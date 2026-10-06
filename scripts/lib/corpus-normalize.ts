@@ -1,8 +1,8 @@
 import type { AuctionLot } from '../../app/types';
 import { subCatOf, sportSlugOf } from './sub-cats';
 import { extractReference } from './identity-enrich';
-import { looksLikeCard, playerSlugOf } from '../../app/lib/cards';
-import { classifyForm, objectClassOf, cleanGoldinTitle, watchKey } from '../../app/lib/comps';
+import { looksLikeCard, playerSlugOf, parseCard } from '../../app/lib/cards';
+import { classifyForm, objectClassOf, cleanGoldinTitle, watchKey, isPersonNameRun, personNameOf } from '../../app/lib/comps';
 import { vetReference, readDescriptionReference, splitWatchRef } from '../../app/lib/watch-ref';
 import { titleTokens as titleTokensOf, extractEdition, extractSerials, toUsdDated, fxRateFor } from '../../app/lib/normalize';
 import { isCurrency } from '../../app/types';
@@ -17,7 +17,7 @@ import { segmentOf } from '../corpus-io';
 import { reclassifyLot } from './classify';
 import { saleDayOf, SALE_DAY_HOUSES } from './sale-day';
 import { seasonToDate } from './sports-crawl';
-import { saleCloseFor } from './sale-close-dates';
+import { saleCloseFor, galleryStubClose, GALLERY_HOUSES } from './sale-close-dates';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    corpus-normalize.ts — build-time corpus-hygiene passes.
@@ -165,12 +165,17 @@ export function rerouteScienceMisroutes(lots: Lot[]): {
     if (!SCIENCE_SLUGS.has(l.artist)) continue;
     const t = lotText(l);
     if (SCIENCE_SUBJECT.test(t)) continue; // a genuine science subject pins it in place
+    // (wave 2) a lot an RR / generalist SPACE sale catalogued is space: "Wristwatch
+    // Group Lot (6) - From the Personal Collection of Alan Bean" is an
+    // astronaut's effects — re-routed to a tracked maker if it names one (a
+    // flown Omega), never evicted as an untracked watch maker
+    const spacePinned = l.artist === 'space-exploration' && /\bspace\b/i.test(String((l as { saleName?: string | null }).saleName || ''));
 
     // ── WATCHES (a skeletonized dial is not a fossil) ──
     if (WATCH_MAKER.test(t) || WATCH_SIGNAL.test(t)) {
       const w = WATCH_MAKER_SLUG.find(([re]) => re.test(t));
       if (w) { l.artist = w[1]; l.makerSlug = w[1]; toWatch++; }
-      else { lots.splice(i, 1); evicted++; } // untracked watch maker → never kept
+      else if (!spacePinned) { lots.splice(i, 1); evicted++; } // untracked watch maker → never kept
       continue;
     }
 
@@ -178,7 +183,7 @@ export function rerouteScienceMisroutes(lots: Lot[]): {
     if (ART_MAKERS.test(t) || GEMINI_PRINT.test(t) || ART_MEDIUM.test(t)) {
       const a = ART_MAKER_SLUG.find(([re]) => re.test(t));
       if (a) { l.artist = a[1]; l.makerSlug = a[1]; toArt++; }
-      else { lots.splice(i, 1); evicted++; } // untracked blue-chip / print-ref → never kept
+      else if (!spacePinned || /\bpatent\b/.test(t)) { lots.splice(i, 1); evicted++; } // untracked blue-chip / print-ref → never kept
     }
   }
   return { total: toArt + toWatch + evicted, toArt, toWatch, evicted };
@@ -231,6 +236,18 @@ export function rerouteRelicCards(lots: Lot[]): { total: number; examples: strin
 // ─────────────────────────────────────────────────────────────────────────────
 const WATCH_MAKER_SLUGS = new Set(['rolex', 'patek-philippe', 'cartier', 'audemars-piguet', 'omega']);
 const DESC_REF_FORMS = new Set(['wristwatch', 'pocket-watch']);
+// (Oct 6 2026 categorization re-audit) `reference` holds a printed reference
+// NUMBER only. A model-line name ("submariner", "tank", "royaloak" — 6.8k
+// rows) is not a reference (the audit marked every one wrong); it moves to
+// `modelKey` (the hedonic control reads reference ‖ modelKey, so the control
+// is unchanged) and the field is DELETED, not nulled — the comp readers
+// (comps.watchKeyOf, r2/pools) fall back to watchKey(title) on an absent
+// field, which re-reads the same model line, so model-keyed pools stay.
+function setWatchRef(l: Lot, ref: string | null): void {
+  if (ref && /\d/.test(ref)) { l.reference = ref; return; }
+  if (ref) (l as Lot & { modelKey?: string | null }).modelKey = ref;
+  delete l.reference;
+}
 export function enrichWatchReferences(lots: Lot[]): number {
   let filled = 0, healed = 0, cleared = 0;
   for (const l of lots) {
@@ -249,7 +266,7 @@ export function enrichWatchReferences(lots: Lot[]): number {
     if (x.referenceSrc === 'llm' && prev) {
       const regexRef = regex && /\d/.test(regex) ? regex : null;
       if (regexRef) { l.reference = regexRef; delete x.referenceSrc; healed++; }
-      else if (!vetReference(l.artist, String(prev), l.title)) { l.reference = regex; delete x.referenceSrc; cleared++; }
+      else if (!vetReference(l.artist, String(prev), l.title)) { setWatchRef(l, regex); delete x.referenceSrc; cleared++; }
       else {
         // a kept extraction ref keys on its core too (5970J → 5970)
         const lc = String(prev).toLowerCase().replace(/\s+/g, '');
@@ -258,11 +275,13 @@ export function enrichWatchReferences(lots: Lot[]): number {
       }
       continue;
     }
-    if ((prev || null) === (regex || null)) continue;
+    const num = regex && /\d/.test(regex) ? regex : null;
+    if (!num && regex) (l as Lot & { modelKey?: string | null }).modelKey = regex;
+    if ((prev || null) === num) continue;
     if (!prev) filled++;
-    else if (regex) healed++;
+    else if (num) healed++;
     else cleared++;
-    l.reference = regex;
+    setWatchRef(l, regex);
   }
   if (healed || cleared) console.log(`[normalize] watch references re-derived: healed=${healed} cleared=${cleared}`);
   return filled;
@@ -340,13 +359,25 @@ export function stampSubCats(lots: Lot[]): { subCats: number; drills: number; sp
     const inner = m.get(k) || m.set(k, new Map()).get(k)!;
     inner.set(sport, (inner.get(sport) || 0) + 1);
   };
+  // (wave 2) a CARD row's player is parsed from its title here (normalize runs
+  // before build-market stamps _card): Goldin's sport-stamped cards teach the
+  // player → sport map, and the expansion houses' unstamped cards read it
+  const CARD_SLUGS_SC = new Set(['sports-cards', 'graded-cards']);
+  const cardPlayerCache = new Map<string, string | null>();
+  const cardPlayer = (r: Record<string, unknown>): string | null => {
+    if (!CARD_SLUGS_SC.has(r.artist as string)) return null;
+    const t = String(r.title || '');
+    let p = cardPlayerCache.get(t);
+    if (p === undefined) { p = parseCard(t).playerSlug; cardPlayerCache.set(t, p); }
+    return p;
+  };
   for (const l of lots) {
     const r = l as unknown as Record<string, unknown>;
     const sport = sportSlugOf(r.sport);
     if (!sport) continue;
     if (r._pid != null) vote(pidVotes, String(r._pid), sport);
     const card = r._card as { playerSlug?: string } | undefined;
-    const player = (r.playerSlug as string) || card?.playerSlug;
+    const player = (r.playerSlug as string) || card?.playerSlug || cardPlayer(r);
     if (player) vote(playerVotes, player, sport);
   }
   const settle = (m: Map<string, Map<string, number>>): Map<string, string> => {
@@ -358,7 +389,7 @@ export function stampSubCats(lots: Lot[]): { subCats: number; drills: number; sp
     });
     return out;
   };
-  const maps = { byPid: settle(pidVotes), byPlayer: settle(playerVotes) };
+  const maps = { byPid: settle(pidVotes), byPlayer: settle(playerVotes), cardPlayer: (l: Record<string, unknown>) => cardPlayer(l) };
 
   let subCats = 0, drills = 0, sportRecovered = 0;
   for (const l of lots) {
@@ -900,11 +931,22 @@ export function rerouteSetCodeCards(lots: Lot[]): number {
 export function reclassifyCorpus(lots: Lot[]): { byClass: Record<string, number>; dropped: number } {
   const byClass: Record<string, number> = {};
   const drop = new Set<number>();
+  let stalePlayers = 0;
   for (let i = 0; i < lots.length; i++) {
     const r = reclassifyLot(lots[i] as Lot & { saleName?: string | null; description?: string | null });
     for (const c of r.fired) byClass[c] = (byClass[c] || 0) + 1;
-    if (r.drop) drop.add(i);
+    if (r.drop) { drop.add(i); continue; }
+    // (wave 2) a player is a SPORTS identity: a row that is not (or no longer)
+    // in the sports market sheds the crawl-time playerName/playerSlug it carried
+    // in ("CHINESE A GRAY", "Walt Disney Studios", a moved Julien's lot's
+    // "MARILYN MONROE") — 2,458 moved rows kept theirs; the signer pass and the
+    // backtest identity read playerSlug first, so a stale one shadows them.
+    const w = lots[i] as Lot & { playerName?: string | null; playerSlug?: string | null };
+    if ((w.playerName || w.playerSlug) && ARTIST_MARKET[w.artist as keyof typeof ARTIST_MARKET] !== 'sports') {
+      delete w.playerName; delete w.playerSlug; stalePlayers++;
+    }
   }
+  if (stalePlayers) byClass['stale-player-cleared'] = stalePlayers;
   return { byClass, dropped: compact(lots, drop) };
 }
 
@@ -1078,6 +1120,39 @@ export function redateSeasonSales(lots: Lot[], now: Date = new Date()): { total:
   return { total, bySale };
 }
 
+// ── GALLERY STUB DATES (date re-audit, Oct 2026): Lelands / Love of the Game /
+// Memory Lane gallery rows carry seasonToDate's mid-month stub of the dropdown
+// sale name but NO saleName (the crawler dropped it), and the stub is not a
+// safe bound there (LOTG Fall → Oct 15 closed late Nov; Lelands Spring →
+// Apr 15 closed Jun 7; ML "The Find Winter 2012" → Feb 15 closed Dec 15).
+// sale-close-dates.ts inverts the stub over the house's own dropdown labels:
+// a unique cited sale → its close ('day'); several cited → the latest close
+// as a bound ('season'); any uncited candidate → untouched. A row whose 15th
+// is itself a cited close (live-leg End: day) only loses the guessed 'month'.
+// Only 'month' rows with no saleDateTime; a re-dated row is no longer 'month',
+// so the pass is idempotent. fxAsOf follows when it was the stub.
+export function redateGalleryStubs(lots: Lot[], now: Date = new Date()): { total: number; exact: number; byHouse: Record<string, number> } {
+  const asOf = now.toISOString().slice(0, 10);
+  const byHouse: Record<string, number> = {};
+  let total = 0, exact = 0;
+  for (const l of lots as DQLot[]) {
+    if (!GALLERY_HOUSES.has(l.auctionHouse)) continue;
+    if (l.datePrecision !== 'month' || l.saleDateTime || typeof l.saleDate !== 'string') continue;
+    const stub = l.saleDate.slice(0, 10);
+    const name = typeof l.saleName === 'string' && l.saleName ? l.saleName : null;
+    const named = name ? saleCloseFor(l.auctionHouse, name, asOf) : null;
+    const r = named && seasonToDate(name!) === stub ? named : galleryStubClose(l.auctionHouse, stub, asOf);
+    if (!r) continue;
+    if ('exact' in r) { l.datePrecision = 'day'; exact++; continue; }
+    l.saleDate = r.date;
+    l.datePrecision = r.precision;
+    if ((l as { fxAsOf?: string | null }).fxAsOf === stub) (l as { fxAsOf?: string | null }).fxAsOf = r.date;
+    byHouse[l.auctionHouse] = (byHouse[l.auctionHouse] || 0) + 1;
+    total++;
+  }
+  return { total, exact, byHouse };
+}
+
 // ── HAMMER == ALL-IN (Wright 989 · LAMA 338): older Wright-platform rows copied
 // the premium-inclusive price into the hammer field, so every hammer-basis read
 // (inferHammerUsd, houseCal, max-bid guidance) took a realized price as the
@@ -1131,6 +1206,8 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   // real REA / H&S close days before any pass reads saleDate
   const seasonDates = redateSeasonSales(ls, opts.now);
   console.log(`[normalize] season sales re-dated to their close: ${seasonDates.total} rows across ${Object.keys(seasonDates.bySale).length} sales`);
+  const galleryDates = redateGalleryStubs(ls, opts.now);
+  console.log(`[normalize] gallery stub dates → cited close: ${galleryDates.total} (${Object.entries(galleryDates.byHouse).map(([k, v]) => `${k}=${v}`).join(' ') || 'none'}) · exact 15th closes un-'month'ed=${galleryDates.exact}`);
   const rrUrls = deriveRRAuctionUrls(ls);
   if (rrUrls) console.log(`[normalize] rrauction url backfill: ${rrUrls} lots derived from id (lot-detail/<lotId>)`);
   const deadSso = nullDeadChristiesSsoUrls(ls);
@@ -1178,6 +1255,8 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   // regex first; the extraction fills only a reference still empty (src:'llm')
   fillWatchReferencesFromExtract(ls);
   const players = recoverPlayerSlugs(ls);
+  const junkEntities = healCrawlEntities(ls);
+  if (junkEntities) console.log(`[normalize] crawl entity tags trimmed to a person's name / cleared: ${junkEntities}`);
   const signers = recoverAutographSigners(ls);
   const cultureStamped = stampCultureAxes(ls);
   const datesFixed = reconcileSaleDates(ls);
@@ -1233,7 +1312,9 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
    ("Tandy" matches Jessica Tandy; require computer context). Hardware/
    apparatus → scientific-instruments; documents/figures → science-tech. */
 const CULT_SLUGS_TECH = new Set(['movie-tv', 'music-memorabilia', 'entertainment-memorabilia', 'pop-memorabilia']);
-const TECH_HW = /\b(apple[- ]?(1|one|iii?\w{0,2})\b|apple (computer|lisa)|macintosh|iphone|ipod|ipad|imac|powerbook|next ?(computer|cube)|commodore|amiga|altair \d{3,4}\w?|ibm (pc|5150)|trs-80|osborne 1|circuit board|motherboard|logic board|microprocessor|enigma machine|difference engine|oscilloscope|prototype (board|computer|phone|device))\b/i;
+// (wave 2) a bare "Commodore" is the naval rank (Commodore Stephen Decatur's
+// letter book went to scientific-instruments); the computer names its model
+const TECH_HW = /\b(apple[- ]?(1|one|iii?\w{0,2})\b|apple (computer|lisa)|macintosh|iphone|ipod|ipad|imac|powerbook|next ?(computer|cube)|commodore (?:64|pet|amiga|vic|128|computer)|amiga|altair \d{3,4}\w?|ibm (pc|5150)|trs-80|osborne 1|circuit board|motherboard|logic board|microprocessor|enigma machine|difference engine|oscilloscope|prototype (board|computer|phone|device))\b/i;
 const TECH_DOC = /\b(steve jobs|steve wozniak|\bwoz\b|bill gates|alan turing|ada lovelace|charles babbage|xerox parc)\b/i;
 export function rerouteCultureTech(lots: Lot[]): number {
   let moved = 0;
@@ -1517,6 +1598,27 @@ export function recoverPlayerSlugs(lots: Lot[]): { stamped: number; total: numbe
 // HIGH-PRECISION only (parseSignerName abstains on themes/groups); we never
 // overwrite an existing entity, and we require a canonical autograph format so
 // relics ("a fence rail cane") are skipped.
+/** (wave 2) class 14 · the crawl-time sports/science `entity` tag
+ *  (comps.extractSportsTags) took any leading capitalized run — 'FLOWN ON
+ *  APOLLO', 'Official Game Used', 'NASA Mission Control' (10.2k rows). It is
+ *  now gated on a person-name parse; this clears the stored ones (a crawler
+ *  entity = no entitySrc, equal to its title's leading run) so the signer
+ *  pass below and every entity reader see no identity rather than a phrase. */
+export function healCrawlEntities(lots: Lot[]): number {
+  let cleared = 0;
+  for (const l of lots) {
+    const w = l as Lot & { entity?: string | null; entitySrc?: string | null };
+    if (!w.entity || w.entitySrc) continue;
+    const lead = String(l.title || '').match(/^((?:[A-Z][A-Za-z.'’-]+\s+){1,2}[A-Z][A-Za-z.'’-]+)/);
+    if (!lead || lead[1].trim() !== w.entity) continue;
+    if (isPersonNameRun(w.entity)) continue;
+    const person = personNameOf(w.entity);
+    if (person) w.entity = person; else delete w.entity;
+    cleared++;
+  }
+  return cleared;
+}
+
 export function recoverAutographSigners(lots: Lot[]): { stamped: number; candidates: number } {
   const src = `sig-p${SIGNER_PARSER_VERSION}`;
   let stamped = 0, candidates = 0;
@@ -1635,6 +1737,79 @@ function cultItemClassOf(title: string): string {
   for (const [re, c] of CULT_ITEM_RULES) if (re.test(t)) return c;
   return 'other';
 }
+
+/* ── CULTURE KIND (wave 2, Oct 6 2026 re-audit: ~49k culture lots 'other' or
+   wrong) — cultItemClassOf read the TITLE only, first rule wins. Christie's /
+   Sotheby's culture titles are often a bare name ("Marilyn Monroe", "Eric
+   Clapton", "CASABLANCA") with the object in the description; plural nouns
+   ("PHOTOGRAPHS BY DEZO HOFFMANN") missed; a signed programme read as a ticket
+   and a signed retail hat as a costume. Now: the object named EARLIEST wins
+   (ties by rule order), a SIGNED piece is an autograph unless it was worn /
+   used / played, and a title that names no object falls back to the head of
+   the description, then the sale (an RR "Photography Auction", RR's
+   "<Name> Book / Program" signed-piece shorthand). */
+const CULT_CARD_RE = CULT_ITEM_RULES[0][0];
+const CULT_KIND_RULES: [RegExp, string][] = [
+  // a CUT signature is a document (rubric); a bare "<Name> Signature" lot is an
+  // autograph — the original labels (Audubon, Stalin, Veronica Lake, Woodrow
+  // Wilson) outvote the re-audit's historic ones (Crook, Rutledge) on DEV
+  [/\bsigned (?:cut|index card)s?\b|\bcut signatures?\b/i, 'signed-cut'],
+  [/\b(?:checks?|cheques?)\b/i, 'check'],
+  [/\b(?:signed|autographed|inscribed)\b.{0,30}\b(?:photo|photos|photograph|photographs|stills?|portraits?|cdvs?|snapshots?)\b|\b(?:photo|photos|photograph|photographs|stills?|portraits?)\b.{0,30}\b(?:signed|inscribed)\b/i, 'signed-photo'],
+  // a signed FLAT / retail piece is an autograph (a signed programme, book,
+  // menu, card, standee, retail hat or ball); a signed guitar, album, shoe or
+  // document is still that object (the noun rules below)
+  [/\b(?:signed|autographed)\b.{0,30}\b(?:programs?|programmes?|books?|menus?|cards?|pages?|standees?|drum ?sticks?|hats?|caps?|baseballs?|footballs?|basketballs?|balls?|posters?|banners?|plaques?|bats?|helmets?|jerseys?|mini[- ]helmets?)\b|\b(?:programs?|programmes?|books?|menus?|cards?|pages?)\b.{0,25}\bsigned\b/i, 'autograph-other'],
+  [/\b(?:photo|photos|photograph|photographs|snapshots?|negatives?|carte[- ]de[- ]visites?|cdvs?|tintypes?|daguerreotypes?|polaroids?|(?:film|press|publicity|production|black and white|colou?r) stills?|a still of|contact sheets?|transparenc(?:y|ies)|image of)\b/i, 'photo'],
+  [/\b(?:letters?|correspondence|telegrams?|manuscripts?|typescripts?|documents?|deeds?|land grants?|commissions?|proclamations?|broadsides?|autograph notes?|handwritten|lyrics?|diar(?:y|ies)|notebooks?|als|tls|endorsements?|(?:confederate|war|treasury|savings|railroad) bonds?|bond certificates?|certificates?|stock|treaty|bulletins?|memo(?:randum|randa|s)?|ledgers?|registers?|guest ?books?|journals?|financial statements?|contracts?|telephone messages?|itinerar(?:y|ies)|writes (?:to|his|her|a|an|of|about|from))\b/i, 'document'],
+  [/\b(?:script|scripts|screenplay|shooting script|storyboards?|teleplay)\b/i, 'script'],
+  [/\b(?:posters?|lobby cards?|one[- ]sheets?|handbills?|locandina|affiche|window cards?|half[- ]sheets?|three[- ]sheets?)\b/i, 'poster'],
+  [/\b(?:guitars?|bass|telecaster|stratocaster|les paul|drums?|drumhead|piano|saxophone|violin|microphone|amplifier|keyboard|ukulele|banjo|trumpet|cymbals?)\b/i, 'instrument'],
+  [/\b(?:gold record|platinum record|gold disc|platinum disc|riaa|grammy|oscar|academy award|emmy|golden globe|disc award|sales award|presentation award|awards?|medals?|trophy|trophies|key to the city)\b/i, 'award'],
+  [/\b(?:prop|props|hero prop|production[- ]made|screen[- ]used|maquette)\b/i, 'prop'],
+  [/\b(?:worn|costume|costumes|(?<!dust )jacket|coat|dress|gown|shirt|boots?|robe|tunic|uniform|suit|cape|cowl|helmet|mask|shoes?|sneakers?|hat|jumpsuit|vest|jersey|ensemble|coveralls|overalls|wardrobe)\b/i, 'costume'],
+  [/\b(?:tickets?|stubs?|pass|credentials?|programs?|programmes?)\b/i, 'ticket'],
+  [/\b(?:animation cel|cels?|celluloid|drawings?|sketch(?:es)?|costume design)\b/i, 'cel-art'],
+  [/\b(?:record|records|vinyl|albums?(?!\s+pages?)|lp|45rpm|acetate|test pressing)\b/i, 'record'],
+];
+/** no object noun named: a bare signature mark is still an autograph */
+const CULT_AUTOGRAPH_FALLBACK_RE = /\b(?:signed|autographed|autographs?|signatures?|inscribed)\b/i;
+/** the rule whose noun is named earliest in `s` (ties → rule order), or null */
+function earliestCultKind(s: string): string | null {
+  let best: string | null = null, at = Infinity;
+  for (const [re, c] of CULT_KIND_RULES) {
+    const m = re.exec(s);
+    if (m && m.index < at) { at = m.index; best = c; }
+  }
+  return best;
+}
+/** the description's own object line: the title echo and the trailing
+ *  authenticity / provenance boilerplate ("accompanied by a letter of
+ *  authenticity", "with a photograph of …") removed */
+function descHead(title: string, desc: string): string {
+  let d = String(desc || '').replace(/<[^>]+>|class="[^"]*"/g, ' ');
+  const t = String(title || '').trim();
+  if (t && d.toLowerCase().startsWith(t.toLowerCase())) d = d.slice(t.length);
+  d = d.split(/\b(?:accompanied by|together with|with (?:a|an|the) (?:letter|certificate|coa|loa)|letter of authenticity|certificate of authenticity|provenance|literature|exhibited|lot closed|estimate)\b/i)[0];
+  return d.slice(0, 260);
+}
+export function cultureItemClass(l: { title?: string | null; description?: string | null; saleName?: string | null; auctionHouse?: string | null }): string {
+  const title = String(l.title || '').replace(/["“”]/g, ' ');
+  if (CULT_CARD_RE.test(title)) return 'card';
+  // the word "prop" names the kind wherever it sits ("Stormtrooper Helmet Prop")
+  if (/\bprops?\b/i.test(title)) return 'prop';
+  const fromTitle = earliestCultKind(title) ?? (CULT_AUTOGRAPH_FALLBACK_RE.test(title) ? 'autograph-other' : null);
+  if (fromTitle) return fromTitle;
+  const head = descHead(title, String(l.description || ''));
+  const fromDesc = earliestCultKind(head) ?? (CULT_AUTOGRAPH_FALLBACK_RE.test(head) ? 'autograph-other' : null);
+  // "Approximately seventy signatures collected by …" is an autograph lot, not a cut
+  if (fromDesc) return fromDesc === 'signed-cut' ? 'autograph-other' : fromDesc;
+  const sale = String(l.saleName || '');
+  if (/\bphotograph/i.test(sale)) return 'photo';
+  // RR's signed-piece shorthand: "<Signer> Book", "<Signer> Program", "<Signer> Menu"
+  if (l.auctionHouse === 'RR Auction' && /\b(?:books?|programs?|programmes?|menus?|cards?|bibles?|baseballs?|footballs?|basketballs?|bats?|balls?|scores?|pages?|first day covers?|covers?)\s*$/i.test(title.trim())) return 'autograph-other';
+  return 'other';
+}
 function cultPersonOf(title: string): string | null {
   let t = (title || '').trim();
   t = t.replace(/^(c\.?\s*)?(1[6-9]\d\d|20\d\d)(-\d{2,4})?\s+/i, '');
@@ -1681,7 +1856,7 @@ export function stampCultureAxes(lots: Lot[]): number {
     const person = cultShortSubjectOf(l.title || '') ?? cultPersonOf(l.title || '');
     const franchise = cultFranchiseOf(l.title || '');
     const subjects = Array.from(new Set([person, franchise].filter((x): x is string => !!x && !CULT_SUBJECT_STOPLIST.has(x))));
-    const cls = cultItemClassOf(l.title || '');
+    const cls = cultureItemClass(l as Lot & { description?: string | null; saleName?: string | null });
     const t = l as Lot & { subjectKeys?: string[]; itemClass?: string };
     t.itemClass = cls;
     if (subjects.length) { t.subjectKeys = subjects; stamped++; }

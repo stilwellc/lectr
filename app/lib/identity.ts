@@ -96,14 +96,27 @@ const CR_SYSTEM: Record<string, string> = {
 const CR_PRIORITY = ['fs', 'b', 'ar', 'd', 'e', 'corlett', 'lp', 'ba', 'g', 'm', 'cz', 'cramerbooks', 'duthuitbooks', 'cramer'];
 // one citation: "b. 1147", "ba. 1321", "f. & s. ii.351", "f. & s. iib 302",
 // "a.r. 344", "littmann p. 65", "d.-m. 492", "cramer books 24", "ramie 82"
-const CR_ONE = /^([a-z][a-z .&'-]{0,24}?)\s*\.?\s*((?:[ivx]{1,4}[ab]?[ .]\s*)?\d{1,4}[a-z]?(?:\s*-\s*\d{1,4})?)$/;
+const CR_ONE = /^([a-z][a-z .&'-]{0,24}?)\s*\.?\s*((?:[ivx]{1,4}[ab]?[ .]\s*)?\d{1,4}[a-z]?(?:\[[a-z]\])?(?:\s*-\s*\d{1,4})?)$/;
+// (Oct 6 2026 identity re-audit) one F&S number, three printed forms: houses
+// cite Warhol's main catalogue as "F. & S. II.28", "F&S II 28", "Feldman &
+// Schellmann II28" — and very often drop the section ("F. & S. 28", "F. and
+// S. 356"): the same print keyed cr:fsii.28, cr:fsii28 and cr:fs28 (1,551
+// keys split off their edition). The section is canonicalised to
+// "<roman>.<no>", and a bare F&S number is section II (the catalogue's
+// signed-print body; the other sections — I, IIA, IIB, III, IIIA, IV — are
+// always printed with their section).
+const CR_ROMAN_NO = /^([ivx]{1,4}[ab]?)\.?(\d.*)$/;
 
 function crPart(p: string): { sys: string; no: string } | null {
   const m = p.trim().replace(/^(?:see|cf\.?|and)\s+/, '').match(CR_ONE);
   if (!m) return null;
   const sys = CR_SYSTEM[m[1].replace(/[^a-z]/g, '')];
   if (!sys) return null;
-  return { sys, no: m[2].replace(/\s+/g, '').replace(/\.$/, '') };
+  let no = m[2].replace(/\s+/g, '').replace(/[[\]]/g, '').replace(/\.$/, '');
+  const r = no.match(CR_ROMAN_NO);
+  if (r) no = `${r[1]}.${r[2]}`;
+  else if (sys === 'fs' && /^\d/.test(no)) no = `ii.${no}`;
+  return { sys, no };
 }
 
 /** The catalogue-raisonné citation of a folded, lower-cased title: a
@@ -204,9 +217,17 @@ export function editionIdentityKey(l: Pick<AuctionLot, 'artist' | 'title'> & Edi
     // dates "(1881-1973)", "(american, b. 1937)" — not a dated subtitle
     // "(Flash - November 22, 1963)"
     .replace(/\([^)]*\d{4}[^)]*\)/g, (g: string) => ((g.match(/[a-z]{3,}/g) || []).length > 1 ? g : ''))
+    // (Oct 6 2026 identity re-audit) "one plate from" is the same sheet as
+    // "… from" (Endangered Species), and a trailing creation year ("Mlle
+    // Landsberg au long visage, 1914", "Le Bain, circa 1905") is the
+    // catalogue line, not the title: 2,183 keys carried it while the same
+    // title printed without a year already pooled every year. A dated
+    // subtitle ("Flash - November 22, 1963") keeps its year.
+    .replace(/\b(?:one|a|single) plates? from\b/g, 'from')
     .replace(/[^a-z0-9 ]+/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim();
+    .trim()
+    .replace(/(?<=[a-z].*?)(?<!(?:january|february|march|april|may|june|july|august|september|october|november|december) \d{1,2})(?: (?:circa|c|ca))? (?:1[5-9]|20)\d\d(?: (?:1[5-9]|20)?\d\d)?$/, '');
   let core = cr;
   if (!core) {
     // (the old ≥8-char floor counted the maker's name the title often

@@ -32,7 +32,8 @@ test('labelled refs: every printed label form, keys unchanged for forms the old 
 });
 
 test('Omega dotted refs are not truncated to the collection code', () => {
-  assert.equal(watchKey({ title: 'OMEGA | GLOBEMASTER, REF.130.30.39.21.02.001, A STAINLESS STEEL WRISTWATCH' }), '130.30.39.21');
+  // (Oct 6 re-audit) the whole printed ref — the four-group cut read a different reference
+  assert.equal(watchKey({ title: 'OMEGA | GLOBEMASTER, REF.130.30.39.21.02.001, A STAINLESS STEEL WRISTWATCH' }), '130.30.39.21.02.001');
   assert.equal(watchKey({ title: 'Omega Speedmaster Ref: 145.022-69' }), '145.022');
   assert.equal(watchKey({ title: "Speedmaster 'Ed White', Ref: ST 105.003-65, Circa 1967" }), '105.003');
   // a 4-digit core already names the model and keeps its old key
@@ -151,4 +152,42 @@ test('ONE material reader: steel-and-gold is two-tone, a two-tone DIAL is not', 
   assert.equal(watchMaterialCoarse(t), coarseWatchMaterial(t));
   // the exact-identity key is the core reference
   assert.equal(numericWatchRef({ artist: 'patek-philippe', reference: '5970' }), 'patek-philippe|5970');
+});
+
+/* ── Oct 6 2026 categorization re-audit (class 7): real audit titles ── */
+test('Omega: whole dotted refs, undotted labelled refs, no four-group cut', () => {
+  assert.equal(readWatchKey("OMEGA. A RARE 18K GOLD LIMITED EDITION CHRONOGRAPH WRISTWATCH WITH BOX, MADE TO COMMEMORATE THE 50TH ANNIVERSARY, SIGNED OMEGA, SPEEDMASTER PROFESSIONAL, LIMITED EDITION 111/999, REF. 145.00.52, CASE NO. 48’305’719, MANUFACTURED IN 1992", 'omega')?.key, '145.00.52');
+  assert.equal(readWatchKey('Reference 310.20.42.50.01.001 Speedmaster 50th Anniversary A limited edition stainless steel chronograph wristwatch, Circa 2019', 'omega')?.key, '310.20.42.50.01.001');
+  // printed without dots: used to fall to the model name 'speedmaster'
+  assert.equal(readWatchKey("OMEGA. A STAINLESS STEEL CHRONOGRAPH WRISTWATCH WITH BRACELET SIGNED OMEGA, SPEEDMASTER PROFESSIONAL, REF. ST 145022, MOVEMENT NO. 48'239'202, CIRCA 1", 'omega')?.key, '145.022');
+  assert.equal(readWatchKey("OMEGA. A FINE AND ATTRACTIVE 18K WHITE GOLD AND DIAMOND-SET AUTOMATIC 5-COUNTER CHRONOGRAPH WRISTWATCH WITH DATE SIGNED OMEGA SPEEDMASTER, OLYMPIC GAMES COLLECTION MODEL, REF. 32158445251001, CASE NO. 4, 84'892'686, CIRCA 2012", 'omega')?.key, '321.58.44.52.51.001');
+  assert.equal(readWatchKey('Constellation, Ref: ST168019, Purchased 24th December 1969', 'omega')?.key, '168.019');
+  assert.equal(readWatchReference('omega | seamaster aqua terra, ref 25195100 limited edition stainless steel wristwatch with date and bracelet circa 2005', 'omega'), '2519');
+  // non-Omega makers never read the undotted form
+  assert.equal(readWatchKey('Rolex Ref. 116500 Daytona', 'rolex')?.key, '116500');
+});
+
+test('the typographic fraction slash (U+2044) is a slash, and "Ref. #" is a label', () => {
+  assert.equal(readWatchKey('PATEK PHILIPPE. A HIGHLY IMPRESSIVE PLATINUM AUTOMATIC WRISTWATCH WITH BAGUETTE DIAMOND-SET BEZEL SIGNED PATEK PHILIPPE, GENEVE, REF. 5711⁄110P-001, CIRCA 2019', 'patek-philippe')?.key, '5711/110');
+  assert.equal(readWatchKey("PATEK PHILIPPE. AN 18K WHITE GOLD BRACELET WATCH WITH ONYX DIAL REF. 4429⁄1, MOVEMENT NO. 1'394'576, CASE NO. 2'777'624, CIRCA 1981", 'patek-philippe')?.key, '4429/1');
+  assert.equal(readWatchReference('A Patek Philippe, Geneve "Ellipse" gold and diamond integral bracelet wristwatch, reference #3545/5,', 'patek-philippe'), '3545/5');
+});
+
+test('enrichWatchReferences: a model NAME is not a reference — it moves to modelKey and the field is absent', () => {
+  const lots: any[] = [
+    { ...W('rolex', "A 'Submariner' wristwatch,"), reference: 'submariner' },
+    { ...W('cartier', "CARTIER. A LADY'S 18K GOLD AND DIAMOND-SET OVAL WRISTWATCH SIGNED CARTIER, MODEL BAIGNOIRE, CASE NO. 805791"), reference: 'baignoire' },
+    { ...W('omega', "Omega: An 18ct gold gentleman's Seamaster wristwatch") },
+    { ...W('omega', 'Reference 310.20.42.50.01.001 Speedmaster 50th Anniversary'), reference: '310.20.42.50' },
+    { ...W('patek-philippe', 'Case No. 236087, Movement No. 122624, Circa 1900s'), reference: null },
+  ];
+  enrichWatchReferences(lots);
+  assert.deepEqual(lots.map(l => l.reference), [undefined, undefined, undefined, '310.20.42.50.01.001', null]);
+  assert.ok(!('reference' in lots[0]) && !('reference' in lots[2]));
+  assert.deepEqual(lots.slice(0, 3).map(l => l.modelKey), ['submariner', 'baignoire', 'seamaster']);
+  // the comp key still reads the model line from the title (absent field → watchKey fallback)
+  assert.equal(watchKey(lots[0]), 'submariner');
+  // idempotent
+  enrichWatchReferences(lots);
+  assert.deepEqual(lots.map(l => l.reference), [undefined, undefined, undefined, '310.20.42.50.01.001', null]);
 });

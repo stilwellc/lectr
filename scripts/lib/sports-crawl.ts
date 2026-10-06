@@ -16,7 +16,7 @@ import { readSegment, writeSegment } from '../corpus-io';
 import type { PriceBasis, Currency, AuctionLot } from '../../app/types';
 import { leadsWithSetCode } from './set-codes';
 import { NON_SPORT_RE, SPORT_WORD_RE, GAME_USED_RE, isCardTitle } from './classify';
-import { saleCloseFor } from './sale-close-dates';
+import { saleCloseFor, labelStub } from './sale-close-dates';
 
 // Nightly crawls a BOUNDED window; the segment must ACCUMULATE. Read the last-
 // good segment, union the fresh lots over it (fresh id wins), write the union.
@@ -404,26 +404,20 @@ export function readAuth(cat: SportsCategory, title: string, description: string
 
 /** Season/quarter label → an approximate mid-month sale date (YYYY-MM-DD). REA
  *  and H&S publish "2018 Spring" etc.; the exact day isn't posted.
- *  With `house` = 'REA' | 'Huggins & Scott' the label resolves through the
- *  cited close-date table (scripts/lib/sale-close-dates.ts) first — the real
- *  close day, or a conservative season-end bound — and only a label that table
- *  leaves to the month stub (REA monthly sales) falls through to it. */
+ *  With `house` = 'REA' | 'Huggins & Scott' | a gallery house (Lelands / Love
+ *  of the Game / Memory Lane) the label resolves through the cited close-date
+ *  table (scripts/lib/sale-close-dates.ts) first — the real close day, or (REA
+ *  / H&S) a conservative season-end bound — and only a label that table leaves
+ *  alone falls through to the month stub. */
 export function seasonToDate(label: string, house?: string): string | null {
   if (house) {
     const close = saleCloseFor(house, label);
     if (close) return close.date;
   }
-  const m = label.match(/(20[0-2]\d)/);
-  if (!m) return null;
-  const year = m[1];
-  const l = label.toLowerCase();
   // winter → FEBRUARY, not December: hobby "Winter YYYY" auctions close early
   // in the label year. The old '12' future-dated every in-progress winter
   // month and settledOnly dropped ENTIRE months nightly (H&S 2026-winter:
-  // 1,485 lots, all FATAL "future saleDate", Aug 13 audit).
-  const mm = /spring/.test(l) ? '04' : /summer/.test(l) ? '07' : /(fall|autumn)/.test(l) ? '10' : /winter/.test(l) ? '02'
-    : /jan/.test(l) ? '01' : /feb/.test(l) ? '02' : /mar/.test(l) ? '03' : /apr/.test(l) ? '04' : /may/.test(l) ? '05'
-    : /jun/.test(l) ? '06' : /jul/.test(l) ? '07' : /aug/.test(l) ? '08' : /sep/.test(l) ? '09' : /oct/.test(l) ? '10'
-    : /nov/.test(l) ? '11' : /dec/.test(l) ? '12' : '06';
-  return `${year}-${mm}-15`;
+  // 1,485 lots, all FATAL "future saleDate", Aug 13 audit). The stub itself
+  // lives in sale-close-dates.ts (labelStub) so the gallery heal can invert it.
+  return labelStub(label);
 }

@@ -6,6 +6,7 @@
  */
 import type { AuctionLot } from '../../../app/types';
 import { routeCulture } from '../../culture';
+import { goldinNonSportFix, DROP } from '../classify';
 import { fetchWithRetry } from '../fetch-retry';
 import { DEEP, UA, noteExpected, noteFetched, parseDrop, sleep, stampMoney } from './common';
 import { saleDayOf } from '../sale-day';
@@ -34,6 +35,16 @@ const GOLDIN_FACET_PASSES: { itemType: string; fallback: string | null }[] = [
   { itemType: 'Awards and Trophies', fallback: 'trophies-awards' },
   { itemType: 'Memorabilia', fallback: null }, // mixed — router only
 ];
+
+// (wave 2) the item-type facet's sports fallback is trusted only for a lot
+// with no music / film / TV reading (classify.ts goldinNonSportFix — the same
+// rule corpus-normalize re-applies): a sealed Beatles LP in the Game-Used
+// facet is not game-used. Returns the culture slug, or null to drop.
+function facetArtist(artist: string | null, title: string): string | null {
+  if (!artist) return null;
+  const to = goldinNonSportFix({ artist, title, auctionHouse: 'Goldin' });
+  return to === DROP ? null : to ?? artist;
+}
 
 const GOLDIN_SCIENCE_QUERIES = ['apple computer', 'macintosh', 'steve jobs', 'fossil', 'meteorite', 'dinosaur', 'amber'];
 
@@ -146,7 +157,7 @@ export async function crawlGoldin(): Promise<AuctionLot[]> {
     // facet fallback must never resurrect it, or graded cards ride the
     // Tickets/Game-Used facets straight into the sports vertical.
     if (routed === 'blocked') { dropped++; return; }
-    const artist = routed || fallback;
+    const artist = facetArtist(routed || fallback, lot.title);
     if (!artist) { dropped++; return; }
     const rawEnd = lot.end_timestamp || lot.start_timestamp;
     if (!rawEnd) return;
@@ -218,7 +229,7 @@ export async function crawlGoldin(): Promise<AuctionLot[]> {
     if (GOLDIN_EXCLUDE_GAMES.test(t) || GOLDIN_EXCLUDE_MISC.test(t) || (!sportScoped && GOLDIN_CARD_MAKERS.test(t) && !GOLDIN_POKEMON.test(t))) { dropped++; return false; }
     const routed = goldinRoute(lot.title, sportScoped);
     if (routed === 'blocked') { dropped++; return false; }
-    const artist = routed || fallback;
+    const artist = facetArtist(routed || fallback, lot.title);
     if (!artist) { dropped++; return false; }
     const bid = lot.current_price || 0;
     if (bid <= 0) return false;

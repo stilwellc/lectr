@@ -123,15 +123,22 @@ function classifyLot(lot: AuctionLot): LotCategory {
   // 4. Check sale name for category clues
   if (/prints?\s*[&+]\s*multiples?/i.test(saleName) || /prints?\s+unlimited/i.test(saleName)) return 'print';
   if (/photograph/i.test(saleName)) return 'photograph';
-  if (/design/i.test(saleName) || /furniture/i.test(saleName)) return 'design';
+  // (wave 2) only a DESIGN maker's lot is design by its sale: Wright / LAMA
+  // "Modern Art & Design" sales filed Picasso ceramics, KAWS figures and Ruscha
+  // books by the art makers as 'design' (artCategoryFix re-derives the stored rows)
+  if (isDesignArtist && (/design/i.test(saleName) || /furniture/i.test(saleName))) return 'design';
 
   // 5. Check URL path
   if (/\/prints?\b/i.test(url)) return 'print';
   if (/\/photograph/i.test(url)) return 'photograph';
-  if (/\/design/i.test(url)) return 'design';
+  if (isDesignArtist && /\/design/i.test(url)) return 'design';
 
   // 6. Artist-level defaults
   if (isDesignArtist) return 'design';
+  // (wave 2) the edition default stays — measured on the audit labels, a
+  // no-evidence lot by these five is a print 2:1 over everything else; the
+  // evidence that it is NOT (an originals sale, a price no print reaches, a
+  // ceramic / sculpture form) is read first by artCategoryFix above
   if (EDITION_DEFAULT_ARTISTS.has(lot.artist)) return 'print';
   if (ORIGINAL_DEFAULT_ARTISTS.has(lot.artist)) return 'original';
 
@@ -728,7 +735,10 @@ async function main() {
     // an absent signal produces null (never fabricated identity).
     lot.formKey = classifyForm(lot);
     lot.modelKey = normModelKey(lot);
-    lot.reference = normWatchKey(lot);
+    // a reference is a printed NUMBER (corpus-normalize enrichWatchReferences
+    // owns the model-line fallback); a model name never rides this field
+    const wk = normWatchKey(lot);
+    if (wk && /\d/.test(wk)) lot.reference = wk; else delete lot.reference;
     lot.normalizedTitle = normNormalizeTitle(lot.title);
     // ART lots: drop the maker's own name words from the tokens — they carry
     // zero signal within a same-maker comp pool and inflate cosine between

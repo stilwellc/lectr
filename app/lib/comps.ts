@@ -1214,6 +1214,27 @@ const EVENT_RULES: [RegExp, string][] = [
   [/\ball[- ]star\b/, 'all-star'],
   [/\bmasters\b/, 'masters'],
 ];
+/** a leading capitalized run that is a person's NAME, not a descriptor run
+ *  ("FLOWN ON APOLLO", "Official Game Used", "Original Type I", "World Series
+ *  Champions", "Apollo Command Module"): no word may be a descriptor / object /
+ *  event / grader / month word, and no word may be a lone article or preposition */
+const NOT_A_NAME_WORD = /^(?:flown|apollo|gemini|mercury|skylab|shuttle|nasa|mission|missions|space|lunar|moon|capsule|module|command|flag|patch|emblem|robbins|medallion|signed|autographed|autograph|game|games|used|worn|issued|official|original|vintage|rare|important|exceptional|collection|lot|group|set|pair|team|teams|world|series|super|bowl|the|a|an|of|on|in|and|for|from|with|to|by|at|card|cards|photo|photograph|photos|type|ticket|tickets|full|large|small|early|late|new|old|american|national|league|club|stadium|university|college|high|school|press|pass|program|magazine|sports|illustrated|baseball|football|basketball|hockey|boxing|golf|olympic|olympics|gold|silver|bronze|medal|trophy|award|ring|championship|champion|champions|hall|fame|jersey|bat|ball|helmet|glove|cap|hat|shirt|uniform|display|framed|lithograph|print|poster|letter|document|check|contract|book|cut|index|day|night|era|circa|mint|gem|graded|psa|bgs|sgc|jsa|beckett|rookie|season|career|final|finals|playoff|playoffs|opening|home|road|away|vs|versus|january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|astronaut|astronauts|cosmonaut|crew|launch|rocket|flight|flown-in|presidential|president|white|house|limited|edition|replica|authentic|certified|item|items|memorabilia|conference|eastern|western|division|round|cup|open|international|tournament|championships|match|debut|win|hit|goal|our|two|three|four|five|nhl|nfl|nba|mlb|ncaa|bcs|wbc|fifa|uefa|global|historic|phantom)$/i;
+export function isPersonNameRun(name: string): boolean {
+  return personNameOf(name) === name.trim();
+}
+/** the leading NAME words of a capitalized run, cut at the first descriptor
+ *  ("Tom Brady Signed" → "Tom Brady"); null when fewer than two words remain
+ *  ("FIFA World Cup", "New York Yankees", "FLOWN ON APOLLO") */
+export function personNameOf(run: string): string | null {
+  const kept: string[] = [];
+  for (const w of run.trim().split(/\s+/)) {
+    const bare = w.replace(/[.'’:,-]+$/g, '').replace(/^['’]+/, '');
+    if (NOT_A_NAME_WORD.test(bare) || NOT_A_NAME_WORD.test(bare.split('-')[0])) break;
+    kept.push(w);
+  }
+  return kept.length >= 2 ? kept.join(' ') : null;
+}
+
 export function extractSportsTags(title: string, slug: string): {
   entity?: string; objectType?: ObjectType; eventKey?: string; sportYear?: number;
 } {
@@ -1226,8 +1247,12 @@ export function extractSportsTags(title: string, slug: string): {
   const nameMatch = raw.match(/^((?:[A-Z][A-Za-z.'’-]+\s+){1,2}[A-Z][A-Za-z.'’-]+)/);
   if (nameMatch) {
     const name = nameMatch[1].trim();
-    // reject a leading year/all-caps token run that isn't a person
-    if (!/^\d/.test(name) && name.split(/\s+/).length >= 2) out.entity = name;
+    // reject a leading year/all-caps token run that isn't a person — and
+    // (Oct 6 2026 categorization re-audit: 10.2k junk entities like 'FLOWN ON
+    // APOLLO', 'Official Game Ball', 'NASA Mission Control') any run holding a
+    // descriptor word: the entity is the run's leading NAME words, if any
+    const person = /^\d/.test(name) ? null : personNameOf(name);
+    if (person) out.entity = person;
   }
 
   for (const [re, ty] of OBJECT_TYPE_RULES) if (re.test(t)) { out.objectType = ty; break; }

@@ -182,7 +182,9 @@ test('MLB toLot: sold needs a winning figure AND bidCount > 0; open → upcoming
   assert.equal(sold.id, 'mlbauction-6428490');
   assert.equal(sold.title, 'Henry Bolte Game-Used Broken Bat - Natural Victus Sports MH17-M - 6/30/26 vs. LAD');
   assert.equal(sold.status, 'sold');
-  assert.equal(sold.saleDate, '2026-09-17');
+  // closeTime 2026-09-17 02:00 GMT = 10:00 PM EDT Sep 16 — the ET day, not the GMT one
+  assert.equal(sold.saleDate, '2026-09-16');
+  assert.equal(sold.saleDateTime, '2026-09-17T02:00:00.000Z', 'the close instant rides on the sold row');
   assert.equal(sold.realizedUsd, 590);
   assert.equal(sold.saleName, 'MLB Auctions · athletics');
   assert.equal(sold.subCat, 'game-used');

@@ -13,6 +13,7 @@ import type { AuctionLot, LotCategory, AuctionHouse } from '../app/types';
 import { assertInvariants } from '../app/lib/validate';
 import { classifySports, pseudoArtist, readAuth, stampRealizedUsd, seasonToDate, writeMergedSegment, settledOnly, installCrashGuard, purgeFromSegment } from './lib/sports-crawl';
 import { readSegment } from './corpus-io';
+import { galleryCloseFor } from './lib/sale-close-dates';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 const HOUSES: Record<string, { host: string; house: AuctionHouse; seg: string; prefix: string }> = {
@@ -88,7 +89,7 @@ async function extractCards(page: Page): Promise<RawCard[]> {
   }).catch(() => [] as RawCard[]);
 }
 
-function buildLot(c: RawCard, saleDate: string, cfg: { host: string; house: AuctionHouse; prefix: string }): AuctionLot | null {
+function buildLot(c: RawCard, saleDate: string, cfg: { host: string; house: AuctionHouse; prefix: string }, saleName: string | null = null): AuctionLot | null {
   const m = c.sold.replace(/,/g, '').match(/\$([0-9]+)/);
   const soldNum = m ? parseInt(m[1], 10) : 0;
   if (!soldNum) return null; // no sold price on the card → not a settled sale
@@ -102,7 +103,7 @@ function buildLot(c: RawCard, saleDate: string, cfg: { host: string; house: Auct
     year: null, medium: null, dimensions: null, description: null, platform: null,
     category: 'object' as LotCategory,
     imageUrl: c.img && c.img.startsWith('http') ? c.img : c.img ? cfg.host + c.img : null,
-    auctionHouse: cfg.house, saleName: null, saleDate, lotNumber: null,
+    auctionHouse: cfg.house, saleName, saleDate, lotNumber: null,
     ...stampRealizedUsd(soldNum, saleDate),
     gradeLabel: auth.grade, authCert: auth.marks.length ? auth.marks.join(' · ') : null,
     authConfidence: auth.confidence, subCat: cat, status: 'sold',
@@ -164,7 +165,12 @@ async function main() {
   const all: AuctionLot[] = [];
   let done = 0;
   for (const a of settled.slice(0, maxAuctions)) {
-    const saleDate = seasonToDate(a.name)!;
+    // the cited close of this dropdown sale (sale-close-dates.ts) when the
+    // table has it — else the mid-month stub, flagged 'month' below. The
+    // dropdown name is kept as saleName so a later close lookup can re-date it.
+    const close = galleryCloseFor(cfg.house, a.name, TODAY);
+    const saleDate = close ? close.date : seasonToDate(a.name)!;
+    const saleName = a.name.replace(/\s+-\s+closes\b.*$/i, '').trim() || null;
     // FRESH context per auction — the pagination postbacks corrupt a reused
     // page's auction-select state, so isolate each auction's crawl.
     const ctx = await browser.newContext({ userAgent: UA });
@@ -198,11 +204,11 @@ async function main() {
 
     const lots = cards.filter((c) => !c.wd).map((c) => {
       const prev = exactDates.get(`${cfg.prefix}-${c.id}`);
-      const lot = buildLot(c, prev?.saleDate || saleDate, cfg);
-      // an exact close already on the row wins; otherwise the date is the
-      // dropdown season's mid-month stub → flag it month-precision
+      const lot = buildLot(c, prev?.saleDate || saleDate, cfg, saleName);
+      // an exact close already on the row wins; then the cited close ('day');
+      // otherwise the date is the dropdown season's mid-month stub → 'month'
       return lot && prev ? ({ ...lot, saleDateTime: prev.saleDateTime } as AuctionLot)
-        : lot ? ({ ...lot, datePrecision: 'month' } as AuctionLot) : lot;
+        : lot ? ({ ...lot, datePrecision: close ? 'day' : 'month' } as AuctionLot) : lot;
     }).filter((x): x is AuctionLot => !!x);
     const wdIds = new Set(cards.filter((c) => c.wd).map((c) => `${cfg.prefix}-${c.id}`));
     all.push(...lots);

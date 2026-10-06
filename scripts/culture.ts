@@ -50,6 +50,15 @@ export function isMassCulture(title: string, description = ''): boolean {
   return MASS.test(t) || CARD.test(t) || isNumberedLot(t);
 }
 
+/** (wave 2) the culture slug a lot's own words pick — the router below minus
+ *  its mass gate, for callers that apply their own (classify.ts cultureHome) */
+export function cultureSlugOf(title: string, description = ''): string {
+  const t = `${title} ${description}`.toLowerCase();
+  if (MOVIE_TV.test(t)) return 'movie-tv';
+  if (MUSIC.test(t)) return 'music-memorabilia';
+  return 'entertainment-memorabilia';
+}
+
 export function routeCulture(title: string, description = ''): string | null {
   const t = `${title} ${description}`.toLowerCase();
   if (isMassCulture(title, description) || NOT_CULTURE_LOT.test(t)) return null;

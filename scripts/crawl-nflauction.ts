@@ -39,6 +39,7 @@ import {
 } from './lib/sports-crawl';
 import { readSegment } from './corpus-io';
 import { reportLegHealth, reportAndExit } from './lib/leg-health';
+import { saleDayOf } from './lib/sale-day';
 
 const HOST = 'https://nflauction.nfl.com';
 const SID = '1100783';
@@ -132,7 +133,9 @@ async function fullIdentity(it: ApiItem): Promise<{ title: string; desc: string 
 function toLot(it: ApiItem, ident: { title: string; desc: string }, kind: 'sold' | 'upcoming'): AuctionLot | null {
   const iso = closeIso(it);
   if (!iso) return null;
-  const saleDate = iso.slice(0, 10);
+  // the ET calendar day of the GMT close (a 9:59 PM ET close is 01:59Z the
+  // next day — lib/sale-day.ts); the instant itself rides on every row
+  const saleDate = saleDayOf('NFL Auction', iso) || iso.slice(0, 10);
   const cat = classifySports('', ident.title);
   const auth = readAuth(cat, ident.title, ident.desc);
   const bid = money(it.currentBid);
@@ -157,7 +160,7 @@ function toLot(it: ApiItem, ident: { title: string; desc: string }, kind: 'sold'
     // all-in; there is no buyer's premium)
     if (!bid || it.bidCount <= 0 || (reserve > 0 && bid < reserve)) return null;
     if (saleDate > TODAY) return null;
-    return { ...base, status: 'sold', ...stampRealizedUsd(bid, saleDate) } as unknown as AuctionLot;
+    return { ...base, status: 'sold', saleDateTime: iso, ...stampRealizedUsd(bid, saleDate) } as unknown as AuctionLot;
   }
   return {
     ...base,

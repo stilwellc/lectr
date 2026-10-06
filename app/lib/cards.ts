@@ -41,6 +41,10 @@ export interface CardId {
   /** (Oct 6) a multi-card lot (sets, pairs, "Collection (25)", two #numbers) —
    *  never one card's identity: cardKey/cardLadderKey abstain */
   multi?: boolean;
+  /** (Oct 6 identity re-audit) a comic book / magazine issue filed with the
+   *  cards (CGC-graded comics at H&S, SLAM newsstand covers) — never a card
+   *  identity: cardKey/cardLadderKey abstain */
+  notCard?: boolean;
 }
 // (Oct 6) the gap never crosses a '#' (an insert code "Autograph #DA-32" is
 // not an autograph grade 32) — and a gap naming a card grader is the CARD
@@ -75,7 +79,11 @@ const GRADE_QUAL_RE = /^\s*\(?\s*(OC|MK|ST|PD|MC|OF)\s*\)?(?![a-z])/i;
 const AUTO_GAP_RE = /auth|auto|dna|sig/i;
 // parallel / variant tokens (whole title, outside the set name). Team names
 // that carry a colour word are masked first ("Red Sox" is not a Red parallel).
-const TEAM_MASK_RE = /\b(red sox|white sox|blue jays|red wings|green bay|golden state|golden knights|blue devils|crimson tide|orange bowl|black knights|silver bullets|gold rush|browns|reds|blues|golden bears|redskins|green wave|royals)\b/gi;
+// (Oct 6 identity re-audit) set and person names that carry a colour /
+// pattern word are masked the same way: 'Turkey Red' (T3) and 'Red Man'
+// (tobacco) are sets, not Red parallels (1,897 keys); 'Tiger Woods' in a
+// multi-player title is not a Tiger-stripe pattern
+const TEAM_MASK_RE = /\b(turkey red|red man|tiger woods|red sox|white sox|blue jays|red wings|green bay|golden state|golden knights|blue devils|crimson tide|orange bowl|black knights|silver bullets|gold rush|browns|reds|blues|golden bears|redskins|green wave|royals)\b/gi;
 const VARIANT_TOKENS: [RegExp, string][] = [
   [/\b(?:autograph(?:ed)?|signed|auto)\b/i, 'auto'],
   [/\b(?:patch|jersey|relic|swatch|memorabilia)\b/i, 'relic'],
@@ -85,6 +93,7 @@ const VARIANT_TOKENS: [RegExp, string][] = [
   [/\b(?:1\/1|one of one)\b/i, '1of1'],
   [/\b(?:variation|var\.|image variation|photo variation)\b/i, 'var'],
   [/\berror\b/i, 'error'],
+  // (read outside the set name and card number, modern cards only — SP_TOKEN)
   [/\bs?sp\b|\bshort print\b/i, 'sp'],
   [/\bdie[- ]?cut\b/i, 'diecut'],
   [/\bholo(?:foil|gram)?\b/i, 'holo'],
@@ -101,6 +110,27 @@ const VARIANT_TOKENS: [RegExp, string][] = [
   [/\bgr[ae]y back\b/i, 'grayback'],
   [/\bwhite back\b/i, 'whiteback'],
 ];
+/** (Oct 6 identity re-audit) 'SP' is a variant only when the house names a
+ *  short print OUTSIDE the set name and card number ("SP Authentic", "SP Game
+ *  Used", "#SP-JAZ" are the product / the number — 3.1k keys), and only on a
+ *  modern card: a pre-1980 "SP" / "Short Print" is a scarcity note on the
+ *  base card (1948-49 Leaf, 1953 Topps) some houses print and others don't —
+ *  it split one card's sales across two keys (737). */
+const SP_TOKEN = 'sp';
+/** (Oct 6 identity re-audit) a comic book or magazine issue keyed as a card:
+ *  H&S files CGC-graded Marvel/Timely/DC comics with its cards, Goldin SLAM
+ *  newsstand covers. Card products named for a magazine or comic (Bazooka
+ *  Comics, Sports Illustrated for Kids, Life Magazine hand-cuts, magazine
+ *  promo cards) carry a card word or brand and stay cards. */
+const MONTH_ISSUE = '(?:jan|feb|mar|apr|may|june?|july?|aug|sept?|oct|nov|dec)[a-z]*';
+const NOT_A_CARD_RE = new RegExp(String.raw`\bcomic books?\b|\b(?:marvel|dc|timely|quality|leading|atlas|fawcett|classic|gold key|dell|harvey|archie|ec) comics\b|\bnewsstand\b|\b(?:first|1st|last) issue\b|\bvol(?:ume)?\.? \d+,? #\d|#\d+[a-z]? ${MONTH_ISSUE} (?:19|20)\d\d\b`, 'i');
+const COMIC_APPEARANCE_RE = /\b(?:first|1st|early|second) (?:[a-z]+ )?appearance\b/i;
+const CARD_PRODUCT_WORD_RE = /\b(?:cards?|topps|fleer|bowman|bazooka|upper deck|panini|donruss|leaf|promo|stickers?|insert)\b/i;
+/** a comic book / magazine issue title (never a card identity) */
+export function isComicOrMagazineTitle(title: string): boolean {
+  const t = title || '';
+  return (NOT_A_CARD_RE.test(t) || (COMIC_APPEARANCE_RE.test(t) && /\bCGC\b/.test(t))) && !CARD_PRODUCT_WORD_RE.test(t);
+}
 /** a leading lot number immediately followed by a 4-digit year */
 // several cards in one lot (the count in parens follows a set/lot word or ends
 // the title: "Complete Set (576)", "Rookie Card Collection (25)")
@@ -138,7 +168,14 @@ export function playerSlugOf(name: string | null): string | null {
   return s || null;
 }
 
-function trimNameRun(run: string): string | null {
+// (Oct 6 identity re-audit) a LEADING name run (object titles, lot-style card
+// titles) also ends at a sport word or postseason descriptor: "Wayne Gretzky
+// Hockey Card", "Mickey Mantle Baseball", "Matt Moore Playoff Debut". Not
+// after a card number, where "#197 NL Playoffs Game 3" is the subset card's
+// own identity.
+const LEAD_NAME_STOP = /^(?:Baseball|Football|Basketball|Hockey|Soccer|Playoffs?|Postseason)$/i;
+
+function trimNameRun(run: string, lead = false): string | null {
   // a grader glued on by dashes ("Hank Aaron--PSA Gem Mint 10", "Babe Ruth-SGC")
   const words = run.trim().replace(/-+(?=(?:PSA|BGS|SGC|CGC|BVG)\b)/g, ' ').split(/\s+/);
   const kept: string[] = [];
@@ -146,6 +183,7 @@ function trimNameRun(run: string): string | null {
     const w = words[i];
     // stop on descriptors, INCLUDING hyphenated ones ("Game-Used", "Photo-Matched")
     if (NAME_STOP.test(w) || NAME_STOP.test(w.split('-')[0])) break;
+    if (lead && LEAD_NAME_STOP.test(w)) break;
     const w0 = w.split(/[-/]/)[0];
     if (GRADE_NAME_STOP.test(w0) || (kept.length >= 2 && COLOR_NAME_STOP.test(w0))) break;
     if (PAIR_NAME_STOP.test(words.slice(i, i + 2).join(' '))) break;
@@ -161,7 +199,7 @@ export function parseCard(title: string): CardId {
     player: null, playerSlug: null, year: null, setName: null, cardNo: null,
     gradeCo: null, gradeNum: null, serialOf: null, rookie: false, auto: false,
     gradeQual: null, gradeTag: null, gradeUnparsed: false, variant: null, autoGrade: null,
-    gradeTier: null, multi: false,
+    gradeTier: null, multi: false, notCard: false,
   };
   const t = (title || '').trim();
   if (!t) return out;
@@ -269,7 +307,7 @@ export function parseCard(title: string): CardId {
   // (some card titles lead with the player, lot-style)
   const after = noParens.match(AFTER_NO_PLAYER);
   const run = after ? trimNameRun(after[1]) : null;
-  const lead = !run ? (() => { const m = t.match(LEADING_PLAYER); return m ? trimNameRun(m[1]) : null; })() : null;
+  const lead = !run ? (() => { const m = t.match(LEADING_PLAYER); return m ? trimNameRun(m[1], true) : null; })() : null;
   out.player = run || lead;
   out.playerSlug = playerSlugOf(out.player);
 
@@ -279,13 +317,21 @@ export function parseCard(title: string): CardId {
   // (Oct 6) an MBA "Silver/Gold Diamond Certified" sticker is not a parallel
   let vt = t.replace(TEAM_MASK_RE, ' ').replace(/\bMBA\s+(?:silver|gold|platinum|black|red|blue)\s+diamond(?:\s+certified)?\b/gi, ' ');
   if (out.player) vt = vt.split(out.player).join(' ');
+  let spScope = vt;
+  if (out.setName) spScope = spScope.split(out.setName).join(' ');
+  spScope = spScope.replace(/#[A-Za-z0-9/.-]+/g, ' ');
+  const vintage = !!out.year && parseInt(out.year, 10) < 1980;
   const toks: string[] = [];
-  for (const [re, tok] of VARIANT_TOKENS) if (re.test(vt) && !toks.includes(tok)) toks.push(tok);
+  for (const [re, tok] of VARIANT_TOKENS) {
+    const src = tok === SP_TOKEN ? (vintage ? '' : spScope) : vt;
+    if (re.test(src) && !toks.includes(tok)) toks.push(tok);
+  }
   out.variant = toks.length ? toks.sort().join('+') : null;
 
   // MULTI-CARD lots (Oct 6): a set / pair / "Collection (25)" / two card
   // numbers is several cards — its price is never one card's
   out.multi = isMultiCardTitle(t);
+  out.notCard = isComicOrMagazineTitle(t);
   return out;
 }
 
@@ -296,7 +342,9 @@ export function parseCard(title: string): CardId {
    fixed slot, so the set of players the CARD parser has read ≥ minCount
    times is the roster an object name must belong to. Team / set / checklist
    runs that card titles also produce are excluded by word. */
-const NOT_A_PLAYER_WORD = /\b(team|teams|checklist|leaders?|league|leagues|rookies|stars|all|world|series|highlights?|cards?|set|sets|collection|lot|hall|fame|champions?|championship|giants|yankees|dodgers|cubs|sox|cardinals|tigers|pirates|athletics|senators|browns|braves|reds|phillies|orioles|indians|colts|packers|bears|celtics|lakers|bulls|knicks|canadiens|bruins|rangers|mets|jets|patriots|cowboys|steelers|49ers|raiders|eagles|lions|rams|chiefs|broncos|giants|warriors|heat|nets|spurs|beatles|stones|best|the|of|and|edition|special|in|action|record|breaker|boyhood|photo|future|prospects?|draft|picks?|batting|pitching|home|run|kings?|super|bowl|unopened|box|pack|wax|sports|illustrated|press|pass|panini|topps|upper|deck)\b/i;
+// (Oct 6) + lot-description leads that a card parse now stops at the sport
+// word on ("Assorted Brands Baseball …", "Nineteenth Century Baseball …")
+const NOT_A_PLAYER_WORD = /\b(assorted|brands|vintage|modern|century|nineteenth|various|greats|hofers?|hof|team|teams|checklist|leaders?|league|leagues|rookies|stars|all|world|series|highlights?|cards?|set|sets|collection|lot|hall|fame|champions?|championship|giants|yankees|dodgers|cubs|sox|cardinals|tigers|pirates|athletics|senators|browns|braves|reds|phillies|orioles|indians|colts|packers|bears|celtics|lakers|bulls|knicks|canadiens|bruins|rangers|mets|jets|patriots|cowboys|steelers|49ers|raiders|eagles|lions|rams|chiefs|broncos|giants|warriors|heat|nets|spurs|beatles|stones|best|the|of|and|edition|special|in|action|record|breaker|boyhood|photo|future|prospects?|draft|picks?|batting|pitching|home|run|kings?|super|bowl|unopened|box|pack|wax|sports|illustrated|press|pass|panini|topps|upper|deck)\b/i;
 export function knownPlayerSet(cardPlayers: Iterable<string | null | undefined>, minCount = 3): Set<string> {
   const n = new Map<string, number>();
   for (const name of Array.from(cardPlayers)) {
@@ -330,6 +378,10 @@ export function isMultiCardTitle(title: string): boolean {
   const noParens = t.replace(/\([^)]*\)/g, ' ').replace(/#?\d+\s*\/\s*\d+/g, ' ');
   return (noParens.match(/#\s?[A-Za-z]{0,4}\d/g) || []).length >= 2;
 }
+
+/** (Oct 6 identity re-audit) a structured NFL/MLB-Auction slot that names a
+ *  national or minor-league TEAM (World Baseball Classic, MiLB at Dyersville) */
+const STRUCTURED_TEAM_SLOT = /^(?:Great Britain|Dominican Republic|Puerto Rico|Chinese Taipei|Czech Republic|Czechia|South Africa|Kingdom of the Netherlands|(?:Team )?(?:USA|Japan|Mexico|Korea|Italy|Israel|Canada|Netherlands|Venezuela|Cuba|Australia|Colombia|Panama|Nicaragua|China|Germany|Spain|France|Brazil)|(?:[A-Z][a-z.]+ ){1,2}(?:Saints|Cubs|Bulls|Barons|Indians|Stars|Dragons|Bees|Kernels|Sounds|Isotopes|Aces|Bats|Chihuahuas|Express|Storm Chasers|RiverDogs|Hot Rods))$/;
 
 /** The player behind ANY sports lot: cards parse mid-title; objects (game-used
  *  jerseys, tickets, trophies) lead with the athlete's name. With `known`
@@ -366,12 +418,31 @@ export function playerOf(title: string, slug: string, known?: ReadonlySet<string
     /-\s+((?:[A-Z][\w'’.-]*[\w.]\s+){1,5}?)Game[- ](?:Worn|Used|Issued)/
   );
   if (structured) {
-    const words = structured[1].trim().split(/\s+/);
+    const pre = structured[1].trim();
+    // (Oct 6 identity re-audit) the MLB-Auctions WBC / MiLB form names the
+    // TEAM before the use-class and the athlete after the object: "… - Great
+    // Britain Game-Used Jersey - Tristan Beck (3/7/26)", "St. Paul Saints
+    // Game-Used Jersey: Ben Ross #48" — 'Great Britain', 'Dominican Republic',
+    // 'St. Paul Saints' were stamped as players. Only when the leading slot
+    // is such a team is the trailing slot read (Goldin's "… - David Ortiz
+    // Game-Used OWS Baseball - Foul Tip" keeps its leading athlete).
+    if (STRUCTURED_TEAM_SLOT.test(pre)) {
+      const tail = stripped.slice((structured.index || 0) + structured[0].length).replace(/&#0?39;|&apos;/g, "'")
+        .match(/^\s+[A-Za-z]+(?:\s+[A-Za-z]+){0,3}\s*[:–—-]\s+([A-Z][\w'’.-]*(?:\s+[A-Z][\w'’.-]*){1,3})/);
+      const tailName = tail ? trimNameRun(tail[1]) : null;
+      return tailName ? { player: tailName, playerSlug: playerSlugOf(tailName) } : { player: null, playerSlug: null };
+    }
+    const words = pre.split(/\s+/);
     // drop leading team token(s) — NFL/MLB franchise names are single words
     // here ("Jets", "Dolphins", "49ers", "Yankees"); two-word city forms don't
     // appear in these feeds. Anything left is the athlete.
     const TEAMS = /^(Cardinals|Falcons|Ravens|Bills|Panthers|Bears|Bengals|Browns|Cowboys|Broncos|Lions|Packers|Texans|Colts|Jaguars|Chiefs|Raiders|Chargers|Rams|Dolphins|Vikings|Patriots|Saints|Giants|Jets|Eagles|Steelers|49ers|Seahawks|Buccaneers|Titans|Commanders|Redskins|Football|Yankees|Mets|Dodgers|Cubs|Sox|Astros|Braves|Padres|Phillies|Mariners|Angels|Athletics|Orioles|Royals|Tigers|Twins|Guardians|Indians|Rangers|Blue|Jays|Marlins|Nationals|Pirates|Reds|Rockies|Brewers|Diamondbacks)$/i;
     while (words.length > 1 && TEAMS.test(words[0])) words.shift();
+    // a qualifier the house puts before "Game Worn" ends the name ("Quentin
+    // Johnston Signed Game Worn", "Teair Tart Signed Yellow Game Worn") —
+    // '<Name> Signed' was minted as a player on ~140 NFL Auction lots
+    const stop = words.findIndex((w, i) => i > 0 && (NAME_STOP.test(w) || LEAD_NAME_STOP.test(w)));
+    if (stop > 0) words.splice(stop);
     const cand = words.join(' ');
     if (words.length >= 2 && !NAME_STOP.test(words[0])) {
       // the structured NFL/MLB-Auction slot is reliable on its own — no gate
@@ -380,7 +451,7 @@ export function playerOf(title: string, slug: string, known?: ReadonlySet<string
     return { player: null, playerSlug: null };
   }
   const m = stripped.match(LEADING_PLAYER);
-  const name = m ? trimNameRun(m[1]) : null;
+  const name = m ? trimNameRun(m[1], true) : null;
   // reject non-person leads ("World Series", "Super Bowl", team-ish runs,
   // sale branding — "London Games", "Crucial Catch", "Salute to Service")
   if (name && /\b(World|Series|Super|Bowl|Olympic|Stanley|Final|Champion|League|Team|City|United|Yankees|Lakers|Cowboys|Collection|Games|Catch|Salute|Auction|Lot\b)/i.test(name)) {
@@ -558,7 +629,7 @@ export function cardSetKey(setName: string | null | undefined): string {
  *  variant signature + serial run (a /99 Gold parallel is a different card
  *  from the base, at every grade). */
 export function cardLadderKey(id: CardId): string | null {
-  if (!id.playerSlug || !id.year || !id.cardNo || id.multi) return null;
+  if (!id.playerSlug || !id.year || !id.cardNo || id.multi || id.notCard) return null;
   const set = cardSetKey(id.setName);
   const v = id.variant ? `|v:${id.variant}` : '';
   const s = id.serialOf ? `|/${id.serialOf}` : '';

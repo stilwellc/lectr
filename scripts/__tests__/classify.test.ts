@@ -242,7 +242,7 @@ test('class 10 · player names on object lots come from the known-player roster'
   // the structured NFL/MLB Auction slot is trusted as-is
   assert.equal(P('Dublin Games - Vikings Chaz Chambliss Game Worn Jersey (9/28', 'game-used'), 'Chaz Chambliss');
   // without a roster the parser behaves as before
-  assert.equal(playerOf('Barry Bonds Baseball', 'sports-memorabilia').player, 'Barry Bonds Baseball');
+  assert.equal(playerOf('Barry Bonds Baseball', 'sports-memorabilia').player, 'Barry Bonds'); // a sport word ends the run (Oct 6 re-audit)
 });
 
 test('class 11 · attribution: after / attributed / appropriation / exhibition posters / namesakes are evicted', () => {
@@ -270,7 +270,8 @@ test('class 12 · culture mass leaks: graded tapes, sealed boxes, toys, non-spor
   assert.equal(C('2023 Union Arena Ua02Bt/Jjk Jujutsu Kaisen 068 Suguru Geto – PSA MINT 9'), DROP);
   assert.equal(C('2023 Disney Lorcana EN 1 The First Chapter Enchanted #206 Stitch - Carefree Surfer - PSA GEM MT 10'), DROP);
   assert.equal(C('1887 N172 John Clarkson CHI Right Hand, Right Profile - PSA EX 5 (Highest Graded!)', 'entertainment-memorabilia', 'RR Auction'), 'graded-cards');
-  assert.equal(C('1933 Goudey #31 Tony Lazzeri PSA EX 5', 'entertainment-memorabilia', 'RR Auction'), 'graded-cards');
+  // (wave 2) a roster athlete's card at RR routes through RR's own sports ladder — its card slug is sports-cards
+  assert.equal(C('1933 Goudey #31 Tony Lazzeri PSA EX 5', 'entertainment-memorabilia', 'RR Auction'), 'sports-cards');
   // encapsulated autographs, graded tickets, signed cards and original posters are real culture lots
   assert.equal(C('Cher Signature - PSA GEM MT 10', 'entertainment-memorabilia', 'RR Auction'), 'entertainment-memorabilia');
   assert.equal(C('John F. Kennedy Typed Letter Signed as President - PSA MINT 9', 'entertainment-memorabilia', 'RR Auction'), 'entertainment-memorabilia');

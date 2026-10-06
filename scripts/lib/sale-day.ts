@@ -21,6 +21,10 @@
  *   · Sotheby's gives genuine opening/close instants: the Now & Contemporary
  *     Evening Auction, New York, 18 Nov 2025 7 PM EST is 2025-11-19T00:00Z;
  *     NBA weekly finals close 9:30 PM ET = 01:30Z next day (5,147 lots).
+ *   · MLB Auctions / NFL Auction (iSynApp) print closeTime in GMT; team
+ *     sales close ~9:59 PM ET (MLB brewers/rangers/astros: 01:59Z), so the
+ *     GMT day is the NEXT day (date re-audit Oct 2026: 3/4 MLB rows a day
+ *     late). Read in ET, same overnight rule as Goldin.
  *
  * Pure, dependency-free (Intl only). Returns null when the house is not one
  * whose dates this module owns or the stamp is unreadable — callers keep the
@@ -49,7 +53,9 @@ const LOCATION_TZ: [RegExp, string][] = [
   [/\bmumbai\b/i, 'Asia/Kolkata'],
 ];
 
-export const SALE_DAY_HOUSES: ReadonlySet<string> = new Set(['Goldin', "Christie's", "Sotheby's"]);
+export const SALE_DAY_HOUSES: ReadonlySet<string> = new Set(['Goldin', "Christie's", "Sotheby's", 'MLB Auctions', 'NFL Auction']);
+/** houses whose sales close in the US evening (ET), extended bidding past midnight */
+const ET_EVENING_HOUSES: ReadonlySet<string> = new Set(['Goldin', 'MLB Auctions', 'NFL Auction']);
 
 const fmtCache = new Map<string, Intl.DateTimeFormat>();
 function fmt(tz: string): Intl.DateTimeFormat {
@@ -81,7 +87,7 @@ const utcDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
 /** The sale-location zone for a lot, or null when unknown. */
 export function saleTimeZone(house: string, ctx: { saleName?: string | null; currency?: string | null } = {}): string | null {
-  if (house === 'Goldin') return 'America/New_York';
+  if (ET_EVENING_HOUSES.has(house)) return 'America/New_York';
   if (house === "Christie's" && ctx.saleName) {
     // "<Location> Sale <number>" (the www search feed) names the room
     const m = /^(.+?)\s+Sale\s+\d+/i.exec(ctx.saleName);
@@ -92,7 +98,8 @@ export function saleTimeZone(house: string, ctx: { saleName?: string | null; cur
 
 /**
  * The calendar day of the sale for a house stamp, or null (not ours / no stamp).
- * Goldin   — ET; a close before 06:00 ET is the previous night's sale.
+ * Goldin / MLB Auctions / NFL Auction — ET; a close before 06:00 ET is the
+ *   previous night's sale.
  * Christie's — a minute-precision www stamp on the hour is a local-midnight
  *   (or bare-date at 00:00Z) marker: UTC hour ≥ 12 → the next UTC day (a zone
  *   east of UTC), else the UTC day. Any other stamp is a genuine instant, read
@@ -104,7 +111,7 @@ export function saleDayOf(house: string, stamp: string | null | undefined, ctx: 
   if (!stamp || !SALE_DAY_HOUSES.has(house)) return null;
   const ms = parseStamp(stamp);
   if (!Number.isFinite(ms)) return null;
-  if (house === 'Goldin') {
+  if (ET_EVENING_HOUSES.has(house)) {
     const lp = localParts(ms, 'America/New_York');
     return lp.hour < 6 ? localParts(ms - 6 * 3600e3, 'America/New_York').day : lp.day;
   }

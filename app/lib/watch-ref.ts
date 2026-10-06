@@ -46,13 +46,13 @@ const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
 const modelKeyOf = (m: string) => fold(m).replace(/[-~ ]/g, '');
 
 // "ref" / "réf" / "reference" / "référence", then . : , or whitespace, then an
-// optional "no." — then the ref token in the pre-Sep-28 shape (so every key the
+// optional "#" / "no." — then the ref token in the pre-Sep-28 shape (so every key the
 // old reader produced is produced unchanged; only forms it MISSED are added).
 // No leading \b: concatenated catalogue fields glue the label to the previous
 // word ("…wristwatchRef. 3215", "…dateRef: 77113") and the old reader then
 // fell through to the CASE number. The separator + digit requirement keeps
 // words that merely contain "ref" (refined, reflector) out.
-const LABEL = String.raw`r[eé]f(?:[eé]rence)?(?:\s*[.:,]\s*|\s*)(?:(?:no|nr|n°)\.?\s*)?`;
+const LABEL = String.raw`r[eé]f(?:[eé]rence)?(?:\s*[.:,]\s*|\s*)(?:#\s*)?(?:(?:no|nr|n°)\.?\s*)?`;
 const LABELLED = new RegExp(LABEL + String.raw`([a-z]?\d{3,6}[a-z]{0,4}(?:\/\d+[a-z]?)?)\b((?:\.\d{2,4})*)`);
 // forms the old shape could not read: an Omega case-type prefix before a
 // dotted ref ("Ref: ST 105.003-65", "Réf. BA 145.0041") and Cartier W-refs
@@ -65,10 +65,28 @@ const LABELLED_W = new RegExp(LABEL + String.raw`((?:cr)?w[a-z]{0,4}\d{4,6}[a-z0
 // "311.30.42.30.01.005" keeps four (collection.material.size.movement — the
 // dial/strap tail is a variant). A 4-digit core (3570.50, 2531.80) already
 // names the model and stays bare, as it always has.
+// (Oct 6 2026 categorization re-audit) the WHOLE printed ref is kept: the
+// four-group cut made "145.00.52" read "145.00" (every 145.00xx Speedmaster)
+// and "310.20.42.50.01.001" a different reference than the one printed.
 function dottedKey(core: string, dots: string): string {
   if (core.length !== 3) return core;
   const g = dots.split('.').filter(Boolean);
-  return [core, ...g.slice(0, g.length >= 4 ? 3 : 1)].join('.');
+  return [core, ...g].join('.');
+}
+
+// Omega refs printed WITHOUT their dots after a label: "REF. ST 145022" is
+// 145.022, "Ref. 1450022" 145.0022, "REF. 32158445251001" the modern
+// six-group 321.58.44.52.51.001 (that one used to fall to the model name);
+// an eight-digit "25195100" is the four-digit-core 2519.51.00, keyed 2519
+// like every dotted four-digit core.
+const OMEGA_UNDOTTED = new RegExp(LABEL + String.raw`(?:(?:st|ba|bj|bt|bd|cd|ot|ck|dd|md|sa|sy|sc|ta|dt|kd)\s?)?(\d{14}|\d{8}|\d{6,7})(?![\d.])`);
+function omegaUndotted(t: string): string | null {
+  const m = t.match(OMEGA_UNDOTTED);
+  if (!m) return null;
+  const d = m[1];
+  if (d.length === 14) return [d.slice(0, 3), d.slice(3, 5), d.slice(5, 7), d.slice(7, 9), d.slice(9, 11), d.slice(11)].join('.');
+  if (d.length === 8) return d.slice(0, 4);
+  return d.slice(0, 3) + '.' + d.slice(3);
 }
 
 function labelled(t: string): string | null {
@@ -182,10 +200,12 @@ export function refSuffixMaterial(title: string | null | undefined, maker: strin
   return raw ? splitWatchRef(maker, raw).material : null;
 }
 
-// lower-case, whitespace-folded, and the Swiss thousands mark inside a number
-// removed ("REF. 66'714BC" is 66714bc, not 66)
+// lower-case, whitespace-folded, the Swiss thousands mark inside a number
+// removed ("REF. 66'714BC" is 66714bc, not 66), and the typographic
+// fraction slash a catalogue export prints read as "/" ("5711⁄110P" was cut
+// to 5711 at the U+2044)
 const prep = (s: string | null | undefined, ws = true) => {
-  const t = (s || '').toLowerCase().replace(/(\d)['’](\d)/g, '$1$2');
+  const t = (s || '').toLowerCase().replace(/(\d)['’](\d)/g, '$1$2').replace(/[⁄∕]/g, '/');
   return ws ? t.replace(/\s+/g, ' ') : t;
 };
 
@@ -198,7 +218,7 @@ export function readWatchKey(title: string | null | undefined, maker?: string): 
   const t = prep(title, false);
   // the strict label, else (tracked makers) the loose label — a printed
   // "Calatrava, Ref: 96" is a reference, not the model line
-  const r = labelled(t) ?? (maker && WATCH_MAKERS.has(maker) ? labelledLoose(t.replace(/\s+/g, ' '), maker) : null);
+  const r = (maker === 'omega' ? omegaUndotted(t.replace(/\s+/g, ' ')) : null) ?? labelled(t) ?? (maker && WATCH_MAKERS.has(maker) ? labelledLoose(t.replace(/\s+/g, ' '), maker) : null);
   if (r) return { key: canon(maker, r), kind: 'ref' };
   const m = modelLine(t, maker);
   if (m) return { key: m, kind: 'model-name' };
@@ -210,7 +230,7 @@ export function readWatchKey(title: string | null | undefined, maker?: string): 
 export function readWatchReference(title: string | null | undefined, maker: string): string | null {
   if (!WATCH_MAKERS.has(maker)) return null;
   const t = prep(title);
-  const r = labelled(t) ?? labelledLoose(t) ?? bare(t, maker);
+  const r = (maker === 'omega' ? omegaUndotted(t) : null) ?? labelled(t) ?? labelledLoose(t) ?? bare(t, maker);
   if (r) return canon(maker, r);
   return modelLine(t, maker)
     ?? (maker === 'cartier' && /\bmust de cartier\b/.test(t) ? 'mustdecartier' : null)
@@ -223,7 +243,7 @@ export function readWatchReference(title: string | null | undefined, maker: stri
 export function readDescriptionReference(text: string | null | undefined, maker: string): string | null {
   if (!WATCH_MAKERS.has(maker) || !text) return null;
   const t = prep(text);
-  const r = labelled(t) ?? labelledLoose(t);
+  const r = (maker === 'omega' ? omegaUndotted(t) : null) ?? labelled(t) ?? labelledLoose(t);
   return r && vetReference(maker, r, t) ? canon(maker, r) : null;
 }
 
