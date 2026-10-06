@@ -19,7 +19,7 @@ import { ARTISTS } from '../app/constants';
 import { buildIdf, buildVectors } from '../app/lib/similarity';
 import { groupRepeatSales } from './lib/repeat-sale';
 import { buildMakerIndicesParallel } from './lib/maker-pool';
-import { buildCompCandidateIndex, compCandidates, type CompCandidateIndex, resolveComps, estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, noEstGateOf, buyerFields, vsBidRead, quantile, knownKey, ENGINE_VERSION, ENGINE_FLAGS_CANDIDATE, type ValueResult, type AbstainReason } from '../app/lib/value';
+import { buildCompCandidateIndex, compCandidates, type CompCandidateIndex, resolveComps, estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, noEstGateOf, buyerFields, vsBidRead, floorAtBid, quantile, knownKey, ENGINE_VERSION, ENGINE_FLAGS_CANDIDATE, type ValueResult, type AbstainReason } from '../app/lib/value';
 import { fitCardCalibration, cardGate, CARD_GATE, type CardResidual, type CardCalibration } from '../app/lib/cards-gate';
 import { inferHammerUsd } from '../app/lib/premiums';
 import { pokemonKey } from './sub-markets';
@@ -1332,6 +1332,21 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     const cardBidOnly = cardValued + tierCounts.none + tierCounts.gated;
     console.log(`[market] card value estimator: ${cardValued}/${cardBidOnly} bid-only cards valued (${cardBidOnly ? (100 * cardValued / cardBidOnly).toFixed(1) : '0'}%) · tier1 exact=${tierCounts.exact} · tier2 grade-adj=${tierCounts['grade-adj']} · tier3 player=${tierCounts.player} · gated=${tierCounts.gated} · none=${tierCounts.none}`);
     console.log(`[market] cross-house live collisions stamped: ${crossLiveStamped}`);
+  }
+  // THE LIVE-BID FLOOR (Oct 6 2026, value.floorAtBid): every served value —
+  // hedonic and card tier — at or above the hammer bid already on the lot
+  // (×1.1 inside the sale's last 3 days). Applied at publish, after every
+  // value is stamped, so the tape, the calls ledger and the book all carry it.
+  {
+    let floored = 0;
+    for (const l of all) {
+      if (l.status !== 'upcoming') continue;
+      const lw = l as AuctionLot & { value?: ValueResult | null; currentBid?: number; saleDateTime?: string | null };
+      if (!lw.value || !((lw.currentBid || 0) > 0)) continue;
+      const f = floorAtBid(lw.value, lw, NOW_MS);
+      if (f !== lw.value) { lw.value = f; if (f.bidFloor != null) floored++; }
+    }
+    console.log(`[market] live-bid floor: ${floored} served values lifted to the bid on the lot`);
   }
   // the point-in-time evaluation seam stops here: every upcoming lot now
   // carries the value/abstain/cardComps it would have been served

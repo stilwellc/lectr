@@ -201,6 +201,54 @@ export function buyerFields(
   };
 }
 
+/** (Oct 6 2026) THE LIVE-BID FLOOR. A live lot's hammer cannot land below the
+ *  bid already on it (currentBid is a HAMMER bid), so every served value is
+ *  floored there: expectedHammerUsd = max(xh, bid), and inside the last
+ *  BID_FLOOR_LATE_DAYS of the sale max(xh, bid × BID_FLOOR_LATE_LIFT) — a lot
+ *  that close still draws at least one more increment. The band low and max
+ *  bid are floored at the bid itself; the all-in fields keep their meaning
+ *  (compValueUsd / low / estimateUsd = hammer × the lot's premium at that
+ *  hammer). vsBid stays the COMPS read (it is computed before the floor).
+ *  Measured on the served tape (Sep 20 – Oct 5, 3,189 graded lots, first
+ *  served value): median abs error 154% → 86.0% (floor alone 86.9%), ±30%
+ *  17.8% → 25.0%, bias 1.61 → 1.29; last served value 154% → 60.2% (floor
+ *  alone 66.5%); card exact tier 67% → 36%. Applied at publish (build-market),
+ *  never inside the replay — a holdout lot has no bid at valuation time. */
+export const BID_FLOOR_LATE_DAYS = 3;
+export const BID_FLOOR_LATE_LIFT = 1.1;
+export function floorAtBid<V extends Partial<ValueResult> & { compValueUsd: number }>(
+  v: V, lot: { currentBid?: number | null; auctionHouse?: string | null; buyerPremiumPct?: number | null; saleDate?: string | null; saleDateTime?: string | null },
+  nowMs: number,
+): V {
+  const bid = lot.currentBid || 0;
+  if (!(bid > 0)) return v;
+  const closeMs = Date.parse(String(lot.saleDateTime || lot.saleDate || ''));
+  const late = Number.isFinite(closeMs) && (closeMs - nowMs) / 86_400_000 <= BID_FLOOR_LATE_DAYS;
+  const floor = bid * (late ? BID_FLOOR_LATE_LIFT : 1);
+  const xh = v.expectedHammerUsd ?? (v.premiumFactor ? v.compValueUsd / v.premiumFactor : lotHammerFromAllIn(lot, v.compValueUsd));
+  if (xh >= floor && !((v.bandLowUsd ?? Infinity) < bid)) return v;
+  const out = { ...v } as V;
+  if (xh < floor) {
+    const pf = lotAllInFactor(lot, floor);
+    const allIn = Math.round(floor * pf);
+    out.expectedHammerUsd = Math.round(floor);
+    out.premiumFactor = Math.round(pf * 1000) / 1000;
+    out.compValueUsd = allIn;
+    if (out.estimateUsd != null) out.estimateUsd = allIn;
+    if ((out.high ?? 0) < allIn) out.high = allIn;
+    if ((out.bandHighUsd ?? 0) < out.expectedHammerUsd) out.bandHighUsd = out.expectedHammerUsd;
+    out.bidFloor = Math.round(floor);
+  }
+  const bidAllIn = Math.round(bid * lotAllInFactor(lot, bid));
+  if (out.bandLowUsd != null && out.bandLowUsd < bid) out.bandLowUsd = Math.round(bid);
+  if (out.low != null && out.low < bidAllIn) out.low = bidAllIn;
+  if (out.maxBidUsd != null) {
+    const lo = out.bandLowUsd ?? 0, hi = out.expectedHammerUsd ?? Infinity;
+    out.maxBidUsd = Math.min(hi, Math.max(lo, out.maxBidUsd));
+  }
+  return out;
+}
+
 export interface ValueResult {
   /** the pool this was computed from (real sales, inspectable) */
   poolIds: string[];
@@ -269,6 +317,9 @@ export interface ValueResult {
   premiumFactor?: number;
   /** the engine version that produced this value */
   engineVersion?: string;
+  /** (Oct 6 2026) set when the live-bid floor lifted the expected hammer:
+   *  the floor it was lifted to (hammer USD) — see floorAtBid */
+  bidFloor?: number;
   /** (Oct 3 2026, card/TCG values) the publish-gate record of this value's
    *  market × tier × confidence cell over the trailing year, out of sample:
    *  graded n, share within ±30%, median realized / value */
