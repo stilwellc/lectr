@@ -1507,7 +1507,10 @@ const PRINT_PROCESS = /\b(lithograph(?:s|e|ie)?|silkscreen|screen\s?print(?:s|in
 const PLATE_FROM = /\b(?:pl\.?|plates?)\s*(?:[IVXLCDM]+\b|\d{1,3}\b)?[,]?\s*from\b|\b(?:one|two|three|four|five|six|seven|eight|\d{1,2})\s+plates?\b|\bplate\s+(?:[IVXLCDM]+|\d{1,3})\b/i;
 const FROM_SERIES = /,\s*from\s+(?!the\s+(?:collection|estate|property)|a\s+private|an?\s+important)(?:the\s+)?[A-Z'"«“]/;
 const EDITION_STRONG = /\bedition of \d+\b|\bfrom (?:an|the) edition\b|\bnumbered\b[^.;]{0,16}\d{1,3}\s*\/\s*\d{1,4}|\bartist'?s proof\b|\bprinter'?s proof\b|\btrial proof\b|\bbon [aà] tirer\b|\bhors commerce\b/i;
-const ORIGINAL_STRONG = /\b(?:oil|acrylic|tempera|alkyd|enamel|synthetic polymer)\b[^.;]{0,40}\bon\s+(?:canvas|linen|panel|board|masonite|cardboard|paper)\b|\bmixed media on (?:canvas|panel|board)\b|\bhand[- ]painted\b|\bunique\b/i;
+// (wave 3) Warhol's medium line runs long ("Synthetic polymer paint,
+// screenprint ink, and diamond dust on canvas") and silkscreen INK on canvas
+// is his painting medium — neither may be flipped back to a print
+const ORIGINAL_STRONG = /\b(?:oil|acrylic|tempera|alkyd|enamel|synthetic polymer)\b[^.;]{0,60}\bon\s+(?:canvas|linen|panel|board|masonite|cardboard|paper)\b|\b(?:silkscreen|screen ?print) inks?\b[^.;]{0,60}\bon (?:canvas|linen)\b|\bmixed media on (?:canvas|panel|board)\b|\bhand[- ]painted\b|\bunique\b/i;
 const OIL_CANVAS = /\b(?:oil|acrylic|tempera|synthetic polymer)\b[^.;]{0,30}\bon\s+(?:canvas|panel|board|linen|masonite)\b/i;
 const EDITION_ANY = /\bedition of \d+|\bnumbered edition\b|\blimited edition\b/i;
 
@@ -1856,7 +1859,7 @@ const CULT_KIND_RULES: [RegExp, string][] = [
   // a signed FLAT / retail piece is an autograph (a signed programme, book,
   // menu, card, standee, retail hat or ball); a signed guitar, album, shoe or
   // document is still that object (the noun rules below)
-  [/\b(?:signed|autographed)\b.{0,30}\b(?:programs?|programmes?|books?|menus?|cards?|pages?|standees?|drum ?sticks?|hats?|caps?|baseballs?|footballs?|basketballs?|balls?|posters?|banners?|plaques?|bats?|helmets?|jerseys?|mini[- ]helmets?)\b|\b(?:programs?|programmes?|books?|menus?|cards?|pages?)\b.{0,25}\bsigned\b/i, 'autograph-other'],
+  [/\b(?:signed|autographed)\b.{0,30}\b(?:programs?|programmes?|books?|menus?|cards?|pages?|standees?|drawings?|sketch(?:es)?|artwork|drum ?sticks?|hats?|caps?|baseballs?|footballs?|basketballs?|balls?|posters?|banners?|plaques?|bats?|helmets?|jerseys?|mini[- ]helmets?)\b|\b(?:programs?|programmes?|books?|menus?|cards?|pages?)\b.{0,25}\bsigned\b/i, 'autograph-other'],
   [/\b(?:photo|photos|photograph|photographs|snapshots?|negatives?|carte[- ]de[- ]visites?|cdvs?|tintypes?|daguerreotypes?|polaroids?|(?:film|press|publicity|production|black and white|colou?r) stills?|a still of|contact sheets?|transparenc(?:y|ies)|image of)\b/i, 'photo'],
   [/\b(?:letters?|correspondence|telegrams?|manuscripts?|typescripts?|documents?|deeds?|land grants?|commissions?|proclamations?|broadsides?|autograph notes?|handwritten|lyrics?|diar(?:y|ies)|notebooks?|als|tls|endorsements?|(?:confederate|war|treasury|savings|railroad) bonds?|bond certificates?|certificates?|stock|treaty|bulletins?|memo(?:randum|randa|s)?|ledgers?|registers?|guest ?books?|journals?|financial statements?|contracts?|telephone messages?|itinerar(?:y|ies)|writes (?:to|his|her|a|an|of|about|from))\b/i, 'document'],
   [/\b(?:script|scripts|screenplay|shooting script|storyboards?|teleplay)\b/i, 'script'],
@@ -1891,7 +1894,10 @@ function descHead(title: string, desc: string): string {
   return d.slice(0, 260);
 }
 export function cultureItemClass(l: { title?: string | null; description?: string | null; saleName?: string | null; auctionHouse?: string | null }): string {
-  const title = String(l.title || '').replace(/["“”]/g, ' ');
+  // (wave 3) a portrait DRAWING / painting is not a photograph ("Kurt Cobain
+  // Signed Original DJ Portrait Drawing")
+  let title = String(l.title || '').replace(/["“”]/g, ' ');
+  if (/\b(?:drawings?|sketch(?:es)?|paintings?|illustrations?|caricatures?)\b/i.test(title)) title = title.replace(/\bportraits?\b/gi, ' ');
   if (CULT_CARD_RE.test(title)) return 'card';
   // the word "prop" names the kind wherever it sits ("Stormtrooper Helmet Prop")
   if (/\bprops?\b/i.test(title)) return 'prop';
@@ -1905,6 +1911,9 @@ export function cultureItemClass(l: { title?: string | null; description?: strin
   if (/\bphotograph/i.test(sale)) return 'photo';
   // RR's signed-piece shorthand: "<Signer> Book", "<Signer> Program", "<Signer> Menu"
   if (l.auctionHouse === 'RR Auction' && /\b(?:books?|programs?|programmes?|menus?|cards?|bibles?|baseballs?|footballs?|basketballs?|bats?|balls?|scores?|pages?|first day covers?|covers?)\s*$/i.test(title.trim())) return 'autograph-other';
+  // (wave 3) RR's narrative letter headline: "Edwin M. Stanton: Stanton
+  // consoles a doctor …", "Judy Garland: Judy refuses to share her money …"
+  if (/^[^:]{3,60}:\s+(?:[A-Z][\w.'’-]*\s+){1,3}(?:writes|wrote|consoles|refuses|thanks|asks|discusses|explains|recalls|reflects|praises|requests|orders|informs|tells|declines|accepts|invites|congratulates|heralds|defends|describes|urges|offers|sends|seeks|laments|confirms|responds|replies|reports|promises|agrees|complains|announces|instructs|advises|apologizes|insists|warns|vows|pledges|recommends|appoints|authorizes|grants|demands)\b/.test(title)) return 'document';
   return 'other';
 }
 function cultPersonOf(title: string): string | null {

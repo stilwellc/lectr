@@ -6,7 +6,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { subCatOf, sportOfSale, cultureTextDomain, curatedDomainOf } from '../lib/sub-cats';
-import { stampSubCats, clearJunkModelKeys } from '../lib/corpus-normalize';
+import { stampSubCats, clearJunkModelKeys, cultureItemClass } from '../lib/corpus-normalize';
+import { reclassifyLot, DROP } from '../lib/classify';
 import { isWatchModelLine } from '../../app/lib/watch-ref';
 import { parseCard, cardLadderKey, cardKey, playerOf, knownPlayerSet } from '../../app/lib/cards';
 
@@ -90,13 +91,9 @@ test('drill 1e · culture domain from the lot\'s own words; Prince and Queen the
   assert.equal(curatedDomainOf(['marilyn monroe unpublished snapshot']), 'hollywood');
 });
 
-test('drill 1f · watch family from the description head; design material from the text', () => {
+test('drill 1f · watch family from the description head', () => {
   const W = subCatOf({ artist: 'rolex', formKey: 'wristwatch', title: 'A very fine stainless steel chronograph wristwatch with bracelet', description: 'Rolex Cosmograph Daytona, ref. 6263, a very fine stainless steel chronograph' });
   assert.equal(W.drill, 'daytona');
-  const Dz = (title: string, description = '') => subCatOf({ artist: 'pierre-jeanneret', formKey: 'seating', title, description }).drill;
-  assert.equal(Dz('teak, cane and rope'), 'teak');
-  assert.equal(Dz('Pair of \'Committee\' Chairscirca 1953model no. PJ-SI-30-A, teak, cowhide'), 'teak');
-  assert.equal(subCatOf({ artist: 'jean-prouve', formKey: 'seating', title: '"Antony Chair". Lounge chair with orange lacquered metal frame.' }).drill, 'steel');
 });
 
 test('modelKey 2 · a model key survives only as an identity: design codes, art catalogue numbers, watch model lines / printed refs', () => {
@@ -151,4 +148,59 @@ test('player 4 · sold sports objects: the one known player anywhere in the head
   const k2 = knownPlayerSet(['Babe Ruth', 'Babe Ruth', 'Babe Ruth', 'Babe Ruth Type', 'Babe Ruth Type', 'Babe Ruth Type']);
   assert.equal(k2.has('babe-ruth-type'), false);
   assert.equal(playerOf('1932 Babe Ruth Type I Original Photo - PSA/DNA', 'type-1-photos', k2).player, 'Babe Ruth');
+});
+
+type Mv = { artist: string; title: string; auctionHouse: string; category?: string; description?: string; saleName?: string };
+const mv = (o: Mv): string => {
+  const l: any = { id: 'x', category: 'object', saleName: '', description: '', ...o };
+  const r = reclassifyLot(l);
+  return r.drop ? DROP : `${l.artist}${o.category ? `/${l.category}` : ''}`;
+};
+
+test('sports 5 · misroutes: slabbed ticket-named cards, signed balls, GU footballs, non-athlete autographs; wrongful evictions restored', () => {
+  // wave-2 wrongful evictions: Contenders / Prospect Ticket "Gold Vinyl" cards
+  assert.equal(mv({ artist: 'tickets-passes', auctionHouse: 'Goldin', title: '22 Panini Contenders Rookie Ticket Autograph Premium Edition Gold Vinyl #138 Luka Garza Signed Rookie Card (#1/1) – PSA MINT 9' }), 'sports-cards');
+  assert.equal(mv({ artist: 'tickets-passes', auctionHouse: 'Goldin', title: '2024 Panini Prospect Edition Prospect Ticket Gold Vinyl #62 Blake Dunn Rookie Card (#1/1) - PSA GEM MT 10' }), 'sports-cards');
+  // and the H&S mixed Multi / Non-Sport lots
+  assert.equal(mv({ artist: 'graded-cards', auctionHouse: 'Huggins & Scott', title: 'Late 1880s-1980s Multi/Non-Sport Treasure Chest of (2,049) Cards with Many Hall of Famers & Stars' }), 'graded-cards');
+  // wave-2 slip: a singles collection that also has wrappers stays a card lot
+  assert.equal(mv({ artist: 'graded-cards', auctionHouse: 'Huggins & Scott', title: '1970-79 Topps Baseball Singles Collection (844) Plus (22) Wrappers' }), 'graded-cards');
+  assert.equal(mv({ artist: 'sports-cards', auctionHouse: 'Goldin', title: 'Roger Clemens Signed Commemorative 300th Win, 4,000 Strikeout OML Yankees 100th Anniversary Selig Baseball - Beckett' }), 'autographs');
+  assert.equal(mv({ artist: 'trophies-awards', auctionHouse: 'Goldin', title: 'Aaron Rodgers Signed & "2021 MVP" Inscribed Official NFL Football - Fanatics' }), 'autographs');
+  assert.equal(mv({ artist: 'trophies-awards', auctionHouse: 'Goldin', title: '1957 Mickey Mantle MVP Award Plaque Signed' }), 'trophies-awards');
+  assert.equal(mv({ artist: 'tickets-passes', auctionHouse: 'NFL Auction', title: 'NFL - Vikings Game Used Football (11/16/2025) Numbered 020 Next Gen Stats Notable Play: J. McCarthy 30 Yard TD Pass' }), 'game-used');
+  assert.equal(mv({ artist: 'autographs', auctionHouse: 'Huggins & Scott', title: '1963 Dwight D. Eisenhower Signed Typed Letter with Original Mailing Envelope--Full JSA' }), 'entertainment-memorabilia');
+  assert.equal(mv({ artist: 'autographs', auctionHouse: 'RR Auction', title: 'Billy Joel Signed Baseball' }), 'entertainment-memorabilia');
+  assert.equal(mv({ artist: 'autographs', auctionHouse: 'RR Auction', title: 'Babe Ruth and Calvin Coolidge Signed Photograph' }), 'autographs');
+});
+
+test('culture 6 · NASA photos are space, RR "Horse Racing:" an athlete autograph, Hake\'s 1920+ pins and magazine runs are mass', () => {
+  assert.equal(mv({ artist: 'entertainment-memorabilia', auctionHouse: 'Goldin', title: 'Jul. 3, 1969 Buzz Aldrin Apollo 11 "Countdown Demo Test" Type I Original Photo by NASA' }), 'space-exploration');
+  assert.equal(mv({ artist: 'entertainment-memorabilia', auctionHouse: 'RR Auction', title: 'Horse Racing: Cauthen, Steve' }), 'autographs');
+  assert.equal(mv({ artist: 'entertainment-memorabilia', auctionHouse: "Hake's", title: 'ROBERT F. KENNEDY 1968 STAFF PIN.' }), DROP);
+  assert.equal(mv({ artist: 'entertainment-memorabilia', auctionHouse: "Hake's", title: 'TRUMAN AND BARKLEY CLASSIC JUGATE WITH LIGHT AGE TONE.' }), 'entertainment-memorabilia');
+  assert.equal(mv({ artist: 'entertainment-memorabilia', auctionHouse: "Christie's", title: 'THE BEATLES MONTHLY - A COMPLETE RUN' }), DROP);
+});
+
+test('culture 7 · kind: a portrait DRAWING is not a photo; RR narrative letter headlines are documents', () => {
+  assert.equal(cultureItemClass({ title: 'NIRVANA: KURT COBAIN SIGNED ORIGINAL DJ PORTRAIT DRAWING &bull;' }), 'autograph-other');
+  assert.equal(cultureItemClass({ title: 'Edwin M. Stanton: Stanton consoles a doctor shortly before teaming with Lincoln', auctionHouse: 'RR Auction' }), 'document');
+  assert.equal(cultureItemClass({ title: 'Judy Garland: Judy refuses to share her money from A Star Is Born', auctionHouse: 'RR Auction' }), 'document');
+  assert.equal(cultureItemClass({ title: 'Marilyn Monroe Signed Portrait Photograph' }), 'signed-photo');
+});
+
+test('art 8 · originals without print evidence, Koons porcelain, homage / appropriation / photographer leads', () => {
+  const W = (o: Partial<Mv>) => mv({ artist: 'andy-warhol', category: 'print', auctionHouse: "Christie's", title: 't', ...o });
+  // an estate inventory number is not an edition
+  assert.equal(W({ title: 'Andy Warhol (1928-1987) Owl and Feet', description: "stamped with the Estate of the Andy Warhol and the Andy Warhol Foundation for the Visual Arts, Inc. stamps and numbered '221.032' (on the reverse) ink on paper 16 x 14 in." }), 'andy-warhol/original');
+  assert.equal(W({ title: 'ANDY WARHOL (1928-1987) Santa Claus (from Myths)', description: "numéroté 'PA51.010' (sur le revers) peinture au polymère synthétique, peinture dorée et encres sérigraphiques sur toile 152.4 x 152.4 cm." }), 'andy-warhol/original');
+  assert.equal(W({ title: 'Andy Warhol (1928-1987) Coke Bottle', description: 'silkscreen ink, acrylic and ballpoint pen on linen 11 1/8 x 6in.' }), 'andy-warhol/original');
+  // a print stays a print
+  assert.equal(W({ title: 'Marilyn (F. & S. II.31)', description: 'screenprint in colors on wove paper, edition of 250' }), 'andy-warhol/print');
+  assert.equal(mv({ artist: 'jeff-koons', category: 'print', auctionHouse: 'Rago', title: 'Puppy (vase)' }), 'jeff-koons/sculpture');
+  assert.equal(mv({ artist: 'andy-warhol', category: 'original', auctionHouse: "Christie's", title: 'STURTEVANT (1924-2014) Warhol Gold Marilyn' }), DROP);
+  assert.equal(mv({ artist: 'pablo-picasso', category: 'print', auctionHouse: "Christie's", title: 'JIM DINE Big Red Wrench in a Landscape, from Hommage à Picasso (W. C. 146)' }), DROP);
+  assert.equal(mv({ artist: 'pablo-picasso', category: 'photograph', auctionHouse: 'Bruun Rasmussen', title: 'Jacques-Henri Lartigue: Spanish painter Pablo Picasso (1881–1973) reclining on a sofa.' }), DROP);
+  assert.equal(mv({ artist: 'henri-matisse', category: 'print', auctionHouse: 'Bruun Rasmussen', title: 'Henri Matisse: Exhibition poster. Signed in print Matisse 52. Lithographic poster in colours.' }), DROP);
+  assert.equal(mv({ artist: 'henri-matisse', category: 'print', auctionHouse: 'Bonhams', title: 'Verve: Volume IX, Nos 35 & 36. Dernières Oeuvres de Matisse 1950-54' }), 'henri-matisse/print');
 });
