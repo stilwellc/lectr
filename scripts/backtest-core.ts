@@ -51,7 +51,7 @@
  *    on the current version so drift is visible instead of silent.
  */
 import { buildIdf, buildVectors } from '../app/lib/similarity';
-import { resolveComps, estimateValue, setCalibration, setTimeIndex, setHouseBias, getEngineFlags, houseFactorOf, adjustedTop, estKindOf as estKindOfLot, BAND_TOP_RATIO, knownKey, FALLBACK_GATE, APPLY_NOEST_BIAS, MAXBID_Q, VB_MARKET, ODDS_FLOOR, ENGINE_VERSION, quantile, type EngineCalibration, type TimeIndex, type HouseBias } from '../app/lib/value';
+import { resolveComps, estimateValue, setCalibration, setTimeIndex, setHouseBias, getEngineFlags, houseFactorOf, adjustedTop, estKindOf as estKindOfLot, BAND_TOP_RATIO, knownKey, FALLBACK_GATE, APPLY_NOEST_BIAS, MAXBID_Q, VB_MARKET, VB_TIER, ODDS_FLOOR, ENGINE_VERSION, quantile, type EngineCalibration, type TimeIndex, type HouseBias } from '../app/lib/value';
 import { makeTimeIndexer, makeHouseBiasIndexer } from '../app/lib/indices';
 import { gateCell, type CardGateCell } from '../app/lib/cards-gate';
 import { weightedMedian, weightedQuantile, medianSorted } from '../app/lib/stats';
@@ -1339,6 +1339,23 @@ export function fitValueBands(
           out[c] = { lo, hi, ...(typeof g.mb === 'number' ? { mb: Math.round(Math.min(1, Math.max(lo, g.mb)) * 1000) / 1000 } : {}) };
         }
         (valueBandByMarket[m] ||= {})[path] = out;
+      }
+    }
+  }
+  // (Oct 6, wave 10, FLAGS.vbTier) THE TIER TAILS: each market × path × tier
+  // cell (the market's own, else the global tier band) has its tails raised to
+  // VB_TIER.k — fit on the current engine's point-in-time residuals by
+  // tier, which the calibration rows (written under older tiers) cannot carry
+  if (getEngineFlags().vbTier) {
+    for (const [path, byM] of Object.entries(VB_TIER.k)) {
+      for (const [m, byT] of Object.entries(byM)) {
+        for (const [c, [kLo, kHi]] of Object.entries(byT)) {
+          const g = valueBandByMarket[m]?.[path]?.[c] ?? valueBand[path]?.[c];
+          if (!g) continue;
+          const lo = Math.round(Math.min(1, Math.max(0.15, Math.pow(g.lo, kLo))) * 1000) / 1000;
+          const hi = Math.round(Math.min(8, Math.max(1, Math.pow(g.hi, kHi))) * 1000) / 1000;
+          ((valueBandByMarket[m] ||= {})[path] ||= {})[c] = { lo, hi, ...(typeof g.mb === 'number' ? { mb: Math.round(Math.min(1, Math.max(lo, g.mb)) * 1000) / 1000 } : {}) };
+        }
       }
     }
   }

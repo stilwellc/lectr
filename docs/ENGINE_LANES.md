@@ -560,3 +560,43 @@ The on arm added 52 holdout watch values at 26.1% and withdrew 3.
 Gates unchanged.
 
 Harness additions: `oneoff/qa/watch-ref-precision.ts` (reference-identity comp precision, run from a flag-off and a flag-on code root).
+
+## 21 · OCT 6 2026 PRICING WAVE 10 — the tier tails, then the Phillips reference again (`2026.10.06-wave10`)
+
+**Why.** Wave 9 kept `USE_HOUSE_REFERENCE` off because exact-reference pools promote watch values to the high tier, and the high tier's band already under-covered. Measured on the production calibration (`engine-ab.ts --cal full`, corpus `versions/20261006T162315Z`), the under-cover is not a watch problem. Every high tier runs short on the holdout: art 67.8%, culture 64.6%, watches 72.6%, all high 70.0% (medium 77.4%, low 77.9%).
+
+**The cause.** The band is fit on the calibration rows (`calObs`), and each row carries the tier of the engine that wrote it. In the 3-year band window every art and culture row is 'low', and the high rows come from watches and science alone. The served engine calls 807 holdout values high. Their spread cannot be learned from those rows, at the tier or the market-tail level (a per-market × tier exponent on `calObs`, tried first, left art and culture unchanged).
+
+**Adopted: the tier tails** (`vbTier`, `VB_TIER.k`, backtest-core `fitValueBands`). This is a static table of exponents per path × market × tier. Each cell of the calibrated band (the market's own cell, else the global tier band) has its tails raised to `[kLo, kHi]`. The table is fit by `oneoff/qa/band-tier-fit.ts` on the TRAINING window (`engine-ab.ts --from 2023-10-01 --to 2025-10-01`, 7,569 rows priced point-in-time by the current engine): q 0.10 per tail, q 0.08 for high, ≥ 100 rows per cell, k in [1, 2] (widen only). The q values came from the training window alone. Fit before Oct 2024 and scored on the year after, high reached 77.3% at q 0.10 and 79.8% at 0.08, and medium and low reached 82.5% and 81.2% at 0.10. Letting k tighten (k ≥ 0.8) cost the holdout watches 77.3 → 75.6% and science-high 80.6 → 71.8%. The calibration carries the stretched cells, so the client reader (`value-band.calibratedBand`) wears the same band. Values, tiers and Flags are unchanged.
+
+| holdout coverage / mean log width (5,888 values) | high | medium | low |
+|---|---|---|---|
+| art | 67.8% / 0.60 → 81.9% / 0.94 | 68.9 / 0.79 → 73.5 / 0.86 | 78.6 / 0.99 (unchanged) |
+| culture | 64.6 / 0.67 → 83.1 / 1.04 | 68.0 / 0.89 → 75.7 / 1.06 | 71.5 / 1.15 → 76.1 / 1.35 |
+| design | — | 84.9 / 1.11 → 88.5 / 1.20 | 92.9 / 1.40 → 94.3 / 1.58 |
+| science | 80.6 / 0.87 (unchanged) | 78.1 / 1.14 → 80.7 / 1.17 | 81.4 / 1.45 → 82.9 / 1.53 |
+| sports | — | 81.3 / 1.07 → 88.8 / 1.28 | 80.9 / 1.33 (unchanged) |
+| watches | 72.6 / 0.59 → 78.7 / 0.68 | 77.3 / 0.79 (unchanged) | 81.8 / 1.01 → 82.5 / 1.02 |
+| no-estimate sports | — | 83.5 / 1.75 → 83.8 / 1.76 | 75.3 / 2.47 → 76.8 / 2.77 |
+| **all** | **70.0 / 0.66 → 80.4 / 0.86** | **77.5 / 1.15 → 80.7 / 1.23** | **77.9 / 1.51 → 79.4 / 1.64** |
+
+All values: 76.6% / 1.22 → 80.2% / 1.34. Median error 31.2% = 31.2%, ±30% 48.8%, bias 1.031, flags 656 at 52.1% precision, all unchanged. Art and culture medium stay under 80% because the training window under-states their test-year drift. Design and sports medium over-cover.
+
+Live (production calibration, Sep 14 book with the Phillips backfill, 925 values): 84.9% / 0.97 → 86.7% / 1.07. High 80.6 → 85.9% (watches 69.2 → 79.5%, culture 73.3 → 86.7%, art 76.5 → 82.4%), medium 84.6 → 85.3%, low 87.3 → 88.7%. Sep 24 (303 values): 86.1% / 0.79 → 86.8% / 0.82. Error is unchanged on both books (21.2%, 16.2%). Cards keep their own band (89% / 85%).
+
+**Re-measured and NOT adopted: the Phillips reference on the recalibrated band.** The setup is the same as §20 (a second code root with `USE_HOUSE_REFERENCE = true`, the live books stamped and backfilled per arm), now on wave 10:
+
+| | off | on |
+|---|---|---|
+| holdout all: values / medErr / band / log width | 5,888 / 31.2% / 80.2% / 1.336 | 5,937 / 31.1% / 80.1% / 1.328 |
+| holdout watches, same 1,002: medErr / mean abs log / band | 21.7% / 0.267 / 79.4% | 21.7% / 0.265 / 78.7% |
+| holdout watches changed (315): medErr / band | 19.6% / 81.3% | 18.6% / 79.0% |
+| holdout Phillips watches, same 345: medErr / band | 21.2% / 78.8% | 21.6% / 76.5% |
+| holdout watches high tier: values / band | 310 / 78.7% | 403 / 78.7% |
+| live Sep 14 watches: values / medErr / band | 124 / 22.7% / 83% | 129 / 21.2% / 84% |
+| live Sep 14 changed (25): medErr / bias | 23.3% / 0.97 | 17.9% / 0.90 |
+| live Sep 24 | 16.2% / 87% | unchanged |
+
+The tier tails close most of wave 9's band gap. The promoted high-tier lots now cover at the tier's rate (78.7% both arms). The watch band drop falls from 1.7 to 0.7pt and the Phillips drop from 4.1 to 2.3pt. Live improves, but holdout coverage is still lower (all −0.1pt, watches −0.7pt), and Phillips' own lots are still worse (21.2 → 21.6%). Two of the three bars fail, so the flag stays off.
+
+`validate-engine` passes all gates. Harness additions: `oneoff/qa/band-tier-fit.ts` (the table, `--split` for the training window's own out-of-sample check), `oneoff/qa/band-tier-sim.ts` (re-fits only the band per quarter and rescores an `engine-ab.ts` run, which reproduces the run's own coverage), and `engine-ab.ts --a wave10`. Tests: `scripts/__tests__/pricing-wave10.test.ts`.

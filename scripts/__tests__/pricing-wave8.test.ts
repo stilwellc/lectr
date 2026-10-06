@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   setEngineFlags, setCalibration, estimateValueEx,
-  ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_CANDIDATE, HABIT_PREMIUM, COMP_HL,
+  ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_CANDIDATE, ENGINE_FLAGS_WAVE7, HABIT_PREMIUM, COMP_HL,
   type Comp, type EngineCalibration, type EngineFlags,
 } from '../../app/lib/value';
 import { buildIdf, type Match } from '../../app/lib/similarity';
@@ -17,8 +17,8 @@ import type { AuctionLot } from '../../app/types';
 
 const with_ = (o: Partial<EngineFlags>): EngineFlags => ({ ...ENGINE_FLAGS_CURRENT, ...o, version: `${ENGINE_FLAGS_CURRENT.version}~t` });
 
-test('wave 8 changes no served value: wave 7 stays the engine, the habit premium is off', () => {
-  assert.equal(ENGINE_FLAGS_CURRENT.version, '2026.10.06-wave7');
+test('wave 8 changes no served value: the habit premium is off', () => {
+  assert.equal(ENGINE_FLAGS_WAVE7.version, '2026.10.06-wave7');
   assert.ok(!ENGINE_FLAGS_CURRENT.habitPremium);
   assert.ok(!ENGINE_FLAGS_CANDIDATE.habitPremium, 'nothing pending');
   assert.deepEqual(COMP_HL, { band: 2, point: 2, noEst: 1 });

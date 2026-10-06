@@ -267,6 +267,15 @@ export interface EngineFlags {
    *  premium the printed estimate understates — the value × HABIT_PREMIUM.k.
    *  Measured and NOT adopted (docs/ENGINE_LANES.md §19) */
   habitPremium?: boolean;
+  /** (Oct 6, pricing wave 10) THE TIER TAILS: each market × path × tier
+   *  cell of the value band has its two tails raised to VB_TIER.k — the
+   *  exponents that put 10% of the current engine's own point-in-time
+   *  residuals below and 10% above it over the training window (2023-10 →
+   *  2025-10, oneoff/qa/band-tier-fit.ts). The calibration rows carry the
+   *  tier of the engine that wrote them (art / culture calObs are all 'low'),
+   *  so the fitted tier bands cannot see the served 'high' tier's spread
+   *  (backtest-core.fitValueBands) */
+  vbTier?: boolean;
 }
 /** The engine before the Oct 3 pass (raw-estimate Flags, premium-only
  *  anchor, ungated card tiers) — kept so the harnesses can replay it. */
@@ -381,7 +390,16 @@ export const ENGINE_FLAGS_WAVE7: EngineFlags = {
   version: '2026.10.06-wave7',
   vbMarket: true, bidPull: true, cardNewRelease: true, oddsFloor: true,
 };
-export const ENGINE_FLAGS_CURRENT: EngineFlags = ENGINE_FLAGS_WAVE7;
+/** (Oct 6 2026, pricing wave 10) THE TIER TAILS on the value band (vbTier).
+ *  Measured on the wave-7 engine (docs/ENGINE_LANES.md §21): holdout band
+ *  coverage high 70.0 → 80.4%, medium 77.4 → 80.6%, low 77.9 → 79.4% (all
+ *  76.6 → 80.1%, mean log width 1.22 → 1.34); values unchanged. */
+export const ENGINE_FLAGS_WAVE10: EngineFlags = {
+  ...ENGINE_FLAGS_WAVE7,
+  version: '2026.10.06-wave10',
+  vbTier: true,
+};
+export const ENGINE_FLAGS_CURRENT: EngineFlags = ENGINE_FLAGS_WAVE10;
 /** The candidate under evaluation. Equal to CURRENT's flags when nothing is
  *  pending — a candidate run then reports a no-op comparison. */
 export const ENGINE_FLAGS_CANDIDATE: EngineFlags = { ...ENGINE_FLAGS_CURRENT, version: `${ENGINE_FLAGS_CURRENT.version}+cand` };
@@ -988,6 +1006,29 @@ export const CR_WORK = { minN: 3, maxAgeY: 3, w: 0.5, idExact: 1 };
 export const VB_MARKET = { q: 0.10, minN: 150, kMin: 0.6, kMax: 2.5, hlY: 0.75, windowY: 3 };
 /** (wave 7) EngineFlags.oddsFloor's clamp on a calibrated odds bucket */
 export const ODDS_FLOOR = { lo: 0.1 };
+/** (wave 10) EngineFlags.vbTier: path ('e' estimate / 'n' no-estimate) →
+ *  market → tier → [kLo, kHi], the exponents on the calibrated band's lower
+ *  and upper multiples (lo^kLo, hi^kHi). Fit by oneoff/qa/band-tier-fit.ts on
+ *  the training window (q 0.10, ≥ 100 rows a cell, k clamped to [0.8, 2]);
+ *  a cell absent here keeps its calibrated band. */
+export const VB_TIER: { k: Record<string, Record<string, Record<string, [number, number]>>> } = {
+  // band-tier-fit.ts --q 0.10 --q-high 0.08 --kmin 1 on the training window;
+  // 'high' at q 0.08: fit before Oct 2024 and scored on the year after, the
+  // high tier reached 79.8% at 0.08 (77.3% at 0.10), the others 81–83% at 0.10
+  k: {
+    e: {
+      art: { high: [1.23, 1.89], medium: [1, 1.19] },
+      culture: { high: [1.15, 1.79], medium: [1, 1.3], low: [1, 1.25] },
+      design: { medium: [1.11, 1.06], low: [1.3, 1] },
+      science: { medium: [1, 1.05], low: [1.14, 1] },
+      sports: { medium: [1, 1.44] },
+      watches: { high: [1.27, 1.05], low: [1.03, 1] },
+    },
+    n: {
+      sports: { medium: [1.1, 1], low: [1.02, 1.21] },
+    },
+  },
+};
 /** (wave 7) EngineFlags.cardNewRelease: a card whose set year (the first
  *  year of a season, "2025-26" → 2025) is ≥ the valuation year − years */
 export const CARD_NEW = { years: 1 };

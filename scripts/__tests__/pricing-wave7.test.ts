@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   setEngineFlags, setCalibration, estimateValueEx, pullTowardBid, floorAtBid, isNewReleaseCard, watchRefFamily,
-  ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_WAVE6, BID_PULL, VB_MARKET, CARD_NEW,
+  ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_WAVE6, ENGINE_FLAGS_WAVE7, BID_PULL, VB_MARKET, CARD_NEW,
   type Comp, type EngineCalibration, type EngineFlags,
 } from '../../app/lib/value';
 import { fitValueBands, type NoEstObs } from '../backtest-core';
@@ -17,10 +17,11 @@ import { readHouseReference } from '../../app/lib/watch-ref';
 import { buildIdf, type Match } from '../../app/lib/similarity';
 import type { AuctionLot } from '../../app/types';
 
-const with_ = (o: Partial<EngineFlags>): EngineFlags => ({ ...ENGINE_FLAGS_CURRENT, ...o, version: `${ENGINE_FLAGS_CURRENT.version}~t` });
+// (wave 10) the tier tails off: these cases isolate the wave-7 rules
+const with_ = (o: Partial<EngineFlags>): EngineFlags => ({ ...ENGINE_FLAGS_CURRENT, vbTier: false, ...o, version: `${ENGINE_FLAGS_CURRENT.version}~t` });
 
-test('wave 7 is the served engine', () => {
-  assert.equal(ENGINE_FLAGS_CURRENT.version, '2026.10.06-wave7');
+test('wave 7 is in the served engine', () => {
+  assert.equal(ENGINE_FLAGS_WAVE7.version, '2026.10.06-wave7');
   for (const k of ['vbMarket', 'bidPull', 'cardNewRelease', 'oddsFloor'] as const) assert.equal(ENGINE_FLAGS_CURRENT[k], true, k);
   for (const k of ['watchRefBound'] as const) assert.ok(!ENGINE_FLAGS_CURRENT[k], k);
   assert.ok(!ENGINE_FLAGS_WAVE6.vbMarket && !ENGINE_FLAGS_WAVE6.bidPull);
