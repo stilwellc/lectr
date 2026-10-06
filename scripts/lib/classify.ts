@@ -19,6 +19,7 @@
  */
 import { looksLikeCard } from '../../app/lib/cards';
 import { leadsWithSetCode } from './set-codes';
+import { ARTIST_MARKET } from '../../app/constants';
 
 export const DROP = 'DROP' as const;
 
@@ -130,6 +131,44 @@ export function goldinSportKind(title: string | null | undefined): string {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 2 · ART CATEGORY — Madoura ceramics and unique works filed as prints. The
+// crawler's print test ran before its ceramic test and five artists defaulted
+// to 'print' with no evidence; normalize never moved print → sculpture and
+// skipped print → original whenever 'silkscreen' appeared (Warhol's canvases
+// are "synthetic polymer and silkscreen inks on canvas"). Reads title +
+// medium + the first 600 chars of the description (Christie's/Bonhams/
+// Phillips print the medium line there).
+// ═══════════════════════════════════════════════════════════════════════════
+const ART_MAKERS = new Set(Object.entries(ARTIST_MARKET).filter(([, m]) => m === 'art').map(([k]) => k));
+const CERAMIC_RE = /madoura|earthenware|fa[iï]ence|ceramic|c[ée]ramique|empreinte originale|rami[ée]\b|terracotta|terre cuite|glazed|engobe|stoneware|porcelain|turned (?:vase|pitcher)/i;
+/** Alain Ramié catalogue number — Picasso's CERAMIC catalogue ("(A.R. 408)", "a. r. 156", "ar no. 165") */
+const RAMIE_NO_RE = /\ba\.?\s?r\.?\s*(?:no\.?\s*)?\d{1,3}\b/i;
+const ART_PRINT_WORD_RE = /poster|affiche|lithograph|linocut|linogravure|etching|aquatint|screen ?print|silkscreen|s[ée]rigraph|woodcut|engraving|drypoint|offset|edition of|numbered|artist.s proof|\bprint(?:ed|s)?\b|gicl[ée]e|monotype|multiple|pochoir|photogravure|\bplates?\b/i;
+/** a unique medium on a support: "oil on canvas", "pen and India ink on paper", "acrylic, oilstick and paper collage on canvas" */
+const UNIQUE_MEDIUM_RE = /\b(?:oil|acrylic|tempera|gouache|watercolou?r|pastel|charcoal|crayon|graphite|pencil|ballpoint|pen|ink|felt[- ]tip|marker|oil ?stick|spray ?paint|enamel|synthetic polymer|gunpowder|collage|mixed media)s?\b[^.;]{0,60}?\bon\s+(?:canvas|linen|panel|board|paper|card|masonite|wood|metal|aluminum|cardboard)(?![a-z])/i;
+/** Warhol's painting medium: silkscreen INK on canvas is a unique painting */
+const SILKSCREEN_CANVAS_RE = /silkscreen inks?\b[^.;]{0,30}\bon (?:canvas|linen)/i;
+const EDITION_MARK_RE = /edition of|numbered|\b\d{1,3}\s*\/\s*\d{1,4}\b/i;
+
+const artText = (l: ClassifyLot) => `${l.title || ''} | ${l.medium || ''} | ${(l.description || '').slice(0, 600)}`;
+
+/** The corrected art CATEGORY for a tracked art maker's lot, or null when the
+ *  current one stands. Ceramic → sculpture; a unique medium → original. */
+export function artCategoryFix(l: ClassifyLot): string | null {
+  if (!ART_MAKERS.has(l.artist)) return null;
+  const cat = l.category || 'unknown';
+  if (cat === 'sculpture' || cat === 'photograph') return null;
+  const s = artText(l);
+  const printWord = ART_PRINT_WORD_RE.test(s);
+  const ceramic = CERAMIC_RE.test(s) || (l.artist === 'pablo-picasso' && RAMIE_NO_RE.test(`${l.title || ''} ${l.medium || ''}`));
+  if (ceramic && !/poster|affiche|lithograph|linocut|linogravure|etching|aquatint|screen ?print|serigraph|woodcut|engraving|drypoint|offset/i.test(s)) return 'sculpture';
+  if (cat === 'original') return null;
+  if (UNIQUE_MEDIUM_RE.test(s) && !printWord) return 'original';
+  if (SILKSCREEN_CANVAS_RE.test(s) && !EDITION_MARK_RE.test(s)) return 'original';
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // THE RECLASS LADDER — applied to every corpus row by corpus-normalize. Each
 // entry is one audited error class; `apply` returns the new artist, DROP, or
 // null. Order matters only where noted.
@@ -150,6 +189,11 @@ export const RECLASS_RULES: ReclassRule[] = [
   },
 ];
 
+/** Category rules: same contract, but they return the corrected CATEGORY. */
+export const RECAT_RULES: ReclassRule[] = [
+  { cls: 'art-ceramic-unique-vs-print', apply: artCategoryFix },
+];
+
 /** Run the ladder over one lot. Returns the classes that fired (in order) and
  *  whether the lot must be evicted; mutates artist (+ makerSlug when set). */
 export function reclassifyLot(l: ClassifyLot & { makerSlug?: string | null }): { fired: string[]; drop: boolean } {
@@ -161,6 +205,12 @@ export function reclassifyLot(l: ClassifyLot & { makerSlug?: string | null }): {
     if (to === DROP) return { fired, drop: true };
     l.artist = to;
     if (l.makerSlug) l.makerSlug = to;
+  }
+  for (const r of RECAT_RULES) {
+    const to = r.apply(l);
+    if (to == null || to === l.category) continue;
+    fired.push(r.cls);
+    l.category = to;
   }
   return { fired, drop: false };
 }

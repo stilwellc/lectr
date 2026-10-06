@@ -6,7 +6,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isCardTitle, goldinSportKind, reclassifyLot, DROP } from '../lib/classify';
+import { isCardTitle, goldinSportKind, reclassifyLot, artCategoryFix, DROP } from '../lib/classify';
 import { goldinRoute } from '../lib/houses/routing';
 import { reclassifyCorpus } from '../lib/corpus-normalize';
 
@@ -61,4 +61,29 @@ test('reclassifyCorpus: moves, evicts, counts per class; idempotent', () => {
   assert.deepEqual(lots.map(l => [l.id, l.artist]), [['a', 'autographs'], ['c', 'sports-cards']]);
   const again = reclassifyCorpus(lots);
   assert.deepEqual(again, { byClass: {}, dropped: 0 });
+});
+
+test('class 2 · art: Madoura ceramics → sculpture, unique mediums → original, real prints untouched', () => {
+  const A = (o: R) => ({ artist: 'pablo-picasso', category: 'print', title: '', medium: '', description: '', ...o });
+  const cases: [R, string | null][] = [
+    [{ title: 'Pablo Picasso (1881-1973) Poisson bleu', description: "Pablo Picasso (1881-1973) Poisson bleu stamped, marked and numbered 'Madoura Plein Feu/Empreinte Originale de Picasso/106/200' (underneath) partially glazed ceramic plate" }, 'sculpture'],
+    [{ title: 'vase aux chèvres (a. r. 156)' }, 'sculpture'],
+    [{ title: 'PABLO PICASSO Face in Thick Relief (A.R. 408)' }, 'sculpture'],
+    [{ title: 'Pitcher with Birds', category: 'design', medium: 'White earthenware clay turned pitcher with decoration in engobes under partial b' }, 'sculpture'],
+    [{ artist: 'henri-matisse', title: 'Henri Matisse (1869-1954) Fermes en Bretagne, Belle-Île', description: "Henri Matisse (1869-1954) Fermes en Bretagne, Belle-Île signed and dated 'H. MATISSE 97' (lower left) oil on canvas 18 x 21 5/8 in." }, 'original'],
+    [{ artist: 'andy-warhol', title: 'Andy Warhol (1928-1987) Four-foot Flowers', description: "signed and dedicated 'to Roy L. Andy Warhol' (on the reverse) synthetic polymer and silkscreen inks on canvas 48 x 48 in." }, 'original'],
+    [{ artist: 'henri-matisse', title: 'Tête de fille et feuillage', medium: 'ink and pencil on paper8 x 103⁄8 in' }, 'original'],
+    [{ artist: 'francis-bacon', category: 'unknown', title: 'Seated Man', description: 'FRANCIS BACON (1909-1992) Seated Man oil on canvas 55 x 43 3/8in.' }, 'original'],
+    // real prints and print posters stay
+    [{ title: 'Madoura (Bloch 1021: Baer 1270) Linocut printed in colours, 1961, on wove' }, null],
+    [{ title: 'affiche exposition de céramiques (bloch 1281; mourlot 314; czwiklitzer 31)' }, null],
+    [{ artist: 'andy-warhol', title: 'Untitled', medium: 'screenprint and collage on paper' }, null],
+    // not an art maker → never touched
+    [{ artist: 'george-nakashima', category: 'design', title: 'glazed ceramic lamp' }, null],
+  ];
+  for (const [o, want] of cases) assert.equal(artCategoryFix(A(o)), want, o.title);
+  const l = L({ artist: 'pablo-picasso', category: 'print', title: 'pichet espagnol (a. r. 244)', auctionHouse: "Sotheby's" });
+  assert.deepEqual(reclassifyLot(l), { fired: ['art-ceramic-unique-vs-print'], drop: false });
+  assert.equal(l.category, 'sculpture');
+  assert.deepEqual(reclassifyLot(l), { fired: [], drop: false }, 'idempotent');
 });
