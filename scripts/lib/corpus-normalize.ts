@@ -236,6 +236,18 @@ export function rerouteRelicCards(lots: Lot[]): { total: number; examples: strin
 // ─────────────────────────────────────────────────────────────────────────────
 const WATCH_MAKER_SLUGS = new Set(['rolex', 'patek-philippe', 'cartier', 'audemars-piguet', 'omega']);
 const DESC_REF_FORMS = new Set(['wristwatch', 'pocket-watch']);
+// (Oct 6 2026 categorization re-audit) `reference` holds a printed reference
+// NUMBER only. A model-line name ("submariner", "tank", "royaloak" — 6.8k
+// rows) is not a reference (the audit marked every one wrong); it moves to
+// `modelKey` (the hedonic control reads reference ‖ modelKey, so the control
+// is unchanged) and the field is DELETED, not nulled — the comp readers
+// (comps.watchKeyOf, r2/pools) fall back to watchKey(title) on an absent
+// field, which re-reads the same model line, so model-keyed pools stay.
+function setWatchRef(l: Lot, ref: string | null): void {
+  if (ref && /\d/.test(ref)) { l.reference = ref; return; }
+  if (ref) (l as Lot & { modelKey?: string | null }).modelKey = ref;
+  delete l.reference;
+}
 export function enrichWatchReferences(lots: Lot[]): number {
   let filled = 0, healed = 0, cleared = 0;
   for (const l of lots) {
@@ -254,7 +266,7 @@ export function enrichWatchReferences(lots: Lot[]): number {
     if (x.referenceSrc === 'llm' && prev) {
       const regexRef = regex && /\d/.test(regex) ? regex : null;
       if (regexRef) { l.reference = regexRef; delete x.referenceSrc; healed++; }
-      else if (!vetReference(l.artist, String(prev), l.title)) { l.reference = regex; delete x.referenceSrc; cleared++; }
+      else if (!vetReference(l.artist, String(prev), l.title)) { setWatchRef(l, regex); delete x.referenceSrc; cleared++; }
       else {
         // a kept extraction ref keys on its core too (5970J → 5970)
         const lc = String(prev).toLowerCase().replace(/\s+/g, '');
@@ -263,11 +275,13 @@ export function enrichWatchReferences(lots: Lot[]): number {
       }
       continue;
     }
-    if ((prev || null) === (regex || null)) continue;
+    const num = regex && /\d/.test(regex) ? regex : null;
+    if (!num && regex) (l as Lot & { modelKey?: string | null }).modelKey = regex;
+    if ((prev || null) === num) continue;
     if (!prev) filled++;
-    else if (regex) healed++;
+    else if (num) healed++;
     else cleared++;
-    l.reference = regex;
+    setWatchRef(l, regex);
   }
   if (healed || cleared) console.log(`[normalize] watch references re-derived: healed=${healed} cleared=${cleared}`);
   return filled;

@@ -728,7 +728,10 @@ async function main() {
     // an absent signal produces null (never fabricated identity).
     lot.formKey = classifyForm(lot);
     lot.modelKey = normModelKey(lot);
-    lot.reference = normWatchKey(lot);
+    // a reference is a printed NUMBER (corpus-normalize enrichWatchReferences
+    // owns the model-line fallback); a model name never rides this field
+    const wk = normWatchKey(lot);
+    if (wk && /\d/.test(wk)) lot.reference = wk; else delete lot.reference;
     lot.normalizedTitle = normNormalizeTitle(lot.title);
     // ART lots: drop the maker's own name words from the tokens — they carry
     // zero signal within a same-maker comp pool and inflate cosine between
