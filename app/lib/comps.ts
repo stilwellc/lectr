@@ -91,17 +91,28 @@ function classifyFormUncached(lot: Pick<AuctionLot, 'title' | 'medium' | 'catego
   if (/\b(rug|tapestry|carpet|textile|blanket|scarf)\b/.test(tm)) return 'textile';
 
   // editioned objects & multiples (KAWS companions, decks, plates, plush…)
-  if (/\b(skateboard|skate deck|deck set|companion|be@rbrick|bearbrick|vinyl figure|plush|figure set|ceramic (container|set|plate)|perfume|snow ?globe|keychain|ornament|chess set|cushion|pillow|dish set)\b/.test(tm)) return 'object-edition';
+  // (never for watches/science 'object' lots or furniture: a "cushion-shaped
+  // wristwatch" and a Nakashima "Conoid Cushion" chair are not editions)
+  if (lot.category !== 'object' && lot.category !== 'design'
+    && /\b(skateboard|skate deck|deck set|companion|be@rbrick|bearbrick|vinyl figure|plush|figure set|ceramic (container|set|plate)|perfume|snow ?globe|keychain|ornament|chess set|cushion|pillow|dish set)\b/.test(tm)) return 'object-edition';
 
   // The watches & science verticals: their lots arrive as category 'object'
   // (never art/design), so these checks can't hijack a Nakashima "fossilized
   // walnut" table or a KAWS "Companion" into science forms — and vice versa.
   if (lot.category === 'object') {
     // horology & jewelry
-    if (/\bpocket ?watch\b/.test(tm)) return 'pocket-watch';
+    // watch ACCESSORIES are not watches (stands, winders, boxes, ashtrays)
+    if (/watch[- ]?(?:stands?|winders?|winding box|box(?:es)?|straps?|chains?)\b|\bashtray\b/.test(tm) && !/wrist ?watch/.test(tm)) return 'unknown';
+    // pocket watches: the explicit noun, or the case/movement words only a
+    // pocket watch carries (open face, keyless, hunter, verge, fusee …) when
+    // nothing says wrist. No trailing \b — Sotheby's glues the next field on
+    // ("openface keyless watchref 866").
+    if (/\bpocket ?watch/.test(tm) || (!/wrist/.test(tm) && /\b(?:open[- ]?face|keyless|hunt(?:er|ing)[- ]?cased?|half[- ]hunter|demi[- ]hunter|savonnette|l[ée]pine|key[- ]wound|verge|fus[ée]e|pair[- ]cased|pendant watch)/.test(tm))) return 'pocket-watch';
     // Explicit jewelry nouns first (a Panthère brooch is jewelry even though
     // Panthère is also a watch line). SINGULAR forms — unchanged from before.
-    if (/\b(ring|necklace|brooch|earrings?|pendant|bangle|choker|cufflinks)\b/.test(t)) return 'jewelry';
+    // …unless the lot is a watch set in it ("bangle watch", "ring clip watch",
+    // "wristwatch … and 'Nautilus' cufflinks")
+    if (/\b(ring|necklace|brooch|earrings?|pendant|bangle|choker|cufflinks)\b/.test(t) && !/watch|\bmontre\b/.test(tm)) return 'jewelry';
     // Plural / set jewelry forms the singular gate missed. A watch-MODEL word
     // (Ellipse, Tank, Santos, Panthère) is ALSO a jewelry line, so a lot whose
     // OBJECT noun is jewelry (a ring SET, a pair of bangles) must resolve to
@@ -127,8 +138,8 @@ function classifyFormUncached(lot: Pick<AuctionLot, 'title' | 'medium' | 'catego
     }
     // watch titles are catalog-style ("Cosmograph Daytona, Ref: 16518",
     // "Montre bracelet en or…") — the word "watch" is often absent
-    if (/\b(wristwatch|wrist ?watch|montre)\b/.test(tm)
-      || (/\bwatch\b/.test(tm) && /\b(chronograph|chronometer|automatic|quartz|manual wind|movement|dial|bezel|calibre|caliber|tourbillon|perpetual calendar|bracelet|gold|steel|lady'?s|gentleman)\b/.test(tm))
+    if (/wrist ?watch|\bmontre\b/.test(tm)
+      || (/watch/.test(tm) && /\b(chronograph|chronometer|automatic|quartz|manual wind|movement|dial|bezel|calibre|caliber|tourbillon|perpetual calendar|bracelet|gold|steel|lady'?s|gentleman)\b/.test(tm))
       || /\bref[:.]?\s*[a-z]?\d{3,6}/.test(t)
       || /\b(chronograph|chronometer|chronometre|oyster|cosmograph|cellini)\b/.test(t)
       || WATCH_MODELS.test(t)) return 'wristwatch';

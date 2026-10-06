@@ -18,6 +18,7 @@
  *  · rules are idempotent: a lot a rule moved never re-fires that rule.
  */
 import { looksLikeCard } from '../../app/lib/cards';
+import { classifyForm } from '../../app/lib/comps';
 import { leadsWithSetCode } from './set-codes';
 import { ARTIST_MARKET } from '../../app/constants';
 import { routeCulture, isCultureSale } from '../culture';
@@ -308,6 +309,23 @@ export function sportsCatchAllFix(l: ClassifyLot): string | null {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 8 · WATCH MAKERS — jewellery is not a watch (Cartier Panthère necklaces,
+// Patek 'Nautilus' cufflinks: 'jewelry is NOT a watch'), and Tudor is not
+// Rolex. The form fixes themselves (pocket vs wrist, cushion-shaped cases,
+// glued Sotheby's text) live in app/lib/comps.ts classifyForm.
+// ═══════════════════════════════════════════════════════════════════════════
+const WATCH_MAKERS = new Set(['rolex', 'patek-philippe', 'audemars-piguet', 'omega', 'cartier']);
+export function watchMakerFix(l: ClassifyLot): string | null {
+  if (!WATCH_MAKERS.has(l.artist)) return null;
+  if (classifyForm({ title: l.title || '', medium: l.medium ?? null, category: (l.category || 'object') as never }) === 'jewelry') return DROP;
+  if (l.artist === 'rolex') {
+    const s = `${l.title || ''} ${(l.description || '').slice(0, 300)}`;
+    if (/\btudor\b/i.test(s) && !/signed rolex|\b(?:omega|hamilton|longines|patek|cartier|bulova)\b/i.test(s)) return DROP;
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 2 · ART CATEGORY — Madoura ceramics and unique works filed as prints. The
 // crawler's print test ran before its ceramic test and five artists defaulted
 // to 'print' with no evidence; normalize never moved print → sculpture and
@@ -383,6 +401,7 @@ export const RECLASS_RULES: ReclassRule[] = [
   },
   { cls: 'sale-name-gates', apply: saleGateFix },
   { cls: 'sports-catch-all-programmes', apply: sportsCatchAllFix },
+  { cls: 'watch-jewelry-tudor', apply: watchMakerFix },
 ];
 
 /** Category rules: same contract, but they return the corrected CATEGORY. */

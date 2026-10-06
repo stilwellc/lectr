@@ -8,6 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isCardTitle, goldinSportKind, reclassifyLot, artCategoryFix, DROP } from '../lib/classify';
 import { goldinRoute } from '../lib/houses/routing';
+import { classifyForm } from '../../app/lib/comps';
 import { reclassifyCorpus } from '../lib/corpus-normalize';
 
 type R = Record<string, any>;
@@ -175,4 +176,22 @@ test('class 7 · sports-sale catch-all: programmes → programs, signed → auto
   assert.equal(K({ auctionHouse: 'RR Auction', artist: 'sports-memorabilia', title: 'Seoul 1988 Summer Olympics Winner\'s Diploma', saleName: 'Olympic Memorabilia' }), 'trophies-awards');
   assert.equal(K({ auctionHouse: 'RR Auction', artist: 'tickets-passes', title: 'Tiger Woods Signed Golf Score Card', saleName: 'Fine Autograph and Artifacts' }), 'autographs');
   assert.equal(K({ auctionHouse: "Sotheby's", artist: 'sports-memorabilia', title: 'Beijing 2008 Summer Olympics Pin Set' }), 'sports-memorabilia');
+});
+
+test('class 8 · watch forms (pocket vs wrist, cushion cases, glued text) and jewellery / Tudor evicted', () => {
+  const F = (title: string) => classifyForm({ title, medium: null, category: 'object' } as never);
+  assert.equal(F('ref 5651a yellow gold open faced watch circa 1970'), 'pocket-watch');
+  assert.equal(F('a fine and rare early 18k yellow gold hunting cased watch with enamel scenes1850 no 4735'), 'pocket-watch');
+  assert.equal(F('yellow gold openface keyless watchref 866 mvt 932316 case 433516 made in 1974'), 'pocket-watch');
+  assert.equal(F('AUDEMARS PIGUET. A RARE AND IMPRESSIVE 18K WHITE GOLD, DIAMOND AND SAPPHIRE-SET CUSHION-SHAPED WRISTWATCH WITH'), 'wristwatch');
+  assert.equal(F('a stainless steel cushion-form automatic centre seconds wristwatch with date and braceletref 3800/1 mvt 142421'), 'wristwatch');
+  assert.equal(F("Audemars Piguet. A gents 18ct gold slim case wristwatch1960's"), 'wristwatch');
+  assert.equal(F('An attractive and early stainless steel dual-time wristwatch with center seconds, date, black lacquer dial, ring lock'), 'wristwatch');
+  assert.equal(F("reference 4239/1j | a yellow gold bangle watch | circa 1976"), 'wristwatch');
+  assert.equal(F('A Gold and Steel \'Panther\' Necklace'), 'jewelry');
+  // the reclass rule evicts jewellery and Tudor from the watch makers
+  assert.equal(move({ auctionHouse: 'Phillips', artist: 'cartier', title: "Pair of diamond, onyx and emerald earrings, 'Panthère'" }), DROP);
+  assert.equal(move({ auctionHouse: "Christie's", artist: 'rolex', title: 'Tudor. A fine stainless steel waterproof chronograph wristwatch with date and bracelet SIGNED TUDOR, OYSTER DA' }), DROP);
+  assert.equal(move({ auctionHouse: "Christie's", artist: 'rolex', title: 'ROLEX/TUDOR. A STAINLESS STEEL SELF-WINDING WATERPROOF CHRONOGRAPH SIGNED ROLEX AND TUDOR' }), 'rolex');
+  assert.equal(move({ auctionHouse: 'Phillips', artist: 'cartier', title: "A rare yellow gold 'Tank' wristwatch" }), 'cartier');
 });
