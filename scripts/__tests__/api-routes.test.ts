@@ -164,7 +164,8 @@ test('comps: the precomputed client read equals the read over the whole book', a
   const want = signalWithPool(anchor, book)!;
   assert.ok(want, 'fixture must produce a read');
   const r = await call(`/api/comps?lot=${anchor.id}`);
-  assert.equal(r.headers.get('Content-Encoding'), 'gzip', 'answers pass through as stored');
+  // stored gzip is decompressed in the Function (Pages ignores encodeBody:'manual'); the edge compresses
+  assert.equal(r.headers.get('Content-Encoding'), null, 'answers are served as plain JSON');
   const j = await body(r);
   assert.equal(j.pack.c.n, want.pool.length);
   assert.equal(j.pack.c.med, want.signal.med);
@@ -255,7 +256,7 @@ test('archive table: sports carries the archive tier and sport chips', async () 
 
 test('summaries: maker book minus the eager lots, decoded; market summary', async () => {
   const r = await call('/api/maker/pablo-picasso?view=summary');
-  assert.equal(r.headers.get('Content-Encoding'), 'gzip');
+  assert.equal(r.headers.get('Content-Encoding'), null);
   const rows = decodeSummary(await body(r) as SummaryJson);
   const want = main.filter(l => l.artist === 'pablo-picasso' && !eager.some(e => e.id === l.id));
   assert.equal(rows.length, want.length);

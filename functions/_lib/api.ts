@@ -47,8 +47,6 @@ const BASE_HEADERS: Record<string, string> = {
 // keyed by version, so it can live a day — a new nightly is a new key
 const CLIENT_CC = 'public, max-age=300, stale-while-revalidate=3600';
 const EDGE_CC = 'public, max-age=86400';
-// Workers: hand our gzip bytes through as-is instead of re-encoding the body
-const MANUAL = { encodeBody: 'manual' } as ResponseInit;
 
 function json(body: unknown, status = 200, extra: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...BASE_HEADERS, ...extra } });
@@ -56,10 +54,15 @@ function json(body: unknown, status = 200, extra: Record<string, string> = {}): 
 function errorResponse(status: number, error: string): Response {
   return json({ error }, status, { 'Cache-Control': 'no-store', ...(status === 503 ? { 'Retry-After': '30' } : {}) });
 }
-/** stored gzip JSON → the response, untouched (no parse, no CPU) */
+/** stored gzip JSON → plain JSON, streamed through the platform's native
+ *  DecompressionStream (no parse; Cloudflare compresses at the edge). Pages
+ *  Functions do not honour Workers' encodeBody:'manual', so passing the gzip
+ *  bytes through with Content-Encoding: gzip served a header/body mismatch
+ *  (ERR_CONTENT_DECODING_FAILED in browsers, Oct 3). */
 async function gzipThrough(obj: R2ObjectBodyLike): Promise<Response> {
-  const body = obj.body ?? new Uint8Array(await obj.arrayBuffer());
-  return new Response(body as BodyInit, { status: 200, headers: { ...BASE_HEADERS, 'Content-Encoding': 'gzip' }, ...MANUAL });
+  const src = obj.body ?? new Blob([new Uint8Array(await obj.arrayBuffer())]).stream();
+  const body = (src as ReadableStream).pipeThrough(new DecompressionStream('gzip') as unknown as ReadableWritablePair<Uint8Array, Uint8Array>);
+  return new Response(body, { status: 200, headers: { ...BASE_HEADERS } });
 }
 
 // ── input validation ───────────────────────────────────────────────────────
@@ -231,7 +234,7 @@ export async function handleApi(request: Request, env: Env, ctx: Ctx = {}, cache
     h.set('X-Corpus-Version', store.version);
     h.set('X-Api-Cache', hit ? 'hit' : 'miss');
     h.set('Server-Timing', `api;dur=${(performance.now() - t0).toFixed(2)}`);
-    return new Response(request.method === 'HEAD' ? null : res.body, { status: res.status, headers: h, ...MANUAL });
+    return new Response(request.method === 'HEAD' ? null : res.body, { status: res.status, headers: h });
   };
   if (cache) {
     const hit = await cache.match(key).catch(() => undefined);
@@ -251,9 +254,9 @@ export async function handleApi(request: Request, env: Env, ctx: Ctx = {}, cache
     const [a, b] = res.body ? res.body.tee() : [null, null];
     const h = new Headers(res.headers);
     h.set('Cache-Control', EDGE_CC);
-    const p = cache.put(key, new Response(b, { status: 200, headers: h, ...MANUAL })).catch(() => { /* best effort */ });
+    const p = cache.put(key, new Response(b, { status: 200, headers: h })).catch(() => { /* best effort */ });
     if (ctx.waitUntil) ctx.waitUntil(p); else await p;
-    res = new Response(a, { status: res.status, headers: res.headers, ...MANUAL });
+    res = new Response(a, { status: res.status, headers: res.headers });
   }
   return finish(res, false);
 }
