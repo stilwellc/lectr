@@ -94,18 +94,51 @@ export function monthIndexRank(u: string): number {
   return parseInt(m[1], 10) * 100 + (MONTH_RANK[m[2].toLowerCase()] ?? 6);
 }
 
+/** `--since YYYY-MM` / `--until YYYY-MM` (both inclusive) → a monthIndexRank
+ *  bound (YYYYMM), or null when absent. Throws on a malformed value. */
+export function monthBound(v: string | null, flag: string): number | null {
+  if (v === null) return null;
+  const m = v.match(/^(\d{4})-(\d{2})$/);
+  if (!m || +m[2] < 1 || +m[2] > 12) throw new Error(`--${flag} must be YYYY-MM (got '${v}')`);
+  return +m[1] * 100 + +m[2];
+}
+
+/** the month indexes inside [since, until] (monthIndexRank, inclusive),
+ *  newest → oldest — the backfill's slice (backfill-hugginsscott.yml) */
+export function monthsInRange(idx: readonly string[], since: number | null, until: number | null): string[] {
+  return idx
+    .filter(u => { const r = monthIndexRank(u); return r > 0 && (since === null || r >= since) && (until === null || r <= until); })
+    .sort((a, b) => monthIndexRank(b) - monthIndexRank(a));
+}
+
+function strArg(name: string): string | null {
+  const i = process.argv.indexOf(`--${name}`);
+  return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : null;
+}
+
 async function main() {
   const monthsWanted = arg('months', 2);
+  // BACKFILL SLICE: --since/--until YYYY-MM keep only the month indexes in
+  // that (inclusive) range before --months caps the count. The month pages
+  // past ~40 were rate-limit-truncated on CI until Aug 13 2026 (every month
+  // 2018-02 → 2025-10 sits at exactly 400 lots); re-reading those months
+  // fetches only the lots the segment does not already hold as sold.
+  const since = monthBound(strArg('since'), 'since');
+  const until = monthBound(strArg('until'), 'until');
+  if (since !== null && until !== null && since > until) throw new Error(`--since ${strArg('since')} is after --until ${strArg('until')}`);
   const delayMs = arg('delay', 200);
   const idx = await monthIndexes();
   if (!idx.length) console.error('[H&S] /search returned no month indexes — archive leg skipped');
   // newest-first by (year, month/season). The newest index IS normally the
   // most recently CLOSED sale (the running auction lives on bid.* only), so it
   // must be covered — its lots are the freshest realized prices.
-  const sorted = idx.slice().sort((a, b) => monthIndexRank(b) - monthIndexRank(a)); // newest → oldest
+  const sorted = since !== null || until !== null
+    ? monthsInRange(idx, since, until)
+    : idx.slice().sort((a, b) => monthIndexRank(b) - monthIndexRank(a)); // newest → oldest
   const oldest = process.argv.includes('--oldest');
   const months = oldest ? sorted.slice().reverse().slice(0, monthsWanted) : sorted.slice(0, monthsWanted);
-  console.log(`[H&S] ${idx.length} month indexes; crawling ${oldest ? 'oldest' : 'newest'} ${monthsWanted}: ${months.map(m => m.split('/auction/')[1]).join(', ')}`);
+  console.log(`[H&S] ${idx.length} month indexes${sorted.length !== idx.length ? ` (${sorted.length} in ${strArg('since') || 'start'} → ${strArg('until') || 'now'})` : ''}; crawling ${oldest ? 'oldest' : 'newest'} ${monthsWanted}: ${months.map(m => m.split('/auction/')[1]).join(', ')}`);
+  if ((since !== null || until !== null) && idx.length && !months.length) throw new Error('no month index falls inside --since/--until');
 
   const write = process.argv.includes('--write');
   if (write) installCrashGuard('H&S');
@@ -144,6 +177,13 @@ async function main() {
       try { return parseReaLot(html, idFromUrl(u), 'Huggins & Scott', u); } catch { return null; }
     }, 'H&S archive')).filter((x): x is AuctionLot => !!x);
     miss += todo.length - monthLots.length;
+    // BACKFILL WALL STOP: in a --since/--until slice, a month where most lot
+    // pages came back empty is a wall/rate-limit, not a sparse archive — stop
+    // (the crash path exits non-zero, so the workflow never pushes) instead
+    // of hammering the next month. Nightly behaviour is unchanged.
+    if ((since !== null || until !== null) && todo.length >= 20 && monthLots.length < todo.length * 0.5) {
+      throw new Error(`${mu}: only ${monthLots.length}/${todo.length} lot pages parsed — looks like a wall/rate limit; stopping the backfill`);
+    }
     // a re-read of an ALREADY exact-dated row (--refetch*) must not knock it
     // back to the archive's month stub — keep the real close + time
     for (const ml of monthLots) {
