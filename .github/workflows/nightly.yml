@@ -458,6 +458,7 @@ jobs:
       # Uploaded write-once under api/v/<version>/, pointer flipped LAST.
       # Best-effort: a failure keeps the API on the previous version.
       - name: Emit + push the lot-API index → R2
+        id: lotapi
         if: ${{ steps.push.outcome == 'success' }}
         continue-on-error: true
         timeout-minutes: 25
@@ -467,6 +468,11 @@ jobs:
         run: |
           NODE_OPTIONS=--max-old-space-size=12288 npx tsx scripts/emit-r2-index.ts --served public/data/ray --corpus data/corpus --out data/r2-api
           bash scripts/r2-api-push.sh data/r2-api
+      - name: Warm the lot API
+        if: ${{ steps.lotapi.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 8
+        run: npx tsx scripts/r2/warm-api.ts --out data/r2-api --base https://lectr.bid --wait 300
       # The ledger is CRAWL truth, independent of publish: persist it even on a
       # night assemble failed, so tomorrow's stale clock is right.
       - name: Persist the house ledger → R2
