@@ -319,7 +319,38 @@ const ROSTER = (
   ''
 ).split('|').filter(Boolean);
 
-export const ATHLETES: ReadonlySet<string> = new Set(ROSTER);
+// (wave 4) the coaches, boxers, drivers, jockeys and track / tennis greats
+// the card parser rarely reads (they print on few cards) but the autograph
+// houses title by bare name ("Vince Lombardi Signature", "Floyd Patterson and
+// Ingemar Johansson Signed Photograph", "A. J. Foyt Signed Helmet"). Names
+// shared with famous non-athletes are left out.
+const ROSTER_SUPPLEMENT = (
+  'vince lombardi|paul bear bryant|bear bryant|tom landry|don shula|george halas|red auerbach|john wooden|' +
+  'phil jackson|pat riley|scotty bowman|joe mccarthy|tony la russa|sparky anderson|tommy lasorda|earl weaver|' +
+  'joe torre|bill parcells|chuck noll|mike ditka|joe paterno|dean smith|bobby knight|mike krzyzewski|' +
+  'jim valvano|adolph rupp|red holzman|paul brown|curly lambeau|woody hayes|bud grant|hank stram|marv levy|' +
+  'joe gibbs|leo durocher|miller huggins|john mcgraw|walter alston|' +
+  'floyd patterson|ingemar johansson|rocky marciano|sugar ray robinson|joe louis|jack dempsey|gene tunney|' +
+  'muhammad ali|joe frazier|george foreman|sonny liston|larry holmes|mike tyson|evander holyfield|' +
+  'jake lamotta|rocky graziano|archie moore|jersey joe walcott|ezzard charles|max schmeling|primo carnera|' +
+  'james j braddock|jim braddock|john l sullivan|jim jeffries|bob fitzsimmons|marvin hagler|' +
+  'thomas hearns|roberto duran|sugar ray leonard|oscar de la hoya|manny pacquiao|floyd mayweather|willie pep|' +
+  'henry armstrong|tony zale|carmen basilio|ken norton|leon spinks|michael spinks|lennox lewis|jack sharkey|' +
+  'max baer|gene fullmer|benny leonard|mickey walker|harry greb|stanley ketchel|' +
+  'mario andretti|aj foyt|a j foyt|jeff gordon|jimmie johnson|cale yarborough|bobby allison|darrell waltrip|' +
+  'junior johnson|al unser|bobby unser|rick mears|emerson fittipaldi|juan manuel fangio|stirling moss|' +
+  'jackie stewart|niki lauda|michael schumacher|lewis hamilton|graham hill|phil hill|dan gurney|' +
+  'carroll shelby|barney oldfield|danica patrick|tony stewart|kyle busch|max verstappen|' +
+  'willie shoemaker|bill shoemaker|eddie arcaro|steve cauthen|' +
+  'jesse owens|jim thorpe|babe didrikson|bill tilden|rod laver|arthur ashe|billie jean king|chris evert|' +
+  'martina navratilova|bjorn borg|john mcenroe|jimmy connors|serena williams|roger federer|rafael nadal|' +
+  'carl lewis|bob mathias|mark spitz|michael phelps|jack nicklaus|ben hogan|sam snead|gene sarazen|' +
+  'byron nelson|walter hagen|francis ouimet|tiger woods|gary player|lee trevino|tom watson|' +
+  'hulk hogan|ric flair|andre the giant|' +
+  ''
+).split('|').filter(Boolean);
+
+export const ATHLETES: ReadonlySet<string> = new Set(ROSTER.concat(ROSTER_SUPPLEMENT));
 
 const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]+/g, ' ').trim();
 
@@ -328,7 +359,16 @@ const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').t
  *  title LEADS with its signer ("Ted Williams Signed Photograph"), so a name
  *  deep in the title ("John F. Kennedy … Mentioning Ted Williams") is not it. */
 export function athleteIn(title: string | null | undefined, maxStart = Infinity): string | null {
-  const w = fold(String(title || '')).split(' ').filter(Boolean);
+  const raw = String(title || '');
+  const hit = athleteInFolded(fold(raw), maxStart);
+  if (hit) return hit;
+  // (wave 4) a quoted nickname inside the name: George "Highpockets" Kelly,
+  // Charles "Old Hoss" Radbourn
+  const bare = raw.replace(/\s+["“'‘][A-Za-z .'-]{2,24}["”'’]\s+/g, ' ');
+  return bare !== raw ? athleteInFolded(fold(bare), maxStart) : null;
+}
+function athleteInFolded(folded: string, maxStart: number): string | null {
+  const w = folded.split(' ').filter(Boolean);
   for (let i = 0; i < Math.min(w.length - 1, maxStart + 1); i++) {
     if (i + 2 < w.length) { const g3 = `${w[i]} ${w[i + 1]} ${w[i + 2]}`; if (ATHLETES.has(g3)) return g3; }
     const g2 = `${w[i]} ${w[i + 1]}`;

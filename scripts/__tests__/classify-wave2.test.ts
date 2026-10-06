@@ -36,7 +36,7 @@ test('regression a · wrongful evictions: signed historic documents, culture-sal
   assert.ok(!isSignedDocument('helmut newton, fashion study. model in trouser suit, 1970s, colour print, signed...'));
   // a celebrity-signed piece is an autograph, not the mass object it is signed on
   assert.equal(move({ auctionHouse: 'RR Auction', artist: 'entertainment-memorabilia', title: 'The Godfather: Al Pacino, James Caan, and Diane Keaton Signed LaserDisc Sleeve' }), 'entertainment-memorabilia');
-  assert.equal(move({ auctionHouse: "Julien's", artist: 'pop-memorabilia', title: 'OLIVIA NEWTON-JOHN AND JOHN TRAVOLTA SIGNED MENU FROM 2019 "MEET \'N\' GREASE MOVIE SING-A-LONG!," SIGNED IMAGE AND TRADING CARD' }), 'pop-memorabilia');
+  assert.equal(move({ auctionHouse: "Julien's", artist: 'pop-memorabilia', title: 'OLIVIA NEWTON-JOHN AND JOHN TRAVOLTA SIGNED MENU FROM 2019 "MEET \'N\' GREASE MOVIE SING-A-LONG!," SIGNED IMAGE AND TRADING CARD' }), 'entertainment-memorabilia'); // (wave 4) Julien's pop slug re-homed (culture-sub-slug)
   // …but slabbed / sealed / comic product stays out
   assert.equal(move({ auctionHouse: 'Goldin', artist: 'entertainment-memorabilia', title: '2023 Hit Parade Iron Throne Edition Series 27 Hobby Box - Possible Emilia Clarke, Kit Harington, Peter Dinklage Signed Cards' }), DROP);
   assert.equal(move({ auctionHouse: 'Propstore', artist: 'pop-memorabilia', title: 'Lot # 1524: Marvel Comics - Charles Lippincott Collection: Star Wars No. 1 Comic Signed by Charles Lippincott, Roy Thomas, and Howard Chaykin CBCS 5.5' }), DROP);
@@ -92,7 +92,7 @@ test('regression c · flips: aviators in a space sale, graded tickets / lineup c
 });
 
 test('athlete roster: corpus card players, never teams / phrases / namesakes', () => {
-  assert.equal(athleteIn('Sugar Ray Robinson Signed Photograph'), 'ray robinson');
+  assert.equal(athleteIn('Sugar Ray Robinson Signed Photograph'), 'sugar ray robinson'); // (wave 4) the boxers' full names joined the roster
   assert.equal(athleteIn('Ty Cobb Signature'), 'ty cobb');
   assert.equal(athleteIn('St. Louis Cardinals Signed Photograph'), null);
   assert.equal(athleteIn('1960s TV Series High-Grade Complete Sets (3): Beverly Hillbillies, Munsters, and Superman'), null);
@@ -124,7 +124,7 @@ test('class 8 · Julien\'s / Propstore lots are sports only with sport evidence'
   assert.equal(J('THE BIG LEBOWSKI JEFF BRIDGES WHITE SLEEVELESS COVERALLS'), 'entertainment-memorabilia');
   assert.equal(J('DAYS OF OUR LIVES EMMY AWARD', 'trophies-awards'), 'entertainment-memorabilia');
   assert.equal(J('MICHAEL JACKSON SIGNED STANDEE', 'autographs', 'The Collection of Tompkins and Bush'), 'entertainment-memorabilia');
-  assert.equal(J("Lot # 368: Star Wars: The Phantom Menace (1999) - Obi-Wan Kenobi's (Ewan McGregor) Dueling Lightsaber Hilt", 'memorabilia', 'Entertainment Memorabilia Live', 'Propstore'), 'entertainment-memorabilia');
+  assert.equal(J("Lot # 368: Star Wars: The Phantom Menace (1999) - Obi-Wan Kenobi's (Ewan McGregor) Dueling Lightsaber Hilt", 'memorabilia', 'Entertainment Memorabilia Live', 'Propstore'), 'movie-tv'); // (wave 4) a Propstore production piece is movie-tv
   assert.equal(J('PINOCCHIO RE-RELEASE POSTER', 'memorabilia', 'Icons & Idols 2012: Hollywood'), DROP);
   assert.equal(J('LETTER OPENER AND MAGNIFYING GLASS', 'memorabilia', "A Gentleman's Arcade of Luxury Treasures"), DROP);
   // sports evidence keeps it: a sports sale, a roster athlete, fight/match-worn language

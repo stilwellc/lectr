@@ -209,7 +209,12 @@ export function cardRepeatKey(l: AuctionLot): string | null {
   const set = cardSetKey(c.setName);
   const serial = c.serialOf != null ? `/${c.serialOf}` : '';
   const signed = c.auto ? '|s' : '';
-  return `${c.playerSlug}|${cardYearKey(c.year)}|${set}|${c.cardNo}|${grade}${serial}${signed}`;
+  // (wave 4) a descriptor cut from the player's name ("Wearing Mask", "In
+  // Action") keeps that variation apart from the base card, as the junk
+  // player slug it replaced did
+  const dx = (c as typeof c & { descriptor?: string | null }).descriptor;
+  const desc = dx ? `|d:${dx}` : '';
+  return `${c.playerSlug}|${cardYearKey(c.year)}|${set}|${c.cardNo}|${grade}${serial}${signed}${desc}`;
 }
 
 /** Reference-level watch identity: same maker + same reference is "the same

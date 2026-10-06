@@ -16,7 +16,7 @@ import { parseSignerName, SIGNER_PARSER_VERSION } from './autograph-signer';
 import { leadsWithSetCode } from './set-codes';
 import { attachExtractions, fillWatchReferencesFromExtract } from './extract/apply';
 import { segmentOf } from '../corpus-io';
-import { reclassifyLot } from './classify';
+import { reclassifyLot, isSpaceLeadTitle } from './classify';
 import { saleDayOf, SALE_DAY_HOUSES } from './sale-day';
 import { seasonToDate } from './sports-crawl';
 import { saleCloseFor, galleryStubClose, GALLERY_HOUSES } from './sale-close-dates';
@@ -171,7 +171,9 @@ export function rerouteScienceMisroutes(lots: Lot[]): {
     // Group Lot (6) - From the Personal Collection of Alan Bean" is an
     // astronaut's effects — re-routed to a tracked maker if it names one (a
     // flown Omega), never evicted as an untracked watch maker
-    const spacePinned = l.artist === 'space-exploration' && /\bspace\b/i.test(String((l as { saleName?: string | null }).saleName || ''));
+    // (wave 4) + an astronaut's / a flown piece wherever it sold ("Alan Bean
+    // Signed Lithograph: 'On the Rim'" — the hand labels file it space)
+    const spacePinned = l.artist === 'space-exploration' && (/\bspace\b/i.test(String((l as { saleName?: string | null }).saleName || '')) || isSpaceLeadTitle(String(l.title || '')));
 
     // ── WATCHES (a skeletonized dial is not a fossil) ──
     if (WATCH_MAKER.test(t) || WATCH_SIGNAL.test(t)) {
@@ -299,13 +301,38 @@ export function enrichWatchReferences(lots: Lot[]): number {
 // (catalogue numbers: F. & S. II.31) and a watch's own model LINE. Deleted,
 // not nulled: the readers fall back the same way on an absent field.
 // ─────────────────────────────────────────────────────────────────────────────
+/** (wave 4) a junk art / design model key (re-audit #3, ~3.5k rows): a size
+ *  fragment ("x101" from "101.6 x 101.6cm"), an art TITLE word (an art key is a
+ *  catalogue number — "f. & s. ii.31", "rie347" — never "electric", "femme",
+ *  "une"), or a generic furniture / form word ("coffee", "dining", "side",
+ *  "table", "door"). Named models stay ("lounge", "conoid", "standard",
+ *  "grass-seated", "compas", "mira", "antony", "kornblut", "time-life"). */
+const JUNK_DESIGN_MODEL_WORDS = new Set(('coffee dining side door and wall end table tables rocking floor pedestal office ' +
+  'writing cane linen easy nesting library executive school wall-mounted wall-hanging king-size queen-size seated conference ' +
+  'hanging console theatre mesh shell sliding-door wood base front student trestle sewing leather swivel lobby cloth desk ' +
+  'special-order folding leg mounted steel platform refectory arm wire plastic drawer administrative with boy one two three ' +
+  'four five six eight beech plywood two-door single-pedestal public life chair chairs stool stools bench cabinet chest lamp ' +
+  'bed sofa settee ottoman headboard mirror low high occasional dressing night bedside the a of for from in on de la le pair ' +
+  'set early rare fine custom important large small triple double plank tall round square rectangular oval walnut teak oak ' +
+  'rosewood aluminum aluminium upholstered glass bronze').split(' '));
+export function isJunkMakerModelKey(market: string, key: string): boolean {
+  const k = key.toLowerCase().trim();
+  if (/^x\d+$/.test(k)) return true;
+  if (market === 'art') return !/\d/.test(k);
+  return JUNK_DESIGN_MODEL_WORDS.has(k);
+}
 export function clearJunkModelKeys(lots: Lot[]): number {
   let cleared = 0;
   for (const l of lots) {
     const x = l as Lot & { modelKey?: string | null };
     if (x.modelKey == null) continue;
     const m = ARTIST_MARKET[l.artist as keyof typeof ARTIST_MARKET];
-    if (m === 'design' || m === 'art') continue;
+    if (m === 'design' || m === 'art') {
+      if (!isJunkMakerModelKey(m, String(x.modelKey))) continue;
+      delete x.modelKey;
+      cleared++;
+      continue;
+    }
     if (m === 'watches' && isWatchModelLine(l.artist, x.modelKey)) continue;
     // a watch key that IS the printed reference ("REF. 3919" → 3919 / ref3919)
     const ref = String(l.reference || '').toLowerCase().replace(/\s+/g, '');
@@ -1891,17 +1918,30 @@ const CULT_KIND_RULES: [RegExp, string][] = [
   // menu, card, standee, retail hat or ball); a signed guitar, album, shoe or
   // document is still that object (the noun rules below)
   [/\b(?:signed|autographed)\b.{0,30}\b(?:programs?|programmes?|books?|menus?|cards?|pages?|standees?|drawings?|sketch(?:es)?|artwork|drum ?sticks?|hats?|caps?|baseballs?|footballs?|basketballs?|balls?|posters?|banners?|plaques?|bats?|helmets?|jerseys?|mini[- ]helmets?)\b|\b(?:programs?|programmes?|books?|menus?|cards?|pages?)\b.{0,25}\bsigned\b/i, 'autograph-other'],
-  [/\b(?:photo|photos|photograph|photographs|snapshots?|negatives?|carte[- ]de[- ]visites?|cdvs?|tintypes?|daguerreotypes?|polaroids?|(?:film|press|publicity|production|black and white|colou?r) stills?|a still of|contact sheets?|transparenc(?:y|ies)|image of)\b/i, 'photo'],
-  [/\b(?:letters?|correspondence|telegrams?|manuscripts?|typescripts?|documents?|deeds?|land grants?|commissions?|proclamations?|broadsides?|autograph notes?|handwritten|lyrics?|diar(?:y|ies)|notebooks?|als|tls|endorsements?|(?:confederate|war|treasury|savings|railroad) bonds?|bond certificates?|certificates?|stock|treaty|bulletins?|memo(?:randum|randa|s)?|ledgers?|registers?|guest ?books?|journals?|financial statements?|contracts?|telephone messages?|itinerar(?:y|ies)|writes (?:to|his|her|a|an|of|about|from))\b/i, 'document'],
+  // (wave 4) + the photographic print processes Christie's prints in the
+  // medium line ("5 gelatin silver contact prints", "chromogenic print") and
+  // RR's sitter headline ("McKinley sternly poses for an Ohio studio")
+  [/\b(?:photo|photos|photograph|photographs|snapshots?|negatives?|carte[- ]de[- ]visites?|cdvs?|tintypes?|daguerreotypes?|polaroids?|(?:film|press|publicity|production|black and white|colou?r) stills?|a still of|contact sheets?|transparenc(?:y|ies)|image of|gelatin[- ]silver|silver (?:gelatin )?prints?|contact prints?|chromogenic|c-prints?|platinum prints?|albumen prints?|pos(?:e|es|ed|ing)|photo ?shoots?|last sitting)\b/i, 'photo'],
+  // (wave 4) + a FREE FRANK (the franking signature on a cover) and a signed
+  // QUOTATION (RR: "Henry Wilson Free Frank", "James Buchanan Souvenir Quotation")
+  [/\b(?:free[- ]franks?|franked|quotations?|letters?|correspondence|telegrams?|manuscripts?|typescripts?|documents?|deeds?|land grants?|commissions?|proclamations?|broadsides?|autograph notes?|handwritten|lyrics?|diar(?:y|ies)|notebooks?|als|tls|endorsements?|(?:confederate|war|treasury|savings|railroad) bonds?|bond certificates?|certificates?|stock|treaty|bulletins?|memo(?:randum|randa|s)?|ledgers?|registers?|guest ?books?|journals?|financial statements?|contracts?|telephone messages?|itinerar(?:y|ies)|writes (?:to|his|her|a|an|of|about|from))\b/i, 'document'],
   [/\b(?:script|scripts|screenplay|shooting script|storyboards?|teleplay)\b/i, 'script'],
-  [/\b(?:posters?|lobby cards?|one[- ]sheets?|handbills?|locandina|affiche|window cards?|half[- ]sheets?|three[- ]sheets?)\b/i, 'poster'],
+  // (wave 4) + the film-poster formats and the condition grade Christie's
+  // poster sales print ("British Quad -- 30x40in., (A-)", "Italian, (B+),
+  // Linen-Backed", "U.S. insert -- 36x14in.")
+  [/\b(?:posters?|lobby cards?|one[- ]sheets?|handbills?|locandina|affiche|window cards?|half[- ]sheets?|three[- ]sheets?|six[- ]sheets?|(?:british |u\.?k\.? |australian )?quads?|daybills?|scene cards?|(?:linen|paper)[- ]backed|insert\s*(?:[-–]+|,)\s*\d)\b/i, 'poster'],
+  [/\((?:A|B|C)[+-]\)|\((?:A|B|C)\)\s*,?\s*(?:unfolded|folded|linen|paper)/, 'poster'],
   [/\b(?:guitars?|bass|telecaster|stratocaster|les paul|drums?|drumhead|piano|saxophone|violin|microphone|amplifier|keyboard|ukulele|banjo|trumpet|cymbals?)\b/i, 'instrument'],
   [/\b(?:gold record|platinum record|gold disc|platinum disc|riaa|grammy|oscar|academy award|emmy|golden globe|disc award|sales award|presentation award|awards?|medals?|trophy|trophies|key to the city)\b/i, 'award'],
   [/\b(?:prop|props|hero prop|production[- ]made|screen[- ]used|maquette)\b/i, 'prop'],
-  [/\b(?:worn|costume|costumes|(?<!dust )jacket|coat|dress|gown|shirt|boots?|robe|tunic|uniform|suit|cape|cowl|helmet|mask|shoes?|sneakers?|hat|jumpsuit|vest|jersey|ensemble|coveralls|overalls|wardrobe)\b/i, 'costume'],
+  // (wave 4) + the garment nouns Julien's titles carry ("JANET JACKSON GLOVES",
+  // "SINATRA GROUP OF … SWEATERS AND OTHER CLOTHES", "CINDY LOU WHO SLIPPERS")
+  [/\b(?:worn|costume|costumes|(?<!dust )jacket|coat|dress|gown|shirt|boots?|robe|tunic|uniform|suit|cape|cowl|helmet|mask|shoes?|sneakers?|hat|jumpsuit|vest|jersey|ensemble|coveralls|overalls|wardrobe|gloves|sweaters?|clothes|clothing|garments?|slippers|sombrero|scarf|scarves|neckties?|trousers|blouses?|skirts?|pajamas|kimono|corset|bodysuit|leotard|tuxedo)\b/i, 'costume'],
   [/\b(?:tickets?|stubs?|pass|credentials?|programs?|programmes?)\b/i, 'ticket'],
   [/\b(?:animation cel|cels?|celluloid|drawings?|sketch(?:es)?|costume design)\b/i, 'cel-art'],
-  [/\b(?:record|records|vinyl|albums?(?!\s+pages?)|lp|45rpm|acetate|test pressing)\b/i, 'record'],
+  // (wave 4) + a demo / master TAPE (a band's demo cassette is the 1/1
+  // recording; a sealed or graded retail cassette is a mass item — classify.ts)
+  [/\b(?:record|records|vinyl|(?<!(?:photo|photograph|autograph|stamp|scrap|sticker|cigarette card|card|cabinet card) )albums?(?!\s+pages?)|lp|45rpm|acetate|test pressing|cassettes?|demo (?:tapes?|recordings?|discs?)|master tapes?|reel[- ]to[- ]reel)\b/i, 'record'],
 ];
 /** no object noun named: a bare signature mark is still an autograph */
 const CULT_AUTOGRAPH_FALLBACK_RE = /\b(?:signed|autographed|autographs?|signatures?|inscribed)\b/i;
@@ -1934,12 +1974,19 @@ export function cultureItemClass(l: { title?: string | null; description?: strin
   if (/\bprops?\b/i.test(title)) return 'prop';
   const fromTitle = earliestCultKind(title) ?? (CULT_AUTOGRAPH_FALLBACK_RE.test(title) ? 'autograph-other' : null);
   if (fromTitle) return fromTitle;
-  const head = descHead(title, String(l.description || ''));
+  // (wave 4) a POSE names a photograph in RR's own headline only — a
+  // description's "in flying pose" describes a model or a figure
+  const head = descHead(title, String(l.description || '')).replace(/\bpos(?:e|es|ed|ing)\b/gi, ' ');
   const fromDesc = earliestCultKind(head) ?? (CULT_AUTOGRAPH_FALLBACK_RE.test(head) ? 'autograph-other' : null);
   // "Approximately seventy signatures collected by …" is an autograph lot, not a cut
   if (fromDesc) return fromDesc === 'signed-cut' ? 'autograph-other' : fromDesc;
   const sale = String(l.saleName || '');
   if (/\bphotograph/i.test(sale)) return 'photo';
+  // (wave 4) a production piece: Propstore sells only screen-used / production
+  // material ("Lot # 51: Mike Ehrmantraut (as played by Jonathan Banks) Nail
+  // Hose Strip", "Count Dooku's Stunt Lightsaber") — a piece whose title names
+  // no other object is a prop
+  if (l.auctionHouse === 'Propstore' || /\bas played by\b|\bstunt\b|\bscreen[- ](?:used|matched)\b|\bproduction[- ]used\b/i.test(title)) return 'prop';
   // RR's signed-piece shorthand: "<Signer> Book", "<Signer> Program", "<Signer> Menu"
   if (l.auctionHouse === 'RR Auction' && /\b(?:books?|programs?|programmes?|menus?|cards?|bibles?|baseballs?|footballs?|basketballs?|bats?|balls?|scores?|pages?|first day covers?|covers?)\s*$/i.test(title.trim())) return 'autograph-other';
   // (wave 3) RR's narrative letter headline: "Edwin M. Stanton: Stanton

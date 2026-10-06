@@ -53,6 +53,10 @@ export interface CardId {
    *  ("portrait-green-background", "bat-on-shoulder", "boston") — T206 Cobb
    *  has four poses, Dahlen a Boston and a Brooklyn card */
   pose?: string | null;
+  /** (wave 4) a descriptor the house glued after the player's name ("Mike
+   *  Trout Wearing Mask", "Harry Niles Cabinets", "Bill Russell In Action"):
+   *  cut from the player, kept as the card's own variant ('d-wearing-mask') */
+  descriptor?: string | null;
 }
 
 /* ── PRE-WAR CATALOG CARDS (Oct 6 2026, categorization wave 3) — 85k single
@@ -313,7 +317,22 @@ export function playerSlugOf(name: string | null): string | null {
 // own identity.
 const LEAD_NAME_STOP = /^(?:Baseball|Football|Basketball|Hockey|Soccer|Playoffs?|Postseason)$/i;
 
+// (wave 4) descriptor words a house glues after a player's name — never a
+// name part once two name words are kept ("Mike Trout Wearing Mask", "Harry
+// Niles Cabinets - Checklist Back", "Sandy Koufax Arms Crossed", "Willie Mays'
+// Catch Makes …", "Bill Russell In Action", "Joe Page Incorrect Bio"): 3,175
+// keys carried a ≥4-token player slug. The cut words become the card's
+// descriptor (its own variant), so the repeat-sale key still keeps the
+// variation apart from the base card. (Brandon Belt keeps his name: the stop
+// needs two kept words.)
+const DESCRIPTOR_STOP = /^(?:wearing|mask(?:ed)?|belt|visible|cabinets?|checklist|blank|back|script|correct|incorrect|bio|logoman|shield|stats|signing|arms|crossed|twice|swoosh|wrong|copyright|replay|instant|thrills|connects|becomes|makes|catch|exquisite|logos|shots|laundry|tag|nameplate|booklet|vertical|unissued|proof|trees|no|in|action|hoard|portrait|portraits)$/i;
+// a league mark / team name / print-process word after a kept two-word name
+// ("LaDainian Tomlinson NFL Shield Patch", "Don Baylor Athletics Unissued
+// Proof", "Luke Easter Color-Process Proof")
+const DESCRIPTOR_TEAM_STOP = /^(?:nfl|mlb|nba|nhl|color|colour|process|athletics|yankees|dodgers|giants|cubs|cardinals|tigers|pirates|senators|braves|reds|phillies|orioles|indians|mets|angels|astros|padres|mariners|rangers|royals|twins|brewers|expos|celtics|lakers|bulls|knicks|packers|bears|steelers|cowboys|raiders|49ers)$/i;
+let lastDescriptor: string | null = null;
 function trimNameRun(run: string, lead = false): string | null {
+  lastDescriptor = null;
   // a grader glued on by dashes ("Hank Aaron--PSA Gem Mint 10", "Babe Ruth-SGC")
   const words = run.trim().replace(/-+(?=(?:PSA|BGS|SGC|CGC|BVG)\b)/g, ' ').split(/\s+/);
   const kept: string[] = [];
@@ -327,6 +346,13 @@ function trimNameRun(run: string, lead = false): string | null {
     // a LEADING "Hand Cut" ("#13 Hand Cut Willie Mays") is skipped, not a stop
     if (!kept.length && /^Hand(?:-Cut|\s+Cut)?$/i.test(w) && /^Hand[- ]?Cut\b/i.test(words.slice(i, i + 2).join(' '))) { if (!/-/.test(w)) i++; continue; }
     if (PAIR_NAME_STOP.test(words.slice(i, i + 2).join(' '))) break;
+    if (kept.length >= 2 && (DESCRIPTOR_STOP.test(w.split(/[-/]/)[0].replace(/[^A-Za-z]/g, '')) || DESCRIPTOR_TEAM_STOP.test(w.replace(/[^A-Za-z]/g, '')))) {
+      // the descriptor runs to the next grader / grade word or name-stop descriptor ("In Action PSA" is 'in-action')
+      const dw: string[] = [];
+      for (const x of words.slice(i)) { if (GRADE_NAME_STOP.test(x.split(/[-/]/)[0]) || (dw.length && NAME_STOP.test(x))) break; dw.push(x); }
+      lastDescriptor = dw.join(' ').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || null;
+      break;
+    }
     kept.push(w);
   }
   // a real name is 2+ words (single word = a set word we misgrabbed)
@@ -457,9 +483,11 @@ export function parseCard(title: string): CardId {
   // (some card titles lead with the player, lot-style)
   const after = noParens.match(AFTER_NO_PLAYER);
   const run = after ? trimNameRun(after[1]) : bare ? bare.player : null;
+  const runDesc = after && run ? lastDescriptor : null;
   const lead = !run ? (() => { const m = t.match(LEADING_PLAYER); return m ? trimNameRun(m[1], true) : null; })() : null;
   out.player = run || lead;
   out.playerSlug = playerSlugOf(out.player);
+  out.descriptor = runDesc;
 
   // VARIANT signature (Sep 27): parallel / auto / relic / serial-class tokens
   // anywhere in the title, with the player's own name and colour-word team
@@ -480,6 +508,7 @@ export function parseCard(title: string): CardId {
     const src = tok === SP_TOKEN ? (vintage ? '' : spScope) : vt;
     if (re.test(src) && !toks.includes(tok)) toks.push(tok);
   }
+  if (out.descriptor) toks.push(`d-${out.descriptor}`);
   out.variant = toks.length ? toks.sort().join('+') : null;
 
   // MULTI-CARD lots (Oct 6): a set / pair / "Collection (25)" / two card

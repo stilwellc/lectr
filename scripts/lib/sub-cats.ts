@@ -75,6 +75,10 @@ const BASEBALL_ISSUE_RE = /^\s*(?:\d{1,3}\s+)?(?:(?:19|18)\d\d(?:-\d{2,4})?\s+)?
  *  Christy Mathewson Poses") — the leading-code test above misses a code after
  *  a lot count or a maker name. Only the codes that are baseball-only issues. */
 const BASEBALL_CODE_ANY_RE = /\b(?:T20[1-7]|T21[3-6]|T222|E9\d|E1[0-4]\d|M101|M116|N167|N172|N284|N300|D3\d\d)(?:-\d)?\b/;
+/** (wave 4) pre-war issues that are BASEBALL-only (R331 National Chicle is
+ *  football, T9 / T218 / N162 boxers and champions — the catalogue letter
+ *  alone does not say baseball) */
+const PREWAR_BASEBALL_ISSUE_RE = /\bR319\b|\bgoudey\b|\bplay ball\b|\bcracker jack\b|\bzeenut\b|\bold judge\b|\bdelong\b|\bdiamond stars\b|\bbatter-up\b|\bsporting (?:news|life)\b/i;
 /** association football / cricket / rugby lots carry no drill of ours (and a
  *  London "Football Memorabilia" sale is soccer) */
 const NO_SPORT_DRILL_RE = /\b(?:cricket|rugby|polo|croquet|rowing|regatta|curling)\b/i;
@@ -179,7 +183,7 @@ const CULT_KIND: Record<string, string> = {
 const CULT_TEXT_DOMAIN: [RegExp, string][] = [
   [/\b(?:astronauts?|cosmonauts?|nasa|apollo \d+|space shuttle|mercury seven|moonwalkers?)\b/i, 'space-science'],
   [/\b(?:presidents?|presidential|vice[- ]president|first lady|white house|senat(?:e|ors?)|congress(?:man|woman|ional)?|impeachment|(?:presidential|political) campaign|campaign (?:buttons?|posters?|pins?|banners?|ribbons?|badges?)|inaugura(?:l|tion)|jugate|supreme court|chief justice|governor|secretary of state|prime minister|parliament|mayor|ambassador|electoral|confederate president|political)\b/i, 'political'],
-  [/\b(?:concerts?|tour (?:posters?|programs?|books?|jackets?|shirts?|pass(?:es)?)|albums?(?!\s+pages?)|rock band|the band|band[- ](?:signed|members?)|guitars?|singers?|songs?|songwriter|lyrics?|rock (?:and|&|n'?) roll|vinyl|gold record|platinum record|grammy|drum ?sticks?|drumheads?|setlist|set list|stage[- ](?:worn|played|used)|backstage|recording|motown|woodstock|orchestra|opera|symphony|composer|musical quot\w*|musical score|ballroom)\b/i, 'music'],
+  [/\b(?:concerts?|tour (?:posters?|programs?|books?|jackets?|shirts?|pass(?:es)?)|(?<!(?:photo|photograph|autograph|stamp|scrap|sticker|card|cabinet card) )albums?(?!\s+pages?)|rock band|the band|band[- ](?:signed|members?)|guitars?|singers?|songs?|songwriter|lyrics?|rock (?:and|&|n'?) roll|vinyl|gold record|platinum record|grammy|drum ?sticks?|drumheads?|setlist|set list|stage[- ](?:worn|played|used)|backstage|recording|motown|woodstock|orchestra|opera|symphony|composer|musical quot\w*|musical score|ballroom)\b/i, 'music'],
   [/\b(?:films?|movies?|motion picture|screen[- ](?:used|worn|matched)|production[- ](?:made|used|drawing|cels?|art)|film studios?|actors?|actress(?:es)?|one[- ]sheets?|lobby cards?|animation|animated|cels?|walt disney|disney|television|tv series|tv show|sitcom|episode|ursa|oscars?|academy awards?|emmys?|hollywood|filmmakers?|screenplay|shooting script|movie poster)\b/i, 'hollywood'],
   [/\b(?:wwii|ww2|wwi|world war|army|navy|naval|admiral|soldiers?|battle(?:ship|field)?|regiment(?:al)?|air aces?|luftwaffe|military|marine corps|usmc|usaf|pearl harbor|d-day|nazi|third reich|medal of honor|fighter pilot)\b/i, 'military'],
   // case-sensitive: a royal title + a capitalised name ("King Louis XIII",
@@ -292,9 +296,12 @@ const DESIGN_MATERIALS = ['walnut', 'teak', 'oak', 'rosewood', 'plywood', 'steel
 // the next field on ("Committee' Chairscirca 1953").
 const DESIGN_KIND_WORDS: [string, RegExp][] = [
   ['lighting', /\b(?:lamps?|lampe|lighting|light fixture|wall light|ceiling light|floor light|potence|sconces?|applique|lanterns?|chandeliers?)/i],
-  ['case-storage', /\besus?\b|\b(?:eames storage unit|storage units?|cabinets?|chests?|bookcases?|biblioth[eè]que|room divider|wall case|credenza|sideboards?|dressers?|rangement|kornblut|pj-r-|wardrobes?|armoire|shelv(?:es|ing)|bookshel)/i],
-  ['seating', /\b(?:lcw|lcm|dcw|dcm|dsr|dsw|dsx|dss|dar|dax|rar|raw|rkr|pkw|pkc|lar|lax|dkr|dkx|es ?\d{3}|670|671)(?:s|-?\d)?\b|\b(?:pj-si|chairs?|armchairs?|fauteuils?|chaises?|chaise longue|lounge|stools?|tabourets?|bench(?:es)?|settees?|sofas?|canap[ée]|daybeds?|rockers?|rocking|ottomans?|seating|kangaroo|committee)/i],
-  ['tables', /\b(?:etr|ltr|ctw|otw|dtw|etw)(?:s|-?\d)?\b|\b(?:pj-ta|pj-bu|tables?|gu[ée]ridon|compas|desks?|bureau|frenchman'?s cove|minguren|dining suite|sundra|conoid dining)/i],
+  // (wave 4) + a wall unit, a bahut, a buffet / commode / vitrine / étagère
+  ['case-storage', /\besus?\b|\b(?:eames storage unit|storage units?|wall units?|cabinets?|chests?|bookcases?|biblioth[eè]que|room divider|wall case|credenza|sideboards?|bahuts?|buffets?|commodes?|vitrines?|[ée]tag[eè]res?|dressers?|rangement|kornblut|pj-r-|wardrobes?|armoire|shelv(?:es|ing)|bookshel)/i],
+  // (wave 4) + a banquette
+  ['seating', /\bbanquettes?\b|\b(?:lcw|lcm|dcw|dcm|dsr|dsw|dsx|dss|dar|dax|rar|raw|rkr|pkw|pkc|lar|lax|dkr|dkx|es ?\d{3}|670|671)(?:s|-?\d)?\b|\b(?:pj-si|chairs?|armchairs?|fauteuils?|chaises?|chaise longue|lounge|stools?|tabourets?|bench(?:es)?|settees?|sofas?|canap[ée]|daybeds?|rockers?|rocking|ottomans?|seating|kangaroo|committee)/i],
+  // (wave 4) + Jeanneret's IT-1 table code
+  ['tables', /\bit-?1\b|\b(?:etr|ltr|ctw|otw|dtw|etw)(?:s|-?\d)?\b|\b(?:pj-ta|pj-bu|tables?|gu[ée]ridon|compas|desks?|bureau|frenchman'?s cove|minguren|dining suite|sundra|conoid dining)/i],
 ];
 function designKind(formKey: string, title = '', desc = ''): string {
   if (formKey.startsWith('seating')) return 'seating';
@@ -371,6 +378,14 @@ export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
     if (!drill && NO_SPORT_DRILL_RE.test(title.replace(/\bpolo grounds\b/gi, ' '))) return { subCat, drill: null, flown: null };
     // (wave 3) a single-sport sale names the sport of every lot in it
     if (!drill) drill = sportOfSale(l.saleName as string, l.auctionHouse as string);
+    // (wave 4) a PRE-WAR baseball issue names the sport before any learned
+    // player vote: a name two athletes share ("1933 Goudey #214 John Kerr" —
+    // the 1920s infielder, not the 1960s NBA center) must not take the other
+    // one's sport (Goudey's multi-sport Sport Kings excepted)
+    if (!drill && subCat === 'cards') {
+      const y = title.match(/^\s*(?:\d{1,4}\s+)?(?:(?:signed|autographed)\s+)?(18[6-9]\d|19[0-3]\d|194[01])\b/i);
+      if (y && (BASEBALL_CODE_ANY_RE.test(title) || PREWAR_BASEBALL_ISSUE_RE.test(title)) && !NON_BASEBALL_ISSUE_RE.test(title) && !/sport kings|\bR338\b/i.test(title) && !sportWordOf(title)) drill = 'baseball';
+    }
     if (!drill && sportMaps) {
       const pid = l._pid != null ? String(l._pid) : null;
       const card = l._card as { playerSlug?: string } | undefined;
