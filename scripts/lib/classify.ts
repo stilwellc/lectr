@@ -488,6 +488,9 @@ export function attributionFix(l: ClassifyLot): string | null {
 // editions and printed documents are judged real culture lots in the audit;
 // these are the marks of a MASS item only.
 const CULTURE_MASS_RE = /\b(igs|wegs|wata|vga|cgc|cbcs|afa (?:qualified )?\d{2}|ukg \d{2}|cas \d{2}|vmg|factory[- ]sealed|sealed (?:video|vhs|cassette|cd|dvd|laserdisc|box|case|pack|game|tape)|hobby (?:box|case)|booster (?:box|pack)|blaster box|beanie bab(?:y|ies)|funko|action figures?|playset|video ?games?|nintendo|playstation|\bvhs\b|laserdisc|video 8|trading cards?|comic books?|comics)\b/i;
+const HAKES_TOY_RE = /\b(?:boxed|in (?:original )?box|sealed box|carded|loose action|playsets?|model kits?|transformers|g\.?i\.? joe|masters of the universe|teenage mutant ninja turtles|he-man|micromasters?|hot wheels|matchbox|lionel|lunch ?box(?:es)?|board game|toy|toys)\b/i;
+const CULTURE_MASS2_RE =/\b(?:pcgs|ngc|anacs)\b|\b(?:silver|morgan|peace|walking liberty|eagle) dollars?\b|\bdouble eagle\b|\bhalf dollars?\b|\bcoins?\b.{0,40}\b(?:ms|pr|pf)[- ]?\d{2}\b|\b(?:magazines?|newspapers?)\b.{0,40}\b(?:collection|lot|group|\(\d+\))|\b(?:collection|lot|group) of (?:\(?\d+\)? )?(?:magazines|newspapers)\b|\b(?:toy (?:truck|car|train)s?|tin toys?|die-?cast|buddy-?l|kickstradomis|designer toys?|vinyl figures?|model kits?)\b/i;
+
 /** graded-slab / sealed-product marks: a SIGNED item carrying one is still a
  *  mass collectible (a signed CGC comic, a "Possible … Signed Cards" box) */
 const MASS_EVEN_SIGNED_RE = /\b(?:igs|wegs|wata|vga|cgc|cbcs|afa|ukg|cas \d|vmg|amg|hobby (?:box|case)|booster|blaster|possible|factory[- ]sealed)\b|\b(?:psa|bgs|sgc)\s+(?:gem|mint|nm|ex|vg|good|\d)/i;
@@ -507,6 +510,22 @@ export function cultureMassFix(l: ClassifyLot): string | null {
   // it is slabbed / sealed product or a comic / non-sport TCG card
   const signedPiece = SIGNED_RE.test(t) && !MASS_EVEN_SIGNED_RE.test(t) && !COMIC_RE.test(t) && !NON_SPORT_TCG_RE.test(t);
   if ((CULTURE_MASS_RE.test(t) && !signedPiece) || NON_SPORT_TCG_RE.test(t)) return DROP;
+  // (wave 2) class 3 · more mass marks the audit found kept: graded / bullion
+  // coins, toy vehicles and designer toys, magazine & newspaper lots, a
+  // Hake's slogan / litho / cartoon campaign button (a classic jugate stays),
+  // and a Sotheby's Fashion Icons designer garment or costume-jewellery set
+  // no celebrity wore or owned
+  // a NAMED person's piece ("Dwight D. Eisenhower's Silver Dollar Belt Buckle",
+  // "Audrey Hepburn's Givenchy … Gown") is provenance, not a mass object
+  const personal = /\b[A-Z][\w.]*(?:\s+[A-Z][\w.]*)*['’]s\b/.test(t);
+  if (!signedPiece && !personal && CULTURE_MASS2_RE.test(t)) return DROP;
+  if (l.auctionHouse === "Hake's" && /\b(?:buttons?|pinbacks?)\b/i.test(t) && !/\b(?:jugate|classic|rare|unique|prototype|signed|original art|ferrotype)\b/i.test(t)) {
+    // a mass-made campaign / cause button: dated 1920 or later, or a slogan /
+    // litho / cartoon / member's button (a 1902 portrait button stays)
+    const yr = (t.match(/\b(1[89]\d\d|20\d\d)\b/) || [])[1];
+    if ((yr && +yr >= 1920) || (!yr && /\b(?:slogan|litho|cartoon|member'?s|union|labor|symboliz\w*)\b/i.test(t))) return DROP;
+  }
+  if (l.auctionHouse === "Sotheby's" && /fashion icons/i.test(String(l.saleName || '')) && !personal && !/\b(?:worn|owned|property of|collection of|belonged|given to|gifted)\b/i.test(t)) return DROP;
   // a trading card in culture: a sports card goes home to sports, a non-sport
   // card has none. A "set" counts only when it is a set of CARDS ("near-complete
   // set of the USS Pueblo crew" signatures is not).
@@ -589,7 +608,14 @@ export const RECLASS_RULES: ReclassRule[] = [
       if (l.auctionHouse === "Hake's") {
         const t = String(l.title || '');
         if (COMIC_RE.test(t) || COMIC_ISSUE_RE.test(t)) return DROP;
-        return (MASS_TOY_RE.test(t) || TOY_GRADE_RE.test(t)) && !SIGNED_RE.test(t) ? DROP : null;
+        // (wave 2) Hake's toy titles: "TRANSFORMERS (1988) … BOXED", "MPC STAR
+        // WARS … FACTORY SEALED MODEL KIT", "TMNT (1990) - … IN SEALED BOX"
+        if ((MASS_TOY_RE.test(t) || TOY_GRADE_RE.test(t) || HAKES_TOY_RE.test(t)) && !SIGNED_RE.test(t)) return DROP;
+        // (wave 2) Hake's is a pop / political house: a sports-slug lot with no
+        // sport evidence (a Whig almanac, a Truman-Barkley jugate, an Eleanor
+        // Roosevelt signature) is a culture lot
+        if (SPORTS_SLUGS.has(l.artist) && !isSportsEvidence(t)) return cultureHome(t);
+        return null;
       }
       if (l.artist !== 'pop-memorabilia' || !SPORTS_EXPANSION_HOUSES.has(l.auctionHouse || '')) return null;
       return sportsHousePopKind(l.title);

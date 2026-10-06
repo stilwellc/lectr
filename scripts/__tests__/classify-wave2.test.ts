@@ -167,6 +167,28 @@ test('class 2 · sports houses: card lots are cards; non-sport cards have no hom
   assert.equal(H('1949 Cleveland Indians Picture Pack Action Set with Satchel Paige PSA 9 MINT', 'graded-cards', 'Memory Lane'), 'graded-cards');
 });
 
+test('class 3 · mass items kept in culture: coins, toys, magazine lots, mass campaign buttons, unworn designer fashion', () => {
+  const C = (title: string, house = 'Goldin', artist = 'entertainment-memorabilia', saleName = '') => move({ auctionHouse: house, artist, title, saleName });
+  assert.equal(C('1921 Morgan Peace Dollar $1 Coin - PCGS MS63'), DROP);
+  assert.equal(C('The Beatles Magazines, Books, Newspapers Collection (16) - Savenick LOP'), DROP);
+  assert.equal(C('2025 Kickstradomis Charzilla Vs. Kong Iridescent Glow Premium Collection Iconic Mashups Series (#1/1) - Kickstradomis Encapsulated'), DROP);
+  assert.equal(C('A BUDDY-L STEELPLATE FORD MODEL T DUMP TRUCK', "Christie's"), DROP);
+  assert.equal(C('(3) American Eagle U.S. Silver Dollar Album Lot With (64) Total Coins', 'Huggins & Scott', 'pop-memorabilia'), DROP);
+  // a named person's piece is provenance
+  assert.equal(C("Dwight D. Eisenhower's Silver Dollar Belt Buckle: Ornate silver-and-gold belt buckle", 'RR Auction'), 'entertainment-memorabilia');
+  // Hake's: mass campaign / cause buttons go; a classic jugate or a 1902 portrait button stays
+  assert.equal(C('WILLKIE: "OUT OF THE DOG HOUSE INTO THE WHITE HOUSE" 1940 CARTOON BUTTON.', "Hake's", 'pop-memorabilia'), DROP);
+  assert.equal(C('"ANOTHER DEMOCRAT FOR HOOVER" SLOGAN BUTTON.', "Hake's", 'pop-memorabilia'), DROP);
+  assert.equal(C('"MCKINLEY AND HOBART" STARS AND STRIPES JUGATE BUTTON.', "Hake's", 'pop-memorabilia'), 'pop-memorabilia');
+  assert.equal(C('"WELCOME ROOSEVELT SOUVENIR JULY 4, 1902" PORTRAIT BUTTON.', "Hake's", 'pop-memorabilia'), 'pop-memorabilia');
+  // Hake's sports-slug political lots are culture; its toys go
+  assert.equal(C('ZACHARY TAYLOR: WHIG ALMANAC 1849.', "Hake's", 'memorabilia'), 'entertainment-memorabilia');
+  assert.equal(C('TRANSFORMERS (1988) MICROMASTER BATTLE STATION - MICROMASTER IRONWORKS BOXED.', "Hake's", 'memorabilia'), DROP);
+  // Sotheby's Fashion Icons: an unworn designer garment / costume jewellery has no home; a star's gown stays
+  assert.equal(C('Set of Three Gold and Pearl Earrings and Bracelet, Red Gripoix Necklace', "Sotheby's", 'entertainment-memorabilia', 'Fashion Icons'), DROP);
+  assert.equal(C("Audrey Hepburn's Givenchy Haute Couture Cocktail Gown, Autumn-Winter 1966", "Sotheby's", 'entertainment-memorabilia', 'Fashion Icons'), 'entertainment-memorabilia');
+});
+
 test('class 1 · culture kind reads the description when the title is a bare name; signed pieces; plurals', () => {
   const K = (title: string, description = '', o: R = {}) => subCatOf({ artist: 'entertainment-memorabilia', title, itemClass: cultureItemClass({ title, description, ...o }) }).subCat;
   // the object lives in the description (Christie's / Sotheby's culture titles)
