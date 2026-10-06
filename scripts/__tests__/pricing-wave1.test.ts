@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { floorAtBid, BID_FLOOR_LATE_LIFT, type ValueResult } from '../../app/lib/value';
+import { floorAtBid, BID_FLOOR_LATE_LIFT, setEngineFlags, ENGINE_FLAGS_WAVE3, type ValueResult } from '../../app/lib/value';
 import { lotAllInFactor } from '../../app/lib/premiums';
 import { engineFlagOf, computeDeepSignal } from '../../app/lib/comps';
 import type { AuctionLot } from '../../app/types';
@@ -43,7 +43,13 @@ test('floorAtBid: inside the last 3 days the floor is bid × 1.1; the band low s
   // a value between bid and bid×1.1 is lifted only when late
   const mid = v({ expectedHammerUsd: 1450, compValueUsd: 1769, bandLowUsd: 1200 });
   assert.equal(floorAtBid(mid, goldin(1400, '2026-10-20T02:00:00Z'), NOW).expectedHammerUsd, 1450);
+  // (wave 4, bidLift24h) inside the final day the floor is the bid itself;
+  // the wave-3 engine lifted it there too
+  assert.equal(floorAtBid(mid, goldin(1400, '2026-10-06T02:00:00Z'), NOW).expectedHammerUsd, 1450);
+  assert.equal(floorAtBid(mid, goldin(1400, '2026-10-07T02:00:00Z'), NOW).expectedHammerUsd, 1540);
+  setEngineFlags(ENGINE_FLAGS_WAVE3);
   assert.equal(floorAtBid(mid, goldin(1400, '2026-10-06T02:00:00Z'), NOW).expectedHammerUsd, 1540);
+  setEngineFlags(null);
 });
 
 test('floorAtBid: a value above the bid with its band low under it only has the band floored', () => {

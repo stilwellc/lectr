@@ -44,6 +44,10 @@ export const CARD_GATE = {
  *  max-bid quantile (value.MAXBID_Q) */
 const BAND_Q = 0.13;
 const MB_Q = 0.3;
+/** (Oct 6 2026, pricing wave 4, EngineFlags.cardBandWide) the card band's
+ *  tail quantile when widened: the 13/87 band covered 65–74% of the live
+ *  book's card outcomes (nominal 74%) — 10/90 aims the published band at 80% */
+export const CARD_BAND_WIDE_Q = 0.1;
 
 export type CardResidual = { tier: string; conf: string; market: string; ms: number; lr: number };
 export interface CardTierCal { bias: number; lo: number; hi: number; mb: number; n: number }
@@ -66,7 +70,7 @@ function tierBiasLog(lrs: number[]): number | null {
 
 /** Fit the tier calibration (live) and the publish gate (per cell) from
  *  point-in-time residuals, as of `nowMs` (rows at/after it are ignored). */
-export function fitCardCalibration(rows: CardResidual[], nowMs: number): CardCalibration {
+export function fitCardCalibration(rows: CardResidual[], nowMs: number, bandQ = BAND_Q): CardCalibration {
   const past = rows.filter(r => r.ms < nowMs && Number.isFinite(r.lr));
   // ── tier calibration (the live correction + band) ──
   const tiers: Record<string, CardTierCal> = {};
@@ -77,11 +81,11 @@ export function fitCardCalibration(rows: CardResidual[], nowMs: number): CardCal
     const b = tierBiasLog(lrs);
     if (b == null) return;
     const z = lrs.map(x => x - b).sort((a, c) => a - c);
-    const lo = Math.min(1, Math.exp(quantileSorted(z, BAND_Q)));
+    const lo = Math.min(1, Math.exp(quantileSorted(z, bandQ)));
     tiers[tier] = {
       bias: r3(Math.exp(b)),
       lo: r3(lo),
-      hi: r3(Math.max(1, Math.exp(quantileSorted(z, 1 - BAND_Q)))),
+      hi: r3(Math.max(1, Math.exp(quantileSorted(z, 1 - bandQ)))),
       mb: r3(Math.min(1, Math.max(lo, Math.exp(quantileSorted(z, MB_Q))))),
       n: lrs.length,
     };

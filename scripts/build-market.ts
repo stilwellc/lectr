@@ -20,7 +20,7 @@ import { buildIdf, buildVectors } from '../app/lib/similarity';
 import { groupRepeatSales, repeatSaleEligible, withVectors } from './lib/repeat-sale';
 import { buildMakerIndicesParallel } from './lib/maker-pool';
 import { buildCompCandidateIndex, compCandidates, type CompCandidateIndex, resolveComps, estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, noEstGateOf, buyerFields, vsBidRead, floorAtBid, vsBidLive, VSBID_WINDOW_DAYS, quantile, knownKey, ENGINE_VERSION, ENGINE_FLAGS_CANDIDATE, CARD_THIN, type ValueResult, type AbstainReason } from '../app/lib/value';
-import { fitCardCalibration, cardGate, CARD_GATE, type CardResidual, type CardCalibration } from '../app/lib/cards-gate';
+import { fitCardCalibration, cardGate, CARD_GATE, CARD_BAND_WIDE_Q, type CardResidual, type CardCalibration } from '../app/lib/cards-gate';
 import { inferHammerUsd } from '../app/lib/premiums';
 import { pokemonKey } from './sub-markets';
 import { mergeCardExtract, pokemonKeyFromExtract, llmConditionFlag, sameObjectFilter, flushExtractQueue } from './lib/extract/apply';
@@ -1192,7 +1192,9 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         const pr = priceCard(c, (ck ? byCardKey.get(ck) : undefined) || [], (lk ? byLadderKey.get(lk) : undefined) || [], String(s.auctionHouse), saleMsOf(s), String(s.id));
         if (pr.value && pr.value > 0 && s.realizedUsd! > 0) rows.push({ tier: pr.tier, conf: pr.confidence, market: 'sports', ms: saleMsOf(s), lr: Math.log(s.realizedUsd! / pr.value) });
       }
-      cardCalib = fitCardCalibration(rows.concat(tcgResiduals), NOW_MS);
+      // (Oct 6, wave 4, FLAGS.cardBandWide) the 10/90 band (13/87 covered
+      // 65–74% of live card outcomes)
+      cardCalib = fitCardCalibration(rows.concat(tcgResiduals), NOW_MS, getEngineFlags().cardBandWide ? CARD_BAND_WIDE_Q : undefined);
       console.log(`[market] card tier calibration (pit, ${recentSold.length} sold cards in ${CARD_GATE.windowDays}d, sampled 1/${step}; ${rows.length} sports + ${tcgResiduals.length} tcg residuals): ${JSON.stringify(cardCalib.tiers)}`);
       console.log(`[market] card publish gate (${CARD_GATE.windowDays}d OOS, ±30% ≥ ${CARD_GATE.within30Pct}% & |bias| ≤ ${CARD_GATE.maxBias}×, n ≥ ${CARD_GATE.minN}): ${Object.entries(cardCalib.cells).map(([k, c]) => `${k} n${c.n} w30=${c.within30Pct ?? '-'} b=${c.bias ?? '-'} ${c.pass ? 'PUBLISH' : c.reason}`).join(' · ')}`);
       if (markets.all?.analytics) (markets.all.analytics as unknown as Record<string, unknown>).cardCalibration = { ...cardCalib.tiers, gate: cardCalib.cells };

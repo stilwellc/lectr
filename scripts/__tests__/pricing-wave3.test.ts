@@ -13,7 +13,7 @@ import {
   rowsEngineVersionOf, rowsByEngineVersionOf,
 } from '../backtest-core';
 import { calibrationOnEngineBasis } from '../build-market';
-import { setEngineFlags, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_HOUSE_GATE, ENGINE_FLAGS_COMP_PURITY, ENGINE_VERSION, estimateValueEx, blendPredict, EXACT_W, type Comp } from '../../app/lib/value';
+import { setEngineFlags, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_WAVE3, ENGINE_FLAGS_HOUSE_GATE, ENGINE_FLAGS_COMP_PURITY, ENGINE_VERSION, estimateValueEx, blendPredict, EXACT_W, type Comp } from '../../app/lib/value';
 import { buildIdf, type Match } from '../../app/lib/similarity';
 import { lotMaxBid, lotProjectedClose, cardCompsHammer, lotVerdict } from '../../app/lib/verdict';
 import { maxHammerFor } from '../../app/lib/premiums';
@@ -109,7 +109,9 @@ test('identity-less art (wave 3): a bare title whose comps span > 20× abstains;
 });
 
 test('stale floor (wave 3): a pool whose weighted median comp is > 5y old never values the lot under its low estimate', () => {
-  setEngineFlags(ENGINE_FLAGS_CURRENT);
+  // pinned to wave 3: the fixture's comps sit at 0.16× the estimate, which
+  // wave 4 (poolScale) withholds outright
+  setEngineFlags(ENGINE_FLAGS_WAVE3);
   const lot = artTarget('Le Repas frugal', { medium: 'etching', estLowUsd: 100000, estHighUsd: 150000 });
   const old = [1, 2, 3, 4].map(i => artComp(`o${i}`, 'Le Repas frugal', 20000 + i, '2012-05-01', { medium: 'etching' }));
   const v = estimateValueEx(lot, old, buildIdf([])).value!;

@@ -22,12 +22,12 @@ import {
 } from '../../backtest-core';
 import {
   estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, houseFactorOf, FLAG_GATE,
-  ENGINE_FLAGS_LEGACY, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_CANDIDATE, ENGINE_FLAGS_HOUSE_GATE, ENGINE_FLAGS_HAMMER_BASIS, ENGINE_FLAGS_COMP_PURITY, type EngineFlags, type EngineCalibration,
+  ENGINE_FLAGS_LEGACY, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_CANDIDATE, ENGINE_FLAGS_HOUSE_GATE, ENGINE_FLAGS_HAMMER_BASIS, ENGINE_FLAGS_COMP_PURITY, ENGINE_FLAGS_WAVE3, type EngineFlags, type EngineCalibration,
 } from '../../../app/lib/value';
 import type { AuctionLot } from '../../../app/types';
 
 const arg = (n: string): string | null => { const i = process.argv.indexOf(`--${n}`); return i >= 0 ? process.argv[i + 1] : null; };
-const FLAGSETS: Record<string, EngineFlags> = { legacy: ENGINE_FLAGS_LEGACY, 'house-gate': ENGINE_FLAGS_HOUSE_GATE, 'hammer-basis': ENGINE_FLAGS_HAMMER_BASIS, 'comp-purity': ENGINE_FLAGS_COMP_PURITY, current: ENGINE_FLAGS_CURRENT, candidate: ENGINE_FLAGS_CANDIDATE };
+const FLAGSETS: Record<string, EngineFlags> = { legacy: ENGINE_FLAGS_LEGACY, 'house-gate': ENGINE_FLAGS_HOUSE_GATE, 'hammer-basis': ENGINE_FLAGS_HAMMER_BASIS, 'comp-purity': ENGINE_FLAGS_COMP_PURITY, wave3: ENGINE_FLAGS_WAVE3, current: ENGINE_FLAGS_CURRENT, candidate: ENGINE_FLAGS_CANDIDATE };
 
 function main() {
   const dir = arg('corpus') || 'data/corpus';
@@ -108,7 +108,13 @@ function main() {
       setEngineFlags(f);
       setCalibration(cals[slot]);
       const v = comps ? estimateValueEx(l, comps, prep.tbl).value : null;
-      out.push(engineRowOf(l, hasAnyEst(l) ? m : `noest:${m}`, v, hf));
+      // (wave 4) the per-lot diagnostics the harness analyses read (house,
+      // estimate, comp ratio / weight) — the comparison ignores them
+      out.push({
+        ...engineRowOf(l, hasAnyEst(l) ? m : `noest:${m}`, v, hf),
+        h: l.auctionHouse, el: l.estLowUsd || 0, eh: l.estHighUsd || 0,
+        ...(v ? { cr: v.compRatio, fr: v.flagRatio ?? null, bw: v.blendW ?? null, cm: v.compMedianUsd ?? null, n: v.n } : {}),
+      } as EngineRow);
     }
   }
   setEngineFlags(null); setCalibration(null); setTimeIndex(null); setHouseBias(null);

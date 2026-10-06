@@ -27,7 +27,7 @@ import { weightedMedian, quantileSorted } from './stats';
 import { lotShapeOf, shapesCompatible, isCompExcluded } from './comps';
 import type { CardGateCell } from './cards-gate';
 import { numericWatchRef, editionIdentityKey, isEditionLot, WATCH_SLUGS } from './identity';
-import { compBoundaryFault, compPurityFault, isIdentityLessTitle, isIdentityLessArtTarget } from './comp-purity';
+import { compBoundaryFault, compPurityFault, isIdentityLessTitle, isIdentityLessArtTarget, sameWorkComp, mediumFamilyMatch } from './comp-purity';
 
 /** THE signal-label vocabulary — one source (P2, Sep 2 2026). Re-exported from
  *  lanes.ts; UI files that hardcode the strings should import from there
@@ -163,6 +163,46 @@ export interface EngineFlags {
   /** (Oct 6, pricing wave 3) watch dial / nickname variants (Stella, agate,
    *  Aquatic, Dual Time, …) are a hard comp boundary */
   watchVariant?: boolean;
+  /** (Oct 6, pricing wave 4) THE PARTIAL HABIT: a single-point estimate
+   *  ("$500+") whose pure comps (≥ PURITY.minPure) read under the house's
+   *  habit (flagRatio < PARTIAL_HABIT.fr) anchors on only (1 − s) of the
+   *  habit — such lots sell near the printed figure × premium, not the
+   *  house's average over-run */
+  partialHabit?: boolean;
+  /** (Oct 6, pricing wave 4) THE SAME WORK: ≥ SAME_WORK.minN comps that are
+   *  the same work by the strict test (comp-purity.sameWorkComp: same title,
+   *  same house family, height and width ±10%) and sold ≤ SAME_WORK.maxAgeY
+   *  ago put at least SAME_WORK.w of the prediction on the comps */
+  sameWork?: boolean;
+  /** (Oct 6, pricing wave 4) THE WRONG-SCALE POOL: an estimate lot whose
+   *  comp median sits outside [1/POOL_SCALE.ratio, POOL_SCALE.ratio]× its
+   *  estimate abstains ('pool-scale') — the pool prices another object
+   *  (prints for a painting, a single for a set) */
+  poolScale?: boolean;
+  /** (Oct 6, pricing wave 4) the card tiers' published band is the 10/90
+   *  quantile band of their point-in-time residuals (cards-gate
+   *  CARD_BAND_WIDE_Q), not 13/87 */
+  cardBandWide?: boolean;
+  /** (Oct 6, pricing wave 4) an art / design target with a known medium
+   *  family whose pool holds ≥ MEDIUM_POOL.minN comps carrying that family as
+   *  evidence prices off those alone — medium-less rows (Christie's archive
+   *  "Mao" / "Mao": painting or print) leave the pool */
+  mediumKnownPool?: boolean;
+  /** (Oct 6, pricing wave 4) FLAG_HOLD_MARKETS carry no 'below' read */
+  flagHold?: boolean;
+  /** (Oct 6, pricing wave 4) no calibrated odds row → no odds (NaN → no
+   *  directional call), never the pre-calibration legacy curve */
+  uncalNoOdds?: boolean;
+  /** (Oct 6, pricing wave 4) the live-bid floor is the bid itself at every
+   *  distance from the close (no BID_FLOOR_LATE_LIFT). Measured, NOT
+   *  adopted: worse on the Sep 14 tape (RR lots 1–3 days out realized 1.21×
+   *  the bid) — §15 */
+  bidLiftOff?: boolean;
+  /** (Oct 6, pricing wave 4) inside the last BID_FLOOR_FINAL_DAYS before the
+   *  close the floor is the bid itself — the late lift applies 1–3 days out
+   *  only (Sep 24 tape: floored lots closing within 24h realized 1.00× the
+   *  bid, 10 of 14 exactly at it) */
+  bidLift24h?: boolean;
 }
 /** The engine before the Oct 3 pass (raw-estimate Flags, premium-only
  *  anchor, ungated card tiers) — kept so the harnesses can replay it. */
@@ -214,11 +254,23 @@ export const ENGINE_FLAGS_COMP_PURITY: EngineFlags = {
  *  26.4 → 26.0%, ±30% 54.9 → 55.9%, band 71.8 → 72.8%, flag precision 56.0
  *  → 57.8%, edge 38.7 → 39.9pt; live card values medErr 21.0 → 19.9%, band
  *  78.1 → 80.0%. Measured and NOT adopted: pureRead, exactWeight, the
- *  quantity boundary (§14). */
-export const ENGINE_FLAGS_CURRENT: EngineFlags = {
+ *  quantity boundary (§14). Kept so the harnesses can replay it. */
+export const ENGINE_FLAGS_WAVE3: EngineFlags = {
   ...ENGINE_FLAGS_COMP_PURITY,
   version: '2026.10.06-wave3',
   boundary2: true, idLessAbstain: true, watchVariant: true, staleFloor: true, cardThinMedian: true,
+};
+/** (Oct 6 2026, pricing wave 4) the partial house habit on single-point
+ *  estimates, the wrong-scale pool abstention, the held sports / watches
+ *  Flags, the 10/90 card band, no odds without calibration, no bid lift
+ *  inside the final day. Measured per rule on the wave-3 engine
+ *  (docs/ENGINE_LANES.md §15). Measured and NOT adopted: sameWork (no live
+ *  lot qualifies), mediumKnownPool (live worse), bidLiftOff (Sep 14 tape
+ *  worse). */
+export const ENGINE_FLAGS_CURRENT: EngineFlags = {
+  ...ENGINE_FLAGS_WAVE3,
+  version: '2026.10.06-wave4',
+  partialHabit: true, poolScale: true, flagHold: true, cardBandWide: true, uncalNoOdds: true, bidLift24h: true,
 };
 /** The candidate under evaluation. Equal to CURRENT's flags when nothing is
  *  pending — a candidate run then reports a no-op comparison. */
@@ -373,6 +425,8 @@ export function buyerFields(
  *  never inside the replay — a holdout lot has no bid at valuation time. */
 export const BID_FLOOR_LATE_DAYS = 3;
 export const BID_FLOOR_LATE_LIFT = 1.1;
+/** (wave 4) EngineFlags.bidLift24h: the window before the close with no lift */
+export const BID_FLOOR_FINAL_DAYS = 1;
 export function floorAtBid<V extends Partial<ValueResult> & { compValueUsd: number }>(
   v: V, lot: { currentBid?: number | null; auctionHouse?: string | null; buyerPremiumPct?: number | null; saleDate?: string | null; saleDateTime?: string | null },
   nowMs: number,
@@ -380,10 +434,18 @@ export function floorAtBid<V extends Partial<ValueResult> & { compValueUsd: numb
   const bid = lot.currentBid || 0;
   if (!(bid > 0)) return v;
   const closeMs = Date.parse(String(lot.saleDateTime || lot.saleDate || ''));
-  const late = Number.isFinite(closeMs) && (closeMs - nowMs) / 86_400_000 <= BID_FLOOR_LATE_DAYS;
-  const floor = bid * (late ? BID_FLOOR_LATE_LIFT : 1);
+  const daysOut = Number.isFinite(closeMs) ? (closeMs - nowMs) / 86_400_000 : Infinity;
+  const late = daysOut <= BID_FLOOR_LATE_DAYS;
+  // (wave 4, FLAGS.bidLift24h) the final day's bid is close to the hammer:
+  // no lift inside BID_FLOOR_FINAL_DAYS
+  const final = !!FLAGS.bidLift24h && daysOut <= BID_FLOOR_FINAL_DAYS;
+  const floor = bid * (late && !final && !FLAGS.bidLiftOff ? BID_FLOOR_LATE_LIFT : 1);
   const xh = v.expectedHammerUsd ?? (v.premiumFactor ? v.compValueUsd / v.premiumFactor : lotHammerFromAllIn(lot, v.compValueUsd));
-  if (xh >= floor && !((v.bandLowUsd ?? Infinity) < bid)) return v;
+  const bidAllIn = Math.round(bid * lotAllInFactor(lot, bid));
+  // (wave 4) a value without the hammer band (no bandLowUsd) still has its
+  // all-in low floored — it used to pass through under the bid
+  const lowUnder = v.bandLowUsd != null ? v.bandLowUsd < bid : (v.low ?? Infinity) < bidAllIn;
+  if (xh >= floor && !lowUnder) return v;
   const out = { ...v } as V;
   if (xh < floor) {
     const pf = lotAllInFactor(lot, floor);
@@ -396,11 +458,10 @@ export function floorAtBid<V extends Partial<ValueResult> & { compValueUsd: numb
     if ((out.bandHighUsd ?? 0) < out.expectedHammerUsd) out.bandHighUsd = out.expectedHammerUsd;
     out.bidFloor = Math.round(floor);
   }
-  const bidAllIn = Math.round(bid * lotAllInFactor(lot, bid));
   if (out.bandLowUsd != null && out.bandLowUsd < bid) out.bandLowUsd = Math.round(bid);
   if (out.low != null && out.low < bidAllIn) out.low = bidAllIn;
   if (out.maxBidUsd != null) {
-    const lo = out.bandLowUsd ?? 0, hi = out.expectedHammerUsd ?? Infinity;
+    const lo = out.bandLowUsd ?? Math.round(bid), hi = out.expectedHammerUsd ?? Infinity;
     out.maxBidUsd = Math.min(hi, Math.max(lo, out.maxBidUsd));
   }
   return out;
@@ -494,6 +555,7 @@ export type AbstainReason =
   | 'no-value'          // weighted median collapsed to 0
   | 'stale'             // (Oct 6) every comp in the pool sold > PURITY.maxAgeY ago
   | 'identity-less'     // (Oct 6, wave 3) an art title naming no object, comps spanning > ID_LESS.spread×
+  | 'pool-scale'        // (Oct 6, wave 4) comp median outside ×/÷ POOL_SCALE.ratio of the estimate
   | 'card:pool<2'       // card tiers: exact/ladder pools too thin, no player pool
   | 'card:player<5'     // card tier 3: player pool under the floor (legacy)
   | 'card:player-tier'  // (Sep 27) only a PLAYER median exists — abstains (2.87× live)
@@ -694,6 +756,8 @@ export function blendPredict(
   /** (wave 3, FLAGS.exactWeight) a floor on the comp weight — the pool holds
    *  enough recent, tight exact comps */
   minW = 0,
+  /** (wave 4, FLAGS.partialHabit) the share of the house habit withheld */
+  habitShrink = 0,
 ): { value: number; w: number } {
   const market = cal?.marketBySlug?.[lot.artist];
   const ratio = compMedian > 0 && estMid > 0 ? compMedian / estMid : 1;
@@ -704,7 +768,7 @@ export function blendPredict(
   if (FLAGS.houseAnchor) {
     const hf = houseFactorOf(market ?? TIDX?.marketBySlug?.[lot.artist], lot.auctionHouse, estKind);
     const w = exactW(b?.w[confidence] ?? BLEND_W_DEFAULT[confidence] ?? 0.1);
-    if (hf) return { value: estMid * Math.exp((1 - w) * hf.log + w * Math.log(ratio)), w };
+    if (hf) return { value: estMid * Math.exp((1 - w) * (1 - habitShrink) * hf.log + w * Math.log(ratio)), w };
   }
   if (b) {
     const w = exactW(b.w[confidence] ?? BLEND_W_DEFAULT[confidence] ?? 0.1);
@@ -750,6 +814,16 @@ export const BOUNDARY2 = { designator: 1, catalogue: 1, unit: 1, quantity: 0 };
 /** (wave 3) EngineFlags.cardThinMedian: the exact-tier pool size at or under
  *  which the plain median prices the card */
 export const CARD_THIN = { n: 3 };
+/** (wave 4) EngineFlags.partialHabit: the flag ratio under which a
+ *  single-point estimate's pure comps shrink the house habit by `s` */
+export const PARTIAL_HABIT = { fr: 0.8, s: 0.3 };
+/** (wave 4) EngineFlags.sameWork's bar */
+export const SAME_WORK = { minN: 3, maxAgeY: 3, dimTol: 0.1, w: 0.5 };
+/** (wave 4) EngineFlags.poolScale: comp median vs estimate past this ratio
+ *  (either way) is a different object's pool */
+export const POOL_SCALE = { ratio: 5 };
+/** (wave 4) EngineFlags.mediumKnownPool's floor */
+export const MEDIUM_POOL = { minN: 3 };
 export function exactBlendW(house: string | null | undefined): number {
   const v = house ? EXACT_BLEND.byHouse[house] : undefined;
   return typeof v === 'number' ? v : EXACT_BLEND.w;
@@ -794,6 +868,14 @@ export function noEstimateBias(artist: string, confidence: string, cal: EngineCa
  *  flag; every other market's flag buckets calibrate at 57–75%. The legacy
  *  engine keeps its 50 (raw-high odds). Mutable for the harness sweep. */
 export const FLAG_GATE = { minOdds: 55, minLiftPt: 10, minOddsHammer: 45 };
+/** (Oct 6 2026, pricing wave 4, EngineFlags.flagHold) markets whose Flags
+ *  are HELD: the test-year holdout put sports flags at 20.8% precision (24
+ *  flags, edge −1.8pt — calibrated odds ≥ 45%) and watches at 23 flags, under
+ *  the n ≥ 50 a market's flags need before their edge counts. A held market
+ *  keeps its value and its at / above reads; a would-be 'below' read ships
+ *  no signal (abstain 'flag:held'). Release a market when its holdout flags
+ *  reach n ≥ 50 with an edge over EDGE_TOL_PT. */
+export const FLAG_HOLD_MARKETS = new Set<string>(['sports', 'watches']);
 
 /** Calibrated beat-high rate as a function of compRatio (comps / estimate-mid).
  *  Falls back to the original holdout fit (n=5,215, monotonic 42% → 69%). */
@@ -818,6 +900,9 @@ function beatRate(compRatio: number, market?: string, estKind?: EstKind): number
       return row[b];
     }
   }
+  // (Oct 6, wave 4, FLAGS.uncalNoOdds) no calibrated row: no odds at all —
+  // the original holdout fit below is not this book's calibration
+  if (FLAGS.uncalNoOdds) return NaN;
   if (compRatio < 0.6) return 42;
   if (compRatio < 0.9) return 48;
   if (compRatio < 1.3) return 55;
@@ -866,6 +951,12 @@ export function estimateValueEx(
     if (relaxed.length < 3) return { value: null, abstain: comps.length ? 'pool<3' : 'no-candidates' };
     pool = relaxed;
     tier = 'fallback';
+  }
+  // (Oct 6, wave 4, FLAGS.mediumKnownPool) the comps that carry the target's
+  // own medium family as evidence price it, when there are enough of them
+  if (FLAGS.mediumKnownPool) {
+    const known = pool.filter(c => c.lot && mediumFamilyMatch(lot, c.lot) === true);
+    if (known.length >= MEDIUM_POOL.minN && known.length < pool.length) pool = known;
   }
 
   const refMs = (() => { const t = new Date(lot.saleDate || '').getTime(); return isNaN(t) ? Date.now() : t; })();
@@ -1016,6 +1107,11 @@ export function estimateValueEx(
     // the estimate AS THIS HOUSE HABITUALLY CLEARS IT (house-bias index,
     // point-in-time) — a house that prints low estimates by policy no longer
     // reads as a flag on every lot. compRatio itself stays raw.
+    // (Oct 6, wave 4, FLAGS.poolScale) comps at a different SCALE from the
+    // estimate (outside ×/÷ POOL_SCALE.ratio, after the exact-match guard)
+    // price another object — a unique painting off its prints, one plate off
+    // the set: no value, not merely no flag
+    if (FLAGS.poolScale && !(compRatio <= POOL_SCALE.ratio && compRatio >= 1 / POOL_SCALE.ratio)) return { value: null, abstain: 'pool-scale' };
     flagRatio = compRatio;
     if (FLAGS.houseNormFlags) {
       const hf = houseFactorOf(market, lot.auctionHouse, estKind);
@@ -1046,6 +1142,10 @@ export function estimateValueEx(
     const strength = (flagRatio >= 2 && br >= 60) || flagRatio <= 0.55 ? 'strong'
       : flagRatio >= 1.3 || flagRatio <= 0.75 ? 'moderate' : 'slight';
     signal = { label, strength, beatRatePct: uncal ? 0 : br };
+    // (Oct 6, wave 4, FLAGS.flagHold) a held market's would-be flag ships no
+    // signal — not 'at market', which it is not
+    const mk = CAL?.marketBySlug?.[lot.artist] ?? market;
+    if (FLAGS.flagHold && label === SIGNAL_LABEL.below && mk && FLAG_HOLD_MARKETS.has(mk)) { signal = null; partial = 'flag:held'; }
     // (Oct 6, FLAGS.purityGate) no directional read without the evidence for
     // one: a comp ratio outside the ×5 estimate-band sanity is a data fault
     // (engineFlagOf already hid it; the signal itself kept 'strong, 64%'),
@@ -1075,7 +1175,18 @@ export function estimateValueEx(
       const ex = pool.filter(c => c.match.cosine >= EXACT_W.cos && ageYOf(c) <= EXACT_W.maxAgeY).map(c => c.realizedUsd).sort((a, b) => a - b);
       if (ex.length >= EXACT_W.minN && quantile(ex, 0.75) <= EXACT_W.spread * quantile(ex, 0.25)) minW = EXACT_W.w;
     }
-    const bp = blendPredict(lot, estMid, estKind, compAdjUsd, confidence, CAL, nExact, minW);
+    // (Oct 6, wave 4, FLAGS.sameWork) ≥ SAME_WORK.minN recent comps that are
+    // the SAME WORK by the strict test (title, house family, dimensions)
+    if (FLAGS.sameWork) {
+      const sw = pool.filter(c => c.lot && ageYOf(c) <= SAME_WORK.maxAgeY && sameWorkComp(lot, c.lot, SAME_WORK.dimTol));
+      if (sw.length >= SAME_WORK.minN) minW = Math.max(minW, SAME_WORK.w);
+    }
+    // (Oct 6, wave 4, FLAGS.partialHabit) a single-point estimate whose pure
+    // comps read under the house's habit anchors on only part of the habit
+    let habitShrink = 0;
+    if (FLAGS.partialHabit && estKind === 'p' && flagRatio != null && flagRatio < PARTIAL_HABIT.fr
+        && pureOf(top).length >= PURITY.minPure) habitShrink = PARTIAL_HABIT.s;
+    const bp = blendPredict(lot, estMid, estKind, compAdjUsd, confidence, CAL, nExact, minW, habitShrink);
     predUsd = bp.value; blendW = bp.w;
   } else {
     // The no-estimate market×tier bias (calibration.bias) is FITTED and

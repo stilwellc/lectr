@@ -5,7 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
+import { ENGINE_FLAGS_WAVE3,
   capWeights, COMP_WEIGHT_CAP, vsBidLive, VSBID_WINDOW_DAYS,
   estimateValueEx, setEngineFlags, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_HAMMER_BASIS, type Comp,
   blendPredict, EXACT_BLEND,
@@ -80,11 +80,16 @@ test('purity gate: a read needs ≥3 pure comps — bare-name / stale comps carr
 });
 
 test('purity gate: a comp ratio outside ×5 strips the signal (it used to ship "strong, 64%")', () => {
-  setEngineFlags(ENGINE_FLAGS_CURRENT);
-  const v = estimateValueEx(target('Harry S. Truman Typed Letter Signed'), [1, 2, 3, 4].map(i => comp(`x${i}`, 'Harry S. Truman Typed Letter Signed', 9000 + i)), buildIdf([])).value!;
+  // the wave-3 engine kept the value and stripped the signal; wave 4
+  // (poolScale) withholds the value itself
+  setEngineFlags(ENGINE_FLAGS_WAVE3);
+  const comps = [1, 2, 3, 4].map(i => comp(`x${i}`, 'Harry S. Truman Typed Letter Signed', 9000 + i));
+  const v = estimateValueEx(target('Harry S. Truman Typed Letter Signed'), comps, buildIdf([])).value!;
   assert.ok(v.compRatio! > 5);
   assert.equal(v.signal, null);
   assert.equal(v.abstain, 'flag:ratio-x5');
+  setEngineFlags(ENGINE_FLAGS_CURRENT);
+  assert.equal(estimateValueEx(target('Harry S. Truman Typed Letter Signed'), comps, buildIdf([])).abstain, 'pool-scale');
   setEngineFlags(null);
 });
 

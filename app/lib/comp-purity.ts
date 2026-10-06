@@ -135,6 +135,18 @@ export function mediumConflict(a: PurityLot, b: PurityLot): 'medium' | 'edition'
   return null;
 }
 
+/** (EngineFlags.mediumKnownPool, wave 4) Whether comp `c` carries the
+ *  target's own medium family as EVIDENCE (art / design targets with a
+ *  medium only; null = the rule does not apply to this target). A comp with
+ *  no medium evidence reads false — "Mao" with medium "Mao" may be the
+ *  painting or the screenprint. */
+export function mediumFamilyMatch(t: PurityLot, c: PurityLot): boolean | null {
+  if (!MAKER_MARKETS.has(MARKET_OF.get(t.artist) || '')) return null;
+  const ft = mediumFamilyOf(t);
+  if (!ft) return null;
+  return mediumFamilyOf(c) === ft;
+}
+
 /** The static PURITY fault of comp `c` for target `t` (EngineFlags.purityGate),
  *  or null when the comp may carry a call. Recency and the geomedian band
  *  are pool-level and checked by the engine. */
@@ -408,4 +420,38 @@ export function compBoundaryFault(
     if (!shared) return 'object';
   }
   return null;
+}
+
+/* ── wave 4 (Oct 6 2026): THE SAME WORK, strictly ─────────────────────── */
+/** House families that sell one inventory under several names (the Wright
+ *  family mirrors its lots across Wright / Rago / LAMA / Toomey). */
+const HOUSE_FAMILY: Record<string, string> = { Wright: 'wright', Rago: 'wright', LAMA: 'wright', 'Toomey & Co.': 'wright', Toomey: 'wright' };
+const houseFamilyOf = (h: string | null | undefined) => (h ? HOUSE_FAMILY[h] || h : null);
+/** The title as one comparable string: maker's name, 4-digit years and
+ *  punctuation dropped ("Puppy (vase)" = "Puppy Vase"). */
+function workTitleKey(l: PurityLot): string {
+  const label = LABEL_OF.get(l.artist);
+  const lab = new Set(label ? fold(label.toLowerCase()).split(/[^a-z0-9]+/).filter(Boolean) : []);
+  return fold((l.title || '').toLowerCase()).replace(/\b\d{4}\b/g, ' ')
+    .split(/[^a-z0-9]+/).filter(w => w && !lab.has(w)).join(' ');
+}
+type WorkLot = PurityLot & { auctionHouse?: string | null; heightCm?: number | null; widthCm?: number | null };
+/** Height × width (cm) from the stamped fields, else null. */
+function hwOf(l: WorkLot): [number, number] | null {
+  return (l.heightCm || 0) > 0 && (l.widthCm || 0) > 0 ? [l.heightCm!, l.widthCm!] : null;
+}
+/** (EngineFlags.sameWork) Comp `c` is the SAME WORK as target `t` by the
+ *  strict test: the same title (maker / years / punctuation aside), the same
+ *  house family, and height and width both inside ±`dimTol` — dimensions on
+ *  both sides are required (no evidence = not the same work). Recency is the
+ *  caller's. */
+export function sameWorkComp(t: WorkLot, c: WorkLot, dimTol = 0.1): boolean {
+  const ht = houseFamilyOf(t.auctionHouse), hc = houseFamilyOf(c.auctionHouse);
+  if (!ht || ht !== hc) return false;
+  const kt = workTitleKey(t);
+  if (!kt || kt !== workTitleKey(c)) return false;
+  const a = hwOf(t), b = hwOf(c);
+  if (!a || !b) return false;
+  const near = (x: number, y: number) => Math.abs(x - y) <= dimTol * Math.max(x, y);
+  return near(a[0], b[0]) && near(a[1], b[1]);
 }
