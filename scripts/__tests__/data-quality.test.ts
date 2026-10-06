@@ -14,7 +14,7 @@ import {
   rerouteForeignLeadMaker, rerouteSetCodeCards, demoteStaleUpcoming, stampCompExcludes,
   nullPlaceholderImages, stampDatePrecision, fixFamilyHammerEqualsPrice, BRUUN_HOUSE,
 } from '../lib/corpus-normalize';
-import { isRoundIncrement, BID_LADDER_PCT, lotAllInFactor, houseAllInFactorAt } from '../../app/lib/premiums';
+import { isRoundIncrement, BID_LADDER_PCT, lotAllInFactor, houseAllInFactorAt, houseHammerFromAllInAt } from '../../app/lib/premiums';
 import { computeSentinel, sentinelVerdict } from '../assemble';
 import { isServedUpcoming } from '../corpus-io';
 import { leadsWithSetCode } from '../lib/set-codes';
@@ -233,6 +233,47 @@ check('computeSentinel + REA premium eras: real increment × era-premium cluster
   const flat = computeSentinel(lots as never, { lotAllInFactor, isRoundIncrement, BID_LADDER_PCT });
   for (const p of [1840, 1508, 7540, 2962, 10072]) assert.strictEqual(sig(flat, p).honest, false, `$${p} under the flat 1.175`);
   assert.strictEqual(sig(flat, 2350).honest, true, 'the flat factor blessed a wrong-era tie');
+});
+
+check("computeSentinel + Christie's/Sotheby's tiered eras in the SALE currency: real ties honest; a bleed, a wrong-era tie and a native-less row stay poison", () => {
+  const lots: R[] = [];
+  const add = (house: string, usd: number, n: number, date: string, cur?: string, native?: number) => {
+    for (let i = 0; i < n; i++) lots.push({ status: 'sold', auctionHouse: house, priceUsd: usd, realizedUsd: usd, saleDate: date, ...(cur ? { nativeCurrency: cur, premiumNative: native } : {}) });
+  };
+  // REAL standing signatures from the Oct 5 2026 corpus (USD = native all-in × that year's FX):
+  add("Christie's", 21793.75, 23, '2012-06-25', 'GBP', 13750); // £11,000 × 1.25
+  add("Christie's", 5747.47, 18, '2002-10-09', 'GBP', 3824);   // £3,200 × 1.195 (King Street, 19.5% era)
+  add("Christie's", 40987.5, 15, '2014-05-11', 'CHF', 37500);  // CHF 30,000 × 1.25
+  add("Christie's", 1062.1, 15, '2010-06-23', 'GBP', 687);     // £550 × 1.25 = 687.5, premium truncated to the pound
+  add("Sotheby's", 7470, 15, '2013-02-25', 'EUR', 5625);       // €4,500 × 1.25
+  add("Sotheby's", 52428.8, 16, '2026-04-24', 'HKD', 409600);  // HK$320,000 × 1.28
+  add("Sotheby's", 4833.28, 16, '2002-10-30', 'HKD', 37760);   // HK$32,000 × 1.18 (Hong Kong's 2002 rate)
+  // above band 1: Christie's NY 2012 hammer $130,000 = 25% on $50k + 20% on $80k → $158,500
+  add("Christie's", 158500, 15, '2012-05-09');
+  // a wrong-era tie: £3,824 is 19.5%-era arithmetic — in a 2012 sale (25%) it implies £3,059.20
+  add("Christie's", 6060.04, 20, '2012-06-25', 'GBP', 3824);
+  // a bleed: one arbitrary price stamped across a London batch
+  add("Christie's", 21836.55, 40, '2012-06-25', 'GBP', 13777);
+  // a USD-native bleed at Sotheby's NY
+  add("Sotheby's", 10050, 40, '2016-04-05');
+  // the same real £13,750 tie but WITHOUT its native figure → read as USD, not blessed
+  add("Sotheby's", 21793.75, 20, '2012-06-25');
+  const all = { lotAllInFactor, isRoundIncrement, BID_LADDER_PCT, houseAllInFactorAt, houseHammerFromAllInAt };
+  const s = computeSentinel(lots as never, all);
+  const sig = (h: string, p: number) => s.find(x => x.house === h && x.price === p)!;
+  for (const [h, p] of [["Christie's", 21793.75], ["Christie's", 5747.47], ["Christie's", 40987.5], ["Christie's", 1062.1], ["Sotheby's", 7470], ["Sotheby's", 52428.8], ["Sotheby's", 4833.28], ["Christie's", 158500]] as const) {
+    assert.ok(sig(h, p).honest, `${h} $${p} is a round native increment × its era premium`);
+  }
+  assert.strictEqual(sig("Christie's", 21793.75).currency, 'GBP');
+  assert.strictEqual(sig("Christie's", 21793.75).hammer, 11000);
+  assert.strictEqual(sig("Christie's", 158500).hammer, 130000, 'band walk: $50k @25% + $80k @20%');
+  assert.strictEqual(sig("Christie's", 6060.04).honest, false, 'a 19.5%-era figure in a 25%-era sale is not a tie');
+  assert.strictEqual(sig("Christie's", 21836.55).honest, false, 'the London bleed stays poison');
+  assert.strictEqual(sig("Sotheby's", 10050).honest, false, 'the NY bleed stays poison');
+  assert.strictEqual(sig("Sotheby's", 21793.75).honest, false, 'no native figure → USD → not blessed');
+  // single factor: the flat/undated read (pre-Oct-5 sentinel) saw all the real ties as poison
+  const old = computeSentinel(lots as never, { lotAllInFactor, isRoundIncrement, BID_LADDER_PCT, houseAllInFactorAt });
+  for (const p of [21793.75, 5747.47, 40987.5, 158500]) assert.strictEqual(old.find(x => x.house === "Christie's" && x.price === p)!.honest, false, `$${p} under the undated USD read`);
 });
 
 // ── 7 · placeholder images ────────────────────────────────────────────────
