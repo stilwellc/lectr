@@ -7,14 +7,16 @@ import { useRouter } from 'next/navigation';
 import { ARTISTS, ARTIST_LABEL, MARKETS } from '../constants';
 import { useMarket, MARKET_PATH } from '../lib/market';
 import { useRayData } from '../hooks/useRayData';
-import { craftTitle } from '../utils';
+import { craftTitle, refLabel } from '../utils';
+import { useRefs } from '../hooks/useRefs';
+import { encodeRefPath } from '../ref/ref-path';
 import ArtistAvatar from './ArtistAvatar';
 
 interface Item {
   label: string;
   hint: string;
   path: string;
-  kind: 'section' | 'market' | 'maker' | 'sub' | 'lot';
+  kind: 'section' | 'market' | 'maker' | 'sub' | 'lot' | 'ref';
 }
 
 /** Any surface can open the palette by dispatching this window event —
@@ -120,6 +122,32 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
   // archive. The sold history lives in R2, never mirrored to Supabase, so
   // there is no DB search tier to maintain.
 
+  // REFERENCE DOSSIERS — a query carrying a digit ('5711', 'Rolex 1675',
+  // '126720VTNR') is reference-shaped: refs.json is pulled then (not on every
+  // page mount) and the matching /ref dossiers lead the results.
+  const refQuery = open && /\d/.test(q);
+  const { refs } = useRefs(refQuery);
+  const refMatches = useMemo<Item[]>(() => {
+    if (!refQuery || !refs) return [];
+    const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const refWords = words.filter(w => /\d/.test(w));
+    const nameWords = words.filter(w => !/\d/.test(w));
+    return refs
+      .filter(r => {
+        const name = `${ARTIST_LABEL[r.maker] || r.maker} ${r.maker}`.toLowerCase();
+        return refWords.every(w => r.ref.startsWith(w)) && nameWords.every(w => name.includes(w) || r.ref.includes(w));
+      })
+      // the exact reference first, then the deepest record
+      .sort((a, b) => (Number(refWords.includes(b.ref)) - Number(refWords.includes(a.ref))) || b.n - a.n)
+      .slice(0, 4)
+      .map(r => ({
+        label: `${ARTIST_LABEL[r.maker] || r.maker} ${refLabel(r.ref)}`,
+        hint: `reference · ${r.n.toLocaleString()} sales`,
+        path: `/ref/${r.maker}/${encodeRefPath(r.ref)}`,
+        kind: 'ref' as const,
+      }));
+  }, [refQuery, refs, q]);
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     if (!needle) return browseItems;
@@ -143,8 +171,8 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
         path: `/lot?id=${encodeURIComponent(l.id)}`,
         kind: 'lot' as const,
       }));
-    return [...itemMatches, ...lotMatches];
-  }, [items, browseItems, q, upcomingLots]);
+    return [...refMatches, ...itemMatches, ...lotMatches];
+  }, [items, browseItems, q, upcomingLots, refMatches]);
   // While searching, only the first 12 are rendered — keyboard nav + Enter
   // must index into the SAME list, or the highlight vanishes and Enter fires
   // an unseen item. The empty-query browse renders the whole grouped roster
