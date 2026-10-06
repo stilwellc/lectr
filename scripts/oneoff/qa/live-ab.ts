@@ -70,7 +70,7 @@ async function main() {
     const EXC = new Set(['sports-cards', 'graded-cards', 'pokemon']);
     if (makeHouseBiasIndexer) hbIdx = makeHouseBiasIndexer(lots.filter(l => !EXC.has(l.artist as string) && l.source !== 'sothebys-algolia'), mbs);
   } catch { hbIdx = null; }
-  if (core.rehydrateState) core.rehydrateState(st, null, () => {}, hbIdx);
+  if (core.rehydrateState) core.rehydrateState(st, null, (m: string) => console.log(m), hbIdx, lots);
   const rows = st.calObs.filter((o: { sd?: string }) => (o.sd || '') < asOf);
   const c = core.calibrationOf(rows, (st.noEst || []).filter((o: { sd: string }) => o.sd < asOf), asOf);
   const full = process.argv.includes('--full-cal');

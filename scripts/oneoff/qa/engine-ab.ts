@@ -22,12 +22,12 @@ import {
 } from '../../backtest-core';
 import {
   estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, houseFactorOf, FLAG_GATE,
-  ENGINE_FLAGS_LEGACY, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_CANDIDATE, type EngineFlags, type EngineCalibration,
+  ENGINE_FLAGS_LEGACY, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_CANDIDATE, ENGINE_FLAGS_HOUSE_GATE, type EngineFlags, type EngineCalibration,
 } from '../../../app/lib/value';
 import type { AuctionLot } from '../../../app/types';
 
 const arg = (n: string): string | null => { const i = process.argv.indexOf(`--${n}`); return i >= 0 ? process.argv[i + 1] : null; };
-const FLAGSETS: Record<string, EngineFlags> = { legacy: ENGINE_FLAGS_LEGACY, current: ENGINE_FLAGS_CURRENT, candidate: ENGINE_FLAGS_CANDIDATE };
+const FLAGSETS: Record<string, EngineFlags> = { legacy: ENGINE_FLAGS_LEGACY, 'house-gate': ENGINE_FLAGS_HOUSE_GATE, current: ENGINE_FLAGS_CURRENT, candidate: ENGINE_FLAGS_CANDIDATE };
 
 function main() {
   const dir = arg('corpus') || 'data/corpus';
@@ -40,11 +40,13 @@ function main() {
     if (!spec) return f;
     const o: EngineFlags = { ...f, version: `${f.version}~${spec}` };
     for (const kv of spec.split(',')) { const [k, v] = kv.split('='); (o as unknown as Record<string, unknown>)[k] = v === '1'; }
+    if (process.env.AB_DEBUG) console.log('[ab] flags', JSON.stringify(o));
     return o;
   };
   const fa = tweak(A, arg('a-flags')), fb = tweak(B, arg('b-flags'));
   const calMode = arg('cal') || 'legacy';
   if (arg('lift') != null) FLAG_GATE.minLiftPt = +arg('lift')!;
+  if (arg('min-odds-hammer') != null) FLAG_GATE.minOddsHammer = +arg('min-odds-hammer')!;
   const t0 = Date.now();
   const el = () => `${((Date.now() - t0) / 1000).toFixed(0)}s`;
   const lots = (readGzRows(path.join(dir, 'lots.json.gz')) as unknown as AuctionLot[])
@@ -94,7 +96,8 @@ function main() {
     }
     const comps = compsOne(prep, l);
     const m = mOf(l);
-    const et = (l.estLowUsd || 0) > 0 && (l.estHighUsd || 0) > 0 ? 'b' : 'p';
+    const et = (l.estLowUsd || 0) > 0 && (l.estHighUsd || 0) > 0 ? 'b' : 'p'; // the yardstick's house factor (one for both engines)
+    setEngineFlags(ENGINE_FLAGS_HOUSE_GATE); // one yardstick for both engines
     const hf = hasAnyEst(l) ? houseFactorOf(m, l.auctionHouse, et)?.f : undefined;
     for (const [f, out, slot] of [[fa, rowsA, 'a'], [fb, rowsB, 'b']] as [EngineFlags, EngineRow[], 'a' | 'b'][]) {
       setEngineFlags(f);

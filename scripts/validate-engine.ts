@@ -48,7 +48,7 @@ import * as fs from 'fs';
 import type { AuctionLot } from '../app/types';
 import { ARTISTS } from '../app/constants';
 import {
-  setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, estimateValueEx, houseFactorOf, adjustedTop, quarterKey,
+  setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, estimateValueEx, houseFactorOf, adjustedTop, quarterKey, estKindOf,
   ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_CANDIDATE, type TimeIndex, type HouseBias, type EngineFlags, type EngineCalibration,
 } from '../app/lib/value';
 import { inferHammerUsd } from '../app/lib/premiums';
@@ -211,7 +211,7 @@ export function runValidateEngine(o: ValidateOpts = {}): { failures: number } {
     setHouseBias(houseBiasFor(lot.saleDate));
     const comps = compsOne(prep, lot);
     if (CANDIDATE) {
-      const et = (lot.estLowUsd || 0) > 0 && (lot.estHighUsd || 0) > 0 ? 'b' : 'p';
+      const et = estKindOf(lot.estLowUsd, lot.estHighUsd);
       const hfc = hasAnyEst(lot) ? houseFactorOf(m, lot.auctionHouse, et)?.f : undefined;
       for (const [k, f] of [['current', ENGINE_FLAGS_CURRENT], ['candidate', ENGINE_FLAGS_CANDIDATE]] as ['current' | 'candidate', EngineFlags][]) {
         setEngineFlags(f); setCalibration(calFor(f, lot.saleDate));
@@ -235,7 +235,8 @@ export function runValidateEngine(o: ValidateOpts = {}): { failures: number } {
       if (v.compRatio != null) {
         const b = bucketOf(v.flagRatio ?? v.compRatio);
         sigGlobal[b].n++; sigByM[m][b].n++;
-        if (lot.realizedUsd! > adjustedTop(lot.estLowUsd, lot.estHighUsd, v.houseFactor ?? 1)) { sigGlobal[b].beat++; sigByM[m][b].beat++; }
+        // (Oct 6) a beat is the HAMMER over the top (hammer-basis estimate)
+        if (inferHammerUsd(lot) > adjustedTop(lot.estLowUsd, lot.estHighUsd, v.houseFactor ?? 1)) { sigGlobal[b].beat++; sigByM[m][b].beat++; }
       }
     }
   }

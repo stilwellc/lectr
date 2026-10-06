@@ -272,7 +272,7 @@ export function buildTimeIndex(lots: AuctionLot[], marketBySlug: Record<string, 
    value.houseFactorOf as a multiplier RELATIVE TO THE GLOBAL BAND HABIT, so a
    typical band-estimate house reads ≈1 and the flag ratio is unchanged
    there. Never a `compExclude` lot, never an undated/year-precision sale. */
-type HBRow = { k: string; m: string; h: string; et: 'b' | 'p'; y: number };
+type HBRow = { k: string; m: string; h: string; et: 'b' | 'p'; y: number; sf: boolean };
 const HB_WINDOW_Y = 6;
 const HB_HL_Y = 2;
 const HB_K = 20;
@@ -291,7 +291,9 @@ export function makeHouseBiasIndexer(lots: AuctionLot[], marketBySlug: Record<st
     if (!(mid > 0)) continue;
     const y = Math.log(l.realizedUsd! / mid);
     if (!Number.isFinite(y) || Math.abs(y) > 4) continue; // ×55 either way is a unit/FX fault, not a habit
-    rows.push({ k: knownKey(lx), m: marketBySlug[l.artist] || 'other', h: String(l.auctionHouse), et: lo && hi ? 'b' : 'p', y });
+    // sf (Oct 6): a single printed figure (low == high) — also indexed under
+    // its own kind 's', and true ranges under 'r', for the single-figure engine
+    rows.push({ k: knownKey(lx), m: marketBySlug[l.artist] || 'other', h: String(l.auctionHouse), et: lo && hi ? 'b' : 'p', y, sf: !!(lo && hi && lo === hi) });
   }
   rows.sort((a, b) => (a.k < b.k ? -1 : a.k > b.k ? 1 : 0));
   const cache = new Map<string, HouseBias>();
@@ -308,10 +310,12 @@ export function makeHouseBiasIndexer(lots: AuctionLot[], marketBySlug: Record<st
       // a month-precision key ('2025-06-32') ages from the end of its month
       const age = (t - Date.parse(r.k.slice(8, 10) > '31' ? `${r.k.slice(0, 7)}-28` : r.k.slice(0, 10))) / 31_557_600_000;
       const w = Math.pow(0.5, Math.max(0, Number.isFinite(age) ? age : HB_WINDOW_Y) / HB_HL_Y);
-      push(`g:${r.et}`, r.y, w);
-      push(`m:${r.m}:${r.et}`, r.y, w);
-      push(`h:${r.h}:${r.et}`, r.y, w);
-      push(`mh:${r.m}|${r.h}:${r.et}`, r.y, w);
+      for (const et of r.et === 'b' ? [r.et, r.sf ? 's' : 'r'] : [r.et]) {
+        push(`g:${et}`, r.y, w);
+        push(`m:${r.m}:${et}`, r.y, w);
+        push(`h:${r.h}:${et}`, r.y, w);
+        push(`mh:${r.m}|${r.h}:${et}`, r.y, w);
+      }
     }
     const raw = new Map<string, { med: number; W: number; n: number }>();
     acc.forEach((pairs, key) => {
@@ -326,7 +330,7 @@ export function makeHouseBiasIndexer(lots: AuctionLot[], marketBySlug: Record<st
       cells[key] = Math.round((parent == null ? c.med : (c.W * c.med + HB_K * parent) / (c.W + HB_K)) * 10000) / 10000;
       n[key] = c.n;
     };
-    for (const et of ['b', 'p']) shrink(`g:${et}`, undefined);
+    for (const et of ['b', 'p', 'r', 's']) shrink(`g:${et}`, undefined);
     raw.forEach((_, key) => {
       const et = key.slice(-1);
       if (key.startsWith('m:') || key.startsWith('h:')) shrink(key, cells[`g:${et}`]);
