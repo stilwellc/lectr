@@ -108,6 +108,17 @@ test('identity-less art (wave 3): a bare title whose comps span > 20× abstains;
   setEngineFlags(null);
 });
 
+test('stale floor (wave 3): a pool whose weighted median comp is > 5y old never values the lot under its low estimate', () => {
+  setEngineFlags(ENGINE_FLAGS_CURRENT);
+  const lot = artTarget('Le Repas frugal', { medium: 'etching', estLowUsd: 100000, estHighUsd: 150000 });
+  const old = [1, 2, 3, 4].map(i => artComp(`o${i}`, 'Le Repas frugal', 20000 + i, '2012-05-01', { medium: 'etching' }));
+  const v = estimateValueEx(lot, old, buildIdf([])).value!;
+  assert.ok(v.compValueUsd >= 100000, `floored at the low estimate (${v.compValueUsd})`);
+  setEngineFlags(ENGINE_FLAGS_COMP_PURITY);
+  assert.ok(estimateValueEx(lot, old, buildIdf([])).value!.compValueUsd < 100000, 'the previous engine sat under it');
+  setEngineFlags(null);
+});
+
 test('exactWeight (measured, not adopted): recent tight exact comps floor the comp weight only under the flag', () => {
   setEngineFlags(ENGINE_FLAGS_CURRENT);
   assert.ok(!ENGINE_FLAGS_CURRENT.exactWeight);

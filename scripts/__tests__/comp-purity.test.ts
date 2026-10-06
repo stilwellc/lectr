@@ -91,7 +91,7 @@ test('hard boundaries: signed vs unsigned, object class, designator; abstain wit
   assert.equal(compBoundaryFault({ artist: 'rolex', title: 'Submariner Ref 5513' }, { artist: 'rolex', title: 'Submariner Ref 5512' }), null);
 });
 
-test('wave 3 boundaries (ext): lone "I" + plate designators, catalogue numbers, plate vs portfolio, item counts', () => {
+test('wave 3 boundaries (ext): lone "I" + plate designators, catalogue numbers, plate vs portfolio, item counts, watch variants', () => {
   const ext = { ext: true };
   const pic = (t: string) => art('pablo-picasso', t);
   // a lone "I" closing a designator; II = 2
@@ -116,6 +116,11 @@ test('wave 3 boundaries (ext): lone "I" + plate designators, catalogue numbers, 
   assert.equal(compBoundaryFault(rr('Funny Ladies (19) Documents Signed, with Jean Arthur, Fanny Brice, and Carol Burnett'), rr('Fanny Brice Signed Document'), ext), 'quantity');
   assert.equal(compBoundaryFault(rr('Yardbirds Signatures with Eric Clapton'), rr('Eric Clapton Signature'), ext), 'quantity');
   assert.equal(compBoundaryFault(rr('Harry S. Truman Typed Letter Signed'), rr('Harry S. Truman Typed Letter Signed'), ext), null);
+  // watch dial variants
+  const w = (t: string): PurityLot => ({ artist: 'rolex', title: t });
+  assert.equal(compBoundaryFault(w('Rolex Day-Date Ref. 18038 Stella dial'), w('Rolex Day-Date Ref. 18038'), { watchVariant: true }), 'variant');
+  assert.equal(compBoundaryFault(w('Patek Philippe Aquanaut Ref. 5164A Dual Time'), w('Patek Philippe Aquanaut Ref. 5164A Dual Time Travel Time'), { watchVariant: true }), null);
+  assert.equal(compBoundaryFault(w('Rolex Day-Date Ref. 18038 Stella dial'), w('Rolex Day-Date Ref. 18038')), null, 'off without the flag');
   // the identity-less art target
   assert.ok(isIdentityLessArtTarget(pic('Homme assis')));
   assert.ok(!isIdentityLessArtTarget(pic('Homme assis (B. 123)')));

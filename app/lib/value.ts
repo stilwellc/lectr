@@ -152,6 +152,17 @@ export interface EngineFlags {
    *  holdout medErr 27.7 → 27.9%, band 68.1 → 67.8% (w 0.4: 27.8%, 67.9%);
    *  live band 71.8 → 71.4% (§14) */
   exactWeight?: boolean;
+  /** (Oct 6, pricing wave 3) a comp pool whose weighted median sale date is
+   *  more than STALE_FLOOR.ageY old never prices an estimate lot under its
+   *  printed low estimate (STALE_FLOOR) */
+  staleFloor?: boolean;
+  /** (Oct 6, pricing wave 3) card exact tier: a pool of ≤ CARD_THIN.n sales
+   *  prices at its plain median — the short-half-life weighted median of 2
+   *  sales IS the newest sale (build-market priceCard) */
+  cardThinMedian?: boolean;
+  /** (Oct 6, pricing wave 3) watch dial / nickname variants (Stella, agate,
+   *  Aquatic, Dual Time, …) are a hard comp boundary */
+  watchVariant?: boolean;
 }
 /** The engine before the Oct 3 pass (raw-estimate Flags, premium-only
  *  anchor, ungated card tiers) — kept so the harnesses can replay it. */
@@ -194,14 +205,20 @@ export const ENGINE_FLAGS_COMP_PURITY: EngineFlags = {
   purityGate: true, compBoundary: true,
 };
 /** (Oct 6 2026, pricing wave 3) THE CLEAN POOL: the extended hard boundaries
- *  (plate / catalogue numbers, single plate vs set) and the identity-less
- *  art abstention, each measured alone on the comp-purity engine
- *  (docs/ENGINE_LANES.md §14). Measured and NOT adopted: pureRead, the
- *  quantity boundary. */
+ *  (plate / catalogue numbers, single plate vs set), the identity-less art
+ *  abstention, watch dial variants, the stale-pool floor at the low
+ *  estimate, the thin card pool's plain median. Measured on the comp-purity
+ *  engine (docs/ENGINE_LANES.md §14): holdout flags 680 → 658, precision
+ *  49.6 → 50.2%, edge 20.1 → 21.1pt, medErr 27.8% = 27.8% on the same lots
+ *  (103 values withdrawn, 26.9% medErr); live (Sep 14 book) estimate medErr
+ *  26.4 → 26.0%, ±30% 54.9 → 55.9%, band 71.8 → 72.8%, flag precision 56.0
+ *  → 57.8%, edge 38.7 → 39.9pt; live card values medErr 21.0 → 19.9%, band
+ *  78.1 → 80.0%. Measured and NOT adopted: pureRead, exactWeight, the
+ *  quantity boundary (§14). */
 export const ENGINE_FLAGS_CURRENT: EngineFlags = {
   ...ENGINE_FLAGS_COMP_PURITY,
   version: '2026.10.06-wave3',
-  boundary2: true, idLessAbstain: true,
+  boundary2: true, idLessAbstain: true, watchVariant: true, staleFloor: true, cardThinMedian: true,
 };
 /** The candidate under evaluation. Equal to CURRENT's flags when nothing is
  *  pending — a candidate run then reports a no-op comparison. */
@@ -721,10 +738,18 @@ export const EXACT_W = { minN: 3, cos: 0.9, maxAgeY: 3, spread: 1.5, w: 0.6 };
 /** (wave 3) EngineFlags.idLessAbstain: the comp spread (max / min of the top
  *  comps) past which an identity-less art title abstains */
 export const ID_LESS = { spread: 20 };
+/** (wave 3) EngineFlags.staleFloor: the weighted median comp age (years) past
+ *  which the value never sits under the low estimate. `allIn` 0 = the floor
+ *  is the printed low estimate itself (measured: the all-in floor
+ *  over-lifted — holdout ±30% on its changed lots 42.9 → 37.4%) */
+export const STALE_FLOOR = { ageY: 5, allIn: 0 };
 /** (wave 3) EngineFlags.boundary2's sub-rules (1 = on) — the harness sweep.
  *  quantity is OFF: measured, it cost the holdout culture cell (medErr 29.1
  *  → 29.6%, edge 31.9 → 31.0pt) */
 export const BOUNDARY2 = { designator: 1, catalogue: 1, unit: 1, quantity: 0 };
+/** (wave 3) EngineFlags.cardThinMedian: the exact-tier pool size at or under
+ *  which the plain median prices the card */
+export const CARD_THIN = { n: 3 };
 export function exactBlendW(house: string | null | undefined): number {
   const v = house ? EXACT_BLEND.byHouse[house] : undefined;
   return typeof v === 'number' ? v : EXACT_BLEND.w;
@@ -829,7 +854,7 @@ export function estimateValueEx(
   // (Oct 6, FLAGS.compBoundary) a comp across a HARD boundary — signed vs
   // unsigned, another subject, another designator, another object class —
   // never enters either gate's pool (comp-purity.compBoundaryFault)
-  const bOpts = { ext: !!FLAGS.boundary2, rules: BOUNDARY2 };
+  const bOpts = { ext: !!FLAGS.boundary2, watchVariant: !!FLAGS.watchVariant, rules: BOUNDARY2 };
   const src = FLAGS.compBoundary ? comps.filter(c => !c.lot || !compBoundaryFault(lot, c.lot, bOpts)) : comps;
   let pool = src
     .filter(c => passesGate(c.match) && c.realizedUsd > 0)
@@ -1069,6 +1094,16 @@ export function estimateValueEx(
     predUsd = compAdjUsd * (APPLY_NOEST_BIAS ? noEstimateBias(lot.artist, confidence) : 1);
   }
   if (!(predUsd > 0) || !Number.isFinite(predUsd)) return { value: null, abstain: 'no-value' };
+  // (Oct 6, wave 3, FLAGS.staleFloor) a pool whose weighted median sale is
+  // more than STALE_FLOOR.ageY old says little about today's level — the
+  // value never sits under the house's printed low estimate
+  if (FLAGS.staleFloor && eLo && eLo > 0) {
+    const medAge = weightedMedian(top.map(c => [ageYOf(c), (c.match.cosine ** 2) * decay(c)] as [number, number]));
+    if (medAge > STALE_FLOOR.ageY) {
+      const loAllIn = STALE_FLOOR.allIn ? eLo * lotAllInFactor(lot, eLo) : eLo;
+      if (predUsd < loAllIn) predUsd = loAllIn;
+    }
+  }
 
   // OUTCOME BAND for the published value. Calibrated: the prediction × the
   // path×tier (per market where deep enough) 15/85 quantiles of realized /

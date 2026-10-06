@@ -339,6 +339,29 @@ export function itemCountOf(title: string | null | undefined): 'many' | 'one' | 
   if (SINGULAR_FORMAT.test(t)) return 'one';
   return null;
 }
+/** Watch dial / nickname variants — each its own market at the same reference. */
+const WATCH_VARIANTS: [string, RegExp][] = [
+  ['stella', /\bstella\b/], ['agate', /\bagate\b/], ['aquatic', /\baquatic\b/], ['dual-time', /\bdual[- ]time\b/],
+  ['tiffany', /\btiffany\b/], ['paul-newman', /\bpaul newman\b/], ['tropical', /\btropical\b/], ['meteorite', /\bmeteorite\b/],
+  ['mop', /\bmother[- ]of[- ]pearl\b|\bmop\b/], ['onyx', /\bonyx\b/], ['lapis', /\blapis\b/], ['malachite', /\bmalachite\b/],
+  ['turquoise', /\bturquoise\b/], ['coral', /\bcoral\b/], ['opal', /\bopal\b/], ['jade', /\bjade\b/], ['tigers-eye', /\btiger'?s?[- ]eye\b/],
+  ['aventurine', /\baventurine\b/], ['sodalite', /\bsodalite\b/], ['pave', /\bpav[eé]\b/], ['sigma', /\bsigma\b/],
+];
+export function watchVariantsOf(title: string | null | undefined): Set<string> {
+  const t = fold((title || '').toLowerCase());
+  const out = new Set<string>();
+  for (const [k, re] of WATCH_VARIANTS) if (re.test(t)) out.add(k);
+  return out;
+}
+/** Different dial / nickname variants on two watch titles (either side). */
+export function watchVariantConflict(a: string | null | undefined, b: string | null | undefined): boolean {
+  const va = watchVariantsOf(a), vb = watchVariantsOf(b);
+  if (!va.size && !vb.size) return false;
+  if (va.size !== vb.size) return true;
+  let diff = false;
+  va.forEach(k => { if (!vb.has(k)) diff = true; });
+  return diff;
+}
 /** (EngineFlags.idLessAbstain) An art target that names no object: no
  *  catalogue citation, a title core of ≤ 4 words, and no medium family /
  *  edition class evidence — the title alone cannot tell a drawing from the
@@ -351,20 +374,22 @@ export function isIdentityLessArtTarget(l: PurityLot): boolean {
   return !core || core.split(' ').length <= 4;
 }
 
-export type BoundaryFault = 'signed' | 'subject' | 'designator' | 'object' | 'unit' | 'quantity';
+export type BoundaryFault = 'signed' | 'subject' | 'designator' | 'object' | 'unit' | 'quantity' | 'variant';
 /** The HARD boundary fault of comp `c` for target `t`
  *  (EngineFlags.compBoundary), or null. Memorabilia only for the
  *  autograph / subject / object-class rules; the designator rule everywhere
  *  but watches (a reference is a watch's designator and already its own
  *  identity tier). `opts.ext` (EngineFlags.boundary2) adds the wave-3 rules:
  *  lone-"I" / plate designators and catalogue numbers (art), single plate vs
- *  set (art / design), item counts (memorabilia). */
+ *  set (art / design), item counts (memorabilia); `opts.watchVariant` the
+ *  dial / nickname variants (watches). */
 export function compBoundaryFault(
   t: PurityLot, c: PurityLot,
-  opts: { ext?: boolean; rules?: { designator?: number; catalogue?: number; unit?: number; quantity?: number } } = {},
+  opts: { ext?: boolean; watchVariant?: boolean; rules?: { designator?: number; catalogue?: number; unit?: number; quantity?: number } } = {},
 ): BoundaryFault | null {
   const ext = !!opts.ext;
   const on = (k: 'designator' | 'catalogue' | 'unit' | 'quantity') => ext && (opts.rules?.[k] ?? 1) !== 0;
+  if (opts.watchVariant && WATCH_SLUGS.has(t.artist) && watchVariantConflict(t.title, c.title)) return 'variant';
   if (!WATCH_SLUGS.has(t.artist) && !CARD_SLUGS.has(t.artist) && designatorConflict(t.title, c.title, on('designator'))) return 'designator';
   if (on('catalogue') && catalogueConflict(t, c)) return 'designator';
   if (on('unit') && unitConflict(t, c)) return 'unit';

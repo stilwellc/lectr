@@ -311,3 +311,26 @@ Per market the edge rose in art (21.0 → 25.4pt), culture, watches and fell in 
 - `weightCap` (no comp over 35% of the weight): holdout medErr 28.4 → 28.7%, ±30% 51.6 → 51.4%; live 26.5 → 26.1% but ±30% 54.1 → 53.7% and band 70.7 → 70.0%; a 50% cap 28.5%. Abstaining when every comp is over 10y old costs 170 holdout values (102 live) and leaves the rest's error unchanged (28.3% = 28.3%; live 26.7%).
 - `exactBlend` (≥ 2 comps at cosine ≥ 0.95 → blendW ≥ 0.5): holdout medErr 28.4 → 29.6%, band 67.2 → 65.8%. Learned point-in-time instead (train Oct 2023 → Sep 2025, house × exact count): every fitted weight was lower than today's (0.05–0.30). On the test year's 3,099 exact-pool lots: current 27.6%, learned global 27.5%, per house 28.0%. Per-house cells do not transfer.
 - RR single-point house factor by estimate size (sub-$300 / $1k / $5k cells under the house's 'p' habit): RR 31.5 → 31.3%, but holdout overall 28.4 → 28.7% and live 26.5 → 26.7%, edge 24.6 → 22.0pt. RR's 'p' habit already tracks realized (median hl 0.32 vs realized/mid 0.32). The $300–1k floors' 40% error is dispersion, not bias.
+
+## 14 · OCT 6 2026 PRICING WAVE 3 — the clean pool (`2026.10.06-wave3`)
+
+**Measured** the same way as §13, each rule alone on top of `2026.10.06-comp-purity`, then together. Holdout = oneoff/qa/engine-ab.ts from Oct 1 2025 (8,180 estimate targets). Live = oneoff/qa/live-ab.ts --full-cal, the Sep 14 book graded on lots sold by Oct 5. Judged = the hand-judged comp sample from wave 2 (per-comp verdicts), counted after the wave-2 boundaries.
+
+| | comp-purity | wave 3 (adopted) |
+|---|---|---|
+| holdout flags / precision / edge | 680 / 49.6% / 20.1pt | 658 / 50.2% / 21.1pt |
+| holdout values / medErr / ±30% / band (same lots) | 4,592: 27.8% / 52.6% / 68.2% | 27.8% / 52.5% / 68.1% (103 values withdrawn, 26.9% medErr) |
+| live estimate values / medErr / ±30% / band | 632: 26.4% / 54.9% / 71.8% | 617: 26.0% / 55.9% / 72.8% |
+| live flags / precision / edge | 84 / 56.0% / 38.7pt | 83 / 57.8% / 39.9pt |
+| live card values / medErr / ±30% / band | 320: 21.0% / 64.1% / 78.1% | 320: 19.9% / 65.3% / 80.0% |
+
+- **Extended boundaries** (`boundary2`, comp-purity.ts): a lone "I" closing a designator ("Fillette, I, from …") and "pl. 94" read as designators, romans compare as numbers; different catalogue-raisonné numbers in one system (B. 138 vs B. 200; F&S 179 vs the 179–182 set); a single plate against the whole portfolio, either way round ("Ten Landscapes" vs "Landscape 2, from Ten Landscapes"; "Untitled (from the Pop Shop I portfolio)" vs "Pop Shop I"). Holdout flags 680 → 676, edge 20.1 → 20.2pt (art 22.3 → 23.4pt); live ±30% 54.9 → 55.1%, edge 38.7 → 39.8pt; judged: every comp it drops was judged wrong (6 of 6), wrong share 12.7 → 12.3%.
+- **Identity-less art** (`idLessAbstain`): an art target with no catalogue citation, no medium / edition evidence and a title core of ≤ 4 words abstains when its comps span > 20× ('identity-less'; Phillips "Homme assis" against the $8M painting). Holdout: 48 values withdrawn at 32.4% medErr, edge 20.1 → 20.9pt; live unchanged.
+- **Watch dial variants** (`watchVariant`): Stella, agate, Aquatic, Dual Time, Tiffany, Paul Newman, tropical, meteorite, mother-of-pearl, hardstones, pavé, sigma — a different variant set is a hard boundary. Holdout watches: flags 27 → 23, precision 40.7 → 47.8%, edge 23.8 → 26.6pt; 41 values withdrawn at 26.9%; the changed values 18.3 → 17.3%.
+- **Stale floor** (`staleFloor`): a pool whose weighted median comp is > 5 years old never values the lot under its printed low estimate. Live medErr 26.4 → 26.1%, ±30% 54.9 → 55.5%, band 71.8 → 72.2% (high tier 28.3 → 25.2%); holdout 8 values change, 123 → 95% medErr, nothing else moves. The all-in floor (low × premium) over-lifted: holdout ±30% on its 91 changed lots 42.9 → 37.4%.
+- **Thin card pools** (`cardThinMedian`, build-market priceCard): an exact pool of ≤ 3 sales prices at its plain median — the 0.5y-half-life weighted median of two sales was the newer one. Live cards medErr 21.0 → 19.9%, band 78.1 → 80.0%, bias 1.022 → 0.996.
+
+**Measured and NOT adopted:**
+- `pureRead` (the directional ratio and the read's median from the purity-gated comps): holdout precision 50.2 → 50.5%, edge 21.1 → 21.7pt on top of the adopted set, but live edge 39.9 → 37.3pt (two Christie's flags swung to below and both missed). The Flags edge must not degrade on either yardstick; it stays off.
+- `exactWeight` (≥ 3 comps at cosine ≥ 0.9, ≤ 3 years, IQR ≤ 1.5× → comp weight ≥ 0.6): holdout medErr 27.7 → 27.9%, band 68.1 → 67.8% (522 changed values 23.8 → 25.3%); live medErr 26.4 → 26.1% but band 71.8 → 71.4%. At 0.4: holdout 27.8%, band 67.9%. The exact comps already carry their weight through the tier weights.
+- The **quantity** boundary ("(19) Documents" vs one document, "Signatures" vs one signature): holdout culture medErr 29.1 → 29.6%, edge 31.9 → 31.0pt; the judged comps it dropped were all 'weak', none 'wrong'. `BOUNDARY2.quantity = 0`.
