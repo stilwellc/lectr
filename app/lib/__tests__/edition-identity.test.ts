@@ -78,3 +78,12 @@ test('generic titles abstain unless a number makes them specific', () => {
   // short real titles survive now that the maker's name is gone
   assert.equal(key({ artist: 'andy-warhol', title: 'Mao' }), 'andy-warhol|mao');
 });
+
+test('bare rows (no medium, no description) need print evidence in the sale or title', () => {
+  // Sotheby's Algolia "femme nue assise", Modern Contemporary Day: a painting typed print
+  assert.equal(isEditionLot({ formKey: 'print', medium: null, description: null, title: 'femme nue assise', saleName: 'Modern Contemporary Day Auction 2' }), false);
+  assert.equal(isEditionLot({ formKey: 'print', medium: null, description: null, title: 'mao', saleName: 'Prints & Multiples' }), true);
+  assert.equal(isEditionLot({ formKey: 'print', medium: null, description: null, title: 'Marilyn (lithograph)', saleName: '' }), true);
+  // a described row is judged on its text, not its sale
+  assert.equal(isEditionLot({ formKey: 'print', medium: 'Linocut in colors on Arches paper', description: null, title: 'Femme nue assise', saleName: '' }), true);
+});

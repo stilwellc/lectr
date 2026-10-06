@@ -151,7 +151,9 @@ const UNIQUE_WEAK = /\b(?:gouache|watercolou?r|pastel|charcoal|crayon|graphite|p
 const PRINT_PROCESS = /\b(?:lithograph|screenprint|screen print|serigraph|silkscreen print|etching|aquatint|drypoint|linocut|linoleum cut|woodcut|wood engraving|engraving|offset|pochoir|giclee|pigment print|photogravure|heliogravure|intaglio|mezzotint|print(?:ed)? in colou?rs)/;
 const EDITION_SIZE = /\bedition (?:of|was)\b|\bexemplaires\b|\bnumbered\b[^.;]{0,25}?\b\d{1,3} ?\/ ?\d{1,3}\b/;
 
-type EditionText = { title?: string | null; medium?: string | null; description?: string | null };
+const BARE_SALE_EVIDENCE = /print|multiple|edition|lithograph|graphic|works on paper/i;
+const BARE_TITLE_EVIDENCE = /lithograph|screenprint|etching|linocut|woodcut|aquatint|serigraph|poster|edition/;
+type EditionText = { title?: string | null; medium?: string | null; description?: string | null; saleName?: string | null };
 const editionText = (l: EditionText) => fold(`${l.title || ''} ${l.medium || ''} ${l.description || ''}`.toLowerCase());
 
 const SIGNED = /\b(?:hand[- ])?sign(?:ed|e)\b(?! in the (?:plate|stone|block|screen|negative|matrix))/;
@@ -232,6 +234,13 @@ export function isEditionLot(l: Pick<AuctionLot, 'formKey' | 'medium'> & Edition
   const f = `${l.formKey || ''} ${l.medium || ''}`.toLowerCase();
   if (!/print|multiple|edition|poster|lithograph|screenprint|etching/.test(f)) return false;
   const text = editionText(l);
+  // a BARE row (no medium, no description — Sotheby's Algolia, older Bonhams)
+  // has only its category to call it a print; that alone put $17.6M paintings
+  // in print pools. Bare rows need print evidence in the sale or the title
+  // (Oct 6 2026: bare pairs without it were >5x apart 14.6% of the time,
+  // bare-with-evidence 3.4%, described rows 4.6%).
+  if (!l.medium && !l.description
+    && !BARE_SALE_EVIDENCE.test(l.saleName || '') && !BARE_TITLE_EVIDENCE.test(text)) return false;
   if (UNIQUE_STRONG.test(text)) return false;
   if (UNIQUE_WEAK.test(text) && !PRINT_PROCESS.test(text) && !EDITION_SIZE.test(text)) return false;
   return true;
