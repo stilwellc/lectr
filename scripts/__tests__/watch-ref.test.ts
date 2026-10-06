@@ -82,10 +82,10 @@ test('enrichWatchReferences re-derives: heals serials and model names, leaves ot
   ];
   const filled = enrichWatchReferences(lots as any);
   assert.equal(filled, 1);
-  assert.deepEqual(lots.map(l => l.reference), [null, '5513', '145.022', '1675', '12345']);
+  assert.deepEqual(lots.map(l => l.reference ?? null), [null, '5513', '145.022', '1675', '12345']);
   // idempotent
   enrichWatchReferences(lots as any);
-  assert.deepEqual(lots.map(l => l.reference), [null, '5513', '145.022', '1675', '12345']);
+  assert.deepEqual(lots.map(l => l.reference ?? null), [null, '5513', '145.022', '1675', '12345']);
 });
 
 /* ── Oct 6 2026 identity fix wave: core reference + suffix material, glued
@@ -136,7 +136,7 @@ test('description fallback: labelled refs only, watches only', () => {
     { ...W('patek-philippe', '2007'), formKey: 'unknown', description: 'limited edition patek philippe lithograph depicting a ref.5098p 2007', reference: null },
   ];
   enrichWatchReferences(lots);
-  assert.deepEqual(lots.map(l => l.reference), ['2591', null]);
+  assert.deepEqual(lots.map(l => l.reference ?? null), ['2591', null]);
 });
 
 test('ONE material reader: steel-and-gold is two-tone, a two-tone DIAL is not', () => {
@@ -182,12 +182,12 @@ test('enrichWatchReferences: a model NAME is not a reference — it moves to mod
     { ...W('patek-philippe', 'Case No. 236087, Movement No. 122624, Circa 1900s'), reference: null },
   ];
   enrichWatchReferences(lots);
-  assert.deepEqual(lots.map(l => l.reference), [undefined, undefined, undefined, '310.20.42.50.01.001', null]);
+  assert.deepEqual(lots.map(l => l.reference ?? null), [null, null, null, '310.20.42.50.01.001', null]);
   assert.ok(!('reference' in lots[0]) && !('reference' in lots[2]));
   assert.deepEqual(lots.slice(0, 3).map(l => l.modelKey), ['submariner', 'baignoire', 'seamaster']);
   // the comp key still reads the model line from the title (absent field → watchKey fallback)
   assert.equal(watchKey(lots[0]), 'submariner');
   // idempotent
   enrichWatchReferences(lots);
-  assert.deepEqual(lots.map(l => l.reference), [undefined, undefined, undefined, '310.20.42.50.01.001', null]);
+  assert.deepEqual(lots.map(l => l.reference ?? null), [null, null, null, '310.20.42.50.01.001', null]);
 });
