@@ -1653,6 +1653,74 @@ function cultItemClassOf(title: string): string {
   for (const [re, c] of CULT_ITEM_RULES) if (re.test(t)) return c;
   return 'other';
 }
+
+/* ── CULTURE KIND (wave 2, Oct 6 2026 re-audit: ~49k culture lots 'other' or
+   wrong) — cultItemClassOf read the TITLE only, first rule wins. Christie's /
+   Sotheby's culture titles are often a bare name ("Marilyn Monroe", "Eric
+   Clapton", "CASABLANCA") with the object in the description; plural nouns
+   ("PHOTOGRAPHS BY DEZO HOFFMANN") missed; a signed programme read as a ticket
+   and a signed retail hat as a costume. Now: the object named EARLIEST wins
+   (ties by rule order), a SIGNED piece is an autograph unless it was worn /
+   used / played, and a title that names no object falls back to the head of
+   the description, then the sale (an RR "Photography Auction", RR's
+   "<Name> Book / Program" signed-piece shorthand). */
+const CULT_CARD_RE = CULT_ITEM_RULES[0][0];
+const CULT_KIND_RULES: [RegExp, string][] = [
+  [/\bsigned (?:cut|index card)s?\b|\bcut signatures?\b|(?<!\d\s?)\bsignatures?\b(?!\s+(?:series|edition|model|collection|card|guitar|costume|look|style|suit|dress|hat|outfit|song|sound|move|role|scent|fragrance))/i, 'signed-cut'],
+  [/\b(?:checks?|cheques?)\b/i, 'check'],
+  [/\b(?:signed|autographed|inscribed)\b.{0,30}\b(?:photo|photos|photograph|photographs|stills?|portraits?|cdvs?|snapshots?)\b|\b(?:photo|photos|photograph|photographs|stills?|portraits?)\b.{0,30}\b(?:signed|inscribed)\b/i, 'signed-photo'],
+  // a signed FLAT / retail piece is an autograph (a signed programme, book,
+  // menu, card, standee, retail hat or ball); a signed guitar, album, shoe or
+  // document is still that object (the noun rules below)
+  [/\b(?:signed|autographed)\b.{0,30}\b(?:programs?|programmes?|books?|menus?|cards?|pages?|standees?|drum ?sticks?|hats?|caps?|baseballs?|footballs?|basketballs?|balls?|posters?|banners?|plaques?|bats?|helmets?|jerseys?|mini[- ]helmets?)\b|\b(?:programs?|programmes?|books?|menus?|cards?|pages?)\b.{0,25}\bsigned\b/i, 'autograph-other'],
+  [/\b(?:photo|photos|photograph|photographs|snapshots?|negatives?|carte[- ]de[- ]visites?|cdvs?|tintypes?|daguerreotypes?|polaroids?|(?:film|press|publicity|production|black and white|colou?r) stills?|a still of|contact sheets?|transparenc(?:y|ies)|image of)\b/i, 'photo'],
+  [/\b(?:letters?|correspondence|telegrams?|manuscripts?|typescripts?|documents?|deeds?|land grants?|commissions?|proclamations?|broadsides?|autograph notes?|handwritten|lyrics?|diar(?:y|ies)|notebooks?|als|tls|endorsements?|(?:confederate|war|treasury|savings|railroad) bonds?|bond certificates?|certificates?|stock|treaty|bulletins?|memo(?:randum|randa|s)?|ledgers?|registers?|guest ?books?|journals?|financial statements?|contracts?|telephone messages?|itinerar(?:y|ies)|writes (?:to|his|her|a|an|of|about|from))\b/i, 'document'],
+  [/\b(?:script|scripts|screenplay|shooting script|storyboards?|teleplay)\b/i, 'script'],
+  [/\b(?:posters?|lobby cards?|one[- ]sheets?|handbills?|locandina|affiche|window cards?|half[- ]sheets?|three[- ]sheets?)\b/i, 'poster'],
+  [/\b(?:guitars?|bass|telecaster|stratocaster|les paul|drums?|drumhead|piano|saxophone|violin|microphone|amplifier|keyboard|ukulele|banjo|trumpet|cymbals?)\b/i, 'instrument'],
+  [/\b(?:gold record|platinum record|gold disc|platinum disc|riaa|grammy|oscar|academy award|emmy|golden globe|disc award|sales award|presentation award|awards?|medals?|trophy|trophies|key to the city)\b/i, 'award'],
+  [/\b(?:prop|props|hero prop|production[- ]made|screen[- ]used|maquette)\b/i, 'prop'],
+  [/\b(?:worn|costume|costumes|(?<!dust )jacket|coat|dress|gown|shirt|boots?|robe|tunic|uniform|suit|cape|cowl|helmet|mask|shoes?|sneakers?|hat|jumpsuit|vest|jersey|ensemble|coveralls|overalls|wardrobe)\b/i, 'costume'],
+  [/\b(?:tickets?|stubs?|pass|credentials?|programs?|programmes?)\b/i, 'ticket'],
+  [/\b(?:animation cel|cels?|celluloid|drawings?|sketch(?:es)?|costume design)\b/i, 'cel-art'],
+  [/\b(?:record|records|vinyl|albums?(?!\s+pages?)|lp|45rpm|acetate|test pressing)\b/i, 'record'],
+];
+/** no object noun named: a bare signature mark is still an autograph */
+const CULT_AUTOGRAPH_FALLBACK_RE = /\b(?:signed|autographed|autographs?|signatures?|inscribed)\b/i;
+/** the rule whose noun is named earliest in `s` (ties → rule order), or null */
+function earliestCultKind(s: string): string | null {
+  let best: string | null = null, at = Infinity;
+  for (const [re, c] of CULT_KIND_RULES) {
+    const m = re.exec(s);
+    if (m && m.index < at) { at = m.index; best = c; }
+  }
+  return best;
+}
+/** the description's own object line: the title echo and the trailing
+ *  authenticity / provenance boilerplate ("accompanied by a letter of
+ *  authenticity", "with a photograph of …") removed */
+function descHead(title: string, desc: string): string {
+  let d = String(desc || '').replace(/<[^>]+>|class="[^"]*"/g, ' ');
+  const t = String(title || '').trim();
+  if (t && d.toLowerCase().startsWith(t.toLowerCase())) d = d.slice(t.length);
+  d = d.split(/\b(?:accompanied by|together with|with (?:a|an|the) (?:letter|certificate|coa|loa)|letter of authenticity|certificate of authenticity|provenance|literature|exhibited|lot closed|estimate)\b/i)[0];
+  return d.slice(0, 260);
+}
+export function cultureItemClass(l: { title?: string | null; description?: string | null; saleName?: string | null; auctionHouse?: string | null }): string {
+  const title = String(l.title || '').replace(/["“”]/g, ' ');
+  if (CULT_CARD_RE.test(title)) return 'card';
+  const fromTitle = earliestCultKind(title) ?? (CULT_AUTOGRAPH_FALLBACK_RE.test(title) ? 'autograph-other' : null);
+  if (fromTitle) return fromTitle;
+  const head = descHead(title, String(l.description || ''));
+  const fromDesc = earliestCultKind(head) ?? (CULT_AUTOGRAPH_FALLBACK_RE.test(head) ? 'autograph-other' : null);
+  // "Approximately seventy signatures collected by …" is an autograph lot, not a cut
+  if (fromDesc) return fromDesc === 'signed-cut' ? 'autograph-other' : fromDesc;
+  const sale = String(l.saleName || '');
+  if (/\bphotograph/i.test(sale)) return 'photo';
+  // RR's signed-piece shorthand: "<Signer> Book", "<Signer> Program", "<Signer> Menu"
+  if (l.auctionHouse === 'RR Auction' && /\b(?:books?|programs?|programmes?|menus?|cards?|bibles?|baseballs?|footballs?|basketballs?|bats?|balls?|scores?|pages?|first day covers?|covers?)\s*$/i.test(title.trim())) return 'autograph-other';
+  return 'other';
+}
 function cultPersonOf(title: string): string | null {
   let t = (title || '').trim();
   t = t.replace(/^(c\.?\s*)?(1[6-9]\d\d|20\d\d)(-\d{2,4})?\s+/i, '');
@@ -1699,7 +1767,7 @@ export function stampCultureAxes(lots: Lot[]): number {
     const person = cultShortSubjectOf(l.title || '') ?? cultPersonOf(l.title || '');
     const franchise = cultFranchiseOf(l.title || '');
     const subjects = Array.from(new Set([person, franchise].filter((x): x is string => !!x && !CULT_SUBJECT_STOPLIST.has(x))));
-    const cls = cultItemClassOf(l.title || '');
+    const cls = cultureItemClass(l as Lot & { description?: string | null; saleName?: string | null });
     const t = l as Lot & { subjectKeys?: string[]; itemClass?: string };
     t.itemClass = cls;
     if (subjects.length) { t.subjectKeys = subjects; stamped++; }

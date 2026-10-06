@@ -7,9 +7,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { reclassifyLot, isCardTitle, isSignedDocument, DROP } from '../lib/classify';
-import { reclassifyCorpus, rerouteScienceMisroutes } from '../lib/corpus-normalize';
+import { reclassifyCorpus, rerouteScienceMisroutes, cultureItemClass } from '../lib/corpus-normalize';
 import { routeRRLot } from '../rr-auction';
 import { athleteIn } from '../lib/athlete-roster';
+import { subCatOf } from '../lib/sub-cats';
 
 type R = Record<string, any>;
 const L = (o: R): any => ({ id: 'x', artist: 'memorabilia', title: 't', category: 'object', auctionHouse: 'REA', saleName: '', status: 'sold', ...o });
@@ -115,4 +116,35 @@ test('class 4 · RR athlete autographs by bare name are sports, not culture', ()
   // the sports houses' pop desk: a roster athlete is sports unless the object reads non-sport
   assert.equal(move({ auctionHouse: 'SCP', artist: 'pop-memorabilia', title: 'Hack Wilson Autographed Album Page - PSA/DNA Authentic' }), 'autographs');
   assert.equal(move({ auctionHouse: 'Lelands', artist: 'pop-memorabilia', title: '208 Wilt Chamberlain Stilt Record Label Acetate & More' }), 'pop-memorabilia');
+});
+
+test('class 1 · culture kind reads the description when the title is a bare name; signed pieces; plurals', () => {
+  const K = (title: string, description = '', o: R = {}) => subCatOf({ artist: 'entertainment-memorabilia', title, itemClass: cultureItemClass({ title, description, ...o }) }).subCat;
+  // the object lives in the description (Christie's / Sotheby's culture titles)
+  assert.equal(K('Eric Clapton', "Eric Clapton A presentation 'platinum' disc award for the album From The Cradle"), 'awards');
+  assert.equal(K('CASABLANCA', 'CASABLANCA Re-release 1962, Warner Bros., Italian locandina - linen-backed, (B+)'), 'posters');
+  assert.equal(K('STEVIE NICKS', 'STEVIE NICKS A black velvet hat worn by Stevie Nicks on her 1988 WHOLE LOTTA TROUBLE tour'), 'worn-personal');
+  assert.equal(K('Alien And Aliens', "Alien And Aliens A prop grotesque 'face hugger' of foam-filled latex"), 'props');
+  assert.equal(K('Film Stars And Entertainers', 'Film Stars And Entertainers Approximately one hundred and seventy autographs, mainly on album pages'), 'autographs');
+  // plurals and photo forms
+  assert.equal(K('JOHN LENNON & BEATLES PHOTOGRAPHS BY DEZO HOFFMANN 1963-1967'), 'photos');
+  assert.equal(K('MARILYN MONROE UNPUBLISHED SNAPSHOT 1945'), 'photos');
+  // a signed flat / retail piece is an autograph; a signed document, guitar or album is that object
+  assert.equal(K('Nat King Cole Signed Program Page'), 'autographs');
+  assert.equal(K('Johnny Depp Signed Disney Pirate Hat - PSA/DNA LOA'), 'autographs');
+  assert.equal(K('Pete Best Single-Signed Drum Sticks Pair (2) - Includes Personal Photo, Oasis Tour Passes - Beckett'), 'autographs');
+  assert.equal(K('Franklin D. Roosevelt Signed Document'), 'documents');
+  assert.equal(K('REO SPEEDWAGON SIGNED GUITAR'), 'instruments');
+  assert.equal(K('Led Zeppelin: Robert Plant Signed Album'), 'records');
+  assert.equal(K("Daniel Radcliffe's Personally-Owned Signed Shoes"), 'worn-personal');
+  assert.equal(K('James Bond: Regin, Nadja Signed Photograph'), 'photos');
+  assert.equal(K('Led Zeppelin Multi-Signed DVD Insert Booklet (3 Signatures) - Including Jimmy Page'), 'autographs');
+  // RR documents and cut signatures (rubric: a signed cut is a document)
+  assert.equal(K('Edward Rutledge Signature'), 'documents');
+  assert.equal(K('Civil War: Confederate Bond'), 'documents');
+  assert.equal(K('Henri de Toulouse-Lautrec: Sick with the flu, Lautrec writes his grandmother in early 1890'), 'documents');
+  assert.equal(K('PAUL REUBENS PEE-WEE HERMAN SIGNATURE COSTUME'), 'worn-personal');
+  // RR's "<Signer> Book" shorthand, and an RR Photography Auction lot
+  assert.equal(K('Fritz Kreisler Book', '', { auctionHouse: 'RR Auction' }), 'autographs');
+  assert.equal(K('Cecil Beaton', '', { auctionHouse: 'RR Auction', saleName: 'Photography Auction' }), 'photos');
 });
