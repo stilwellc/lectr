@@ -246,7 +246,14 @@ const DESC_REF_FORMS = new Set(['wristwatch', 'pocket-watch']);
  *  (Oct 6 corpus with the Phillips field back-stamped) it added 74 Phillips
  *  values at 23.0% median error but moved the 351 already-valued Phillips
  *  lots 24.1 → 24.3% (±30% 60.4 → 59.0%, band 77.5 → 74.6%); live Sep 14
- *  Sotheby's watches 22.0 → 22.2%. docs/ENGINE_LANES.md §18. */
+ *  Sotheby's watches 22.0 → 22.2%. docs/ENGINE_LANES.md §18.
+ *  Re-measured after the Phillips deep backfill (§20, 9,491 Phillips rows
+ *  carry the field): it fixes the pools (cross-reference comps in Phillips
+ *  pools 61.5 → 28.3%) and the point error holds (holdout watches 21.7 →
+ *  21.7%, live Sep 14 watches 22.7 → 21.2%), but 99 watch values move up to
+ *  the high confidence tier and the band under-covers (holdout watches 77.3 → 75.6%,
+ *  Phillips 77.4 → 73.3%). Still OFF until the high tier's band is fitted to
+ *  those lots. */
 export const USE_HOUSE_REFERENCE = false;
 // (Oct 6 2026 categorization re-audit) `reference` holds a printed reference
 // NUMBER only. A model-line name ("submariner", "tank", "royaloak" — 6.8k

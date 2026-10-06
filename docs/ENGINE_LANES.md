@@ -517,3 +517,46 @@ The lift fixes the mean (bias goes to 1.0) but not the median. The residuals abo
 **The Phillips deep backfill (report only, no crawl run).** The 5 tracked watch makers' maker-API histories hold 10,715 Phillips lots. The corpus has 4,926 of them, and none yet carries `houseReference`, because the nightly crawler with the field has not run. `PHILLIPS_DEEP=1` walks every page of every Phillips maker, art included, instead of the nightly 2 pages. For watches it would add about 5,800 lots: Patek Philippe 3,526 (the corpus has 269), Rolex 1,682, Cartier 579. They come from Geneva (2,161), Hong Kong (2,782) and New York (846) sales, and 5,032 of them carry a reference. Wave 7 measured `USE_HOUSE_REFERENCE` only on back-stamped existing rows (Phillips 24.1 → 24.3%). The deeper Patek pools are the case it never tested. Order: run the deep crawl once, let normalize stamp the references, then re-run `engine-ab.ts` with the reader on vs off before flipping it. Flipping it before the backfill is the wave-7 result again.
 
 Harness additions: `engine-ab.ts` takes `--to` (a training window) and `--a wave7`; `comp-precision.ts` takes `--a wave7`; `live-ab.ts` rows carry `bw` / `cm` / `ca` / `n`, and `--pools` adds the pool ids and title. Tests: `scripts/__tests__/pricing-wave8.test.ts`.
+
+## 20 · OCT 6 2026 PRICING WAVE 9 — the Phillips reference after the deep backfill (no engine change; `2026.10.06-wave7` stays)
+
+**Why.** Wave 7 measured `USE_HOUSE_REFERENCE` on 826 back-stamped rows and found it flat. The deep backfill has now landed (corpus `versions/20261006T162315Z`): 17,336 Phillips rows, 16,043 of them sold, and 9,491 carry `houseReference` (Rolex 3,968, Patek Philippe 3,610, Audemars Piguet 996, Omega 521, Cartier 396). With the flag off, normalize keys almost none of them: 27 Phillips sales sit in the watch repeat-sale pool.
+
+**The field is sound.**
+- Format. `readHouseReference` reads 9,423 of 9,491 fields (99.3%) and keys them with the title reader's core (`splitWatchRef`), so no new key: "5711/1A-010" → 5711/1, the same key as a title "Ref. 5711/1A"; "5100P-001" → 5100; "3970EP-019" → 3970; "26300ST.OO.1110ST.08" → 26300; Rolex suffixes stay ("126710BLNR" → 126710blnr), as on the title path; Omega's six-part numbers stay whole. The 68 misses are multi-watch fields ("Blue: 6127G-010; Violet: …"), typos ("154120R.YG…"), glued suffixes ("11659912SA") and 3-digit Rolex numbers.
+- Agreement. Phillips titles print a reference on 5 of these rows. 2 agree; the other 3 are the title reader taking the plural "reference 5004s" as 5004s. Across houses, 92.5% of house keys match a reference another house printed (Rolex 97.0%, Patek 96.0, AP 85.0, Omega 74.9, Cartier 55.2). A Phillips sale sits a median 40.0% from the other houses' median for the same key (±3 years, 6,885 sales); a random key of the same maker sits 251%.
+
+**Measured** (corpus-normalize flag off vs on, same corpus; the Sep 14 / Sep 24 books get the field copied by id and the backfilled Phillips sales dated before the book, then each arm's normalize re-derives the references):
+
+| | off | on |
+|---|---|---|
+| holdout all: values / medErr / band | 5,888 / 31.2% / 76.6% | 5,937 / 31.1% / 76.3% |
+| holdout watches, same 1,002 lots: medErr / mean abs log / bias / band / log width | 21.7% / 0.267 / 1.041 / 77.3% / 0.80 | 21.7% / 0.265 / 1.035 / 75.6% / 0.77 |
+| holdout watches changed (315, 227 Phillips): medErr / band | 19.6% / 80.0% | 18.6% / 74.6% |
+| holdout Phillips watches, same 345: medErr / band | 21.2% / 77.4% | 21.6% / 73.3% |
+| holdout Christie's 298 / Sotheby's 229 / Bonhams 130 | 21.7 / 20.7 / 26.5% | 21.2 / 20.3 / 26.8% |
+| holdout Rolex 322 / Patek 480 / AP 79 / Cartier 94 / Omega 27 | 20.7 / 20.0 / 25.6 / 31.3 / 43.2% | 20.2 / 20.0 / 25.6 / 31.3 / 44.4% |
+| live Sep 14 watches: values / medErr / bias / band | 124 / 22.7% / 1.07 / 80% | 129 / 21.2% / 1.03 / 80% |
+| live Sep 14 changed (25, all Sotheby's watches): medErr / ±30% / bias / band | 23.3% / 64% / 0.97 / 76% | 17.9% / 60% / 0.90 / 72% |
+| live Sep 24 (303 values, 4 watches) | 16.2% | 16.2% (nothing changed) |
+
+The on arm added 52 holdout watch values at 26.1% and withdrew 3.
+
+**Comp precision.** The judged comp set (`comp-precision.ts`) holds 7 watch lots and 4 Phillips lots (none watches), and it is identical on and off. The new `oneoff/qa/watch-ref-precision.ts` scores every served pool by reference identity instead. It covers the 2,695 watch lots sold since 2025-10-01 whose true reference is known.
+- Phillips (947 lots): values 647 → 731. Pool comps carrying a different reference: 61.7 → 26.1%; on the 643 both arms value, 61.5 → 28.3%. Median error against the hammer on those 643: 21.9 → 22.4% (Rolex 22.2 → 23.0, Patek 21.0 → 21.5, AP 20.6 → 17.7%).
+- Other houses (1,159 both valued): cross-reference comps 3.1 → 2.7%, error 21.7 → 21.5%.
+
+**Why it stays off.** The reference fixes the pools, and the point error holds or improves everywhere except Phillips' own lots. The band is the problem. Exact-reference pools promote 99 changed watch values to the high confidence tier (65 from medium, 34 from low). The high tier's band already under-covers watches (72.6% off, 71.0% on). On Phillips lots, the error does not shrink to match: same-lot band coverage drops 4.1pt and the width 9%. The holdout watch band drops 1.7pt, and wave 7 was the band-coverage wave. Next: fit the high-tier watch band to these lots (or hold Phillips house-reference values at their pre-flag tier for the band), then re-run this A/B. The A/B needs only a second code root with `USE_HOUSE_REFERENCE = true`.
+
+**What the backfill alone did (flag off).** Pre-backfill corpus (`versions/20261006T145723Z`) vs the backfilled one, holdout: watch values 861 → 1,005, medErr 21.8 → 21.7%, band 79.0 → 77.3%. Phillips watch values went 200 → 347 at 22.4 → 21.2%; Sotheby's 19.9 → 20.7%. On the 607 lots both value, 22.7 → 22.9%. Against wave 7's numbers (watches 830 at 21.6%, band 78.9%; Phillips' valued lots 24.1%), Phillips is better and watches overall are level. Live Sep 14 (snapshot vs snapshot + backfill): watches 120 → 124 values, 23.5 → 22.7% (mean abs log 0.270 → 0.274). Sep 24: 3 → 4 watch values.
+
+**The watch index.** The repeat-sale block (build-market `buildVerticalRepeatSale`) does not become publishable either way. Every horizon fails the endpoint-sensitivity gate:
+
+| | pairs / objects | 1Y shift vs CI | 3Y | 5Y |
+|---|---|---|---|---|
+| off (pre- and post-backfill alike) | 20,275 / 3,204 | 12.9 vs 11.3pt | 13.3 vs 12.4 | 27.4 vs 14.3 |
+| on | 23,350 / 3,610 | 13.7 vs 10.4pt | 20.6 vs 11.7 | 21.0 vs 13.1 |
+
+Gates unchanged.
+
+Harness additions: `oneoff/qa/watch-ref-precision.ts` (reference-identity comp precision, run from a flag-off and a flag-on code root).
