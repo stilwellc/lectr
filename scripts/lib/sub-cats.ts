@@ -204,7 +204,10 @@ export function subCatOf(l: Lot, sportMaps?: { byPid: Map<string, string>; byPla
   if (vert === 'tcg') {
     // Pokémon's own axis: product form (sealed wax vs singles), era drill by
     // the leading year Goldin titles always carry ("1998 Pokemon Japanese …").
-    const subCat = /\b(booster|sealed|box(es)?|packs?|case|display)\b/i.test(title) ? 'pokemon-sealed' : 'pokemon-cards';
+    // a card NUMBER makes it a single, whatever product it was pulled from
+    // ("Stamp Box Full Art #227 Pikachu", "Card Pack 25th Anniversary #006",
+    // "Collector Chest Holo #SM226") — 1.2k singles were filed sealed
+    const subCat = !/#\s?[A-Za-z0-9]/.test(title) && /\b(booster|sealed|unopened|box(es)?|packs?|case|display|tins?|blister|bundle|elite trainer)\b/i.test(title) ? 'pokemon-sealed' : 'pokemon-cards';
     const y = (title.match(/\b(19|20)\d{2}\b/) || [])[0];
     const yr = y ? parseInt(y, 10) : null;
     const drill = yr ? (yr <= 2002 ? 'vintage' : yr <= 2016 ? 'classic' : 'modern') : null;

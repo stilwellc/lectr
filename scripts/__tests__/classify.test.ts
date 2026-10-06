@@ -278,3 +278,15 @@ test('class 12 · culture mass leaks: graded tapes, sealed boxes, toys, non-spor
   assert.equal(C('The Beatles Remote View Ticket Stub - 1st U.S. Concert El Portal Theatre - PSA EX-MT 6(MK)'), 'entertainment-memorabilia');
   assert.equal(C('THE INVISIBLE MAN, UNIVERSAL, 1933', 'movie-tv', "Christie's"), 'movie-tv');
 });
+
+test('class 13 · Pokémon: a card number makes a single; other TCGs evicted', () => {
+  const K = (title: string) => subCatOf({ artist: 'pokemon', title }).subCat;
+  assert.equal(K('2021 Pokemon Japanese Promo Pokemon Stamp Box Full Art #227 Pikachu - PSA GEM MT 10'), 'pokemon-cards');
+  assert.equal(K('2021 Pokemon Japanese Sword/Shield Eevee Heroes Strength Expansion Pack #71 Leafeon V - BGS GEM MINT 9.5'), 'pokemon-cards');
+  assert.equal(K('2016 Pokemon Japanese Sun & Moon Promo Full Art Special Box Pretend Grunt Pikachu #013 Pretend Team Skull Pika'), 'pokemon-cards');
+  assert.equal(K('1999 Pokemon Base Set Unopened Foil Pack PSA NM-MT 8 - Charizard Art'), 'pokemon-sealed');
+  assert.equal(K('2025 Pokemon Scarlet & Violet Prismatic Evolutions Elite Trainer Box - Factory Sealed'), 'pokemon-sealed');
+  assert.equal(move({ auctionHouse: 'Goldin', artist: 'pokemon', title: '2003 Yu-Gi-Oh! MFC Magician\'s Force #107 Diffusion Wave-Motion – PSA MINT 9' }), DROP);
+  assert.equal(move({ auctionHouse: 'Goldin', artist: 'pokemon', title: '2023 One Piece Promos Treasure Cup - Top 8 #ST01-013 Roronoa Zoro - PSA GEM MT 10' }), DROP);
+  assert.equal(move({ auctionHouse: 'Goldin', artist: 'pokemon', title: '1999 Pokemon Game #4 Charizard - PSA GEM MT 10' }), 'pokemon');
+});

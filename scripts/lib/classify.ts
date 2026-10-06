@@ -372,6 +372,17 @@ export function cultureMassFix(l: ClassifyLot): string | null {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 13 · POKÉMON IS THE ONE TCG — Yu-Gi-Oh / One Piece / Dragon Ball lots
+// rode the 'pokemon' slug in from mixed TCG sweeps. (Singles vs sealed is a
+// sub-cats.ts subCat fix.)
+// ═══════════════════════════════════════════════════════════════════════════
+export function pokemonOnlyFix(l: ClassifyLot): string | null {
+  if (l.artist !== 'pokemon') return null;
+  const t = String(l.title || '');
+  return NON_SPORT_TCG_RE.test(t) && !/pok[eé]mon/i.test(t) ? DROP : null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 2 · ART CATEGORY — Madoura ceramics and unique works filed as prints. The
 // crawler's print test ran before its ceramic test and five artists defaulted
 // to 'print' with no evidence; normalize never moved print → sculpture and
@@ -450,6 +461,7 @@ export const RECLASS_RULES: ReclassRule[] = [
   { cls: 'watch-jewelry-tudor', apply: watchMakerFix },
   { cls: 'art-design-attribution', apply: attributionFix },
   { cls: 'culture-mass-leaks', apply: cultureMassFix },
+  { cls: 'pokemon-only-tcg', apply: pokemonOnlyFix },
 ];
 
 /** Category rules: same contract, but they return the corrected CATEGORY. */
