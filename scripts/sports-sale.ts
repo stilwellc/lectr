@@ -36,11 +36,7 @@ export function isSportsSale(slug: string): boolean {
 
 import { isCardTitle, sportsObjectKind } from './lib/classify';
 
-const CARD_MAKERS = /\b(topps|panini|bowman|upper deck|fleer|donruss|goudey|leaf|o-pee-chee|rookie card|trading card|tobacco (card|silk))\b/i;
 const NON_SPORT_TCG = /\bpok[eé]mon\b|yu-?gi-?oh|magic the gathering|\bmtg\b/i;
-const GAME_USED = /\b(game[- ](used|worn|issued)|match[- ](used|worn)|player[- ]worn|team[- ]issued|tour[- ](used|worn)|worn (jersey|uniform|cleats|boots|gloves|jacket|cap|shirt|kit)|game (bat|ball|jersey|uniform|glove|worn)|match[- ]worn (shirt|jersey|boots)|bat used|ball used)\b/i;
-const TROPHY = /\b(trophy|championship (ring|trophy|belt|pennant)|title belt|winners? medal|olympic (medal|torch)|world series (ring|trophy)|super bowl ring|mvp award|heisman|vince lombardi|stanley cup|green jacket|lombardi trophy|\bmedal\b|championship pennant)\b/i;
-const TICKET = /\b(ticket|stub|full ticket|season pass|press pass|all[- ]access (pass|credential)|programme?|scorecard|score card|score book)\b/i;
 
 /** Route a lot KNOWN to be from a sports sale → a sports vertical slug, or null
  *  to drop (non-sport TCG). Everything sport that isn't a specific object type
