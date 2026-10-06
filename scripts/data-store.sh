@@ -419,7 +419,7 @@ prune() { # keep the newest N versions/ prefixes (default 14), delete the rest.
 # ── SEGMENTS: per-house corpus slices for the staged nightly. Each crawl job
 # pull/push-es ONE segment (isolated); assemble pulls them all. R2 key:
 # latest/segments/<name>.ndjson.gz. A pull miss (new segment) is non-fatal.
-SEGMENTS="goldin sothebys christies bonhams phillips wright rrauction rrauction-archive other"
+SEGMENTS="goldin sothebys christies bonhams phillips wright rrauction rrauction-archive other juliens propstore"
 seg_etag_file() { echo "data/corpus/segments/.$1.pulled-etag"; }
 seg_stats_file() { echo "data/corpus/segments/.$1.pulled-stats.json"; }
 seg_gate() { # stats <file> | check <house> <prev-stats> <file>  (scripts/ci/segment-gate.ts)
@@ -741,20 +741,56 @@ for o in json.load(sys.stdin).get('result', []):
 # assemble's segment intake: this run's crawl handoff first (immediately
 # consistent), else the R2 last-good (`other`, rrauction-archive, a failed
 # or skipped leg). Parallel: worst case is one GET-lag window, not N.
-assemble_segments() { # houses…
+#
+#   assemble-segments <crawl house…> [--archive <archive segment…>]
+#
+# ARCHIVE-ONLY SEGMENTS (Oct 5 2026 — juliens, propstore; the list lives in
+# nightly.yml and scripts/lib/house-status.ts ARCHIVE_SOURCES, kept in step by
+# scripts/__tests__/archive-segments.test.ts; rrauction-archive + other ride
+# the same path):
+# sold-only history written by a backfill (backfill-struts-wayback.yml). No
+# crawl leg, so no handoff is looked for. Present in R2 → assembled as
+# last-good. CONFIRMED ABSENT (the bucket listing answered and the key is not
+# there, e.g. before the first backfill push) → logged and skipped, rc 0: an
+# archive that does not exist yet must never cost the night's publish.
+# UNREACHABLE (listed but unreadable, or a listing that will not answer) stays
+# FATAL exactly as for a crawl house — silently dropping a house's whole
+# history is the failure the bucket-listing authority exists to prevent.
+#
+# Crawl houses keep their rc semantics unchanged (pull_segment's rules: an
+# unreachable segment fails, a confirmed-absent one has always passed with no
+# rows). Only the .source marker is now honest — 'absent' (was mislabelled
+# 'last-good') vs 'unavailable' (was mislabelled 'absent') — and a crawl house
+# that contributes no segment at all now raises a ::warning.
+assemble_segments() { # houses… [--archive archives…]
   mkdir -p data/corpus/segments
-  local h pids="" rc=0 p
+  local h pids="" rc=0 p kind=crawl
   for h in "$@"; do
+    if [ "$h" = "--archive" ]; then kind=archive; continue; fi
     (
       # .<house>.source records WHERE tonight's segment came from — the house
       # ledger (scripts/emit-status.ts) counts only a 'handoff' as a fresh crawl
-      hrc=0; src="data/corpus/segments/.$h.source"
-      if [ -n "${GITHUB_RUN_ID:-}" ]; then handoff_get "segment-$h" "data/corpus/segments/$h.ndjson.gz" || hrc=$?; else hrc=3; fi
-      if [ "$hrc" -eq 0 ]; then echo "[data-store] segment $h fresh from this run's crawl"; echo handoff > "$src"; exit 0; fi
-      [ "$hrc" -ne 3 ] && echo "[data-store] WARNING: segment $h handoff unreadable (rc $hrc) — falling back to R2 last-good"
+      hrc=3; src="data/corpus/segments/.$h.source"; f="data/corpus/segments/$h.ndjson.gz"
+      if [ "$kind" = crawl ]; then
+        if [ -n "${GITHUB_RUN_ID:-}" ]; then hrc=0; handoff_get "segment-$h" "$f" || hrc=$?; fi
+        if [ "$hrc" -eq 0 ]; then echo "[data-store] segment $h fresh from this run's crawl"; echo handoff > "$src"; exit 0; fi
+        [ "$hrc" -ne 3 ] && echo "[data-store] WARNING: segment $h handoff unreadable (rc $hrc) — falling back to R2 last-good"
+      fi
       SEGMENT_STATS=0   # subshell-local: assemble never pushes, skip the gate baseline
-      if pull_segment "$h"; then echo last-good > "$src"; exit 0; fi
-      echo absent > "$src"; exit 1
+      if pull_segment "$h"; then
+        if [ -s "$f" ]; then echo last-good > "$src"; exit 0; fi
+        # pull_segment returns 0 on a CONFIRMED-absent key (listing answered)
+        echo absent > "$src"
+        if [ "$kind" = archive ]; then
+          echo "[data-store] archive segment $h absent in R2 — skipped tonight (nothing pushed to it yet)"
+        else
+          echo "::warning title=segment $h absent::no handoff and no R2 segment for crawl house $h — it contributes no rows tonight"
+        fi
+        exit 0
+      fi
+      echo unavailable > "$src"
+      if [ "$kind" = archive ]; then echo "[data-store] ERROR: archive segment $h is in R2 but could not be read — refusing to assemble without it"; fi
+      exit 1
     ) & pids="$pids $!"
   done
   for p in $pids; do wait "$p" || rc=1; done
@@ -960,5 +996,5 @@ case "${1:-}" in
   push-ledger) test -s data/qa/house-ledger.json && obj_put "latest/house-ledger.json" "data/qa/house-ledger.json" || echo "[data-store] no house ledger to push" ;;
   put-gate-report) put_gate_report "${2:-data/qa/validate-engine.json}" ;;
   pull-gate-reports) pull_gate_reports "${2:-data/qa/gate-reports}" "${3:-30}" ;;
-  *) echo "usage: $0 pull|push|pull-version <versions/…> [served-only]|push-segment <name>|pull-segment <name>|pull-segments|assemble-segments <house…>|pull-meta|pull-backtest|push-backtest|prune [keep=14]|handoff-put <name> <path>|handoff-get <name> <dest>|handoff-clean|handoff-prune [days=2]|pin-fixture|pull-fixture [key]|list-segment-versions <house>|restore-segment <house> <date>|prune-segment-versions [days=30] [keep=3]|restore-drill <house> [date]|pull-ledger|push-ledger|put-gate-report [file]|pull-gate-reports [dir] [n=30]  (env: DATA_PUSH_FORCE=1, SEGMENT_PUSH_FORCE=1, SEGMENT_SHRINK_OK=1, DATA_FRESH_ALLOW_STALE=1, RESTORE_PREFIX=)"; exit 1 ;;
+  *) echo "usage: $0 pull|push|pull-version <versions/…> [served-only]|push-segment <name>|pull-segment <name>|pull-segments|assemble-segments <house…> [--archive <segment…>]|pull-meta|pull-backtest|push-backtest|prune [keep=14]|handoff-put <name> <path>|handoff-get <name> <dest>|handoff-clean|handoff-prune [days=2]|pin-fixture|pull-fixture [key]|list-segment-versions <house>|restore-segment <house> <date>|prune-segment-versions [days=30] [keep=3]|restore-drill <house> [date]|pull-ledger|push-ledger|put-gate-report [file]|pull-gate-reports [dir] [n=30]  (env: DATA_PUSH_FORCE=1, SEGMENT_PUSH_FORCE=1, SEGMENT_SHRINK_OK=1, DATA_FRESH_ALLOW_STALE=1, RESTORE_PREFIX=)"; exit 1 ;;
 esac

@@ -22,29 +22,3 @@ export default function SectionMark({ n, align = 'left', style }: SectionMarkPro
   void n; void align; void style;
   return null;
 }
-
-function SectionMarkRetired({ n, align = 'left', style }: SectionMarkProps) {
-  return (
-    <span
-      aria-hidden="true"
-      className="section-mark"
-      style={{
-        position: 'absolute',
-        top: '50%',
-        transform: 'translateY(-50%)',
-        left: align === 'left' ? 0 : 'auto',
-        right: align === 'right' ? 0 : 'auto',
-        fontFamily: 'var(--font-serif)',
-        fontWeight: 300,
-        fontSize: 'clamp(8rem, 18vw, 16rem)',
-        lineHeight: 0.8,
-        pointerEvents: 'none',
-        userSelect: 'none',
-        zIndex: 0,
-        ...style,
-      }}
-    >
-      {n}
-    </span>
-  );
-}

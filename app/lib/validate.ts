@@ -138,7 +138,6 @@ export function assertInvariants(lots: AuctionLot[], now: number = Date.now()): 
   let formKeyNull = 0;
   let soldNoEstUsd = 0;
   let fingerprintNull = 0;
-  let sold = 0;
 
   for (const l of lots) {
     const id = l.id || '<no-id>';
@@ -146,7 +145,6 @@ export function assertInvariants(lots: AuctionLot[], now: number = Date.now()): 
 
     // ── FATAL 1 · a sold lot is a FACT ──────────────────────────────────────
     if (isSold) {
-      sold++;
       const rUsd = realizedUsdOf(l);
       if (!(typeof rUsd === 'number' && rUsd > 0)) {
         fatal.push(`[1] ${id}: sold lot has no realizedUsd>0 (got ${rUsd ?? 'null'})`);

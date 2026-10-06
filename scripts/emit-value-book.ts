@@ -335,7 +335,7 @@ export function buildValueBook(all: AuctionLot[]): ValueBook {
   // grade ladder + certified vertical indexes ride along from market.json —
   // Starling prices grade-adjacent cards (basis 'ladder') and shows trend.
   let gradeLadder: unknown = null;
-  let indexes: Record<string, unknown> = {};
+  const indexes: Record<string, unknown> = {};
   try {
     const mj = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'public', 'data', 'ray', 'market.json'), 'utf8'));
     if (mj.gradeLadder) gradeLadder = mj.gradeLadder;

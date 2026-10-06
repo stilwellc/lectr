@@ -118,7 +118,6 @@ export function writeCopy(p: Post): Copy {
       };
     }
     case 'board': {
-      const lead = p.lots[0];
       const x = [
         `${p.liveCount} lots on the block are priced under their comparables tonight. Six of them:`,
         p.lots.slice(0, 6).map(l => `${l.maker} — ${l.multiple} the ask`).join('\n'),

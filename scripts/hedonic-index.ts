@@ -139,7 +139,7 @@ function currentQuarter(now: Date): string {
 function shiftQuarter(period: string, k: number): string {
   const [ys, qs] = period.split('-Q');
   let y = +ys, q = +qs;
-  let total = y * 4 + (q - 1) - k;
+  const total = y * 4 + (q - 1) - k;
   y = Math.floor(total / 4);
   q = (total % 4) + 1;
   return `${y}-Q${q}`;
@@ -491,7 +491,7 @@ function horizonLogSE(h: HedonicHorizon): number | null {
  *  uncapped, until no weight exceeds the cap. */
 function cappedWeights(raw: Map<string, number>): Map<string, number> {
   const total = Array.from(raw.values()).reduce((a, b) => a + b, 0) || 1;
-  let w = new Map(Array.from(raw.entries()).map(([k, v]) => [k, v / total]));
+  const w = new Map(Array.from(raw.entries()).map(([k, v]) => [k, v / total]));
   for (let iter = 0; iter < 50; iter++) {
     const over = Array.from(w.entries()).filter(([, v]) => v > COMPOSITE_WEIGHT_CAP + 1e-9);
     if (!over.length) break;
@@ -505,7 +505,7 @@ function cappedWeights(raw: Map<string, number>): Map<string, number> {
   return w;
 }
 
-export function buildComposite(inputs: CompositeInput[], marketSlugCount: number, now: Date = new Date()): CompositeResult {
+export function buildComposite(inputs: CompositeInput[], marketSlugCount: number, _now: Date = new Date()): CompositeResult {
   const notPub = (reason: string, components: CompositeComponent[] = []): CompositeResult =>
     ({ series: [], seriesEqualWeight: [], horizons: emptyHorizons(reason), components, method: COMPOSITE_METHOD, publishable: false, reason });
 

@@ -49,6 +49,65 @@ export function houseAllInFactor(house: string | null | undefined, hammerUsd?: n
   return FLAT[house] ?? 1.25;
 }
 
+/** ERA-DATED premium schedules (Oct 5 2026) — houses whose buyer's premium
+ *  changed over the years the corpus spans. [first saleDate (YYYY-MM-DD) the
+ *  rate applies to, factor], ascending; a saleDate before the first entry takes
+ *  the first rate.
+ *
+ *  REA (183k rows, 2004 → today, NO stamped buyerPremiumPct/hammer). MEASURED
+ *  on the corpus by increment quantization: for every sold REA row ≥ $1,000,
+ *  the share whose price ÷ factor is a round flat bid increment is ~100% for
+ *  exactly ONE factor per sale and ~0% for the neighbours (≥ 85% where the
+ *  remainder are off-ladder bids), with clean break points between sales:
+ *    2004 (Apr)                  1.15   100%
+ *    2005 – 2006                 1.16   100%
+ *    2007 – 2011                 1.175  100%
+ *    2012 – Spring 2014 (Apr)    1.185  100%
+ *    Fall 2014 (Oct) – Jul 2025  1.20   85–100%
+ *    Sep 2025 → today            1.23   79–90%
+ *  CONFIRMED against REA's published terms ("A N% buyer's premium will be
+ *  added to all winning bids" — one flat rate, no card/cash variant; checked
+ *  Oct 5 2026 on Wayback captures):
+ *    15%   web.archive.org/web/20040302013238/http://www.robertedwardauctions.com/site/terms.asp
+ *    16%   web.archive.org/web/20051109084900/http://www.robertedwardauctions.com/site/terms.asp
+ *    17.5% web.archive.org/web/20071009013020/http://bid.robertedwardauctions.com/terms.aspx
+ *    18.5% web.archive.org/web/20120511121233/http://bid.robertedwardauctions.com/terms.aspx
+ *          (still 18.5% at …/20140407193704/…/terms.aspx)
+ *    20%   web.archive.org/web/20150301124756/http://bid.robertedwardauctions.com/terms.aspx
+ *          (… through …/20250801160420/https://bid.collectrea.com/terms-and-conditions)
+ *    23%   web.archive.org/web/20251006210043/https://bid.collectrea.com/terms-and-conditions
+ *          effective Sep 1 2025 (REA customer notice, reported by postwarcards.com).
+ *  The capture dates lag the changes; the boundaries below are the sale
+ *  seasons the corpus quantization pins (Spring 2014 = 18.5, Fall 2014 = 20).
+ *
+ *  USED BY the price-bleed sentinel's honesty test (scripts/assemble.ts
+ *  computeSentinel): the 29+ standing REA "poison" signatures were real flat
+ *  increments × the OLDER premiums that the flat 1.175 could not see. NOT
+ *  (yet) wired into lotAllInFactor/inferHammerUsd — that moves the engine's
+ *  hammer basis for REA (flat 1.175 under-reads 2014+ hammers by 2–5%) and is
+ *  the engine owner's call. */
+export const DATED_PREMIUMS: Record<string, Array<[string, number]>> = {
+  REA: [
+    ['0000-01-01', 1.15],
+    ['2005-01-01', 1.16],
+    ['2007-01-01', 1.175],
+    ['2012-01-01', 1.185],
+    ['2014-07-01', 1.20],
+    ['2025-09-01', 1.23], // REA's stated effective date
+  ],
+};
+
+/** The house's premium factor AT a sale date: the era schedule when the house
+ *  has one and the date parses, else houseAllInFactor (same as undated). */
+export function houseAllInFactorAt(house: string | null | undefined, hammerUsd: number | null | undefined, saleDate: string | null | undefined): number {
+  const eras = house ? DATED_PREMIUMS[house] : undefined;
+  const d = typeof saleDate === 'string' ? saleDate.slice(0, 10) : '';
+  if (!eras || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return houseAllInFactor(house, hammerUsd);
+  let f = eras[0][1];
+  for (const [from, factor] of eras) if (d >= from) f = factor;
+  return f;
+}
+
 /** The factor for a specific lot: its own stamped premium wins, then the house
  *  schedule. `usd` disambiguates the tiered houses' band. */
 export function lotAllInFactor(lot: { auctionHouse?: string | null; buyerPremiumPct?: number | null }, usd?: number | null): number {

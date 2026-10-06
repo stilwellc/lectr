@@ -1035,7 +1035,6 @@ export default function ValuePage() {
       }, 440));
     }
     flipPos.current = next;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flipKey]);
 
   // the five dials — three of them (hammer, record, coverage) are corpus/

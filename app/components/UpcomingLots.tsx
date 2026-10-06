@@ -19,7 +19,6 @@ export default function UpcomingLots({
   lots,
   showArtist = false,
   allLots = [],
-  stats,
   savedIds = [],
   onToggleSave,
   mark,

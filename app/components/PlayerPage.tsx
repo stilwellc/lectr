@@ -67,18 +67,16 @@ export function displayName(raw: string): string {
 // cache contract: it clears on the next mount so one flaky fetch never bricks
 // every /player page for the whole session (RefPage's exact pattern).
 let cache: PlayerEntry[] | null = null;
-let failed = false;
 function usePlayers(): { players: PlayerEntry[] | null; failed: boolean } {
   // fresh mounts start un-failed — the effect below retries the fetch
   const [state, setState] = useState({ players: cache, failed: false });
   useEffect(() => {
     if (cache) return;
-    failed = false; // retry on every fresh mount — never a permanent latch
     let dead = false;
     fetch('/data/ray/players.json')
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then(j => { cache = j.players || []; if (!dead) setState({ players: cache, failed: false }); })
-      .catch(() => { failed = true; if (!dead) setState({ players: null, failed: true }); });
+      .catch(() => { if (!dead) setState({ players: null, failed: true }); });
     return () => { dead = true; };
   }, []);
   return state;

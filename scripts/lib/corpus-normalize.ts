@@ -430,6 +430,33 @@ export function deriveRRAuctionUrls(lots: Lot[]): number {
   return n;
 }
 
+/* ── CHRISTIE'S DEAD SSO LINKS (Oct 5 2026) — Christie's lot links come in two
+   `sso` shapes, and only one of them works:
+     · https://onlineonly.christies.com/sso?ObjectID=<sale>.<lot>&LotNumber=<lot>
+       is a LIVE permalink: it 301s to the slugged lot page (verified Oct 5
+       2026 on 7/7 sampled rows, 2018 → 2026 sales, e.g. 24969.26 →
+       /s/breaking-ground-…/andy-warhol-1928-1987-26/324583). resolve-christies.ts
+       relies on it. Kept.
+     · https://www.christies.com/en/sso?ObjectID=…  (the www host, any /<lang>/sso
+       or bare /sso path) is a DEAD link: a 404 on www (verified on all 4 corpus
+       rows, the 2012 "50 Years of James Bond" online sale 4431). No real url is
+       derivable: the onlineonly host bounces that ObjectID to "/" and the row's
+       numeric id (christies-auc-5602497 → /en/lot/lot-5602497) 302s to the
+       calendar. So the url is NULLED — a lot must never link to a dead sso page.
+   Idempotent; never touches a Christie's url of any other shape. */
+const CHRISTIES_DEAD_SSO = /^(?:https?:\/\/(?:www\.)?christies\.com)?\/(?:[a-z]{2}\/)?sso(?:[?#]|$)/i;
+export function nullDeadChristiesSsoUrls(lots: Lot[]): number {
+  let n = 0;
+  for (const l of lots) {
+    const w = l as { url?: string | null; auctionHouse?: string };
+    if (!w.url || (w.auctionHouse !== "Christie's" && w.auctionHouse !== 'Christies')) continue;
+    if (!CHRISTIES_DEAD_SSO.test(String(w.url).trim())) continue;
+    w.url = null;
+    n++;
+  }
+  return n;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    DATA-QUALITY PASSES (Sep 27 2026 audit, scratchpad audit-data/). Every rule
    below was measured on the served corpus (626k rows) before it was written;
@@ -863,6 +890,8 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   attachExtractions(ls);
   const rrUrls = deriveRRAuctionUrls(ls);
   if (rrUrls) console.log(`[normalize] rrauction url backfill: ${rrUrls} lots derived from id (lot-detail/<lotId>)`);
+  const deadSso = nullDeadChristiesSsoUrls(ls);
+  if (deadSso) console.log(`[normalize] christie's dead www /sso urls nulled: ${deadSso}`);
   const rrStubs = dropRRStubRows(ls);
   const mirrorDupes = dedupeWrightFamilyMirrors(ls);
   // the Sep 27 dedupe family (next to the Wright mirrors — same compaction):

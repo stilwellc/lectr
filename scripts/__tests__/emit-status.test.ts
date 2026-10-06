@@ -96,7 +96,8 @@ test('buildStatus: THE CONTRACT — fields, signal ok vs degraded, staleHidden',
     now: T0, houses: ['goldin', 'hakes'], ledger, runId: '99', engineVersion: 'v1', engineSignal: 'validated',
     stats: { goldin: { rows: 10, sold: 8, live: 2, hiddenLive: 0, lastSaleDate: '2026-10-02' }, hakes: { rows: 5, sold: 0, live: 0, hiddenLive: 5, lastSaleDate: null } },
   });
-  assert.deepEqual(Object.keys(s).sort(), ['generatedAt', 'houses', 'publish']);
+  assert.deepEqual(Object.keys(s).sort(), ['archives', 'generatedAt', 'houses', 'publish']);
+  for (const a of s.archives) for (const k of ['house', 'label', 'kind', 'present', 'rows', 'sold', 'lastSaleDate']) assert.ok(k in a, `archives[].${k}`);
   for (const k of ['lastPublishedAt', 'runId', 'engineVersion', 'signal']) assert.ok(k in s.publish, `publish.${k}`);
   for (const h of s.houses) for (const k of ['house', 'asOf', 'lastSaleDate', 'live', 'ok', 'reason', 'staleHidden']) assert.ok(k in h, `houses[].${k}`);
   const g = s.houses.find(h => h.house === 'goldin')!;

@@ -276,7 +276,7 @@ function fitBMN(pairs: Pair[], minQuarterPairs: number, ridge: number, gls: bool
     const B = Matrix.columnVector(Array.from(DtWr));
     const beta = solveSPD(A, B).to1DArray();
     // residuals + robust-ish σ² (weighted RSS / dof)
-    let wrss = 0, wsum = 0;
+    let wrss = 0;
     const resid = new Float64Array(usable.length);
     for (let i = 0; i < usable.length; i++) {
       const pr = usable[i];
@@ -284,7 +284,7 @@ function fitBMN(pairs: Pair[], minQuarterPairs: number, ridge: number, gls: bool
       const b1 = colOf.has(pr.q1) ? beta[colOf.get(pr.q1)!] : 0;
       const e = pr.r - (b2 - b1);
       resid[i] = e;
-      wrss += weights[i] * e * e; wsum += weights[i];
+      wrss += weights[i] * e * e;
     }
     const sigma2 = wrss / Math.max(usable.length - p, 1);
     const Ainv = pseudoInverse(A);

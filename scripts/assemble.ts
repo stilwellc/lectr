@@ -87,9 +87,14 @@ export function computeSentinel(
     lotAllInFactor: (lot: { auctionHouse?: string | null }, usd?: number | null) => number;
     isRoundIncrement: (h: number, tol?: number, ladder?: { pct: number; peers: Iterable<number> }) => boolean;
     BID_LADDER_PCT: Record<string, number>;
+    /** ERA-DATED premium (premiums.ts DATED_PREMIUMS, Oct 5 2026): when given,
+     *  the implied hammer divides by the house's premium AT the signature's
+     *  dominant saleDate — REA charged 15/16/17.5/18.5/20/23% across the years
+     *  the corpus spans, and an old price ÷ one flat factor never looked round. */
+    houseAllInFactorAt?: (house: string, usd: number, saleDate: string | null) => number;
   },
 ): SentinelSignature[] {
-  const { lotAllInFactor, isRoundIncrement, BID_LADDER_PCT } = premiums;
+  const { lotAllInFactor, isRoundIncrement, BID_LADDER_PCT, houseAllInFactorAt } = premiums;
   const sentinel: SentinelSignature[] = [];
   const byHouse = new Map<string, Map<number, Map<string, number>>>();
   const ladderCounts = new Map<string, Map<number, number>>();
@@ -117,7 +122,7 @@ export function computeSentinel(
     let n = 0, top = 0, topDate = '';
     d.forEach((c, dt) => { n += c; if (c > top) { top = c; topDate = dt; } });
     if (n >= 15 && top / n >= 0.6) {
-      const hammer = p / lotAllInFactor({ auctionHouse: h }, p);
+      const hammer = p / (houseAllInFactorAt && topDate !== '?' ? houseAllInFactorAt(h, p, topDate) : lotAllInFactor({ auctionHouse: h }, p));
       const pct = BID_LADDER_PCT[h];
       const honest = isRoundIncrement(hammer) || (!!pct && isRoundIncrement(p, 1, { pct, peers: ladderPeers.get(h) || [] }));
       sentinel.push({ house: h, price: p, n, top, topDate, hammer: Math.round(hammer * 100) / 100, honest });
@@ -258,6 +263,9 @@ async function main() {
   // (Sep 27 2026) the scan is computeSentinel() above; it now also knows the
   // 10% GEOMETRIC ladders at Lelands / Memory Lane / LOTG (BID_LADDER_PCT), so
   // those standing rungs read as honest ties instead of POISON (known/standing).
+  // (Oct 5 2026) and REA's premium ERAS (premiums.ts DATED_PREMIUMS): the 36
+  // standing REA signatures were flat increments × the 15/16/18.5% premiums of
+  // 2004-2013 that the flat 1.175 divided wrong — now honest; REA poison 36 → 0.
   let sentinel: SentinelSignature[] = [];
   {
     sentinel = computeSentinel(allLots as never, await import('../app/lib/premiums'));

@@ -352,9 +352,16 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           HOUSES: ${{ join(fromJSON(needs.plan.outputs.houses), ' ') }}
+        # --archive = segments with NO crawl leg (backfill-only history): no
+        # handoff is looked for, and one that is confirmed ABSENT in R2 is
+        # logged + skipped instead of warned (juliens/propstore before their
+        # first Wayback push). Unreadable-but-listed stays fatal for both kinds.
+        # juliens/propstore are also ARCHIVE_SOURCES in scripts/lib/house-status.ts
+        # (status.json "archives", never crawl health) — keep the lists in step
+        # (scripts/__tests__/archive-segments.test.ts checks).
         run: |
           read -r -a houses <<< "$HOUSES"
-          bash scripts/data-store.sh assemble-segments "${houses[@]}" rrauction-archive other
+          bash scripts/data-store.sh assemble-segments "${houses[@]}" --archive rrauction-archive other juliens propstore
       - name: Pull previous totals + backtest + house ledger (gate baselines + carried state)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
@@ -451,6 +458,7 @@ jobs:
       # Uploaded write-once under api/v/<version>/, pointer flipped LAST.
       # Best-effort: a failure keeps the API on the previous version.
       - name: Emit + push the lot-API index → R2
+        id: lotapi
         if: ${{ steps.push.outcome == 'success' }}
         continue-on-error: true
         timeout-minutes: 25
@@ -460,6 +468,11 @@ jobs:
         run: |
           NODE_OPTIONS=--max-old-space-size=12288 npx tsx scripts/emit-r2-index.ts --served public/data/ray --corpus data/corpus --out data/r2-api
           bash scripts/r2-api-push.sh data/r2-api
+      - name: Warm the lot API
+        if: ${{ steps.lotapi.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 8
+        run: npx tsx scripts/r2/warm-api.ts --out data/r2-api --base https://lectr.bid --wait 300
       # The ledger is CRAWL truth, independent of publish: persist it even on a
       # night assemble failed, so tomorrow's stale clock is right.
       - name: Persist the house ledger → R2

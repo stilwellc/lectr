@@ -30,7 +30,7 @@ const MONTHS = /^(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\.?$/i;
 
 function recoverPlayerSlug(title: string): string | null {
   let s = cleanGoldinTitle(title || '');
-  s = s.replace(/[‘’'“”"|].*$/s, ' ').trim();
+  s = s.replace(/[‘’'“”"|][\s\S]*$/, ' ').trim();
   // drop leading " - " prefix segments ONLY when short (≤5 tokens) and date/event-like
   const segs = s.split(/\s+-\s+/);
   let si = 0;
@@ -72,7 +72,7 @@ const guUp = upcoming.filter(l => l.artist === 'game-used');
 const idCache = new Map<string, string | null>();
 function idOf(l: AuctionLot): string | null {
   let v = idCache.get(l.id);
-  if (v === undefined) { v = recoverPlayerSlug(l.title || '') || (l as any).playerSlug || null; idCache.set(l.id, v); }
+  if (v === undefined) { v = (recoverPlayerSlug(l.title || '') || (l as any).playerSlug || null) as string | null; idCache.set(l.id, v); }
   return v;
 }
 
@@ -154,7 +154,7 @@ for (const gate of ['sportsForm', 'objectType'] as const) {
 // tighter jersey purity probe: within identity+jersey pools, how much does the
 // wide 'jersey' key mix eras? measure spread of pools pre-guard
 const spreads: number[] = [];
-for (const [id, n] of soldIdCount) {
+for (const [id, n] of Array.from(soldIdCount)) {
   if (n < 3) continue;
   const rows = guSold.filter(l => idOf(l) === id && (l.objectType ?? 'other') === 'jersey');
   if (rows.length < 3) continue;

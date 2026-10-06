@@ -25,10 +25,11 @@ Most write-capable scripts are report-only unless given `--write` / `--commit`.
 
 `qa/` is excluded from `tsc` (see tsconfig.json), so files here may drift from
 the live engine APIs. Files that no longer typechecked and that nothing
-referenced were deleted on Sep 28 2026; the ones that remain but fail `tsc`
-(`classification-normalize-spec`, `culture-lib`, `design-gates`,
+referenced were deleted on Sep 28 2026. The eight that are cited by docs or
+code comments (`classification-normalize-spec`, `culture-lib`, `design-gates`,
 `game-used-final`, `game-used-fix4`, `repeat-sale-equiv`, `watches-backtest`,
-`watches-backtest2`) are cited by docs or code comments — fix before re-running.
+`watches-backtest2`) had their types fixed on Oct 5 2026 (ES5-target iteration,
+dotAll regex, narrowing) and typecheck again; they stay excluded all the same.
 
 - **Plans / status write-ups:** `JULIENS_PROPSTORE_PLAN.md`, `MEMORYLANE_HEAL_STATUS.md`, `sports-expansion-recon.md`, `audit-*.md`, `data-engine-audit-2026-08.md`, `engine-value-audit-2026-08.md`.
 - **Generators for committed app data:** `gen-coverage.ts` (app/about/coverage.json), `gen-distribution.ts`, `gen-proof-comps.ts` (app/about/proof-cases.json), `deep-value.ts`.

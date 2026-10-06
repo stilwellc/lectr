@@ -141,9 +141,9 @@ function report(rows: any[], base: Map<string, any>, name: string) {
   console.log(`${name}: reads=${rows.length} medAbsErr=${median(errs).toFixed(3)} below=${below.length} belowWin=${(100*win.length/below.length).toFixed(0)}%`);
   if (base.size) {
     const cur = new Map(rows.map(r=>[r.id, r]));
-    const lost=[...base.keys()].filter(i=>!cur.has(i));
+    const lost=Array.from(base.keys()).filter(i=>!cur.has(i));
     const gained=rows.filter(r=>!base.has(r.id));
-    const changed=[...base.keys()].filter(i=>cur.has(i) && Math.abs(base.get(i).err-cur.get(i)!.err)>1e-9);
+    const changed=Array.from(base.keys()).filter(i=>cur.has(i) && Math.abs(base.get(i).err-cur.get(i)!.err)>1e-9);
     const be=changed.map(i=>Math.abs(base.get(i).err)).sort((a,b)=>a-b);
     const ae=changed.map(i=>Math.abs(cur.get(i)!.err)).sort((a,b)=>a-b);
     const lostErr = lost.map(i=>Math.abs(base.get(i).err)).sort((a,b)=>a-b);

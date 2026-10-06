@@ -1,9 +1,24 @@
 /**
- * store.ts — the read side of the R2 layout (format.ts). Per-isolate memos
- * (pointer 60s; manifest + dir.bin + small decoded objects per version) keep
- * the per-request CPU to a few small parses.
+ * store.ts — the read side of the R2 layout (format.ts).
+ *
+ * COLD START (Oct 3–5: the first request after a nightly took 32s). A cold
+ * isolate used to walk pointer → dir.bin → manifest → loc shard → loc shard →
+ * answer, every hop a serial R2 round trip (~100–200ms each at the edge, far
+ * worse right after the night's upload). Now:
+ *
+ *   - the pointer carries the loc-shard directory inline (format.ts locDir)
+ *     and blob n is always blobKey(n): a table/summary request is pointer →
+ *     loc shard → answer, no dir.bin and no manifest on the path;
+ *   - the small immutable index reads (dir.bin, id buckets, loc shards) go
+ *     through the colo's Cache API, so one cold isolate pays R2 for them and
+ *     every other isolate in that colo reads them in a few ms;
+ *   - the pointer is a per-isolate memo, fresh for 60s, then served stale
+ *     while one background refresh runs (never on a request's critical path
+ *     unless the isolate sat idle > 10 min), and colo-cached for 30s.
+ *
+ * CPU stays a few small parses per request (Free plan, 10ms).
  */
-import { ID_BUCKETS, LOC_SHARDS, idBucketOf, locShardOf, type Current, type IdEntry, type Loc, type Manifest, type PagedLoc } from './format';
+import { ID_BUCKETS, LOC_SHARDS, blobKey, idBucketOf, locShardOf, type Current, type IdEntry, type Loc, type Manifest, type PagedLoc } from './format';
 
 /** The slice of the R2 binding this API uses (R2Bucket in workers-types). */
 export interface R2ObjectBodyLike {
@@ -16,26 +31,83 @@ export interface R2BucketLike {
 }
 export interface Env { CORPUS?: R2BucketLike }
 
+/** Cache API surface (caches.default in Workers) — optional so Node tests run. */
+export interface EdgeCache { match(req: Request): Promise<Response | undefined>; put(req: Request, res: Response): Promise<void> }
+/** what a request lends the store: the colo cache, its origin (cache keys
+ *  live under the site's own host) and waitUntil for background work */
+export interface StoreIO { cache?: EdgeCache | null; origin?: string; waitUntil?(p: Promise<unknown>): void }
+
 export class NotFound extends Error {}
 export class StoreUnavailable extends Error {}
 
-const POINTER_TTL_MS = 60_000;
+const POINTER_FRESH_MS = 60_000;
+const POINTER_STALE_MS = 10 * 60_000;
+const POINTER_EDGE_S = 30;
+/** versioned objects are write-once: the colo copy can live as long as the version */
+const IMMUTABLE_EDGE_S = 3 * 86400;
+const STORE_PATH = '/__store/';
+/** Cache API calls count against the Free plan's 50 subrequests a request
+ *  (R2 binding calls have their own, far larger allowance): a 12-id
+ *  /api/lots on a cold isolate stops using the colo cache past this many */
+const CACHE_OPS_PER_REQUEST = 24;
+
 let pointer: { at: number; cur: Current } | null = null;
+let pointerLoad: Promise<Current> | null = null;
 
 /** Test hook: forget every memo (the fake bucket changes between tests). */
 export function resetStoreMemo() {
   pointer = null;
+  pointerLoad = null;
   versions.clear();
 }
 
-export async function currentVersion(bucket: R2BucketLike): Promise<Current> {
-  if (pointer && Date.now() - pointer.at < POINTER_TTL_MS) return pointer.cur;
+function background(io: StoreIO, p: Promise<unknown>) {
+  const q = p.catch(() => { /* best effort */ });
+  if (io.waitUntil) io.waitUntil(q);
+}
+const edgeKey = (io: StoreIO, key: string): Request | null =>
+  io.cache && io.origin ? new Request(`${io.origin}${STORE_PATH}${key}`, { method: 'GET' }) : null;
+
+export function parsePointer(text: string): Current {
+  let cur: Current;
+  try { cur = JSON.parse(text) as Current; } catch { throw new StoreUnavailable('bad pointer'); }
+  if (!cur?.version || !cur?.prefix || !/^api\/v\/[A-Za-z0-9._-]+\/$/.test(cur.prefix)) throw new StoreUnavailable('bad pointer');
+  const ld = cur.locDir;
+  // a malformed inline directory is ignored (dir.bin still answers), never trusted
+  if (ld !== undefined && !(Array.isArray(ld) && ld.length === LOC_SHARDS * 3 && ld.every(n => Number.isInteger(n) && n >= 0))) delete cur.locDir;
+  return cur;
+}
+
+async function loadPointer(bucket: R2BucketLike, io: StoreIO): Promise<Current> {
+  const ck = edgeKey(io, 'api/current.json');
+  if (ck) {
+    const hit = await io.cache!.match(ck).catch(() => undefined);
+    if (hit) {
+      try { return parsePointer(await hit.text()); } catch { /* fall through to R2 */ }
+    }
+  }
   const obj = await bucket.get('api/current.json');
   if (!obj) throw new StoreUnavailable('api/current.json missing');
-  const cur = JSON.parse(await obj.text()) as Current;
-  if (!cur?.version || !cur?.prefix || !/^api\/v\/[A-Za-z0-9._-]+\/$/.test(cur.prefix)) throw new StoreUnavailable('bad pointer');
-  pointer = { at: Date.now(), cur };
+  const text = await obj.text();
+  const cur = parsePointer(text);
+  if (ck) background(io, io.cache!.put(ck, new Response(text, { headers: { 'Content-Type': 'application/json', 'Cache-Control': `public, max-age=${POINTER_EDGE_S}` } })));
   return cur;
+}
+
+export async function currentVersion(bucket: R2BucketLike, io: StoreIO = {}): Promise<Current> {
+  const age = pointer ? Date.now() - pointer.at : Infinity;
+  if (pointer && age < POINTER_FRESH_MS) return pointer.cur;
+  if (!pointerLoad) {
+    const p = loadPointer(bucket, io).then(cur => { pointer = { at: Date.now(), cur }; return cur; });
+    pointerLoad = p;
+    p.then(() => { pointerLoad = null; }, () => { pointerLoad = null; });
+  }
+  // stale but recent: answer from the memo, refresh behind the response
+  if (pointer && age < POINTER_STALE_MS) { background(io, pointerLoad); return pointer.cur; }
+  // long idle: wait for the fresh pointer, but an R2 hiccup still answers
+  // from the last one we had (its version's objects are write-once)
+  const last = pointer?.cur;
+  return pointerLoad.catch(e => { if (last) return last; throw e; });
 }
 
 interface VersionMemo {
@@ -63,11 +135,12 @@ export async function gunzipText(bytes: Uint8Array): Promise<string> {
 }
 
 export class Store {
-  constructor(readonly bucket: R2BucketLike, readonly cur: Current) {}
+  private cacheOps = CACHE_OPS_PER_REQUEST;
+  constructor(readonly bucket: R2BucketLike, readonly cur: Current, readonly io: StoreIO = {}) {}
 
-  static async open(env: Env): Promise<Store> {
+  static async open(env: Env, io: StoreIO = {}): Promise<Store> {
     if (!env.CORPUS) throw new StoreUnavailable('no CORPUS binding');
-    return new Store(env.CORPUS, await currentVersion(env.CORPUS));
+    return new Store(env.CORPUS, await currentVersion(env.CORPUS, io), io);
   }
 
   get version() { return this.cur.version; }
@@ -79,6 +152,29 @@ export class Store {
     return obj;
   }
 
+  /** a small write-once object (or range of one) under this version, through
+   *  the colo cache: the index reads every cold isolate needs first */
+  private async immutable(key: string, loc?: Loc): Promise<Uint8Array> {
+    const full = `${this.cur.prefix}${key}`;
+    // a match + a possible put
+    const ck = this.cacheOps >= 2 ? edgeKey(this.io, loc ? `${full}?r=${loc[1]}-${loc[2]}` : full) : null;
+    if (ck) this.cacheOps -= 2;
+    if (ck) {
+      const hit = await this.io.cache!.match(ck).catch(() => undefined);
+      if (hit) return new Uint8Array(await hit.arrayBuffer());
+    }
+    const obj = await this.bucket.get(full, loc ? { range: { offset: loc[1], length: loc[2] } } : undefined);
+    if (!obj) throw new StoreUnavailable(`${key} missing`);
+    const bytes = new Uint8Array(await obj.arrayBuffer());
+    if (ck) {
+      background(this.io, this.io.cache!.put(ck, new Response(bytes.slice(), {
+        headers: { 'Content-Type': 'application/octet-stream', 'Cache-Control': `public, max-age=${IMMUTABLE_EDGE_S}, immutable` },
+      })));
+    }
+    return bytes;
+  }
+
+  /** /api/version only — no other read needs the manifest */
   manifest(): Promise<Manifest> {
     const m = this.memo;
     if (!m.manifest) {
@@ -92,21 +188,19 @@ export class Store {
   private dir(): Promise<Uint32Array> {
     const m = this.memo;
     if (!m.dir) {
-      m.dir = this.getObj('dir.bin').then(async o => {
-        const d = new Uint32Array(await o.arrayBuffer());
-        if (d.length !== (ID_BUCKETS + LOC_SHARDS) * 3) throw new StoreUnavailable('bad dir.bin');
-        return d;
+      m.dir = this.immutable('dir.bin').then(b => {
+        if (b.byteLength !== (ID_BUCKETS + LOC_SHARDS) * 12 || b.byteOffset % 4) throw new StoreUnavailable('bad dir.bin');
+        return new Uint32Array(b.buffer, b.byteOffset, b.byteLength / 4);
       });
       m.dir.catch(() => { m.dir = undefined; });
     }
     return m.dir;
   }
 
-  /** one ranged GET of a located object */
+  /** one ranged GET of a located object (blob n is always blobKey(n)) */
   async range(loc: Loc): Promise<R2ObjectBodyLike> {
-    const man = await this.manifest();
-    const blob = man.blobs[loc[0]];
-    if (!blob) throw new StoreUnavailable('bad blob index');
+    if (!Number.isInteger(loc[0]) || loc[0] < 0) throw new StoreUnavailable('bad blob index');
+    const blob = blobKey(loc[0]);
     const obj = await this.bucket.get(`${this.cur.prefix}${blob}`, { range: { offset: loc[1], length: loc[2] } });
     if (!obj) throw new StoreUnavailable(`${blob} missing`);
     return obj;
@@ -117,9 +211,9 @@ export class Store {
   async json<T>(loc: Loc): Promise<T> {
     return JSON.parse(await gunzipText(await this.bytes(loc))) as T;
   }
-  /** plain (uncompressed) JSON — the id buckets and loc shards */
-  async plain<T>(loc: Loc): Promise<T> {
-    return JSON.parse(await (await this.range(loc)).text()) as T;
+  /** plain (uncompressed) JSON index objects — the id buckets and loc shards */
+  private async plain<T>(loc: Loc): Promise<T> {
+    return JSON.parse(new TextDecoder().decode(await this.immutable(blobKey(loc[0]), loc))) as T;
   }
 
   cached<T>(key: string, load: () => Promise<T>): Promise<T> {
@@ -134,6 +228,11 @@ export class Store {
   }
 
   private async dirLoc(i: number): Promise<Loc | null> {
+    const ld = this.cur.locDir;
+    if (ld && i >= ID_BUCKETS) {
+      const j = (i - ID_BUCKETS) * 3;
+      return ld[j + 2] ? [ld[j], ld[j + 1], ld[j + 2]] : null;
+    }
     const d = await this.dir();
     const len = d[i * 3 + 2];
     return len ? [d[i * 3], d[i * 3 + 1], len] : null;
@@ -170,4 +269,3 @@ export class Store {
     return out;
   }
 }
-

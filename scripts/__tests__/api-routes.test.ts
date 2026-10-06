@@ -14,10 +14,10 @@ import zlib from 'node:zlib';
 import type { AuctionLot } from '../../app/types';
 import { emitR2Index, orderRows } from '../emit-r2-index';
 import { handleApi } from '../../functions/_lib/api';
-import { resetStoreMemo, type R2BucketLike } from '../../functions/_lib/store';
+import { Store, resetStoreMemo, type R2BucketLike } from '../../functions/_lib/store';
 import { decodeSummary } from '../../app/lib/api';
 import { signalWithPool, soldCompBand, cultureReferenceBand, appraiseLot, areComparable } from '../../app/lib/comps';
-import { TABLE_MAX_PAGES, TABLE_PAGE, type SummaryJson } from '../../functions/_lib/format';
+import { TABLE_MAX_PAGES, TABLE_PAGE, type Loc, type SummaryJson } from '../../functions/_lib/format';
 
 // ── fake R2 over a directory ────────────────────────────────────────────────
 class DirBucket implements R2BucketLike {
@@ -317,5 +317,73 @@ test('no corpus → 503, never a hang or an empty 200', async () => {
   const v = await handleApi(new Request('https://lectr.test/api/version'), {}, {}, null);
   assert.equal(v.status, 200);
   assert.deepEqual(await v.json(), { version: null, available: false });
+  resetStoreMemo();
+});
+
+test('cold start: a table request is pointer → loc shards → page (no dir.bin, no manifest)', async () => {
+  resetStoreMemo();
+  bucket.gets = [];
+  const res = await call('/api/archive?market=all&page=0');
+  assert.equal(res.status, 200);
+  await res.arrayBuffer();
+  assert.equal(bucket.gets[0], 'api/current.json');
+  assert.ok(!bucket.gets.some(k => /dir\.bin|manifest\.json/.test(k)), `reads: ${bucket.gets.join(', ')}`);
+  assert.ok(bucket.gets.length <= 4, `reads: ${bucket.gets.join(', ')}`);
+});
+
+test('cold start: a pointer without locDir (written before it existed) still reads via dir.bin', async () => {
+  resetStoreMemo();
+  const legacy: R2BucketLike = {
+    get: async (key, opts) => {
+      const o = await bucket.get(key, opts);
+      if (!o || key !== 'api/current.json') return o;
+      const { version, prefix } = JSON.parse(await o.text());
+      const t = JSON.stringify({ version, prefix });
+      return { arrayBuffer: async () => new TextEncoder().encode(t).buffer as ArrayBuffer, text: async () => t };
+    },
+  };
+  const a = await body(await handleApi(new Request('https://lectr.test/api/maker/kaws?page=1'), { CORPUS: legacy }, {}, null));
+  resetStoreMemo();
+  const b = await body(await call('/api/maker/kaws?page=1'));
+  assert.deepEqual(a, b);
+  assert.equal(a.rows.length, TABLE_PAGE);
+  resetStoreMemo();
+});
+
+test('cold isolates share the colo cache: pointer + index reads come from it, R2 serves only the answer', async () => {
+  const cache = new FakeCache();
+  const pending: Promise<unknown>[] = [];
+  const ctx = { waitUntil: (p: Promise<unknown>) => { pending.push(p); } };
+  const go = async (p: string) => {
+    const r = await handleApi(new Request(`https://lectr.test${p}`), { CORPUS: bucket }, ctx, cache);
+    await r.arrayBuffer();
+    await Promise.all(pending);
+    return r;
+  };
+  resetStoreMemo();
+  await go(`/api/lot/${main[3].id}`);
+  await go('/api/maker/kaws?page=2');
+  // a second, fresh isolate in the same colo
+  resetStoreMemo();
+  bucket.gets = [];
+  const r1 = await go('/api/maker/kaws?page=3');
+  assert.equal(r1.headers.get('X-Api-Cache'), 'miss');
+  assert.equal(bucket.gets.length, 1, `reads: ${bucket.gets.join(', ')}`);
+  bucket.gets = [];
+  const r2 = await go(`/api/lot/${main[4].id}`);
+  assert.equal(r2.status, 200);
+  assert.ok(!bucket.gets.some(k => /dir\.bin|current\.json/.test(k)), `reads: ${bucket.gets.join(', ')}`);
+  resetStoreMemo();
+});
+
+test('summaries stream the plain copy (no gunzip in the Function); the gzip copy stays for older readers', async () => {
+  resetStoreMemo();
+  const res = await call('/api/market/all?view=summary');
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('Content-Encoding'), null);
+  const plain = await res.text();
+  const store = await Store.open({ CORPUS: bucket });
+  const gz = await store.json<SummaryJson>((await store.loc('s:k:all')) as Loc);
+  assert.deepEqual(JSON.parse(plain), gz);
   resetStoreMemo();
 });

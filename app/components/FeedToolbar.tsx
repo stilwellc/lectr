@@ -5,7 +5,7 @@ import { useDialogFocus } from './useDialogFocus';
 import { sportOfLot } from '../lib/submarkets';
 import { createPortal } from 'react-dom';
 import { AuctionLot } from '../types';
-import { categoryLabels, sportOf } from '../utils';
+import { categoryLabels } from '../utils';
 import { ARTIST_LABEL, MARKETS, marketArtists, Market } from '../constants';
 import Flick from './Flick';
 import SaveSearch from './SaveSearch';
