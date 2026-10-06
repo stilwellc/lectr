@@ -33,14 +33,14 @@ import { normalizeCorpus } from '../../lib/corpus-normalize';
 import { prepare, compsOne, calibrationFor, rehydrateState, type BacktestState, type L } from '../../backtest-core';
 import {
   estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags,
-  ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_CANDIDATE, ENGINE_FLAGS_WAVE4, type EngineFlags, type ValueResult,
+  ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_CANDIDATE, ENGINE_FLAGS_WAVE4, ENGINE_FLAGS_WAVE5, type EngineFlags, type ValueResult,
 } from '../../../app/lib/value';
 import { compBoundaryFault, objectBoundaryFault, isMemorabiliaLot } from '../../../app/lib/comp-purity';
 import { BOUNDARY2, BOUNDARY5 } from '../../../app/lib/value';
 import type { AuctionLot } from '../../../app/types';
 
 const arg = (n: string): string | null => { const i = process.argv.indexOf(`--${n}`); return i >= 0 ? process.argv[i + 1] : null; };
-const FLAGSETS: Record<string, EngineFlags> = { wave4: ENGINE_FLAGS_WAVE4, current: ENGINE_FLAGS_CURRENT, candidate: ENGINE_FLAGS_CANDIDATE };
+const FLAGSETS: Record<string, EngineFlags> = { wave4: ENGINE_FLAGS_WAVE4, wave5: ENGINE_FLAGS_WAVE5, current: ENGINE_FLAGS_CURRENT, candidate: ENGINE_FLAGS_CANDIDATE };
 const CARD = new Set(['sports-cards', 'graded-cards', 'pokemon']);
 
 type Pair = { round: number; lotId: string; compId: string; g: 'G' | 'W' | 'X'; r: string; split: string; house: string };

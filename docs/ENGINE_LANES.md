@@ -403,3 +403,27 @@ On the 17 changed Sep 14 values, error went 20.7% → 22.0% (n small). Judged "a
 - **Bulk** (count ≥ 3 / collection / archive vs one): DEV 8 wrong / 16 acceptable (the wave-3 quantity rule was rejected on the holdout too).
 - **Stamped unique vs multiple** (art subCat originals vs prints) and **subject-only art comps**: no comp in today's pools (the formKey gate already separates them).
 - **Known misses, seen on TEST, not tuned:** "Apollo 17 Lunar Flown Checklist Page" reads as plain 'flown', so 6 good lunar-surface comps were dropped. "USS Constitution Ashtray" is a 2-word object title read as subject-only.
+
+## 17 · OCT 6 2026 PRICING WAVE 6 — catalogue identity for art comps (`2026.10.06-wave6`)
+
+**Why.** After wave 5 the art pools were still the worst judged: TEST wrong share Christie's 18.1%, Sotheby's 30.0%, Wright 16.4% (art 21.9%). Wave 5's title rules (another work of a suite, another colorway) were rejected on the holdout. The wrong DEV art comps are other works that share a title or a suite ("Minotaure aveugle guidé par une fillette dans la nuit" pricing plate I at 8×), unsigned posters pricing signed prints, and a whole illustrated book pricing one of its plates — usually far off the estimate's scale.
+
+**Adopted** (`EngineFlags.crWork`, `CR_WORK = { minN 3, maxAgeY 3, w 0.5, idExact 1 }`): the CATALOGUE FLOOR. The wave-4 same-work comp floor, keyed on catalogue identity instead of title + house + dimensions. An art lot with ≥ 3 comps sold in the last 3 years that are the same work (the same catalogue-raisonné number, or the same edition identity key: `similarity` idExact) puts at least 0.5 of the prediction on the comps. Art only: on watch references the same floor made live Sotheby's watches worse (28 values, 24.2 → 30.1%).
+
+| wave 5 → wave 6 | |
+|---|---|
+| holdout art medErr / ±30% / band | 27.2 → 26.6% / 53.4 → 53.9% / 70.1 → 70.3% (917 values, none withdrawn) |
+| holdout values changed | 90: 22.1 → 20.4% |
+| holdout all / flags | 31.6% = 31.6%; 591 flags, precision 54.1%, edge 25.3pt (unchanged) |
+| hand-judged TEST pools | unchanged (the floor moves the weight, not the pool): art wrong 21.9%; Christie's 18.1 / Sotheby's 30.0 / Wright 16.4% |
+| TEST appraiser error, art lots | 20.3 → 19.7% (Wright 24.9 → 22.6%) |
+| live Sep 14 | 933 values, art 25.2% = 25.2%, ±30% and band equal; 5 art values changed (12.7 → 13.0%); 78 flags unchanged |
+| live Sep 24 | no lot touched |
+
+**Measured and NOT adopted:**
+- **The scale-consistent pool** (`compScale`, `COMP_SCALE`): an art / design comp whose hammer sits more than 4× outside the printed estimate leaves the pool when ≥ 3 comps remain. The identity-less and pool-scale abstentions still read the unfiltered pool, so the filter never revives a pool that prices another object (the first version did: 9 of 29 new comps wrong on DEV). The pools get much purer: DEV same-lot art wrong 12.7 → 10.3%. TEST: art 21.9 → 16.9%, Christie's 18.1 → 11.4%, Sotheby's 30.0 → 27.6%, Wright 16.4 → 15.5%. TEST appraiser error 20.3 → 19.7%, holdout art 27.2 → 27.1%. But the holdout art band fell 70.1 → 68.8% and art flags 213 → 205 (precision 53.5 → 53.2%). Live it lost on both books: art 25.2 → 26.7% (Sep 14) and 25.2 → 27.2% (Sep 24), and the Sep 24 flag hit rate fell 61.5 → 53.3%. With the extra pool-median condition (also ×3 off the pool median) it was still worse live: 26.0% / 26.1%. The off-scale comps are often the wrong object, but the price they carry still informs the value.
+- **The catalogue pool** (`crPool`): a target that cites a catalogue number prices off same-citation comps only. No DEV pool qualifies (few targets cite a number). Different citations were already a hard boundary (wave 3, `catalogueConflict`).
+- **The catalogue floor on citations alone** (`CR_WORK.idExact = 0`): holdout art 27.2% = 27.2% (too few cited pools).
+- **Edition size and sheet dimensions as compatibility:** no judged DEV pair carries an edition size on both sides. Of 98 pairs with dimensions on both sides, the area ratio separates nothing (> 2.5×: 1 pair).
+
+Harness additions: `comp-precision.ts` and `engine-ab.ts` take `--a wave5`. Tests: `scripts/__tests__/pricing-wave6.test.ts`.

@@ -26,8 +26,8 @@ import { lotAllInFactor, lotHammerFromAllIn } from './premiums';
 import { weightedMedian, quantileSorted } from './stats';
 import { lotShapeOf, shapesCompatible, isCompExcluded } from './comps';
 import type { CardGateCell } from './cards-gate';
-import { numericWatchRef, editionIdentityKey, isEditionLot, WATCH_SLUGS } from './identity';
-import { compBoundaryFault, compPurityFault, isIdentityLessTitle, isIdentityLessArtTarget, sameWorkComp, mediumFamilyMatch, objectBoundaryFault, isBareSubjectTitle, type Boundary5Rules } from './comp-purity';
+import { numericWatchRef, editionIdentityKey, isEditionLot, WATCH_SLUGS, ART_SLUGS } from './identity';
+import { compBoundaryFault, compPurityFault, isIdentityLessTitle, isIdentityLessArtTarget, sameWorkComp, mediumFamilyMatch, objectBoundaryFault, isBareSubjectTitle, catalogueNumberOf, type Boundary5Rules } from './comp-purity';
 
 /** THE signal-label vocabulary — one source (P2, Sep 2 2026). Re-exported from
  *  lanes.ts; UI files that hardcode the strings should import from there
@@ -218,6 +218,28 @@ export interface EngineFlags {
    *  colorway (comp-purity workConflict / colorConflict) is a PURITY fault —
    *  it carries no directional call; the value pool keeps it */
   workPurity?: boolean;
+  /** (Oct 6, pricing wave 6) THE SCALE-CONSISTENT POOL: on an art / design
+   *  estimate lot, a comp whose hammer sits more than COMP_SCALE.est× outside
+   *  the printed estimate AND more than COMP_SCALE.pool× off the would-be
+   *  pool's own median leaves the pool (another object that shares the title:
+   *  the "dans la nuit" plate for "Minotaure aveugle … I", the book for one
+   *  of its plates), provided COMP_SCALE.minKeep comps remain. The
+   *  identity-less and pool-scale abstentions still read the unfiltered
+   *  pool. Measured, NOT adopted: hand-judged TEST art wrong share 21.9 →
+   *  16.9% and holdout art 27.2 → 27.1%, but live art error 25.2 → 26.7%
+   *  (Sep 14) and 25.2 → 27.2% (Sep 24) — §17 */
+  compScale?: boolean;
+  /** (Oct 6, pricing wave 6) THE CATALOGUE POOL: an art target citing a
+   *  catalogue-raisonné number whose gated pool holds ≥ CR_POOL.minN comps
+   *  citing the same number prices off those alone. Measured, NOT adopted:
+   *  no DEV pool qualifies (§17) */
+  crPool?: boolean;
+  /** (Oct 6, pricing wave 6) THE CATALOGUE FLOOR: the same-work comp floor
+   *  on catalogue identity, art only — ≥ CR_WORK.minN comps sold ≤
+   *  CR_WORK.maxAgeY ago that cite the target's catalogue-raisonné number
+   *  (CR_WORK.idExact = 1: or share its full edition identity key) put at
+   *  least CR_WORK.w of the prediction on the comps */
+  crWork?: boolean;
 }
 /** The engine before the Oct 3 pass (raw-estimate Flags, premium-only
  *  anchor, ungated card tiers) — kept so the harnesses can replay it. */
@@ -304,7 +326,24 @@ export const ENGINE_FLAGS_WAVE5: EngineFlags = {
   version: '2026.10.06-wave5',
   objectBoundary: true, memIdLessAbstain: true,
 };
-export const ENGINE_FLAGS_CURRENT: EngineFlags = ENGINE_FLAGS_WAVE5;
+/** (Oct 6 2026, pricing wave 6) THE CATALOGUE FLOOR: an art lot with ≥
+ *  CR_WORK.minN comps sold in the last CR_WORK.maxAgeY years that are the
+ *  same work by catalogue identity (the same catalogue-raisonné number, or
+ *  the same edition identity key) puts at least CR_WORK.w of the
+ *  prediction on the comps. Measured on the wave-5 engine
+ *  (docs/ENGINE_LANES.md §17): holdout art medErr 27.2 → 26.6%, ±30% 53.4
+ *  → 53.9%, band 70.1 → 70.3%, flags unchanged (90 values changed: 22.1 →
+ *  20.4%); live Sep 14 art 25.2% = 25.2% (5 values changed), Sep 24
+ *  untouched. Pools unchanged (hand-judged TEST wrong share as wave 5).
+ *  Measured and NOT adopted: compScale (purer pools, TEST art wrong 21.9 →
+ *  16.9%, but live art error 25.2 → 26.7% / 27.2%), crWork on watch
+ *  references (live worse), crPool (no pool qualifies). */
+export const ENGINE_FLAGS_WAVE6: EngineFlags = {
+  ...ENGINE_FLAGS_WAVE5,
+  version: '2026.10.06-wave6',
+  crWork: true,
+};
+export const ENGINE_FLAGS_CURRENT: EngineFlags = ENGINE_FLAGS_WAVE6;
 /** The candidate under evaluation. Equal to CURRENT's flags when nothing is
  *  pending — a candidate run then reports a no-op comparison. */
 export const ENGINE_FLAGS_CANDIDATE: EngineFlags = { ...ENGINE_FLAGS_CURRENT, version: `${ENGINE_FLAGS_CURRENT.version}+cand` };
@@ -862,6 +901,15 @@ export const SAME_WORK = { minN: 3, maxAgeY: 3, dimTol: 0.1, w: 0.5 };
 /** (wave 4) EngineFlags.poolScale: comp median vs estimate past this ratio
  *  (either way) is a different object's pool */
 export const POOL_SCALE = { ratio: 5 };
+/** (wave 6) EngineFlags.compScale: a comp's hammer outside [estLow / est,
+ *  estHigh × est] and outside ×/÷ pool of the would-be pool median (0 = the
+ *  pool test is off) leaves the pool when ≥ minKeep comps remain; markets
+ *  the rule reads (1 = on) */
+export const COMP_SCALE = { est: 4, pool: 0, minKeep: 3, art: 1, design: 1, other: 0 };
+/** (wave 6) EngineFlags.crPool's bar */
+export const CR_POOL = { minN: 3 };
+/** (wave 6) EngineFlags.crWork's bar */
+export const CR_WORK = { minN: 3, maxAgeY: 3, w: 0.5, idExact: 1 };
 /** (wave 4) EngineFlags.mediumKnownPool's floor */
 export const MEDIUM_POOL = { minN: 3 };
 export function exactBlendW(house: string | null | undefined): number {
@@ -1001,6 +1049,38 @@ export function estimateValueEx(
     if (known.length >= MEDIUM_POOL.minN && known.length < pool.length) pool = known;
   }
 
+  // the top-K before the wave-6 scale filter: the abstentions (identity-less,
+  // pool-scale) still read it — dropping the off-scale comps never rescues a
+  // pool that prices another object
+  let unscaledTop: Comp[] | null = null;
+  // (Oct 6, wave 6, FLAGS.crPool) the same catalogue-raisonné number is the
+  // same work: enough of them price the cited target alone
+  if (FLAGS.crPool) {
+    const cr = catalogueNumberOf(lot);
+    if (cr) {
+      const same = pool.filter(c => { const k = c.lot ? catalogueNumberOf(c.lot) : null; return !!k && k.sys === cr.sys && k.no === cr.no; });
+      if (same.length >= CR_POOL.minN && same.length < pool.length) pool = same;
+    }
+  }
+  // (Oct 6, wave 6, FLAGS.compScale) a comp off the estimate's scale AND off
+  // the pool's own median prices another object
+  if (FLAGS.compScale && (lot.estLowUsd || lot.estHighUsd)) {
+    const mk0 = CAL?.marketBySlug?.[lot.artist] ?? TIDX?.marketBySlug?.[lot.artist] ?? 'other';
+    const on = (COMP_SCALE as Record<string, number>)[mk0 === 'art' || mk0 === 'design' ? mk0 : 'other'];
+    const lo = (lot.estLowUsd ?? lot.estHighUsd)!, hi = (lot.estHighUsd ?? lot.estLowUsd)!;
+    if (on && lo > 0 && hi > 0) {
+      const head = pool.slice(0, TOP_K).map(c => c.realizedUsd).sort((a, b) => a - b);
+      const m = quantile(head, 0.5);
+      const off = (c: Comp) => {
+        const h = lotHammerFromAllIn(lot, c.realizedUsd);
+        if (!(h > hi * COMP_SCALE.est || h < lo / COMP_SCALE.est)) return false;
+        return !COMP_SCALE.pool || !(m > 0) || c.realizedUsd > m * COMP_SCALE.pool || c.realizedUsd < m / COMP_SCALE.pool;
+      };
+      const keep = pool.filter(c => !off(c));
+      if (keep.length >= COMP_SCALE.minKeep && keep.length < pool.length) { unscaledTop = pool.slice(0, TOP_K); pool = keep; }
+    }
+  }
+
   const refMs = (() => { const t = new Date(lot.saleDate || '').getTime(); return isNaN(t) ? Date.now() : t; })();
   const ageYOf = (c: Comp) => { const t = new Date(c.saleDate || '').getTime(); return isNaN(t) ? Infinity : (refMs - t) / 31_557_600_000; };
   // (Oct 6, FLAGS.purityGate / purityPool) THE PURE COMPS: an object-naming
@@ -1026,7 +1106,7 @@ export function estimateValueEx(
   // that span more than ID_LESS.spread×: the title is shared by different
   // works (a 'Homme assis' drawing vs the $8M painting); no value
   if (FLAGS.idLessAbstain && isIdentityLessArtTarget(lot)) {
-    const ps = top.map(c => c.realizedUsd).filter(p => p > 0);
+    const ps = (unscaledTop || top).map(c => c.realizedUsd).filter(p => p > 0);
     if (ps.length && Math.max(...ps) / Math.min(...ps) > ID_LESS.spread) return { value: null, abstain: 'identity-less' };
   }
   // (Oct 6, wave 5, FLAGS.memIdLessAbstain) a memorabilia title that is only
@@ -1161,6 +1241,14 @@ export function estimateValueEx(
     // price another object — a unique painting off its prints, one plate off
     // the set: no value, not merely no flag
     if (FLAGS.poolScale && !(compRatio <= POOL_SCALE.ratio && compRatio >= 1 / POOL_SCALE.ratio)) return { value: null, abstain: 'pool-scale' };
+    if (FLAGS.poolScale && unscaledTop) {
+      // the unfiltered pool's ratio, through the same exact-match guard
+      const isEx = (c: Comp) => c.match.cls === 'physicalMatch' || (c.match.cls === 'modelMatch' && c.match.cosine >= 0.92);
+      let r0 = ratioOf(wmed(unscaledTop, c => c.realizedUsd));
+      const ex0 = unscaledTop.find(c => c.match.cls === 'physicalMatch') || unscaledTop.find(c => c.match.cls === 'modelMatch' && c.match.cosine >= 0.92);
+      if (r0 > 5 && ex0 && ex0.realizedUsd >= 0.5 * eLo! && ex0.realizedUsd <= 2 * eHi!) r0 = ratioOf(wmed(unscaledTop.filter(isEx), c => c.realizedUsd));
+      if (!(r0 <= POOL_SCALE.ratio && r0 >= 1 / POOL_SCALE.ratio)) return { value: null, abstain: 'pool-scale' };
+    }
     flagRatio = compRatio;
     if (FLAGS.houseNormFlags) {
       const hf = houseFactorOf(market, lot.auctionHouse, estKind);
@@ -1229,6 +1317,17 @@ export function estimateValueEx(
     if (FLAGS.sameWork) {
       const sw = pool.filter(c => c.lot && ageYOf(c) <= SAME_WORK.maxAgeY && sameWorkComp(lot, c.lot, SAME_WORK.dimTol));
       if (sw.length >= SAME_WORK.minN) minW = Math.max(minW, SAME_WORK.w);
+    }
+    // (Oct 6, wave 6, FLAGS.crWork) the same catalogue-raisonné number (or,
+    // CR_WORK.idExact, the same edition identity) is the same work
+    if (FLAGS.crWork && ART_SLUGS.has(lot.artist)) {
+      const cr = catalogueNumberOf(lot);
+      const same = (c: Comp) => {
+        if (CR_WORK.idExact && c.match.idExact) return true;
+        const k = cr && c.lot ? catalogueNumberOf(c.lot) : null;
+        return !!k && k.sys === cr!.sys && k.no === cr!.no;
+      };
+      if (pool.filter(c => ageYOf(c) <= CR_WORK.maxAgeY && same(c)).length >= CR_WORK.minN) minW = Math.max(minW, CR_WORK.w);
     }
     // (Oct 6, wave 4, FLAGS.partialHabit) a single-point estimate whose pure
     // comps read under the house's habit anchors on only part of the habit
