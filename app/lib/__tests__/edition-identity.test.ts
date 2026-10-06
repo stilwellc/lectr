@@ -50,7 +50,7 @@ test('catalogue raisonné numbers key the edition across title languages', () =>
 
 test("'Ed' is a first name, 'ed.' is an edition", () => {
   assert.equal(key({ artist: 'ed-ruscha', title: 'ED RUSCHA Annie (E. 13)' }), 'ed-ruscha|cr:e13');
-  assert.equal(key({ artist: 'ed-ruscha', title: 'Ed Ruscha (b. 1937) Gasoline Stations 1962' }), 'ed-ruscha|gasoline stations 1962');
+  assert.equal(key({ artist: 'ed-ruscha', title: 'Ed Ruscha (b. 1937) Gasoline Stations 1962' }), 'ed-ruscha|gasoline stations');
   assert.equal(key({ artist: 'kaws', title: 'Companion ed. 500' }), 'kaws|companion 500');
 });
 
@@ -86,4 +86,27 @@ test('bare rows (no medium, no description) need print evidence in the sale or t
   assert.equal(isEditionLot({ formKey: 'print', medium: null, description: null, title: 'Marilyn (lithograph)', saleName: '' }), true);
   // a described row is judged on its text, not its sale
   assert.equal(isEditionLot({ formKey: 'print', medium: 'Linocut in colors on Arches paper', description: null, title: 'Femme nue assise', saleName: '' }), true);
+});
+
+test('F&S citations key one form: section canonicalised, a bare number is section II (Oct 6 re-audit)', () => {
+  const W = (title: string) => key({ artist: 'andy-warhol', title });
+  assert.equal(W('ANDY WARHOL Marilyn (F. and S. 28)'), 'andy-warhol|cr:fsii.28');
+  assert.equal(W('ANDY WARHOL Marilyn (F. & S. 28)'), W('ANDY WARHOL Marilyn (F. & S. II.28)'));
+  assert.equal(W('Andy Warhol Van Heusen (Ronald Reagan), from Ads (F. and S. 356)'), 'andy-warhol|cr:fsii.356');
+  assert.equal(W("ANDY WARHOL Campbell's Soup Can on a Shopping Bag (Feldman & Schellmann II 4a)"), 'andy-warhol|cr:fsii.4a');
+  assert.equal(W('Liz (F. & S. 7)'), 'andy-warhol|cr:fsii.7');
+  assert.equal(W('eva mudocci (after munch) (f. & s. iiia.59[b])'), 'andy-warhol|cr:fsiiia.59b');
+  // a printed section is kept as printed
+  assert.equal(W('Sunday B Morning Marilyn (F. & S. IIB.22)'), 'andy-warhol|cr:fsiib.22|after');
+  assert.equal(key({ artist: 'pablo-picasso', title: 'PABLO PICASSO Personnages et Colombe (B. 758; M. 254)' }), 'pablo-picasso|cr:b758');
+});
+
+test('title junk: a trailing creation year and "one plate from" do not split an edition (Oct 6 re-audit)', () => {
+  assert.equal(key({ artist: 'henri-matisse', title: 'Mlle Landsberg au long visage, 1914' }), 'henri-matisse|mlle landsberg au long visage');
+  assert.equal(key({ artist: 'pablo-picasso', title: 'Raphaël et la Fornarina III, from the 347 suite, 1968' }), 'pablo-picasso|raphael et la fornarina iii from the 347 suite');
+  assert.equal(key({ artist: 'pablo-picasso', title: 'Le Bain, circa 1905' }), 'pablo-picasso|le bain');
+  assert.equal(key({ artist: 'andy-warhol', title: 'Andy Warhol African Elephant: One Plate from Endangered Species' }), key({ artist: 'andy-warhol', title: 'African Elephant, from Endangered Species' }));
+  // a dated subtitle keeps its year; a year-only / generic title still abstains
+  assert.equal(key({ artist: 'andy-warhol', title: 'Untitled (Flash - November 22, 1963)' }), 'andy-warhol|untitled flash november 22 1963');
+  assert.equal(key({ artist: 'pablo-picasso', title: 'Untitled, 1984' }), null);
 });
