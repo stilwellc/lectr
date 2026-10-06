@@ -575,12 +575,42 @@ export function extractEdition(
   // N/M edition: "No. 314/400", "edition 12/50", or a bare "12/50" that is a
   // plausible edition (N ≤ M ≤ 999, not a size, not a date). Prefer one that
   // is explicitly labeled; else accept a lone bare fraction if it reads clean.
-  const labeled = low.match(/\b(?:no\.?|edition|ed\.?|nr\.?|n°)\s*(\d{1,3})\s*\/\s*(\d{1,3})\b/);
-  const bare = low.match(/(?:^|[^\d.\/])(\d{1,3})\s*\/\s*(\d{1,3})(?![\d.\/])/);
-  const cand = labeled || bare;
+  //
+  // A fraction is NOT an edition when it is the fractional part of a
+  // dimension: it follows a whole number ("10 7/8 in", "22 5/8 x 29",
+  // "10-7/8") or precedes a unit / the dimension "x" ("5/8-in.", "7/8 x 10",
+  // '3/4"'). Measured Oct 2026: 4,908 of 13,494 stored art editions were
+  // such dimension fractions (they also fed "same edition" physical matches).
+  // (a whole number before only disqualifies an inch-style denominator — "75
+  // 10/125" is still edition 10 of 125; "in" is a unit only when it is not
+  // the start of "in pencil"/"in ink")
+  const accept = (s: number, e: number, den: number): boolean => {
+    const before = low.slice(Math.max(0, s - 6), s);
+    if (/\d[\s\-–]*$/.test(before) && [2, 3, 4, 8, 16, 32, 64].includes(den)) return false;
+    // a calibre ("calibre 25-21/176", "cal. 10 1/2'''") or a ligne size ("19'''1/2")
+    if (/\bcal(?:ibre|iber)?\.?\s*[\d\s\-'’]*$/.test(low.slice(Math.max(0, s - 16), s)) || /['’]{2}$/.test(before)) return false;
+    const after = low.slice(e, e + 10);
+    if (/^(?:\s*-\s*in|in|\s*inch)/.test(after)) return false; // "13/16in stroke", "5/8-in. tear", "1/2-inch"
+    if (/^\s*(?:in(?:\.|\b(?!\s+[a-z]))|cm\b|mm\b|ft\b|x(?:\b|\d)|×|"|”|''|′)/.test(after)) return false;
+    if (/^(?:th|st|nd|rd)\b|^\s*(?:minute|second|sec)/.test(after)) return false; // "outer 1/5th / 1/5 minute track"
+    return true;
+  };
+  let cand: { n: number; m: number } | null = null;
+  const labeledRe = /\b(?:no\.?|edition|ed\.?|nr\.?|n°)\s*(\d{1,3})\s*\/\s*(\d{1,3})\b/g;
+  const bareRe = /(^|[^\d.\/])(\d{1,3})\s*\/\s*(\d{1,3})(?![\d.\/])/g;
+  for (let x = labeledRe.exec(low); x && !cand; x = labeledRe.exec(low)) {
+    const s = x.index + x[0].search(/\d/); // the label carries no digits
+    if (accept(s, x.index + x[0].length, parseInt(x[2], 10))) cand = { n: parseInt(x[1], 10), m: parseInt(x[2], 10) };
+  }
+  // only the FIRST acceptable bare fraction is read (the old reader stopped at
+  // the first fraction of any kind; a rejected dimension must not hide a real
+  // "numbered 12/50" later in the description)
+  for (let x = bareRe.exec(low); x && !cand; x = bareRe.exec(low)) {
+    const s = x.index + x[1].length;
+    if (accept(s, x.index + x[0].length, parseInt(x[3], 10))) cand = { n: parseInt(x[2], 10), m: parseInt(x[3], 10) };
+  }
   if (cand) {
-    const n = parseInt(cand[1], 10);
-    const m = parseInt(cand[2], 10);
+    const { n, m } = cand;
     // an edition has N ≤ M, and M is the run size (≤ 999). Reject 9/11-style
     // (N > M) and obvious dates already excluded by the ≤3-digit cap.
     if (n >= 1 && m >= 1 && n <= m && m <= 999) {
@@ -601,13 +631,50 @@ export function extractEdition(
   return { editionOf, editionTotal, editionMarker };
 }
 
-/** A case/movement/serial-style number from a watch/instrument title or desc.
-    Conservative: only an explicit serial/movement/case-number label, else null
-    (a bare number is a reference or an edition, not a serial). */
-export function extractSerial(title: string, desc?: string | null): string | null {
+/** Labelled serial numbers from a watch/instrument title or desc.
+    Conservative: a number counts only behind an explicit label —
+      case side:  "Case No. 2685891", "case number 446128", "Serial No: R588021",
+                  "watch no. 35816" (Rolex/AP print the case serial as "serial")
+      movement:   "Movement No. 1165730", "MVT 768395"
+    and only when it carries ≥ 4 digits and is not masked ("No.393**").
+    Thousand separators (dots, apostrophes: "6'188'974", "1.234.567") and a
+    spaced letter prefix ("C 20953") are folded. Case and movement numbers are
+    DIFFERENT number series, so they never share a field: `caseNo`/`movementNo`
+    carry each, and `serialNo` (the one blocking key) is the case number else
+    the movement number, kind-qualified ("sn-2685891" / "mvt-1165730") so a
+    case number can never equal a movement number.
+    The old reader took any word after "case"/"movement" ("with": 6,646 rows,
+    "signed", "Automatic", "40mm", "NO.4", calibre numbers). */
+export function extractSerials(title: string, desc?: string | null): { serialNo: string | null; caseNo: string | null; movementNo: string | null } {
   const src = `${title || ''} ${desc || ''}`;
-  const m = src.match(/\b(?:serial|movement|case)\s*(?:no\.?|number|#)?\s*[:.]?\s*([A-Z0-9][A-Z0-9.\-\/]{2,})\b/i);
-  return m ? m[1] : null;
+  let caseNo: string | null = null, movementNo: string | null = null;
+  // label: <case|serial|watch|movement> + a number word, "MVT", "serial", or —
+  // Sotheby's shorthand — a bare "case" before a ≥5-digit / letter-led number
+  // ("ref 1665 case 5209479", "case a858414"; never "Case 1972", a year).
+  const NUM = String.raw`(?:(?:numbered|number|nos?|nr|n°)(?![a-z])\.?|#)`;
+  const re = new RegExp(
+    String.raw`\b(?:(?<cs>serial|case|watch)\s*${NUM}|(?<sb>serial)|(?<cb>case)(?=\s+[a-z]?\d{5})|(?<mv>movement)\s*${NUM}|(?<mb>mvt)\b\.?)` +
+    String.raw`\s*[:'’.,]{0,2}\s*(?<v>(?:[A-Z]{1,3}[ \-]?)?\d[\d'’.\-]*(?:[A-Z]{1,3}[\d'’.\-]+)*[A-Z]{0,3}(?:(?<=\b\d{4}) (?=[A-Z]{0,2}\d{3})[A-Z]{0,2}\d[\d]*[A-Z]{0,3})?)(?![\w*])`, 'gi');
+  for (let m = re.exec(src); m; m = re.exec(src)) {
+    const g = m.groups || {};
+    const v = (g.v || '').replace(/[\s'’.\-]/g, '').toUpperCase();
+    if ((v.match(/\d/g) || []).length < 4) continue;
+    // Cartier prints "<4-digit model code> <serial>" ("Case No. 1988 0094",
+    // "1713 CC732817" — folded above into one number); a model code standing
+    // alone in a list ("Case Nos. 1713 and SM10398") is not the serial
+    if (/^\d{4}$/.test(v) && /^\s*(?:and\b|&|,\s*[A-Z]{0,2}\d)/i.test(src.slice(re.lastIndex))) continue;
+    const isMvt = !!(g.mv || g.mb);
+    if (isMvt) { if (!movementNo) movementNo = v; }
+    else if (!caseNo) caseNo = v;
+    if (caseNo && movementNo) break;
+  }
+  const serialNo = caseNo ? `sn-${caseNo}` : movementNo ? `mvt-${movementNo}` : null;
+  return { serialNo, caseNo, movementNo };
+}
+
+/** The blocking serial key (see extractSerials). */
+export function extractSerial(title: string, desc?: string | null): string | null {
+  return extractSerials(title, desc).serialNo;
 }
 
 /** Collectible auth signals for game-used sports lots (title-borne). */

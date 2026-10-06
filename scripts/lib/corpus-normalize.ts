@@ -4,7 +4,7 @@ import { extractReference } from './identity-enrich';
 import { looksLikeCard, playerSlugOf } from '../../app/lib/cards';
 import { classifyForm, objectClassOf, cleanGoldinTitle, watchKey } from '../../app/lib/comps';
 import { vetReference, readDescriptionReference, splitWatchRef } from '../../app/lib/watch-ref';
-import { titleTokens as titleTokensOf } from '../../app/lib/normalize';
+import { titleTokens as titleTokensOf, extractEdition, extractSerials } from '../../app/lib/normalize';
 import { ARTIST_MARKET } from '../../app/constants';
 import { isMisattributed } from '../../app/lib/attribution';
 import { AUTOGRAPH_SLUGS, autographFormatOf } from '../../app/lib/identity';
@@ -1014,6 +1014,8 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   // healExpansionRows runs FIRST: it cleans titles (every parser below reads
   // them) and stamps the missing identity tokens.
   const healed = healExpansionRows(ls);
+  const edSer = rederiveEditionsSerials(ls);
+  console.log(`[normalize] editions re-derived=${edSer.editions} · serials re-derived=${edSer.serials}`);
   const techMoved = rerouteCultureTech(ls);
   const yearsNulled = clampImpossibleYears(ls);
   const reroute = rerouteScienceMisroutes(ls);
@@ -1191,6 +1193,37 @@ function bareEditionFraction(s: string): boolean {
     if (den >= 8 && num <= den && den <= 3000) return true;
   }
   return false;
+}
+
+/* ── EDITION / SERIAL RE-DERIVATION (Oct 2026) — editionOf/editionTotal/
+   editionMarker and serialNo are stamped ONCE by the crawl-time normalize
+   (ray-crawl.ts, schemaVersion 2) and never re-read, so a parser fix would
+   only reach freshly crawled lots. Re-derive them here from the stored title
+   + description with the current extractEdition/extractSerials: the old
+   readers took dimension fractions as editions ("10 7/8 in" → 7/8: 8,059
+   rows) and any word after "case"/"movement" as a serial ("with": 6,646).
+   On the Oct 5 corpus the old readers re-run on the stored text reproduce
+   every stored value, so the only movement is the parser fix itself.
+   Writes only on change (unaffected rows stay byte-identical); caseNo/
+   movementNo are set only when present. Idempotent. */
+export function rederiveEditionsSerials(lots: Lot[]): { editions: number; serials: number } {
+  let editions = 0, serials = 0;
+  for (const l of lots) {
+    if ((l as { schemaVersion?: number }).schemaVersion !== 2) continue;
+    const desc = (l as { description?: string | null }).description || undefined;
+    const ed = extractEdition(l.title, desc);
+    if ((l.editionOf ?? null) !== ed.editionOf || (l.editionTotal ?? null) !== ed.editionTotal || (l.editionMarker ?? null) !== ed.editionMarker) {
+      l.editionOf = ed.editionOf; l.editionTotal = ed.editionTotal; l.editionMarker = ed.editionMarker;
+      editions++;
+    }
+    const s = extractSerials(l.title, desc);
+    let moved = false;
+    if ((l.serialNo ?? null) !== s.serialNo) { l.serialNo = s.serialNo; moved = true; }
+    if ((l.caseNo ?? null) !== s.caseNo) { if (s.caseNo) l.caseNo = s.caseNo; else delete l.caseNo; moved = true; }
+    if ((l.movementNo ?? null) !== s.movementNo) { if (s.movementNo) l.movementNo = s.movementNo; else delete l.movementNo; moved = true; }
+    if (moved) serials++;
+  }
+  return { editions, serials };
 }
 
 const ART_CAT_MAKERS = new Set(Object.entries(ARTIST_MARKET).filter(([, m]) => m === 'art').map(([k]) => k));

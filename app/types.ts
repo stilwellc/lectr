@@ -258,8 +258,14 @@ export interface AuctionLot {
   editionTotal?: number | null;
   /** non-numbered proof designation */
   editionMarker?: EditionMarker | null;
-  /** case/movement/serial (watches, instruments) */
+  /** labelled serial blocking key (watches, instruments), kind-qualified:
+      "sn-<case/serial no.>" else "mvt-<movement no.>" (app/lib/normalize.ts
+      extractSerials) — a case number never equals a movement number */
   serialNo?: string | null;
+  /** labelled case / serial number (≥4 digits, separators folded). CORPUS-ONLY */
+  caseNo?: string | null;
+  /** labelled movement number (≥4 digits, separators folded). CORPUS-ONLY */
+  movementNo?: string | null;
   /** game-used "photo-matched" in title — strongest sports exact signal */
   photoMatched?: boolean;
   /** auth bodies (PSA/DNA, MeiGray, Beckett, LOA/COA) */

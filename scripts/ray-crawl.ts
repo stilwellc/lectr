@@ -30,7 +30,7 @@ import { saleDayOf } from './lib/sale-day';
 // runs INCREMENTALLY (a bounded batch per crawl — decision #3), never all 41k.
 import {
   normalizeDimensions, extractYear, canonMedium,
-  extractEdition, extractSerial, extractCollectibleTags, classifyEntity,
+  extractEdition, extractSerials, extractCollectibleTags, classifyEntity,
   objectFingerprint, titleTokens,
   modelKey as normModelKey, watchKey as normWatchKey,
   normalizeTitle as normNormalizeTitle,
@@ -752,7 +752,10 @@ async function main() {
     lot.editionOf = ed.editionOf;
     lot.editionTotal = ed.editionTotal;
     lot.editionMarker = ed.editionMarker;
-    lot.serialNo = extractSerial(lot.title, lot.description || undefined);
+    const ser = extractSerials(lot.title, lot.description || undefined);
+    lot.serialNo = ser.serialNo;
+    if (ser.caseNo) lot.caseNo = ser.caseNo;
+    if (ser.movementNo) lot.movementNo = ser.movementNo;
 
     // collectible auth signals (game-used sports) — title-borne
     const tags = extractCollectibleTags(lot.title);
