@@ -770,6 +770,13 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     // one parse pass over every sold sports lot
     type PLot = AuctionLot & { _pid?: string | null; _pname?: string | null; _card?: ReturnType<typeof parseCard> };
     const byPlayer = new Map<string, { name: string; lots: PLot[] }>();
+    // KNOWN PLAYERS (Oct 6 2026): an object lot's leading name is stamped as a
+    // player only when the CARD parser has read that player ≥3 times across
+    // the corpus — 'Baseball Hall', 'New York Giants', 'The Beatles' never are.
+    const { knownPlayerSet } = require('../app/lib/cards');
+    const cardPlayerNames: (string | null)[] = [];
+    for (const l of all) if (CARD_SLUGS.has(l.artist)) cardPlayerNames.push(parseCardCached(l.title || '').player);
+    const knownPlayers: Set<string> = knownPlayerSet(cardPlayerNames);
     const byCardKey = new Map<string, AuctionLot[]>();
     const byLadderKey = new Map<string, AuctionLot[]>();
     for (const l of sportsSold as PLot[]) {
@@ -782,7 +789,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         const ck = cardKey(c); if (ck) (byCardKey.get(ck) || byCardKey.set(ck, []).get(ck)!).push(l);
         const lk = cardLadderKey(c); if (lk) (byLadderKey.get(lk) || byLadderKey.set(lk, []).get(lk)!).push(l);
       } else {
-        const p = playerOf(l.title || '', l.artist);
+        const p = playerOf(l.title || '', l.artist, knownPlayers);
         l._pid = p.playerSlug; l._pname = p.player;
       }
       if (l._pid && l._pname) {
@@ -1213,7 +1220,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
       if (l.status === 'sold' && !CARD_SLUGS.has(l.artist)) {
         const sw = l as AuctionLot & { _pid?: string | null; _pname?: string | null; playerSlug?: string | null; playerName?: string | null };
         let pid = sw._pid ?? null, pname = sw._pname ?? null;
-        if (pid == null) { const p = playerOf(l.title || '', l.artist); pid = p.playerSlug; pname = p.player; }
+        if (pid == null) { const p = playerOf(l.title || '', l.artist, knownPlayers); pid = p.playerSlug; pname = p.player; }
         sw.playerSlug = pid; sw.playerName = pname;
         if (pid) soldStamped++;
         continue;
@@ -1323,7 +1330,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
           }
         }
       } else {
-        const p = playerOf(l.title || '', l.artist);
+        const p = playerOf(l.title || '', l.artist, knownPlayers);
         lw.playerSlug = p.playerSlug; lw.playerName = p.player;
       }
     }

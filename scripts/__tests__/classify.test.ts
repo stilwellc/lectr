@@ -10,6 +10,7 @@ import { isCardTitle, goldinSportKind, reclassifyLot, artCategoryFix, DROP } fro
 import { goldinRoute } from '../lib/houses/routing';
 import { classifyForm } from '../../app/lib/comps';
 import { subCatOf } from '../lib/sub-cats';
+import { knownPlayerSet, playerOf } from '../../app/lib/cards';
 import { reclassifyCorpus } from '../lib/corpus-normalize';
 
 type R = Record<string, any>;
@@ -217,4 +218,29 @@ test('class 9 · design kinds: every table form, model codes, Conoid Cushion, th
   assert.equal(D('designed 1962', 'Charles and Ray Eames, a pair of Soft Pad lounge chairs'), 'seating');
   assert.equal(D('Charles Eames, Ray Eames: "Segmented". Dining table with white laminate top. And five chairs'), 'tables');
   assert.equal(D('Rare mirror', 'with a matching chair', 'design', 'george-nakashima'), 'objects');
+});
+
+test('class 10 · player names on object lots come from the known-player roster', () => {
+  const known = knownPlayerSet([
+    'Ted Williams', 'Ted Williams', 'Ted Williams', 'Barry Bonds', 'Barry Bonds', 'Barry Bonds',
+    'Ty Cobb', 'Ty Cobb', 'Ty Cobb', 'New York Giants', 'New York Giants', 'New York Giants', 'Barney McCosky Short Print',
+  ]);
+  assert.ok(known.has('ted-williams') && known.has('ty-cobb'));
+  assert.ok(!known.has('new-york-giants'), 'team runs are never players');
+  assert.ok(!known.has('barney-mccosky-short-print'), 'under the count floor');
+  const P = (t: string, slug = 'sports-memorabilia') => playerOf(t, slug, known).player;
+  assert.equal(P('Ted Williams Signed Baseball'), 'Ted Williams');
+  assert.equal(P('Barry Bonds Baseball'), 'Barry Bonds');                       // was "Barry Bonds Baseball"
+  assert.equal(P('Ty Cobb Vintage 12" Decal Mini-Bat - Rare Decal'), 'Ty Cobb'); // was "Ty Cobb Vintage"
+  assert.equal(P('Baseball Hall of Fame Signed Brochure with Mantle and Greenb'), null);
+  assert.equal(P('1929 Green Bay Packers Football Program with Curly Lambeau'), null);
+  assert.equal(P('PAUL MCCARTNEY AND RINGO STARR'), null);
+  assert.equal(P('Billy Joel Signed Baseball'), null);
+  assert.equal(P('Claire Ruth Cut Signature - JSA'), null);
+  // unknown names still read when the title puts use language right after them
+  assert.equal(P('Andy Barkett Game Used April 5, 2018 Home Jersey', 'game-used'), 'Andy Barkett');
+  // the structured NFL/MLB Auction slot is trusted as-is
+  assert.equal(P('Dublin Games - Vikings Chaz Chambliss Game Worn Jersey (9/28', 'game-used'), 'Chaz Chambliss');
+  // without a roster the parser behaves as before
+  assert.equal(playerOf('Barry Bonds Baseball', 'sports-memorabilia').player, 'Barry Bonds Baseball');
 });
