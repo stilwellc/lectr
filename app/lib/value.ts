@@ -27,6 +27,7 @@ import { weightedMedian, quantileSorted } from './stats';
 import { lotShapeOf, shapesCompatible, isCompExcluded } from './comps';
 import type { CardGateCell } from './cards-gate';
 import { numericWatchRef, editionIdentityKey, isEditionLot, WATCH_SLUGS } from './identity';
+import { compPurityFault, isIdentityLessTitle } from './comp-purity';
 
 /** THE signal-label vocabulary — one source (P2, Sep 2 2026). Re-exported from
  *  lanes.ts; UI files that hardcode the strings should import from there
@@ -52,7 +53,13 @@ export function basisNote(kind: 'estimate' | 'bid' | 'value' = 'estimate'): stri
   }
 }
 
-export interface Comp { id: string; match: Match; realizedUsd: number; saleDate: string; }
+export interface Comp {
+  id: string; match: Match; realizedUsd: number; saleDate: string;
+  /** (Oct 6 2026, pricing wave 2) the comp's own lot row — resolveComps
+   *  attaches it so the comp-purity readers (title, medium, edition class,
+   *  signedness, subject) can judge the comp against the target */
+  lot?: AuctionLot;
+}
 
 /* ── ENGINE VERSION + THE SHADOW/PROMOTE SEAM (Oct 3 2026) ────────────────
    Every served value carries `engineVersion`; every backtest observation and
@@ -95,6 +102,16 @@ export interface EngineFlags {
   /** (Oct 6) confidence demotes at most ONE notch (else-if), on the record's
    *  error of the PUBLISHED value (rp), not the comp pool's (r) */
   confOnPublished?: boolean;
+  /** (Oct 6, pricing wave 2) THE PURITY GATE: a flag needs ≥ PURITY.minPure
+   *  comps with an object-naming title, the target's medium family and
+   *  edition class, ≤ PURITY.maxAgeY old and within PURITY.band× of the pool
+   *  median; else signal = null. The signal is also stripped whenever the
+   *  comp ratio sits outside the ×5 estimate-band sanity. */
+  purityGate?: boolean;
+  /** (Oct 6, pricing wave 2) the value pool itself keeps only pure comps when
+   *  ≥ PURITY.minPure of them exist (else the pool stands, unflagged).
+   *  Measured, NOT adopted: holdout medErr 28.4% → 29.0% (§13) */
+  purityPool?: boolean;
 }
 /** The engine before the Oct 3 pass (raw-estimate Flags, premium-only
  *  anchor, ungated card tiers) — kept so the harnesses can replay it. */
@@ -115,11 +132,19 @@ export const ENGINE_FLAGS_HOUSE_GATE: EngineFlags = {
  *  0.2–3.3pt (mean 1.4); value medErr 32.3% = 32.3%, ±30% 47.7% → 47.8%;
  *  band coverage 72.0% → 68.2%. Measured and NOT adopted: calHalfLife1y
  *  (fewer flags, odds calibration 1.4 → 3.1pt), singleFigure (flat: 1,152
- *  flags, same edge). docs/ENGINE_LANES.md §11. */
-export const ENGINE_FLAGS_CURRENT: EngineFlags = {
+ *  flags, same edge). docs/ENGINE_LANES.md §11. Kept so the harnesses can
+ *  replay it against CURRENT. */
+export const ENGINE_FLAGS_HAMMER_BASIS: EngineFlags = {
   ...ENGINE_FLAGS_HOUSE_GATE,
   version: '2026.10.06-hammer-basis',
   hammerBasis: true, confOnPublished: true,
+};
+/** (Oct 6 2026, pricing wave 2) COMP PURITY: the purity gate on every
+ *  directional read + the ×5 strip (docs/ENGINE_LANES.md §13). */
+export const ENGINE_FLAGS_CURRENT: EngineFlags = {
+  ...ENGINE_FLAGS_HAMMER_BASIS,
+  version: '2026.10.06-comp-purity',
+  purityGate: true,
 };
 /** The candidate under evaluation. Equal to CURRENT's flags when nothing is
  *  pending — a candidate run then reports a no-op comparison. */
@@ -615,6 +640,12 @@ export function blendPredict(
   return { value: estMid * pm * Math.pow(ratio / pm, w), w };
 }
 
+/* ── PRICING WAVE 2 (Oct 6 2026): comp purity, recency cap, exact blend ── */
+/** The purity gate's bar (EngineFlags.purityGate / purityPool): a flag needs
+ *  ≥ minPure comps that pass comp-purity.compPurityFault, sold ≤ maxAgeY
+ *  before the valuation, and inside band× of the pure comps' median. */
+export const PURITY = { minPure: 3, maxAgeY: 10, band: 5, ratioCap: 5 };
+
 /** Whether the engine applies the no-estimate bias (measured: no — see
  *  estimateValueEx; re-measured Oct 5 2026, still no). The 'n' value band is
  *  fit on the SAME basis. */
@@ -703,12 +734,30 @@ export function estimateValueEx(
     tier = 'fallback';
   }
 
+  const refMs = (() => { const t = new Date(lot.saleDate || '').getTime(); return isNaN(t) ? Date.now() : t; })();
+  const ageYOf = (c: Comp) => { const t = new Date(c.saleDate || '').getTime(); return isNaN(t) ? Infinity : (refMs - t) / 31_557_600_000; };
+  // (Oct 6, FLAGS.purityGate / purityPool) THE PURE COMPS: an object-naming
+  // title, the target's medium family + edition class (comp-purity), sold ≤
+  // PURITY.maxAgeY before the valuation, inside PURITY.band× of their own
+  // median. A target whose own title names no object has none.
+  const targetIdLess = FLAGS.purityGate || FLAGS.purityPool ? isIdentityLessTitle(lot) : false;
+  const pureOf = (cs: Comp[]): Comp[] => {
+    if (targetIdLess) return [];
+    const st = cs.filter(c => ageYOf(c) <= PURITY.maxAgeY && !(c.lot && compPurityFault(lot, c.lot)));
+    if (!st.length) return st;
+    const m = quantile(st.map(c => c.realizedUsd).sort((a, b) => a - b), 0.5);
+    return st.filter(c => c.realizedUsd <= m * PURITY.band && c.realizedUsd >= m / PURITY.band);
+  };
+  if (FLAGS.purityPool) {
+    const p = pureOf(pool);
+    if (p.length >= PURITY.minPure) pool = p;
+  }
+
   const top = pool.slice(0, TOP_K);
   // Recency decay (validated ADOPT, halflife 2y): a comp's weight halves every
   // 2 years of age relative to the lot's own sale (or now for a live lot).
   // Measured on temporal holdout: identical coverage, edge 23.9→25.0pt, +199
   // flags with clean churn (removed flags realize like unflagged).
-  const refMs = (() => { const t = new Date(lot.saleDate || '').getTime(); return isNaN(t) ? Date.now() : t; })();
   // hl=2y for estimate lots (directional signal); hl=1y on the no-estimate
   // (Goldin absolute) path — memorabilia cycles faster, and the uncapped
   // holdout measured MdAPE 41.2%→38.8% at hl≈1y there.
@@ -775,6 +824,7 @@ export function estimateValueEx(
 
   // DIRECTIONAL signal (estimate lots)
   let signal: ValueResult['signal'] = null;
+  let partial: string | null = null;
   let compRatio: number | null = null;
   let flagRatio: number | null = null;
   let houseF: number | undefined;
@@ -837,6 +887,14 @@ export function estimateValueEx(
     const strength = (flagRatio >= 2 && br >= 60) || flagRatio <= 0.55 ? 'strong'
       : flagRatio >= 1.3 || flagRatio <= 0.75 ? 'moderate' : 'slight';
     signal = { label, strength, beatRatePct: uncal ? 0 : br };
+    // (Oct 6, FLAGS.purityGate) no directional read without the evidence for
+    // one: a comp ratio outside the ×5 estimate-band sanity is a data fault
+    // (engineFlagOf already hid it; the signal itself kept 'strong, 64%'),
+    // and a read needs ≥ PURITY.minPure pure comps
+    if (FLAGS.purityGate) {
+      if (!(compRatio <= PURITY.ratioCap && compRatio >= 1 / PURITY.ratioCap)) { signal = null; partial = 'flag:ratio-x5'; }
+      else if (pureOf(top).length < PURITY.minPure) { signal = null; partial = 'flag:purity'; }
+    }
   }
 
   // THE PUBLISHED VALUE (Sep 27 2026 engine pass). Measured live (659 estimate
@@ -919,6 +977,7 @@ export function estimateValueEx(
     tier,
     exact,
     idn: idn || undefined,
+    ...(partial ? { abstain: partial } : {}),
     compMedianUsd: Math.round(compRawUsd),
     compAdjUsd: Math.round(compAdjUsd),
     ...(blendW != null ? { blendW: Math.round(blendW * 100) / 100 } : {}),
@@ -1044,7 +1103,7 @@ export function resolveComps(
     // admit down to the RELAXED tier-b gate — estimateValue applies the strict
     // gate first and only reaches for these when the strict pool is thin
     if (!passesGateWith(FALLBACK_GATE, m)) continue;
-    out.push({ id: c.id, match: m, realizedUsd: compAllInUsd(c), saleDate: c.saleDate });
+    out.push({ id: c.id, match: m, realizedUsd: compAllInUsd(c), saleDate: c.saleDate, lot: c });
   }
   return out;
 }

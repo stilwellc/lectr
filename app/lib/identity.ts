@@ -246,6 +246,21 @@ export function isEditionLot(l: Pick<AuctionLot, 'formKey' | 'medium'> & Edition
   return true;
 }
 
+/** (Oct 6 2026, pricing wave 2) The EDITION CLASS a lot's own text proves:
+ *  'multiple' (an edition-structured lot, isEditionLot), 'unique' (medium
+ *  text only a unique work carries — the same UNIQUE_STRONG / UNIQUE_WEAK
+ *  readers isEditionLot vetoes on), else null (bare or ambiguous text — no
+ *  claim either way). A comp of the other class is a different object: a
+ *  $3.1M 2019 painting priced a Wright $2,000 print to "+158,730%". */
+export function editionClassOf(l: Pick<AuctionLot, 'formKey' | 'medium'> & EditionText): 'unique' | 'multiple' | null {
+  if (isEditionLot(l)) return 'multiple';
+  if (!l.medium && !l.description) return null;
+  const text = editionText(l);
+  if (UNIQUE_STRONG.test(text)) return 'unique';
+  if (UNIQUE_WEAK.test(text) && !PRINT_PROCESS.test(text) && !EDITION_SIZE.test(text)) return 'unique';
+  return null;
+}
+
 /** Canonical autograph format from the title. RR mostly spells formats out
  *  (66k sold lots); the classic abbreviations are matched case-sensitively so
  *  "als"/"ds" inside ordinary words never fire. Order matters: ALS/TLS before

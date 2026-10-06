@@ -469,7 +469,11 @@ function buyerObs(v: { expectedHammerUsd?: number; maxBidUsd?: number }, hammer:
 
 export function scoreSold(prep: Prepared, st: BacktestState, lot: L): boolean {
   const v = valueOne(prep, lot);
-  if (!v || !v.signal) return false;
+  // (Oct 6, pricing wave 2) a value whose directional read was withheld (the
+  // purity gate / ×5 sanity: signal null) still feeds the value record
+  // (calObs: the blend, the bands, the odds by ratio) — it only stays out of
+  // the flagged / at / above buckets, where it made no call
+  if (!v || (!v.signal && !getEngineFlags().purityGate)) return false;
   const estMid = estMidOf(lot);
   const estTop = estTopOf(lot);
   const et = estKindOf(lot);
@@ -480,11 +484,11 @@ export function scoreSold(prep: Prepared, st: BacktestState, lot: L): boolean {
   // the house's estimate habit at scoring time (house-bias index for this
   // quarter) — the adjusted top the Flags' odds are graded against
   const hfx = houseFactorOf(prep.marketBySlug[lot.artist], lot.auctionHouse, estKindOfLot(lot.estLowUsd, lot.estHighUsd));
-  const isBelow = v.signal.label.startsWith('below');
-  const isAbove = v.signal.label.startsWith('above');
+  const isBelow = !!v.signal && v.signal.label.startsWith('below');
+  const isAbove = !!v.signal && v.signal.label.startsWith('above');
   // point-estimate lots (RR "$500+") feed calObs ONLY — the certified global
   // buckets + byYear stay band-basis so their published meaning never shifts
-  if (et === 'b') {
+  if (et === 'b' && v.signal) {
     const bucket = isBelow ? st.flagged : isAbove ? st.above : st.unflagged;
     const push = (b: Bucket) => {
       b.perfs.push(realized / estMid - 1);
@@ -543,7 +547,7 @@ export function scoreSold(prep: Prepared, st: BacktestState, lot: L): boolean {
     });
   }
 
-  if (et === 'b') {
+  if (et === 'b' && v.signal) {
     const y = +lot.saleDate.slice(0, 4);
     if (y >= 2000) {
       const yb = st.byYear[y] || { flagged: [], unflagged: [] };

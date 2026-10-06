@@ -37,6 +37,9 @@ async function main() {
     f.version = `${f.version}~${arg('flags')}`;
     value.setEngineFlags(f);
   }
+  if (arg('set')) {
+    for (const kv of arg('set')!.split(',')) { const [k, v] = kv.split('='); const [o, f] = k.split('.'); value[o][f] = +v; }
+  }
   // outcomes first (only the id → sold map is kept)
   const outcome = new Map<string, { r: number; sd: string; h: number | null }>();
   for (const f of ['lots.json.gz', 'sold-archive.json.gz']) {
