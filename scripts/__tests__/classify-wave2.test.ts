@@ -7,7 +7,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { reclassifyLot, isCardTitle, isSignedDocument, artCategoryFix, DROP } from '../lib/classify';
-import { reclassifyCorpus, rerouteScienceMisroutes, cultureItemClass } from '../lib/corpus-normalize';
+import { reclassifyCorpus, rerouteScienceMisroutes, cultureItemClass, healCrawlEntities } from '../lib/corpus-normalize';
+import { extractSportsTags } from '../../app/lib/comps';
 import { routeRRLot } from '../rr-auction';
 import { athleteIn } from '../lib/athlete-roster';
 import { subCatOf } from '../lib/sub-cats';
@@ -247,6 +248,23 @@ test('class 9 · art makers are never design; artist books and printed posters g
   assert.equal(K('raymond-pettibon', 'A set of two Raymond Pettibon skateboards', 'object-edition', 'original'), 'prints');
   assert.equal(K('kaws', 'Together (Set of Three)', 'object-edition', 'sculpture'), 'sculpture');
   assert.equal(K('roy-lichtenstein', 'Crak!', 'unknown', 'print'), 'prints');
+});
+
+test('class 14 · the sports/science entity tag is a person\'s name, not a leading descriptor run', () => {
+  const E = (title: string) => extractSportsTags(title, 'game-used').entity;
+  assert.equal(E('Tom Brady Signed Super Bowl XLIX Full Scan Ticket - Seattle Seahawks vs. New England Patriots'), 'Tom Brady');
+  assert.equal(E('GRANT HILL GAME USED SNEAKERS'), 'GRANT HILL');
+  assert.equal(E('Kobe Bryant Game-Worn Jersey'), 'Kobe Bryant');
+  for (const t of ['FLOWN Apollo spacecraft 009 heat shield segment', 'FIFA World Cup Chile Ticket Stub - Brazil vs. England', 'New York Yankees vs. Boston Red Sox MLB Ticket Stub', 'NHL Global Series - Patrik Laine Game-Used Columbus Blue Jackets Jersey', 'Official Wilson Game-Used Football Signed by Brock Purdy', 'The Rolling Stones'])
+    assert.equal(E(t), undefined, t);
+  // stored crawl entities heal the same way (signer-parsed entities untouched)
+  const lots: any[] = [
+    { id: 'a', artist: 'tickets-passes', title: 'Derek Jeter Signed Ticket - PSA/DNA Authentic', entity: 'Derek Jeter Signed' },
+    { id: 'b', artist: 'space-exploration', title: 'FLOWN ON APOLLO 11 Beta Cloth', entity: 'FLOWN ON APOLLO' },
+    { id: 'c', artist: 'autographs', title: 'Babe Ruth Signed Ball', entity: 'Babe Ruth', entitySrc: 'sig-p3' },
+  ];
+  assert.equal(healCrawlEntities(lots), 2);
+  assert.deepEqual(lots.map(l => l.entity), ['Derek Jeter', undefined, 'Babe Ruth']);
 });
 
 test('class 1 · culture kind reads the description when the title is a bare name; signed pieces; plurals', () => {

@@ -2,7 +2,7 @@ import type { AuctionLot } from '../../app/types';
 import { subCatOf, sportSlugOf } from './sub-cats';
 import { extractReference } from './identity-enrich';
 import { looksLikeCard, playerSlugOf, parseCard } from '../../app/lib/cards';
-import { classifyForm, objectClassOf, cleanGoldinTitle, watchKey } from '../../app/lib/comps';
+import { classifyForm, objectClassOf, cleanGoldinTitle, watchKey, isPersonNameRun, personNameOf } from '../../app/lib/comps';
 import { vetReference, readDescriptionReference, splitWatchRef } from '../../app/lib/watch-ref';
 import { titleTokens as titleTokensOf, extractEdition, extractSerials, toUsdDated, fxRateFor } from '../../app/lib/normalize';
 import { isCurrency } from '../../app/types';
@@ -1255,6 +1255,8 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   // regex first; the extraction fills only a reference still empty (src:'llm')
   fillWatchReferencesFromExtract(ls);
   const players = recoverPlayerSlugs(ls);
+  const junkEntities = healCrawlEntities(ls);
+  if (junkEntities) console.log(`[normalize] crawl entity tags trimmed to a person's name / cleared: ${junkEntities}`);
   const signers = recoverAutographSigners(ls);
   const cultureStamped = stampCultureAxes(ls);
   const datesFixed = reconcileSaleDates(ls);
@@ -1596,6 +1598,27 @@ export function recoverPlayerSlugs(lots: Lot[]): { stamped: number; total: numbe
 // HIGH-PRECISION only (parseSignerName abstains on themes/groups); we never
 // overwrite an existing entity, and we require a canonical autograph format so
 // relics ("a fence rail cane") are skipped.
+/** (wave 2) class 14 · the crawl-time sports/science `entity` tag
+ *  (comps.extractSportsTags) took any leading capitalized run — 'FLOWN ON
+ *  APOLLO', 'Official Game Used', 'NASA Mission Control' (10.2k rows). It is
+ *  now gated on a person-name parse; this clears the stored ones (a crawler
+ *  entity = no entitySrc, equal to its title's leading run) so the signer
+ *  pass below and every entity reader see no identity rather than a phrase. */
+export function healCrawlEntities(lots: Lot[]): number {
+  let cleared = 0;
+  for (const l of lots) {
+    const w = l as Lot & { entity?: string | null; entitySrc?: string | null };
+    if (!w.entity || w.entitySrc) continue;
+    const lead = String(l.title || '').match(/^((?:[A-Z][A-Za-z.'’-]+\s+){1,2}[A-Z][A-Za-z.'’-]+)/);
+    if (!lead || lead[1].trim() !== w.entity) continue;
+    if (isPersonNameRun(w.entity)) continue;
+    const person = personNameOf(w.entity);
+    if (person) w.entity = person; else delete w.entity;
+    cleared++;
+  }
+  return cleared;
+}
+
 export function recoverAutographSigners(lots: Lot[]): { stamped: number; candidates: number } {
   const src = `sig-p${SIGNER_PARSER_VERSION}`;
   let stamped = 0, candidates = 0;
