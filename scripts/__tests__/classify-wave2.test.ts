@@ -147,6 +147,26 @@ test('class 11 · Goldin\'s item-type facet: a music / film object is not game-u
   assert.equal(G('1952 Rocky Marciano/Jersey Joe Walcott Type I Original Photo by Sam Goldstein - 7 x 9.25 - PSA/DNA', 'type-1-photos'), 'type-1-photos');
 });
 
+test('class 2 · sports houses: card lots are cards; non-sport cards have no home; Pokémon is tcg', () => {
+  const H = (title: string, artist: string, house = 'Huggins & Scott') => move({ auctionHouse: house, artist, title });
+  assert.equal(H('(19,000+) Multi-Sport 1980s-2000s Stars, Rookies & Inserts', 'memorabilia'), 'graded-cards');
+  assert.equal(H('(3) 1941-1968 Hall of Fame Graded Rookie Lot with Ryan, Clemente and Reese', 'memorabilia'), 'graded-cards');
+  assert.equal(H('1948-1982 Baseball & Football Singles Collection (317) with Hall of Famers & Stars', 'memorabilia'), 'graded-cards');
+  // autograph collections, coins, tobacco packages, lobby cards are not card lots
+  assert.equal(H('151 Hall of Famers Autograph Collection (15)', 'autographs', 'Lelands'), 'autographs');
+  assert.equal(H('1828-1938 U.S. Graded Coin Lot of (10) with (2) Key Date Liberty Nickels', 'memorabilia'), 'memorabilia');
+  assert.equal(H('1950s Mexican Movie Lobby Cards Lot (8) with Edward G. Robinson and Dan Dailey', 'memorabilia'), 'memorabilia');
+  // non-sport cards / comics / other TCGs: no home; Pokémon → tcg; a non-sport 1/1 → pop-memorabilia
+  assert.equal(H('1985 Topps "Garbage Pail Kids" Original Series 1 and Series 3 Near-Complete Set Pair (2 Sets, 156 Stickers)', 'graded-cards', 'REA'), DROP);
+  assert.equal(H('1962 Topps "Mars Attacks" #24 "The Shrinking Ray" PSA NM-MT 8', 'graded-cards', 'REA'), DROP);
+  assert.equal(H('1955 Topps "Rails and Sails" Collection (73)', 'graded-cards', 'REA'), DROP);
+  assert.equal(H('1963 Marvel Amazing Spider-Man #1 Second Appearance of Spider-Man CGC 4.5', 'graded-cards'), DROP);
+  assert.equal(H('2019 Pokémon Sun & Moon #205 Gardevoir/Sylveon GX Unbroken Bonds Full Art PSA GEM MINT 10', 'graded-cards'), 'pokemon');
+  assert.equal(H('1962 Topps "Mars Attacks" Original Artwork for Card #14 - Charred By Martians', 'graded-cards', 'REA'), 'pop-memorabilia');
+  // sports cards stay: a team name or roster athlete is sport evidence
+  assert.equal(H('1949 Cleveland Indians Picture Pack Action Set with Satchel Paige PSA 9 MINT', 'graded-cards', 'Memory Lane'), 'graded-cards');
+});
+
 test('class 1 · culture kind reads the description when the title is a bare name; signed pieces; plurals', () => {
   const K = (title: string, description = '', o: R = {}) => subCatOf({ artist: 'entertainment-memorabilia', title, itemClass: cultureItemClass({ title, description, ...o }) }).subCat;
   // the object lives in the description (Christie's / Sotheby's culture titles)

@@ -212,6 +212,31 @@ export function expansionSportsKind(l: ClassifyLot): string | null {
   return null;
 }
 
+/** (wave 2) class 2 · CARD LOTS AND NON-SPORT CARDS AT THE SPORTS HOUSES —
+ *  (a) a lot / collection / hoard of cards ("1948-1967 Football Singles Lot of
+ *  (1170)", "(92) 1981-Modern Cal Ripken Jr. Graded & Rookie Collection") was
+ *  filed memorabilia: isCardTitle reads one card, not a lot of them;
+ *  (b) non-sport cards ("1962 Topps Mars Attacks", "1880s N245 Actors and
+ *  Actresses", Garbage Pail Kids, Pokémon, CGC comics) rode graded-cards. A
+ *  non-sport CARD (or comic / TCG) has no home; a Pokémon card goes to tcg; a
+ *  non-sport 1/1 (original card artwork, a cel, a signature) is the sports
+ *  houses' pop-memorabilia. */
+const CARD_LOT_RE = /\(\d[\d,]*\+?\)[^.]{0,60}\b(?:singles|stars|rookies|inserts|commons|cards)\b|\b(?:singles|inserts|rookies?|rcs|commons|stars|hall of famers?|hofers?|graded|cards?|parallels?|refractors?|sets?)\b[^.]{0,50}\b(?:lots?|collections?|groups?|grouping|runs?|hoards?|assortments?|accumulations?|treasure chest|balance)\b|\b(?:lots?|collections?|groups?|accumulations?|hoards?)\b[^.]{0,40}\b(?:singles|rookies?|rcs|commons|inserts|cards?)\b/i;
+const CARD_LOT_NOT_RE = /\b(?:photos?|photographs?|jerseys?|bats?|balls?|uniforms?|tickets?|stubs?|line-?up cards?|programs?|scorecards?|pins?|buttons?|pennants?|postcards?|wrappers?|display|signed|autographs?|autographed|cuts?|index cards?|magazines?|press|negatives?|letters?|checks?|contracts?|trophies|awards?|rings?|bobble\w*|figures?|statues?|posters?|game[- ]used|game[- ]worn|blankets?|rugs?|silks?|packages?|labels?|coupons?|lids?|coins?|advertising|premiums?|felts?|stamps?|decals?|stickers?|tattoos?|lobby cards?|movie|matchbooks?|menus?)\b/i;
+const NON_SPORT_CARD_RE = /\b(?:garbage pail|wacky packages|howdy doody|presidents?|beauties|actors and actresses|actresses|mars attacks|star wars|star trek|disney|mickey mouse|marvel|batman|superman|wizard of oz|elvis|beatles|monkees|non-?sports?|nonsports?|pok[eé]mon|yu-?gi-?oh|magic:? the gathering|green hornet|munsters|rails and sails|krazy|civil war|world war|wwii|james bond|beverly hillbillies|bewitched|i love lucy|between the acts|indian chiefs|indian gum|automobile|flags of|wildlife|dinosaurs?|astronauts?|universal monsters|frankenstein|dracula|film stars|movie stars|comics?)\b/i;
+export function sportsHouseCardLotKind(l: ClassifyLot): string | null {
+  if (!SPORTS_EXPANSION_HOUSES.has(l.auctionHouse || '')) return null;
+  const t = String(l.title || '');
+  const sport = SPORT_WORD_RE.test(t) || !!athleteIn(t);
+  if (l.artist === 'graded-cards' && !sport && NON_SPORT_CARD_RE.test(t)) {
+    if (/pok[eé]mon/i.test(t) && !NON_SPORT_TCG_RE.test(t)) return 'pokemon';
+    const cardish = /\bcards?\b|\bsets?\b|\bpsa\b|\bsgc\b|\bbgs\b|\bcgc\b|\bgraded\b|\buncut\b|\bstickers?\b|\bwrappers?\b|#\s?\d|\b(?:collection|lot|run|hoard|shoebox|grouping|treasure chest)\b|\(\d[\d,+]*\)|\brecords?\b|\b45 ?rpm\b/i.test(t) || leadsWithSetCode(t) || COMIC_RE.test(t) || NON_SPORT_TCG_RE.test(t);
+    return cardish && !/original (?:card )?art(?:work)?|\bcels?\b/i.test(t) ? DROP : 'pop-memorabilia';
+  }
+  if ((l.artist === 'memorabilia' || l.artist === 'autographs' || l.artist === 'programs-publications') && CARD_LOT_RE.test(t) && !CARD_LOT_NOT_RE.test(t) && !NON_SPORT_CARD_RE.test(t)) return 'graded-cards';
+  return null;
+}
+
 /** (wave 2) the reverse flip: a card-slug row at an expansion house that is a
  *  graded TICKET, a signed lineup card, a pack wrapper or a blown-up print —
  *  the card-first rule's grade/number test caught them ("Aug. 6, 1965 Detroit
@@ -572,6 +597,7 @@ export const RECLASS_RULES: ReclassRule[] = [
   },
   { cls: 'sports-kind-card-first-gu-language', apply: expansionSportsKind },
   { cls: 'sports-card-slug-objects', apply: expansionCardObject },
+  { cls: 'sports-house-card-lots-nonsport', apply: sportsHouseCardLotKind },
   {
     cls: 'science-title-object-noun',
     apply: l => (GENERALIST_HOUSES.has(l.auctionHouse || '') ? scienceVerdict(l) : null),
