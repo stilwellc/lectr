@@ -262,6 +262,11 @@ export interface EngineFlags {
   /** (Oct 6, pricing wave 7) the calibrated odds clamp at ODDS_FLOOR.lo, not
    *  0.30 (backtest-core.calibrationOf) */
   oddsFloor?: boolean;
+  /** (Oct 6, pricing wave 8) THE HABIT PREMIUM: an estimate lot whose comps
+   *  read at least HABIT_PREMIUM.fr × the house's habit (flagRatio) carries a
+   *  premium the printed estimate understates — the value × HABIT_PREMIUM.k.
+   *  Measured and NOT adopted (docs/ENGINE_LANES.md §19) */
+  habitPremium?: boolean;
 }
 /** The engine before the Oct 3 pass (raw-estimate Flags, premium-only
  *  anchor, ungated card tiers) — kept so the harnesses can replay it. */
@@ -1002,6 +1007,14 @@ export function watchRefFamily(l: Pick<AuctionLot, 'artist' | 'reference'>): str
   const m = k.slice(k.indexOf('|') + 1).match(/^[a-z]{0,3}(\d+)/);
   return m ? `${l.artist}|${m[1]}` : null;
 }
+/** The comp recency half-life (years) by the target's estimate kind: a
+ *  banded estimate, a single printed figure (RR's "$500+"), none (Goldin).
+ *  (wave 8) a sweep handle; point 1 / 0.5 measured and not taken (RR's old
+ *  comps are not its under-call — docs/ENGINE_LANES.md §19). */
+export const COMP_HL = { band: 2, point: 2, noEst: 1 };
+/** (wave 8) EngineFlags.habitPremium's bar and lift — measured, OFF
+ *  (docs/ENGINE_LANES.md §19) */
+export const HABIT_PREMIUM = { fr: 1.4, k: 1.1 };
 /** (wave 4) EngineFlags.mediumKnownPool's floor */
 export const MEDIUM_POOL = { minN: 3 };
 export function exactBlendW(house: string | null | undefined): number {
@@ -1225,7 +1238,7 @@ export function estimateValueEx(
   // holdout measured MdAPE 41.2%→38.8% at hl≈1y there.
   // ANY estimate (incl. RR's single-point low) = the directional path → 2y;
   // only the true no-estimate (Goldin absolute) path takes the 1y halflife.
-  const halflife = (lot.estLowUsd || lot.estHighUsd) ? 2 : 1;
+  const halflife = (lot.estLowUsd || lot.estHighUsd) ? ((lot.estLowUsd && lot.estHighUsd) ? COMP_HL.band : COMP_HL.point) : COMP_HL.noEst;
   const decay = (c: Comp) => {
     const t = new Date(c.saleDate || '').getTime();
     if (isNaN(t)) return 0.25; // undated comp: penalty weight, never max recency
@@ -1450,6 +1463,9 @@ export function estimateValueEx(
     predUsd = compAdjUsd * (APPLY_NOEST_BIAS ? noEstimateBias(lot.artist, confidence) : 1);
   }
   if (!(predUsd > 0) || !Number.isFinite(predUsd)) return { value: null, abstain: 'no-value' };
+  // (Oct 6, wave 8, FLAGS.habitPremium) comps well over the house's habit:
+  // the estimate understates a premium the comps carry
+  if (FLAGS.habitPremium && estMid && flagRatio != null && flagRatio >= HABIT_PREMIUM.fr) predUsd *= HABIT_PREMIUM.k;
   // (Oct 6, wave 3, FLAGS.staleFloor) a pool whose weighted median sale is
   // more than STALE_FLOOR.ageY old says little about today's level — the
   // value never sits under the house's printed low estimate

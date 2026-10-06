@@ -481,3 +481,39 @@ Run through the engine (Sep 14), culture error went 26 → 21% and band coverage
 - **RR rare-content under-calls** ("as President", ship's pass, Type I vs III, multi-signer): not attempted this wave.
 
 Harness additions: `engine-ab.ts` and `comp-precision.ts` take `--a wave6`. Tests: `scripts/__tests__/pricing-wave7.test.ts`.
+
+## 19 · OCT 6 2026 PRICING WAVE 8 — the round-3 under-call classes (no engine change; `2026.10.06-wave7` stays)
+
+**Why.** After wave 7, three under-call classes carried a third of the live error beyond ±30%: vintage watches (10.9%, Sotheby's bias 1.34), card key / grade premium (10.0%), and RR rare content (11.8%, bias 1.22).
+
+Yardsticks: the test-year holdout (`engine-ab.ts --a wave7`, Oct 6 corpus, 5,717 values). A training window (`engine-ab.ts --from 2023-10-01 --to 2025-10-01`, 7,749 values) checks whether a pattern predates the test year. The Sep 14 and Sep 24 books go through `live-ab.ts --full-cal` (920 and 300 values). Rules are tuned on the Sep 14 even lots and tested on the odd lots (md5 parity). Cards use the point-in-time card record (trailing year, 1,715 residuals).
+
+**What the pools show.** The engine picks the right comps in all three classes. The misses come from the sale itself, not from a lost identity.
+- **Watches.** The Day-Date 1803 (guilloché dial) priced off ten 1803 sales at $9.5k–17.8k and sold for $81.9k, 2.1× its high estimate. The "Red Stella" 18038 priced off eight Stella-dial 18038s ($19.5k–145k) and sold for $139k, 2.2× its high. The Bubbleback 3131 priced off ten 3131s ($5.4k–11.5k) and sold for $52k. On the holdout, the lots that sold above the house's high estimate (216 of 861) carry the whole bias (1.55). Dial and rarity words show no stable premium: "extremely rare", "retailed by" and the dial variants read 0.90–1.11 in the training window and 1.20–1.39 in the test year (n 15–36 per half-year).
+- **Cards.** The Ohtani 2018 Topps Update US1 BGS 9.5 had four earlier sales under the identical title at $67–288. It sold for $4,028, and the Sep 14 value was $271. The Bednarik 1948 Leaf yellow-background PSA 4 had one exact sale in the window ($4,797) and sold for $10,742. The Ichiro Victory PSA 10 had two same-week exact sales ($39 and $98). None of these pools holds base cards. In the point-in-time record, raw bias by segment (1970–99 sets 1.20, grade 9 1.20) does not repeat live: grade 9 reads 1.18 on Sep 14 and 1.01 on Sep 24, and 1970–99 reads 1.09 and 1.01. Two identity faults were found but not changed, because neither causes an under-call: the "Victory" and "Upper Deck Victory" set keys split one card, and every colour reads as one `v:color` variant (the Bednarik orange background shares the yellow ladder).
+- **RR.** Wells & Fargo priced off ten Wells & Fargo American Express certificates ($500–1,739) and sold for $4,980. Conan Doyle priced off seven Conan Doyle ALS ($446–1,344) and sold for $1,553. Lon Chaney Sr. priced off his own signed photographs ($1.2k–3.0k, with Jr. rows in the tail) and sold for $4,185. Content tokens show no stable premium either. The subCat habit flips between windows: documents 1.00 in training and 1.12 in test, space 0.96 and 1.11. A letter "on" a topic reads 1.01 on the holdout.
+
+**Measured and NOT adopted:**
+- **The habit premium** (`habitPremium`, `HABIT_PREMIUM = { fr 1.4, k 1.1 }`): an estimate lot whose comps read ≥ 1.4× the house habit gets its value × 1.1. Comps over the habit realize above the value in both windows (bias 1.06–1.15 at fr ≥ 1.25). The parameters were tuned on the Sep 14 even lots.
+
+| | wave 7 | habit premium |
+|---|---|---|
+| holdout all medErr / ±30% / bias / band | 31.4% / 48.8% / 1.031 / 76.8% | 31.1% / 48.9% / 1.019 / 76.9% |
+| holdout changed (919) | 34.1% (mean abs log 0.405) | 32.4% (0.390) |
+| holdout per market, all lots | art 26.2, culture 31.0, design 28.7, science 31.0, sports 27.5, watches 21.8% | 26.4, 31.1, 28.8, 31.5, 28.0, 21.7% |
+| training window, changed (1,652) | 31.8%, ±30% 48.3% | 32.7%, ±30% 46.7% (worse in 5 of 6 markets) |
+| live Sep 14 estimate lots: odd / even | 21.65 / 24.71% | 21.14 / 24.25% |
+| live Sep 24 estimate lots | 26.93% | 26.15% |
+| live Sep 14 changed (91): medErr / bias | 30.1% / 1.00 | 29.8% / 0.91 |
+| audit classes, Sep 14 odd lots: watches / RR / cards | 36.0 / 26.6 / 25.0% | 36.0 / 24.2 / 25.0% |
+
+The lift fixes the mean (bias goes to 1.0) but not the median. The residuals above the habit are right-skewed, so the training window's median error and ±30% got worse. On the holdout, five of six markets also got worse on all lots, while their changed lots improved. Sotheby's watches did not move. At k 1.05, Sep 14 odd lots went 21.65 → 21.75% (worse). The rule stays off. It can be replayed with `--b-flags habitPremium=1`.
+- **The estimate premium**: when comps sit far under the estimate (cr < 0.4–0.6), shrink the comp weight by 50–100% (offline, exact blend inversion). Training watches 20.72 → 20.70–21.10%. Holdout watches 21.83 → 21.83–22.57%, and Sotheby's 19.9 → 20.4–21.5%.
+- **A higher comp weight above the habit** (w ≥ 0.2–0.5, or w + 0.1–0.3, when fr ≥ 1.25–2): training all 25.1 → 25.2–27.1%.
+- **A shorter house-habit half-life** (`indices.HB_HL_Y` 2 → 1 / 0.5, both the anchor and the Flags yardstick). Holdout all 31.4 → 31.2 / 31.5%. Watches 21.8 → 22.1 / 21.9% and art 26.2 → 27.1 / 27.2%.
+- **RR comp recency** (`COMP_HL.point` 2 → 1 / 0.5, a new sweep handle; the default is unchanged). Holdout RR 30.5 → 30.5 / 31.0% (20–37 values withdrawn). Training RR 23.6 → 23.8%.
+- **A dial / gem-set variant boundary** (guilloché, gilt, diamond-set). The tokens show no holdout bias: diamond-set 0.95 in training and 1.03 in test, guilloché 0.84 and 0.96. Not built.
+
+**The Phillips deep backfill (report only, no crawl run).** The 5 tracked watch makers' maker-API histories hold 10,715 Phillips lots. The corpus has 4,926 of them, and none yet carries `houseReference`, because the nightly crawler with the field has not run. `PHILLIPS_DEEP=1` walks every page of every Phillips maker, art included, instead of the nightly 2 pages. For watches it would add about 5,800 lots: Patek Philippe 3,526 (the corpus has 269), Rolex 1,682, Cartier 579. They come from Geneva (2,161), Hong Kong (2,782) and New York (846) sales, and 5,032 of them carry a reference. Wave 7 measured `USE_HOUSE_REFERENCE` only on back-stamped existing rows (Phillips 24.1 → 24.3%). The deeper Patek pools are the case it never tested. Order: run the deep crawl once, let normalize stamp the references, then re-run `engine-ab.ts` with the reader on vs off before flipping it. Flipping it before the backfill is the wave-7 result again.
+
+Harness additions: `engine-ab.ts` takes `--to` (a training window) and `--a wave7`; `comp-precision.ts` takes `--a wave7`; `live-ab.ts` rows carry `bw` / `cm` / `ca` / `n`, and `--pools` adds the pool ids and title. Tests: `scripts/__tests__/pricing-wave8.test.ts`.

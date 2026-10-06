@@ -22,16 +22,18 @@ import {
 } from '../../backtest-core';
 import {
   estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, houseFactorOf, FLAG_GATE,
-  ENGINE_FLAGS_LEGACY, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_CANDIDATE, ENGINE_FLAGS_HOUSE_GATE, ENGINE_FLAGS_HAMMER_BASIS, ENGINE_FLAGS_COMP_PURITY, ENGINE_FLAGS_WAVE3, ENGINE_FLAGS_WAVE4, ENGINE_FLAGS_WAVE5, ENGINE_FLAGS_WAVE6, type EngineFlags, type EngineCalibration,
+  ENGINE_FLAGS_LEGACY, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_CANDIDATE, ENGINE_FLAGS_HOUSE_GATE, ENGINE_FLAGS_HAMMER_BASIS, ENGINE_FLAGS_COMP_PURITY, ENGINE_FLAGS_WAVE3, ENGINE_FLAGS_WAVE4, ENGINE_FLAGS_WAVE5, ENGINE_FLAGS_WAVE6, ENGINE_FLAGS_WAVE7, type EngineFlags, type EngineCalibration,
 } from '../../../app/lib/value';
 import type { AuctionLot } from '../../../app/types';
 
 const arg = (n: string): string | null => { const i = process.argv.indexOf(`--${n}`); return i >= 0 ? process.argv[i + 1] : null; };
-const FLAGSETS: Record<string, EngineFlags> = { legacy: ENGINE_FLAGS_LEGACY, 'house-gate': ENGINE_FLAGS_HOUSE_GATE, 'hammer-basis': ENGINE_FLAGS_HAMMER_BASIS, 'comp-purity': ENGINE_FLAGS_COMP_PURITY, wave3: ENGINE_FLAGS_WAVE3, wave4: ENGINE_FLAGS_WAVE4, wave5: ENGINE_FLAGS_WAVE5, wave6: ENGINE_FLAGS_WAVE6, current: ENGINE_FLAGS_CURRENT, candidate: ENGINE_FLAGS_CANDIDATE };
+const FLAGSETS: Record<string, EngineFlags> = { legacy: ENGINE_FLAGS_LEGACY, 'house-gate': ENGINE_FLAGS_HOUSE_GATE, 'hammer-basis': ENGINE_FLAGS_HAMMER_BASIS, 'comp-purity': ENGINE_FLAGS_COMP_PURITY, wave3: ENGINE_FLAGS_WAVE3, wave4: ENGINE_FLAGS_WAVE4, wave5: ENGINE_FLAGS_WAVE5, wave6: ENGINE_FLAGS_WAVE6, wave7: ENGINE_FLAGS_WAVE7, current: ENGINE_FLAGS_CURRENT, candidate: ENGINE_FLAGS_CANDIDATE };
 
 function main() {
   const dir = arg('corpus') || 'data/corpus';
   const from = arg('from') || '2025-10-01';
+  // (wave 8) an upper bound for a TRAINING window (fit on an earlier year, test on the holdout)
+  const to = arg('to') || '9999';
   const perMarket = parseInt(arg('per-market') || '2500', 10);
   const noEstN = parseInt(arg('noest') || '3000', 10);
   const A = FLAGSETS[arg('a') || 'legacy'], B = FLAGSETS[arg('b') || 'current'];
@@ -64,12 +66,12 @@ function main() {
   rehydrateState(st, prep, console.log);
   const tg = targetsOf(prep);
   const mOf = (l: L) => prep.marketBySlug[l.artist] || 'other';
-  const est = tg.soldTargets.filter(l => l.saleDate >= from);
+  const est = tg.soldTargets.filter(l => l.saleDate >= from && l.saleDate < to);
   const byM = new Map<string, L[]>();
   for (const l of est) (byM.get(mOf(l)) || byM.set(mOf(l), []).get(mOf(l))!).push(l);
   const pick: L[] = [];
   byM.forEach(arr => { const step = Math.max(1, Math.ceil(arr.length / perMarket)); for (let i = 0; i < arr.length; i += step) pick.push(arr[i]); });
-  const ne = tg.noEstTargets.filter(l => l.saleDate >= from);
+  const ne = tg.noEstTargets.filter(l => l.saleDate >= from && l.saleDate < to);
   { const step = Math.max(1, Math.ceil(ne.length / noEstN)); for (let i = 0; i < ne.length; i += step) pick.push(ne[i]); }
   pick.sort((a, b) => (a.saleDate < b.saleDate ? -1 : 1));
   console.log(`[ab] ${pick.filter(hasAnyEst).length} estimate + ${pick.filter(l => !hasAnyEst(l)).length} no-estimate targets since ${from} · A=${fa.version} B=${fb.version} · cal=${calMode} (${el()})`);

@@ -105,6 +105,8 @@ async function main() {
       cr: v?.compRatio ?? null, fr: v?.flagRatio ?? null, hf: v?.houseFactor ?? null,
       xh: v?.expectedHammerUsd ?? null, blo: v?.bandLowUsd ?? null, bhi: v?.bandHighUsd ?? null, mb: v?.maxBidUsd ?? null,
       ev: v?.engineVersion ?? null, vab: v?.abstain ?? null,
+      bw: v?.blendW ?? null, cm: v?.compMedianUsd ?? null, ca: v?.compAdjUsd ?? null, n: v?.n ?? null,
+      ...(process.argv.includes('--pools') ? { pool: ((v?.poolIds as string[] | undefined) || []).slice(0, 20), title: l.title, el: lo || null } : {}),
       abst: l.abstain ?? null,
     });
   }
