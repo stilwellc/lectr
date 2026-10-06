@@ -64,6 +64,8 @@ export interface SubMarketRead {
 // the descriptive stats each slug carries (a subset of stats.json / computeStats)
 interface StatsRow {
   totalLotsTracked?: number;
+  /** sales in the trailing 365 days (computeStats) — the typical-price n */
+  sold12m?: number;
   medianPriceLast12Months?: number;
   avgPriceLast12Months?: number;
   recordPrice?: number;
@@ -81,6 +83,8 @@ const HORIZON_PREF = ['5Y', '3Y', '1Y'] as const;
 const MIN_EST_COVERAGE = 0.6;
 const MIN_DEMAND_QUARTERS = 6;
 const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+// trailing-year sales a 'typical price' needs (slug rows + drill rows)
+const MIN_TYPICAL_SALES = 10;
 
 /** trailing quarterly sold counts — 'YYYY Qn' keys, capped at 24 quarters */
 function quarterlyVolume(sold: AuctionLot[]): { period: string; n: number }[] | undefined {
@@ -360,7 +364,7 @@ function buildRead(
   // descriptive layer straight from the pool (drills have no stats.json row)
   const now = Date.now();
   const ttm = sold.filter(l => now - new Date(l.saleDate).getTime() < YEAR_MS).map(l => l.priceUsd!);
-  const typicalUsd = ttm.length >= 10 ? Math.round(median(ttm)) : null;
+  const typicalUsd = ttm.length >= MIN_TYPICAL_SALES ? Math.round(median(ttm)) : null;
   let rec: AuctionLot | null = null;
   for (const l of sold) if (!rec || (l.priceUsd || 0) > (rec.priceUsd || 0)) rec = l;
   const record = rec ? { usd: rec.priceUsd!, title: rec.title || '', date: rec.saleDate || null, house: rec.auctionHouse || null } : null;
@@ -497,9 +501,15 @@ export function buildSubMarkets(
     const stats = statsBySlug[slug] || {};
 
     // ── descriptive layer (always available) ──
-    const typicalUsd = (stats.medianPriceLast12Months && stats.medianPriceLast12Months > 0)
-      ? stats.medianPriceLast12Months
-      : (stats.avgPriceLast12Months && stats.avgPriceLast12Months > 0 ? stats.avgPriceLast12Months : null);
+    // n-gated like the drill rows (MIN_TYPICAL_SALES in the trailing year):
+    // computeStats medians whatever the year held — one sale, or (zero sales)
+    // the PREVIOUS run's median carried forward indefinitely — so a thin slug
+    // printed one lot's price as its "typical" (Basquiat: 5 sales).
+    const typicalUsd = (stats.sold12m ?? 0) < MIN_TYPICAL_SALES
+      ? null
+      : (stats.medianPriceLast12Months && stats.medianPriceLast12Months > 0)
+        ? stats.medianPriceLast12Months
+        : (stats.avgPriceLast12Months && stats.avgPriceLast12Months > 0 ? stats.avgPriceLast12Months : null);
     const record = (stats.recordPrice && stats.recordPrice > 0)
       ? {
           usd: stats.recordPrice,
