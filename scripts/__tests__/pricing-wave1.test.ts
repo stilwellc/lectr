@@ -6,6 +6,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { floorAtBid, BID_FLOOR_LATE_LIFT, type ValueResult } from '../../app/lib/value';
 import { lotAllInFactor } from '../../app/lib/premiums';
+import { engineFlagOf, computeDeepSignal } from '../../app/lib/comps';
+import type { AuctionLot } from '../../app/types';
 
 const NOW = Date.parse('2026-10-05T13:00:00Z');
 const v = (o: Partial<ValueResult> = {}): ValueResult => ({
@@ -49,4 +51,21 @@ test('floorAtBid: a value above the bid with its band low under it only has the 
   assert.equal(f.bidFloor, undefined);
   assert.equal(f.bandLowUsd, 800);
   assert.equal(f.low, Math.round(800 * lotAllInFactor({ auctionHouse: 'Goldin' }, 800)));
+});
+
+test('engineFlagOf / computeDeepSignal: no engine value → no flag (never a client synthesis)', () => {
+  const lot = (value: unknown, extra: Record<string, unknown> = {}) => ({ id: 'x', artist: 'andy-warhol', title: 'Marilyn', estLowUsd: 1000, estHighUsd: 2000, formKey: 'screenprint', value, ...extra }) as unknown as AuctionLot;
+  assert.equal(engineFlagOf(lot(null)), null);
+  assert.equal(engineFlagOf(lot(undefined)), null);
+  assert.equal(computeDeepSignal(lot(null), [lot(null)]), null, 'the client no longer reads a pool for an engine-declined lot');
+  const ev = { n: 6, compValueUsd: 2400, compMedianUsd: 2100, compRatio: 1.4, flagRatio: 1.35, confidence: 'high', signal: { label: 'below comparable market', strength: 'moderate', beatRatePct: 58 } };
+  const f = engineFlagOf(lot(ev))!;
+  assert.equal(f.label, 'Below Market');
+  assert.equal(f.pct, 35, 'the printed % is the flag ratio');
+  assert.equal(f.med, 2100);
+  assert.equal(engineFlagOf(lot({ ...ev, signal: { ...ev.signal, label: 'at comparable market' } })), null);
+  assert.equal(engineFlagOf(lot({ ...ev, compRatio: 6 })), null, 'x5 estimate-band sanity');
+  assert.equal(engineFlagOf(lot({ ...ev, signal: null })), null);
+  const a = engineFlagOf(lot({ ...ev, compRatio: 0.6, flagRatio: 0.62, signal: { label: 'above comparable market', strength: 'moderate', beatRatePct: 30 } }))!;
+  assert.equal(a.label, 'Above Market'); assert.equal(a.pct, 38);
 });

@@ -335,6 +335,9 @@ export interface AuctionLot {
     poolIds: string[]; n: number; compValueUsd: number; low: number; high: number;
     compMedianUsd?: number | null; compAdjUsd?: number | null; blendW?: number | null;
     compRatio: number | null;
+    /** the statistic the signal is called on (comps vs the house-adjusted
+     *  estimate) — the printed % reads THIS, fallback compRatio */
+    flagRatio?: number | null;
     signal: { label: string; strength: string; beatRatePct: number } | null;
     estimateUsd: number | null;
     vsBid: { label: string; pct: number } | null;
