@@ -130,7 +130,7 @@ test('emit-value-book: a prebuilt book is pushed only for the corpus files it wa
     const vb = await import('../emit-value-book');
     const sig = vb.corpusSignature(corpus);
     assert.match(sig, /^lots\.json\.gz:1:\d+\|sold-archive\.json\.gz:2:\d+$/);
-    const book = { schema: 1 as const, builtAt: '2026-10-05T00:00:00.000Z', rows: [], context: [], gradeLadder: null, indexes: {} };
+    const book = { schema: 1 as const, builtAt: '2026-10-05T00:00:00.000Z', engineVersion: 'test', bookVersion: 'test', rows: [], context: [], gradeLadder: null, indexes: {}, audit: { skipped: {}, abstained: {}, watchSplit: 0 } };
     vb.writeValueBook(book, sig);
     assert.ok(fs.existsSync(process.env.RAY_VALUE_BOOK_FILE));
     assert.deepEqual(JSON.parse(fs.readFileSync(process.env.RAY_VALUE_BOOK_FILE + '.built.json', 'utf8')), { builtAt: book.builtAt, corpus: sig });
