@@ -40,7 +40,9 @@ import { marketOf } from '../app/constants';
 import { extractSignerSlug } from './lib/autograph-signer';
 import { parseCard } from '../app/lib/cards';
 import { hasConditionFlag } from '../app/lib/condition';
-import { isCompExcluded, lotShapeOf, coarseWatchMaterial } from '../app/lib/comps';
+import {
+  isCompExcluded, lotShapeOf, isDualWatchRef, watchSaleClass, purifyWatchSales, WATCH_MIN_N, type WatchSaleClass,
+} from '../app/lib/comps';
 import { mergeCardExtract, llmConditionFlag } from './lib/extract/apply';
 import { ENGINE_VERSION } from '../app/lib/value';
 import type { AuctionLot } from '../app/types';
@@ -184,40 +186,9 @@ export function pokemonKey(l: AuctionLot): string | SkipReason | null {
 }
 
 // ── watches ──────────────────────────────────────────────────────────────────
-/** A slash-joined PAIR of full references ("5513/5517", "5512/5513") is a
- *  dual-stamped case (British military Submariners, transitional cases) — not
- *  one tradable reference. eBay text uses the same pair for homages, parts
- *  and "fits 5513/5517" straps, so a pair key prices the wrong thing at
- *  $100K+. A slash SUFFIX ("5711/1a", "3700/031", "5723/112r") is part of the
- *  reference and stays. */
-export function isDualWatchRef(key: string): boolean {
-  const ref = key.slice(key.indexOf('|') + 1);
-  return /^\d{4,6}[a-z]{0,3}\/\d{4,6}[a-z]{0,3}$/.test(ref);
-}
-// gem-set cases/dials/bezels — "sapphire crystal" and "21 rubies/jewels"
-// (movement jewels) are standard spec, not gems
-const WATCH_NOT_GEM_RE = /\bsapphire[\s-]+(?:crystal|glass|case\s*-?\s*back|caseback|back)\b|\b\d{1,2}\s*(?:rubies|jewels)\b/gi;
-const WATCH_GEM_RE = /\b(?:diamonds?|diamond[- ]set|brilliants?|brilliant[- ]cut|gem[- ]?set|gem-?stones?|pav[eé]|baguettes?|sapphires?|rubies|ruby[- ]set|emeralds?|tsavorites?|rainbow|bejewell?ed|jewell?ed\s+(?:bezel|dial|case)|set with)\b/gi;
-// rare/special dials, special series and provenance that price far off the
-// plain reference (Milsub, Comex, Tiffany-signed, engraved presentation…)
-const WATCH_SPECIAL_RE = /\b(?:lacquer(?:ed)?(?: \w+)? dial|(?:green|yellow|pink|candy pink|red) dial|turquoise|tiffany|coral|celebration|bubbles? dial|stella|enamel(?:led)?|cloisonn[eé]|meteorite|mother[- ]of[- ]pearl|lapis|malachite|onyx|aventurine|opal|jade|tiger'?s?[- ]eye|tropical|paul newman|explorer dial|gilt dial|underline|exclamation|double red|red submariner|comex|military|milsub|royal navy|secret service|engraved|engraving|presentation|unique|prototype|one[- ]off|pi[eè]ce unique|retailed by|limited edition|limited series|anniversary|special edition|khanjar|crest dial|logo dial)\b/gi;
-const markerToken = (m: string, kind: 'gem' | 'sp') =>
-  `${kind}:${m.toLowerCase().replace(/[^a-z]+/g, '-').replace(/s$/, '')}`;
-
-export interface WatchSaleClass {
-  /** variant markers the sale's text carries ('gem:diamond', 'sp:tiffany',
-   *  'sp:paul-newman' …) — empty for a plain example of the reference */
-  markers: string[];
-  /** coarse case material (null = not stated) */
-  mat: string | null;
-}
-export function watchSaleClass(l: Pick<AuctionLot, 'title' | 'medium'>): WatchSaleClass {
-  const text = `${l.title || ''} ${l.medium || ''}`;
-  const gems = text.replace(WATCH_NOT_GEM_RE, ' ').match(WATCH_GEM_RE) || [];
-  const sps = text.match(WATCH_SPECIAL_RE) || [];
-  const markers = Array.from(new Set([...gems.map(m => markerToken(m, 'gem')), ...sps.map(m => markerToken(m, 'sp'))])).sort();
-  return { markers, mat: coarseWatchMaterial(l) };
-}
+// The variant classes (isDualWatchRef, watchSaleClass, the material split) live
+// in app/lib/comps.ts — ONE source shared with the engine's watch comp pools.
+export { isDualWatchRef, watchSaleClass, type WatchSaleClass };
 
 type Vertical = 'sports-cards' | 'autographs' | 'pokemon' | 'art-editions' | 'watches' | 'design';
 
@@ -381,14 +352,12 @@ const MEDIUM_DISP: Record<Vertical, number> = {
  *  see. The band is read on the trailing WATCH_BAND_YEARS when that window
  *  alone carries WATCH_MIN_N sales, so twenty years of price drift on a
  *  vintage reference is not mistaken for a variant mix. */
-export const WATCH_MIN_N = 5;
+export { WATCH_MIN_N };
 export const WATCH_MAX_BAND = 2.5;
 const WATCH_BAND_YEARS = 5;
 /** Variant purity: the dominant signature must hold ≥ 75% of a pool's sales
  *  (the rest are dropped); below that the pool abstains. */
 const VARIANT_DOMINANCE = 0.75;
-/** Material purity for a watch pool, over sales whose material is stated. */
-const MATERIAL_DOMINANCE = 0.8;
 
 /** Kish effective sample size of the recency weights. */
 function effectiveN(ws: number[]): number {
@@ -410,35 +379,9 @@ export function purifyPool(pool: Pool): { sales: Pool['sales']; abstain: string 
     return { sales: kept, abstain: null, split: kept.length < pool.sales.length, variant: top || undefined };
   }
   if (pool.v === 'watches') {
-    // A marker most of the pool carries IS the reference (every 3960 is the
-    // 'Anniversary Edition', every 5976/1G the 40th-anniversary Nautilus);
-    // a marker only a minority carries is a variant of it — those sales leave.
-    const freq = new Map<string, number>();
-    for (const s of pool.sales) for (const m of s.watch?.markers || []) freq.set(m, (freq.get(m) || 0) + 1);
-    const intrinsic = new Set(Array.from(freq.entries()).filter(([, n]) => n / pool.sales.length >= 0.5).map(([m]) => m));
-    const plain = pool.sales.filter(s => !(s.watch?.markers || []).some(m => !intrinsic.has(m)));
-    const mats = new Map<string, number>();
-    let known = 0;
-    for (const s of plain) if (s.watch?.mat) { known++; mats.set(s.watch.mat, (mats.get(s.watch.mat) || 0) + 1); }
-    let top: string | undefined, topN = 0;
-    mats.forEach((n, k) => { if (n > topN || (n === topN && top !== undefined && k < top)) { top = k; topN = n; } });
-    if (known && topN / known < MATERIAL_DOMINANCE) {
-      // MIXED materials (a 6265 in steel and in gold): split — the row prices
-      // the CHEAPEST documented material, so a listing in a pricier material
-      // can never read as under it. Only stated-material sales count here
-      // (an unstated one could be either), the cheapest subset must carry a
-      // row on its own (n ≥ WATCH_MIN_N), and no thinner material may sit
-      // under it (steel is not always the cheap case on vintage Patek).
-      const byMat = new Map<string, Pool['sales']>();
-      for (const s of plain) if (s.watch?.mat) (byMat.get(s.watch.mat) || byMat.set(s.watch.mat, []).get(s.watch.mat)!).push(s);
-      const med = (xs: Pool['sales']) => quantile(xs.map(x => x.p[0]).sort((a, b) => a - b), 0.5);
-      const subs = Array.from(byMat.entries()).filter(([, xs]) => xs.length >= 2).map(([m, xs]) => ({ m, xs, med: med(xs) })).sort((a, b) => a.med - b.med);
-      const cheapest = subs[0];
-      if (!cheapest || cheapest.xs.length < WATCH_MIN_N) return { sales: [], abstain: 'watch-material-mixed', split: false };
-      return { sales: cheapest.xs, abstain: null, split: true, mat: cheapest.m };
-    }
-    const kept = plain.filter(s => !s.watch?.mat || s.watch.mat === top);
-    return { sales: kept, abstain: null, split: kept.length < pool.sales.length, mat: top };
+    // the shared rule (comps.purifyWatchSales): minority-marker variants
+    // leave; a mixed-material pool prices its cheapest documented material
+    return purifyWatchSales(pool.sales, s => s.watch, s => s.p[0], WATCH_MIN_N);
   }
   return { sales: pool.sales, abstain: null, split: false };
 }
