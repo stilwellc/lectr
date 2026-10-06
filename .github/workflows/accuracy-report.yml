@@ -1,0 +1,129 @@
+# THE MONTHLY ENGINE ACCURACY REPORT — scripts/accuracy-report.ts
+#
+# On the 2nd of each month, grades what lectr served before the hammer
+# (value tape + calls ledger) against the lots that settled in the previous
+# calendar month, and opens a PR adding docs/accuracy/<YYYY-MM>.{md,json}.
+# docs/accuracy/README.md explains the metrics and how to read the report.
+#
+#   report   READ-ONLY: pulls the corpus + the persisted tape/ledger from R2
+#            (CF_R2_READ_TOKEN, falling back to CLOUDFLARE_API_TOKEN), runs
+#            the script, uploads the two report files. No write scopes.
+#   propose  the only job with write scopes: commits the files to
+#            accuracy/<YYYY-MM>-<run_id> and opens a PR (same pattern as
+#            ui-shots.yml's propose job; if Actions may not open PRs here the
+#            branch is still pushed and the compare URL is printed).
+#
+# Thin data never fails the run — the report says how thin it is.
+# Manual: gh workflow run accuracy-report.yml [-f month=2026-09] [-f from=… -f to=…]
+name: accuracy-report
+on:
+  schedule:
+    - cron: '23 7 2 * *'   # 07:23 UTC on the 2nd — the month's last sales have settled overnight
+  workflow_dispatch:
+    inputs:
+      month:
+        description: 'Report month YYYY-MM (default: the previous calendar month)'
+        type: string
+        default: ''
+      from:
+        description: 'Optional window start YYYY-MM-DD (inside the month; makes a partial report)'
+        type: string
+        default: ''
+      to:
+        description: 'Optional window end YYYY-MM-DD (inside the month; makes a partial report)'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: accuracy-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max-old-space-size=8192
+    outputs:
+      month: ${{ steps.run.outputs.month }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      # the corpus (lots + sold archive) via the pointer, then the persisted
+      # latest/ tape + ledger on top (pull-backtest — the authoritative copies)
+      - name: Pull the sold corpus + value tape + calls ledger (read-only)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          bash scripts/data-store.sh pull
+          bash scripts/data-store.sh pull-backtest
+      - name: Build the report
+        id: run
+        env:
+          MONTH: ${{ inputs.month }}
+          FROM: ${{ inputs.from }}
+          TO: ${{ inputs.to }}
+        run: |
+          args=()
+          if [ -n "$MONTH" ]; then args+=(--month "$MONTH"); fi
+          if [ -n "$FROM" ]; then args+=(--from "$FROM"); fi
+          if [ -n "$TO" ]; then args+=(--to "$TO"); fi
+          npx tsx scripts/accuracy-report.ts "${args[@]}" | tee "$RUNNER_TEMP/report.log"
+          month=$(sed -n 's/^\[accuracy\] \([0-9]\{4\}-[0-9]\{2\}\).*/\1/p' "$RUNNER_TEMP/report.log" | head -1)
+          if [ -z "$month" ]; then echo "::error::could not read the report month from the script output"; exit 1; fi
+          echo "month=$month" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Engine accuracy report ${month}"
+            echo
+            sed -n '/^## Headline/,/^## Served values/p' "docs/accuracy/${month}.md" | sed '$d'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: accuracy-report
+          path: |
+            docs/accuracy/${{ steps.run.outputs.month }}.md
+            docs/accuracy/${{ steps.run.outputs.month }}.json
+          retention-days: 30
+          if-no-files-found: error
+
+  propose:
+    needs: report
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: accuracy-report
+          path: docs/accuracy
+      - name: Push a branch + open the PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MONTH: ${{ needs.report.outputs.month }}
+        run: |
+          if git diff --quiet -- docs/accuracy && [ -z "$(git ls-files --others --exclude-standard docs/accuracy)" ]; then
+            echo "docs/accuracy unchanged — no PR"; exit 0
+          fi
+          branch="accuracy/${MONTH}-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add docs/accuracy
+          git commit -m "accuracy: engine accuracy report ${MONTH}"
+          git push origin "$branch"
+          body="Monthly engine accuracy report for ${MONTH} (docs/accuracy/${MONTH}.md). Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          gh pr create --base main --head "$branch" --title "accuracy: engine accuracy report ${MONTH}" --body "$body" \
+            || echo "::warning title=PR not opened::Actions may not be allowed to open PRs here — open it by hand: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/main...${branch}"
