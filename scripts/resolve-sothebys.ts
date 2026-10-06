@@ -23,7 +23,7 @@
  */
 import { readSegment, writeSegment } from './corpus-io';
 import { toUsdDated, fxRateFor } from '../app/lib/normalize';
-import type { AuctionLot, Currency, PriceBasis } from '../app/types';
+import { isCurrency, type AuctionLot, type Currency, type PriceBasis } from '../app/types';
 
 const WRITE = process.argv.includes('--write');
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
@@ -119,7 +119,11 @@ async function resolveLot(c: Creds, lot: AuctionLot): Promise<Hit | null> {
 }
 
 // parse "… | Sale price: 1,605,500 USD" — amount cross-checks salePrice
-const detailsCurrency = (details: string) => (details.match(/Sale price:\s*[\d,.]+\s*([A-Z]{3})/) || [])[1] as Currency | undefined;
+const detailsCurrency = (details: string): Currency | null | undefined => {
+  const iso = (details.match(/Sale price:\s*[\d,.]+\s*([A-Z]{3})/) || [])[1];
+  if (!iso) return undefined;
+  return isCurrency(iso) ? iso : null; // a code the money layer cannot convert: fail-closed
+};
 
 // ── main ───────────────────────────────────────────────────────────────────
 (async () => {
@@ -155,7 +159,9 @@ const detailsCurrency = (details: string) => (details.match(/Sale price:\s*[\d,.
     if ((hit.salePrice || 0) > 0 && hit.soldStatus !== 'UNSOLD') {
       // realized total ("Sale price") is buyer-inclusive → premiumNative; the
       // currency rides in the details string; keep the lot's own estimates
-      const cur = detailsCurrency(hit.details || '') || (l.nativeCurrency as Currency) || 'USD';
+      const dc = detailsCurrency(hit.details || '');
+      const cur = dc === undefined ? (l.nativeCurrency as Currency | undefined) : dc;
+      if (!cur) { unmatched++; continue; } // currency unknown — keep state, never stamp USD
       const from = l.status as string;
       Object.assign(L, stampSold(cur, l.saleDate, hit.salePrice!, l.estLowNative ?? null, l.estHighNative ?? null));
       L.status = 'sold';

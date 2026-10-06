@@ -34,19 +34,42 @@ export interface CardId {
    *  "Auto 10", "PSA/DNA Authentic" → 'A') — a 10 auto and an Authentic auto
    *  are different cards; null when none */
   autoGrade?: string | null;
+  /** (Oct 6) premium label tier on a 10 slab ('bl' BGS Black Label, 'pristine'
+   *  BGS/CGC Pristine, 'gold' SGC/CGC Gold Label) — a Black Label 10 is not a
+   *  Gem Mint 10; null when none */
+  gradeTier?: string | null;
+  /** (Oct 6) a multi-card lot (sets, pairs, "Collection (25)", two #numbers) —
+   *  never one card's identity: cardKey/cardLadderKey abstain */
+  multi?: boolean;
 }
-const AUTO_GRADE_RE = /\b(?:PSA\s*\/\s*DNA|auto(?:graph)?(?:\s+grade)?)\b[^0-9,;()]{0,20}?(\d{1,2}(?:\.5)?)(?![\d.])/i;
+// (Oct 6) the gap never crosses a '#' (an insert code "Autograph #DA-32" is
+// not an autograph grade 32) — and a gap naming a card grader is the CARD
+// grade ("Auto--BGS 9/Auto 10" reads 10, not 9); grades are 1–10 only
+const AUTO_GRADE_RE = /\b(?:PSA\s*\/\s*DNA|auto(?:graph)?(?:\s+grade)?)\b([^0-9,;()#]{0,20}?)(\d{1,2}(?:\.5)?)(?![\d.])/gi;
+// the comma-separated SECOND grade on a dual-graded signed slab: "BGS 9.5,
+// Beckett 10", "BGS Authentic, Beckett 10", "SGC 9, SGC Auto 10"
+const SECOND_GRADE_RE = /,\s*(?:Beckett|BGS|SGC|CGC|PSA(?!\s*\/\s*DNA))\s*(?:auto(?:graph)?\s*)?(?:(?:GEM|MINT|MT|NM|EX|VG|PRISTINE)[\s+/-]*){0,3}(\d{1,2}(?:\.5)?)(?![\d.])/i;
+// "BGS NM-MT 8 with GEM 10 Signature"
+const WITH_SIG_GRADE_RE = /\bwith\s+(?:(?:GEM|MINT|MT|NM)[\s+/-]*){0,2}(\d{1,2}(?:\.5)?)\s+(?:signature|auto(?:graph)?)\b/i;
+const GRADER_WORD_IN_GAP = /\b(?:PSA|BGS|SGC|CGC|BVG|Beckett)\b(?!\s*\/\s*DNA)/i;
 const AUTO_AUTH_RE = /\b(?:PSA\s*\/\s*DNA|auto(?:graph)?)\s*[-:]?\s*(?:authentic|auth)\b/i;
 
 // the trailing "- PSA 10" Goldin form (the gap may not carry an autograph
 // grade: "- PSA Authentic, Auto 10" is NOT a card graded 10)
 const GRADE_RE = /[-–—]\s*(PSA|BGS|SGC|CGC)\b([^0-9]*?)(\d{1,2}(?:\.5)?)\s*(?:[-–—].*)?$/i;
-const GRADERS = 'PSA|BGS|SGC|CGC|BVG|CSG|HGA';
+// (Oct 6) + TAG / GAI / BCCG / KSA / GMA — the smaller graders keyed RAW
+// before ("TAG GEM MT 10" comped raw sales). These five are matched
+// UPPERCASE ONLY (see isGrader): "Toe Tag" / "name tag" are not a slab.
+const GRADERS = 'PSA|BGS|SGC|CGC|BVG|CSG|HGA|TAG|GAI|BCCG|KSA|GMA';
+const CASED_GRADER = /^(?:TAG|GAI|BCCG|KSA|GMA)$/i;
+const isGrader = (w: string) => !CASED_GRADER.test(w) || /^[A-Z]+$/.test(w);
+// premium label tiers, read beside the grade
+const TIER_RES: [RegExp, string][] = [[/\bblack\s*label\b/i, 'bl'], [/\bgold\s*label\b/i, 'gold'], [/\bpristine\b/i, 'pristine']];
 // a grader ANYWHERE (REA / Memory Lane / H&S: "…Sandy Koufax Rookie PSA 9 MINT"),
 // never the autograph-authentication form PSA/DNA
-const GRADER_ANY_RE = new RegExp(`\\b(${GRADERS})\\b(?!\\s*\\/\\s*DNA)`, 'i');
+const GRADER_ANY_RE = new RegExp(`\\b(${GRADERS})\\b(?!\\s*\\/\\s*DNA)`, 'gi');
 const GRADE_ANY_RE = new RegExp(`\\b(${GRADERS})\\b(?!\\s*\\/\\s*DNA)([^0-9()]{0,24}?)(\\d{1,2}(?:\\.5)?)(?![\\d.])`, 'gi');
-const GRADE_TAG_RE = new RegExp(`\\b(${GRADERS})\\b(?!\\s*\\/\\s*DNA)\\s*[-:]?\\s*(authentic|auth\\b|altered|a\\b)`, 'i');
+const GRADE_TAG_RE = new RegExp(`\\b(${GRADERS})\\b(?!\\s*\\/\\s*DNA)\\s*[-:]?\\s*(authentic|auth\\b|altered|a\\b)`, 'gi');
 const GRADE_QUAL_RE = /^\s*\(?\s*(OC|MK|ST|PD|MC|OF)\s*\)?(?![a-z])/i;
 // a gap between the grader and the number that reads as an AUTOGRAPH grade
 const AUTO_GAP_RE = /auth|auto|dna|sig/i;
@@ -69,6 +92,12 @@ const VARIANT_TOKENS: [RegExp, string][] = [
   [/\b(?:silver|gold|red|blue|green|orange|purple|pink|black|bronze|platinum|yellow|teal|aqua|emerald|ruby|sapphire)\b/i, 'color'],
 ];
 /** a leading lot number immediately followed by a 4-digit year */
+// several cards in one lot (the count in parens follows a set/lot word or ends
+// the title: "Complete Set (576)", "Rookie Card Collection (25)")
+// ("Complete Set" / "Team Set" alone can be a PRODUCT name — "Topps Complete
+// Set Chrome … #5 (#05/25)" — so a set word counts only with a count or an
+// "Including / Featuring / with" listing)
+const MULTI_CARD_RE = /\b(?:lots? of|set of|run of|group of|(?:complete|near[- ]complete|near|team|master|partial|starter)[- ]sets?\s*(?:\(\d|[:,-]?\s*(?:including|featuring|with)\b)|(?:collection|lot|group|set|stack|trio|quartet)\s*\(\d+\)|pair\b|\(\d+\)\s*$|\(\d+\)\s*[-–—])/i;
 const LOT_NO_BEFORE_YEAR = /^\d{1,5}\s+(?=(?:19|20)\d{2}(?:-\d{2})?\b)/;
 const SERIAL_RE = /\(#?\s*\d*\s*\/\s*(\d+)\)/;
 // the player: capitalized-word run right after #CARDNO (cards) — allows
@@ -79,6 +108,17 @@ const AFTER_NO_PLAYER = new RegExp(
 );
 const LEADING_PLAYER = new RegExp(String.raw`^((?:${NAME_TOKEN}\s+){1,2}${NAME_TOKEN})`);
 // words that end a player-name run (descriptors, never surnames)
+// (Oct 6) a name run also ends at a GRADER or GRADE word ("Willie Mays PSA
+// EX-MT 6" minted the player willie-mays-psa-ex-mt: 40k lots) and at card
+// descriptors houses append after the name ("All-Star", "High Number",
+// "Gray Back", "Short Print", "Silver Buyback", "Secret Rare")
+const GRADE_NAME_STOP = /^(PSA|BGS|SGC|CGC|BVG|CSG|HGA|TAG|GAI|BCCG|KSA|GMA|Beckett|GEM|MINT|MT|NM|EX|VG|GOOD|FAIR|POOR|PR|Authentic|Graded|All|Buyback|Holographic|Holo|Rare|Checklist|Gem|Mint)$/;
+// two-word descriptors whose first word is also a surname (Reggie White,
+// Danny Gray): stop only when the pair reads as the descriptor
+const PAIR_NAME_STOP = /^(?:(?:White|Gray|Grey|Blue|Yellow|Cream)\s+(?:Back|Border)|High\s+(?:Number|#)|Short\s+Print|(?:Secret|Ultimate|Ultra|Super)\s+Rare)/;
+// a colour word ends a run only once a 2+ word name is kept ("Patrick Mahomes
+// II Orange #42/49"), never before ("Vida Blue", "Red Grange")
+const COLOR_NAME_STOP = /^(Silver|Gold|Red|Blue|Green|Orange|Purple|Pink|Black|Bronze|Platinum|Yellow|Teal|Aqua|Emerald|Ruby|Sapphire)$/;
 const NAME_STOP = /^(Rookie|Signed|Card|Patch|Autograph(?:ed)?|Auto|Jersey|Relic|Logo|Game|Match|Photo|Player|Team|Tour|Practice|Fight|Warm|Dual|Triple|On|RC|And|With|Refractor|Prizm|Insert|Parallel|Case|Hit|Exchange|Redemption|SP|SSP|Worn|Used|Issued|Debut|Career|Final|Championship|World|Series|Super|Season|Professional|Model|Style|Era|Circa|HR|RBI|Mini|Decal|Single|Full|Store|Salesman|Advertising|Presentational?)$/i;
 
 export function playerSlugOf(name: string | null): string | null {
@@ -89,11 +129,16 @@ export function playerSlugOf(name: string | null): string | null {
 }
 
 function trimNameRun(run: string): string | null {
-  const words = run.trim().split(/\s+/);
+  // a grader glued on by dashes ("Hank Aaron--PSA Gem Mint 10", "Babe Ruth-SGC")
+  const words = run.trim().replace(/-+(?=(?:PSA|BGS|SGC|CGC|BVG)\b)/g, ' ').split(/\s+/);
   const kept: string[] = [];
-  for (const w of words) {
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
     // stop on descriptors, INCLUDING hyphenated ones ("Game-Used", "Photo-Matched")
     if (NAME_STOP.test(w) || NAME_STOP.test(w.split('-')[0])) break;
+    const w0 = w.split(/[-/]/)[0];
+    if (GRADE_NAME_STOP.test(w0) || (kept.length >= 2 && COLOR_NAME_STOP.test(w0))) break;
+    if (PAIR_NAME_STOP.test(words.slice(i, i + 2).join(' '))) break;
     kept.push(w);
   }
   // a real name is 2+ words (single word = a set word we misgrabbed)
@@ -106,6 +151,7 @@ export function parseCard(title: string): CardId {
     player: null, playerSlug: null, year: null, setName: null, cardNo: null,
     gradeCo: null, gradeNum: null, serialOf: null, rookie: false, auto: false,
     gradeQual: null, gradeTag: null, gradeUnparsed: false, variant: null, autoGrade: null,
+    gradeTier: null, multi: false,
   };
   const t = (title || '').trim();
   if (!t) return out;
@@ -116,36 +162,55 @@ export function parseCard(title: string): CardId {
   // $2,730 → sold $604,736). An autograph grade never reads as the card's
   // ("PSA Authentic, Auto 10"); a named grader with no parseable card grade
   // leaves the identity unkeyable instead of silently 'raw'.
-  const setGrade = (co: string, num: string, rest: string) => {
+  const setGrade = (co: string, num: string, rest: string, gap: string) => {
     out.gradeCo = co.toUpperCase(); out.gradeNum = parseFloat(num);
     const q = rest.match(GRADE_QUAL_RE);
     if (q) out.gradeQual = q[1].toUpperCase();
+    // the label tier sits in the gap ("BGS BLACK LABEL 10") or right after
+    // ("CGC 10 Pristine") — never further out ("Topps Gold Label" is a set)
+    const near = gap + ' ' + rest.slice(0, 24);
+    for (const [re, tier] of TIER_RES) if (re.test(near)) { out.gradeTier = tier; break; }
   };
   const g = t.match(GRADE_RE);
   if (g && !AUTO_GAP_RE.test(g[2])) {
     const headLen = g[0].indexOf(g[1]) + g[1].length + g[2].length + g[3].length;
-    setGrade(g[1], g[3], t.slice((g.index || 0) + headLen));
+    setGrade(g[1], g[3], t.slice((g.index || 0) + headLen), g[2]);
   }
   if (out.gradeNum == null) {
     GRADE_ANY_RE.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = GRADE_ANY_RE.exec(t))) {
       const n = parseFloat(m[3]);
-      if (AUTO_GAP_RE.test(m[2]) || !(n >= 1 && n <= 10)) continue;
-      setGrade(m[1], m[3], t.slice(m.index + m[0].length));
+      if (!isGrader(m[1]) || AUTO_GAP_RE.test(m[2]) || !(n >= 1 && n <= 10)) continue;
+      setGrade(m[1], m[3], t.slice(m.index + m[0].length), m[2]);
       break;
     }
   }
   if (out.gradeNum == null) {
-    const tag = t.match(GRADE_TAG_RE);
+    let tag: RegExpExecArray | null = null;
+    GRADE_TAG_RE.lastIndex = 0;
+    for (let m = GRADE_TAG_RE.exec(t); m; m = GRADE_TAG_RE.exec(t)) if (isGrader(m[1])) { tag = m; break; }
     if (tag) { out.gradeCo = tag[1].toUpperCase(); out.gradeTag = 'A'; }
-    else if (GRADER_ANY_RE.test(t)) out.gradeUnparsed = true;
+    else {
+      GRADER_ANY_RE.lastIndex = 0;
+      for (let m = GRADER_ANY_RE.exec(t); m; m = GRADER_ANY_RE.exec(t)) if (isGrader(m[1])) { out.gradeUnparsed = true; break; }
+    }
   }
-  // the AUTOGRAPH grade (dual-graded signed slabs)
+  // the AUTOGRAPH grade (dual-graded signed slabs): PSA/DNA or "Auto N"
+  // (1–10, no grader named in the gap, never across '#'), else the
+  // comma-separated second grade of a signed card ("BGS 9.5, Beckett 10")
   {
-    const ag = t.match(AUTO_GRADE_RE);
-    if (ag) out.autoGrade = ag[1];
-    else if (AUTO_AUTH_RE.test(t)) out.autoGrade = 'A';
+    AUTO_GRADE_RE.lastIndex = 0;
+    for (let m = AUTO_GRADE_RE.exec(t); m; m = AUTO_GRADE_RE.exec(t)) {
+      const n = parseFloat(m[2]);
+      if (GRADER_WORD_IN_GAP.test(m[1]) || !(n >= 1 && n <= 10)) continue;
+      out.autoGrade = m[2]; break;
+    }
+    if (out.autoGrade == null && /\b(autograph\w*|signed|signature|auto)\b/i.test(t)) {
+      const sg = t.match(SECOND_GRADE_RE) || t.match(WITH_SIG_GRADE_RE);
+      if (sg) { const n = parseFloat(sg[1]); if (n >= 1 && n <= 10) out.autoGrade = sg[1]; }
+    }
+    if (out.autoGrade == null && AUTO_AUTH_RE.test(t)) out.autoGrade = 'A';
   }
 
   const ser = t.match(SERIAL_RE);
@@ -160,10 +225,16 @@ export function parseCard(title: string): CardId {
   // '77 two-digit year (Sep 28 2026: it minted 1977 for a 1962 card).
   const lotPre = (t.match(LOT_NO_BEFORE_YEAR) || [''])[0];
   const ty = t.slice(lotPre.length);
-  const y4 = ty.match(/^(19\d{2}|20\d{2})(?:-\d{2})?\b/);
-  const y2 = !y4 && ty.match(/^'?(\d{2})\b/);
-  if (y4) out.year = y4[0].replace(/^'/, '');
-  else if (y2) { const n = parseInt(y2[1], 10); out.year = n > 40 ? `19${y2[1]}` : `20${y2[1]}`; }
+  // (Oct 6) a 4-digit range end ("1986-1987 Fleer" — REA/Lelands) and a
+  // 2-digit range ("34-36 Diamond Stars") are the YEAR, not the set's first
+  // word: both read as "1986-87" / "1934-36"
+  const y4 = ty.match(/^(19\d{2}|20\d{2})(?:-((?:19|20)\d{2}|\d{2}))?\b/);
+  const y2 = !y4 && ty.match(/^'?(\d{2})(?:-(\d{2}))?\b/);
+  if (y4) out.year = y4[2] ? `${y4[1]}-${y4[2].slice(-2)}` : y4[1];
+  else if (y2) {
+    const n = parseInt(y2[1], 10);
+    out.year = (n > 40 ? `19${y2[1]}` : `20${y2[1]}`) + (y2[2] ? `-${y2[2]}` : '');
+  }
 
   // card number: the first # group NOT inside parens (serials live in parens)
   const noParens = t.replace(/\([^)]*\)/g, ' ');
@@ -195,11 +266,16 @@ export function parseCard(title: string): CardId {
   // VARIANT signature (Sep 27): parallel / auto / relic / serial-class tokens
   // anywhere in the title, with the player's own name and colour-word team
   // names masked ("Vida Blue", "Red Sox" are not parallels)
-  let vt = t.replace(TEAM_MASK_RE, ' ');
+  // (Oct 6) an MBA "Silver/Gold Diamond Certified" sticker is not a parallel
+  let vt = t.replace(TEAM_MASK_RE, ' ').replace(/\bMBA\s+(?:silver|gold|platinum|black|red|blue)\s+diamond(?:\s+certified)?\b/gi, ' ');
   if (out.player) vt = vt.split(out.player).join(' ');
   const toks: string[] = [];
   for (const [re, tok] of VARIANT_TOKENS) if (re.test(vt) && !toks.includes(tok)) toks.push(tok);
   out.variant = toks.length ? toks.sort().join('+') : null;
+
+  // MULTI-CARD lots (Oct 6): a set / pair / "Collection (25)" / two card
+  // numbers is several cards — its price is never one card's
+  out.multi = isMultiCardTitle(t);
   return out;
 }
 
@@ -234,6 +310,15 @@ function gateKnown(name: string | null, known?: ReadonlySet<string>): { player: 
   const twoSlug = playerSlugOf(two);
   if (two !== name && twoSlug && known.has(twoSlug)) return { player: two, playerSlug: twoSlug };
   return { player: null, playerSlug: null };
+}
+
+/** (Oct 6) Several cards in one lot: a set / pair / "Collection (25)" / two
+ *  card numbers outside parens (a "#42/49" serial is not a second card). */
+export function isMultiCardTitle(title: string): boolean {
+  const t = title || '';
+  if (MULTI_CARD_RE.test(t)) return true;
+  const noParens = t.replace(/\([^)]*\)/g, ' ').replace(/#?\d+\s*\/\s*\d+/g, ' ');
+  return (noParens.match(/#\s?[A-Za-z]{0,4}\d/g) || []).length >= 2;
 }
 
 /** The player behind ANY sports lot: cards parse mid-title; objects (game-used
@@ -426,19 +511,47 @@ export function cardKey(id: CardId): string | null {
   if (!base) return null;
   if (id.gradeUnparsed) return null;
   const grade = id.gradeCo
-    ? `${id.gradeCo}${id.gradeNum ?? id.gradeTag ?? ''}${id.gradeQual ? `-${id.gradeQual.toLowerCase()}` : ''}`
+    ? `${id.gradeCo}${id.gradeNum ?? id.gradeTag ?? ''}${id.gradeQual ? `-${id.gradeQual.toLowerCase()}` : ''}${id.gradeTier ? `-${id.gradeTier}` : ''}`
     : 'raw';
   return `${base}|${grade}`;
+}
+
+/** (Oct 6) The YEAR as keyed: a one-season range ("1986-87", Goldin's '87,
+ *  H&S "1986-87", REA "1986-1987") is the season's END year — Goldin's
+ *  two-digit form, the deepest card pool; a wider span ("1934-36", "1909-11"
+ *  — the card's own year unknown) stays the span. */
+export function cardYearKey(year: string | null | undefined): string | null {
+  if (!year) return null;
+  const m = year.match(/^(\d{4})-(\d{2})$/);
+  if (!m) return year;
+  const start = parseInt(m[1], 10);
+  const end = Math.floor(start / 100) * 100 + parseInt(m[2], 10) + (parseInt(m[2], 10) < start % 100 ? 100 : 0);
+  return end === start + 1 ? String(end) : year;
+}
+
+// sport words houses add or omit ("1955 Topps Baseball" = Goldin "55 Topps")
+const SET_SPORT_RE = /\b(?:baseball|basketball|football|hockey|soccer)\b/gi;
+// a leading American Card Catalog code before the set's name ("R319 Goudey",
+// "M101-4 Sporting News", "V353 World Wide Gum") — dropped only when a name
+// follows, so a bare "T206" stays the set
+const SET_CATALOG_RE = /^(?:[A-Z]{1,2}\d{2,3}(?:-\d{1,2})?)\s+(?=\S)/;
+/** (Oct 6) The SET as keyed: no sport word, no leading catalog code, no
+ *  year-range tail ("-36 Diamond Stars", "1987 Fleer" — older parses) — so
+ *  REA / H&S / Memory Lane join Goldin's card keys. */
+export function cardSetKey(setName: string | null | undefined): string {
+  let s = (setName || '').trim().replace(/^-?(?:\d{4}|\d{2})\b\s*/, '');
+  s = s.replace(SET_CATALOG_RE, '').replace(SET_SPORT_RE, ' ');
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
 /** Same card, any grade — the ladder key: player + year + set + number +
  *  variant signature + serial run (a /99 Gold parallel is a different card
  *  from the base, at every grade). */
 export function cardLadderKey(id: CardId): string | null {
-  if (!id.playerSlug || !id.year || !id.cardNo) return null;
-  const set = (id.setName || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+  if (!id.playerSlug || !id.year || !id.cardNo || id.multi) return null;
+  const set = cardSetKey(id.setName);
   const v = id.variant ? `|v:${id.variant}` : '';
   const s = id.serialOf ? `|/${id.serialOf}` : '';
   const ag = id.autoGrade ? `|ag:${id.autoGrade}` : '';
-  return `${id.playerSlug}|${id.year}|${set}|${id.cardNo.toLowerCase()}${v}${s}${ag}`;
+  return `${id.playerSlug}|${cardYearKey(id.year)}|${set}|${id.cardNo.toLowerCase()}${v}${s}${ag}`;
 }

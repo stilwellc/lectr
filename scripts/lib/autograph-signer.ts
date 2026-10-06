@@ -10,6 +10,8 @@
  *   1. medium field = "NAME, <date>"           (Christie's)  → NAME
  *   2. title  = "SURNAME, Firstname (dates)."   (catalog)     → Firstname Surname
  *   3. title  = "NAME: <format …>"              (themed)      → NAME
+ *   4. title  = "TOPIC: NAME <format …>"        (RR themed)   → NAME (v3;
+ *      a topic with no single person after the colon abstains)
  */
 
 const FORMAT_OR_MATERIAL =
@@ -29,7 +31,11 @@ const HONORIFICS = new Set([
  *  re-stamps parser-derived entities from older versions (and clears them if
  *  the new parser abstains). Crawler-supplied entities are never touched.
  *  v2 = Christie's catalog + RR leading-name shapes (Aug 2026). */
-export const SIGNER_PARSER_VERSION = 2;
+export const SIGNER_PARSER_VERSION = 3;
+// v3 (Oct 2026) = "Topic: Person …" titles read the person after the colon (or
+// abstain — never a topic slug like enola-gay/horse-racing); regnal numerals
+// kept (George III ≠ George II, John Paul I ≠ II); "Lady Bird"/"Lady Gaga"-style
+// names keep their leading title word.
 
 export function signerSlug(s: string | null | undefined): string {
   return (s || '')
@@ -57,6 +63,16 @@ const NON_NAME = new Set([
   'blue', 'flag', 'archive', 'collection', 'group', 'lot', 'set', 'important',
   'historic', 'rare', 'fine', 'the', 'and', 'of', 'on', 'for', 'from', 'space',
   'star', 'wars', 'trek', 'wagon', 'train', 'show', 'team', 'club', 'company',
+  'derby',
+]);
+
+// Words naming a GROUP or body — a run containing one is never one signer
+// ("Gettysburg: Iron Brigade", "Supreme Court: Burger Court", "Academy Award
+// Winners", "King George III Children"): the whole candidate abstains (a theme
+// word above only ends the run). v3.
+const GROUP_WORDS = new Set([
+  'brigade', 'regiment', 'battalion', 'corps', 'squadron', 'court', 'children',
+  'society', 'league', 'winners', 'champions', 'legends',
 ]);
 
 /** True when a cleaned string reads like a personal name (First [Middle…] Last,
@@ -68,26 +84,41 @@ function looksLikePerson(name: string): boolean {
   let caps = 0;
   for (const t of toks) {
     const low = t.toLowerCase().replace(/[.'’-]/g, '');
-    if (NON_NAME.has(low)) return false; // a theme word → not a name
+    if (NON_NAME.has(low) || GROUP_WORDS.has(low)) return false; // a theme word → not a name
     if (isCap(t)) caps++;
     else if (!PARTICLES.has(low)) return false; // lowercase non-particle → not a clean name
   }
   return caps >= 2 && caps <= 4; // First + Last … up to a compound name
 }
 
+// A leading title word that IS part of the name, not an honorific to strip.
+const NAME_TITLES = /^(?:lady\s+(?:bird|gaga)|queen\s+latifah|king\s+curtis|sir\s+mix)\b/i;
+// Sovereign / pontiff context: a roman numeral after the name is part of the
+// identity (George III, Elizabeth II, John Paul I vs II), not a "Jr."-style suffix.
+const REGNAL = new Set(['king', 'queen', 'pope', 'emperor', 'empress', 'tsar', 'czar', 'kaiser', 'sultan', 'shah', 'prince', 'princess']);
+const ROMAN = /^(?:i{1,3}|iv|vi{0,3}|ix|xi{0,3}|xiv|xvi{0,3}|xix|xxi{0,3})$/i;
+
 /** Strip dates, parentheticals, quoted signatures, honorifics, trailing punct. */
 function cleanName(raw: string): string {
-  const s = raw
+  const s0 = raw
     .replace(/\([^)]*\)/g, ' ') // (1879-1955)
     .replace(/["“”][^"“”]*["“”]/g, ' ') // ("A Einstein")
     .replace(/\b(?:c\.?|circa)\s*\d{3,4}.*$/i, ' ') // c. 1864 …
     .replace(/,?\s*\b(1[0-9]{3}|20[0-2]\d)\b.*$/, ' ') // , 1913 …
-    .replace(/\b(?:jr|sr|ii|iii|iv)\.?\b/gi, ' ')
+    .replace(/\b(?:jr|sr)\.?(?=\s|,|$)/gi, ' ')
     .replace(/[.,;:]+\s*$/, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  const toks = s.split(/\s+/).filter(Boolean);
-  while (toks.length && HONORIFICS.has(toks[0].toLowerCase())) toks.shift();
+  const toks0 = s0.split(/\s+/).filter(Boolean);
+  // regnal: a sovereign/pope title anywhere at the head, or a lone given name
+  // before the numeral ("George III") — otherwise a trailing II/III/IV is a
+  // family suffix ("Davis Love III") and is dropped as before
+  const regnal = toks0.length > 0 && (REGNAL.has(toks0[0].toLowerCase()) ||
+    (toks0.length === 2 && ROMAN.test(toks0[1]) && !HONORIFICS.has(toks0[0].toLowerCase())));
+  const toks = toks0.filter((t, i) => regnal || i === 0 || !/^(?:ii|iii|iv)\.?$/i.test(t));
+  if (!NAME_TITLES.test(toks.join(' '))) {
+    while (toks.length && HONORIFICS.has(toks[0].toLowerCase())) toks.shift();
+  }
   // drop a trailing dangling particle
   while (toks.length && PARTICLES.has(toks[toks.length - 1].toLowerCase())) toks.pop();
   return toks.join(' ');
@@ -145,6 +176,7 @@ const DESCRIPTOR = new Set([
   'desirable', 'magnificent', 'exceptional', 'museum', 'large', 'small', 'group',
   'archive', 'impressive', 'extraordinary', 'remarkable', 'stunning', 'beautiful',
   'significant', 'notable', 'iconic', 'wartime', 'undated', 'triple', 'multi',
+  'partial',
 ]);
 
 /** RR/eBay shape "Firstname Lastname <Format>…" → the leading name run (stopping
@@ -153,19 +185,82 @@ const DESCRIPTOR = new Set([
 function fromLeadingName(title: string): string | null {
   const m = title.match(FORMAT_ANCHOR);
   if (!m || m.index === undefined || m.index < 3) return null; // format at the head → not RR shape
-  let prefix = title.slice(0, m.index).replace(/\(\d+\)/g, ' ').split(':')[0].trim(); // "Name: descriptor" → Name
-  prefix = prefix.replace(/,\s*(jr|sr|ii|iii|iv)\.?\s*$/i, ''); // keep "King, Jr." as one signer
+  const segs = title.slice(0, m.index).replace(/\(\d+\)/g, ' ').split(':').map(x => x.trim());
+  // "Topic: Person <Format>" (Enola Gay: Paul Tibbets Signed Photograph) names
+  // the signer AFTER the colon; "Person: <descriptor> <format>" (Jack Kerouac:
+  // Crisp triple-signed check) names them before it. Walk from the segment
+  // nearest the format back to the head: a person → that's the signer; a
+  // proper-noun phrase that is not a person (Triple Crown Winners, Lindberg
+  // and Wells) → the head is a topic → abstain; a descriptive tail → go on.
+  const shouting = (x: string) => /[A-Z]{2}/.test(x) && !/[a-zà-ÿ]/.test(x);
+  for (let i = segs.length - 1; i >= 1; i--) {
+    if (!segs[i]) continue;
+    // an all-caps headline between colons ("Harry Houdini: GREAT ESCAPE: …")
+    // is a lot nickname, never the signer — unless the whole title shouts
+    if (shouting(segs[i]) && !shouting(segs[0])) continue;
+    const person = invertedName(segs[i]) || leadingNameRun(segs[i], true);
+    // a tail that re-uses the head's own name is a description of that
+    // person ("Walt Disney: Dazzling Disney signed book display")
+    const headToks = new Set(segs.slice(0, i).join(' ').toLowerCase().split(/[^a-z0-9à-ÿ]+/).filter(Boolean));
+    if (person && !person.toLowerCase().split(/\s+/).some(t => headToks.has(t.replace(/[.'’]/g, '')))) return person;
+    if (topicTail(segs[i], segs.slice(0, i).join(' '))) return null;
+  }
+  return leadingNameRun(segs[0]);
+}
+
+/** A whole segment in index form "Surname, Firstname" ("Horse Racing: Turcotte,
+ *  Ron Signed Photograph", "James Bond: Moore, Roger …") → "Firstname Surname". */
+function invertedName(seg: string): string | null {
+  const m = seg.match(/^([A-ZÀ-Þ][A-Za-zÀ-ÿ'’.\-]+),\s+([A-ZÀ-Þ][A-Za-zÀ-ÿ'’.\- ]+)$/);
+  if (!m || /\band\b|&|,/.test(m[2])) return null;
+  const name = cleanName(`${m[2]} ${m[1]}`);
+  return looksLikePerson(name) ? name : null;
+}
+
+/** The leading person-name run of one title segment (stopping at a descriptor),
+ *  or null — multi-signer groups and comma lists abstain. */
+function leadingNameRun(seg: string, strict = false): string | null {
+  const prefix = seg.replace(/,\s*(jr|sr|ii|iii|iv)\.?\s*$/i, ''); // keep "King, Jr." as one signer
   if (/\band\b|&/i.test(prefix)) return null; // multi-signer group
   if (prefix.includes(',')) return null; // a remaining comma = a list of signers
   // take the leading run, stopping at the first descriptor/non-name word
   const run: string[] = [];
-  for (const t of prefix.split(/\s+/).filter(Boolean)) {
+  const words = prefix.split(/\s+/).filter(Boolean);
+  // after a colon, a leading article opens a title ("…: An Illustrated History")
+  if (strict && words.length && /^(?:a|an|the)$/i.test(words[0])) return null;
+  for (const t of words) {
     const low = t.toLowerCase().replace(/[.'’-]/g, '');
-    if (DESCRIPTOR.has(low) || NON_NAME.has(low)) break;
+    if (GROUP_WORDS.has(low)) return null;
+    if (DESCRIPTOR.has(low)) break;
+    // after a colon a theme word means the run named a thing, not a person
+    // ("Horse Racing: Kentucky Derby Winners …")
+    if (NON_NAME.has(low)) { if (strict) return null; break; }
     run.push(t);
   }
   const name = cleanName(run.join(' '));
   return looksLikePerson(name) ? name : null;
+}
+
+/** A segment after a colon that names something other than a person — so the
+ *  text before the colon is a topic, not the signer: several people ("and"/"&"/
+ *  a list), or two consecutive capitalized non-descriptor words in its first
+ *  three tokens that are not just the head's own name ("Triple Crown Winners";
+ *  but "Attractive 1870 Liszt Festival" and quotations are descriptive). */
+function topicTail(tail: string, head: string): boolean {
+  if (/^["“‘']/.test(tail)) return false; // a quotation
+  const toks = tail.split(/\s+/).filter(Boolean).slice(0, 3);
+  // an all-caps headline ("Ho Chi Minh: GOOD MORNING, VIETNAM: Scarce signed photo")
+  if (toks.length && toks.every(t => !/[a-zà-ÿ]/.test(t))) return false;
+  // several people: "Crane and Banner", "Erwin, Wiley, and Deal" (a capitalized
+  // word after the and/comma — "Rare and desirable", "Scarce, early" describe)
+  if (/(?:\band|&|,)\s+[A-ZÀ-Þ]/.test(toks.join(' '))) return true;
+  const headLow = new Set(head.toLowerCase().split(/[^a-z0-9à-ÿ]+/).filter(Boolean));
+  const proper = (t: string) => {
+    const low = t.toLowerCase().replace(/[.'’-]/g, '');
+    return isCap(t) && !DESCRIPTOR.has(low) && !headLow.has(low);
+  };
+  for (let i = 0; i + 1 < toks.length; i++) if (proper(toks[i]) && proper(toks[i + 1])) return true;
+  return false;
 }
 
 /** Parse an INDIVIDUAL signer NAME from a lot's descriptive title/medium, or

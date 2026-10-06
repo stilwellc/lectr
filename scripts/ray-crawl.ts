@@ -23,6 +23,7 @@ import type {
 // parsing. All pure/no-side-effect modules — safe as static imports.
 import { RESULT_PENDING_MS } from './lib/skip-set';
 import { artCategoryFix, type ClassifyLot } from './lib/classify';
+import { saleDayOf } from './lib/sale-day';
 
 // v2 foundation — the single, deterministic normalization layer. Every FUTURE
 // row is born v2 by stamping these (native money fact + dated USD, persisted
@@ -30,7 +31,7 @@ import { artCategoryFix, type ClassifyLot } from './lib/classify';
 // runs INCREMENTALLY (a bounded batch per crawl — decision #3), never all 41k.
 import {
   normalizeDimensions, extractYear, canonMedium,
-  extractEdition, extractSerial, extractCollectibleTags, classifyEntity,
+  extractEdition, extractSerials, extractCollectibleTags, classifyEntity,
   objectFingerprint, titleTokens,
   modelKey as normModelKey, watchKey as normWatchKey,
   normalizeTitle as normNormalizeTitle,
@@ -639,7 +640,8 @@ async function main() {
           const d = new Date(raw);
           if (isNaN(d.getTime())) return;
           const iso = d.toISOString();
-          lot.saleDate = iso.slice(0, 10);
+          // the sale-location calendar day (lib/sale-day), not the UTC day
+          lot.saleDate = saleDayOf("Christie's", iso, { saleName: lot.saleName, currency: (lot as AuctionLot & { nativeCurrency?: string }).nativeCurrency }) || iso.slice(0, 10);
           (lot as AuctionLot & { saleDateTime?: string }).saleDateTime = iso;
           dated++;
           if (d.getTime() > Date.now()) {
@@ -758,7 +760,10 @@ async function main() {
     lot.editionOf = ed.editionOf;
     lot.editionTotal = ed.editionTotal;
     lot.editionMarker = ed.editionMarker;
-    lot.serialNo = extractSerial(lot.title, lot.description || undefined);
+    const ser = extractSerials(lot.title, lot.description || undefined);
+    lot.serialNo = ser.serialNo;
+    if (ser.caseNo) lot.caseNo = ser.caseNo;
+    if (ser.movementNo) lot.movementNo = ser.movementNo;
 
     // collectible auth signals (game-used sports) — title-borne
     const tags = extractCollectibleTags(lot.title);

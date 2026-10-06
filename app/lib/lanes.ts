@@ -76,6 +76,52 @@ export function closeGrowth(curve: CloseCurve | null | undefined, bid: number, d
   return typeof g === 'number' && g >= 1 ? g : null;
 }
 
+/* ── THE GAP'S PUBLISH GATE (Oct 6 2026) ────────────────────────────────
+   The graded tape (calls ledger, 'vsbid' rows: every floored projection,
+   graded on the realized price) showed the projection is right only where
+   the Gap never looks: lots projecting AT or over their floor realize 0.88–
+   0.91× the projection, but the Gap SELECTS lots projecting far under it, and
+   those realize 2–10× (Goldin 4–8 days out, projection < ½ floor: 4.5×,
+   n 385; the 'forming' shelf graded 4.68×, n 176; the wire 1.55×, n 121;
+   Memory Lane 0 of 18 reached the floor). A per-cell correction fit on the
+   calls before Sep 12 did not hold after it (4.2× fitted → 1.27–2.88× left).
+   So a projection SEATS a Gap row only when its cell — house (lot id
+   prefix) × days out × projection/floor band — has ≥ GAP_CELL_GATE.minN
+   graded calls whose median realized/projected sits in [lo, hi]. The cells
+   are re-validated every night from the ledger (build-upcoming stamps
+   bidProj.ok); a cell that drifts out stops seating rows. The forming shelf
+   is frozen outright. */
+export const GAP_CELL_GATE = { minN: 50, lo: 0.8, hi: 1.25 };
+/** the Gap shelf the lane may seat (forming frozen, Oct 6 2026) */
+export const GAP_FORMING_FROZEN = true;
+export type GapCell = { n: number; ratio: number; pass: boolean };
+const houseKeyOf = (id: string) => String(id).split('-')[0].toLowerCase();
+const daysBand = (d: number) => (d <= 1 ? '0-1' : d <= 3.5 ? '2-3' : d <= 8 ? '4-8' : '9+');
+const pfBand = (x: number) => (x < 0.5 ? '<0.5' : x < 0.75 ? '0.5-0.75' : x < 1 ? '0.75-1' : '>=1');
+/** the cell a projection is validated in: house × days-out band × projection/floor band */
+export function gapCellKey(id: string, daysOut: number, projAllIn: number, floor: number): string {
+  return `${houseKeyOf(id)}|${daysBand(daysOut)}|${pfBand(projAllIn / floor)}`;
+}
+/** Validate every cell from graded 'vsbid' calls (call day → sale day is the
+ *  days out; p = projected close, f = the floor, r = realized). */
+export function validateGapCells(calls: { id: string; d: string; k: string; p: number; f?: number; r?: number; sd?: string }[]): Record<string, GapCell> {
+  const acc = new Map<string, number[]>();
+  for (const c of calls) {
+    if (c.k !== 'vsbid' || !(c.r! > 0) || !(c.p > 0) || !(c.f! > 0) || !c.sd) continue;
+    const d = (Date.parse(c.sd.slice(0, 10)) - Date.parse(c.d)) / 86400000;
+    if (!Number.isFinite(d) || d < 0) continue;
+    const k = gapCellKey(c.id, d, c.p, c.f!);
+    const a = acc.get(k); if (a) a.push(c.r! / c.p); else acc.set(k, [c.r! / c.p]);
+  }
+  const out: Record<string, GapCell> = {};
+  acc.forEach((v, k) => {
+    v.sort((x, y) => x - y);
+    const ratio = v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2;
+    out[k] = { n: v.length, ratio: Math.round(ratio * 1000) / 1000, pass: v.length >= GAP_CELL_GATE.minN && ratio >= GAP_CELL_GATE.lo && ratio <= GAP_CELL_GATE.hi };
+  });
+  return out;
+}
+
 /* ── THE GAP ────────────────────────────────────────────────────────────── */
 
 export interface GapRead {
@@ -97,6 +143,8 @@ export function gapRead(lot: AuctionLot, now: number): GapRead | null {
   if (est.low != null || est.high != null) return null;
   const proj = lot.bidProj;
   if (!proj || !(proj.allIn > 0)) return null;
+  // (Oct 6) only a projection whose cell is validated on the graded tape
+  if (proj.ok !== true) return null;
   if (hasConditionFlag(lot.title)) return null;
   // the floor is derived HERE through the ONE floor rule (valueFloor above)
   const vf = valueFloor(lot);
@@ -112,7 +160,7 @@ export function gapRead(lot: AuctionLot, now: number): GapRead | null {
   const depth = 1 - proj.allIn / floor;
   if (depth < 0.25 || depth > 0.90) return null; // 0.90 = the floor-error gate
   if (daysOut <= 3.5) return { shelf: 'wire', depth, allIn: proj.allIn, floor, floorSrc, daysOut };
-  if (depth >= 0.40) return { shelf: 'forming', depth, allIn: proj.allIn, floor, floorSrc, daysOut };
+  if (!GAP_FORMING_FROZEN && depth >= 0.40) return { shelf: 'forming', depth, allIn: proj.allIn, floor, floorSrc, daysOut };
   return null;
 }
 

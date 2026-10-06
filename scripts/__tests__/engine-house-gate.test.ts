@@ -13,7 +13,7 @@ import { appendValueTape, readValueTape, gradeValueTape } from '../build-market-
 import type { AuctionLot } from '../../app/types';
 import {
   estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, houseFactorOf, adjustedTop, buyerFields,
-  noEstGateOf, blendPredict, BAND_TOP_RATIO, ENGINE_FLAGS_LEGACY, ENGINE_FLAGS_CURRENT, ENGINE_VERSION,
+  noEstGateOf, blendPredict, BAND_TOP_RATIO, ENGINE_FLAGS_LEGACY, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_HOUSE_GATE, ENGINE_VERSION,
   type Comp, type HouseBias, type EngineCalibration,
 } from '../../app/lib/value';
 import { buildHouseBias } from '../../app/lib/indices';
@@ -91,13 +91,19 @@ test('flags: a low-estimating house no longer flags on its own policy — flagRa
   assert.equal(legacy.compRatio, 2.8);
   assert.equal(legacy.signal!.label, 'below comparable market', 'legacy: raw 2.8× flags');
   assert.equal(legacy.flagRatio, 2.8, 'legacy flag ratio = raw');
-  setEngineFlags(ENGINE_FLAGS_CURRENT);
+  setEngineFlags(ENGINE_FLAGS_HOUSE_GATE);
   const cur = estimateValueEx(rrLot(), comps, tbl).value!;
   assert.equal(cur.compRatio, 2.8, 'compRatio stays raw');
   assert.ok(Math.abs(cur.houseFactor! - 2.4) < 0.01);
   assert.ok(Math.abs(cur.flagRatio! - 2.8 / 2.4) < 0.01);
-  assert.equal(cur.signal!.label, 'at comparable market', 'current: 1.17× the house-adjusted estimate is not a flag');
-  assert.equal(cur.engineVersion, ENGINE_VERSION);
+  assert.equal(cur.signal!.label, 'at comparable market', 'house-gate: 1.17× the house-adjusted estimate is not a flag');
+  // (Oct 6) CURRENT reads the same comps on the hammer basis: the comps'
+  // hammer (÷ RR's premium) vs the point — still not a flag
+  setEngineFlags(ENGINE_FLAGS_CURRENT);
+  const ham = estimateValueEx(rrLot(), comps, tbl).value!;
+  assert.ok(Math.abs(ham.compRatio! - 2.8 / houseAllInFactor('RR Auction')) < 0.01);
+  assert.equal(ham.signal!.label, 'at comparable market');
+  assert.equal(ham.engineVersion, ENGINE_VERSION);
 });
 
 test('house anchor: the estimate-lot prediction anchors on the house habit, moved toward comps by w', () => {

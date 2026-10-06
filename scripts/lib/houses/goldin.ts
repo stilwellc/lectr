@@ -8,6 +8,7 @@ import type { AuctionLot } from '../../../app/types';
 import { routeCulture } from '../../culture';
 import { fetchWithRetry } from '../fetch-retry';
 import { DEEP, UA, noteExpected, noteFetched, parseDrop, sleep, stampMoney } from './common';
+import { saleDayOf } from '../sale-day';
 import { GOLDIN_CARD_MAKERS, GOLDIN_EXCLUDE_GAMES, GOLDIN_EXCLUDE_MISC, GOLDIN_LEAK_NOTE, GOLDIN_POKEMON, goldinRoute } from './routing';
 
 // ── Goldin Crawler ──
@@ -174,9 +175,10 @@ export async function crawlGoldin(): Promise<AuctionLot[]> {
       imageUrl: lot.primary_image_name ? GOLDIN_IMG(lot.lot_id, lot.primary_image_name) : null,
       auctionHouse: 'Goldin',
       saleName: lot.auction_type ? `Goldin ${lot.auction_type} Auction` : 'Goldin Auction',
-      // born-v2: saleDate is the canonical bare YYYY-MM-DD (invariant 7); the
+      // born-v2: saleDate is the canonical bare YYYY-MM-DD (invariant 7) — the
+      // ET sale night (lib/sale-day), not the UTC day of a 10 PM ET close; the
       // full close timestamp is retained on saleDateTime.
-      saleDate: (end || '').split('T')[0],
+      saleDate: saleDayOf('Goldin', end) || (end || '').split('T')[0],
       saleDateTime: end || null,
       ...(undated ? { datePrecision: 'unknown' } : {}),
       lotNumber: lot.lot_number || null,
@@ -186,7 +188,7 @@ export async function crawlGoldin(): Promise<AuctionLot[]> {
       ...stampMoney({
         isSold: false,
         nativeCurrency: 'USD',
-        saleDate: (end || '').split('T')[0] || null,
+        saleDate: saleDayOf('Goldin', end) || (end || '').split('T')[0] || null,
         hammerNative: null,
         premiumNative: null,
         estLowNative: null,
@@ -237,8 +239,9 @@ export async function crawlGoldin(): Promise<AuctionLot[]> {
       imageUrl: lot.primary_image_name ? GOLDIN_IMG(lot.lot_id, lot.primary_image_name) : null,
       auctionHouse: 'Goldin',
       saleName: lot.auction_type ? `Goldin ${lot.auction_type} Auction` : 'Goldin Auction',
-      // born-v2: canonical bare YYYY-MM-DD saleDate; full timestamp on saleDateTime.
-      saleDate: (end || '').split('T')[0],
+      // born-v2: canonical bare YYYY-MM-DD saleDate (the ET sale night, lib/sale-day);
+      // full timestamp on saleDateTime.
+      saleDate: saleDayOf('Goldin', end) || (end || '').split('T')[0],
       saleDateTime: end || null,
       lotNumber: lot.lot_number || null,
       // v2 money: hammer = the winning bid; realized = hammer + buyer's premium.
@@ -246,7 +249,7 @@ export async function crawlGoldin(): Promise<AuctionLot[]> {
       ...stampMoney({
         isSold: true,
         nativeCurrency: 'USD',
-        saleDate: (end || '').split('T')[0] || null,
+        saleDate: saleDayOf('Goldin', end) || (end || '').split('T')[0] || null,
         hammerNative: bid,
         premiumNative: Math.round(bid * (1 + bp / 100)),
         estLowNative: null,

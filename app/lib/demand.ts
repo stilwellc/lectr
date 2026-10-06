@@ -12,6 +12,7 @@
 import { AuctionLot, RealizedPoint, BidCompetitionPoint } from '../types';
 import { isSportsScienceObject, sportsForm, classifyForm } from './comps';
 import { medianSorted } from './stats';
+import { inferHammerUsd } from './premiums';
 
 export interface DemandPoint {
   date: string;
@@ -25,56 +26,78 @@ const MIN_WINDOW_SALES = 5;
 
 const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
-export function demandSeries(lots: AuctionLot[]): DemandPoint[] {
+type DemandLot = Pick<AuctionLot, 'status' | 'priceUsd' | 'saleDate' | 'estimateLow' | 'estimateHigh' | 'estLowUsd' | 'estHighUsd' | 'auctionHouse'> & {
+  hammerUsd?: number | null; realizedUsd?: number | null; buyerPremiumPct?: number | null;
+};
+
+/**
+ * THE demand-read primitive: a sold lot's HAMMER-basis % over its estimate
+ * midpoint, or null when the lot cannot be read. Every demand read — the
+ * market hero curve (demandSeries, via build-upcoming) and the sub-market /
+ * drill rows (scripts/sub-markets.ts) — goes through here, so one lot can
+ * never read two different numbers on two surfaces.
+ *
+ * BASIS (Oct 2026): hammer vs estimate. Houses quote estimates on hammer;
+ * the published sold price carries the buyer's premium (~20–28%), so the old
+ * all-in read sat ~25–30pts above a like-for-like comparison (art TTM: +28%
+ * all-in vs ~0% hammer). The hammer is the published one where the house
+ * prints it, else realized ÷ the lot's OWN premium schedule
+ * (premiums.inferHammerUsd — stamped premium, then the house schedule in
+ * force on the sale date). The Aug 4 all-in call was made because only a
+ * flat ÷1.25 existed; the real per-house schedules are wired now.
+ *
+ * RANGE ESTIMATES ONLY: a single-figure estimate (RR Auction's "$500+",
+ * stored low-only) is a FLOOR, not a midpoint — reading it as the mid
+ * inflated culture's demand to ~+37% when the range-estimate tape read ~+5%.
+ * Single-figure lots are dropped from the midpoint math (and from the
+ * coverage that gates a demand read — see sub-markets.ts hasRangeEstimate).
+ */
+export function hammerOverEstimatePct(l: DemandLot): number | null {
+  const lo = (l.estLowUsd ?? l.estimateLow) || 0;
+  const hi = (l.estHighUsd ?? l.estimateHigh) || 0;
+  if (!(lo > 0) || !(hi > 0)) return null;
+  const mid = (lo + hi) / 2;
+  const hammer = inferHammerUsd(l);
+  if (!(hammer > 0)) return null;
+  return (hammer / mid - 1) * 100;
+}
+
+/** a lot whose estimate is a real RANGE (both bounds) — the only kind the
+ *  demand read can midpoint */
+export function hasRangeEstimate(l: Pick<AuctionLot, 'estimateLow' | 'estimateHigh' | 'estLowUsd' | 'estHighUsd'>): boolean {
+  return ((l.estLowUsd ?? l.estimateLow) || 0) > 0 && ((l.estHighUsd ?? l.estimateHigh) || 0) > 0;
+}
+
+/**
+ * Quarterly demand: median hammerOverEstimatePct over the trailing twelve
+ * calendar months, evaluated at each quarter end — and for the IN-PROGRESS
+ * quarter, at `now` (the window always spans a true twelve months: the old
+ * read ended the current quarter's window at the quarter's future end, so
+ * on Oct 5 the "2026 Q4" point was really Jan 1 → today, nine months wearing
+ * a trailing-year label). Sales dated after `now` are dropped.
+ */
+export function demandSeries(lots: DemandLot[], opts: { now?: number } = {}): DemandPoint[] {
+  const now = opts.now ?? Date.now();
   const sales: { t: number; perf: number }[] = [];
-  // quarter key -> exclusive end of that quarter (first ms of the next one)
+  // quarter key -> exclusive end of that quarter's window (first ms of the
+  // next quarter, clamped to now for the quarter in progress)
   const quarterEnd: Record<string, number> = {};
   for (const l of lots) {
-    // v2 money read (alias-safe): the canonical USD estimate is estLowUsd/
-    // estHighUsd (native × dated FX); pre-migration only estimateLow/High exist.
-    // Read the USD band when present, fall back to the old fields — so perf =
-    // priceUsd / estMid divides USD by USD before AND after migration (a
-    // non-USD sale no longer divides a USD price by a native estimate).
-    // Single-point estimates count (the fourth sighting of this bug family,
-    // Aug 6 2026): RR Auction publishes ONE figure, stored in estimateLow with
-    // estimateHigh null — requiring BOTH bounds silently zeroed the demand
-    // series for culture and science (the RR-dominated verticals) while
-    // sub-markets.ts, utils.ts and the drill gates all midpoint via the same
-    // low↔high fallback. A single-point estimate IS the mid.
-    const rawLow = l.estLowUsd ?? l.estimateLow;
-    const rawHigh = l.estHighUsd ?? l.estimateHigh;
-    const estLow = rawLow || rawHigh;
-    const estHigh = rawHigh || rawLow;
-    if (l.status !== 'sold' || !l.priceUsd || !estLow || !estHigh) continue;
+    if (l.status !== 'sold') continue;
+    const perf = hammerOverEstimatePct(l);
+    if (perf == null) continue;
     const d = new Date(l.saleDate);
-    if (isNaN(d.getTime())) continue;
+    const t = d.getTime();
+    if (isNaN(t) || t > now) continue;
     const q = Math.floor(d.getUTCMonth() / 3);
     const key = `${d.getUTCFullYear()} Q${q + 1}`;
-    const estMid = (estLow + estHigh) / 2;
-    if (estMid <= 0) continue;
-    // RAW SOLD PRICE vs estimate (Collin's call, Aug 4 2026). The price the
-    // house published is used as-is — no premium arithmetic, nothing inferred.
-    //
-    // The trade-off, recorded so it isn't rediscovered: for most houses that
-    // published price INCLUDES the buyer's premium, while the estimate is a
-    // hammer-basis prediction, so this reading carries the house's fee inside
-    // it and runs ~19–28pts above a like-for-like comparison (measured across
-    // TTM/2y/5y/all-time). Where a house publishes both numbers we can see the
-    // gap directly — Bonhams 1.25–1.38×, Wright/Rago 1.25×. The alternative
-    // was dividing by an assumed 1.25, which is apples-to-apples but INFERS a
-    // hammer for the 79% of the demand pool (Christie's + Sotheby's) that
-    // never publishes one. Raw wins on "never invent a number"; fees can be
-    // added properly later, per house, when the real schedules are wired in.
-    //
-    // BECAUSE this includes fees, the surface must NOT call it "hammer" — see
-    // the caption in IndexHero's useHeroSeries.
-    sales.push({ t: d.getTime(), perf: l.priceUsd / estMid - 1 });
-    quarterEnd[key] = quarterEnd[key] ?? Date.UTC(d.getUTCFullYear(), q * 3 + 3, 1);
+    sales.push({ t, perf });
+    quarterEnd[key] = quarterEnd[key] ?? Math.min(Date.UTC(d.getUTCFullYear(), q * 3 + 3, 1), now + 1);
   }
   const quarters = Object.keys(quarterEnd).sort();
   const points: DemandPoint[] = [];
   for (const qk of quarters) {
-    // Trailing twelve CALENDAR months from the quarter's end — never adjacent
+    // Trailing twelve CALENDAR months from the window end — never adjacent
     // array keys. A sparse vertical can have years-old quarters sitting right
     // next to current ones; slicing keys would smuggle decade-old sales into
     // a "trailing year" read.
@@ -84,8 +107,7 @@ export function demandSeries(lots: AuctionLot[]): DemandPoint[] {
       .map(s => s.perf)
       .sort((a, b) => a - b);
     if (window.length < MIN_WINDOW_SALES) continue;
-    const median = medianSorted(window);
-    points.push({ date: qk, value: median * 100, n: window.length });
+    points.push({ date: qk, value: medianSorted(window), n: window.length });
   }
   return points;
 }

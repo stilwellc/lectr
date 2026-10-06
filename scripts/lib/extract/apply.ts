@@ -19,6 +19,7 @@ import { ExtractCache, hashText, pairKey, type QRec } from './cache';
 import { cachePath, extractApplyEnabled, logExtractionOff, EXTRACT_PROMPT_VERSION, SAME_PROMPT_VERSION } from './config';
 import type { Extraction } from './schema';
 import { vetReference } from '../../../app/lib/watch-ref';
+import { composePokemonKey } from '../../sub-markets';
 
 /** The compact extraction a lot carries in the corpus (stripped from served). */
 export type LotExtract = Partial<Extraction> & { h: string; v: string; src: 'llm' };
@@ -175,11 +176,9 @@ export function mergeCardExtract(c: CardId, l: AuctionLot): CardId {
 
 // ── pokémon ──────────────────────────────────────────────────────────────────
 const PKMN_GRADERS = new Set(['PSA', 'BGS', 'CGC', 'SGC']);
-const PKMN_STRIP = /\b(pok[eé]mon|holo(?:foil)?|1st edition|shadowless|unlimited|reverse|japanese|english)\b/gi;
-const setPartOf = (s: string) => s.replace(PKMN_STRIP, ' ').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).slice(0, 4).join('-');
 
-/** The pokemonKey (sub-markets.ts format year|set|no|edition|GRADE) built from
- *  the extraction — called ONLY where the regex pokemonKey returned null. */
+/** The pokemonKey (sub-markets.ts format, composePokemonKey) built from the
+ *  extraction — called ONLY where the regex pokemonKey returned null. */
 export function pokemonKeyFromExtract(l: AuctionLot): string | null {
   const x = (l as XLot).llm;
   if (!x || l.artist !== POKEMON_SLUG_X || !extractApplyEnabled()) return null;
@@ -191,11 +190,10 @@ export function pokemonKeyFromExtract(l: AuctionLot): string | null {
   const no = x.card_number.replace(/^#/, '');
   if (!/^[A-Za-z0-9]+$/.test(no)) return null;
   const between = t.indexOf(yr) >= 0 ? setBetween(t, yr, no) : null;
-  const setPart = setPartOf(between ?? x.set ?? '');
-  if (!setPart) return null;
-  const ed = /1st edition/i.test(t) ? '1st' : /shadowless/i.test(t) ? 'shadowless'
-    : x.edition === '1st' ? '1st' : x.edition === 'shadowless' ? 'shadowless' : 'unl';
-  return `${yr}|${setPart}|${no}|${ed}|${x.grading_company}${x.grade}`;
+  // the character: the title after the number token, else the extraction's subject
+  const nm = t.match(new RegExp(`(?:^|\\s)#?${no}(?=\\s|$|[,;])`, 'i'));
+  const afterNo = nm && nm.index != null ? t.slice(nm.index + nm[0].length) : (x.subject ?? '');
+  return composePokemonKey({ year: yr, setText: between ?? x.set ?? '', cardNo: no, afterNo, title: t, edition: x.edition, grade: `${x.grading_company}${x.grade}` });
 }
 
 // ── same-object veto ─────────────────────────────────────────────────────────

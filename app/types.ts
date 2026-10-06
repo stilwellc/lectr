@@ -11,7 +11,7 @@ export type LotStatus = 'upcoming' | 'sold' | 'bought_in' | 'withdrawn' | 'unkno
 /** Every currency the money layer can carry and convert (normalize.ts FX
     table) — the ONE runtime list; `Currency` is derived from it, and crawlers
     validate a house-supplied code with `isCurrency` instead of re-typing it. */
-export const CURRENCIES = ['USD', 'GBP', 'EUR', 'HKD', 'CNY', 'AUD', 'CHF'] as const;
+export const CURRENCIES = ['USD', 'GBP', 'EUR', 'HKD', 'CNY', 'AUD', 'CHF', 'DKK', 'SEK', 'NOK', 'JPY'] as const;
 export type Currency = typeof CURRENCIES[number];
 export const isCurrency = (c: unknown): c is Currency =>
   typeof c === 'string' && (CURRENCIES as readonly string[]).includes(c);
@@ -137,6 +137,9 @@ export interface AuctionLot {
   // ── OLD money fields, retained as optional ALIASES during migration ──
   estimateLow: number | null;
   estimateHigh: number | null;
+  /** ABSENT at runtime on a row whose currency the money layer cannot convert
+      (crawler fail-closed: no price, no estimate, compExclude
+      'fx-unknown-currency' — never a native figure relabelled 'USD') */
   currency: Currency;
   hammerPrice: number | null;
   premiumPrice: number | null;
@@ -165,8 +168,11 @@ export interface AuctionLot {
   compExclude?: string;
   /** How precise saleDate is. Absent = 'day'. 'month' = a synthesized mid-month
       stamp (seasonToDate: "2018 Spring" → 04-15); 'year' = a June-1 placeholder
-      (Sotheby's artist-page scrape). Crawler-stamped values win over normalize. */
-  datePrecision?: 'day' | 'month' | 'year' | 'unknown';
+      (Sotheby's artist-page scrape); 'season' = a conservative upper bound on
+      an unpublished close (scripts/lib/sale-close-dates.ts — the day is read
+      as-is, so the sale counts as known only from that bound on).
+      Crawler-stamped values win over normalize. */
+  datePrecision?: 'day' | 'month' | 'year' | 'season' | 'unknown';
   url: string;
   /** Stamped at BUILD time by scripts/build-upcoming.ts onto the eager
       upcoming.json lots ONLY (comps median vs estimate midpoint, or the
@@ -258,8 +264,14 @@ export interface AuctionLot {
   editionTotal?: number | null;
   /** non-numbered proof designation */
   editionMarker?: EditionMarker | null;
-  /** case/movement/serial (watches, instruments) */
+  /** labelled serial blocking key (watches, instruments), kind-qualified:
+      "sn-<case/serial no.>" else "mvt-<movement no.>" (app/lib/normalize.ts
+      extractSerials) — a case number never equals a movement number */
   serialNo?: string | null;
+  /** labelled case / serial number (≥4 digits, separators folded). CORPUS-ONLY */
+  caseNo?: string | null;
+  /** labelled movement number (≥4 digits, separators folded). CORPUS-ONLY */
+  movementNo?: string | null;
   /** game-used "photo-matched" in title — strongest sports exact signal */
   photoMatched?: boolean;
   /** auth bodies (PSA/DNA, MeiGray, Beckett, LOA/COA) */
@@ -297,7 +309,10 @@ export interface AuctionLot {
   /** cross-house live collisions: this exact cardKey live elsewhere NOW */
   crossLive?: { id: string; house: string; bid: number }[];
   /** projected close (bid × close-day growth curve, all-in) vs the value floor */
-  bidProj?: { g: number; allIn: number; floor?: number; below?: boolean };
+  /** ok (Oct 6 2026): the projection's house × days-out × projection/floor
+      cell is VALIDATED on the graded tape (lanes.validateGapCells) — the Gap
+      seats only such lots */
+  bidProj?: { g: number; allIn: number; floor?: number; below?: boolean; ok?: boolean };
   playerName?: string | null;
   /** parsed trading-card identity — the composite fingerprint keying the card
       repeat-sales index (same player+year+set+cardNo+grade = the same product).
@@ -332,6 +347,9 @@ export interface AuctionLot {
     poolIds: string[]; n: number; compValueUsd: number; low: number; high: number;
     compMedianUsd?: number | null; compAdjUsd?: number | null; blendW?: number | null;
     compRatio: number | null;
+    /** the statistic the signal is called on (comps vs the house-adjusted
+     *  estimate) — the printed % reads THIS, fallback compRatio */
+    flagRatio?: number | null;
     signal: { label: string; strength: string; beatRatePct: number } | null;
     estimateUsd: number | null;
     vsBid: { label: string; pct: number } | null;

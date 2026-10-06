@@ -26,7 +26,7 @@ import { AuctionLot, ObjectType, SoldComp } from '../types';
 // the engine band/backtest. Imported from stats (not value) so value.ts can
 // import the shape gate below without a module cycle.
 import { quantileSorted as quantile, medianSorted } from './stats';
-import { readWatchKey } from './watch-ref';
+import { readWatchKey, refSuffixMaterial } from './watch-ref';
 
 export type Form =
   | 'book' | 'ephemera' | 'poster' | 'photograph' | 'textile'
@@ -316,10 +316,16 @@ export function watchKeyKind(lot: Pick<AuctionLot, 'title'> & { artist?: string 
   return readWatchKey(lot.title, lot.artist)?.kind ?? null;
 }
 
-/** Coarse watch material from title+medium. Gold shades deliberately collapse
-    (fine split measured no better: 0.305 vs 0.303). */
-export function coarseWatchMaterial(lot: Pick<AuctionLot, 'title' | 'medium'>): string | null {
-  const t = `${(lot.title || '')} ${(lot.medium || '')}`.toLowerCase();
+/** Coarse watch CASE material from title+medium — the ONE material reader
+    (identity.watchMaterialCoarse delegates here; Oct 6 2026). Gold shades
+    deliberately collapse (fine split measured no better: 0.305 vs 0.303).
+    Dial/hand descriptions are not the case: "yellow gold wristwatch with
+    two-tone dial" is gold, "gold … blued steel hands" is gold (427 lots read
+    two-tone off the dial). When the text names no metal, a Patek/AP
+    reference suffix does (5970J, 15202ST — watch-ref.refSuffixMaterial). */
+const WATCH_DIAL_PHRASE = /\btwo[- ]?(?:tone|colou?r(?:ed)?)\s+(?:[a-z'-]+\s+){0,2}?dial\b|\b(?:gold(?:en)?|gilt)(?:[- ]plated)?\s+(?:dial|hands|numerals|markers|indexes|indices|batons|hour markers)\b|\b(?:blued? )?steel (?:[a-z'-]+ )?hands\b/g;
+export function coarseWatchMaterial(lot: Pick<AuctionLot, 'title' | 'medium'> & { artist?: string }): string | null {
+  const t = `${(lot.title || '')} ${(lot.medium || '')}`.toLowerCase().replace(WATCH_DIAL_PHRASE, ' ');
   const gold = /\b(gold|or jaune|or gris|or rose|or blanc)\b|\b18k\b|\b14k\b|\b18ct\b|\b9ct\b/.test(t);
   const steel = /\b(steel|stainless|acier)\b/.test(t);
   if ((gold && steel) || /two[- ]tone/.test(t)) return 'two-tone';
@@ -327,7 +333,7 @@ export function coarseWatchMaterial(lot: Pick<AuctionLot, 'title' | 'medium'>): 
   if (gold) return 'gold';
   if (steel) return 'steel';
   if (/titanium/.test(t)) return 'titanium';
-  return null;
+  return refSuffixMaterial(lot.title, lot.artist);
 }
 
 /* ── WATCH VARIANT CLASSES (Oct 6 2026) — ONE source (moved from
@@ -1069,8 +1075,37 @@ export function dealScore(lot: AuctionLot, signalPct: number): number {
   return br * 1000 + Math.min(signalPct, 400);
 }
 
-export function computeDeepSignal(lot: AuctionLot, allLots: AuctionLot[]): DeepSignal | null {
-  return signalWithPool(lot, allLots)?.signal ?? null;
+/** THE FLAG A LOT WEARS (Oct 6 2026) — the ENGINE's call, never a client
+ *  synthesis. The build used to fall back to signalWithPool for lots the
+ *  engine declined to value: 119 of the 374 'Below Market' flags on the Oct 5
+ *  book (+46 'Above') came from that never-backtested read (e.g. 62 Hake's
+ *  comic pages "+259%" off Babe Ruth book pages). Now: no engine value, or an
+ *  engine value with no directional call → no flag. The printed % is the FLAG
+ *  ratio the signal was called on (value.flagRatio, fallback compRatio — on
+ *  the hammer basis from the Oct 6 engine); a ratio outside [1/5, 5] is a data
+ *  fault and carries no flag (the ×5 estimate-band sanity). 'at comparable
+ *  market' → null. One source for scripts/build-upcoming and the client. */
+export function engineFlagOf(lot: AuctionLot): DeepSignal | null {
+  const ev = lot.value;
+  if (!ev || !ev.signal) return null;
+  if (ev.compRatio != null && !(ev.compRatio <= 5 && ev.compRatio >= 1 / 5)) return null;
+  const fr = ev.flagRatio ?? ev.compRatio;
+  if (fr == null) return null;
+  const below = ev.signal.label.startsWith('below');
+  if (!below && !ev.signal.label.startsWith('above')) return null;
+  return {
+    label: below ? 'Below Market' : 'Above Market',
+    pct: Math.round((below ? fr - 1 : 1 - fr) * 100),
+    basis: ev.n || 0, med: ev.compMedianUsd ?? ev.compValueUsd, kind: 'form',
+    form: ((lot as { formKey?: string }).formKey || 'unknown') as Form,
+    confidence: ev.confidence === 'high' ? 'high' : ev.confidence === 'medium' ? 'medium' : 'low',
+  };
+}
+
+/** The client-side signal read: the engine's flag (engineFlagOf). `allLots`
+ *  is kept for the call signature; no flag is synthesized from it. */
+export function computeDeepSignal(lot: AuctionLot, _allLots?: AuctionLot[]): DeepSignal | null {
+  return engineFlagOf(lot);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

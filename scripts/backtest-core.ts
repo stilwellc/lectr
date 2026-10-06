@@ -51,7 +51,7 @@
  *    on the current version so drift is visible instead of silent.
  */
 import { buildIdf, buildVectors } from '../app/lib/similarity';
-import { resolveComps, estimateValue, setCalibration, setTimeIndex, setHouseBias, getEngineFlags, houseFactorOf, adjustedTop, BAND_TOP_RATIO, knownKey, FALLBACK_GATE, APPLY_NOEST_BIAS, MAXBID_Q, ENGINE_VERSION, quantile, type EngineCalibration, type TimeIndex, type HouseBias } from '../app/lib/value';
+import { resolveComps, estimateValue, setCalibration, setTimeIndex, setHouseBias, getEngineFlags, houseFactorOf, adjustedTop, estKindOf as estKindOfLot, BAND_TOP_RATIO, knownKey, FALLBACK_GATE, APPLY_NOEST_BIAS, MAXBID_Q, ENGINE_VERSION, quantile, type EngineCalibration, type TimeIndex, type HouseBias } from '../app/lib/value';
 import { makeTimeIndexer, makeHouseBiasIndexer } from '../app/lib/indices';
 import { gateCell, type CardGateCell } from '../app/lib/cards-gate';
 import { weightedMedian, weightedQuantile, medianSorted } from '../app/lib/stats';
@@ -80,7 +80,9 @@ const evNow = () => getEngineFlags().version;
 // median realized/hammer is 1.25. Kept as the last-resort constant; the
 // per-house schedule (app/lib/premiums) now takes precedence at the use site.
 export const PREMIUM_FALLBACK = 1.25;
-import { inferHammerUsd } from '../app/lib/premiums';
+import { inferHammerUsd, lotHammerFromAllIn, lotAllInFactor } from '../app/lib/premiums';
+/** the house schedule's factor at a sale date (no lot at hand) */
+const lotAllInFactorAt = (h: string | undefined, sd: string | undefined) => lotAllInFactor({ auctionHouse: h ?? null, saleDate: sd ?? null });
 
 /** median of an ascending-sorted array — stats.medianSorted with the record's
  *  historical 0-on-empty contract (summaries print 0 for an empty bucket) */
@@ -100,6 +102,14 @@ export const hasAnyEst = (l: L) => (l.estLowUsd || 0) > 0 || (l.estHighUsd || 0)
 export const estMidOf = (l: L) => { const lo = l.estLowUsd || 0, hi = l.estHighUsd || 0; return lo && hi ? (lo + hi) / 2 : (lo || hi); };
 export const estTopOf = (l: L) => (l.estHighUsd || l.estLowUsd || 0);
 export const estKindOf = (l: L): 'b' | 'p' => ((l.estLowUsd || 0) > 0 && (l.estHighUsd || 0) > 0 ? 'b' : 'p');
+/** (Oct 6) a single printed figure: low == high */
+export const sfOf = (l: L): boolean => (l.estLowUsd || 0) > 0 && l.estLowUsd === l.estHighUsd;
+/** (Oct 6) the comps' premium factor at THIS lot's dated schedule: an all-in
+ *  comp median ÷ its hammer equivalent (premiums.lotHammerFromAllIn) */
+export function compPremiumOf(lot: L, compAllIn: number): number {
+  const h = compAllIn > 0 ? lotHammerFromAllIn(lot, compAllIn) : 0;
+  return h > 0 ? compAllIn / h : 1.25;
+}
 
 // ── ACCUMULATOR STATE ──
 // Every published number derives from these raw arrays/counts. The full build
@@ -136,6 +146,33 @@ export type CalObs = {
   hl?: number;
   /** (Oct 3) realized beat the HOUSE-ADJUSTED top (value.adjustedTop) */
   ba?: boolean;
+  /** (Oct 6) the call was 'above comparable market' (absent on older rows →
+   *  isAboveObs recovers it from the label rule) */
+  ab?: boolean;
+  /** (Oct 6) HAMMER basis: inferred hammer / estimate mid − 1, and hammer
+   *  beat the estimate top — the per-row twins of Bucket.hammerPerfs /
+   *  hammerBeat, so a restricted population can be re-aggregated from rows */
+  hp?: number;  // hb (hammer beat the top) is declared once, below
+  /** (Oct 6) THE HAMMER BASIS (EngineFlags.hammerBasis). pc = the comps'
+   *  premium factor at this lot's dated schedule (comp median all-in / its
+   *  hammer), so the hammer comp / flag ratios are cr/pc and fr/pc; hb = the
+   *  HAMMER beat the raw top (estimate high, or the single point); hba = the
+   *  HAMMER beat the house-adjusted top. sf = the estimate is a single printed
+   *  figure (low == high). Rehydrated by id lookup on rows scored before. */
+  pc?: number; hb?: boolean; hba?: boolean; sf?: boolean;
+  /** (Oct 6) single-figure rows: the HAMMER over the single-figure top
+   *  (figure × house factor × BAND_TOP_RATIO — value.adjustedTop kind 's') */
+  hbs?: boolean;
+};
+/** (Oct 6) ONE bought-in observation — the row behind a Bucket.boughtIn
+ *  count, kept so the record can say WHERE unsold lots were observed. */
+export type BiObs = {
+  m: string; h?: string; sd: string;
+  /** the call: F below (flagged) · U at market · A above */
+  lab: 'F' | 'U' | 'A';
+  /** flagged calls only: the engine tier */
+  t?: 'main' | 'fallback';
+  id: string;
 };
 /** (Sep 27) a NO-ESTIMATE hedonic observation — the pure comp path's record
  *  (Goldin/no-estimate objects). Feeds the no-estimate bias correction and
@@ -155,6 +192,8 @@ export type NoEstObs = {
 export type YearObs = { flagged: number[]; unflagged: number[] };
 
 export interface BacktestState {
+  /** (Oct 6) 'hammer' once the certified buckets' `beat` counts hammer beats */
+  beatBasis?: 'hammer';
   flagged: Bucket;
   unflagged: Bucket;
   above: Bucket;
@@ -177,6 +216,14 @@ export interface BacktestState {
   engineVersion?: string;
   /** (Sep 27) no-estimate observations (trailing window only — see targetsOf) */
   noEst?: NoEstObs[];
+  /** (Oct 6) bought-in observations; biComplete marks that EVERY bought-in
+   *  count in the buckets has its row here (a full build, or backfillUnsold
+   *  on a legacy state) — until then the record stays on the sold-only basis */
+  bi?: BiObs[];
+  biComplete?: boolean;
+  /** (Oct 6) house|quarter cells where the corpus CAPTURED unsold lots
+   *  (unsoldCapturedCells) — the population the headline levels are claimed on */
+  unsoldCells?: string[];
 }
 
 export const mkBucket = (): Bucket => ({ perfs: [], hammerPerfs: [], beat: 0, hammerBeat: 0, n: 0, boughtIn: 0 });
@@ -186,7 +233,7 @@ export function mkState(nowMs: number): BacktestState {
     flagged: mkBucket(), unflagged: mkBucket(), above: mkBucket(),
     flaggedMain: mkBucket(), flaggedFallback: mkBucket(),
     byYear: {}, calObs: [], nowMs, scoredIds: [], triedIds: [], engineVersion: ENGINE_VERSION,
-    noEst: [],
+    noEst: [], bi: [], biComplete: true, unsoldCells: [],
   };
 }
 
@@ -209,9 +256,13 @@ export function mergeStates(states: BacktestState[]): BacktestState {
     }
     for (const o of s.calObs) out.calObs.push(o);
     for (const o of s.noEst || []) out.noEst!.push(o);
+    for (const o of s.bi || []) out.bi!.push(o);
+    for (const c of s.unsoldCells || []) out.unsoldCells!.push(c);
     for (const id of s.scoredIds) out.scoredIds.push(id);
     for (const id of s.triedIds || []) out.triedIds!.push(id);
   }
+  out.biComplete = states.every(s => s.biComplete === true);
+  out.unsoldCells = Array.from(new Set(out.unsoldCells)).sort();
   return out;
 }
 
@@ -428,7 +479,7 @@ export function scoreSold(prep: Prepared, st: BacktestState, lot: L): boolean {
   const hammer = inferHammerUsd(lot);
   // the house's estimate habit at scoring time (house-bias index for this
   // quarter) — the adjusted top the Flags' odds are graded against
-  const hfx = houseFactorOf(prep.marketBySlug[lot.artist], lot.auctionHouse, et);
+  const hfx = houseFactorOf(prep.marketBySlug[lot.artist], lot.auctionHouse, estKindOfLot(lot.estLowUsd, lot.estHighUsd));
   const isBelow = v.signal.label.startsWith('below');
   const isAbove = v.signal.label.startsWith('above');
   // point-estimate lots (RR "$500+") feed calObs ONLY — the certified global
@@ -438,7 +489,9 @@ export function scoreSold(prep: Prepared, st: BacktestState, lot: L): boolean {
     const push = (b: Bucket) => {
       b.perfs.push(realized / estMid - 1);
       b.hammerPerfs.push(hammer / estMid - 1);
-      if (realized > estTop) b.beat++;
+      // (Oct 6) a beat is the HAMMER over the (hammer-basis) high estimate —
+      // the all-in figure carried the buyer's premium past it by construction
+      if (hammer > estTop) b.beat++;
       if (hammer > estTop) b.hammerBeat++;
       b.n++;
     };
@@ -451,10 +504,19 @@ export function scoreSold(prep: Prepared, st: BacktestState, lot: L): boolean {
     // the legacy conformal band read it); rp is realized / the PUBLISHED
     // prediction; ca is the time-adjusted comp ratio the blend learns from
     const compMed = v.compAdjUsd && v.compAdjUsd > 0 ? v.compAdjUsd : v.compValueUsd;
+    // the comps' premium factor at THIS lot's schedule; cr / fr are stored
+    // ALL-IN whatever basis the engine in force called them on
+    const pc = compPremiumOf(lot, (v.compMedianUsd || 0) > 0 ? v.compMedianUsd! : v.compRatio * estMid);
+    const toAllIn = getEngineFlags().hammerBasis ? pc : 1;
+    const top = adjustedTop(lot.estLowUsd, lot.estHighUsd, hfx?.f);
     st.calObs.push({
       m: prep.marketBySlug[lot.artist] || 'all',
-      cr: v.compRatio,
-      ...(v.flagRatio != null ? { fr: v.flagRatio } : {}),
+      cr: v.compRatio * toAllIn,
+      ...(v.flagRatio != null ? { fr: v.flagRatio * toAllIn } : {}),
+      pc: Math.round(pc * 10000) / 10000,
+      hb: hammer > estTop,
+      hba: hammer > top,
+      ...(sfOf(lot) ? { sf: true, hbs: hammer > adjustedTop(lot.estLowUsd, lot.estHighUsd, hfx?.f, 's') } : {}),
       ...(hfx ? { hl: Math.round(hfx.log * 10000) / 10000 } : {}),
       ba: realized > adjustedTop(lot.estLowUsd, lot.estHighUsd, hfx?.f),
       beat: realized > estTop,
@@ -469,6 +531,8 @@ export function scoreSold(prep: Prepared, st: BacktestState, lot: L): boolean {
       ageY: Math.max(0, (st.nowMs - new Date(lot.saleDate).getTime()) / 31_557_600_000),
       pf: realized / estMid - 1,
       fl: isBelow,
+      ab: isAbove,
+      hp: hammer / estMid - 1,
       // watches era-gate MEASUREMENT (spec 8a precondition): reference-keyed
       // vs model-name-keyed error splits fall out of the Sunday full replay
       kt: prep.marketBySlug[lot.artist] === 'watches' ? ((lot as L & { reference?: string | null }).reference ? 'ref' : 'model') : undefined,
@@ -518,7 +582,80 @@ export function scoreBoughtIn(prep: Prepared, st: BacktestState, lot: L): boolea
   const isBelow = v.signal.label.startsWith('below');
   const isAbove = v.signal.label.startsWith('above');
   (isBelow ? st.flagged : isAbove ? st.above : st.unflagged).boughtIn++;
+  // the tier buckets count their bought-ins too (they used to read 0% fail-
+  // to-sell by construction — only sold lots were ever folded into them)
+  const t = v.tier === 'fallback' ? 'fallback' : 'main';
+  if (isBelow) (t === 'fallback' ? st.flaggedFallback : st.flaggedMain).boughtIn++;
+  (st.bi || (st.bi = [])).push({
+    m: prep.marketBySlug[lot.artist] || 'all',
+    ...(lot.auctionHouse ? { h: String(lot.auctionHouse) } : {}),
+    sd: lot.saleDate.slice(0, 10),
+    lab: isBelow ? 'F' : isAbove ? 'A' : 'U',
+    ...(isBelow ? { t } : {}),
+    id: lot.id,
+  });
   return true;
+}
+
+// ── UNSOLD CAPTURE (Oct 6) ──
+// Christie's and Sotheby's history before 2026 was crawled SOLD-ONLY (results
+// pages list what sold; a bought-in lot simply vanishes), and so is Hake's and
+// most of RR's. A level claim ("flags realized +X% vs estimate", "Y% failed to
+// sell") over those cells measures survivors only. The record therefore claims
+// its HEADLINE LEVELS only where unsold lots were captured: a house × calendar
+// quarter whose concluded range-estimate lots include at least
+// UNSOLD_CAPTURE_MIN_N bought-ins making up at least UNSOLD_CAPTURE_MIN_SHARE
+// of them (real sell-through runs 70-90%; a sold-only crawl reads ~0%).
+export const UNSOLD_CAPTURE_MIN_SHARE = 0.03;
+export const UNSOLD_CAPTURE_MIN_N = 3;
+export const unsoldCellKey = (house: string | null | undefined, sd: string) => `${house || ''}|${quarterOf(sd)}`;
+export function unsoldCapturedCells(lots: L[]): string[] {
+  const c = new Map<string, [number, number]>();
+  for (const l of lots) {
+    if ((l.status !== 'sold' && l.status !== 'bought_in') || !l.saleDate || !l.auctionHouse || !hasEst(l)) continue;
+    const k = unsoldCellKey(String(l.auctionHouse), l.saleDate);
+    const v = c.get(k) || c.set(k, [0, 0]).get(k)!;
+    v[l.status === 'sold' ? 0 : 1]++;
+  }
+  const out: string[] = [];
+  c.forEach(([sold, bi], k) => { if (bi >= UNSOLD_CAPTURE_MIN_N && bi / (sold + bi) >= UNSOLD_CAPTURE_MIN_SHARE) out.push(k); });
+  return out.sort();
+}
+
+/** One-time repair of a state minted before bought-in rows existed: re-score
+ *  every bought-in target the record already counted (same point-in-time
+ *  replay, so the same calls), rebuilding the boughtIn counters — tier buckets
+ *  included — and the bi rows; and look up each range row's hammer twins
+ *  (hp/hb) from the corpus. Idempotent; a no-op once biComplete. */
+export function backfillUnsold(prep: Prepared, st: BacktestState, log: (m: string) => void = () => {}): { bi: number; hp: number; before: number[]; after: number[] } {
+  const buckets = [st.flagged, st.unflagged, st.above, st.flaggedMain, st.flaggedFallback];
+  const before = buckets.map(b => b.boughtIn);
+  let hp = 0;
+  const byId = new Map<string, L>();
+  for (const l of prep.lots) byId.set(String(l.id), l);
+  for (const o of st.calObs) {
+    if (o.et === 'p' || typeof o.hp === 'number' || !o.id) continue;
+    const l = byId.get(String(o.id));
+    if (!l || l.status !== 'sold' || !hasEst(l) || !((l.realizedUsd || 0) > 0)) continue;
+    const hammer = inferHammerUsd(l);
+    o.hp = hammer / estMidOf(l) - 1;
+    o.hb = hammer > estTopOf(l);
+    hp++;
+  }
+  if (st.biComplete) return { bi: (st.bi || []).length, hp, before, after: before };
+  const scored = new Set(st.scoredIds);
+  const { biTargets } = targetsOf(prep);
+  const redo = biTargets.filter(l => scored.has(l.id));
+  for (const b of buckets) b.boughtIn = 0;
+  st.bi = [];
+  // a shim shares every accumulator (buckets, calObs, noEst, bi) by reference
+  // but swallows the id bookkeeping — these lots are already on record
+  const shim: BacktestState = { ...st, scoredIds: [], triedIds: [] };
+  const r = replayTargets(prep, shim, [], redo, log, 5000);
+  st.biComplete = true;
+  const after = buckets.map(b => b.boughtIn);
+  log(`[backtest] unsold backfill: ${r.scored}/${redo.length} bought-in targets re-scored (${r.tried} abstain now) · boughtIn F/U/A/main/fallback ${before.join('/')} → ${after.join('/')} · hammer twins on ${hp} rows`);
+  return { bi: st.bi.length, hp, before, after };
 }
 
 // ── POINT-IN-TIME REPLAY ──
@@ -596,8 +733,17 @@ export function calibrationFor(st: BacktestState, before: string, marketBySlug: 
 export function rehydrateState(
   st: BacktestState, prep: Prepared | null, log: (m: string) => void,
   houseBiasIndexer: ((asOf: string) => HouseBias) | null = prep?.houseBiasIndexer ?? null,
-): { pf: number; fl: number; et: number; sd: number; kt: number; hb: number } {
-  const n = { pf: 0, fl: 0, et: 0, sd: 0, kt: 0, hb: 0 };
+  /** (Oct 6) the corpus rows to look calObs ids up in when no `prep` is
+   *  handed in (the live harnesses) — the hammer-basis fields need the lot */
+  lotsForLookup?: L[] | null,
+): { pf: number; fl: number; et: number; sd: number; kt: number; hb: number; ham: number; hamApprox: number } {
+  const n = { pf: 0, fl: 0, et: 0, sd: 0, kt: 0, hb: 0, ham: 0, hamApprox: 0 };
+  // (Oct 6) the certified buckets count a beat on the HAMMER — a state
+  // accumulated before carries the hammer beats alongside: adopt them once
+  if (!st.beatBasis) {
+    for (const b of [st.flagged, st.unflagged, st.above, st.flaggedMain, st.flaggedFallback]) if (b) b.beat = b.hammerBeat;
+    st.beatBasis = 'hammer';
+  }
   const watchKtByDay = new Map<string, string | null>();
   if (prep) {
     const byId = new Map<string, L>();
@@ -631,6 +777,46 @@ export function rehydrateState(
         n.hb++;
       }
     }
+  }
+  // (Oct 6) THE HAMMER-BASIS FIELDS for rows scored before them, by id
+  // lookup: pc (the comps' premium factor at the lot's dated schedule), hb /
+  // hba (the HAMMER over the raw / house-adjusted top; the house factor is the
+  // row's own habit hl relative to its quarter's index reference), sf (a
+  // single printed figure). A row whose lot is gone from the corpus gets the
+  // house schedule's factor and the band-top approximation (counted).
+  const need = st.calObs.filter(o => typeof o.pc !== 'number' || typeof o.hb !== 'boolean' || typeof o.hba !== 'boolean');
+  if (need.length) {
+    const byId = new Map<string, L>();
+    for (const l of (prep ? prep.lots : lotsForLookup || [])) byId.set(String(l.id), l);
+    const refAt = new Map<string, number>();
+    const refOf = (sd: string): number | null => {
+      if (!houseBiasIndexer) return null;
+      const q = quarterStart(quarterOf(sd));
+      if (!refAt.has(q)) refAt.set(q, houseBiasIndexer(q).ref);
+      return refAt.get(q)!;
+    };
+    for (const o of need) {
+      const l = o.id ? byId.get(String(o.id)) : undefined;
+      const ref = o.sd ? refOf(o.sd) : null;
+      const f = typeof o.hl === 'number' && ref != null ? Math.min(4, Math.max(0.25, Math.exp(o.hl - ref))) : 1;
+      if (l && (l.realizedUsd || 0) > 0 && estMidOf(l) > 0) {
+        const mid = estMidOf(l);
+        const hammer = inferHammerUsd(l);
+        o.pc = Math.round(compPremiumOf(l, o.cr * mid) * 10000) / 10000;
+        o.hb = hammer > estTopOf(l);
+        o.hba = hammer > adjustedTop(l.estLowUsd, l.estHighUsd, f);
+        if (sfOf(l)) { o.sf = true; o.hbs = hammer > adjustedTop(l.estLowUsd, l.estHighUsd, f, 's'); }
+        n.ham++;
+      } else if (typeof o.pf === 'number') {
+        const pcl = lotAllInFactorAt(o.h, o.sd);
+        o.pc = pcl;
+        const hm = (o.pf + 1) / pcl; // hammer / estimate mid
+        o.hb = hm > (o.et === 'p' ? 1 : BAND_TOP_RATIO);
+        o.hba = hm > BAND_TOP_RATIO * f;
+        n.hamApprox++;
+      }
+    }
+    log(`[backtest] hammer-basis fields rehydrated: ${n.ham} by lot lookup · ${n.hamApprox} approximated (lot gone) · of ${need.length} rows`);
   }
   if (!st.triedIds) st.triedIds = [];
   if (!st.noEst) st.noEst = [];
@@ -716,7 +902,9 @@ export const CAL_EDGES = [0.6, 0.9, 1.3, 2.0, 10];
 export const CONFS = ['high', 'medium', 'low'] as const;
 const BAND_MIN_N = 150;
 const bucketOf = (cr: number) => { let b = 0; for (const e of CAL_EDGES) { if (cr < e) break; b++; } return b; }; // 0..5
-const wOf = (o: { ageY: number }) => Math.pow(0.5, o.ageY / 3);
+/** beat-rate recency weight: 3-year half-life; 1 year under
+ *  EngineFlags.calHalfLife1y (Oct 6) */
+const wOf = (o: { ageY: number }) => Math.pow(0.5, o.ageY / (getEngineFlags().calHalfLife1y ? 1 : 3));
 const marketsOf = (obs: CalObs[]) => Array.from(new Set(obs.map(o => o.m).filter(m => m && m !== 'all')));
 
 /** Split-conformal 15/85 band from a sorted realized/compValue array (lerp
@@ -730,13 +918,24 @@ export function calibrationOf(calObs: CalObs[], noEst: NoEstObs[] = [], asOf?: s
   // (Oct 3) under the house-normalized Flags the odds are P(realized beats
   // the HOUSE-ADJUSTED top | flag-ratio bucket) — `ba`; legacy rows without
   // it (and the legacy engine) read the raw beat
-  const normed = getEngineFlags().houseNormFlags;
-  const beatOf = (o: CalObs) => (normed && typeof o.ba === 'boolean' ? o.ba : o.beat);
+  const flags = getEngineFlags();
+  const normed = flags.houseNormFlags;
+  // (Oct 6) hammer basis: bucket on the HAMMER flag ratio, beat = the HAMMER
+  // over the (house-adjusted) top; rows without the hammer fields (never
+  // rehydrated) fall back to the all-in figures
+  const ham = !!flags.hammerBasis;
+  const beatOf = (o: CalObs) => (ham
+    ? (normed ? ((flags.singleFigure && o.sf ? o.hbs : o.hba) ?? o.ba ?? o.beat) : (o.hb ?? o.beat))
+    : (normed && typeof o.ba === 'boolean' ? o.ba : o.beat));
+  const ratioOf = (o: CalObs) => { const r = normed ? (o.fr ?? o.cr) : o.cr; return ham && o.pc ? r / o.pc : r; };
   const rate = (obs: CalObs[]) => {
     const acc = Array.from({ length: 6 }, () => ({ w: 0, wb: 0, n: 0 }));
-    for (const o of obs) { const b = bucketOf(normed ? (o.fr ?? o.cr) : o.cr); const w = wOf(o); acc[b].w += w; acc[b].wb += beatOf(o) ? w : 0; acc[b].n++; }
+    for (const o of obs) { const b = bucketOf(ratioOf(o)); const w = wOf(o); acc[b].w += w; acc[b].wb += beatOf(o) ? w : 0; acc[b].n++; }
     return acc;
   };
+  // (Oct 6) the estimate kind a row is calibrated under: a single printed
+  // figure is its own kind under EngineFlags.singleFigure
+  const kindOf = (o: CalObs): 'b' | 'p' | 's' => (flags.singleFigure && o.sf ? 's' : o.et === 'p' ? 'p' : 'b');
   const globalAcc = rate(calObs);
   const globalLevels = globalAcc.map(a => (a.w > 0 ? a.wb / a.w : 0.55));
   const K = 60;
@@ -779,7 +978,10 @@ export function calibrationOf(calObs: CalObs[], noEst: NoEstObs[] = [], asOf?: s
     const rows = m === 'all' ? calObs : calObs.filter(o => o.m === m);
     mdape[m] = {};
     for (const c of CONFS) {
-      const errs = rows.filter(o => o.conf === c && o.r > 0).map(o => Math.abs(1 / o.r - 1)).sort((a, b) => a - b);
+      // (Oct 6, EngineFlags.confOnPublished) the error of the PUBLISHED value
+      // (rp) — the number the tier label sits next to — not the comp pool's
+      const pub = !!flags.confOnPublished;
+      const errs = rows.filter(o => o.conf === c && (pub ? (o.rp ?? 0) > 0 : o.r > 0)).map(o => Math.abs(1 / (pub ? o.rp! : o.r) - 1)).sort((a, b) => a - b);
       mdape[m][c] = errs.length >= 100 ? Math.round(quantile(errs, 0.5) * 1000) / 1000 : null;
     }
   }
@@ -791,10 +993,18 @@ export function calibrationOf(calObs: CalObs[], noEst: NoEstObs[] = [], asOf?: s
   // observations are deep enough — "beat" means beating the LOW estimate
   // there, a different claim that must never blend into the band rows.
   for (const m of marketsOf(calObs)) {
-    const bandRows = calObs.filter(o => o.m === m && o.et !== 'p');
+    const bandRows = calObs.filter(o => o.m === m && kindOf(o) === 'b');
     if (bandRows.length >= 100) beatRate[m] = levelsOf(bandRows);
     const pt = calObs.filter(o => o.m === m && o.et === 'p');
     if (pt.length >= 200) beatRate[`${m}:pt`] = levelsOf(pt);
+    if (flags.singleFigure) {
+      const sf = calObs.filter(o => o.m === m && kindOf(o) === 's');
+      if (sf.length >= 200) beatRate[`${m}:sf`] = levelsOf(sf);
+    }
+  }
+  if (flags.singleFigure) {
+    const sf = calObs.filter(o => kindOf(o) === 's');
+    if (sf.length >= 200) beatRate['global:sf'] = levelsOf(sf);
   }
   // (Sep 27) the published-value layer: estimate-lot blend, no-estimate bias,
   // and the outcome bands of the PUBLISHED value — all recency-weighted and
@@ -1151,17 +1361,12 @@ export function summarizeState(st: BacktestState, generatedAt: string) {
   const cal = calibrationOf(calObs, st.noEst || []);
   // PER-MARKET RECORD (Aug 13 value audit): the +41/+16 receipt was global-
   // only — a watches user read an art/design-dominant number. Split it.
-  const byMarket: Record<string, { flagged: { n: number; medPct: number | null }; unflagged: { n: number; medPct: number | null } }> = {};
-  {
-    const medOf = (a: number[]) => { if (a.length < 50) return null; const x = [...a].sort((p, q) => p - q); return Math.round(x[Math.floor(x.length / 2)] * 1000) / 10; };
-    for (const m of marketsOf(calObs)) {
-      const rows = calObs.filter(o => o.m === m && typeof o.pf === 'number');
-      byMarket[m] = {
-        flagged: { n: rows.filter(o => o.fl).length, medPct: medOf(rows.filter(o => o.fl).map(o => o.pf!)) },
-        unflagged: { n: rows.filter(o => !o.fl).length, medPct: medOf(rows.filter(o => !o.fl).map(o => o.pf!)) },
-      };
-    }
-  }
+  // THE HEADLINE POPULATION (Oct 6): range-estimate lots in the house ×
+  // quarters where unsold lots were captured, bought-ins counted as failed
+  // outcomes (docs/ENGINE_LANES.md "Unsold lots"). A state without bought-in
+  // rows falls back to the sold-only buckets and says so (recordBasis).
+  const captured = capturedHeadlineOf(st);
+  const byMarket = recordByMarketOf(calObs, captured?.scope ?? null);
   // WATCH KEY-TYPE SPLIT — the era-gate measurement (fills as replays run)
   const watchKt: Record<string, { n: number; medAbsErr: number | null }> = {};
   for (const kt of ['ref', 'model']) {
@@ -1217,9 +1422,20 @@ export function summarizeState(st: BacktestState, generatedAt: string) {
      *  the record still carries rows from an older labeler (refresh with a
      *  per-market full leg) */
     rowsOnVersionPct: calObs.length ? Math.round(1000 * onVersion / calObs.length) / 10 : 0,
-    flagged: summarize(st.flagged),
-    unflagged: summarize(st.unflagged),
-    above: summarize(st.above),
+    flagged: captured ? captured.flagged : summarize(st.flagged),
+    unflagged: captured ? captured.unflagged : summarize(st.unflagged),
+    above: captured ? captured.above : summarize(st.above),
+    /** what the headline is claimed on: 'unsold-captured' = range-estimate
+     *  lots in house × quarters whose unsold lots the corpus holds, bought-ins
+     *  counted as failed outcomes; 'sold-only' = every house × period, sold
+     *  lots only (survivors — the pre-Oct-6 basis) */
+    recordBasis: captured
+      ? { headline: 'unsold-captured' as const, cells: captured.nCells, minShare: UNSOLD_CAPTURE_MIN_SHARE, minBoughtIn: UNSOLD_CAPTURE_MIN_N }
+      : { headline: 'sold-only' as const, cells: 0, minShare: UNSOLD_CAPTURE_MIN_SHARE, minBoughtIn: UNSOLD_CAPTURE_MIN_N },
+    /** the pre-Oct-6 headline buckets: every house × period, range-estimate
+     *  lots; medians over SOLD lots, bought-ins only in the fail rate (and the
+     *  sold-only crawls contribute none) — kept for continuity */
+    soldOnly: { flagged: summarize(st.flagged), unflagged: summarize(st.unflagged), above: summarize(st.above) },
     flaggedTiers: { main: summarize(st.flaggedMain), fallback: summarize(st.flaggedFallback) },
     byMarket,
     valueRecord,
@@ -1290,6 +1506,109 @@ export function valueRecordOf(calObs: CalObs[], noEst: NoEstObs[]): Record<strin
   return out;
 }
 
+/** An observation's "above comparable market" call. Rows scored since Oct 6
+ *  carry it (ab); older rows recover it from the label rule itself
+ *  (value.ts: 'above' ⇔ not 'below' and flag ratio ≤ 0.75, the flag ratio
+ *  being fr, or cr on rows from before the house-normalized flag). */
+export const isAboveObs = (o: CalObs): boolean => (typeof o.ab === 'boolean' ? o.ab : !o.fl && (o.fr ?? o.cr) <= 0.75);
+
+export type RecordCell = { n: number; medPct: number | null; nBoughtIn?: number };
+export type MarketRecord = {
+  flagged: RecordCell; unflagged: RecordCell; above: RecordCell;
+  /** single-figure estimates ("$500+", RR) — scored, but a different yardstick
+   *  (no range, the figure is a floor), so never pooled into the cells above;
+   *  sold-only (no single-figure bought-in is ever a target) */
+  singleFigure: { flagged: RecordCell; unflagged: RecordCell; above: RecordCell };
+  /** (Oct 6) the range-estimate arms over EVERY house × period, sold lots
+   *  only — what the cells read before the unsold-capture restriction */
+  soldOnly?: { flagged: RecordCell; unflagged: RecordCell; above: RecordCell };
+};
+/** The unsold-captured population (see unsoldCapturedCells): the cells, and
+ *  the bought-in rows. Absent → the sold-only basis. */
+export type CapturedScope = { cells: Set<string>; bi: BiObs[] };
+const armOf = (o: CalObs): 'F' | 'U' | 'A' => (o.fl ? 'F' : isAboveObs(o) ? 'A' : 'U');
+/** PER-MARKET RECORD CELLS (/value "The record" when a market is selected).
+ *  Same population as the global headline: RANGE-estimate lots only (et 'b');
+ *  'unflagged' = the at-market calls, never the above-market ones (they are
+ *  their own 'above' arm). With a CapturedScope the cells are the headline's
+ *  unsold-captured house × quarters, and a bought-in lot counts as a failed
+ *  outcome (below every sold lot) in the median. Single-figure lots are
+ *  reported separately. medPct needs n + nBoughtIn >= 50. */
+export function recordByMarketOf(calObs: CalObs[], scope: CapturedScope | null = null): Record<string, MarketRecord> {
+  const medOf = (a: number[]) => { if (a.length < 50) return null; const x = [...a].sort((p, q) => p - q); return Math.round(x[Math.floor(x.length / 2)] * 1000) / 10; };
+  const cell = (rows: CalObs[], nBi: number | null = null): RecordCell => ({
+    n: rows.length,
+    medPct: medOf(rows.map(o => o.pf!).concat(new Array(nBi ?? 0).fill(-1))),
+    ...(nBi != null ? { nBoughtIn: nBi } : {}),
+  });
+  const arms = (rows: CalObs[], bi: BiObs[] | null = null) => {
+    const nb = (lab: 'F' | 'U' | 'A') => (bi ? bi.filter(b => b.lab === lab).length : null);
+    return {
+      flagged: cell(rows.filter(o => armOf(o) === 'F'), nb('F')),
+      unflagged: cell(rows.filter(o => armOf(o) === 'U'), nb('U')),
+      above: cell(rows.filter(o => armOf(o) === 'A'), nb('A')),
+    };
+  };
+  const inScope = (h: string | undefined, sd: string | undefined) => !!scope && !!sd && scope.cells.has(unsoldCellKey(h, sd));
+  const out: Record<string, MarketRecord> = {};
+  for (const m of marketsOf(calObs)) {
+    const rows = calObs.filter(o => o.m === m && typeof o.pf === 'number');
+    const band = rows.filter(o => o.et !== 'p');
+    const singleFigure = arms(rows.filter(o => o.et === 'p'));
+    if (!scope) { out[m] = { ...arms(band), singleFigure }; continue; }
+    out[m] = {
+      ...arms(band.filter(o => inScope(o.h, o.sd)), scope.bi.filter(b => b.m === m && inScope(b.h, b.sd))),
+      singleFigure,
+      soldOnly: arms(band),
+    };
+  }
+  return out;
+}
+
+/** A headline arm over ROWS (calObs + bought-in count), on the CONCLUDED basis:
+ *  a bought-in lot is a failed outcome — it ranks below every sold lot in the
+ *  medians (perf −100%) and never beats the high. The *Sold* fields are the
+ *  same rows without the bought-ins. Field names match summarize() so every
+ *  consumer of flagged/unflagged/above reads it unchanged. */
+export function summarizeRows(sold: CalObs[], nBi: number) {
+  const n = sold.length;
+  const concluded = n + nBi;
+  const fail = new Array(nBi).fill(-1) as number[];
+  const pf = sold.map(o => o.pf!).sort((a, b) => a - b);
+  const ham = sold.filter(o => typeof o.hp === 'number');
+  const hp = ham.map(o => o.hp!).sort((a, b) => a - b);
+  const beat = sold.filter(o => o.beat).length;
+  const hBeat = ham.filter(o => o.hb).length;
+  const pct = (k: number, d: number) => (d ? Math.round((k / d) * 100) : 0);
+  const med = (a: number[]) => (a.length ? Math.round(median(a) * 100) : 0);
+  return {
+    n,
+    medianPerfPct: med(fail.concat(pf)),
+    beatHighPct: pct(beat, concluded),
+    hammerMedianPct: med(fail.concat(hp)),
+    hammerBeatPct: pct(hBeat, ham.length + nBi),
+    nBoughtIn: nBi,
+    failToSellPct: concluded ? Math.round((nBi / concluded) * 1000) / 10 : 0,
+    beatHighHonestPct: pct(beat, concluded),
+    medianSoldPct: med(pf),
+    hammerMedianSoldPct: med(hp),
+    beatHighSoldPct: pct(beat, n),
+    hammerBeatSoldPct: pct(hBeat, ham.length),
+  };
+}
+
+/** The HEADLINE arms on the unsold-captured population (null when the state
+ *  cannot support it: no bought-in rows yet, or no captured cells). */
+export function capturedHeadlineOf(st: BacktestState): { scope: CapturedScope; flagged: ReturnType<typeof summarizeRows>; unflagged: ReturnType<typeof summarizeRows>; above: ReturnType<typeof summarizeRows>; nCells: number } | null {
+  if (!st.biComplete || !st.unsoldCells || !st.unsoldCells.length) return null;
+  const cells = new Set(st.unsoldCells);
+  const inScope = (h: string | undefined, sd: string | undefined) => !!sd && cells.has(unsoldCellKey(h, sd));
+  const rows = st.calObs.filter(o => o.et !== 'p' && typeof o.pf === 'number' && inScope(o.h, o.sd));
+  const bi = (st.bi || []).filter(b => inScope(b.h, b.sd));
+  const arm = (lab: 'F' | 'U' | 'A') => summarizeRows(rows.filter(o => armOf(o) === lab), bi.filter(b => b.lab === lab).length);
+  return { scope: { cells, bi: st.bi || [] }, flagged: arm('F'), unflagged: arm('U'), above: arm('A'), nCells: cells.size };
+}
+
 /** The one-line console summary both entry points print on completion. */
 export function summaryLine(out: ReturnType<typeof summarizeState>): string {
   return [
@@ -1353,12 +1672,15 @@ export type EngineRow = {
    *  HOUSE-ADJUSTED top (value.adjustedTop), the house factor, signal */
   mid?: number; top?: number; atop?: number; hf?: number;
   sig?: 'b' | 'a' | 't' | null;
+  /** (Oct 6) the calibrated odds the signal printed, and the sale day — the
+   *  odds' own calibration error per quarter is measured off these */
+  br?: number; sd?: string;
 };
 export type EngineSummary = {
   valued: number; n: number; medAbsErrPct: number | null; within30Pct: number | null; bias: number | null; bandCoveragePct: number | null;
   belowMaxBidPct: number | null;
   flags: {
-    nFlagged: number; nUnflagged: number; precisionAdjPct: number | null; precisionRawPct: number | null;
+    nFlagged: number; nUnflagged: number; precisionAdjPct: number | null; precisionRawPct: number | null; unflaggedPrecisionAdjPct: number | null;
     flaggedAdj: number | null; unflaggedAdj: number | null; edgeAdjPt: number | null; edgeRawPt: number | null;
   };
 };
@@ -1372,9 +1694,14 @@ export function summarizeEngineRows(rows: EngineRow[], both: Set<string>): Engin
   const mbRows = scored.filter(r => (r.mb || 0) > 0 && (r.hm || 0) > 0);
   const est = rows.filter(r => (r.mid || 0) > 0 && r.sig != null);
   const fl = est.filter(r => r.sig === 'b'), un = est.filter(r => r.sig !== 'b');
-  const adj = (r: EngineRow) => r.r / (r.mid! * (r.hf || 1));
+  // (Oct 6) ONE yardstick, the HAMMER (realized through the lot's dated
+  // premium inverse when no hammer is published) against the hammer-basis
+  // estimate: a beat is hammer > the (house-adjusted) top; the edge is the
+  // flagged − unflagged median hammer / house-adjusted mid
+  const hmOf = (r: EngineRow) => ((r.hm || 0) > 0 ? r.hm! : r.r);
+  const adj = (r: EngineRow) => hmOf(r) / (r.mid! * (r.hf || 1));
   const fAdj = fl.length >= 20 ? med(fl.map(adj)) : null, uAdj = un.length >= 20 ? med(un.map(adj)) : null;
-  const fRaw = fl.length >= 20 ? med(fl.map(r => r.r / r.mid!)) : null, uRaw = un.length >= 20 ? med(un.map(r => r.r / r.mid!)) : null;
+  const fRaw = fl.length >= 20 ? med(fl.map(r => hmOf(r) / r.mid!)) : null, uRaw = un.length >= 20 ? med(un.map(r => hmOf(r) / r.mid!)) : null;
   return {
     valued: rows.filter(r => r.p > 0).length,
     n,
@@ -1385,8 +1712,9 @@ export function summarizeEngineRows(rows: EngineRow[], both: Set<string>): Engin
     belowMaxBidPct: pct(mbRows.filter(r => r.hm! <= r.mb!).length, mbRows.length),
     flags: {
       nFlagged: fl.length, nUnflagged: un.length,
-      precisionAdjPct: pct(fl.filter(r => r.r > (r.atop || (r.top || r.mid!) * (r.hf || 1))).length, fl.length),
-      precisionRawPct: pct(fl.filter(r => r.r > (r.top || r.mid!)).length, fl.length),
+      precisionAdjPct: pct(fl.filter(r => hmOf(r) > (r.atop || (r.top || r.mid!) * (r.hf || 1))).length, fl.length),
+      precisionRawPct: pct(fl.filter(r => hmOf(r) > (r.top || r.mid!)).length, fl.length),
+      unflaggedPrecisionAdjPct: pct(un.filter(r => hmOf(r) > (r.atop || (r.top || r.mid!) * (r.hf || 1))).length, un.length),
       flaggedAdj: fAdj != null ? Math.round(fAdj * 1000) / 1000 : null,
       unflaggedAdj: uAdj != null ? Math.round(uAdj * 1000) / 1000 : null,
       edgeAdjPt: fAdj != null && uAdj != null ? Math.round((fAdj - uAdj) * 1000) / 10 : null,
@@ -1414,7 +1742,7 @@ export function compareEngines(current: EngineRow[], candidate: EngineRow[], ver
 }
 
 /** One holdout lot's EngineRow from the value it would have been served. */
-export function engineRowOf(lot: L, m: string, v: { compValueUsd: number; low: number; high: number; confidence: string; maxBidUsd?: number; signal?: { label: string } | null } | null, hf: number | undefined): EngineRow {
+export function engineRowOf(lot: L, m: string, v: { compValueUsd: number; low: number; high: number; confidence: string; maxBidUsd?: number; signal?: { label: string; beatRatePct?: number } | null } | null, hf: number | undefined): EngineRow {
   const mid = estMidOf(lot);
   const lab = v?.signal?.label || '';
   return {
@@ -1423,5 +1751,7 @@ export function engineRowOf(lot: L, m: string, v: { compValueUsd: number; low: n
     hm: inferHammerUsd(lot), ...(v?.maxBidUsd ? { mb: v.maxBidUsd } : {}),
     ...(mid > 0 ? { mid, top: estTopOf(lot), atop: adjustedTop(lot.estLowUsd, lot.estHighUsd, hf ?? 1), hf } : {}),
     sig: v?.signal ? (lab.startsWith('below') ? 'b' : lab.startsWith('above') ? 'a' : 't') : null,
+    ...(v?.signal && typeof v.signal.beatRatePct === 'number' ? { br: v.signal.beatRatePct } : {}),
+    sd: String(lot.saleDate || '').slice(0, 10),
   };
 }
