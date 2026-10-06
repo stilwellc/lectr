@@ -145,6 +145,22 @@ test('class 5 · science at Christie\'s/Sotheby\'s must be earned by the title',
   assert.equal(S('scientific-instruments', 'An English 3¾-inch terrestrial globe SMITH & SON, [C.1850]', 'Travel Science  Natural H'), 'scientific-instruments');
   assert.equal(S('scientific-instruments', 'ensemble de trois sphères armillaires et un globe terrestre d\'époque louis-philippe, vers 1845', '', "Sotheby's"), 'scientific-instruments');
   assert.equal(S('fossils', 'A MEGALODON TOOTH NORTH CAROLINA', 'Travel Science And Natura'), 'fossils');
-  // RR / Goldin run their own routing — untouched here
+  // RR / Goldin run their own routing — untouched by the science rule
   assert.equal(S('space-exploration', 'apollo and marsyas', '', 'RR Auction'), 'space-exploration');
+});
+
+test('class 6 · sale-name gates: pop/film sales are not sports; RR space sale prior; New Jersey / Mac', () => {
+  const G = (o: R) => move(o);
+  // Christie's pop / film sales swept in by the bare 'memorabilia' gate
+  assert.equal(G({ auctionHouse: "Christie's", artist: 'sports-memorabilia', title: 'George Harrison', saleName: 'Pop Memorabilia' }), 'entertainment-memorabilia');
+  assert.equal(G({ auctionHouse: "Christie's", artist: 'sports-memorabilia', title: 'THE INVISIBLE MAN, UNIVERSAL, 1933', saleName: 'Television And Film Memorabilia And Posters' }), 'entertainment-memorabilia');
+  assert.equal(G({ auctionHouse: "Christie's", artist: 'sports-memorabilia', title: 'A 1924 Cunard/Anchor-Donaldson calendar', saleName: 'The Wayne Lapoe Collection Of Oceanliner Memorabilia And Art' }), DROP);
+  // …but a sports lot in a pop sale stays sports, and real sports sales are untouched
+  assert.equal(G({ auctionHouse: "Christie's", artist: 'sports-memorabilia', title: 'Muhammad Ali signed boxing glove', saleName: 'Pop Memorabilia' }), 'sports-memorabilia');
+  assert.equal(G({ auctionHouse: "Christie's", artist: 'sports-memorabilia', title: 'TY COBB LETTER', saleName: 'Sports Memorabilia' }), 'sports-memorabilia');
+  // RR: a space catalogue lists astronauts by bare name
+  assert.equal(G({ auctionHouse: 'RR Auction', artist: 'entertainment-memorabilia', title: 'John Young', saleName: 'Space & Aviation Auction' }), 'space-exploration');
+  assert.equal(G({ auctionHouse: 'RR Auction', artist: 'entertainment-memorabilia', title: 'Charles Lindbergh Signed Photograph with the \'Spirit of St. Louis\'', saleName: 'Space & Aviation' }), 'entertainment-memorabilia');
+  assert.equal(G({ auctionHouse: 'RR Auction', artist: 'entertainment-memorabilia', title: 'Jack Swigert\'s Skylab II and III Robbins Medals', saleName: 'Fine Autographs and Artifacts' }), 'space-exploration');
+  assert.equal(G({ auctionHouse: 'RR Auction', artist: 'science-tech', title: 'Magic Sam and Mac Thompson Signatures', saleName: 'Fine Autographs and Artifacts' }), 'entertainment-memorabilia');
 });

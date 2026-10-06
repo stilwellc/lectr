@@ -20,6 +20,8 @@
 import { looksLikeCard } from '../../app/lib/cards';
 import { leadsWithSetCode } from './set-codes';
 import { ARTIST_MARKET } from '../../app/constants';
+import { routeCulture, isCultureSale } from '../culture';
+import { routeRRLot } from '../rr-auction';
 
 export const DROP = 'DROP' as const;
 
@@ -248,6 +250,41 @@ export function scienceVerdict(l: ClassifyLot): string | null {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 6 · SALE-NAME GATES — (a) the bare 'memorabilia' sports-sale gate swept
+// Christie's "Pop Memorabilia", "Television And Film Memorabilia" and
+// ocean-liner/transport sales into sports (3.3k lots); (b) RR Auction: a
+// "Space & Aviation" catalogue lists astronauts by bare name, so 5.8k space
+// lots fell to culture; 'New Jersey' read as a sports jersey; 'Mac' (Fleetwood
+// Mac) read as computing. The crawl-side fixes live in sports-sale.ts and
+// rr-auction.ts; these rules re-apply them to the back-catalogue.
+// ═══════════════════════════════════════════════════════════════════════════
+const SPORTS_SLUGS = new Set(Object.entries(ARTIST_MARKET).filter(([, m]) => m === 'sports').map(([k]) => k));
+const CULTURE_SLUGS = new Set(['movie-tv', 'music-memorabilia', 'entertainment-memorabilia', 'pop-memorabilia']);
+/** sale names that are NOT sports sales but matched the old bare-'memorabilia' gate */
+const NON_SPORT_SALE_RE = /pop memorabilia|pop culture|television|\bfilm\b|movie|posters|guitars?|rock (?:and|&|n)|rock roll|entertainment|music|ocean ?liner|transport/i;
+
+export function saleGateFix(l: ClassifyLot): string | null {
+  const t = String(l.title || '');
+  const sale = String(l.saleName || '');
+  if ((l.auctionHouse === "Christie's" || l.auctionHouse === "Sotheby's") && SPORTS_SLUGS.has(l.artist)) {
+    if (!NON_SPORT_SALE_RE.test(sale) || SPORT_WORD_RE.test(t)) return null;
+    if (/ocean ?liner|transport/i.test(sale)) return DROP; // no tracked home
+    return isCultureSale(sale) ? (routeCulture(t) ?? DROP) : DROP;
+  }
+  if (l.auctionHouse === 'RR Auction') {
+    const from = l.artist;
+    const spaceCase = CULTURE_SLUGS.has(from);
+    const jerseyCase = SPORTS_SLUGS.has(from) && /new jersey/i.test(t);
+    const macCase = from === 'science-tech' && /\bmac\b/i.test(t);
+    if (!spaceCase && !jerseyCase && !macCase) return null;
+    const to = routeRRLot(t, '', sale);
+    if (spaceCase) return to === 'space-exploration' ? to : null;
+    return to ?? DROP;
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 2 · ART CATEGORY — Madoura ceramics and unique works filed as prints. The
 // crawler's print test ran before its ceramic test and five artists defaulted
 // to 'print' with no evidence; normalize never moved print → sculpture and
@@ -321,6 +358,7 @@ export const RECLASS_RULES: ReclassRule[] = [
     cls: 'science-title-object-noun',
     apply: l => (GENERALIST_HOUSES.has(l.auctionHouse || '') ? scienceVerdict(l) : null),
   },
+  { cls: 'sale-name-gates', apply: saleGateFix },
 ];
 
 /** Category rules: same contract, but they return the corrected CATEGORY. */
