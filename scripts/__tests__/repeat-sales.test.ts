@@ -83,7 +83,9 @@ test('Huber: a cluster of x8 mis-variant resales in the end quarter does not mov
   });
   const ols = buildRepeatSaleIndex(toLots(sales), keyOf, { now: NOW, huberPasses: 0 });
   const hub = buildRepeatSaleIndex(toLots(sales), keyOf, { now: NOW });
-  assert.ok((ols.horizons['1Y'].changePct ?? 0) > 15, `least squares chases the outliers (${ols.horizons['1Y'].changePct})`);
+  // least squares chases the outliers — so far that the endpoint gate (wave 3) now refuses it
+  const o1 = ols.horizons['1Y'];
+  assert.ok((o1.changePct ?? 0) > 15 || /endpoint-sensitive/.test(o1.reason), `least squares chases the outliers (${o1.changePct} ${o1.reason})`);
   const h1 = hub.horizons['1Y'].changePct ?? 0;
   assert.ok(Math.abs(h1) < 8, `Huber holds (${h1})`);
   // the CI is a real interval around the robust point
@@ -143,4 +145,20 @@ test('end-point sensitivity: a published horizon reports the same lag ending one
   assert.ok(h.publishable, h.reason);
   assert.equal(h.endSensitivity?.[0]?.end, '2025-Q3');
   assert.ok(Math.abs(h.endSensitivity![0].changePct - h.changePct!) < 5, 'a smooth market is insensitive to the endpoint');
+});
+
+test('endpoint gate (wave 3): a read that one quarter of endpoint swings by more than its CI width does not publish', async () => {
+  const { endSensitivityGap } = await import('../repeat-sales');
+  assert.equal(endSensitivityGap(26.5, [{ changePct: 12.2 }, { changePct: 48.6 }]).toFixed(1), '36.4');
+  assert.equal(endSensitivityGap(10, []), 0);
+  // a smooth ~12%/yr market, then the last quarter alone jumps +20%: the 1Y
+  // read ending there vs ending one quarter earlier differs by ~20pt, far
+  // wider than a 7,000-object CI
+  const last = QUARTERS.indexOf('2025-Q4');
+  const sales = market(11, 7000, { mult: (_h, qi) => Math.exp(0.03 * qi) * (qi === last ? 1.2 : 1) });
+  const r = buildRepeatSaleIndex(toLots(sales), keyOf, { now: NOW });
+  const h = r.horizons['1Y'];
+  assert.equal(h.publishable, false);
+  assert.match(h.reason, /endpoint-sensitive/);
+  assert.ok(h.endSensitivity?.length, 'the sensitivity stays reported');
 });
