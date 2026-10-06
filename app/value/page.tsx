@@ -904,6 +904,21 @@ export default function ValuePage() {
       return ka.localeCompare(kb);
     });
   }, [deals, call, sortMode]);
+  // ODDS ONCE: when every printed flag row carries the same calibrated odds,
+  // the figure prints once in the column header instead of on each row
+  const uniformOdds = useMemo(() => {
+    const rows = gridDeals.slice(0, shown);
+    if (rows.length < 2) return null;
+    let v: number | null = null;
+    for (const d of rows) {
+      const b = d.lot.value?.signal?.beatRatePct;
+      if (b == null) return null;
+      const r = Math.round(b);
+      if (v == null) v = r;
+      else if (v !== r) return null;
+    }
+    return v;
+  }, [gridDeals, shown]);
   // ONE LOT, ONE NUMBER: the band prefers the BUILD ENGINE's stamp
   // (value.compValueUsd + poolIds — the same numbers the plate sentence and
   // the modal print); the client signalWithPool runs only for unstamped
@@ -2004,7 +2019,7 @@ export default function ValuePage() {
                 <span className="kicker">Hammers</span>
                 <span className="kicker" style={{ textAlign: 'right' }}>Estimate</span>
                 <span className="kicker" style={{ textAlign: 'right' }}>Comps med</span>
-                <span className="kicker" style={{ textAlign: 'right' }}>Odds</span>
+                <span className="kicker" style={{ textAlign: 'right' }}>Odds{uniformOdds != null && <><br />{uniformOdds}%</>}</span>
                 <span className="kicker" style={{ textAlign: 'right' }}>Gap</span>
               </div>
               {!hasFlags ? (
@@ -2102,7 +2117,9 @@ export default function ValuePage() {
                       {rowMed ? formatPrice(rowMed) : '—'}
                     </span>
                     <span className="ray-value-cell ray-value-cell-num ray-value-cell-odds">
-                      {d.lot.value?.signal?.beatRatePct != null
+                      {uniformOdds != null
+                        ? null
+                        : d.lot.value?.signal?.beatRatePct != null
                         ? `${Math.round(d.lot.value.signal.beatRatePct)}%`
                         : conf
                           ? <span className="ray-value-conf" aria-label={`${confidenceMeter(conf).word} confidence`}>{confidenceMeter(conf).dots}</span>
