@@ -146,6 +146,12 @@ export interface EngineFlags {
    *  more than ID_LESS.spread× abstains ('identity-less'): the title names
    *  several different works (Phillips 'Homme assis': 10 of 10 comps wrong) */
   idLessAbstain?: boolean;
+  /** (Oct 6, pricing wave 3) EXACT COMPS: ≥ EXACT_W.minN comps at cosine ≥
+   *  EXACT_W.cos, sold ≤ EXACT_W.maxAgeY, inside EXACT_W.spread× of each
+   *  other → the comp weight is at least EXACT_W.w. Measured, NOT adopted:
+   *  holdout medErr 27.7 → 27.9%, band 68.1 → 67.8% (w 0.4: 27.8%, 67.9%);
+   *  live band 71.8 → 71.4% (§14) */
+  exactWeight?: boolean;
 }
 /** The engine before the Oct 3 pass (raw-estimate Flags, premium-only
  *  anchor, ungated card tiers) — kept so the harnesses can replay it. */
@@ -668,13 +674,16 @@ export function blendPredict(
   lot: { artist: string; auctionHouse?: string | null; buyerPremiumPct?: number | null },
   estMid: number, estKind: EstKind, compMedian: number, confidence: string,
   cal: EngineCalibration | null = CAL, nExact = 0,
+  /** (wave 3, FLAGS.exactWeight) a floor on the comp weight — the pool holds
+   *  enough recent, tight exact comps */
+  minW = 0,
 ): { value: number; w: number } {
   const market = cal?.marketBySlug?.[lot.artist];
   const ratio = compMedian > 0 && estMid > 0 ? compMedian / estMid : 1;
   const b = cal?.blend;
   // (Oct 6, FLAGS.exactBlend) a pool holding ≥ EXACT_BLEND.minN exact comps
   // (the same object by title) earns at least EXACT_BLEND.w on the comps
-  const exactW = (w: number) => (FLAGS.exactBlend && nExact >= EXACT_BLEND.minN ? Math.max(w, exactBlendW(lot.auctionHouse)) : w);
+  const exactW = (w: number) => Math.max(minW, FLAGS.exactBlend && nExact >= EXACT_BLEND.minN ? Math.max(w, exactBlendW(lot.auctionHouse)) : w);
   if (FLAGS.houseAnchor) {
     const hf = houseFactorOf(market ?? TIDX?.marketBySlug?.[lot.artist], lot.auctionHouse, estKind);
     const w = exactW(b?.w[confidence] ?? BLEND_W_DEFAULT[confidence] ?? 0.1);
@@ -707,6 +716,8 @@ export const COMP_WEIGHT_CAP = { share: 0.35 };
 /** EngineFlags.exactBlend: ≥ minN comps at title cosine ≥ cos → comp weight
  *  ≥ w (per house where measured — EXACT_BLEND.byHouse). */
 export const EXACT_BLEND: { minN: number; cos: number; w: number; byHouse: Record<string, number> } = { minN: 2, cos: 0.95, w: 0.5, byHouse: {} };
+/** (wave 3) EngineFlags.exactWeight's bar */
+export const EXACT_W = { minN: 3, cos: 0.9, maxAgeY: 3, spread: 1.5, w: 0.6 };
 /** (wave 3) EngineFlags.idLessAbstain: the comp spread (max / min of the top
  *  comps) past which an identity-less art title abstains */
 export const ID_LESS = { spread: 20 };
@@ -1032,7 +1043,14 @@ export function estimateValueEx(
   let predUsd: number;
   if (estMid && estMid > 0) {
     const nExact = top.filter(c => c.match.cosine >= EXACT_BLEND.cos).length;
-    const bp = blendPredict(lot, estMid, estKind, compAdjUsd, confidence, CAL, nExact);
+    // (Oct 6, wave 3, FLAGS.exactWeight) enough recent, tight exact comps
+    // earn the comps EXACT_W.w of the prediction
+    let minW = 0;
+    if (FLAGS.exactWeight) {
+      const ex = pool.filter(c => c.match.cosine >= EXACT_W.cos && ageYOf(c) <= EXACT_W.maxAgeY).map(c => c.realizedUsd).sort((a, b) => a - b);
+      if (ex.length >= EXACT_W.minN && quantile(ex, 0.75) <= EXACT_W.spread * quantile(ex, 0.25)) minW = EXACT_W.w;
+    }
+    const bp = blendPredict(lot, estMid, estKind, compAdjUsd, confidence, CAL, nExact, minW);
     predUsd = bp.value; blendW = bp.w;
   } else {
     // The no-estimate market×tier bias (calibration.bias) is FITTED and

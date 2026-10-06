@@ -13,7 +13,7 @@ import {
   rowsEngineVersionOf, rowsByEngineVersionOf,
 } from '../backtest-core';
 import { calibrationOnEngineBasis } from '../build-market';
-import { setEngineFlags, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_HOUSE_GATE, ENGINE_FLAGS_COMP_PURITY, ENGINE_VERSION, estimateValueEx, type Comp } from '../../app/lib/value';
+import { setEngineFlags, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_HOUSE_GATE, ENGINE_FLAGS_COMP_PURITY, ENGINE_VERSION, estimateValueEx, blendPredict, EXACT_W, type Comp } from '../../app/lib/value';
 import { buildIdf, type Match } from '../../app/lib/similarity';
 import { lotMaxBid, lotProjectedClose, cardCompsHammer, lotVerdict } from '../../app/lib/verdict';
 import { maxHammerFor } from '../../app/lib/premiums';
@@ -105,6 +105,15 @@ test('identity-less art (wave 3): a bare title whose comps span > 20× abstains;
   assert.ok(estimateValueEx(artTarget('Homme assis', { medium: 'etching' }), comps, buildIdf([])).value, 'medium evidence names the object');
   setEngineFlags(ENGINE_FLAGS_COMP_PURITY);
   assert.ok(estimateValueEx(artTarget('Homme assis'), comps, buildIdf([])).value, 'the previous engine valued it');
+  setEngineFlags(null);
+});
+
+test('exactWeight (measured, not adopted): recent tight exact comps floor the comp weight only under the flag', () => {
+  setEngineFlags(ENGINE_FLAGS_CURRENT);
+  assert.ok(!ENGINE_FLAGS_CURRENT.exactWeight);
+  const lot = { artist: 'andy-warhol', auctionHouse: "Christie's" };
+  assert.equal(blendPredict(lot, 10000, 'b', 20000, 'low', null, 0, EXACT_W.w).w, EXACT_W.w);
+  assert.ok(blendPredict(lot, 10000, 'b', 20000, 'low', null, 0).w < EXACT_W.w);
   setEngineFlags(null);
 });
 
