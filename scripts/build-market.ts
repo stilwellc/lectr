@@ -1410,10 +1410,16 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   // and art editions. Only verticals where at least one horizon certifies are
   // emitted — an all-abstain block would be dead weight.
   const repeatSale: Record<string, ReturnType<typeof buildVerticalRepeatSale>> = {};
+  const REPEAT_SALE_HELD = new Set(['art']);
   for (const v of ['watches', 'art', 'sports', 'tcg']) {
     try {
       const vLots = all.filter(l => (MARKETS[v] || []).includes(l.artist) && l.status === 'sold' && (l.priceUsd || 0) > 0);
       const r = buildVerticalRepeatSale(vLots, v);
+      // HELD (Oct 2026 index fix wave): art editions first certify under the
+      // house-effect / Huber fit (5Y ≈ −25%, end-point sensitive: −14% one
+      // quarter earlier). A vertical that never published before is a new
+      // visible read on the tape — it stays off market.json until reviewed.
+      if (r && REPEAT_SALE_HELD.has(v)) { console.log(`[market] ${v} repeat-sale HELD for review — ${Object.entries(r.horizons).filter(([, h]) => h.publishable).map(([k, h]) => `${k} ${h.changePct!.toFixed(1)}%`).join(' ') || 'none'}`); continue; }
       if (r) { repeatSale[v] = r; console.log(`[market] ${v} repeat-sale: pairs ${r.nPairs} objects ${r.nObjects} — ${Object.entries(r.horizons).filter(([, h]) => h.publishable).map(([k, h]) => `${k} ${h.changePct!.toFixed(1)}%`).join(' ') || 'none'}`); }
     } catch (e) { console.warn(`[market] ${v} repeat-sale failed:`, (e as Error).message); }
   }
