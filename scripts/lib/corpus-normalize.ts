@@ -404,11 +404,15 @@ export function dedupeWrightFamilyMirrors(lots: Lot[]): number {
     const l = lots[i];
     const house = (l as { auctionHouse?: string }).auctionHouse || '';
     if (!WRIGHT_FAMILY.has(house)) continue;
-    const idm = String((l as { id?: string }).id || '').match(/-(\d+)~?$/);
-    if (idm) consider(`id:${idm[1]}`, i, l);
+    // the platform id: numeric (wright-301456) or the older alphanumeric lot
+    // code (wright-RA4 ≡ lama-RA4, wright-ABMG2 ≡ lama-ABMG2 — 9 mirrored pairs,
+    // Oct 2026 identity audit). A code is short, so it keys WITH the title.
+    const idm = String((l as { id?: string }).id || '').match(/-([A-Za-z0-9]+)~?$/);
+    if (idm) consider(/^\d+$/.test(idm[1]) ? `id:${idm[1]}` : `aid:${idm[1]}|${normTitle(l.title)}`, i, l);
     if (drop.has(i)) continue; // already dropped by the id key
     const tail = String((l as { url?: string }).url || '').replace(/^https?:\/\/[^/]+/, '');
-    if (/^\/auctions\/.+\/\d+\/?$/.test(tail)) consider(`path:${tail.replace(/\/$/, '')}`, i, l);
+    // the slot is numeric or lettered ("…/modern-design/2412a", "…/RA4")
+    if (/^\/auctions\/.+\/[A-Za-z0-9]+\/?$/.test(tail)) consider(`path:${tail.replace(/\/$/, '')}`, i, l);
   }
   if (!drop.size) return 0;
   // O(n) in-place compaction — assemble persists this array, so the dedupe
@@ -527,6 +531,7 @@ export const COMP_EXCLUDE = {
   lastTrackedBid: 'last-tracked-bid',       // Goldin provisional price, not a hammer
   seedNonLotUrl: 'seed-nonlot-url',         // hand-entered seed pointing at a search/artist page
   estimateUponRequest: 'estimate-upon-request', // artist-page scrape, title carried the est. label
+  relistedUnpaid: 'relisted-unpaid',        // NFL Auction: the same item relisted after this "sale"
 } as const;
 
 const markExclude = (l: DQLot, reason: string): boolean => {
@@ -610,13 +615,19 @@ export function dedupeRRSameSaleItems(lots: Lot[]): number {
 // NOT a lot key (5 distinct Condo seeds share one). Keeper: the CRAWLED row
 // (alg/uuid; Christie's numeric) over a slug/seed row — for sold pairs whose
 // dates disagree the crawled date is the real one — then status, then id.
+// PHILLIPS runs two id schemes too (Oct 2026 identity audit, 7 pairs): the
+// crawled `phillips-<SALE>-<lot>` (NY011125-370: sale code + lot, dated) and a
+// bare `phillips-<detailId>` artist-page row (undated, no lot#) pointing at the
+// same /detail/<maker>/<detailId> page. Keeper: the sale-code row.
 const LOT_PATH: Record<string, RegExp> = {
   "Sotheby's": /^\/(?:[a-z]{2}\/)?buy\/auction\/\d{4}\/[^/]+\/[^/]+$/,
   "Christie's": /^\/(?:[a-z]{2}\/)?lot\/lot-\d+$/,
+  Phillips: /^\/detail\/[^/]+\/\d+$/,
 };
 const isCrawledId = (house: string, id: string): boolean =>
   house === "Sotheby's" ? /^sothebys-(?:alg-|[0-9a-f]{8}-[0-9a-f]{4}-)/i.test(id)
-    : house === "Christie's" ? /^christies-(?:auc-)?\d+~?$/.test(id) : true;
+    : house === "Christie's" ? /^christies-(?:auc-)?\d+~?$/.test(id)
+    : house === 'Phillips' ? /^phillips-[A-Z]{2}\d{6}-/.test(id) : true;
 export function dedupeUrlSchemeCollisions(lots: Lot[]): number {
   const best = new Map<string, number>();
   const drop = new Set<number>();
@@ -635,6 +646,48 @@ export function dedupeUrlSchemeCollisions(lots: Lot[]): number {
     if (keepNew) { drop.add(prev); best.set(k, i); } else drop.add(i);
   }
   return compact(lots, drop);
+}
+
+// ── NFL AUCTION RELISTS (Oct 2026 identity audit): NFL Auction sells only
+// league/club/foundation-consigned items — a buyer cannot consign one back —
+// so the SAME item (same iSynApp photo id + same title) closing "sold" and
+// then listed again a few weeks later means the first sale did not complete
+// (non-paying winner → relist). 78 such rows: every same-photo/same-title
+// pair is ≤60 days apart (median 28d) with an empty 60–120d band, and the
+// relist hammers at ~0.73× the unpaid high bid. Keep the later sale; the
+// earlier row becomes 'unknown-result' (not a sale), comp-excluded, and
+// carries `relistedAs` = the relist's id as its evidence. Pairs 5–12 months
+// apart (67) are left alone — a reused photo for an identical game-issued
+// jersey cannot be ruled out there. Idempotent (only 'sold' rows are marked).
+export const NFL_RELIST_MAX_DAYS = 120;
+export function markNflRelists(lots: Lot[]): { marked: number; usd: number } {
+  const norm = (t: unknown) => normTitle(String(t || '').replace(/\s*\|\s*the official auction site.*$/i, ''));
+  const groups = new Map<string, DQLot[]>();
+  for (const l of lots as DQLot[]) {
+    if (l.auctionHouse !== 'NFL Auction') continue;
+    const im = /img-(\d+)/.exec(String(l.imageUrl || ''));
+    const d = typeof l.saleDate === 'string' ? l.saleDate.slice(0, 10) : '';
+    if (!im || !/^\d{4}-\d\d-\d\d$/.test(d)) continue;
+    const k = `${im[1]}|${norm(l.title)}`;
+    const g = groups.get(k); if (g) g.push(l); else groups.set(k, [l]);
+  }
+  let marked = 0, usd = 0;
+  groups.forEach(g => {
+    if (g.length < 2) return;
+    g.sort((a, b) => String(a.saleDate).localeCompare(String(b.saleDate)) || String(a.id).localeCompare(String(b.id)));
+    for (let i = 0; i + 1 < g.length; i++) {
+      const a = g[i], b = g[i + 1];
+      if (a.status !== 'sold' || a.id === b.id) continue;
+      const gap = (Date.parse(String(b.saleDate).slice(0, 10)) - Date.parse(String(a.saleDate).slice(0, 10))) / 864e5;
+      if (!(gap > 0 && gap <= NFL_RELIST_MAX_DAYS)) continue;
+      (a as { status: string }).status = 'unknown-result';
+      (a as { relistedAs?: string }).relistedAs = String(b.id);
+      a.compExclude = COMP_EXCLUDE.relistedUnpaid;
+      usd += priceOf(a) || 0;
+      marked++;
+    }
+  });
+  return { marked, usd };
 }
 
 // ── BRUUN RASMUSSEN filed as Bonhams (131 rows, `bonhams-brk_<sale>-<hex>`):
@@ -931,7 +984,8 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   const rrDupes = dedupeRRSameSaleItems(ls);
   const urlDupes = dedupeUrlSchemeCollisions(ls);
   const bruun = dedupeBruunUnderBonhams(ls);
-  console.log(`[normalize] dedupe: rr stub rows=${rrStubs} · rr same-sale item dupes=${rrDupes} · sotheby's/christie's url-scheme dupes=${urlDupes} · bruun-under-bonhams dropped=${bruun.dropped} relabelled=${bruun.relabelled}`);
+  const nflRelists = markNflRelists(ls);
+  console.log(`[normalize] dedupe: rr stub rows=${rrStubs} · rr same-sale item dupes=${rrDupes} · sotheby's/christie's/phillips url-scheme dupes=${urlDupes} · bruun-under-bonhams dropped=${bruun.dropped} relabelled=${bruun.relabelled} · nfl relists (earlier sale unpaid)=${nflRelists.marked} ($${Math.round(nflRelists.usd)})`);
   // drop misattributed lots AFTER healExpansionRows cleans titles below? No —
   // isMisattributed reads the raw title (car marques / life-dates survive any
   // title clean), and dropping early shrinks every pass that follows.
