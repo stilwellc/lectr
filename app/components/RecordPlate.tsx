@@ -131,7 +131,7 @@ export default function RecordPlate({
       <span className="lectr-recplate-k" style={showImg || holdImg ? undefined : { marginTop: 2 }}>
         <span>{headLabel}</span>
         {cur.date && (
-          <span style={{ color: 'var(--color-text-faint)', fontWeight: 500, letterSpacing: '0.08em' }}>
+          <span style={{ color: 'var(--color-text-faint)', fontWeight: 600, letterSpacing: '0.08em' }}>
             {formatDate(cur.date, { month: 'short', year: 'numeric' })}
           </span>
         )}

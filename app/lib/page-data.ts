@@ -9,19 +9,15 @@
  *
  *   page-stats.json      settlement per market · maker faces · maker shard counts
  *                        · the ref/player directories
+ *   lot-idx-XX.json      lot id → which served shard carries it (256 buckets)
  *   lot-pack-XX.json     per upcoming lot: the comp rows / band / appraisal /
  *                        reference band / provenance the certificate prints
+ *   maker-<slug>-N.json  one maker's own rows (main + archive tier)
  *
- * Every OTHER lot (a settled lot, a lot the build packed nothing for) reads
- * the same pack from the lot API (/api/comps, app/lib/api.ts) — computed at
- * the edge over the lot's own candidate pool. The client never downloads the
- * served corpus shards any more (lot-idx / maker-<slug>-N files are no longer
- * read).
- *
- * Every loader here is module-cached and versioned by the crawl stamp so a
- * new crawl is a new URL.
+ * Every loader here is module-cached, fails SOFT (null) so a data build that
+ * predates the emitter degrades to the old corpus path instead of a blank page,
+ * and is versioned by the crawl stamp so a new crawl is a new URL.
  */
-import { fetchComps } from './api';
 import type { AuctionLot } from '../types';
 
 /** FNV-1a 32 → 2 hex chars. Shared with the emitter — both sides MUST agree. */
@@ -79,8 +75,6 @@ export interface LotPack {
   r?: { kind: 'reference' | 'edition-like'; confidence: 'low'; med: number; q1: number; q3: number; n: number; scope?: string } | null;
   /** provenance rows (repeatSaleGroupId), oldest first */
   p?: PackRow[];
-  /** lot API: this lot sold outside the comps precompute window */
-  np?: boolean;
 }
 
 /** THE FALLBACK-PROJECTION RULE (one definition — the emitter and /receipts
@@ -122,6 +116,7 @@ export function loadPageStats(): Promise<PageStats | null> {
   return statsP;
 }
 
+const idxP = new Map<string, Promise<Record<string, number> | null>>();
 const packP = new Map<string, Promise<Record<string, LotPack> | null>>();
 function bucketFile<T>(cache: Map<string, Promise<T | null>>, kind: string, id: string, ver?: string): Promise<T | null> {
   const b = bucketOf(id);
@@ -130,26 +125,59 @@ function bucketFile<T>(cache: Map<string, Promise<T | null>>, kind: string, id: 
   return p;
 }
 
-/** The build-time pack for an upcoming lot, or null (not packed). */
-export async function loadStaticLotPack(id: string, ver?: string): Promise<LotPack | null> {
+/** The lot's comp pack, or null (no pack: an old data build, or not an
+    upcoming lot) — undefined never escapes: callers get a settled answer. */
+export async function loadLotPack(id: string, ver?: string): Promise<LotPack | null> {
   const m = await bucketFile(packP, 'lot-pack', id, ver);
   return (m && m[id]) || null;
 }
 
-/** The lot's comp pack: the build-time pack when the nightly packed this lot,
- *  else the lot API's (/api/comps — the same reads over the lot's own pool).
- *  Resolves null when neither knows the lot; REJECTS when the API failed, so
- *  the caller can print an honest error + retry. */
-export async function loadLotPackStrict(id: string, ver?: string): Promise<LotPack | null> {
-  const stat = await loadStaticLotPack(id, ver);
-  if (stat) return stat;
-  const ans = await fetchComps(id);
-  return ans ? (ans.np ? { np: true } : ans.pack) : null;
+/** Shard code: 0..99 = lots-N.json, 100+ = sold-archive-(N-100).json.
+ *  undefined = no index on this data build (the bucket didn't load). */
+export async function loadLotShardCode(id: string, ver?: string): Promise<number | null | undefined> {
+  const m = await bucketFile(idxP, 'lot-idx', id, ver);
+  if (!m) return undefined;
+  const c = m[id];
+  return typeof c === 'number' ? c : null;
 }
 
-/** loadLotPackStrict, failing SOFT (null) — for surfaces with their own fallbacks. */
-export function loadLotPack(id: string, ver?: string): Promise<LotPack | null> {
-  return loadLotPackStrict(id, ver).catch(() => null);
+const shardP = new Map<number, Promise<AuctionLot[] | null>>();
+/** Resolve ONE lot by fetching only the single served shard that carries it.
+ *  `indexed: false` = no lot index on this data build (caller falls back to
+ *  the corpus); `lot: null` with `indexed: true` = not on the book. */
+export async function loadLotFromShard(id: string, ver?: string): Promise<{ lot: AuctionLot | null; indexed: boolean }> {
+  const code = await loadLotShardCode(id, ver);
+  if (code === undefined) return { lot: null, indexed: false };
+  if (code === null) return { lot: null, indexed: true };
+  let p = shardP.get(code);
+  if (!p) {
+    const file = code >= 100 ? `sold-archive-${code - 100}.json` : `lots-${code}.json`;
+    // the shard paths are immutable-cached and ?v=-busted like useRayData's
+    p = getJson<AuctionLot[]>(`/data/ray/${file}${verOf(ver)}`);
+    shardP.set(code, p);
+  }
+  const rows = await p;
+  // a failed shard read is "unknown", never "not on the book"
+  if (!rows) return { lot: null, indexed: false };
+  return { lot: rows.find(l => l.id === id) || null, indexed: true };
+}
+
+const makerP = new Map<string, Promise<AuctionLot[] | null>>();
+/** One maker's own rows (main + archive tier), from its maker shards. */
+export function loadMakerLots(slug: string, shards: number, ver?: string): Promise<AuctionLot[] | null> {
+  let p = makerP.get(slug);
+  if (!p) {
+    p = Promise.all(Array.from({ length: shards }, (_, i) => getJson<AuctionLot[]>(`${BASE}/maker-${slug}-${i}.json${verOf(ver)}`)))
+      .then(parts => {
+        if (parts.some(x => !x)) return null;
+        const rows = ([] as AuctionLot[]).concat(...(parts as AuctionLot[][]));
+        // the file omits `artist` (implied by the slug) — restore it
+        for (const r of rows) (r as { artist: string }).artist = slug;
+        return rows;
+      });
+    makerP.set(slug, p);
+  }
+  return p;
 }
 
 /** PackRow → the display-grade lot the comps rows render */

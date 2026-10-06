@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { withShare } from '../lib/og-meta';
 import BookTotal from '../components/BookTotal';
 import Link from 'next/link';
 import ArtistNav from '../components/ArtistNav';
@@ -37,12 +36,12 @@ import { httpsImg, sizedImg } from '../utils';
  * is DeckFx, which choreographs — it holds no data.
  */
 
-export const metadata: Metadata = withShare({
-  title: 'What is lectr — the second opinion in the saleroom',
+export const metadata: Metadata = {
+  title: 'What is lectr — the auction market, priced',
   // Derived, not typed: a previous revision hardcoded the corpus count here
   // and it drifted 772 lots stale within two nightlies.
   description: `lectr reads every published estimate against every realised hammer across ${meta.sources.length} auction houses and three decades — ${Number(meta.totalSold).toLocaleString('en-US')} settled lots — and prices what comes next. The corpus, the value engine, the replayed record, and what it refuses to say.`,
-});
+};
 
 const p: React.CSSProperties = { fontSize: 15.5, lineHeight: 1.7, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
 const caption: React.CSSProperties = { fontSize: 12.5, color: 'var(--color-text-faint)', margin: '10px 0 0', lineHeight: 1.6 };
@@ -207,7 +206,7 @@ function Stat({ figure, label, note }: { figure: React.ReactNode; label: string;
   return (
     <div style={{ minWidth: 0 }}>
       <div className="dk-stat-fig">{figure}</div>
-      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', marginTop: 9 }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)', marginTop: 9 }}>{label}</div>
       {note && <div style={{ fontSize: 12, color: 'var(--color-text-faint)', marginTop: 3, lineHeight: 1.5 }}>{note}</div>}
     </div>
   );
@@ -617,8 +616,9 @@ export default function AboutPage() {
   // Build-time read (server component, output:'export') — see app/about/live.ts
   // for why this is fs and not a JSON import.
   const liveBook = readLiveBook();
+  const serial = String(meta.lastCrawl).slice(0, 10).replace(/-/g, '');
   return (
-    <div className="deck-scope terminal-shell" style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
+    <div className="deck-scope terminal-shell" style={{ minHeight: '100vh', background: 'var(--color-bg-deep, var(--color-bg))', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
       {/* The proof lots hotlink four house CDNs; they stay lazy (the LCP is the
           cover headline) but DNS resolves off the scroll path. */}
       <link rel="preconnect" href="https://sothebys-com.brightspotcdn.com" crossOrigin="" />
@@ -649,13 +649,13 @@ export default function AboutPage() {
               {/* the quiet kicker voice (north star); the dated serial keeps
                   the mono instrument register — a data label, not an eyebrow */}
               <span className="ns-kicker" style={{ marginBottom: 0 }}>What is lectr</span>
-              <span className="dk-serial">Read {String(meta.lastCrawl).slice(0, 10)}</span>
+              <span className="kicker dk-serial">No. {serial}</span>
             </div>
             {/* the hand-drawn mark, writing itself on — the loader's wipe, once */}
             <img className="dk-mark" src="/brand/lectr.png" alt="lectr" />
             <h1 className="dk-h1">
-              The house prints a guess.{' '}
-              <span className="dk-h1-line2">We print the record:{' '}
+              Every lot arrives with a guess.{' '}
+              <span className="dk-h1-line2">We score it against{' '}
                 <span className="dk-u"><b data-count>{fmt(meta.totalSold)}</b> results</span>.
               </span>
             </h1>
@@ -1126,20 +1126,20 @@ const DECK_CSS = `
     letter-spacing: -0.03em; line-height: 1.06;
     color: var(--color-fg);
     margin: 0 0 clamp(18px, 2.2vw, 28px);
-    max-width: 19ch; text-wrap: balance;
+    max-width: 15ch; text-wrap: balance;
   }
   .dk-h1-line2 { display: block; }
-  html .dk-h1 b { font-weight: 400; font-variant-numeric: tabular-nums; }
+  .dk-h1 b { font-weight: 450; font-variant-numeric: tabular-nums; }
   .dk-u { position: relative; white-space: nowrap; }
   .dk-u::after {
     content: ""; position: absolute; left: 0; right: 0; bottom: 0.02em; height: 3px;
-    background: transparent;
+    background: var(--color-butter-deep);
   }
   .dk-sub {
     font-size: var(--d-lead); line-height: 1.62;
     color: var(--color-text-secondary); max-width: 58ch; margin: 0;
   }
-  .dk-sub b { color: var(--color-fg); font-weight: 500; }
+  .dk-sub b { color: var(--color-fg); font-weight: 600; }
   .dk-cover-cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: clamp(22px, 2.6vw, 32px); }
   .dk-free { font-size: var(--d-cap); color: var(--color-text-faint); margin: 12px 0 0; }
   .dk-statband {
@@ -1150,7 +1150,7 @@ const DECK_CSS = `
     border-top: 1px solid var(--hairline);
   }
   .dk-stat-fig {
-    font-size: clamp(26px, 3vw, 44px); font-weight: 300;
+    font-size: clamp(26px, 3vw, 44px); font-weight: 600;
     letter-spacing: -0.035em; color: var(--color-fg); line-height: 1;
     font-variant-numeric: tabular-nums;
   }
@@ -1196,7 +1196,7 @@ const DECK_CSS = `
   .dk-curve-cap {
     position: absolute; right: 0; top: -18px;
     font-family: var(--font-mono), monospace; font-size: var(--d-label);
-    letter-spacing: 0;
+    letter-spacing: .08em; text-transform: uppercase;
     color: var(--color-text-faint);
   }
   .dk-curve, .dk-curve-ticks { margin-inline: calc(50% - 50vw); padding-inline: 0; }
@@ -1217,9 +1217,8 @@ const DECK_CSS = `
   }
   .dk-chip { display: inline-flex; align-items: baseline; white-space: nowrap; font-size: var(--d-cap); }
   .dk-chip i { font-style: normal; color: var(--color-text-faint); }
-  /* muted, not faint-at-70%: the faded chip label measured 2.69:1 (axe, Oct 3) */
-  .dk-chip em { font-style: normal; color: var(--color-text-muted); margin-left: 8px; }
-  .dk-chip b { color: var(--color-fg); font-weight: 500; margin-left: 8px; font-variant-numeric: tabular-nums; }
+  .dk-chip em { font-style: normal; color: var(--color-text-faint); opacity: .7; margin-left: 8px; }
+  .dk-chip b { color: var(--color-fg); font-weight: 600; margin-left: 8px; font-variant-numeric: tabular-nums; }
 
   /* ── slides ─────────────────────────────────────────────────────── */
   .deck-slide { padding: clamp(64px, 8vw, 120px) 0 clamp(20px, 2.6vw, 36px); scroll-margin-top: 76px; }
@@ -1234,13 +1233,13 @@ const DECK_CSS = `
   /* chapter heads: bigger stays, weight drops — the pen, not the marker */
   .deck-h {
     font-family: var(--font-sans), sans-serif;
-    font-size: var(--d-h); font-weight: 300;
+    font-size: var(--d-h); font-weight: 330;
     letter-spacing: -0.025em; line-height: 1.1;
     color: var(--color-fg);
     margin: 0 0 16px; max-width: 22ch; text-wrap: balance;
     position: relative; z-index: 1;
   }
-  .deck-h b { font-weight: 500; font-variant-numeric: tabular-nums; }
+  .deck-h b { font-weight: 450; font-variant-numeric: tabular-nums; }
   /* split section head — headline left, the lede right (stacks under 900) */
   .deck-slide .ns-split { margin-bottom: 10px; }
   .deck-slide .ns-split .deck-h { margin-bottom: 0; }
@@ -1256,14 +1255,14 @@ const DECK_CSS = `
       none;
   }
   .statement-fig {
-    font-size: var(--d-figure); font-weight: 500;
+    font-size: var(--d-figure); font-weight: 800;
     letter-spacing: -0.05em; line-height: 0.92;
     color: var(--color-butter);
     margin-bottom: clamp(18px, 2.2vw, 30px);
     font-variant-numeric: tabular-nums;
   }
   .statement-unit {
-    font-size: clamp(22px, 3vw, 40px); font-weight: 500;
+    font-size: clamp(22px, 3vw, 40px); font-weight: 650;
     letter-spacing: -0.02em; margin-left: 0.28em;
     color: var(--color-butter-text);
     vertical-align: baseline;
@@ -1293,7 +1292,7 @@ const DECK_CSS = `
     font-size: var(--d-lead); line-height: 1.55;
     color: var(--color-text-secondary); margin: 20px 0 0; max-width: 62ch;
   }
-  .hero-cap b { color: var(--color-fg); font-weight: 500; }
+  .hero-cap b { color: var(--color-fg); font-weight: 600; }
   .hero-cap-paid { color: var(--color-fg); }
 
   /* ── method steps ───────────────────────────────────────────────── */
@@ -1310,11 +1309,11 @@ const DECK_CSS = `
     border-top: 1px dotted var(--color-border-mid);
   }
   .method-n {
-    grid-row: 1; font-size: var(--d-cap); font-weight: 500;
+    grid-row: 1; font-size: var(--d-cap); font-weight: 700;
     color: var(--color-butter-deep); font-variant-numeric: tabular-nums; padding-top: 3px;
     font-family: var(--font-mono), monospace;
   }
-  .method-t { font-size: var(--d-ui); font-weight: 500; color: var(--color-fg); }
+  .method-t { font-size: var(--d-ui); font-weight: 650; color: var(--color-fg); }
   .method-b {
     grid-column: 2; font-size: var(--d-body); line-height: 1.65;
     color: var(--color-text-secondary);
@@ -1332,7 +1331,7 @@ const DECK_CSS = `
     border-top: 1px solid var(--hairline);
   }
   .value-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
-  .value-who { font-size: var(--d-body); font-weight: 500; color: var(--color-fg); letter-spacing: -0.01em; }
+  .value-who { font-size: var(--d-body); font-weight: 700; color: var(--color-fg); letter-spacing: -0.01em; }
   .value-job { font-size: var(--d-cap); color: var(--color-text-faint); }
   .value-swap { display: grid; gap: 10px; }
   .value-before, .value-after {
@@ -1346,7 +1345,7 @@ const DECK_CSS = `
   .value-before i, .value-after i {
     display: block; font-style: normal;
     font-family: var(--font-mono), monospace; font-size: var(--d-label);
-    letter-spacing: 0;
+    letter-spacing: 0.08em; text-transform: uppercase;
     color: var(--color-text-faint); margin-bottom: 3px;
   }
   .value-after i { color: var(--color-butter-text); }
@@ -1378,7 +1377,7 @@ const DECK_CSS = `
   .close-sub b { color: var(--color-fg); }
   .deck-more {
     display: inline; padding: 14px 0; margin: -14px 0;
-    color: var(--color-fg); font-weight: 500; text-decoration: none;
+    color: var(--color-fg); font-weight: 600; text-decoration: none;
     border-bottom: 1px solid var(--hairline);
   }
   .deck-more svg { margin-left: 5px; vertical-align: -1px; }
@@ -1430,7 +1429,7 @@ const DECK_CSS = `
     font-size: var(--d-cap); color: var(--color-text-faint);
   }
   .live-legend b { color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
-  .live-legend-on b { color: var(--color-butter-text); } /* text-safe butter — display butter is 4.4:1 on the deck ground */
+  .live-legend-on b { color: var(--color-butter); }
   .live-split {
     display: grid; grid-template-columns: 1fr; gap: clamp(16px, 2vw, 24px);
     margin: clamp(24px, 2.8vw, 32px) 0 0;
@@ -1439,7 +1438,7 @@ const DECK_CSS = `
   }
   .live-cell { display: grid; gap: 6px; align-content: start; }
   .live-n {
-    font-size: var(--d-figure-md); font-weight: 500; letter-spacing: -0.03em;
+    font-size: var(--d-figure-md); font-weight: 750; letter-spacing: -0.03em;
     color: var(--color-fg); line-height: 1; font-variant-numeric: tabular-nums;
   }
   .live-k { font-size: var(--d-cap); line-height: 1.55; color: var(--color-text-secondary); max-width: 30ch; }
@@ -1462,16 +1461,16 @@ const DECK_CSS = `
     flex: none; width: 17px; height: 17px; border-radius: 50%;
     border: 1px solid var(--hairline); color: var(--color-text-faint);
     display: inline-flex; align-items: center; justify-content: center;
-    font-size: 11px; line-height: 1; font-weight: 500;
+    font-size: 11px; line-height: 1; font-weight: 600;
     transition: transform .18s ease;
   }
   .comp-disc[open] .comp-caret { transform: rotate(45deg); }
   .comp-wrap { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); }
   .comp-table { width: 100%; border-collapse: collapse; font-size: var(--d-cap); }
   .comp-table th {
-    text-align: left; font-weight: 500; padding: 0 0 6px;
+    text-align: left; font-weight: 600; padding: 0 0 6px;
     color: var(--color-text-faint); font-size: var(--d-label);
-    letter-spacing: 0;
+    letter-spacing: 0.08em; text-transform: uppercase;
     border-bottom: 1px solid var(--hairline);
   }
   .comp-table td { padding: 7px 0; border-bottom: 1px solid var(--hairline); vertical-align: top; }
@@ -1487,14 +1486,14 @@ const DECK_CSS = `
   .comp-lot i { display: block; font-style: normal; color: var(--color-text-faint); font-size: var(--d-label); margin-top: 2px; }
   .comp-num {
     text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums;
-    color: var(--color-fg); font-weight: 500; padding-left: 12px !important;
+    color: var(--color-fg); font-weight: 600; padding-left: 12px !important;
   }
-  th.comp-num { color: var(--color-text-faint); font-weight: 500; }
+  th.comp-num { color: var(--color-text-faint); font-weight: 600; }
   .comp-note { font-size: var(--d-label); line-height: 1.5; color: var(--color-text-faint); margin: 9px 0 0; }
   .comp-disc-hero { margin-top: 16px; max-width: var(--measure); }
   .comp-disc-hero .comp-table { font-size: var(--d-cap); }
   .comp-disc-hero .comp-lot a, .comp-disc-hero .comp-lot > span { -webkit-line-clamp: 1; }
-  .comp-note b { color: var(--color-text-secondary); font-weight: 500; }
+  .comp-note b { color: var(--color-text-secondary); font-weight: 600; }
 
   /* ── archive coverage ───────────────────────────────────────────── */
   .cov { margin: clamp(26px, 3vw, 34px) 0 0; position: relative; }
@@ -1514,7 +1513,7 @@ const DECK_CSS = `
     padding: 8px 0;
     border-top: 1px solid var(--hairline);
   }
-  .cov-house { grid-area: house; font-size: var(--d-ui); font-weight: 500; color: var(--color-fg); }
+  .cov-house { grid-area: house; font-size: var(--d-ui); font-weight: 650; color: var(--color-fg); }
   .cov-track { grid-area: track; position: relative; display: block; height: 10px; }
   .cov-track::before {
     content: ""; position: absolute; left: 0; right: 0; top: 50%;
@@ -1566,7 +1565,7 @@ const DECK_CSS = `
     background: var(--color-text-faint);
   }
   .chain-node:first-child::before { background: var(--color-butter); }
-  .chain-k { display: block; font-size: var(--d-body); font-weight: 500; color: var(--color-fg); letter-spacing: -0.01em; }
+  .chain-k { display: block; font-size: var(--d-body); font-weight: 700; color: var(--color-fg); letter-spacing: -0.01em; }
   a.chain-k {
     width: fit-content; text-decoration: none;
     border-bottom: 1px solid var(--hairline);
@@ -1597,7 +1596,7 @@ const DECK_CSS = `
     font-variant-numeric: tabular-nums;
   }
   .corpus-item:last-child { border-bottom: 1px solid var(--hairline); }
-  .corpus-label { font-size: var(--d-body); font-weight: 500; color: var(--color-fg); }
+  .corpus-label { font-size: var(--d-body); font-weight: 600; color: var(--color-fg); }
   .corpus-track { display: block; height: 14px; }
   .corpus-bar {
     display: block; height: 100%;
@@ -1617,7 +1616,7 @@ const DECK_CSS = `
   .dist-legend { display: flex; flex-wrap: wrap; gap: 8px 26px; margin-bottom: 14px; }
   .dist-key { display: inline-flex; align-items: center; gap: 8px; font-size: var(--d-cap); color: var(--color-text-secondary); }
   .dist-key i { width: 11px; height: 11px; border-radius: 2px; flex: none; }
-  .dist-key b { color: var(--color-fg); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .dist-key b { color: var(--color-fg); font-weight: 600; font-variant-numeric: tabular-nums; }
   .dist-key-u i { background: color-mix(in srgb, var(--color-fg) 20%, transparent); border: 1px solid color-mix(in srgb, var(--color-fg) 40%, transparent); }
   .dist-key-f i { background: transparent; border: 2px solid var(--color-butter); }
   .dist-plot { position: relative; padding: 0 0 26px 42px; }
@@ -1649,14 +1648,14 @@ const DECK_CSS = `
   .dist-line-f { fill: none; stroke: var(--color-butter); stroke-width: 2.5; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
   .dist-foot {
     display: flex; margin: 2px 0 0; padding-left: 42px;
-    font-size: var(--d-label); letter-spacing: 0;
+    font-size: var(--d-label); letter-spacing: 0.1em; text-transform: uppercase;
     color: var(--color-text-faint); font-family: var(--font-mono), monospace;
   }
   .dist-foot-u { width: 33.333%; text-align: right; padding-right: 10px; white-space: nowrap; }
   .dist-foot-o { flex: 1; text-align: left; padding-left: 10px; }
   @media (max-width: 620px) { .dist-foot { font-size: 10px; letter-spacing: 0.06em; } }
   .dist-cap { font-size: var(--d-cap); line-height: 1.6; color: var(--color-text-faint); margin: 12px 0 0; max-width: var(--measure); }
-  .dist-cap b { color: var(--color-text-secondary); font-weight: 500; }
+  .dist-cap b { color: var(--color-text-secondary); font-weight: 600; }
   .yrs-band { fill: color-mix(in srgb, var(--color-butter) 20%, transparent); }
   .yrs-line { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
   .yrs-line-u { stroke: color-mix(in srgb, var(--color-fg) 45%, transparent); }
@@ -1665,12 +1664,12 @@ const DECK_CSS = `
   .rec-table { width: 100%; border-collapse: collapse; margin-top: clamp(30px, 3.6vw, 44px); }
   .rec-table th, .rec-table td { text-align: left; vertical-align: baseline; }
   .rec-table thead th {
-    font-size: var(--d-label); letter-spacing: 0;
-    color: var(--color-text-faint); font-weight: 500;
+    font-size: var(--d-label); letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--color-text-faint); font-weight: 600;
     padding: 0 0 9px; border-bottom: 1px solid var(--hairline);
   }
   .rec-table tbody th {
-    font-size: var(--d-body); font-weight: 500; color: var(--color-fg);
+    font-size: var(--d-body); font-weight: 650; color: var(--color-fg);
     padding: 14px 16px 14px 0; border-bottom: 1px solid var(--hairline);
   }
   .rec-table tbody th i {
@@ -1680,10 +1679,10 @@ const DECK_CSS = `
   }
   .rec-table td { padding: 14px 0; border-bottom: 1px solid var(--hairline); }
   .rec-num { text-align: right !important; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .rec-table tbody .rec-num { font-size: var(--d-body); font-weight: 500; padding-left: 14px; }
+  .rec-table tbody .rec-num { font-size: var(--d-body); font-weight: 700; padding-left: 14px; }
   .rec-ctrl { color: var(--color-text-faint); }
   .rec-flag { color: var(--color-fg); }
-  .rec-edge { color: var(--color-butter-text); }
+  .rec-edge { color: var(--color-butter); }
   @media (max-width: 560px) {
     .rec-table tbody th i { display: none; }
     .rec-table tbody .rec-num, .rec-table thead th { font-size: var(--d-cap); }
@@ -1724,17 +1723,17 @@ const DECK_CSS = `
     .proof-card:has(details[open]) .proof-shot { padding-block: 18px; }
   }
   .proof-shot:has(img) .proof-mono { display: none; }
-  .proof-mono { font-size: var(--d-figure-md); font-weight: 500; color: var(--color-text-faint); opacity: 0.5; }
+  .proof-mono { font-size: var(--d-figure-md); font-weight: 700; color: var(--color-text-faint); opacity: 0.5; }
   .proof-body { padding: 18px 18px 20px; display: flex; flex-direction: column; flex: 1; }
   .proof-meta { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
   .proof-conf { border: 1px solid var(--hairline); border-radius: 999px; padding: 2px 9px; color: var(--color-text-muted); }
   .proof-conf-mid { border-style: dashed; }
-  .proof-title { font-size: var(--d-body); font-weight: 500; line-height: 1.3; color: var(--color-fg); margin: 9px 0 15px; }
+  .proof-title { font-size: var(--d-body); font-weight: 650; line-height: 1.3; color: var(--color-fg); margin: 9px 0 15px; }
   .proof-figs { display: flex; gap: 26px; align-items: baseline; margin-bottom: 10px; }
   .proof-fig { display: flex; flex-direction: column; gap: 3px; }
   .proof-fig-k { color: var(--color-text-faint); }
-  .proof-fig-v { font-size: var(--d-body); font-weight: 500; color: var(--color-fg); font-variant-numeric: tabular-nums; }
-  .proof-fig-ref .proof-fig-v { color: var(--color-text-muted); font-weight: 500; }
+  .proof-fig-v { font-size: var(--d-body); font-weight: 700; color: var(--color-fg); font-variant-numeric: tabular-nums; }
+  .proof-fig-ref .proof-fig-v { color: var(--color-text-muted); font-weight: 600; }
   .proof-bullet {
     position: relative; height: 14px; width: 100%;
     background: var(--color-bg-elevated);
@@ -1755,7 +1754,7 @@ const DECK_CSS = `
     font-size: var(--d-label); line-height: 1.55; color: var(--color-text-faint);
     display: flex; flex-direction: column; gap: 5px;
   }
-  .proof-gap { font-size: var(--d-figure-sm); font-weight: 500; color: var(--color-up); letter-spacing: -0.025em; line-height: 1; }
+  .proof-gap { font-size: var(--d-figure-sm); font-weight: 750; color: var(--color-up); letter-spacing: -0.025em; line-height: 1; }
   @media (min-width: 760px) {
     .proof-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 1.8vw, 22px); align-items: start; }
     .proof-card { flex-direction: row; }

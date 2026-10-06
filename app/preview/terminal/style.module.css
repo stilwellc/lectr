@@ -62,8 +62,8 @@
   font-family: var(--font-inter), sans-serif;
   font-size: var(--text-label);
   font-weight: 500;
-  letter-spacing: 0.01em;
-  text-transform: none;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
   color: var(--tt-muted);
   margin-bottom: 12px;
 }
@@ -116,8 +116,8 @@
 /* the leader — the ledger's dotted rule carries the title to the edge */
 .pulseRule { flex: 1; margin-left: 12px; border: none; border-top: 1px solid var(--tt-hair); }
 .pulseTitle {
-  font-family: var(--font-inter), sans-serif; font-size: 10px; font-weight: 500;
-  letter-spacing: 0.01em; text-transform: none; color: var(--tt-secondary);
+  font-family: var(--font-inter), sans-serif; font-size: 10px; font-weight: 600;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--tt-secondary);
 }
 /* slim rows, one grammar: words left, instrument right — no dead space */
 .pulseGrid { display: flex; flex-direction: column; gap: 0; }
@@ -140,13 +140,13 @@
 .pulseLabel {
   display: inline-flex; align-items: center; gap: 7px;
   font-family: var(--font-inter), sans-serif; font-size: 10px;
-  letter-spacing: 0.01em; text-transform: none; color: var(--tt-muted);
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--tt-muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .pulseValLead {
   flex: none;
   font-family: var(--font-inter), sans-serif;
-  font-size: 24px; font-weight: 500;
+  font-size: 24px; font-weight: 600;
   letter-spacing: -0.02em; line-height: 1; color: var(--tt-fg, #ffffff);
   font-variant-numeric: tabular-nums; /* the room count YIELDS to the certified read (Robinhood: the market figure wins) */
 }
@@ -155,13 +155,13 @@
 .pulseValLead[data-zero='true'] { color: var(--tt-faint); }
 .pulseVal {
   display: flex; align-items: baseline; gap: 6px;
-  font-family: var(--font-inter), sans-serif; font-size: 24px; font-weight: 500;
+  font-family: var(--font-inter), sans-serif; font-size: 24px; font-weight: 600;
   letter-spacing: -0.02em; line-height: 1; color: var(--tt-fg, #ffffff);
   font-variant-numeric: tabular-nums;
 }
 .pulseUnit {
   font-style: normal; font-family: var(--font-inter), sans-serif;
-  font-size: 10px; letter-spacing: 0.01em; text-transform: none; color: var(--tt-muted, #8a8f98);
+  font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tt-muted, #8a8f98);
 }
 .pulseDir { font-style: normal; font-size: 10px; }
 .pulseDir[data-dir='up'] { color: var(--color-up, #57be87); }
@@ -191,7 +191,7 @@
 .pulseTag { flex: none; display: flex; align-items: center; }
 .pulseTagGhost .pulseTagVal { color: var(--ba-35, rgba(232, 218, 182, 0.35)); }
 .pulseTagVal {
-  font-family: var(--font-inter), sans-serif; font-size: 24px; font-weight: 500;
+  font-family: var(--font-inter), sans-serif; font-size: 24px; font-weight: 600;
   letter-spacing: -0.02em; line-height: 1; color: var(--tt-butter);
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }
@@ -221,7 +221,7 @@
 }
 .pulseChip em {
   font-style: normal; font-family: var(--font-mono-data), monospace;
-  font-size: 10.5px; letter-spacing: 0.01em; text-transform: none; color: var(--tt-muted);
+  font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tt-muted);
 }
 .pulseChip[data-tonight='true'] { border-color: var(--lw-16, rgba(255, 255, 255, 0.16)); }
 .pulseChip[data-tonight='true'] em { color: var(--tt-secondary); }
@@ -242,7 +242,7 @@
 }
 .mRightNow .pulseBlock[data-lead='true'] .pulseLabel,
 .mRightNow .pulseGrid > [data-below='true'] .pulseLabel {
-  font-size: 10px; letter-spacing: 0.01em; white-space: normal; line-height: 1.35;
+  font-size: 10px; letter-spacing: 0.05em; white-space: normal; line-height: 1.35;
 }
 /* the labels already say it — captions are dead weight at thumb scale */
 .mRightNow .pulseBlock[data-lead='true'] .pulseSub,
@@ -303,8 +303,8 @@
   gap: 20px;
   font-family: var(--font-inter), sans-serif;
   font-size: 10px;
-  letter-spacing: 0.01em;
-  text-transform: none;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   color: var(--tt-faint);
   padding-bottom: 10px;
 }
@@ -337,8 +337,8 @@
 .heroSparkFallback .chartCardTag {
   font-family: var(--font-inter), sans-serif;
   font-size: 10px;
-  letter-spacing: 0.01em;
-  text-transform: none;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   color: var(--tt-faint);
 }
 
@@ -408,7 +408,7 @@
    Inter 330, bigger, tighter. The serif display voice retired from heads. */
 .feedTitle {
   font-family: var(--font-inter), system-ui, sans-serif;
-  font-weight: 300;
+  font-weight: 330;
   font-size: clamp(30px, 3.4vw, 44px);
   line-height: 1.08;
   letter-spacing: -0.02em;
@@ -442,7 +442,7 @@
 .mHeroChart { margin: 0 -4px; }
 .mHeroTag {
   font-family: var(--font-inter), sans-serif; font-size: 10px;
-  letter-spacing: 0.01em; text-transform: none; color: var(--tt-faint); margin-top: 6px;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--tt-faint); margin-top: 6px;
 }
 /* ── THE MOBILE "RIGHT NOW" PANEL — the desktop pulse card, phone-native:
    a contained Linear card holding the 3-up metric tiles and the search. ── */
@@ -469,13 +469,13 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   border-color: var(--ba-3, rgba(232, 218, 182, 0.3));
   background: var(--ba-05, rgba(232, 218, 182, 0.05));
 }
-.mStatVal { font-family: var(--font-inter), sans-serif; font-size: 21px; font-weight: 500; letter-spacing: -0.02em; line-height: 1; color: var(--tt-fg, #f7f8f8); }
+.mStatVal { font-family: var(--font-inter), sans-serif; font-size: 21px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; color: var(--tt-fg, #f7f8f8); }
 .mStat[data-accent='true'] .mStatVal { color: var(--tt-butter); }
 .mStatLabel {
   /* tracking eased so the longest label ("Below market ↗") still fits the
      3-up tiles on a 390px screen; cool Linear grey */
   font-family: var(--font-inter), sans-serif; font-size: 10px; letter-spacing: 0.02em;
-  text-transform: none; color: var(--tt-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-transform: uppercase; color: var(--tt-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* mobile search — THE COMMAND BAR. It must never read as the action bar's
    sibling: butter belongs to below-market. FLAT (Aug 22): matte fill, one
@@ -517,7 +517,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   border: 1px solid var(--tt-hair-2); border-radius: 999px; background: rgba(0, 0, 0, 0.22);
 }
 .tfChip {
-  font-family: var(--font-inter), sans-serif; font-size: 11.5px; letter-spacing: 0.01em;
+  font-family: var(--font-inter), sans-serif; font-size: 11.5px; letter-spacing: 0.04em;
   padding: 5px 11px; border-radius: 999px; border: none; background: none; color: var(--tt-muted);
   cursor: pointer; transition: background 180ms var(--ease-signature, cubic-bezier(0.23,1,0.32,1)), color 180ms;
 }
@@ -528,8 +528,8 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 /* mobile return card */
 
 .mHeroReturnPer {
-  font-family: var(--font-inter), sans-serif; font-size: 11.5px; letter-spacing: 0.01em;
-  text-transform: none; color: var(--tt-faint); padding-bottom: 8px;
+  font-family: var(--font-inter), sans-serif; font-size: 11.5px; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--tt-faint); padding-bottom: 8px;
 }
 .mHero .tfToggle { margin: 2px 0 12px; }
 
@@ -537,8 +537,8 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .heroTopRow { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
 
 .heroReturnPer {
-  font-family: var(--font-inter), sans-serif; font-size: 13.5px; letter-spacing: 0.01em;
-  text-transform: none; color: var(--tt-faint); padding-bottom: 16px;
+  font-family: var(--font-inter), sans-serif; font-size: 13.5px; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--tt-faint); padding-bottom: 16px;
 }
 .hero .tfToggle { margin-top: 14px; }
 
@@ -745,7 +745,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   font-family: var(--font-mono-data), monospace;
   font-size: 10px;
   line-height: 12px;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.18em;
   color: var(--tt-faint);
 }
 
@@ -767,18 +767,85 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   color: inherit;
   font: inherit;
 }
-.wallPlate:focus-visible { outline: 1.5px solid var(--color-fg); outline-offset: 4px; }
-/* the plate is the shared LotPlate (app/components/LotPlate.tsx, NORTHSTAR
-   §0.4): cream 4:5 mat, object at 80% multiplied in, FIG. caption. No glare,
-   no lift, no ring — the flag speaks once, in the green line below. Hover
-   underlines the maker, ink only. */
-.wallPlate:hover .wallMaker { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.wallPlate:focus-visible { outline: 2px solid var(--ba-7, rgba(232, 218, 182, 0.7)); outline-offset: 3px; }
+/* THE MUSEUM MAT — a lit gallery frame, not a felt swatch: warm light pools
+   from the top of the mat, the base falls into shade, an inner bevel gives
+   the frame thickness, and the object casts a real contact shadow onto it. */
+.wallMat {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 150px;
+  padding: 14px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--lw-03, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--lw-08, rgba(255, 255, 255, 0.08));
+  box-shadow: none;
+  transform-origin: 50% 100%;
+  transition:
+    transform 260ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)),
+    box-shadow 260ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)),
+    border-color 260ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
+}
+/* the vitrine glass front — a fixed 105° glare on the EXACT axis of the
+   active pill's specular sweep four hundred pixels above: one lamp, one
+   room. On hover the reflection lags the frame — that lag is the glass. */
+.wallMat::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(105deg, rgba(255, 252, 245, 0.075) 0%, rgba(255, 252, 245, 0.02) 30%, transparent 48%);
+  pointer-events: none;
+  transition: transform 320ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1));
+}
+.wallPlate:hover .wallMat::after { transform: translateX(8px); }
+.wallMat img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain; /* never crop artwork */
+  display: block;
+}
+/* frame-lift: the visitor takes the frame off the wall — the mat rises, its
+   shadow deepens, the object's contact shadow stretches. The label stays. */
+.wallPlate:hover .wallMat {
+  border-color: var(--ba-28, rgba(232, 218, 182, 0.28));
+}
+.wallPlate:hover .wallMaker { color: var(--tt-butter); }
+/* the verdict ring — quieter than it was, still LIGHT: a 1.5px filament and
+   one tight skirt. Green stays a real below-market flag; five plates must
+   never read as five lamps. */
+.wallPlate[data-tone='up'] .wallMat {
+  border-color: rgba(87, 190, 135, 0.6);
+  box-shadow: none;
+}
+.wallPlate[data-tone='up']:hover .wallMat {
+  border-color: rgba(87, 190, 135, 0.85);
+  box-shadow: none;
+}
+/* the ignite — a filament striking: overshoot at 60%, settling to the exact
+   static ring. (This keyframe was referenced for months and never defined —
+   the mobile rings had never actually animated.) */
+@keyframes ttRingIgnite {
+  0% { border-color: rgba(87, 190, 135, 0); }
+  60% { border-color: rgba(87, 190, 135, 1); }
+  100% { border-color: rgba(87, 190, 135, 0.6); }
+}
+/* desktop: rings ignite after their plates land */
+@media (prefers-reduced-motion: no-preference) {
+  .wall[data-anim='true'][data-seen='true'] .wallPlate[data-tone='up'] .wallMat {
+    animation: ttRingIgnite 340ms var(--ease-pop, cubic-bezier(0.34, 1.56, 0.64, 1)) both;
+    animation-delay: calc(660ms + var(--wall-i, 0) * 80ms);
+  }
+}
 /* museum wall-text: index · maker · fact, quiet tiers under the frame */
 .wallMeta { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 4px 2px 0; }
 .wallMaker {
   font-family: var(--font-inter), sans-serif;
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--tt-fg);
   white-space: nowrap;
@@ -800,8 +867,8 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   font-style: normal;
   margin-left: 6px;
   color: var(--tt-butter);
-  letter-spacing: 0.01em;
-  text-transform: none;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   font-size: 10px; /* the 10px floor (de-slop law 2) — was 8.5px */
   padding: 1px 5px 0;
   border: 1px solid var(--ba-35, rgba(232, 218, 182, 0.35));
@@ -832,6 +899,10 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
     opacity: 1;
     transform: none;
   }
+  .wall[data-anim='true'] .wallPlate[data-tone='up'] .wallMat,
+  .wallStrip[data-anim='true'] .wallPlate[data-tone='up'] .wallMat {
+    animation: none;
+  }
 }
 @keyframes ttWallRise {
   from { opacity: 0; transform: translateY(12px); }
@@ -861,6 +932,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   width: 176px;
   scroll-snap-align: start;
 }
+.wallStrip .wallMat { height: 158px; padding: 12px; }
 /* plates rise as the strip enters view; rings light left→right */
 .wallStrip[data-anim='true'] .wallPlate {
   opacity: 0;
@@ -869,6 +941,11 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .wallStrip[data-anim='true'][data-seen='true'] .wallPlate {
   animation: ttWallRise 520ms var(--ease-signature, cubic-bezier(0.23, 1, 0.32, 1)) forwards;
   animation-delay: calc(var(--wall-i, 0) * 80ms);
+}
+.wallStrip[data-anim='true'][data-seen='true'] .wallPlate[data-tone='up'] .wallMat {
+  /* the filament strikes after its plate has landed — same pop curve as desktop */
+  animation: ttRingIgnite 340ms var(--ease-pop, cubic-bezier(0.34, 1.56, 0.64, 1)) both;
+  animation-delay: calc(600ms + var(--wall-i, 0) * 60ms);
 }
 
 /* (the M11 serif-head size overrides retired with the north-star pass —
@@ -907,7 +984,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
    a quiet sentence-case kicker over one LIGHT Inter headline (north star) */
 .roomTitle {
   font-family: var(--font-inter), system-ui, sans-serif;
-  font-weight: 300;
+  font-weight: 330;
   font-size: clamp(28px, 3vw, 40px);
   line-height: 1.08;
   letter-spacing: -0.02em;
@@ -945,14 +1022,14 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .mStatVal { font-variant-numeric: tabular-nums; }
 
 
-.heroNumber { font-variant-numeric: tabular-nums; letter-spacing: -0.035em; font-weight: 500; }
+.heroNumber { font-variant-numeric: tabular-nums; letter-spacing: -0.035em; font-weight: 650; }
 .tfChip { letter-spacing: 0.02em; }
 
 
 /* ── THE RECORD room: the board printed on paper; the settlement slip loses
    its own card chrome (it sits ON the room's paper, not on a card) ── */
 .roomPaper :global(.ray-band) { background: transparent; border-block: 0; margin-top: 0; padding-block: 0 8px; }
-.roomPaper :global(.kicker) { letter-spacing: 0; text-transform: none; font-weight: 500; font-size: 13px; }
+.roomPaper :global(.kicker) { letter-spacing: 0; text-transform: none; font-weight: 600; font-size: 13px; }
 
 
 /* the last paper room hands off to the colophon without stacked gaps.
@@ -1017,15 +1094,15 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   justify-content: center;
   gap: 11px;
   font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  text-transform: none;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--paper-muted, #5A5240);
 }
 .eyebrowMark { height: 22px; width: auto; opacity: 0.92; }
 .altarHead {
   font-family: var(--font-serif-display), serif;
-  font-weight: 500;
+  font-weight: 620;
   font-size: clamp(28px, 3.4vw, 48px);
   line-height: 1.1;
   letter-spacing: -0.025em;
@@ -1048,7 +1125,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .monFigureRow { display: flex; align-items: baseline; gap: 20px; }
 .monFigure {
   font-family: var(--font-serif-display), serif;
-  font-weight: 300;
+  font-weight: 620;
   font-size: clamp(64px, 8vw, 112px);
   line-height: 1;
   letter-spacing: -0.03em;
@@ -1080,9 +1157,9 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .beamLabel {
   display: block;
   font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  text-transform: none;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--paper-muted, #5A5240);
   margin-bottom: 8px;
   text-align: left;
@@ -1133,7 +1210,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   justify-content: space-between;
   margin-top: 7px;
   font-size: 11px;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.04em;
   color: var(--paper-muted, #5A5240);
 }
 .demandLineMini { width: 160px; }
@@ -1160,9 +1237,9 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .colHead {
   padding: 9px 18px 8px;
   font-size: 10.5px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  text-transform: none;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--paper-muted, #5A5240);
   background: var(--pa-05, rgba(28, 23, 18, 0.05));
   border-bottom: 2px dotted var(--pa-25, rgba(28, 23, 18, 0.25));
@@ -1215,9 +1292,9 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   /* the readType badge is an honesty label — "DESCRIPTIVE — NO INDEX"
      wraps rather than truncating its second half away */
   font-size: 10.5px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  text-transform: none;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--paper-muted, #5A5240);
 }
 .tapeInstrument { display: flex; align-items: center; justify-content: center; }
@@ -1225,10 +1302,10 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .tapeInstrument .demandLineMini { width: 100px; }
 .tapeAbstain { font-size: 28px; color: var(--paper-muted, #5A5240); }
 .tapeRight { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; min-width: 0; text-align: right; }
-.tapeFigure { font-size: clamp(15px, 1.4vw, 20px); font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tapeFigure { font-size: clamp(15px, 1.4vw, 20px); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tapeFigure[data-dir='up'] { color: var(--tape-up, #1e7a4d); }
 .tapeFigure[data-dir='down'] { color: var(--tape-down, #a03d2e); }
-.tapeFigureDesc { font-size: clamp(14px, 1.2vw, 17px); font-weight: 500; font-variant-numeric: tabular-nums; }
+.tapeFigureDesc { font-size: clamp(14px, 1.2vw, 17px); font-weight: 600; font-variant-numeric: tabular-nums; }
 .tapeSub { font-size: 12.5px; color: var(--paper-muted, #5A5240); font-variant-numeric: tabular-nums; }
 .tri {
   display: inline-block;
@@ -1381,12 +1458,12 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   gap: 8px;
   margin: clamp(28px, 3.6vw, 46px) 0 clamp(14px, 1.8vw, 20px);
   font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  text-transform: none;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
   color: var(--paper-muted, #5A5240);
 }
-.chapter b { color: var(--tape-mut, #8A7440); font-weight: 500; }
+.chapter b { color: var(--tape-mut, #8A7440); font-weight: 700; }
 /* the chapter's constructed section glyph — sits in the gold accent, quiet */
 .chapterGlyph { flex: none; color: var(--tape-mut, #8A7440); opacity: 0.85; }
 /* the sub-market row's parent-market tag — a quiet leading glyph on the label */
@@ -1439,14 +1516,14 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .rcptHead {
   text-align: center;
   font-size: 13.5px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  text-transform: none;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
 }
 .rcptSub {
   text-align: center;
   font-size: 10px;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.05em;
   color: var(--pa-6, rgba(28, 23, 18, 0.6));
   margin-top: 5px;
 }
@@ -1458,18 +1535,18 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   padding: 3.5px 0;
   font-size: 12px;
   letter-spacing: 0.03em;
-  text-transform: none;
+  text-transform: uppercase;
   font-variant-numeric: tabular-nums;
 }
 .rcptDots { flex: 1; border-bottom: 2px dotted var(--pa-4, rgba(28, 23, 18, 0.4)); transform: translateY(-3px); }
-.rcptUp { color: var(--tape-up, #1e7a4d); font-weight: 500; }
-.rcptDown { color: var(--tape-down, #a03d2e); font-weight: 500; }
-.rcptTotal { font-weight: 500; font-size: 13px; }
+.rcptUp { color: var(--tape-up, #1e7a4d); font-weight: 700; }
+.rcptDown { color: var(--tape-down, #a03d2e); font-weight: 700; }
+.rcptTotal { font-weight: 700; font-size: 13px; }
 .rcptMeta {
   text-align: center;
   font-size: 10px;
-  letter-spacing: 0.01em;
-  text-transform: none;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--pa-55, rgba(28, 23, 18, 0.55));
   margin-top: 4px;
 }
@@ -1487,7 +1564,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .rcptNo {
   text-align: center;
   font-size: 10px;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.25em;
   color: var(--pa-6, rgba(28, 23, 18, 0.6));
 }
 .rcptLink {
@@ -1495,8 +1572,8 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   text-align: center;
   margin-top: 14px;
   font-size: 11.5px;
-  letter-spacing: 0.01em;
-  text-transform: none;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--paper-ink, #1C1712);
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -1512,8 +1589,8 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   pointer-events: none;
 }
 .rcptStamp .seal { width: 92px; }
-.rcptStamp .seal svg { stroke: var(--gold-ink, #8F6B1E); transform: none; }
-.rcptStamp .sealTick { stroke: var(--gold-ink, #8F6B1E); }
+.rcptStamp .seal svg { stroke: var(--tape-down, #a03d2e); transform: none; }
+.rcptStamp .sealTick { stroke: var(--tape-down, #a03d2e); }
 
 @media (max-width: 900px) {
   
@@ -1564,7 +1641,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 /* the monogram under the photograph — visible only when the image dies */
 .ehMonogram {
   font-family: var(--font-serif-display), serif;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 64px;
   color: var(--pa-22, rgba(28, 23, 18, 0.22));
   user-select: none;
@@ -1578,15 +1655,15 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 }
 .ehMaker {
   font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  text-transform: none;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--paper-muted, #5A5240);
 }
 .ehWhen { font-size: 11.5px; color: var(--paper-muted, #5A5240); white-space: nowrap; }
 .ehTitle {
   font-family: var(--font-serif-display), serif;
-  font-weight: 500;
+  font-weight: 600;
   font-size: clamp(18px, 1.8vw, 24px);
   line-height: 1.25;
   letter-spacing: -0.02em;
@@ -1605,7 +1682,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 }
 .ehRatio {
   font-family: var(--font-serif-display), serif;
-  font-weight: 500;
+  font-weight: 620;
   font-size: clamp(42px, 4.2vw, 60px);
   line-height: 0.95;
   letter-spacing: -0.03em;
@@ -1628,7 +1705,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   font-variant-numeric: tabular-nums;
 }
 .ehRow > span:first-child { color: var(--paper-muted, #5A5240); }
-.ehRow > span:last-child { font-weight: 500; }
+.ehRow > span:last-child { font-weight: 600; }
 .ehDots { flex: 1; border-bottom: 2px dotted var(--pa-35, rgba(28, 23, 18, 0.35)); transform: translateY(-3px); }
 .ehConfDots { letter-spacing: 2px; font-weight: 400; color: var(--tape-mut, #8A7440); }
 .ehFine {
@@ -1641,9 +1718,9 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   margin-top: auto;
   padding-top: 12px;
   font-size: 12.5px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  text-transform: none;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--paper-ink, #1C1712);
   text-decoration: underline;
   text-underline-offset: 4px;
@@ -1704,7 +1781,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   gap: 12px;
   margin-bottom: 6px;
 }
-.readPopTitle { font-size: 17px; font-weight: 500; letter-spacing: -0.01em; }
+.readPopTitle { font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
 .readPopClose {
   border: 0;
   background: var(--pa-08, rgba(28, 23, 18, 0.08));
@@ -1804,17 +1881,17 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .hcTick {
   font-family: var(--font-inter), sans-serif;
   font-size: 10px;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.04em;
   fill: var(--tt-muted, #7A8087);
 }
 .hcXLabel {
   font-family: var(--font-inter), sans-serif;
   font-size: 10.5px;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.05em;
   fill: var(--tt-muted, #8a8f98);
 }
 .hcCross { stroke: rgba(232, 234, 237, 0.35); stroke-width: 1; stroke-dasharray: 2 6; }
-.hcLineLabel { font-family: var(--font-inter), sans-serif; font-size: 10.5px; font-weight: 500; letter-spacing: 0.03em; }
+.hcLineLabel { font-family: var(--font-inter), sans-serif; font-size: 10.5px; font-weight: 550; letter-spacing: 0.03em; }
 .hcAnno { font-family: var(--font-inter), sans-serif; font-size: 10.5px; fill: var(--tt-secondary, #A6ABB3); }
 .hcTerminusRing { transform-origin: center; transform-box: fill-box; animation: hcPulse 2.6s ease-out infinite; }
 @keyframes hcPulse {
@@ -1834,7 +1911,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   justify-content: space-between;
   margin: 12px 0 4px;
   font-size: 10.5px;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.05em;
   color: var(--tt-muted, #7A8087);
 }
 .hcReadout {
@@ -1855,7 +1932,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .hcReadout[data-flip='true'] { transform: translateX(calc(-100% - 14px)); }
 .hcReadoutPeriod {
   font-size: 10px;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.06em;
   color: var(--tt-muted, #7A8087);
   margin-bottom: 2px;
 }
@@ -1863,8 +1940,8 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .hcReadoutRow i { width: 6px; height: 6px; border-radius: 50%; flex: none; }
 .hcReadoutName { font-size: 11px; color: var(--tt-secondary, #A6ABB3); flex: 1; }
 .hcReadoutVal { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--color-fg, #E8EAED); }
-.hcReadoutRow[data-anchor='true'] .hcReadoutName { color: var(--color-fg, #E8EAED); font-weight: 500; }
-.hcReadoutRow[data-anchor='true'] .hcReadoutVal { font-weight: 500; }
+.hcReadoutRow[data-anchor='true'] .hcReadoutName { color: var(--color-fg, #E8EAED); font-weight: 550; }
+.hcReadoutRow[data-anchor='true'] .hcReadoutVal { font-weight: 600; }
 /* mobile: chips become a snap-scroll rail */
 .layerChipsScroll {
   display: flex;
@@ -1931,14 +2008,14 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .mtLabelBlock { display: grid; gap: 3px; min-width: 0; }
 .mtLabel {
   font-size: clamp(15px, 1.25vw, 17px);
-  font-weight: 500;
+  font-weight: 550;
   letter-spacing: -0.01em;
   color: var(--tt-fg);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .mtTag {
-  font-size: 10px; font-weight: 500;
-  letter-spacing: 0.01em; text-transform: none;
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--tt-faint);
   /* a kicker is ONE line — wrapped microcaps read scrappy; tight widths
      truncate honestly instead */
@@ -1953,7 +2030,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .mtRight { display: grid; gap: 3px; justify-items: end; justify-self: end; text-align: right; }
 .mtFigure {
   font-size: clamp(15px, 1.35vw, 19px);
-  font-weight: 500;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   color: var(--tt-fg);
@@ -1970,7 +2047,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 /* the scoped single-series spark — trend context, one line, one metric */
 .mtSpark { padding: 16px 2px 4px; display: grid; gap: 6px; }
 .mtSpark svg { width: 100%; height: auto; }
-.mtSparkTag { font-size: 11px; letter-spacing: 0.01em; text-transform: none; color: var(--tt-faint); }
+.mtSparkTag { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tt-faint); }
 
 /* re-ink the reused paper instruments for the dark stage. The components are
    the SAME ones the 02 board renders (SubMarketBoard's CIBeam/DemandLine) —
@@ -2064,10 +2141,10 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
    equal to its grid column, and hairlines that dim down the board as the
    lamp's light falls off. */
 .mtHero .mtRow { min-height: clamp(50px, 6vh, 60px); grid-template-columns: minmax(0, 1.3fr) 116px minmax(0, 1fr); column-gap: 24px; }
-.mtHero .mtLabel { font-size: 16px; line-height: 20px; font-weight: 500; letter-spacing: -0.011em; color: rgba(237, 230, 218, 0.87); }
-.mtHero .mtTag { font-size: 10px; line-height: 12px; font-weight: 500; letter-spacing: 0.01em; }
+.mtHero .mtLabel { font-size: 16px; line-height: 20px; font-weight: 570; letter-spacing: -0.011em; color: rgba(237, 230, 218, 0.87); }
+.mtHero .mtTag { font-size: 10px; line-height: 12px; font-weight: 600; letter-spacing: 0.12em; }
 .mtHero .mtLabelBlock { gap: 4px; }
-.mtHero .mtFigure { font-size: 17px; line-height: 20px; font-weight: 500; color: var(--paper-card, #F2EDE3); }
+.mtHero .mtFigure { font-size: 17px; line-height: 20px; font-weight: 620; color: var(--paper-card, #F2EDE3); }
 .mtHero .mtFigure[data-dir='up'] { color: var(--color-up); }
 .mtHero .mtFigure[data-dir='down'] { color: var(--color-down); }
 .mtHero .mtSub { font-size: 11.5px; line-height: 16px; }
@@ -2083,8 +2160,8 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   text-align: right;
   font-family: var(--font-mono-data), monospace;
   font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   color: var(--tt-faint);
   vertical-align: 1px;
 }
@@ -2155,8 +2232,8 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   font-family: var(--font-mono-data), monospace;
   font-size: 10.5px;
   font-weight: 500;
-  letter-spacing: 0.01em;
-  text-transform: none;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   color: var(--tt-faint);
   white-space: nowrap;
 }
@@ -2211,24 +2288,24 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .mtMon:hover .mtMonMarket { color: var(--tt-fg, #ffffff); }
 .mtMonKicker {
   display: flex; align-items: center; width: 100%;
-  font-size: 10px; font-weight: 500; letter-spacing: 0.01em;
-  text-transform: none; color: var(--tt-faint);
+  font-size: 10px; font-weight: 600; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--tt-faint);
 }
 /* the certificate leader — the same solid hairline the pulse header wears */
 .mtMonLead { flex: 1; margin: 0 10px; border: none; border-top: 1px solid var(--tt-hair); }
 .mtMonHorizon {
   font-style: normal; font-family: var(--font-mono-data), monospace;
-  font-size: 10px; letter-spacing: 0.01em; color: var(--tt-muted);
+  font-size: 10px; letter-spacing: 0.14em; color: var(--tt-muted);
 }
 .mtMonMarket {
   font-family: var(--font-serif-display), serif;
-  font-weight: 500; letter-spacing: -0.025em; line-height: 1;
+  font-weight: 620; letter-spacing: -0.025em; line-height: 1;
   font-size: clamp(22px, 1.9vw, 28px);
   color: var(--tt-fg, #ffffff);
   transition: color 0.15s ease;
 }
 .mtMonFigure {
-  font-size: clamp(30px, 2.8vw, 40px); font-weight: 500;
+  font-size: clamp(30px, 2.8vw, 40px); font-weight: 650;
   letter-spacing: -0.02em; line-height: 1;
   font-variant-numeric: tabular-nums;
   margin-top: 2px;
@@ -2248,7 +2325,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   width: 100%; margin-top: 8px; padding-top: 8px;
   border-top: 1px solid var(--tt-hair);
   font-family: var(--font-inter), sans-serif;
-  font-size: 10px; letter-spacing: 0.01em; text-transform: none;
+  font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--tt-faint); font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -2639,7 +2716,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .mtSide .mtMonMarket { font-size: clamp(24px, 2vw, 31px); }
 .mtSide .mtMonFigure {
   font-size: clamp(46px, 4.2vw, 64px);
-  font-weight: 500;
+  font-weight: 640;
   letter-spacing: -0.035em;
   margin-top: 4px;
 }
@@ -2727,10 +2804,10 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   --tt-panel: #FFFFFF;
   --tt-panel-2: #F5F3F1;
   --tt-fg: #1C1917;
-  --tt-butter: #1C1917;          /* the lamp prints INK (NORTHSTAR §0.3: gold is FIG./folio/seal only) */
+  --tt-butter: #7A5A14;          /* the lamp, module register — gold ink */
   --tt-secondary: #44403B;
   --tt-muted: #6B655D;
-  --tt-faint: #726C63;  /* text-safe on eggshell (5.07:1; #8E877D read 3.46 — axe Oct 3) */
+  --tt-faint: #8E877D;
   --tt-hair: rgba(28, 25, 23, 0.10);
   --tt-hair-2: rgba(28, 25, 23, 0.16);
   --color-up: #0F7C43;
@@ -2738,8 +2815,8 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 }
 
 /* THE CATALOGUE — pen-weight display numerals on paper (light only) */
-:global(html[data-lectr-light]) .pulseValLead { font-weight: 400; }
-:global(html[data-lectr-light]) .mStatVal { font-weight: 400; }
+:global(html[data-lectr-light]) .pulseValLead { font-weight: 430; }
+:global(html[data-lectr-light]) .mStatVal { font-weight: 430; }
 
 /* LAB DISCIPLINE — light: grid rules become solid whisper-hairlines,
    ticks a step quieter (the matplotlib voice; dotted texture is the
@@ -2826,7 +2903,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .engineIntroHead {
   margin: 0;
   font-family: var(--font-inter), system-ui, sans-serif;
-  font-weight: 300;
+  font-weight: 330;
   font-size: clamp(30px, 3.4vw, 46px);
   line-height: 1.08;
   letter-spacing: -0.02em;
@@ -2890,179 +2967,3 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   box-shadow: var(--ring-shadow);
 }
 :global(html[data-lectr-light]) .mRightNow .cmdPillFull:hover { background: #fdfcfc; }
-
-/* ════════════════════════════════════════════════════════════════════
-   THE CATALOGUE (Oct 3 2026) — docs/NORTHSTAR_UI.md Part 0. The call hero
-   leads; the vault is retired (the board prints on eggshell); the bento is
-   a dotted ledger; the content column wears vertical registration rails.
-   ════════════════════════════════════════════════════════════════════ */
-
-/* the registration rails — the column's two hairlines, full page height,
-   set just outside the content so text never rides them */
-.deskShell::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: calc(var(--gutter) - 24px);
-  right: calc(var(--gutter) - 24px);
-  border-inline: 1px solid var(--hairline, rgba(28, 25, 23, 0.1));
-  pointer-events: none;
-  z-index: 0;
-}
-.deskShell > * { position: relative; z-index: 1; }
-/* crop dots sit ON the rails, where the section rules cross them */
-.deskShell > :global(.ns-plate)::before { left: -26.5px; width: 5px; height: 5px; top: -3px; border-radius: 0; background: var(--color-fg); opacity: 0.45; }
-.deskShell > :global(.ns-plate)::after { right: -26.5px; width: 5px; height: 5px; top: -3px; border-radius: 0; background: var(--color-fg); opacity: 0.45; }
-/* the section rules run past the rails to the viewport edge (border-image
-   outset paints beyond the box; .root's overflow-x: clip holds the page) */
-.deskShell > :global(.ns-plate) {
-  border-top: 1px solid transparent;
-  border-image: linear-gradient(var(--hairline, rgba(28, 25, 23, 0.1)), var(--hairline, rgba(28, 25, 23, 0.1))) 1 / 1px 0 0 0 / 0 100vw;
-}
-@media (max-width: 900px) {
-  .deskShell::before { display: none; }
-  .deskShell > :global(.ns-plate)::before,
-  .deskShell > :global(.ns-plate)::after { display: none; }
-}
-
-/* the blank plate while tonight's book loads — the signature, no skeleton */
-.signPlate {
-  position: relative;
-  z-index: 2;
-  min-height: 72vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.signMark {
-  height: 44px;
-  width: auto;
-  opacity: 0.55;
-  clip-path: inset(0 100% 0 0);
-  animation: signWrite 900ms cubic-bezier(0.65, 0, 0.35, 1) 120ms forwards;
-}
-@keyframes signWrite { to { clip-path: inset(0 0 0 0); } }
-@media (prefers-reduced-motion: reduce) { .signMark { animation: none; clip-path: none; } }
-
-/* the index board, now below the fold */
-.indexPlate { padding-top: clamp(20px, 2.6vw, 36px); margin-top: clamp(40px, 5vw, 72px); }
-
-/* the board room on eggshell — no slab, no breakout, no radius */
-:global(html[data-lectr-light]) .root .roomPaper {
-  margin-inline: 0;
-  border-radius: 0;
-  background: transparent;
-  --paper: transparent;
-  --paper-mid: transparent;
-  --paper-deep: transparent;
-  --paper-card: #FFFFFF;
-  --paper-ink: var(--color-fg);
-  --paper-secondary: var(--color-text-secondary);
-  --paper-muted: var(--color-text-muted);
-  --paper-faint: var(--color-text-faint);
-  --paper-line: var(--hairline);
-  --tape-up: var(--color-up);
-  --tape-down: var(--color-down);
-  --tape-mut: var(--color-fg);
-  --pa-05: rgba(28, 25, 23, 0.04);
-  --pa-18: rgba(28, 25, 23, 0.14);
-  --pa-22: rgba(28, 25, 23, 0.22);
-  --pa-25: rgba(28, 25, 23, 0.25);
-}
-:global(html[data-lectr-light]) .root .roomPaper .roomInner { padding-inline: 0; }
-:global(html[data-lectr-light]) .root .roomA { padding-top: clamp(20px, 2.4vw, 32px); }
-/* the tape on eggshell: ruled ledger columns, not filled cards */
-:global(html[data-lectr-light]) .root .tape { padding: 0; max-width: none; }
-:global(html[data-lectr-light]) .root .tapeCol { border: 0; border-top: 1px solid var(--color-fg); border-radius: 0; background: transparent; }
-:global(html[data-lectr-light]) .root .tapeRow,
-:global(html[data-lectr-light]) .root .tapeRow:nth-of-type(even) { background: transparent; border-bottom: 1px dotted var(--color-border-mid); padding-inline: 2px; }
-:global(html[data-lectr-light]) .root .tapeRow:hover { background: rgba(28, 25, 23, 0.025); }
-:global(html[data-lectr-light]) .root .colHead { background: transparent; border-bottom: 1px dotted var(--color-border-mid); padding-inline: 2px; }
-
-/* ── THE DESK LEDGER (the retired bento) ── */
-.deskLedgerSection { padding: clamp(36px, 4.2vw, 64px) 0 clamp(12px, 1.6vw, 22px); margin-top: clamp(32px, 4vw, 56px); }
-.deskLedger { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--color-fg); }
-.deskLedger > li { border-bottom: 1px dotted var(--color-border-mid, rgba(28, 25, 23, 0.22)); }
-.deskRow {
-  display: grid;
-  grid-template-columns: 28px minmax(140px, 220px) minmax(0, 1fr) 40px auto;
-  align-items: baseline;
-  gap: 16px;
-  padding: 18px 2px;
-  color: inherit;
-  text-decoration: none;
-  transition: background 150ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-.deskRow:hover { background: rgba(28, 25, 23, 0.025); }
-.deskRow:focus-visible { outline: 1.5px solid var(--color-fg); outline-offset: 2px; }
-.deskFolio { font-family: var(--font-mono), monospace; font-size: 12px; font-weight: 500; color: var(--gold-ink-text, #7A5A14); }
-.deskK { font-size: 17px; font-weight: 400; letter-spacing: -0.01em; color: var(--color-fg); }
-.deskD { font-size: 14px; line-height: 1.5; color: var(--color-text-muted); }
-.deskLead { align-self: center; border-bottom: 1px dotted var(--color-border-mid, rgba(28, 25, 23, 0.22)); transform: translateY(4px); }
-.deskV { font-family: var(--font-mono), monospace; font-size: 13px; font-weight: 500; color: var(--color-fg); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-@media (max-width: 760px) {
-  .deskRow { grid-template-columns: 22px minmax(0, 1fr) auto; row-gap: 4px; padding: 14px 2px; }
-  .deskD { grid-column: 2 / -1; grid-row: 2; }
-  .deskLead { display: none; }
-  .deskV { white-space: normal; }
-}
-
-/* the tape row's open-read control — a stretched sibling button under the
-   dossier link (no nested interactive content) */
-.tapeOpen {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
-.tapeOpen:focus-visible { outline: 1.5px solid var(--color-fg); outline-offset: -2px; }
-.tapeLabelBlock { position: relative; z-index: 1; justify-self: start; }
-.tapeInstrument, .tapeRight { pointer-events: none; }
-
-/* the right-now rail: a ruled ledger on the page, not a cream well (§0.7) */
-:global(html[data-lectr-light]) .root .mtSide .heroRail,
-:global(html[data-lectr-light]) .root .mRightNow {
-  background: transparent;
-  border-radius: 0;
-  border-top: 1px solid var(--color-fg);
-  padding: 14px 0 0;
-}
-:global(html[data-lectr-light]) .root .mtSide { justify-content: flex-start; }
-/* the board room sits close under its own head */
-:global(html[data-lectr-light]) .root .roomPaper { margin-block: clamp(8px, 1.2vw, 16px) clamp(32px, 4vw, 56px); }
-:global(html[data-lectr-light]) .root .engineIntro + .roomPaper { margin-top: 0; }
-
-/* the monument on eggshell — a ruled certificate, not a well */
-:global(html[data-lectr-light]) .root .mtMon {
-  background: transparent;
-  border: 0;
-  border-top: 1px solid var(--color-fg);
-  border-radius: 0;
-  box-shadow: none;
-  padding-inline: 0;
-}
-:global(html[data-lectr-light]) .root .mtMon::before,
-:global(html[data-lectr-light]) .root .mtMon::after { display: none; }
-.mtMonKicker { font-size: 11.5px; }
-
-/* phone "Right now": label over figure, figures at 32px — stacked so a long
-   label can never squeeze the numeral into a clip (Oct 3) */
-.mRightNow .pulseBlock[data-lead='true'],
-.mRightNow .pulseGrid > [data-below='true'] {
-  flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 4px; min-width: 0;
-}
-.mRightNow .pulseBlock[data-lead='true'] .pulseLabel,
-.mRightNow .pulseGrid > [data-below='true'] .pulseLabel { font-size: 12.5px; }
-.mRightNow .pulseValLead,
-.mRightNow .pulseGrid > [data-below='true'] .pulseTagVal,
-.mRightNow .pulseGrid > [data-below='true'] .pulseVal { font-size: 32px; font-weight: 300; line-height: 1.1; letter-spacing: -0.02em; white-space: nowrap; }
-.mRightNow .pulseTag { padding: 0; background: none; border: 0; }
-@media (max-width: 900px) {
-  .nsMastHead { font-size: clamp(28px, 7.6vw, 34px) !important; }
-}

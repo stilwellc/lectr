@@ -513,23 +513,24 @@ function TapeRow({ r, active, onPick }: { r: SubMarketRead; active: boolean; onP
   const isIndex = r.readType === 'index' && r.index;
   const dir = isIndex ? (r.index!.changePct >= 0 ? 'up' : 'down') : undefined;
   return (
-    <div className={styles.tapeRow} data-scoped={active || undefined}>
+    <div
+      className={styles.tapeRow}
+      data-scoped={active || undefined}
+      role="button"
+      tabIndex={0}
+      aria-pressed={active}
+      onClick={onPick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(); } }}
+    >
       {active && <m.span layoutId="brassRule" className={styles.brassRule} transition={{ duration: 0.25, ease: EASE }} />}
-      {/* A11Y (Oct 3): the row used to be a div role=button WRAPPING the
-          dossier link — nested interactive controls. Now two siblings: a
-          stretched real <button> opens the read card (the whole row stays a
-          pointer target), and the label link rides above it to the dossier. */}
-      <button
-        type="button"
-        className={styles.tapeOpen}
-        aria-pressed={active}
-        aria-label={`${r.label} — open the full read`}
-        onClick={onPick}
-      />
+      {/* #3 · the label is a direct link to its dossier — one fewer tap than
+          opening the read card first; stopPropagation so it navigates instead
+          of toggling the card */}
       <Link
         href={rowHref(r)}
         className={styles.tapeLabelBlock}
         style={{ textDecoration: 'none', color: 'inherit' }}
+        onClick={(e) => e.stopPropagation()}
       >
         <span className={styles.tapeLabel}>
           <span className={styles.tapeGlyph} aria-hidden>

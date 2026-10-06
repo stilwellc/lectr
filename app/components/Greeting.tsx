@@ -1,67 +1,45 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 /**
- * THE GREETING — once per session, on the first landing, the signature
- * writes `lectr` on a blank eggshell plate, holds while tonight's book
- * loads, then fades to the call (docs/NORTHSTAR_UI.md §0.10). The plate is
- * opaque eggshell — no skeleton blocks ever show through it.
- *
- *   sign      ~900ms pen stroke (clip-path wipe of the script mark)
- *   hold      until the page reports `ready` (min 1.1s total, max 2.6s)
- *   fade      400ms on the house curve, revealing the call underneath
- *
- * Skipped entirely for prefers-reduced-motion, automation
- * (navigator.webdriver — the shot rig must see the fold), ?nogreet=1, and
- * any later home mount in the same session (sessionStorage 'lectr-greeted').
+ * THE GREETING — once per session, on the first landing, the sign writes
+ * itself over the closed floor before the terminal appears. Same gesture as
+ * the footer's write-on, promoted to a welcome: ~1.4s of pen, a breath, then
+ * the floor lifts away. Back-navigation and internal moves never replay it
+ * (sessionStorage 'lectr-greeted'); reduced-motion skips it entirely, and
+ * so do automation (navigator.webdriver — the shot rig must see the fold)
+ * and an explicit ?nogreet=1. The whole gesture is under 900ms.
  */
-const MIN_MS = 1100;
-const MAX_MS = 2600;
-const FADE_MS = 400;
-
-export default function Greeting({ ready = true }: { ready?: boolean }) {
-  // effect-mounted (never in the server render) so hydration stays clean
+export default function Greeting() {
+  // effect-mounted (never in the server render) so hydration stays clean —
+  // the skeleton paints for a frame, then the floor drops over it.
   const [show, setShow] = useState(false);
   const [leaving, setLeaving] = useState(false);
-  const armedAt = useRef<number | null>(null);
 
   useEffect(() => {
     try {
       if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-      if (navigator.webdriver && new URLSearchParams(window.location.search).get('greet') !== '1') return;
+      if (navigator.webdriver) return;
       if (new URLSearchParams(window.location.search).get('nogreet') === '1') return;
       if (sessionStorage.getItem('lectr-greeted')) return;
     } catch { return; }
-    armedAt.current = performance.now();
     setShow(true);
-    // stamp once the signature is down — a fast navigation after that point
-    // must not replay the plate (audit-lifecycle #7)
-    const stamp = setTimeout(() => {
+    // stamp at the HOLD point (write-on visually complete): stamping only at
+    // full completion let a fast navigation replay the floor on the next
+    // home mount (audit-lifecycle #7); still after-arm, so StrictMode's
+    // double-mount cannot strand the floor
+    const hold = setTimeout(() => {
+      setLeaving(true);
       try { sessionStorage.setItem('lectr-greeted', '1'); } catch { /* private mode */ }
-    }, 900);
-    // the ceiling: a slow network never holds the reader behind the plate
-    const cap = setTimeout(() => setLeaving(true), MAX_MS);
-    return () => {
-      clearTimeout(stamp); clearTimeout(cap);
-      armedAt.current = null;
-      setShow(false); setLeaving(false);
-    };
+    }, 620);
+    // greeted = the write-on COMPLETED — stamping at completion (not on arm)
+    // keeps StrictMode's dev double-mount from stranding the floor at full
+    // opacity forever (run 1 stamped + armed, cleanup killed the timers,
+    // run 2 saw the stamp and bailed with show still true)
+    const gone = setTimeout(() => setShow(false), 880);
+    return () => { clearTimeout(hold); clearTimeout(gone); setShow(false); setLeaving(false); };
   }, []);
-
-  // ready → leave once the minimum hold has elapsed
-  useEffect(() => {
-    if (!show || leaving || !ready || armedAt.current == null) return;
-    const wait = Math.max(0, MIN_MS - (performance.now() - armedAt.current));
-    const t = setTimeout(() => setLeaving(true), wait);
-    return () => clearTimeout(t);
-  }, [show, leaving, ready]);
-
-  useEffect(() => {
-    if (!leaving) return;
-    const t = setTimeout(() => setShow(false), FADE_MS + 40);
-    return () => clearTimeout(t);
-  }, [leaving]);
 
   if (!show) return null;
 

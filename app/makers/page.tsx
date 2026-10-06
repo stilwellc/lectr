@@ -2,11 +2,13 @@
 
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { ARTISTS, MARKETS, ROSTER, marketArtists, rosterNoun, type Market } from '../constants';
+import { ARTISTS, MARKETS, ROSTER, marketArtists, marketOf, rosterNoun, type Market } from '../constants';
 import { useMarket } from '../lib/market';
+import { classifyForm, formsForMarket } from '../lib/comps';
+import { isMisattributed } from '../lib/attribution';
 import MarketSwitch from '../components/MarketSwitch';
 import MarketIcon from '../components/MarketIcon';
-import { useRayData } from '../hooks/useRayData';
+import { useFullLotsOnDemand } from '../hooks/useRayData';
 import { loadPageStats, type PageStats } from '../lib/page-data';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { useSavedSearches } from '../lib/alerts';
@@ -20,7 +22,7 @@ import { verifiedMovers, type VerifiedMover } from '../preview/terminal/verified
 import { FigureCell, FigGate } from '../components/cells';
 import CountUp from '../components/CountUp';
 import CloseClock from '../components/CloseClock';
-import Masthead from '../components/Masthead';
+import Masthead, { Accent } from '../components/Masthead';
 import { Colophon } from '../components/Terminal';
 import Flick from '../components/Flick';
 import type { AuctionLot, MarketStats } from '../types';
@@ -511,7 +513,7 @@ const MakerRowItem = React.memo(function MakerRowItem({
                       <span className="mkx-lot-est">{formatEstimate(l)}</span>
                       <span className="mkx-lot-close">
                         {closeSoon
-                          ? <span style={{ color: 'var(--color-fg)', fontWeight: 500 }}><CloseClock iso={l.saleDateTime!} windowHours={24} /></span>
+                          ? <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}><CloseClock iso={l.saleDateTime!} windowHours={24} /></span>
                           : <>closes {formatDate(l.saleDate)}</>}
                       </span>
                     </span>
@@ -556,7 +558,8 @@ export default function MakersPage() {
   // a figure that could mislead — so the ~35MB stream now waits for a reader
   // who is actually looking: opening a dossier, or the first scroll/keypress/
   // pointer on the directory. A bounce pays nothing.
-  const { allLots, statsByArtist, lastCrawl, loading, fromCache, market: marketData, demand } = useRayData();
+  const { allLots, statsByArtist, lastCrawl, loading, fromCache, market: marketData, demand, requestFullLots } =
+    useFullLotsOnDemand(false);
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const activeLabel = activeKey === 'all' ? 'full' : activeKey === 'tcg' ? 'TCG' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
@@ -646,13 +649,33 @@ export default function MakersPage() {
     loadPageStats().then(p => { if (on) setPageStats(p); });
     return () => { on = false; };
   }, []);
-  // faces are decorative: a data build without page-stats shows the
-  // monogram plates (the corpus fallback that used to fill them is retired)
+  const facesFallback = pageStats === null;
+  const askCorpus = useCallback(() => { if (facesFallback) requestFullLots(); }, [facesFallback, requestFullLots]);
   const heroBySlug = useMemo(() => {
     const best = new Map<string, { url: string; val: number }>();
-    for (const [slug, f] of Object.entries(pageStats?.makerFaces || {})) best.set(slug, f);
+    if (pageStats?.makerFaces) {
+      for (const [slug, f] of Object.entries(pageStats.makerFaces)) best.set(slug, f);
+      return best;
+    }
+    for (const l of allLots) {
+      if (!l.imageUrl) continue;
+      // the shared attribution guard drops cars in art pools + name-collision
+      // lots (the same guard the pipeline scrubs the corpus with — once the
+      // rebuild lands these are gone from the corpus, but this keeps the face
+      // clean on the current shards too). Plus a form gate so the photo is a
+      // real in-market work, never an uncategorized oddity.
+      if (isMisattributed(l.artist, l.title || '')) continue;
+      const forms = formsForMarket(marketOf(l.artist));
+      if (forms) {
+        const f = classifyForm(l);
+        if (f === 'unknown' || !forms.has(f)) continue;
+      }
+      const val = l.priceUsd || l.currentBid || l.estimateHigh || l.estimateLow || 0;
+      const cur = best.get(l.artist);
+      if (!cur || val > cur.val) best.set(l.artist, { url: l.imageUrl, val });
+    }
     return best;
-  }, [pageStats]);
+  }, [allLots, pageStats]);
 
   // ── THE LIVE BOOK + THE ENGINE'S READ, one pass over the eager set ──
   const liveBySlug = useMemo(() => {
@@ -790,8 +813,9 @@ export default function MakersPage() {
   // opening a dossier is the explicit ask for the maker's own photograph —
   // the corpus is the only place that image comes from
   const onToggleOpen = useCallback((slug: string) => {
+    askCorpus();
     setOpen(o => (o === slug ? null : slug));
-  }, []);
+  }, [askCorpus]);
   const onToggleCompare = useCallback((slug: string) => {
     setCompare(c => c.includes(slug) ? c.filter(s => s !== slug) : c.length >= 4 ? c : [...c, slug]);
   }, []);
@@ -801,6 +825,20 @@ export default function MakersPage() {
     if (existing) void removeSearch(existing.id);
     else void saveSearch(`Following ${label}`, { player: slug, playerName: label });
   }, [user, openLogin, searches, removeSearch, saveSearch]);
+
+  /* PRE-WARM on the first sign of engagement — one shot, passive listeners,
+     removed the moment it fires. First paint stays free of the corpus; a
+     reader who scrolls or reaches for the keyboard gets the faces streaming
+     before they open anything. (Deep-linked ?open= asks for it outright.) */
+  useEffect(() => {
+    if (!facesFallback) return;             // faces ship in page-stats — no corpus
+    if (deepLinked.current) { requestFullLots(); return; }
+    const ev = ['scroll', 'pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
+    const fire = () => { off(); requestFullLots(); };
+    const off = () => ev.forEach(e => window.removeEventListener(e, fire));
+    ev.forEach(e => window.addEventListener(e, fire, { passive: true, once: true }));
+    return off;
+  }, [requestFullLots, facesFallback]);
 
   // deep link ?open= — land on the dossier once the ledger has painted.
   // `open` is a dep too: on a WARM cache loading is already false at mount,
@@ -940,14 +978,13 @@ export default function MakersPage() {
                 // artists — "54 tracked names" counted categories as names
                 ? `${ROSTER.makers} makers · ${ROSTER.categories} categories`
                 : <CountUp to={rosterCount} format={n => `${Math.round(n)} ${noun}`} duration={900} animate={!fromCache} />}
-              title={activeKey === 'all'
-                ? <>{ROSTER.makers} makers on one ledger{verifiedCount > 0 ? <>, {verifiedCount} with a verified price index</> : null}.</>
-                : <>{rosterCount} {noun} on one ledger{verifiedCount > 0 ? <>, {verifiedCount} with a verified price index</> : null}.</>}
+              title={<>Every maker, one <Accent>ledger</Accent>.</>}
               sub={
                 <>
-                  <b style={{ color: 'var(--color-fg)', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{totalLive.toLocaleString()} live lots</b> on the block
-                  {totalFlags > 0 && <> · <b style={{ color: 'var(--color-fg)', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{totalFlags}</b> flagged by the engine</>}
-                                  </>
+                  <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{totalLive.toLocaleString()} live lots</b> on the block
+                  {totalFlags > 0 && <> · <b style={{ color: 'var(--color-fg)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{totalFlags}</b> flagged by the engine</>}
+                  {verifiedCount > 0 && <> · {verifiedCount} CI-verified indexes</>}
+                </>
               }
             />
           </section>
@@ -1006,7 +1043,7 @@ export default function MakersPage() {
                   { k: 'The roster', stat: activeKey === 'all' ? ROSTER.makers.toLocaleString() : rosterCount.toLocaleString(), note: activeKey === 'all' ? `makers · ${ROSTER.categories} categories` : noun, body: `Every name lectr tracks on the ${activeLabel} book — sold history, live lots and the engine's flags in one ledger.` },
                   { k: 'Verified indexes', stat: verifiedCount.toLocaleString(), note: 'CI-verified indexes', body: 'Repeat-sales reads whose 95% interval resolves the sign — the only price moves the engine will stand behind.' },
                   { k: 'On the block', stat: totalFlags.toLocaleString(), note: 'flagged by the engine', body: totalFlags > 0
-                    ? `${totalLive.toLocaleString()} live ${totalLive === 1 ? 'lot' : 'lots'} on the book tonight — ${totalFlags.toLocaleString()} the record reads above ${totalFlags === 1 ? 'its' : 'their'} estimate.`
+                    ? `${totalLive.toLocaleString()} live ${totalLive === 1 ? 'lot' : 'lots'} on the book tonight — ${totalFlags.toLocaleString()} priced under ${totalFlags === 1 ? 'its' : 'their'} comparables.`
                     : totalLive > 0 ? `${totalLive.toLocaleString()} live ${totalLive === 1 ? 'lot' : 'lots'} on the book tonight — none flagged under its comparables.` : 'The book is quiet — the crawl refreshes daily.' },
                 ];
                 return facts.map(f => {
@@ -1175,12 +1212,12 @@ const MAKERS_CSS = `
 .mk-cock:focus-visible{outline:1.5px solid color-mix(in srgb,var(--color-fg) 70%,transparent);outline-offset:-1.5px}
 .mk-cock-head{display:flex;align-items:center;gap:7px;min-width:0}
 .mk-cock-icon{display:inline-flex;color:var(--color-text-muted);flex:none}
-.mk-cock-name{font-size:11px;font-weight: 500;letter-spacing:0.02em;color:var(--color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mk-cock-v{font-family:var(--font-mono),monospace;font-size:21px;font-weight: 500;letter-spacing:-0.01em;font-variant-numeric:tabular-nums;color:var(--color-fg);line-height:1.15;display:flex;align-items:baseline;flex-wrap:wrap;column-gap:5px}
+.mk-cock-name{font-size:11px;font-weight:550;letter-spacing:0.02em;color:var(--color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mk-cock-v{font-family:var(--font-mono),monospace;font-size:21px;font-weight:500;letter-spacing:-0.01em;font-variant-numeric:tabular-nums;color:var(--color-fg);line-height:1.15;display:flex;align-items:baseline;flex-wrap:wrap;column-gap:5px}
 .mk-cock-v i{font-style:normal;font-size:10.5px;color:var(--color-text-faint);letter-spacing:0.06em}
-.mk-cock-v em{font-style:normal;font-family:var(--font-mono),monospace;font-size:10.5px;font-weight: 500;color:var(--color-fg);letter-spacing:0.02em}
+.mk-cock-v em{font-style:normal;font-family:var(--font-mono),monospace;font-size:10.5px;font-weight:700;color:var(--color-fg);letter-spacing:0.02em}
 .mk-cock-s{font-size:10.5px;color:var(--color-text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
-.mk-cock-s b{font-weight: 500;font-family:var(--font-mono),monospace}
+.mk-cock-s b{font-weight:700;font-family:var(--font-mono),monospace}
 .mk-cock-s b[data-dir="up"]{color:var(--color-up)}
 .mk-cock-s b[data-dir="down"]{color:var(--color-down-text)}
 @media(max-width:700px){.mk-cockpit{grid-template-columns:repeat(2,1fr)}.mk-cock{border-bottom:1px solid var(--color-hair,rgba(255,255,255,0.06))}}
@@ -1196,10 +1233,10 @@ const MAKERS_CSS = `
 .mk-fact{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 24px;align-items:baseline;padding:14px 2px;border-bottom:1px solid var(--color-border);color:inherit;text-decoration:none}
 a.mk-fact:hover{background:var(--color-hover-item)}
 a.mk-fact:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
-.mk-fact-k{font-size:14px;font-weight: 500;color:var(--color-fg);min-width:0}
-.mk-fact-body{display:block;font-size:12.5px;font-weight: 400;color:var(--color-text-muted);line-height:1.5;margin-top:3px;max-width:68ch}
+.mk-fact-k{font-size:14px;font-weight:500;color:var(--color-fg);min-width:0}
+.mk-fact-body{display:block;font-size:12.5px;font-weight:400;color:var(--color-text-muted);line-height:1.5;margin-top:3px;max-width:68ch}
 .mk-fact-v{text-align:right;white-space:nowrap}
-.mk-fact-v b{display:block;font-family:var(--font-mono),monospace;font-size:26px;font-weight: 500;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;color:var(--color-fg);line-height:1.1}
+.mk-fact-v b{display:block;font-family:var(--font-mono),monospace;font-size:26px;font-weight:500;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;color:var(--color-fg);line-height:1.1}
 .mk-fact-v b[data-dir="up"]{color:var(--color-up)}
 .mk-fact-v b[data-dir="down"]{color:var(--color-down-text)}
 .mk-fact-v span{display:block;font-size:11.5px;color:var(--color-text-faint);margin-top:2px}
@@ -1227,7 +1264,7 @@ a.mk-fact:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
 .mk-display{position:relative}
 .mk-display-veil{position:fixed;inset:0;z-index:39;background:none;border:none;cursor:default}
 .mk-display-pop{position:absolute;top:calc(100% + 8px);right:0;z-index:40;min-width:180px;background:var(--surface-tip, #101214);border:1px solid var(--color-border-mid);border-radius:12px;padding:8px;display:grid;gap:1px}
-.mk-display-head{font-size:10px;letter-spacing:0;padding:4px 8px 7px}
+.mk-display-head{font-size:10px;letter-spacing:0.14em;padding:4px 8px 7px}
 .mk-display-item{display:flex;align-items:center;gap:8px;padding:6px 8px;background:none;border:none;border-radius:7px;font-family:var(--font-sans),sans-serif;font-size:12px;color:var(--color-text-muted);cursor:pointer;text-align:left;transition:background var(--duration-fast) var(--ease-signature),color var(--duration-fast) var(--ease-signature)}
 .mk-display-item:hover{background:var(--color-hover-item);color:var(--color-fg)}
 .mk-display-item[data-on]{color:var(--color-fg)}
@@ -1239,18 +1276,18 @@ a.mk-fact:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
 .mk-cols{display:none}
 @media(min-width:940px){
   .mk-cols{display:grid;gap:14px;align-items:baseline;padding:12px 14px 8px}
-  .mk-cols .kicker{font-size:10px;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mk-cols .kicker{font-size:10px;letter-spacing:0.14em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 }
 
 /* ── group heads — rooms as framed plates, authority through lightness ── */
 .mk-group{margin-bottom:22px;scroll-margin-top:150px}
 .mk-group-head{position:sticky;top:103px;z-index:20;display:flex;align-items:center;gap:10px;padding:12px 0 9px;background:color-mix(in srgb,var(--color-bg, #08090a) 90%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--color-border)}
 .mk-group-mark{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;flex:none;border:1px solid var(--color-border);border-radius:8px;color:var(--color-text-secondary);background:var(--color-bg-elevated)}
-.mk-group-name{margin:0;font-size:20px;font-weight: 400;letter-spacing:-0.02em;white-space:nowrap}
-.mk-group-count{font-family:var(--font-mono),monospace;font-size:10.5px;font-weight: 500;font-variant-numeric:tabular-nums;color:var(--color-text-secondary);border:1px solid var(--color-border);border-radius:100px;padding:1px 8px;flex:none}
+.mk-group-name{margin:0;font-size:20px;font-weight:350;letter-spacing:-0.02em;white-space:nowrap}
+.mk-group-count{font-family:var(--font-mono),monospace;font-size:10.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--color-text-secondary);border:1px solid var(--color-border);border-radius:100px;padding:1px 8px;flex:none}
 .mk-group-rule{flex:1;border-top:1px solid var(--color-border)}
 .mk-group-read{font-size:11.5px;color:var(--color-text-faint);white-space:nowrap;font-variant-numeric:tabular-nums}
-.mk-group-read b{font-weight: 500;font-family:var(--font-mono),monospace}
+.mk-group-read b{font-weight:700;font-family:var(--font-mono),monospace}
 .mk-group-read b[data-dir="up"]{color:var(--color-up)}
 .mk-group-read b[data-dir="down"]{color:var(--color-down-text)}
 @media(max-width:939px){
@@ -1271,17 +1308,17 @@ a.mk-fact:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
 .mk-row:hover{background:var(--color-hover-item)}
 .mk-row:focus-visible{outline:1.5px solid color-mix(in srgb,var(--color-fg) 70%,transparent);outline-offset:-1.5px;background:var(--color-hover-item)}
 .mk-mono{position:relative;width:30px;height:30px;flex:none;border-radius:8px;overflow:hidden;background:var(--color-bg-elevated);border:1px solid var(--color-hair,rgba(255,255,255,0.06))}
-.mk-mono-letter{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight: 500;color:var(--color-text-secondary)}
+.mk-mono-letter{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:650;color:var(--color-text-secondary)}
 .mk-mono img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
 .mk-id{min-width:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-.mk-name{font-size:13.5px;font-weight: 500;color:var(--color-fg);white-space:nowrap}
+.mk-name{font-size:13.5px;font-weight:550;color:var(--color-fg);white-space:nowrap}
 .mk-tags{display:inline-flex;gap:5px;flex-wrap:wrap}
 .mk-tag{display:inline-block;padding:1px 7px;font-family:var(--font-mono),monospace;font-size:10px;letter-spacing:0.05em;color:var(--color-text-muted);border:1px solid var(--color-border);border-radius:100px;white-space:nowrap}
 .mk-tag-verified{color:var(--color-text-secondary);border-color:var(--color-border-mid)}
 .mk-cell{display:none}
 .mk-go{display:none}
 .mk-mob{text-align:right;flex:none}
-.mk-mob-median{display:block;font-family:var(--font-mono),monospace;font-size:12.5px;font-weight: 500;font-variant-numeric:tabular-nums;color:var(--color-fg)}
+.mk-mob-median{display:block;font-family:var(--font-mono),monospace;font-size:12.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--color-fg)}
 .mk-mob-sub{display:block;font-family:var(--font-mono),monospace;font-size:10.5px;color:var(--color-text-faint);font-variant-numeric:tabular-nums}
 .mk-mob-sub[data-dir="up"]{color:var(--color-up)}
 .mk-mob-sub[data-dir="down"]{color:var(--color-down-text)}
@@ -1291,12 +1328,12 @@ a.mk-fact:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
   .mk-mob{display:none}
   .mk-cell{display:block;font-family:var(--font-mono),monospace;font-size:12.5px;letter-spacing:-0.01em;font-variant-numeric:tabular-nums;color:var(--color-fg);text-align:right;white-space:nowrap;overflow:hidden}
   .mk-faint{color:var(--color-text-faint)}
-  .mk-cell[data-live]{font-weight: 500}
+  .mk-cell[data-live]{font-weight:700}
   .mk-flags{color:var(--color-text-faint)}
-  .mk-flags[data-hot]{color:var(--color-fg);font-weight: 500}
+  .mk-flags[data-hot]{color:var(--color-fg);font-weight:700}
   .mk-delta{color:var(--color-text-faint)}
-  .mk-delta[data-dir="up"]{color:var(--color-up);font-weight: 500}
-  .mk-delta[data-dir="down"]{color:var(--color-down-text);font-weight: 500}
+  .mk-delta[data-dir="up"]{color:var(--color-up);font-weight:700}
+  .mk-delta[data-dir="down"]{color:var(--color-down-text);font-weight:700}
   .mk-spark{display:flex;justify-content:flex-end;align-items:center}
   .mk-sparkgap{display:inline-block;width:90px}
   .mk-go{display:flex;justify-content:flex-end;color:var(--color-text-faint);transition:transform var(--duration-fast) var(--ease-signature)}
@@ -1321,10 +1358,10 @@ a.mk-fact:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
 .mkx-hero{position:relative;margin:14px 16px 0;height:150px;border-radius:12px;overflow:hidden;background:var(--color-bg-elevated)}
 .mkx-hero img{width:100%;height:100%;object-fit:cover;display:block}
 .mkx-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 45%,color-mix(in srgb,var(--color-bg, #08090a) 78%,transparent) 100%)}
-.mkx-hero-cap{position:absolute;left:14px;bottom:11px;z-index:1;font-size:12px;font-weight: 500;letter-spacing:0.01em;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,0.6)}
+.mkx-hero-cap{position:absolute;left:14px;bottom:11px;z-index:1;font-size:12px;font-weight:600;letter-spacing:0.01em;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,0.6)}
 @media(min-width:940px){.mkx-hero{height:190px}}
 .mkx-chartwrap{padding:14px 16px 0}
-.mkx-chart-cap{font-size:10px;letter-spacing:0;margin-bottom:8px}
+.mkx-chart-cap{font-size:10px;letter-spacing:0.14em;margin-bottom:8px}
 .mkx-chart{width:100%;height:150px;padding:4px 10px 18px 46px;box-sizing:border-box}
 .mkx-plot{position:relative;width:100%;height:100%}
 .mkx-plot svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible}
@@ -1336,9 +1373,9 @@ a.mk-fact:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
 .mkx-none{margin:14px 16px 0}
 .mkx-none .ns-well-body{font-size:12.5px;color:var(--color-text-muted)}
 .mkx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px 26px;padding:14px 16px 0}
-.mkx-grid .kicker{font-size:10px;letter-spacing:0}
+.mkx-grid .kicker{font-size:10px;letter-spacing:0.14em}
 .mkx-grid p{margin:4px 0 0;font-size:12px;color:var(--color-text-muted);line-height:1.55}
-.mkx-grid p b{color:var(--color-fg);font-weight: 500;font-variant-numeric:tabular-nums}
+.mkx-grid p b{color:var(--color-fg);font-weight:600;font-variant-numeric:tabular-nums}
 .mkx-houses{margin-top:6px;display:grid;gap:4px}
 .mkx-house{display:grid;grid-template-columns:minmax(64px,96px) minmax(0,1fr) 52px;gap:8px;align-items:center}
 .mkx-house-name{font-size:11px;color:var(--color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1346,7 +1383,7 @@ a.mk-fact:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
 .mkx-house-track>span{display:block;height:100%;border-radius:2px;background:var(--lw-4, rgba(255, 255, 255, 0.4))}
 .mkx-house-n{font-family:var(--font-mono),monospace;font-size:10.5px;color:var(--color-text-faint);text-align:right;font-variant-numeric:tabular-nums}
 .mkx-verified{margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.mkx-verified b{font-family:var(--font-mono),monospace;font-size:14px;font-weight: 500;font-variant-numeric:tabular-nums}
+.mkx-verified b{font-family:var(--font-mono),monospace;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
 .mkx-verified b[data-dir="up"]{color:var(--color-up)}
 .mkx-verified b[data-dir="down"]{color:var(--color-down-text)}
 .mkx-ci{width:110px;height:16px;flex:none}
@@ -1355,20 +1392,20 @@ a.mk-fact:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
 
 /* ── the live book inside the dossier ── */
 .mkx-live{margin:14px 16px 0;border:1px solid var(--color-hair,rgba(255,255,255,0.07));border-radius:12px;overflow:clip}
-.mkx-live-head{font-size:10px;letter-spacing:0;padding:9px 12px 8px;border-bottom:1px solid var(--color-hair,rgba(255,255,255,0.06))}
-.mkx-live-flagn{color:var(--color-fg);font-weight: 500;letter-spacing:0.06em}
+.mkx-live-head{font-size:10px;letter-spacing:0.14em;padding:9px 12px 8px;border-bottom:1px solid var(--color-hair,rgba(255,255,255,0.06))}
+.mkx-live-flagn{color:var(--color-fg);font-weight:700;letter-spacing:0.06em}
 .mkx-lot{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 12px;color:inherit;text-decoration:none;border-bottom:1px solid var(--color-hair,rgba(255,255,255,0.05));transition:background var(--duration-fast) var(--ease-signature)}
 .mkx-lot:last-of-type{border-bottom:none}
 .mkx-lot:hover{background:var(--color-hover-item)}
 .mkx-lot-thumb{position:relative;width:44px;height:34px;border-radius:6px;overflow:hidden;background:var(--color-bg-elevated);display:flex;align-items:center;justify-content:center;flex:none}
-.mkx-lot-letter{font-size:14px;font-weight: 500;color:var(--color-text-faint)}
+.mkx-lot-letter{font-size:14px;font-weight:650;color:var(--color-text-faint)}
 .mkx-lot-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .mkx-lot-main{min-width:0}
-.mkx-lot-title{display:block;font-size:12px;font-weight: 500;color:var(--color-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mkx-lot-title{display:block;font-size:12px;font-weight:550;color:var(--color-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mkx-lot-sub{display:block;font-size:10.5px;color:var(--color-text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mkx-lot-flag{color:var(--color-fg);font-weight: 500}
+.mkx-lot-flag{color:var(--color-fg);font-weight:600}
 .mkx-lot-cells{text-align:right;flex:none}
-.mkx-lot-est{display:block;font-family:var(--font-mono),monospace;font-size:11.5px;font-weight: 500;font-variant-numeric:tabular-nums;color:var(--color-fg)}
+.mkx-lot-est{display:block;font-family:var(--font-mono),monospace;font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--color-fg)}
 .mkx-lot-close{display:block;font-family:var(--font-mono),monospace;font-size:10px;color:var(--color-text-faint);font-variant-numeric:tabular-nums}
 .mkx-live-more{display:flex;align-items:center;justify-content:center;padding:8px 12px;font-family:var(--font-mono),monospace;font-size:10.5px;letter-spacing:0.06em;color:var(--color-text-muted);text-decoration:none;border-top:1px solid var(--color-hair,rgba(255,255,255,0.05))}
 .mkx-live-more:hover{color:var(--color-fg)}
@@ -1376,12 +1413,12 @@ a.mk-fact:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
 /* ── THE COMPARE TRAY ── */
 .mkc{position:fixed;left:0;right:0;bottom:0;z-index:35;background:color-mix(in srgb,var(--surface-mix, #0b0c0e) 94%,transparent);backdrop-filter:blur(18px);border-top:1px solid var(--color-border-mid)}
 .mkc-bar{display:flex;align-items:center;gap:8px;padding-top:9px;padding-bottom:9px;flex-wrap:wrap}
-.mkc-title{font-family:var(--font-mono),monospace;font-size:10.5px;letter-spacing: 0;color:var(--color-text-muted)}
-.mkc-chip{display:inline-flex;align-items:center;gap:7px;padding:3px 6px 3px 9px;font-size:12px;font-weight: 500;color:var(--color-fg);border:1px solid var(--color-border);border-radius:100px}
+.mkc-title{font-family:var(--font-mono),monospace;font-size:10.5px;letter-spacing:0.14em;text-transform:uppercase;color:var(--color-text-muted)}
+.mkc-chip{display:inline-flex;align-items:center;gap:7px;padding:3px 6px 3px 9px;font-size:12px;font-weight:600;color:var(--color-fg);border:1px solid var(--color-border);border-radius:100px}
 .mkc-chip button{background:none;border:none;color:var(--color-text-faint);cursor:pointer;font-size:13px;padding:0 3px;line-height:1}
 .mkc-chip button:hover{color:var(--color-fg)}
 .mkc-chip[data-thin]{color:var(--color-text-muted)}
-.mkc-chip-thin{font-family:var(--font-mono),monospace;font-size:10px;letter-spacing: 0;color:var(--color-text-faint);}
+.mkc-chip-thin{font-family:var(--font-mono),monospace;font-size:10px;letter-spacing:0.06em;color:var(--color-text-faint);text-transform:uppercase}
 .mkc-rule{flex:1}
 .mkc-btn{font-family:var(--font-mono),monospace;font-size:10.5px;letter-spacing:0.08em;padding:5px 11px;background:none;color:var(--color-text-muted);border:1px solid var(--color-border);border-radius:100px;cursor:pointer}
 .mkc-btn:hover{color:var(--color-fg)}
@@ -1390,12 +1427,12 @@ a.mk-fact:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
 .mkc-plotwrap{min-width:0}
 .mkc-plot{position:relative;height:150px;margin-left:44px;margin-right:8px}
 .mkc-plot svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
-.mkc-cap{font-size:10px;letter-spacing:0;margin-top:8px}
+.mkc-cap{font-size:10px;letter-spacing:0.1em;margin-top:8px}
 .mkc-legend{display:grid;gap:6px;align-content:start;padding-top:2px}
 .mkc-leg{display:flex;align-items:baseline;gap:8px;min-width:0}
 .mkc-leg svg{flex:none;align-self:center}
-.mkc-leg-name{font-size:12.5px;font-weight: 500;color:var(--color-fg);white-space:nowrap}
-.mkc-leg b{font-family:var(--font-mono),monospace;font-size:12.5px;font-weight: 500;font-variant-numeric:tabular-nums}
+.mkc-leg-name{font-size:12.5px;font-weight:600;color:var(--color-fg);white-space:nowrap}
+.mkc-leg b{font-family:var(--font-mono),monospace;font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums}
 .mkc-leg b[data-dir="up"]{color:var(--color-up)}
 .mkc-leg b[data-dir="down"]{color:var(--color-down-text)}
 .mkc-leg-sub{font-family:var(--font-mono),monospace;font-size:10.5px;color:var(--color-text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}

@@ -53,7 +53,7 @@ export default function RecordByYear({ backtest }: { backtest: Backtest }) {
                     <div style={{ background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '10px 14px', fontFamily: 'var(--font-sans), sans-serif' }}>
                       <div style={{ fontSize: 12.5, color: 'var(--color-text-muted)', marginBottom: 5 }}>{label} · {d.nFlagged} flagged lots</div>
                       {/* signed formatter — a down year must print "−12%", never "+-12%" */}
-                      <div style={{ fontSize: 13.5, color: 'var(--color-up)', fontWeight: 500 }}>flagged {fmtSignedPct(d.flaggedMedianPct)}</div>
+                      <div style={{ fontSize: 13.5, color: 'var(--color-up)', fontWeight: 600 }}>flagged {fmtSignedPct(d.flaggedMedianPct)}</div>
                       <div style={{ fontSize: 13.5, color: 'var(--color-text-secondary)' }}>unflagged {fmtSignedPct(d.unflaggedMedianPct)}</div>
                     </div>
                   );
@@ -66,16 +66,12 @@ export default function RecordByYear({ backtest }: { backtest: Backtest }) {
                 ) : <g />)} />
               <Line type="monotone" dataKey="flaggedMedianPct" stroke="var(--color-up)" strokeWidth={1.75} dot={false} isAnimationActive={false}
                 label={(p: { index?: number; x?: number; y?: number }) => (p.index === data.length - 1 && p.x != null && p.y != null ? (
-                  <text x={p.x + 8} y={p.y + 3} fontSize={10.5} fontFamily="var(--font-mono), monospace" fontWeight={500} fill="var(--color-up)">flagged</text>
+                  <text x={p.x + 8} y={p.y + 3} fontSize={10.5} fontFamily="var(--font-mono), monospace" fontWeight={600} fill="var(--color-up)">flagged</text>
                 ) : <g />)} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
-        {/* the legend sits on the WHITE chart card inside the dark record band,
-            where the band's faint token measured 3.47:1 (axe, Oct 3) — the
-            same porcelain ink the card's figcaption already wears */}
-        <style>{`.rby-legend{color:var(--color-text-faint)}html[data-lectr-light] .ray-band .glass .rby-legend{color:#6B655D}`}</style>
-        <div className="rby-legend" style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 18px', padding: '8px 0 10px 18px', fontSize: 12.5 }}>
+        <div style={{ display: 'flex', gap: 18, padding: '8px 0 10px 18px', fontSize: 12.5, color: 'var(--color-text-faint)' }}>
           <span><span style={{ display: 'inline-block', width: 14, height: 2, background: 'var(--color-up)', verticalAlign: 'middle', marginRight: 6 }} />flagged below market</span>
           <span><span style={{ display: 'inline-block', width: 14, height: 2, background: 'var(--chart-line-2)', verticalAlign: 'middle', marginRight: 6 }} />unflagged</span>
           <span>· premium-inclusive, as bought</span>

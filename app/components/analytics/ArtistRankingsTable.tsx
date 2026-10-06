@@ -397,7 +397,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
             margin: 0,
             fontFamily: 'var(--font-sans), sans-serif',
             fontSize: 30,
-            fontWeight: 300,
+            fontWeight: 340,
             letterSpacing: '-0.02em',
             lineHeight: 1.12,
           }}>

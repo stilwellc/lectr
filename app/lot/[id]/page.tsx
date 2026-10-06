@@ -1,15 +1,9 @@
 import type { Metadata } from 'next';
-import fs from 'node:fs';
-import path from 'node:path';
 import { flaggedLots } from '../flagged';
 import LotPage from '../../components/LotPage';
 import { splitTitle, formatDate, httpsImg, formatPrice } from '../../utils';
-import { lotVerdict, fmtUsd } from '../../lib/verdict';
-
-/** comps ÷ estimate as the one × multiple (TonightsWall.gapMultiple's rule) */
-const gapMultiple = (pct: number) => (pct > 400 ? '5×+' : `${(pct / 100 + 1).toFixed(1)}×`);
+import { signalMagnitude } from '../../lib/comps';
 import { ARTIST_LABEL } from '../../constants';
-import { fmtExpected } from '../../lib/og-meta';
 
 /**
  * The STATIC flagged set — /lot/<id> prerendered for every lot the crawl
@@ -36,48 +30,33 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
   const title = splitTitle(lot.title).short;
   const sig = lot.signal;
   const est = lot.estimateLow && lot.estimateHigh
-    ? (formatPrice(lot.estimateLow) === formatPrice(lot.estimateHigh) ? formatPrice(lot.estimateLow) : `${formatPrice(lot.estimateLow)}–${formatPrice(lot.estimateHigh)}`)
+    ? `${formatPrice(lot.estimateLow)}–${formatPrice(lot.estimateHigh)} est.`
     : lot.estimateLow || lot.estimateHigh
-      ? formatPrice((lot.estimateLow || lot.estimateHigh)!)
+      ? `${formatPrice((lot.estimateLow || lot.estimateHigh)!)} est.`
       : null;
-  // THE CALL, in the card's own sentence: the house's printed guess, then the
-  // engine's expected hammer and its likely range (lotVerdict — the same
-  // numbers the lot page's why panel prints)
-  const vd = lotVerdict(lot);
   const description = [
-    est ? `${lot.auctionHouse} says ${est}.` : `${lot.auctionHouse} prints no estimate.`,
-    vd ? `The record says ${fmtUsd(vd.expected)}, likely ${fmtUsd(vd.bandLo)}–${fmtUsd(vd.bandHi)}.`
-      : sig && sig.label === 'Below Market' ? `Comparable sales realized ${gapMultiple(sig.pct)} the estimate${sig.basis ? ` across ${sig.basis} sales` : ''}.` : null,
-    `${maker} — ${title}. Hammers ${formatDate(lot.saleDate)}.`,
+    `${maker} — flagged Below Market: comps run ${sig ? signalMagnitude(sig.label, sig.pct) : 'over'} the ask${sig?.basis ? ` across ${sig.basis} comparable sales` : ''}.`,
+    est,
+    `Hammers ${formatDate(lot.saleDate)} at ${lot.auctionHouse}.`,
   ].filter(Boolean).join(' ');
 
-  // the lot's own call card (scripts/build-og.tsx → public/og/lot/<id>.png);
-  // the house photograph, then the site card, when the card was not drawn
-  const card = path.join(process.cwd(), 'public', 'og', 'lot', `${lot.id}.png`);
-  const image = fs.existsSync(card)
-    ? `/og/lot/${encodeURIComponent(lot.id)}.png`
-    : httpsImg(lot.imageUrl) || '/opengraph-image';
+  // the lot's own photograph carries the share; https-forced (mixed-content),
+  // falling back to the site card when the house published none
+  const image = httpsImg(lot.imageUrl) || 'https://lectr.bid/opengraph-image';
 
-  // the lot number keeps same-named lots (editions, a run of comic pages)
-  // from sharing one title
-  // (Hake's publishes no lot numbers — its item number is the id's tail)
-  const itemNo = lot.lotNumber ? `lot ${lot.lotNumber}` : (lot.id.match(/(\d{4,})~?$/)?.[1] ? `${lot.auctionHouse} #${lot.id.match(/(\d{4,})~?$/)![1]}` : '');
-  const name = `${title}${itemNo ? `, ${itemNo}` : ''} — ${maker}`;
   return {
-    // absolute: the plain-string title on app/lot/layout drops the root
-    // template for this dynamic child (it shipped without the brand)
-    title: { absolute: `${name} — lectr` },
+    title: `${title} — ${maker}`,
     description,
     alternates: { canonical: `/lot/${lot.id}` },
     openGraph: {
-      title: `${name} — lectr`,
+      title: `${title} — ${maker} — lectr`,
       description,
       images: [image],
       type: 'article',
     },
     twitter: {
       card: 'summary_large_image',
-      title: name,
+      title: `${title} — ${maker}`,
       description,
       images: [image],
     },

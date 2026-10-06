@@ -185,7 +185,7 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
           position: 'relative',
           fontFamily: 'var(--font-sans), sans-serif',
           fontSize: 30,
-          fontWeight: 300,
+          fontWeight: 340,
           letterSpacing: '-0.02em',
           padding: '16px 0 12px',
         }}>
@@ -203,19 +203,19 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '0 20px 12px', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-fg)', flexShrink: 0 }} />
-                <span style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 500 }}>
+                <span style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600 }}>
                   Avg
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-accent-gold)', flexShrink: 0 }} />
-                <span style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 500 }}>
+                <span style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600 }}>
                   High
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ width: 12, height: 2, background: 'var(--color-accent-wine)', borderRadius: 1, flexShrink: 0 }} />
-                <span style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 500 }}>
+                <span style={{ fontSize: 12.5, letterSpacing: '-0.01em', textTransform: 'none', color: 'var(--color-text-faint)', fontWeight: 600 }}>
                   Trend
                 </span>
               </div>
@@ -345,7 +345,7 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                     letterSpacing: '-0.01em',
                     textTransform: 'none',
                     color: 'var(--color-text-faint)',
-                    fontWeight: 500,
+                    fontWeight: 600,
                     padding: '12px 20px 8px',
                     textAlign: 'left',
                   }}>
@@ -356,7 +356,7 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                     letterSpacing: '-0.01em',
                     textTransform: 'none',
                     color: 'var(--color-text-faint)',
-                    fontWeight: 500,
+                    fontWeight: 600,
                     padding: '12px 20px 8px',
                     textAlign: 'right',
                   }}>
@@ -367,7 +367,7 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                     letterSpacing: '-0.01em',
                     textTransform: 'none',
                     color: 'var(--color-text-faint)',
-                    fontWeight: 500,
+                    fontWeight: 600,
                     padding: '12px 20px 8px',
                     textAlign: 'right',
                   }}>
@@ -378,7 +378,7 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                     letterSpacing: '-0.01em',
                     textTransform: 'none',
                     color: 'var(--color-text-faint)',
-                    fontWeight: 500,
+                    fontWeight: 600,
                     padding: '12px 20px 8px',
                     textAlign: 'right',
                   }}>
@@ -412,7 +412,7 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                       transition: 'background var(--duration-fast) var(--ease-signature), opacity var(--duration-fast) var(--ease-signature)',
                     }} />
                     <span style={{
-                      fontWeight: categoryFilter === 'all' ? 500 : 400,
+                      fontWeight: categoryFilter === 'all' ? 600 : 400,
                       color: categoryFilter === 'all' ? 'var(--color-accent-wine-text)' : 'var(--color-fg)',
                       transition: 'color var(--duration-fast) var(--ease-signature)',
                     }}>
@@ -454,7 +454,7 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                           transition: 'background var(--duration-fast) var(--ease-signature), opacity var(--duration-fast) var(--ease-signature)',
                         }} />
                         <span style={{
-                          fontWeight: isActive ? 500 : 400,
+                          fontWeight: isActive ? 600 : 400,
                           color: isActive ? 'var(--color-accent-wine-text)' : 'var(--color-fg)',
                           transition: 'color var(--duration-fast) var(--ease-signature)',
                         }}>

@@ -10,6 +10,7 @@ import RecordBand from './RecordBand';
 import RecordPlate, { type PlateSale } from './RecordPlate';
 import Flick from './Flick';
 import { useChartDraw } from '../hooks/useChartDraw';
+import { useRayData } from '../hooks/useRayData';
 import MethodologyNote from './MethodologyNote';
 import ArtistAvatar from './ArtistAvatar';
 import DeskNote from './analytics/DeskNote';
@@ -21,7 +22,7 @@ type Range = '1Y' | '5Y' | 'MAX';
    numeral (the homepage rule: Inter on levels, mono only on %-deltas) */
 const heroNumStyle: CSSProperties = {
   fontFamily: 'var(--font-inter), sans-serif',
-  fontWeight: 500,
+  fontWeight: 650,
   letterSpacing: '-0.02em',
   fontVariantNumeric: 'tabular-nums',
 };
@@ -47,7 +48,6 @@ export default function ArtistHero({
   bidMarket = false,
   market,
   serial,
-  bookSettled = true,
 }: {
   /** false on cached back-nav — numbers land resolved, no re-count */
   animate?: boolean;
@@ -67,9 +67,6 @@ export default function ArtistHero({
   market?: Market;
   /** crawl-day YYYYMMDD for the record card's certificate footer */
   serial?: string;
-  /** the maker's book (the lot API's columns) has answered — loaded or
-      failed. Until then the record plate holds its photo well. */
-  bookSettled?: boolean;
 }) {
   const [range, setRange] = useState<Range>('MAX');
   const [hover, setHover] = useState<{ date: string; value: number } | null>(null);
@@ -221,9 +218,10 @@ export default function ArtistHero({
   // certificate-only and then grew by the image well's 190px + 12px margin when
   // the photo arrived. Measured 0.346 on /makers/kaws (C3 baseline 0.222), the
   // shift landing ~1.4s in. Hold the well's space while phase 2 could still
-  // deliver it, and stop holding once the maker book settles without it — a record
+  // deliver it, and stop holding once fullLoaded proves it never will — a record
   // with genuinely no photo must not sit above a permanently empty frame.
-  const recordImagePending = !!stats?.recordPrice && !recordLot && !bookSettled;
+  const { fullLoaded } = useRayData();
+  const recordImagePending = !!stats?.recordPrice && !recordLot && !fullLoaded;
 
   // #33 — the ROTATING VITRINE deck: the top-3 realized sales the loaded lots
   // carry, record first. Built from the loaded set (honest to what's on the
@@ -268,7 +266,7 @@ export default function ArtistHero({
             style={{
               marginBottom: 10,
               fontFamily: 'var(--font-sans), sans-serif',
-              fontWeight: 300,
+              fontWeight: 320,
               letterSpacing: '-0.03em',
             }}
           >

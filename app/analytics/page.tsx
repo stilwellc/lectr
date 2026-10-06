@@ -8,8 +8,7 @@ import type { MarketStats } from '../types';
 import { useMarket } from '../lib/market';
 import { countSubMarkets } from '../lib/submarkets';
 import MarketSwitch from '../components/MarketSwitch';
-import { useRayData } from '../hooks/useRayData';
-import { fetchSummary, isApiUnavailable } from '../lib/api';
+import { useRayData, useFullLots, useSoldArchive, retryArchiveLoad, retryFullLoad } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
 import { formatDate, getUpcomingCounts, fmtSignedPct } from '../utils';
@@ -177,7 +176,7 @@ export default function AnalyticsPage() {
            lands) so the row never reflows (CLS). */
         .ray-desk-byline { margin-top: 24px; }
         .ray-desk-byline > div { min-height: 62px; }
-        .ray-desk-byline .v { font-size: 18px; font-weight: 500; letter-spacing: -0.01em; }
+        .ray-desk-byline .v { font-size: 18px; font-weight: 450; letter-spacing: -0.01em; }
         .ray-desk-byline .s { font-size: 11px; color: var(--color-text-muted); margin-top: 2px; }
         .ray-desk-microgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
         /* min-width:0 — a 1fr track's minimum is otherwise the item's CONTENT
@@ -202,7 +201,7 @@ export default function AnalyticsPage() {
         .ray-methods .ns-ledger-row .k { flex: 0 0 122px; font-size: 12.5px; color: var(--color-text-muted); }
         .ray-methods .ns-ledger-row .val { flex: 1; font-size: 12.5px; line-height: 1.65; color: var(--color-text-secondary); }
         /* the room headline — big and LIGHT (authority through lightness) */
-        .ray-room-h { margin: 0; font-family: var(--font-sans), sans-serif; font-size: 30px; font-weight: 300; letter-spacing: -0.02em; line-height: 1.12; color: var(--color-fg); }
+        .ray-room-h { margin: 0; font-family: var(--font-sans), sans-serif; font-size: 30px; font-weight: 340; letter-spacing: -0.02em; line-height: 1.12; color: var(--color-fg); }
         /* a room whose instrument abstained (rendered null) must not print
            a stray plate rule — an empty plate erases itself. (Kept as its
            own rule: a selector list sharing :has would drop :empty too on
@@ -220,7 +219,7 @@ export default function AnalyticsPage() {
         <Masthead
           kicker="The research desk"
           serial={lastCrawl || meta.lastCrawl}
-          title={<>{drillCount} sub-markets, read as one book.</>}
+          title={<>Every market, read as one book.</>}
           sub={<>Indexes, relative strength, microstructure and the engine&rsquo;s own science —{' '}
             <b style={{ color: 'var(--color-fg)', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{bookLots.toLocaleString()} lots</b>,{' '}
             <b style={{ color: 'var(--color-fg)', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{drillCount} sub-markets tracked</b>
@@ -433,50 +432,52 @@ function DeepPools({ activeKey, mktSet, marketStats }: {
 // settled height while it loads.
 const POOLS_HOLD = 'clamp(1740px, 175vw, 2520px)'; // measured settled: 2,518px @1440 · ~1,740px @390
 
-// THE POOLS read the market's book IN COLUMNS from the lot API
-// (/api/market/:key?view=summary — status, price, date, category, estimates,
-// house, sport, player per row; the top-priced rows whole). Same rows the
-// corpus path aggregated (main tier; + the Goldin archive tier for sports and
-// science), at a few percent of the bytes — never the 251MB corpus.
-function DeepPoolsBody({ activeKey, mktSet, marketStats }: {
+function DeepPoolsBody(props: {
   activeKey: Market;
   mktSet: Set<string>;
   marketStats: Record<string, MarketStats>;
 }) {
-  const { fromCache, market: marketData } = useRayData();
-  const [st, setSt] = useState<{ key: string; rows: import('../types').AuctionLot[] | null; error: boolean; unavailable?: boolean }>({ key: '', rows: null, error: false });
-  const [attempt, setAttempt] = useState(0);
-  useEffect(() => {
-    let on = true;
-    setSt({ key: activeKey, rows: null, error: false });
-    fetchSummary('market', activeKey).then(
-      rows => { if (on) setSt({ key: activeKey, rows, error: false }); },
-      e => { if (on) setSt({ key: activeKey, rows: null, error: true, unavailable: isApiUnavailable(e) }); },
-    );
-    return () => { on = false; };
-  }, [activeKey, attempt]);
-  const marketLots = useMemo(() => (st.key === activeKey && st.rows ? st.rows.filter(l => mktSet.has(l.artist)) : null), [st, activeKey, mktSet]);
-  if (st.key === activeKey && st.unavailable) {
-    return (
-      <div style={{ padding: '60px 24px 100px', textAlign: 'center' }}>
-        <p style={{ fontSize: 14, color: 'var(--color-text-muted)', margin: 0 }}>
-          The deep pools read the full sold archive, which isn&rsquo;t available yet &mdash; it opens once tonight&rsquo;s index is published.
-        </p>
-      </div>
-    );
-  }
-  if (st.key === activeKey && st.error) return <PoolsError onRetry={() => setAttempt(n => n + 1)} />;
-  if (!marketLots) return <div className="rail" style={{ paddingTop: 14, paddingBottom: 40 }}><RayLoading /></div>;
+  // sports/science aggregate over the Goldin sold-archive — ONLY those
+  // markets may mount useSoldArchive (its mount triggers the phase-3 fetch)
+  const isArchiveMarket = props.activeKey === 'sports' || props.activeKey === 'science';
+  return isArchiveMarket ? <ArchivePoolsBody {...props} /> : <PlainPoolsBody {...props} />;
+}
+
+function PlainPoolsBody({ activeKey, mktSet, marketStats }: {
+  activeKey: Market;
+  mktSet: Set<string>;
+  marketStats: Record<string, MarketStats>;
+}) {
+  // mounting THIS component triggers phase 2
+  const { allLots, fullLoaded, fullError, fromCache, market: marketData } = useFullLots();
+  const marketLots = useMemo(() => allLots.filter(l => mktSet.has(l.artist)), [allLots, mktSet]);
+  if (fullError) return <PoolsError />;
+  if (!fullLoaded) return <div className="rail" style={{ paddingTop: 14, paddingBottom: 40 }}><RayLoading /></div>;
   return <PoolsGrid activeKey={activeKey} marketLots={marketLots} marketStats={marketStats} marketData={marketData} fromCache={fromCache} />;
 }
 
-function PoolsError({ onRetry }: { onRetry: () => void }) {
+function ArchivePoolsBody({ activeKey, mktSet, marketStats }: {
+  activeKey: Market;
+  mktSet: Set<string>;
+  marketStats: Record<string, MarketStats>;
+}) {
+  const { fullLoaded, fullError, fromCache, market: marketData } = useFullLots();
+  const { allLotsWithArchive, archiveLoaded, archiveError } = useSoldArchive();
+  const marketLots = useMemo(() => allLotsWithArchive.filter(l => mktSet.has(l.artist)), [allLotsWithArchive, mktSet]);
+  const ready = fullLoaded && archiveLoaded;
+  const errored = fullError || archiveError;
+  if (errored) return <PoolsError />;
+  if (!ready) return <div className="rail" style={{ paddingTop: 14, paddingBottom: 40 }}><RayLoading /></div>;
+  return <PoolsGrid activeKey={activeKey} marketLots={marketLots} marketStats={marketStats} marketData={marketData} fromCache={fromCache} />;
+}
+
+function PoolsError() {
   return (
     <div style={{ padding: '60px 24px 100px', textAlign: 'center' }}>
       <p style={{ fontSize: 14, color: 'var(--color-text-muted)', marginBottom: 20 }}>
         The sold archive didn&rsquo;t load. Check your connection and try again.
       </p>
-      <button className="ray-call-btn ray-call-btn-primary" onClick={onRetry}>
+      <button className="ray-call-btn ray-call-btn-primary" onClick={() => { retryFullLoad(); retryArchiveLoad(); }}>
         Retry
       </button>
     </div>

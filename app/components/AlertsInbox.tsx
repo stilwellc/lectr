@@ -32,7 +32,7 @@ const CSS = `
   border-radius: 3px; background: var(--color-bg-elevated);
 }
 .lectr-inbox-title {
-  font-size: 13.5px; color: var(--color-fg); font-weight: 500;
+  font-size: 13.5px; color: var(--color-fg); font-weight: 550;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .lectr-inbox-row:hover .lectr-inbox-title { color: var(--color-butter-text); }
@@ -46,8 +46,8 @@ const CSS = `
 }
 .lectr-inbox-search {
   display: flex; align-items: baseline; gap: 10px;
-  font-size: 13px; font-weight: 500; letter-spacing: 0;
-  color: var(--color-text-muted);
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--color-text-faint);
   margin: 18px 0 2px;
 }
 .lectr-inbox-del {
@@ -56,8 +56,8 @@ const CSS = `
 }
 .lectr-inbox-del:hover { color: var(--color-fg); }
 .lectr-inbox-auto {
-  font-size: 11px; font-weight: 400; letter-spacing: 0;
-  color: var(--color-text-muted); border: 1px solid var(--color-border);
+  font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--color-text-faint); border: 1px solid var(--color-border);
   border-radius: 5px; padding: 1px 6px;
 }
 `;
@@ -216,7 +216,7 @@ export default function AlertsInbox() {
                         <b style={{
                           marginLeft: 8,
                           fontFamily: 'var(--font-mono), monospace',
-                          fontWeight: 500,
+                          fontWeight: 700,
                           color: sig.label === 'Below Market' ? 'var(--color-up)' : 'var(--color-fg)',
                         }}>
                           {fmtSignedPct(sig.pct)}

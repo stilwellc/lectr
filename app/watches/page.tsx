@@ -1,16 +1,10 @@
 export const dynamic = 'force-static';
 import type { Metadata } from 'next';
-import { shareMeta, verticalDescription } from '../lib/og-meta';
-import { LANDER_TITLE } from '../lib/route-titles';
 
-// Counts are cut at build (the nightly rebuild refreshes them); the card is
-// tonight's call inside this vertical, drawn by scripts/build-og.tsx. The
-// title keeps the lander's noun — LANDER_TITLE in app/lib/route-titles.ts
-// re-asserts it on a client market switch.
-export const metadata: Metadata = shareMeta({
-  title: LANDER_TITLE['/watches'],
-  description: verticalDescription('watches'),
-  image: '/og/live/call-watches.png',
-});
+export const metadata: Metadata = {
+  title: 'Watches',
+  description: 'Auction intelligence for the reference market — Rolex, Patek Philippe, Audemars Piguet, Omega, Cartier.',
+  openGraph: { title: 'Watches — lectr', description: 'Auction intelligence for the reference market — Rolex, Patek Philippe, Audemars Piguet, Omega, Cartier.' },
+};
 
 export { default } from '../page';

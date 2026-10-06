@@ -34,7 +34,7 @@ import { GapMark, OddsMark, DepthMark, SalesMark } from '../marks';
 const CSS = `
 .ray-lf-card { padding: var(--card-pad); min-width: 0; }
 .ray-lf-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
-.ray-lf-title { font-size: 13.5px; font-weight: 500; color: var(--color-fg); }
+.ray-lf-title { font-size: 13.5px; font-weight: 550; color: var(--color-fg); }
 .ray-lf-title .ray-sect-mark { margin-right: 8px; }
 .ray-lf-method { font-size: 10.5px; color: var(--color-text-muted); text-align: right; }
 .ray-lf-plot { position: relative; overflow: hidden; }
@@ -48,9 +48,6 @@ const CSS = `
 .ray-lf-grid3 > * { min-width: 0; }
 @media (max-width: 1000px) { .ray-lf-grid3 { grid-template-columns: 1fr; } }
 .ray-lf-dot { position: absolute; border-radius: 50%; transform: translate(-50%, 50%); }
-.ray-lf-hit { position: absolute; width: 24px; height: 24px; transform: translateX(-50%); display: flex; align-items: center; justify-content: center; border-radius: 50%; }
-.ray-lf-hit:focus-visible { outline: 1.5px solid var(--color-fg); outline-offset: 0; }
-.ray-lf-hitdot { display: block; flex: none; border-radius: 50%; pointer-events: none; }
 .ray-lf-venue { display: flex; flex-direction: column; }
 .ray-lf-vrow { display: grid; grid-template-columns: minmax(88px, 120px) 1fr 52px; align-items: center; gap: 10px; min-height: 27px; }
 .ray-lf-vname { font-size: 12px; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -307,25 +304,17 @@ export function DepthField({ lots, scope = 'all' }: { lots: AuctionLot[]; scope?
             <span className="ray-lf-lbl" style={{ bottom: 6, left: `${X(d)}%` }}>{fmt$(d)}</span>
           </React.Fragment>
         ))}
-        {pts.map(p => {
-          // WCAG 2.2 target size: the visible dot stays 4–13px, the link
-          // around it is a 24px invisible hit area centred on the same point
-          // (the dot's centre sits at top + d under the shared translate)
-          const d = Math.min(13, 4 + Math.sqrt(p.n) * 1.6);
-          return (
-            <Link key={p.id} href={`/lot?id=${encodeURIComponent(p.id)}`} title={`${p.title.slice(0, 60)} · comps ${fmt$(Math.round(p.x))} · bid ${p.y > 0 ? '+' : ''}${Math.round(p.y)}% vs comps · ${p.n} comps`}
-              className="ray-lf-hit" style={{ top: (Y(p.y) / 100) * H + d - 12, left: `${X(p.x)}%` }}
-              aria-label={`Open lot: ${p.title.slice(0, 50)}`}>
-              <span className="ray-lf-hitdot" style={{
-                width: d, height: d,
-                ...(p.kind === 'bid'
-                  ? { background: MARKET_INK[p.mkt] || 'var(--color-text-faint)' }
-                  : { background: 'transparent', border: `1.5px solid ${MARKET_INK[p.mkt] || 'var(--color-text-faint)'}` }),
-                opacity: p.conf === 'high' ? 0.92 : p.conf === 'medium' ? 0.6 : 0.35,
-              }} />
-            </Link>
-          );
-        })}
+        {pts.map(p => (
+          <Link key={p.id} href={`/lot?id=${encodeURIComponent(p.id)}`} title={`${p.title.slice(0, 60)} · comps ${fmt$(Math.round(p.x))} · bid ${p.y > 0 ? '+' : ''}${Math.round(p.y)}% vs comps · ${p.n} comps`}
+            className="ray-lf-dot" style={{
+              top: `${(Y(p.y) / 100) * H}px`, left: `${X(p.x)}%`,
+              width: Math.min(13, 4 + Math.sqrt(p.n) * 1.6), height: Math.min(13, 4 + Math.sqrt(p.n) * 1.6),
+              ...(p.kind === 'bid'
+                ? { background: MARKET_INK[p.mkt] || 'var(--color-text-faint)' }
+                : { background: 'transparent', border: `1.5px solid ${MARKET_INK[p.mkt] || 'var(--color-text-faint)'}` }),
+              opacity: p.conf === 'high' ? 0.92 : p.conf === 'medium' ? 0.6 : 0.35,
+            }} aria-label={`Open lot: ${p.title.slice(0, 50)}`} />
+        ))}
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', padding: '10px 0 0', fontSize: 11.5, color: 'var(--color-text-muted)' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -521,7 +510,7 @@ export function CompositeParts({ marketData }: { marketData: MarketData | null }
         {items.map(it => (
           <span key={it.label} className="ray-lf-cend" style={{
             top: it.y, left: 'calc(100% - var(--lfgut) + 8px)', color: it.ink,
-            fontWeight: it.strong ? 500 : 400, opacity: it.strong ? 1 : 0.85,
+            fontWeight: it.strong ? 550 : 450, opacity: it.strong ? 1 : 0.85,
           }}>{it.label}</span>
         ))}
         {[0, Math.floor(last / 2), last].map(i => (

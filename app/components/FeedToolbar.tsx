@@ -25,8 +25,6 @@ export interface FeedFilters {
   sort: FeedSort;
   /** the Hammer Week strip's lens: one hammer day (YYYY-MM-DD) */
   saleDay?: string | null;
-  /** lots whose close is within 48h on the reader's clock */
-  closingSoon?: boolean;
 }
 
 export const FEED_DEFAULTS: FeedFilters = {
@@ -38,7 +36,6 @@ export const FEED_DEFAULTS: FeedFilters = {
   belowOnly: false,
   sort: 'soonest',
   saleDay: null,
-  closingSoon: false,
 };
 
 /**
@@ -62,7 +59,6 @@ export default function FeedToolbar({
   onViewChange,
   pageSize = 24,
   showToggle = true,
-  closingCount = 0,
 }: {
   lots: AuctionLot[];          // the unfiltered upcoming pool (for counts)
   belowIds: Set<string>;
@@ -78,8 +74,6 @@ export default function FeedToolbar({
   /** false hides the card/table toggle (sub-640px: the table is thumb+name
    *  with unhinted side-scroll — not a real choice on a phone) */
   showToggle?: boolean;
-  /** lots closing within 48h (reader's clock) — the Closing ≤48h lens */
-  closingCount?: number;
 }) {
   // The below-market lens auto-ranks by gap (its smart default) — but it must
   // hand back whatever sort the reader had picked when the lens comes off,
@@ -237,7 +231,7 @@ export default function FeedToolbar({
         borderRadius: 10, padding: 6, boxShadow: '0 14px 34px -18px rgba(8,6,3,0.85)',
       }}
     >
-      <div style={{ fontSize: 13, fontWeight: 400, color: 'var(--color-text-muted)', padding: '6px 10px 7px', borderBottom: '1px solid var(--hairline)', marginBottom: 4 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.13em', textTransform: 'uppercase', color: 'var(--color-text-muted)', padding: '6px 10px 7px', borderBottom: '1px solid var(--hairline)', marginBottom: 4 }}>
         The categories
       </div>
       {verticals.map(v => (
@@ -266,7 +260,7 @@ export default function FeedToolbar({
     document.body
   ) : null;
   const isFiltered =
-    filters.query !== '' || filters.vertical !== null || filters.maker !== null || filters.sport !== null || filters.category !== null || filters.belowOnly || filters.saleDay != null || !!filters.closingSoon;
+    filters.query !== '' || filters.vertical !== null || filters.maker !== null || filters.sport !== null || filters.category !== null || filters.belowOnly || filters.saleDay != null;
 
   // Chrome earns its keep: a single-page feed (watches' 21 lots) doesn't
   // need sort pills or a view toggle — search + the below-market lens only.
@@ -464,8 +458,8 @@ export default function FeedToolbar({
         }
         .ray-feedsheet-head {
           font-family: var(--font-sans), sans-serif;
-          font-size: 14px; font-weight: 400;
-          letter-spacing: 0;
+          font-size: 10.5px; font-weight: 700;
+          letter-spacing: 0.16em; text-transform: uppercase;
           color: var(--color-text-muted);
           padding: 16px 2px 10px;
         }
@@ -485,7 +479,7 @@ export default function FeedToolbar({
         .ray-feedsheet-clear {
           border: none; background: none; cursor: pointer;
           font-family: var(--font-sans), sans-serif;
-          font-size: 14px; font-weight: 500;
+          font-size: 14px; font-weight: 600;
           color: var(--color-text-muted);
           padding: 12px 10px; min-height: 44px;
         }
@@ -495,17 +489,10 @@ export default function FeedToolbar({
           background: var(--color-butter);
           color: var(--color-butter-ink, #1C1712);
           font-family: var(--font-sans), sans-serif;
-          font-size: 15px; font-weight: 500;
+          font-size: 15px; font-weight: 700;
           border-radius: 12px; padding: 13px 16px; min-height: 46px;
         }
         .ray-feedsheet-done:active { filter: brightness(0.96); }
-        /* the sticky bar on the home feed reads SOLID: the glass blur let
-           the rows scrolling under it bleed through the pills (Oct 3 audit) */
-        #on-the-block .ray-toolbar {
-          background: var(--color-bg);
-          -webkit-backdrop-filter: none; backdrop-filter: none;
-          border-bottom: 1px solid var(--hairline);
-        }
         @media (max-width: 767px) {
           /* the one lead row breathes a little tighter so lens + category +
              sort-and-filter sit on a single line at 390px */
@@ -604,20 +591,7 @@ export default function FeedToolbar({
                 }
               }}
             >
-              ● Flagged <i>{belowCount}</i>
-            </button>
-            <span className="ray-toolbar-divider" aria-hidden="true" />
-          </>
-        )}
-        {(closingCount > 0 || filters.closingSoon) && (
-          <>
-            <button
-              className="ray-toolbar-pill"
-              data-active={!!filters.closingSoon}
-              aria-pressed={!!filters.closingSoon}
-              onClick={() => set({ closingSoon: !filters.closingSoon })}
-            >
-              Closing ≤48h <i>{closingCount}</i>
+              ● Below market <i>{belowCount}</i>
             </button>
             <span className="ray-toolbar-divider" aria-hidden="true" />
           </>

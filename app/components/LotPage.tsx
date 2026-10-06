@@ -1,34 +1,27 @@
 'use client';
 
-import TrackOnMount from './retention/TrackOnMount';
 import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from 'react';
 import { encodeRefPath } from '../ref/ref-path';
 import { drillRowFor, drillSlugFor } from '../lib/submarkets';
 import { loadCompEvidence, evRowsToLots } from '../lib/comp-evidence';
-import { loadLotPackStrict, packRowsToLots, type LotPack } from '../lib/page-data';
-import { fetchLot, isApiUnavailable } from '../lib/api';
+import { loadLotPack, loadLotFromShard, loadPageStats, loadMakerLots, packRowsToLots, type LotPack } from '../lib/page-data';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import { ARTIST_LABEL, ARTIST_MARKET, MARKETS } from '../constants';
-import { useRayData, useVisibilityTrigger } from '../hooks/useRayData';
+import { useFullLotsOnDemand, useVisibilityTrigger, useSoldArchive, retryFullLoad, retryArchiveLoad } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { useRefs } from '../hooks/useRefs';
 import { safeHref } from '../lib/safe-href';
 import { splitTitle, deglue, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
-import { signalWithPool, appraiseLot, soldCompBand, isSportsScienceObject, FORM_LABEL, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
+import { signalWithPool, appraiseLot, soldCompBand, isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
 import { lotAllInFactor, maxHammerFor } from '../lib/premiums';
 import { valueFloor } from '../lib/lanes';
 import { formatEstimate, estimateOnly, lotSignal, confidenceMeter } from './LotCard';
-import { Colophon } from './Terminal';
+import { daysWord, Colophon } from './Terminal';
 import ArtistNav from './ArtistNav';
 import Flick from './Flick';
 // hotlinked photo that unmounts on failure so the monogram plate under it shows
 import PlateImg from './PlateImg';
-import LotPlate from './LotPlate';
-import { VerdictPanel, CompStrip } from './LotVerdict';
-import { lotVerdict, estAllIn, VERDICT_CSS, fmtUsd } from '../lib/verdict';
-import HouseAsOf from './HouseAsOf';
-import { closeWord, isOpen, useNow } from '../lib/closing';
 
 /**
  * LotPage — one lot as a CATALOGUE PAGE in the north-star grammar: the
@@ -62,7 +55,7 @@ function gatedFloor(lot: AuctionLot): number | null {
    pages carry it in their first HTML. */
 const COPY_BTN_STYLE_ID = 'lectr-lot-copy-style';
 const COPY_BTN_CSS = `
-.lectr-lot-copy{display:inline-flex;align-items:center;gap:7px;background:none;border:1px solid var(--color-butter-deep);color:var(--color-butter-text);border-radius:12px;padding:10px 18px;font-family:var(--font-sans);font-size:13.5px;font-weight: 500;letter-spacing:-0.01em;cursor:pointer;transition:background var(--duration-fast) var(--ease-signature),color var(--duration-fast) var(--ease-signature)}
+.lectr-lot-copy{display:inline-flex;align-items:center;gap:7px;background:none;border:1px solid var(--color-butter-deep);color:var(--color-butter-text);border-radius:12px;padding:10px 18px;font-family:var(--font-sans);font-size:13.5px;font-weight:600;letter-spacing:-0.01em;cursor:pointer;transition:background var(--duration-fast) var(--ease-signature),color var(--duration-fast) var(--ease-signature)}
 .lectr-lot-copy:hover{background:var(--color-butter-subtle)}
 .lectr-lot-copy[data-copied=true]{background:var(--color-butter-subtle);color:var(--color-butter)}
 `;
@@ -71,7 +64,7 @@ const COPY_BTN_CSS = `
    <style> children with quotes break hydration on prerendered pages
    (see RecordBand/ComparableModal); __html serializes raw, deterministic. */
 // exported for RefPage, which reuses the comp-row ledger grammar
-export const LOTPAGE_CSS = COPY_BTN_CSS + VERDICT_CSS + `
+export const LOTPAGE_CSS = COPY_BTN_CSS + `
 .lectr-lot{padding-block:26px 64px}
 .lectr-lot-grid{display:grid;grid-template-columns:minmax(0,42%) minmax(0,1fr);column-gap:44px;row-gap:26px;align-items:start}
 /* ≥900px the two columns are independent flows: the certificate column
@@ -91,45 +84,51 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + VERDICT_CSS + `
 /* the plate head — north star: quiet gray sentence case over a single
    hairline with crop-mark dots at the rule ends (registration grammar);
    the old tracked-uppercase form is retired on this surface */
-.lectr-lot-head{position:relative;padding-top:14px;border-top:1px solid var(--hairline);font-size:13.5px;font-weight: 400;letter-spacing:0.01em;color:var(--color-text-muted);display:flex;justify-content:space-between;gap:8px 18px;flex-wrap:wrap;margin-bottom:14px}
+.lectr-lot-head{position:relative;padding-top:14px;border-top:1px solid var(--hairline);font-size:13.5px;font-weight:400;letter-spacing:0.01em;color:var(--color-text-muted);display:flex;justify-content:space-between;gap:8px 18px;flex-wrap:wrap;margin-bottom:14px}
 .lectr-lot-head::before,.lectr-lot-head::after{content:"";position:absolute;top:-2px;width:3px;height:3px;border-radius:50%;background:var(--color-border-mid)}
 .lectr-lot-head::before{left:-1.5px}
 .lectr-lot-head::after{right:-1.5px}
-.lectr-lot-head .no{color:var(--color-text-faint);font-weight: 400;font-variant-numeric:tabular-nums}
+.lectr-lot-head .no{color:var(--color-text-faint);font-weight:400;font-variant-numeric:tabular-nums}
 /* the lot's name goes light-display — authority through lightness */
-.lectr-lot-title{font-size:clamp(28px,4vw,42px);font-weight: 300;letter-spacing:-0.02em;line-height:1.08;color:var(--color-fg);margin:0 0 6px}
+.lectr-lot-title{font-size:clamp(28px,4vw,42px);font-weight:330;letter-spacing:-0.02em;line-height:1.08;color:var(--color-fg);margin:0 0 6px}
 .lectr-lot-medium{font-size:13px;color:var(--color-text-muted);line-height:1.5;margin:2px 0 0}
 .lectr-lot-leaders{margin-top:16px;border-top:1px solid var(--hairline);padding-top:4px}
 .lectr-lot-row{display:flex;align-items:baseline;gap:10px;padding:10px 0;font-size:13.5px}
 .lectr-lot-k{color:var(--color-text-muted)}
 .lectr-lot-fill{flex:1;border-bottom:1px dotted var(--color-border-mid);transform:translateY(-3px)}
-.lectr-lot-v{font-weight: 500;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
+.lectr-lot-v{font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
 .lectr-lot-v.up{color:var(--color-up)}
 .lectr-lot-v.down{color:var(--color-down)}
-.lectr-lot-sub{font-size:11px;font-weight: 500;color:var(--color-text-muted);margin-right:2px;white-space:nowrap}
-.lectr-lot-skel-mat{aspect-ratio:4/5;background:#F5F3F1;border-radius:2px;box-shadow:inset 0 0 0 1px rgba(28,25,23,0.08)}
-.lectr-lot-skel-cap{padding-top:10px}
+.lectr-lot-sub{font-size:11px;font-weight:500;color:var(--color-text-muted);margin-right:2px;white-space:nowrap}
+.lectr-lot-mono{display:flex;align-items:center;justify-content:center;background:var(--color-bg-elevated)}
+.lectr-lot-monorules{position:absolute;top:10px;left:12px;right:12px;height:5px;background:linear-gradient(to bottom,var(--color-fg) 0,var(--color-fg) 2px,transparent 2px,transparent 4px,var(--color-border-mid) 4px,var(--color-border-mid) 5px)}
+.lectr-lot-monoglyph{font-size:64px;font-weight:700;color:var(--color-text-faint);letter-spacing:0.02em;line-height:1}
+.lectr-lot .ray-plate-mat{padding:18px;margin-bottom:0}
+.lectr-lot .ray-plate-img{height:380px;background:var(--color-bg-elevated)}
+.lectr-lot .ray-plate-img img{object-fit:contain}
+.lectr-lot .ray-plate-cap{margin-top:12px;border-top:1px solid var(--hairline);padding-top:9px;font-size:11px;color:var(--color-text-muted);text-align:left}
 .lectr-lot-ctas{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;padding-top:16px;border-top:1px dotted var(--color-border-mid)}
 .lectr-lot-comps{margin-top:44px}
-.lectr-lot-comps-head{position:relative;padding-top:9px;border-top:2px dotted var(--hairline);font-size:10.5px;font-weight: 500;letter-spacing: 0;color:var(--color-butter-text);display:flex;justify-content:space-between;gap:8px 18px;flex-wrap:wrap}
+.lectr-lot-comps-head{position:relative;padding-top:9px;border-top:2px dotted var(--hairline);font-size:10.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--color-butter-text);display:flex;justify-content:space-between;gap:8px 18px;flex-wrap:wrap}
 .lectr-lot-comps-head::before{content:"";position:absolute;top:2px;left:0;right:0;border-top:1px solid var(--hairline)}
-.lectr-lot-comps-head .ctx{color:var(--color-text-muted);font-weight: 500}
+.lectr-lot-comps-head .ctx{color:var(--color-text-muted);font-weight:600}
 .lectr-lot-comp{display:flex;align-items:center;gap:14px;padding:11px 2px;border-bottom:1px solid var(--hairline-soft);text-decoration:none;color:inherit;transition:background var(--duration-fast) var(--ease-signature)}
 .lectr-lot-comp:hover{background:var(--color-hover-item)}
 .lectr-lot-comp-i{font-size:12px;color:var(--color-text-faint);font-variant-numeric:tabular-nums;width:18px;text-align:right;flex-shrink:0}
 .lectr-lot-comp-thumb{width:40px;height:40px;flex-shrink:0;position:relative;overflow:hidden;border-radius:8px;background:var(--color-bg-elevated);border:1px solid color-mix(in srgb, var(--color-butter) 13%, transparent);display:flex;align-items:center;justify-content:center}
-.lectr-lot-comp-thumb span{font-family:var(--font-serif), serif;font-style:normal;font-weight: 500;font-size:17px;line-height:1;color:color-mix(in srgb, var(--color-butter) 55%, var(--color-text-faint))}
+.lectr-lot-comp-thumb span{font-family:var(--font-serif), serif;font-style:normal;font-weight:500;font-size:17px;line-height:1;color:color-mix(in srgb, var(--color-butter) 55%, var(--color-text-faint))}
 .lectr-lot-comp-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .lectr-lot-comp-t{flex:1;min-width:0}
-.lectr-lot-comp-title{font-size:13.5px;font-weight: 500;color:var(--color-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lectr-lot-comp-title{font-size:13.5px;font-weight:600;color:var(--color-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lectr-lot-comp-meta{font-size:11.5px;color:var(--color-text-faint);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lectr-lot-comp-p{font-size:13.5px;font-weight: 500;font-variant-numeric:tabular-nums;color:var(--color-fg);flex-shrink:0}
+.lectr-lot-comp-p{font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-fg);flex-shrink:0}
 .lectr-lot-quiet{padding:34px 0;text-align:center;color:var(--color-text-faint);font-size:13px}
 .lectr-lot-skel-block{background:var(--color-bg-elevated);border-radius:4px}
 @media (prefers-reduced-motion: no-preference){
   .lectr-lot-skel-block{animation:lectrLotPulse 1.4s ease-in-out infinite}
   @keyframes lectrLotPulse{0%,100%{opacity:1}50%{opacity:0.45}}
 }
+.lectr-lot-noimg .ray-plate-img{height:220px}
 /* ── NORTH STAR, lot-only additions — every rule below is scoped under
    .lectr-lot (or an -lk/-lval/-read/-shead class only this page renders),
    so the shared comp-ledger grammar Ref/Sub/Player reuse is untouched.
@@ -140,19 +139,19 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + VERDICT_CSS + `
 .lectr-lot .lectr-lot-leaders{border-top:none;padding-top:0;margin-top:8px}
 .lectr-lot-lk{font-size:13px;color:var(--color-text-muted);flex:none}
 .lectr-lot-lval{display:flex;align-items:baseline;justify-content:flex-end;gap:10px;min-width:0;text-align:right}
-.lectr-lot-lsub{font-size:11px;font-weight: 500;color:var(--color-text-muted);white-space:nowrap}
-.lectr-lot-lv{font-size:13.5px;font-weight: 500;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
+.lectr-lot-lsub{font-size:11px;font-weight:500;color:var(--color-text-muted);white-space:nowrap}
+.lectr-lot-lv{font-size:13.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
 .lectr-lot-lv.up{color:var(--color-up)}
 .lectr-lot-lv.down{color:var(--color-down)}
 /* the read as color — compact ns-cell-color face; ground = the signal */
 .lectr-lot-read{min-height:0;padding:20px 22px;border-radius:16px;margin:18px 0 4px}
-.lectr-lot-read-stat{font-family:var(--font-mono),monospace;font-size:clamp(30px,3.2vw,40px);font-weight: 500;letter-spacing:-0.02em;line-height:1;font-variant-numeric:tabular-nums;margin:10px 0 8px}
+.lectr-lot-read-stat{font-family:var(--font-mono),monospace;font-size:clamp(30px,3.2vw,40px);font-weight:500;letter-spacing:-0.02em;line-height:1;font-variant-numeric:tabular-nums;margin:10px 0 8px}
 .lectr-lot-read .ns-cell-label{font-size:13px}
-.lectr-lot-read .ns-cell-body{font-size:13px;font-weight: 500;line-height:1.5;max-width:40ch}
+.lectr-lot-read .ns-cell-body{font-size:13px;font-weight:450;line-height:1.5;max-width:40ch}
 /* section heads — quiet kicker + light headline on a registration plate */
 .lectr-lot-shead{display:flex;justify-content:space-between;align-items:flex-end;gap:8px 18px;flex-wrap:wrap;padding-top:14px}
 .lectr-lot-shead .ns-kicker{margin-bottom:4px}
-.lectr-lot-h2{font-size:clamp(19px,2.2vw,23px);font-weight: 400;letter-spacing:-0.02em;line-height:1.15;color:var(--color-fg);margin:0}
+.lectr-lot-h2{font-size:clamp(19px,2.2vw,23px);font-weight:350;letter-spacing:-0.02em;line-height:1.15;color:var(--color-fg);margin:0}
 .lectr-lot-shctx{font-size:11.5px;color:var(--color-text-faint);padding-bottom:2px}
 .lectr-lot .lectr-lot-comp{border-bottom:1px dotted var(--color-border-mid)}
 .lectr-lot .lectr-lot-note{padding:14px 16px;margin-top:14px}
@@ -163,7 +162,7 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + VERDICT_CSS + `
   /* dissolved wrappers make the sections grid items — kill the auto
      min-content floor or a nowrap comp title widens the page */
   .lectr-lot-grid>*{min-width:0}
-  .lectr-lot-plate{order:1;width:78%;max-width:360px}
+  .lectr-lot-cola>.ray-plate-mat{order:1}
   .lectr-lot-cert{order:2}
   .lectr-lot-prov{order:3}
   .lectr-lot-ladder{order:4}
@@ -171,6 +170,9 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + VERDICT_CSS + `
   /* inside the grid the 26px row-gap already separates the sections — trim
      the section margin so the total stays the original 44px */
   .lectr-lot-grid .lectr-lot-comps{margin-top:18px}
+  .lectr-lot .ray-plate-img{height:240px}
+  .lectr-lot-noimg .ray-plate-img{height:160px}
+  .lectr-lot-monoglyph{font-size:44px}
   /* narrow screens: subs wrap, rows may stack, values ellipsize — the
      desktop nowrap pair otherwise forces a >390px page render */
   .lectr-lot-row{flex-wrap:wrap}
@@ -263,9 +265,18 @@ function LeaderRow({ k, v, tone, sub, children }: {
   );
 }
 
-const ARCHIVE_VIA_API: { soldArchive: AuctionLot[]; archiveLoaded: boolean; archiveError: boolean } = {
-  soldArchive: [], archiveLoaded: true, archiveError: false,
-};
+/** The phase-3 trigger, isolated so only Goldin-sports/science needs mount it
+    (useSoldArchive fetches on mount by contract — the 10MB tier must never
+    ride along on an art lot's permalink). Renders nothing. */
+function ArchiveProbe({ onState }: {
+  onState: (s: { soldArchive: AuctionLot[]; archiveLoaded: boolean; archiveError: boolean }) => void;
+}) {
+  const { soldArchive, archiveLoaded, archiveError } = useSoldArchive();
+  useEffect(() => {
+    onState({ soldArchive, archiveLoaded, archiveError });
+  }, [soldArchive, archiveLoaded, archiveError, onState]);
+  return null;
+}
 
 /** The reference certificate row — the /ref dossier link renders ONLY when
     refs.json proves the page exists (dynamicParams=false: every ungated link
@@ -302,9 +313,9 @@ export function LotPageSkeleton() {
     <div className="lectr-lot rail" aria-busy="true" aria-label="Loading lot">
       <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
       <div className="lectr-lot-grid" style={{ paddingTop: 12 }}>
-        <div className="lectr-lot-plate">
-          <div className="lectr-lot-skel-mat" />
-          <div className="lectr-lot-skel-cap"><span className="lectr-lot-skel-block" style={{ display: 'inline-block', width: 180, height: 10 }} /></div>
+        <div className="ray-plate-mat">
+          <div className="ray-plate-img lectr-lot-skel-block" />
+          <div className="ray-plate-cap"><span className="lectr-lot-skel-block" style={{ display: 'inline-block', width: 180, height: 10 }} /></div>
         </div>
         <div>
           <div className="lectr-lot-head"><span className="lectr-lot-skel-block" style={{ width: 190, height: 10 }} /></div>
@@ -323,20 +334,18 @@ export function LotPageSkeleton() {
   );
 }
 
-function NotOnTheBook({ id, pending = false }: { id: string; pending?: boolean }) {
+function NotOnTheBook({ id }: { id: string }) {
   return (
     <div className="lectr-lot rail" style={{ paddingTop: 60, paddingBottom: 100, textAlign: 'center' }}>
       <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
       <span className="ns-kicker" style={{ marginBottom: 14, fontVariantNumeric: 'tabular-nums' }}>
         {id ? `no. ${id}` : 'no lot number'}
       </span>
-      <h1 style={{ fontSize: 'clamp(26px, 4vw, 36px)', fontWeight: 300, letterSpacing: '-0.02em', color: 'var(--color-fg)', margin: '0 0 10px' }}>
-        {pending ? <>This lot&rsquo;s record isn&rsquo;t available yet</> : <>This lot isn&rsquo;t on the book</>}
+      <h1 style={{ fontSize: 'clamp(26px, 4vw, 36px)', fontWeight: 340, letterSpacing: '-0.02em', color: 'var(--color-fg)', margin: '0 0 10px' }}>
+        This lot isn&rsquo;t on the book
       </h1>
       <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', maxWidth: 420, margin: '0 auto 26px', lineHeight: 1.55 }}>
-        {pending
-          ? 'The sold archive opens once tonight’s index is published — check back then.'
-          : 'It may have left the tape — concluded sales roll off as the crawl moves on — or the link may be misprinted.'}
+        It may have left the tape — concluded sales roll off as the crawl moves on — or the link may be misprinted.
       </p>
       <Link href="/" className="ray-call-btn ray-call-btn-primary" style={{ textDecoration: 'none' }}>
         Back to the tape <Flick size={11} />
@@ -359,35 +368,25 @@ export default function LotPage({ lotId, initialLot }: {
   // the page will compute a number from it (needsCorpusRead), or when the
   // comps section becomes reachable (compsSentinel). Nothing this page can
   // eventually show has been given up — it just arrives on demand.
-  const { allLots, loading, lastCrawl, market, totalLots, sources } = useRayData();
-  // THE LOT API (Oct 2026): the certificate never downloads the corpus. The
-  // lot resolves through /api/lot and every comp read arrives as a pack
-  // (build-time for packed upcoming lots, else /api/comps — the same reads
-  // over this lot's own candidate pool). `fullLoaded` stays false for good;
-  // `fullError` is "the API failed" (lot or comps) and drives the retry.
-  const fullLoaded = false;
-  const [apiError, setApiError] = useState(false);
-  // the lot API isn't serving yet (no index uploaded): settled, not failed
-  const [apiDown, setApiDown] = useState(false);
-  const fullError = apiError || apiDown;
-  const [apiTry, setApiTry] = useState(0);
-  const retryApi = useCallback(() => { setApiError(false); setApiTry(t => t + 1); }, []);
+  const { allLots, loading, fullLoaded, fullError, lastCrawl, market, totalLots, sources, requestFullLots } =
+    useFullLotsOnDemand(false);
   const { savedIds, isSaved, toggle } = useSavedLots();
   // Date.now() lives behind mount so SSG HTML (built on another day) never
   // hydrates against a different "in Nd" string.
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
-  // the reader's clock (null until mount) — close labels are computed at
-  // render time, never from the crawl stamp
-  const now = useNow();
-  const [showAllComps, setShowAllComps] = useState(false);
+  const [imgFailed, setImgFailed] = useState(false);
 
   const live = useMemo(() => allLots.find(l => l.id === lotId) || null, [allLots, lotId]);
 
-  // The phase-3 sold-archive tier is retired from the client: /api/lot
-  // resolves archive-tier ids and /api/comps pools them. The archive is
-  // therefore always "settled, nothing local" — never a pending download.
-  const archive = ARCHIVE_VIA_API;
+  // Phase-3 sold-archive tier (10MB, Goldin) — mounted ONLY when this page can
+  // actually need it: a resolved sports/science object (band pool) or an
+  // unresolved goldin-* id after the main corpus finished (sports sold lots
+  // live nowhere else). Every archive id is goldin-*, so a fake art id never
+  // pays the download to learn it's fake.
+  const [archive, setArchive] = useState<{ soldArchive: AuctionLot[]; archiveLoaded: boolean; archiveError: boolean }>({
+    soldArchive: [], archiveLoaded: false, archiveError: false,
+  });
   // Phase-2 permalink fast path — one indexed row from the Supabase lots
   // table resolves the certificate in ~1KB instead of waiting on the 25MB
   // shard stream. It is also the long memory: rows are upserted nightly and
@@ -412,23 +411,24 @@ export default function LotPage({ lotId, initialLot }: {
     // one shot per id on mount — live/initialLot arriving later is fine, they win below
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lotId]);
-  // ONE-LOT RESOLUTION (Oct 2026): a permalink the eager tape, the prerender
-  // and Supabase all missed resolves through the lot API (/api/lot/:id —
-  // main, archive and corpus-only tiers alike), one row, never a shard.
-  // undefined = looking · null = the API answered "not on the book" ·
-  // 'noindex' = the API failed (fullError → the retry below).
+  // SINGLE-SHARD RESOLUTION (Sep 27 2026): a permalink the eager tape, the
+  // prerender and Supabase all missed used to pull the WHOLE corpus (~35MB)
+  // to find one row. The build's lot index (pages/lot-idx-XX.json, ~20KB)
+  // names the one served shard that carries the id — fetch only that.
+  // undefined = looking · null = the index answered "not on the book" ·
+  // 'noindex' = no index on this data build (fall back to the corpus).
   const [shardLot, setShardLot] = useState<AuctionLot | null | undefined | 'noindex'>(undefined);
   useEffect(() => {
     if (!lotId || live || initialLot) { setShardLot(null); return; }
+    if (loading) return;                       // wait for the crawl stamp (?v=)
     let dead = false;
-    setShardLot(undefined);
-    fetchLot(lotId).then(
-      l => { if (!dead) setShardLot(l); },
-      e => { if (!dead) { setShardLot(isApiUnavailable(e) ? null : 'noindex'); if (isApiUnavailable(e)) setApiDown(true); else setApiError(true); } },
-    );
+    loadLotFromShard(lotId, lastCrawl).then(r => {
+      if (dead) return;
+      setShardLot(r.indexed ? r.lot : 'noindex');
+    });
     return () => { dead = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lotId, apiTry]);
+  }, [lotId, loading]);
   const shardHit = shardLot && shardLot !== 'noindex' ? shardLot : null;
   const preResolved = live || initialLot || dbLot || shardHit || null;
 
@@ -436,23 +436,18 @@ export default function LotPage({ lotId, initialLot }: {
   // band, appraisal, reference band, provenance) — ~15KB instead of the
   // corpus. undefined = loading · null = no pack (not an upcoming lot, or a
   // data build that predates the emitter → the corpus paths below stand).
-  // An API 404 (a lot only Supabase still remembers) is a SETTLED empty pack
-  // — no comps to print, never an eternal "loading"; an API failure leaves
-  // the pack null and raises fullError (the comps block offers a retry).
   const [pack, setPack] = useState<LotPack | null | undefined>(undefined);
   useEffect(() => {
     if (!lotId) { setPack(null); return; }
     if (loading) return;
     let dead = false;
-    loadLotPackStrict(lotId, lastCrawl).then(
-      p => { if (!dead) setPack(p || {}); },
-      e => { if (!dead) { setPack(null); if (isApiUnavailable(e)) setApiDown(true); else setApiError(true); } },
-    );
+    loadLotPack(lotId, lastCrawl).then(p => { if (!dead) setPack(p); });
     return () => { dead = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lotId, loading, apiTry]);
+  }, [lotId, loading]);
   const hasPack = !!pack && !fullLoaded;
-  const poolFallback = false;
+  // set when no maker shard could answer → the corpus (+ archive) path stands
+  const [poolFallback, setPoolFallback] = useState(false);
   const isGoldinId = lotId.startsWith('goldin');
   const wantsArchive =
     (!!preResolved && isSportsScienceObject(preResolved) && pack === null && poolFallback) ||
@@ -463,20 +458,70 @@ export default function LotPage({ lotId, initialLot }: {
   );
   const lot = preResolved || archiveLot;
 
-  // THE MAKER POOL is retired with the corpus: every comp read (signalWithPool,
-  // appraiseLot, soldCompBand, the reference bands, provenance) arrives in the
-  // pack above, computed at the edge over this lot's own candidate pool. The
-  // pool paths below only ever see the eager tape now.
-  const makerPool = null as AuctionLot[] | null;
-  const requestPool = useCallback(() => { /* the pack answers — nothing to fetch */ }, []);
-  const poolLots = allLots;
+  // THE MAKER POOL (Sep 27 2026): every comp read here (signalWithPool,
+  // appraiseLot, soldCompBand, the science reference band) pools SAME-ARTIST
+  // rows only — so a lot with no build-time pack (a settled lot) reads its
+  // comps over its maker's own shard (pages/maker-<slug>-N.json, archive tier
+  // included for sports/science) instead of the ~35MB corpus. Same pool, same
+  // answer; a maker without a shard (or an old data build) still asks for
+  // the corpus.
+  const [makerPool, setMakerPool] = useState<AuctionLot[] | null>(null);
 
-  // `engineCalled` = the nightly engine made this call over the whole corpus
-  // and stamped its n / median / poolIds onto the lot — honest with no pool
-  // on the wire (the pack's rows, or comp-evidence.json, carry the evidence).
+  const poolAsked = useRef(false);
+  const requestPool = useCallback(() => {
+    if (poolAsked.current || fullLoaded) return;
+    poolAsked.current = true;
+    const artist = lot?.artist;
+    const fallback = () => { setPoolFallback(true); requestFullLots(); };
+    if (!artist) { fallback(); return; }
+    loadPageStats().then(st => {
+      const n = st?.makerShards?.[artist];
+      if (!n) { fallback(); return; }
+      loadMakerLots(artist, n, lastCrawl).then(rows => {
+        if (rows) setMakerPool(rows); else fallback();
+      });
+    });
+  }, [lot, fullLoaded, requestFullLots, lastCrawl]);
+  const poolLots = fullLoaded || !makerPool ? allLots : makerPool;
+  // a settled sports/science object prints its realized band near the top —
+  // ask for the maker pool at mount (it replaces the 25MB archive probe)
+  useEffect(() => {
+    if (lot && pack === null && isSportsScienceObject(lot)) requestPool();
+  }, [lot, pack, requestPool]);
+
+  /* ── THE CORPUS GATE ───────────────────────────────────────────────────
+     Read off the lot's OWN stamped fields — never off the pool, which is the
+     thing we are deciding whether to fetch.
+
+     `engineCalled` = the nightly engine made this call over the whole corpus
+     and stamped its n / median / poolIds onto the lot. Those numbers are
+     honest with zero shards on the wire, and the evidence rows behind them
+     have a build-shipped fallback (loadCompEvidence). Everything else — an
+     uncalled lot's client-computed read, an "at comparable market" lot's
+     appraisal, the science/culture reference band, the repeat-sale
+     provenance ledger, and resolving a permalink the fast paths all missed —
+     is computed here, over the corpus, so it must ask for it. */
   const engineCall = lot?.value;
   const engineCalled = !!(engineCall && engineCall.signal && engineCall.compRatio != null
     && (engineCall.compRatio <= 5 && engineCall.compRatio >= 1 / 5));
+  const needsCorpusRead = useMemo(() => {
+    // last-resort resolution — only when the build ships no lot index
+    if (!lot) return dbSettled && shardLot === 'noindex';
+    if (pack === undefined) return false;                     // the pack is still answering
+    if (pack) return false;                                   // the build already read the corpus
+    // a settled/unpacked lot's comps are read on demand (the comps sentinel),
+    // never at first paint — the certificate itself needs nothing more
+    if (lot.status !== 'upcoming') return false;
+    if (lot.repeatSaleGroupId) return true;                   // provenance ledger
+    const mkt = ARTIST_MARKET[lot.artist];
+    if (mkt === 'science' || mkt === 'culture') return true;  // reference band
+    if (isSportsScienceObject(lot)) return false;             // the archive tier answers
+    // a fair call ('at comparable market') prints no engine median — the
+    // certificate falls through to appraiseLot, which is corpus-fed
+    if (engineCalled) return !!engineCall?.signal?.label.startsWith('at');
+    return true;                                              // client-computed read
+  }, [lot, dbSettled, shardLot, pack, engineCalled, engineCall]);
+  useEffect(() => { if (needsCorpusRead) requestFullLots(); }, [needsCorpusRead, requestFullLots]);
   // a pack IS a settled corpus read (computed over the whole book at build)
   const corpusSettled = fullLoaded || fullError || hasPack || !!makerPool;
 
@@ -497,11 +542,7 @@ export default function LotPage({ lotId, initialLot }: {
   // ── the certificate's numbers ─────────────────────────────────────────
   const isUpcoming = lot?.status === 'upcoming';
   const todayIso = (lastCrawl || (mounted ? new Date().toISOString() : '')).slice(0, 10);
-  // past its close on the READER's clock (timed lots by the minute, day-only
-  // lots once their day is over) — it hammered; results are pending
-  const isPastPending = !!lot && isUpcoming && (now != null
-    ? !isOpen(lot, now)
-    : !!lot.resultsPending && !!lot.saleDate && !!todayIso && lot.saleDate.slice(0, 10) < todayIso);
+  const isPastPending = !!lot && isUpcoming && !!lot.resultsPending && !!lot.saleDate && !!todayIso && lot.saleDate.slice(0, 10) < todayIso;
 
   // the number every card shows: crawl-time signal first, client compute after
   const sig = useMemo(() => (lot && isUpcoming ? lotSignal(lot, allLots) : null), [lot, allLots, isUpcoming]);
@@ -568,14 +609,12 @@ export default function LotPage({ lotId, initialLot }: {
     return () => { live = false; };
   }, [needEvidence, lot]);
 
-  // every comp row the page can show, newest first — the list prints 12 and
-  // a "show all" opens the rest (never a silent subset)
-  const compRowsAll = useMemo(() => {
+  const compRows = useMemo(() => {
     const pool = band ? band.pool : called ? (called.pool.length ? called.pool : (evRows || [])) : (evRows || []);
     return [...pool]
-      .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime());
+      .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
+      .slice(0, 12);
   }, [band, called, evRows]);
-  const compRows = useMemo(() => (showAllComps ? compRowsAll : compRowsAll.slice(0, 12)), [compRowsAll, showAllComps]);
 
   // ── provenance: the same physical object across the book ──
   // repeatSaleGroupId is the engine's strict physical-match verdict (photo/
@@ -602,12 +641,6 @@ export default function LotPage({ lotId, initialLot }: {
     const word = cell.hammerMedPct >= 3 ? 'run conservative' : cell.hammerMedPct <= -3 ? 'run rich' : 'hold';
     return `estimates here ${word} · hammers ${sign}${cell.hammerMedPct}% vs mid · ${cell.n.toLocaleString()} sales`;
   }, [lot, market]);
-
-  // THE WHY — the engine's forecast frame (null = no sane engine value)
-  const verdict = useMemo(() => (lot && lot.status === 'upcoming' ? lotVerdict(lot) : null), [lot]);
-  // the engine's weighted median runs over its top comps — poolIds IS that
-  // set (lib/value.ts: poolIds = top.map(id)), so its length is the honest K
-  const engineWeightedOn = lot?.value?.poolIds?.length ?? null;
 
   // Comps median: the signal's own median first (crawl-time signals carry it),
   // else the appraisal through the same pools, else the realized band.
@@ -683,15 +716,19 @@ export default function LotPage({ lotId, initialLot }: {
     return (
       <div className="terminal-shell">
         <ArtistNav activeSlug="" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
+        {wantsArchive && <ArchiveProbe onState={setArchive} />}
         {settled ? (
           <>
-            <NotOnTheBook id={lotId} pending={apiDown && !dbLot} />
-            {apiError && lotId && (
+            <NotOnTheBook id={lotId} />
+            {(fullError || archive.archiveError) && lotId && (
               <div className="rail" style={{ textAlign: 'center', paddingBottom: 60, marginTop: -60 }}>
                 <button
                   className="ray-call-btn ray-call-btn-quiet"
                   style={{ cursor: 'pointer' }}
-                  onClick={retryApi}
+                  onClick={() => {
+                    if (fullError) retryFullLoad();
+                    if (archive.archiveError) { setArchive(a => ({ ...a, archiveError: false })); retryArchiveLoad(); }
+                  }}
                 >
                   Part of the book didn&rsquo;t load — try again
                 </button>
@@ -711,9 +748,11 @@ export default function LotPage({ lotId, initialLot }: {
   const marketKey = ARTIST_MARKET[lot.artist];
   const marketLabel = MARKETS.find(m => m.key === marketKey)?.label || null;
   const monogram = (makerName.trim().charAt(0) || craftTitle(lot.title).charAt(0) || '?').toUpperCase();
+  const imgOk = !!lot.imageUrl && !imgFailed;
   const saved = isSaved(lot.id);
   const isSold = lot.status === 'sold' || lot.status === 'bought_in';
   const houseColor = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
+  const beatRate = lot.value?.signal?.beatRatePct ?? null;
   const caption = `${lot.lotNumber != null ? `Lot ${lot.lotNumber} · ` : ''}${lot.auctionHouse}${lot.saleName ? ` · ${cleanText(lot.saleName)}` : ''}`;
   // poolPartial (above): an engine pool that resolved only PART of its stamped
   // ids is the same fault as a client read — the rows under an honest
@@ -744,6 +783,7 @@ export default function LotPage({ lotId, initialLot }: {
   return (
     <div className="terminal-shell">
       <ArtistNav activeSlug={lot.artist in ARTIST_LABEL ? lot.artist : ''} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
+      {wantsArchive && <ArchiveProbe onState={setArchive} />}
       <div className="lectr-lot rail">
         <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
 
@@ -751,18 +791,29 @@ export default function LotPage({ lotId, initialLot }: {
           {/* the plate column — the photograph, then the object's paper trail
               (provenance, the grade ladder) riding beneath it on desktop */}
           <div className="lectr-lot-cola">
-          {/* the plate (NORTHSTAR §0.4): the shared LotPlate — cream 4:5 mat,
-              object at 80% multiplied into it, FIG. caption; a hotlink-blocked
-              house falls back to the maker's initial on the same mat */}
-          <LotPlate
-            className="lectr-lot-plate"
-            src={lot.imageUrl}
-            alt={craftTitle(lot.title)}
-            monogram={monogram}
-            fig={1}
-            caption={caption}
-            eager
-          />
+          {/* the plate: photograph on the elevated mat — or the monogram when
+              the house blocks the hotlink (CallPlate's exact fallback) */}
+          <figure className={`ray-plate-mat${imgOk ? '' : ' lectr-lot-noimg'}`} style={{ margin: 0 }}>
+            {imgOk ? (
+              <div className="ray-plate-img">
+                <img
+                  src={httpsImg(lot.imageUrl)}
+                  alt={craftTitle(lot.title)}
+                  referrerPolicy="no-referrer"
+                  onError={() => setImgFailed(true)}
+                  // cache hits never fire onError — complete with zero
+                  // naturalWidth at attach is a cached failure
+                  ref={el => { if (el && el.complete && el.naturalWidth === 0) setImgFailed(true); }}
+                />
+              </div>
+            ) : (
+              <div className="ray-plate-img lectr-lot-mono" style={{ position: 'relative' }}>
+                <span className="lectr-lot-monorules" aria-hidden />
+                <span className="lectr-lot-monoglyph">{monogram}</span>
+              </div>
+            )}
+            <figcaption className="ray-plate-cap">{caption}</figcaption>
+          </figure>
 
           {/* provenance — the same physical object's trips across the block.
               Strict physical-match groups only; absence of the section means
@@ -792,7 +843,7 @@ export default function LotPage({ lotId, initialLot }: {
                           {here ? ' — this listing' : ''}
                         </span>
                         <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
-                          <span style={{ color: houseColors[p.auctionHouse] || 'var(--color-text-faint)', fontWeight: 500 }}>{p.auctionHouse}</span>
+                          <span style={{ color: houseColors[p.auctionHouse] || 'var(--color-text-faint)', fontWeight: 600 }}>{p.auctionHouse}</span>
                           {p.saleName ? ` · ${cleanText(p.saleName)}` : ''}
                         </span>
                       </span>
@@ -876,9 +927,9 @@ export default function LotPage({ lotId, initialLot }: {
                 <div className="k">{isSold || isPastPending ? 'Hammered' : 'Hammers'}</div>
                 <div className="v">{formatDate(lot.saleDate)}</div>
                 {isPastPending
-                  ? <div className="s">closed · results pending</div>
-                  : !isSold && now != null && !isNaN(new Date(lot.saleDate).getTime())
-                    ? <div className="s">{closeWord(lot, now)}</div>
+                  ? <div className="s">results pending</div>
+                  : !isSold && mounted && !isNaN(new Date(lot.saleDate).getTime())
+                    ? <div className="s">{daysWord(lot.saleDate)}</div>
                     : null}
               </div>
               <div>
@@ -904,32 +955,25 @@ export default function LotPage({ lotId, initialLot }: {
               )}
             </div>
 
-            {/* THE WHY (Oct 3 2026) — the engine's expected hammer against
-                the house estimate, its likely range, the comps median, the
-                value floor and the max bid, each on a stated basis
-                (LotVerdict). Green only when the engine flagged the lot
-                (its call: the hammer runs over the estimate); ink
-                otherwise. A lot with only a comps read (no engine value)
-                prints the comps against the estimate — two numbers, no
-                multiple, no forecast it doesn't have. */}
-            {/* the house's own freshness — silent unless it was last read
-                more than 36h ago */}
-            {isUpcoming && !isPastPending && <HouseAsOf lots={[lot]} style={{ marginTop: 12 }} />}
-            {isUpcoming && verdict && (
-              <VerdictPanel lot={lot} verdict={verdict} house={lot.auctionHouse} weightedOn={engineWeightedOn} />
-            )}
-            {isUpcoming && !verdict && sig && compsMed != null && !!(lot.estimateLow || lot.estimateHigh) && (
-              <div className="lectr-vd">
-                <div className="ns-cell ns-cell-color lectr-vd-cell" data-dir="ink">
-                  <span className="ns-cell-label">What the comps realized</span>
-                  <span className="lectr-vd-stat">
-                    {fmtUsd(compsMed)}
-                    <span className="lectr-vd-vs">vs {(formatEstimate(lot) || '').replace(/ est\.$/, '')} estimate</span>
-                  </span>
-                  <span className="ns-cell-body">
-                    All-in median of {compsN != null ? `${compsN} comparable sales` : 'the comparable sales'} · {confidenceMeter(sig.confidence).word} confidence · no hammer forecast on this lot
-                  </span>
-                </div>
+            {/* THE READ AS COLOR — the engine's face in ns-cell-color
+                grammar. dir comes STRICTLY from the signal the row already
+                printed: 'up' only when the engine called Below Market (the
+                lamp); anything else falls to ink — never red, never
+                manufactured. Every figure is the gap row's own number. */}
+            {/* no printed estimate → no "vs. estimate" plate: the label would
+                name a number the page never shows (the byline prints a bid) */}
+            {isUpcoming && sig && !!(lot.estimateLow || lot.estimateHigh) && (
+              <div className="ns-cell ns-cell-color lectr-lot-read" data-dir={sig.label === 'Below Market' ? 'up' : 'ink'}>
+                {/* "vs. estimate", not "the gap" — THE GAP is the no-estimate
+                    lane's name (lanes.ts); this cell is the FLAGS read */}
+                <span className="ns-cell-label">vs. estimate · {sig.label.toLowerCase()}</span>
+                <span className="lectr-lot-read-stat">{signalMagnitude(sig.label, sig.pct)}</span>
+                <span className="ns-cell-body">
+                  {beatRate != null
+                    ? `${beatRate}% of flags like this beat their estimate`
+                    : sig.label === 'Below Market' ? 'comps over ask' : 'comps under ask'}
+                  {' · '}{confidenceMeter(sig.confidence).word} confidence
+                </span>
               </div>
             )}
 
@@ -938,8 +982,8 @@ export default function LotPage({ lotId, initialLot }: {
                 <LeaderRow k="Estimate" v={formatEstimate(lot)} />
               ) : null}
 
-              {compsMed != null && !(isUpcoming && verdict) && !(isUpcoming && sig && !!(lot.estimateLow || lot.estimateHigh)) && (
-                <LeaderRow k="Comps median" v={formatPrice(compsMed)} sub={compsN != null ? `${compsN} sales · all-in` : undefined} />
+              {compsMed != null && (
+                <LeaderRow k="Comps median" v={formatPrice(compsMed)} sub={compsN != null ? `${compsN} sales` : undefined} />
               )}
 
               {isUpcoming && !sig && band && (
@@ -954,18 +998,15 @@ export default function LotPage({ lotId, initialLot }: {
                   sub={`${formatPrice(lot.currentBid!)} bid + ~${Math.round((lotAllInFactor(lot, lot.currentBid) - 1) * 100)}% premium`}
                 />
               )}
-              {isUpcoming && !verdict && (() => {
+              {isUpcoming && (() => {
                 const floor = gatedFloor(lot);
                 if (!floor) return null;
                 return (
-                  <>
-                    <LeaderRow
-                      k="Max bid"
-                      v={`≤ ${formatPrice(maxHammerFor(floor, lot))} hammer`}
-                      sub={`walk-away at the value floor · ${formatPrice(floor)} all-in`}
-                    />
-                    <TrackOnMount event="maxbid_view" onceKey={lot.id} />
-                  </>
+                  <LeaderRow
+                    k="Max bid"
+                    v={`≤ ${formatPrice(maxHammerFor(floor, lot))} hammer`}
+                    sub={`walk-away at the value floor · ${formatPrice(floor)} all-in`}
+                  />
                 );
               })()}
               {isUpcoming && lot.bidProj?.allIn != null && (() => {
@@ -1103,7 +1144,6 @@ export default function LotPage({ lotId, initialLot }: {
                 style={{ cursor: 'pointer', background: saved ? 'var(--color-bg-elevated)' : 'var(--color-bg)' }}
                 onClick={() => toggle(lot.id, lot)}
                 aria-pressed={saved}
-                aria-label={`${saved ? 'Saved' : 'Save'}: ${titleParts.short}`}
               >
                 <svg width="11" height="13" viewBox="0 0 12 14" fill="none" aria-hidden="true" style={{ marginRight: 1 }}>
                   <path
@@ -1138,37 +1178,8 @@ export default function LotPage({ lotId, initialLot }: {
                     : 'Comparable sales'}
               </h2>
             </div>
-            <span className="lectr-lot-shctx">realized prices, all-in</span>
+            <span className="lectr-lot-shctx">medians, never means</span>
           </div>
-          {/* the distribution behind the median — every comp price the page
-              can show, with the median, the expected all-in and the estimate
-              grossed up by the premium on one axis. When the engine's pool
-              is deeper than the rows it weighted on, say exactly that. */}
-          {!compsPending && compRowsAll.length > 0 && (() => {
-            const prices = hasPack && pack!.c?.ps?.length && !band
-              ? pack!.c.ps
-              : compRowsAll.map(c => c.priceUsd || 0).filter(p => p > 0);
-            const ea = estAllIn(lot);
-            const med = verdict?.compMedianAllIn ?? (band ? band.median : compsMed);
-            const deep = !!headCalled && engineCalled && engineWeightedOn != null && headCalled.n > engineWeightedOn;
-            return (
-              <>
-                <CompStrip
-                  prices={prices}
-                  median={med ?? null}
-                  expectedAllIn={verdict ? verdict.expectedAllIn : null}
-                  estAllInLo={band ? null : ea?.lo ?? null}
-                  estAllInHi={band ? null : ea?.hi ?? null}
-                  flagged={!!verdict?.flagged}
-                />
-                {deep && (
-                  <p className="lectr-vd-note">
-                    {headCalled!.n} sales cleared the comparability gates; the median is weighted on the {engineWeightedOn} closest by similarity and recency, so those are the rows plotted and listed here. The rest carry no weight in the number.
-                  </p>
-                )}
-              </>
-            );
-          })()}
           {/* explanation copy rides a cream well — the printed-bid gate
               language below is preserved verbatim */}
           {band && (
@@ -1187,14 +1198,10 @@ export default function LotPage({ lotId, initialLot }: {
                wording preserved verbatim */
             <div className="ns-well lectr-lot-note">
               <div className="ns-well-body">
-                {apiDown
-                  ? <>Comparable sales open once tonight&rsquo;s archive index is published.</>
-                  : pack?.np
-                  ? <>Comparable sales are precomputed for lots sold in the last two years and for the live book &mdash; this lot sold before that window.</>
-                  : fullError
+                {fullError
                   ? <>
                       Comparable sales couldn&rsquo;t be loaded.{' '}
-                      <button onClick={retryApi} style={{ background: 'none', border: 'none', color: 'var(--color-butter-text)', cursor: 'pointer', font: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3, padding: 0 }}>
+                      <button onClick={() => retryFullLoad()} style={{ background: 'none', border: 'none', color: 'var(--color-butter-text)', cursor: 'pointer', font: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3, padding: 0 }}>
                         Try again
                       </button>
                     </>
@@ -1219,7 +1226,7 @@ export default function LotPage({ lotId, initialLot }: {
                   <span className="lectr-lot-comp-t">
                     <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{craftTitle(comp.title)}</span>
                     <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
-                      <span style={{ color: houseColors[comp.auctionHouse] || 'var(--color-text-faint)', fontWeight: 500 }}>{comp.auctionHouse}</span>
+                      <span style={{ color: houseColors[comp.auctionHouse] || 'var(--color-text-faint)', fontWeight: 600 }}>{comp.auctionHouse}</span>
                       {' · '}{formatDate(comp.saleDate, { month: 'short', year: 'numeric' })}
                       {comp.medium ? ` · ${deglue(cleanText(comp.medium))}` : ''}
                     </span>
@@ -1227,17 +1234,6 @@ export default function LotPage({ lotId, initialLot }: {
                   <span className="lectr-lot-comp-p">{comp.priceUsd ? formatPrice(comp.priceUsd) : '—'}</span>
                 </a>
               ))}
-              {compRowsAll.length > 12 && (
-                <button
-                  type="button"
-                  className="ray-call-btn ray-call-btn-quiet"
-                  style={{ cursor: 'pointer', marginTop: 14 }}
-                  aria-expanded={showAllComps}
-                  onClick={() => setShowAllComps(v => !v)}
-                >
-                  {showAllComps ? 'Show the newest 12' : `Show all ${compRowsAll.length} comps`}
-                </button>
-              )}
             </div>
           )}
         </section>

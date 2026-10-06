@@ -23,17 +23,17 @@ const fmtMult = (m: number) => (m >= 10 ? m.toFixed(1) : m.toFixed(2));
 const CSS = `
 .ray-gl.ray-vm-card{padding:var(--card-pad)}
 .ray-gl .ray-vm-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
-.ray-gl .ray-vm-title{font-size:13.5px;font-weight: 500;color:var(--color-fg)}
+.ray-gl .ray-vm-title{font-size:13.5px;font-weight:550;color:var(--color-fg)}
 .ray-gl .ray-vm-method{font-size:10.5px;color:var(--color-text-muted);text-align:right}
 .ray-gl-strip{display:grid;column-gap:10px;align-items:end;margin-top:4px}
 .ray-gl-rung{display:flex;flex-direction:column;align-items:center;text-align:center;min-width:0}
-.ray-gl-mult{font-family:var(--font-mono),monospace;font-size:17px;font-weight: 500;letter-spacing:-0.5px;color:var(--color-fg);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ray-gl-mult{font-family:var(--font-mono),monospace;font-size:17px;font-weight:500;letter-spacing:-0.5px;color:var(--color-fg);font-variant-numeric:tabular-nums;white-space:nowrap}
 .ray-gl-mult .x{font-size:11px;color:var(--color-text-secondary);margin-left:1px}
 .ray-gl-rung[data-fitted="false"] .ray-gl-mult{color:var(--color-text-secondary)}
 .ray-gl-barwrap{display:flex;align-items:flex-end;height:${BAR_MAX + 6}px;margin:6px 0 8px}
 .ray-gl-bar{width:14px;border-radius:2px 2px 0 0;background:var(--color-fg);opacity:0.7}
 .ray-gl-rung[data-fitted="false"] .ray-gl-bar{opacity:0.25}
-.ray-gl-grade{font-size:12.5px;font-weight: 500;color:var(--color-fg)}
+.ray-gl-grade{font-size:12.5px;font-weight:650;color:var(--color-fg)}
 .ray-gl-old{font-size:10.5px;color:var(--color-text-muted);margin-top:2px;white-space:nowrap}
 .ray-gl-old s{text-decoration-color:color-mix(in srgb,currentColor 60%,transparent)}
 .ray-gl-pairs{font-size:10px;color:var(--color-text-muted);font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap}
