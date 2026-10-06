@@ -1,7 +1,7 @@
 import type { AuctionLot } from '../../app/types';
 import { subCatOf, sportSlugOf } from './sub-cats';
 import { extractReference } from './identity-enrich';
-import { looksLikeCard, playerSlugOf } from '../../app/lib/cards';
+import { looksLikeCard, playerSlugOf, parseCard } from '../../app/lib/cards';
 import { classifyForm, objectClassOf, cleanGoldinTitle, watchKey } from '../../app/lib/comps';
 import { vetReference, readDescriptionReference, splitWatchRef } from '../../app/lib/watch-ref';
 import { titleTokens as titleTokensOf, extractEdition, extractSerials, toUsdDated, fxRateFor } from '../../app/lib/normalize';
@@ -359,13 +359,25 @@ export function stampSubCats(lots: Lot[]): { subCats: number; drills: number; sp
     const inner = m.get(k) || m.set(k, new Map()).get(k)!;
     inner.set(sport, (inner.get(sport) || 0) + 1);
   };
+  // (wave 2) a CARD row's player is parsed from its title here (normalize runs
+  // before build-market stamps _card): Goldin's sport-stamped cards teach the
+  // player → sport map, and the expansion houses' unstamped cards read it
+  const CARD_SLUGS_SC = new Set(['sports-cards', 'graded-cards']);
+  const cardPlayerCache = new Map<string, string | null>();
+  const cardPlayer = (r: Record<string, unknown>): string | null => {
+    if (!CARD_SLUGS_SC.has(r.artist as string)) return null;
+    const t = String(r.title || '');
+    let p = cardPlayerCache.get(t);
+    if (p === undefined) { p = parseCard(t).playerSlug; cardPlayerCache.set(t, p); }
+    return p;
+  };
   for (const l of lots) {
     const r = l as unknown as Record<string, unknown>;
     const sport = sportSlugOf(r.sport);
     if (!sport) continue;
     if (r._pid != null) vote(pidVotes, String(r._pid), sport);
     const card = r._card as { playerSlug?: string } | undefined;
-    const player = (r.playerSlug as string) || card?.playerSlug;
+    const player = (r.playerSlug as string) || card?.playerSlug || cardPlayer(r);
     if (player) vote(playerVotes, player, sport);
   }
   const settle = (m: Map<string, Map<string, number>>): Map<string, string> => {
@@ -377,7 +389,7 @@ export function stampSubCats(lots: Lot[]): { subCats: number; drills: number; sp
     });
     return out;
   };
-  const maps = { byPid: settle(pidVotes), byPlayer: settle(playerVotes) };
+  const maps = { byPid: settle(pidVotes), byPlayer: settle(playerVotes), cardPlayer: (l: Record<string, unknown>) => cardPlayer(l) };
 
   let subCats = 0, drills = 0, sportRecovered = 0;
   for (const l of lots) {

@@ -189,6 +189,25 @@ test('class 3 · mass items kept in culture: coins, toys, magazine lots, mass ca
   assert.equal(C("Audrey Hepburn's Givenchy Haute Couture Cocktail Gown, Autumn-Winter 1966", "Sotheby's", 'entertainment-memorabilia', 'Fashion Icons'), 'entertainment-memorabilia');
 });
 
+test('class 16 · drill coverage: a sports lot\'s own words name its sport; an astronaut names the program', () => {
+  const D = (artist: string, title: string) => subCatOf({ artist, title }).drill;
+  assert.equal(D('graded-cards', '1909-11 T206 White Borders Josh Devore - PSA EX 5'), 'baseball');
+  assert.equal(D('graded-cards', '1888 N172 Old Judge Cigarettes #360-6 Dave Orr - PSA VG 3'), 'baseball');
+  assert.equal(D('tickets-passes', '1960 World Series Game 7 Two-Part Ticket Stub - PSA Graded'), 'baseball');
+  assert.equal(D('autographs', '1934 New York Yankees Team-Signed Baseball (24 Signatures) Including Babe Ruth and Lou Gehrig'), 'baseball');
+  assert.equal(D('graded-cards', '116 1911 E80 Philadelphia Caramel Monte & Abe Attell - SGC GOOD 30'), 'boxing-mma');
+  assert.equal(D('graded-cards', '1987-1988 Fleer Basketball #9 Charles Barkley SGC MINT 96'), 'basketball');
+  assert.equal(D('memorabilia', 'Antique Unmarked Leather Satchel'), null);
+  const S = (title: string) => subCatOf({ artist: 'space-exploration', title }).drill;
+  assert.equal(S('Neil Armstrong Signed Photograph'), 'apollo');
+  assert.equal(S('Moonwalkers: Shepard and Irwin Signed Photographs'), 'apollo');
+  assert.equal(S('Gus Grissom Check'), 'mercury-gemini');
+  assert.equal(S('Wally Schirra and Walt Cunningham Signed Oversized Photograph'), 'apollo');
+  assert.equal(S('Wally Schirra and Frank Borman Signed Photograph'), 'mercury-gemini');
+  assert.equal(S('Skylab Medical Experiment Altitude Test (SMEAT) Beta Patches (8)'), 'apollo');
+  assert.equal(S('N1-L3 Soviet Lunar Launch Vehicle Model - Nearly Five Feet Tall'), 'soviet');
+});
+
 test('class 1 · culture kind reads the description when the title is a bare name; signed pieces; plurals', () => {
   const K = (title: string, description = '', o: R = {}) => subCatOf({ artist: 'entertainment-memorabilia', title, itemClass: cultureItemClass({ title, description, ...o }) }).subCat;
   // the object lives in the description (Christie's / Sotheby's culture titles)
