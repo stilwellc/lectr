@@ -995,7 +995,7 @@ export default function AboutPage() {
         </section>
       </div>
 
-      <Colophon record={F.n > 500 ? { n: F.n, medianPerfPct: F.medianPerfPct } : null} />
+      <Colophon record={F.n > 500 ? { n: F.n, medianPerfPct: F.medianPerfPct, hammerMedianPct: F.hammerMedianPct ?? null } : null} />
     </div>
   );
 }

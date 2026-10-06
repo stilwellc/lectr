@@ -147,7 +147,7 @@ export default function ReceiptsPage() {
                     </span>
                     <span className="rcp-sub">
                       {record.card.medRatio != null
-                        ? <>hammer vs our read, median · {record.card.within30Pct}% within ±30% · {record.card.graded} graded</>
+                        ? <>all-in vs our read, median · {record.card.within30Pct}% within ±30% · {record.card.graded} graded, unsold count as misses</>
                         : <>{record.card.n} calls on the tape · {record.card.graded} settled · the median publishes at 20 graded</>}
                     </span>
                   </div>
@@ -373,7 +373,7 @@ export default function ReceiptsPage() {
           </section>
         </RayEntrance>
       )}
-      <Colophon record={F ? { n: F.n, medianPerfPct: F.medianPerfPct } : null} />
+      <Colophon record={F ? { n: F.n, medianPerfPct: F.medianPerfPct, hammerMedianPct: F.hammerMedianPct ?? null } : null} />
     </div>
   );
 }

@@ -366,7 +366,7 @@ function Card({ p, s, a }: { p: Post; s: Size; a: Assets }) {
   const bigPx = s.tall ? 150 : 104;
   const sub = isIndex
     ? `${p.method === 'repeat-sale' ? 'repeat-sale index' : 'hedonic index'} · ${p.basis} · 95% interval ${signed(p.ciLo)} to ${signed(p.ciHi)} · ${p.n.toLocaleString()} ${p.nLabel}`
-    : `median over estimate, flagged vs not · ${p.beatHighPct}% beat the high estimate · ${p.failToSellPct}% failed to sell · as of ${p.asOf}`;
+    : `median over estimate all-in, flagged vs not · ${p.beatHighPct}% beat the high estimate all-in (${p.hammerBeatPct}% at the hammer) · ${p.failToSellPct}% failed to sell · as of ${p.asOf}`;
 
   return (
     <div style={ground}>

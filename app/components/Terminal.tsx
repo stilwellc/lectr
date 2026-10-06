@@ -537,7 +537,7 @@ export function Colophon({ lotCount, houseCount, record, lastCrawl }: {
   lastCrawl?: string;
   /** the backtest's flagged record — the spec line prints it when passed;
       otherwise the line ends in a quiet SEE THE RECORD citation */
-  record?: { n: number; medianPerfPct: number } | null;
+  record?: { n: number; medianPerfPct: number; hammerMedianPct?: number | null } | null;
 }) {
   const [inView, setInView] = useState(false);
   const ref = useRef<HTMLElement | null>(null);
@@ -571,7 +571,7 @@ export function Colophon({ lotCount, houseCount, record, lastCrawl }: {
           {read && <span>last read <b>{read}</b></span>}
           {record && record.n > 500 ? (
             <span>
-              flagged <Link href="/receipts"><b className="up">{fmtSignedPct(record.medianPerfPct)}</b> median over <b>{record.n.toLocaleString()}</b> replays</Link>
+              flagged <Link href="/receipts"><b className="up">{fmtSignedPct(record.medianPerfPct)}</b> median vs estimate, all-in{record.hammerMedianPct != null ? <> ({fmtSignedPct(record.hammerMedianPct)} hammer)</> : null}, over <b>{record.n.toLocaleString()}</b> replays</Link>
             </span>
           ) : (
             <span><Link href="/receipts">see the record</Link></span>
