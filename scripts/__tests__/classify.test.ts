@@ -87,3 +87,22 @@ test('class 2 · art: Madoura ceramics → sculpture, unique mediums → origina
   assert.equal(l.category, 'sculpture');
   assert.deepEqual(reclassifyLot(l), { fired: [], drop: false }, 'idempotent');
 });
+
+test('class 3 · sports-house pop-memorabilia → sports kinds; toys/comics evicted; genuine pop stays', () => {
+  const P = (title: string, house = 'Huggins & Scott') => move({ auctionHouse: house, artist: 'pop-memorabilia', title });
+  assert.equal(P('1955-56 Parkhurst Hockey Complete Set of (79/79) Cards'), 'graded-cards');
+  assert.equal(P('Mostly 2000-Present Multi-Sport Warehouse Lot of (750,000+) Cards'), 'graded-cards');
+  assert.equal(P('(11) 1947-1953 New York Yankees Programs'), 'programs-publications');
+  assert.equal(P('1954 Sports Illustrated Issue #1', 'REA'), 'programs-publications');
+  assert.equal(P('1925 Pittsburgh Pirates World Series Champions Pin', 'REA'), 'memorabilia');
+  assert.equal(P('234 1920s All Star Boxing Show with Tommy Ryan, Erie, Pennsylvania Poster', 'Lelands'), 'memorabilia');
+  assert.equal(P('(5) 1963-1967 Pro Football Championship Game Programs'), 'programs-publications');
+  assert.equal(P('(6) CGC Graded 1944-52 Captain Marvel Adventures “Gold Age” Comic Books'), DROP);
+  assert.equal(P('1971 Beach Boys Syria Mosque Concert Poster', 'REA'), 'pop-memorabilia');
+  assert.equal(P('1910s to 1960s Non-Sport Set Collection (26 sets)', 'REA'), DROP);
+  // Hake's: toys and comics have no home, whatever slug they were filed under
+  assert.equal(move({ auctionHouse: "Hake's", artist: 'pop-memorabilia', title: 'STAR WARS: RETURN OF THE JEDI (1983) - BIB FORTUNA 65 BACK-B CARDED ACTION FIGURE (TSUKUDA STICKER).' }), DROP);
+  assert.equal(move({ auctionHouse: "Hake's", artist: 'graded-cards', title: 'AMAZING SPIDER-MAN #361 APRIL 1992 CGC 7.5 VF- (FIRST CARNAGE).' }), DROP);
+  assert.equal(move({ auctionHouse: "Hake's", artist: 'unopened-wax', title: 'TEENAGE MUTANT NINJA TURTLES (1990) - SLUDGEMOBILE VEHICLE IN SEALED BOX.' }), DROP);
+  assert.equal(move({ auctionHouse: "Hake's", artist: 'pop-memorabilia', title: 'LARGE I LIKE IKE BLUE PORTRAIT BUTTON.' }), 'pop-memorabilia');
+});

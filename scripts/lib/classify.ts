@@ -55,9 +55,11 @@ const CARD_NO_RE = /#\s?[A-Za-z0-9][A-Za-z0-9/-]*/;
 /** card product names (sets + manufacturers) */
 const CARD_BRAND_RE = /\b(topps|bowman|panini|upper deck|fleer|donruss|goudey|play ball|o-pee-chee|score|pro set|hoops|skybox|prizm|optic|leaf|mosaic|stadium club|pinnacle|finest|metal universe|sp authentic|exquisite|national treasures|flawless|immaculate|kellogg'?s|bazooka|parkhurst|sportflics|playoff|contenders|spectra|obsidian|crown royale|zenith|flair|e-x2000|press pass|tobacco card)\b/i;
 /** the physical OBJECT nouns that make a branded/graded title memorabilia, not a card */
-const CARD_OBJECT_RE = /\b(jerseys?|uniform|bats?|gloves?|cleats|boots|helmet|trunks|shorts|jacket|shoes?|sneakers?|shirt|robe|photo|photograph|(?:signed|official|game|onl|oml|oal|obal|nfl|nba|wilson|spalding|rawlings) (?:base|basket|foot|soccer |golf )?ball|puck|pennant|banner|trophy|ring|belt|ticket|stub|pass|poster|painting|lithograph|display|plaque|bobblehead|statue|program|magazine|letter|check|contract|cut|envelope|cover)\b/i;
-const CARD_WORD_RE = /\bcards?\b(?![- ]used)|\bhand[- ]cut\b|\b(?:psa|sgc|bgs|beckett)[- ](?:graded|encapsulated)\b|\bstickers?\b/i;
-const CARD_SET_RE = /\b(?:complete|partial|near[- ]complete|master|team) (?:base )?set\b|\bset \(\d+/i;
+const CARD_OBJECT_RE = /\b(jerseys?|uniform|bats?|gloves?|cleats|boots|helmet|trunks|shorts|jacket|shoes?|sneakers?|shirt|robe|photo|photograph|(?:signed|official|game|onl|oml|oal|obal|nfl|nba|wilson|spalding|rawlings) (?:base|basket|foot|soccer |golf )?ball|puck|pennant|banner|trophy|ring|belt|ticket|stub|pass|poster|painting|lithograph|display|plaque|bobblehead|statue|program|magazine|letter|check|contract|cut|envelope|cover|bobb(?:ing|in'?|le)[- ]?heads?|statues?|figurines?|miniatures?|pins?|pinbacks?|buttons?|coins?)\b/i;
+const CARD_WORD_RE = /(?<!playing )\bcards?\b(?![- ]used)|\bhand[- ]cut\b/i;
+/** card-ish words that only count when no object noun is named ("SGC Encapsulated" also slabs cut signatures) */
+const CARD_WEAK_WORD_RE = /\b(?:psa|sgc|bgs|beckett)[- ]?(?:graded|encapsulated)\b|\bstickers?\b/i;
+const CARD_SET_RE = /\b(?:complete|partial|near[- ]complete|master|team)(?: (?:&|and) partial)? (?:base )?sets?\b|\bset \(\d+/i;
 /** paper publications (graded magazines read like slabs: "… Cover (Newsstand) - CGC 9.4") */
 export const PUBLICATION_RE = /\b(sports illustrated|magazines?|newsstand|yearbooks?|media guides?|press guides?|programs?|programmes?|scorecards?|score cards?|newspapers?|publications?|annuals?|guides?)\b/i;
 /** comics and mass toys — never a home anywhere (culture doctrine: no mass items) */
@@ -72,6 +74,7 @@ export function isCardTitle(title: string | null | undefined): boolean {
   if (looksLikeCard(t) || leadsWithSetCode(t) || SHORT_YEAR_SET_CODE_RE.test(t)) return true;
   if (CARD_WORD_RE.test(t)) return true;
   const obj = CARD_OBJECT_RE.test(t);
+  if (CARD_WEAK_WORD_RE.test(t) && !obj) return true;
   if (CARD_SET_RE.test(t) && !obj) return true;
   if (PUBLICATION_RE.test(t)) return false;
   const lead = YEAR_LEAD_RE.test(t);
@@ -90,7 +93,7 @@ export function isCardTitle(title: string | null | undefined): boolean {
 // the REA/H&S/Lelands/SCP/ML/LOTG expansion houses): the object's own words
 // decide, most specific first.
 // ═══════════════════════════════════════════════════════════════════════════
-export const SEALED_RE = /\b(unopened|factory[- ]sealed|sealed (?:box|case|pack)|wax (?:pack|box|case)|hobby (?:box|case)|blaster(?: box)?|cello (?:pack|box)|rack (?:pack|box)|jumbo (?:pack|box)|vending (?:box|case)|fat pack|booster (?:box|pack))\b/i;
+export const SEALED_RE = /\b(unopened|factory[- ]sealed|sealed (?:box|case|pack)(?:e?s)?|wax (?:pack|box|case)(?:e?s)?|hobby (?:box|case)(?:e?s)?|blaster(?: box(?:es)?)?|cello (?:pack|box)(?:e?s)?|rack (?:pack|box)(?:e?s)?|jumbo (?:pack|box)(?:e?s)?|vending (?:box|case)(?:e?s)?|fat packs?|booster (?:box|pack)(?:e?s)?)\b/i;
 /** EXPLICIT use language — a jersey is not game-used because it is a jersey */
 export const GAME_USED_RE = /\b(game[- ]?(?:used|worn|issued)|match[- ]?(?:used|worn|issued)|player[- ]?worn|team[- ]?issued|fight[- ]?worn|tour(?:nament)?[- ]?(?:used|worn)|race[- ]?(?:used|worn)|warm[- ]?up[- ]?worn|practice[- ]?(?:worn|used)|bench[- ]?worn|photo[- ]?match(?:ed)?|gamer|mears|meigray|worn by|used by)\b/i;
 const TROPHY_RE = /\b(trophy|trophies|awards?|awarded|championship rings?|world series rings?|super bowl rings?|title belt|winners?'? medal|olympic (?:gold |silver |bronze )?medal|mvp award|heisman|plaque award|presentational ring|(?:final four|championship|title|world series|super bowl|pennant|all-star|league) rings?|presented to)\b/i;
@@ -128,6 +131,37 @@ export function goldinSportKind(title: string | null | undefined): string {
   if (SEALED_RE.test(t)) return 'unopened-wax';
   if (isCardTitle(t)) return 'sports-cards';
   return sportsObjectKind(t, 'sports-memorabilia');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 3 · SPORTS-HOUSE POP-MEMORABILIA — REA / H&S / Lelands / LOTG / SCP / ML
+// filed anything with poster|figure|record|memorabilia in it as
+// 'pop-memorabilia' (a CULTURE slug): 79% were sports (fight posters, team
+// postcards, card sets, publications). At these houses a lot is sports unless
+// it reads non-sport; Hake's (a pop house) toys and comics have no home.
+// ═══════════════════════════════════════════════════════════════════════════
+export const SPORTS_EXPANSION_HOUSES = new Set(['REA', 'Huggins & Scott', 'Lelands', 'Love of the Game', 'SCP', 'Memory Lane']);
+export const NON_SPORT_RE = /\b(beatles|rolling stones|elvis|presley|beach boys|springsteen|concert|rock (?:and|&|n|'n'?) roll|albums?|vinyl|records?\b(?! book)|movie|film|hollywood|disney|mickey mouse|star wars|star trek|superman|batman|marvel|comics?|cartoons?|hanna[- ]barbera|television|tv show|howdy doody|monkees|kiss|guitar|jazz|sinatra|marilyn monroe|president(?:ial)?|political|campaign|lincoln|kennedy|eisenhower|nixon|roosevelt|truman|civil war|world war|wwii|apollo|nasa|astronaut|circus|wizard of oz|g\.?i\.? joe|barbie|non[- ]sport|three stooges|lone ranger|hopalong|roy rogers|gene autry|chaplin|laurel (?:and|&) hardy)\b/i;
+export const SPORT_WORD_RE = /\b(baseball|football|basketball|hockey|boxing|boxer|golf|tennis|olympics?|soccer|wrestling|racing|nascar|world series|super bowl|stanley cup|all[- ]star|hall of fame|hof|mlb|nfl|nba|nhl|pcl|nflpa|mlbpa|aba|afl|yankees|dodgers|giants|cubs|red sox|white sox|cardinals|tigers|pirates|athletics|senators|browns|braves|reds|phillies|orioles|indians|colts|packers|bears|celtics|lakers|bulls|knicks|canadiens|maple leafs|bruins|red wings|fight|bout|heavyweight|ali|babe ruth|gehrig|mantle|cobb|wagner|dimaggio|mays|aaron|koufax|robinson|clemente|thorpe|joe louis|dempsey|jordan|gretzky|pel[eé]|bats?|glove|mitt|helmet|jersey|uniform|pennant|scorecard|press pin|stadium|ballpark|team|league|champions?|pitcher|batter|catcher)\b/i;
+/** graded/carded mass toys and comic books as the auction houses print them */
+const TOY_GRADE_RE = /\b(afa (?:qualified |[a-z+-]+ )?\d{2}|ukg \d{2}|loose action|\d{1,2}[- ]back(?:-[a-z])?|vehicle (?:in|afa)|playset)\b/i;
+const COMIC_ISSUE_RE = /#\d+[a-z]? (?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b|\bcgc\b(?! (?:psa|card))|comic book page|comic strip|original art\b(?! ?work)/i;
+
+/** Hake's toys / comics (any slug) → no home. */
+export function isMassToyOrComic(title: string | null | undefined): boolean {
+  const t = String(title || '');
+  return COMIC_RE.test(t) || MASS_TOY_RE.test(t) || TOY_GRADE_RE.test(t) || COMIC_ISSUE_RE.test(t);
+}
+
+/** A sports expansion house's 'pop-memorabilia' lot → its real home. */
+export function sportsHousePopKind(title: string | null | undefined): string | null {
+  const t = String(title || '');
+  const sport = SPORT_WORD_RE.test(t);
+  if (!sport && isMassToyOrComic(t)) return DROP;
+  if (!sport && NON_SPORT_RE.test(t)) return isCardTitle(t) || /non[- ]sport/i.test(t) ? DROP : null; // genuine pop item stays culture
+  if (/\b(?:tickets?|stubs?)\b/i.test(t)) return 'tickets-passes';
+  if (isCardTitle(t)) return 'graded-cards';
+  return sportsObjectKind(t, 'memorabilia');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -185,6 +219,18 @@ export const RECLASS_RULES: ReclassRule[] = [
       if (l.auctionHouse !== 'Goldin' || l.artist !== 'sports-cards') return null;
       const k = goldinSportKind(l.title);
       return k === 'sports-cards' ? null : k;
+    },
+  },
+  {
+    cls: 'sports-house-pop-memorabilia',
+    apply: l => {
+      if (l.auctionHouse === "Hake's") {
+        const t = String(l.title || '');
+        if (COMIC_RE.test(t) || COMIC_ISSUE_RE.test(t)) return DROP;
+        return (MASS_TOY_RE.test(t) || TOY_GRADE_RE.test(t)) && !SIGNED_RE.test(t) ? DROP : null;
+      }
+      if (l.artist !== 'pop-memorabilia' || !SPORTS_EXPANSION_HOUSES.has(l.auctionHouse || '')) return null;
+      return sportsHousePopKind(l.title);
     },
   },
 ];

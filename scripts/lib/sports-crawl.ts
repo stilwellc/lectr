@@ -15,6 +15,7 @@ import { fxRateFor, toUsdDated } from '../../app/lib/normalize';
 import { readSegment, writeSegment } from '../corpus-io';
 import type { PriceBasis, Currency, AuctionLot } from '../../app/types';
 import { leadsWithSetCode } from './set-codes';
+import { NON_SPORT_RE, SPORT_WORD_RE } from './classify';
 
 // Nightly crawls a BOUNDED window; the segment must ACCUMULATE. Read the last-
 // good segment, union the fresh lots over it (fresh id wins), write the union.
@@ -338,7 +339,11 @@ export function classifySports(catLabel: string, title: string): SportsCategory 
   if (/\b(seat|turnstile|base|stadium|signage|display)\b/.test(both)) return 'equipment';
   if (/\b(signed|autograph|auto|cut signature|inscribed)\b/.test(both) && !/\bcard\b/.test(c)) return 'autograph';
   if (/\bcard\b/.test(both) || /\b(psa|sgc|bgs|cgc)\s*(gem|mint|nm|ex|vg|good|fair|poor|pr|\d)/.test(both) || /\b(topps|bowman|leaf|fleer|donruss|upper deck|panini|goudey|cracker jack|t20[0-9]|e9[0-9])\b/.test(both)) return 'graded-card';
-  if (/\b(poster|prop|costume|comic|toy|figure|record|album|guitar|memorabilia)\b/.test(both)) return 'pop-memorabilia';
+  // pop-memorabilia (a CULTURE slug) only when the lot reads NON-sport — at a
+  // sports house a fight poster or a team figure is sports memorabilia (Oct 6
+  // 2026 audit: 79% of 14k pop-memorabilia rows were sports). The same rule
+  // re-runs over the back-catalogue: classify.ts sportsHousePopKind.
+  if (NON_SPORT_RE.test(both) && !SPORT_WORD_RE.test(both)) return 'pop-memorabilia';
   return 'other-memorabilia';
 }
 
