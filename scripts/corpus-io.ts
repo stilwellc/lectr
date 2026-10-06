@@ -271,7 +271,7 @@ export function splitIntoSegments(allLots: Record<string, unknown>[]): Record<st
 const STRIP = new Set([
   'titleTokens','normalizedTitle','objectFingerprint','modelKey',
   'materialTokens','mediumCanon','authCert','gradeLabel','description','titleRaw',
-  'serialNo','editionOf','editionTotal','editionMarker','dimSource','yearSource',
+  'serialNo','caseNo','movementNo','editionOf','editionTotal','editionMarker','dimSource','yearSource',
   'yearIsCirca','sizeClass','fxRecovered','fxRate','fxAsOf',
   'schemaVersion','validatedAt','firstSeenKnown','platform','saleDateTime',
   'buyerPremiumPct','hammerNative','premiumNative','realizedNative','hammerUsd',

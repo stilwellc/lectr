@@ -25,7 +25,7 @@ test('the set name and card identity are read past the lot number', () => {
 
 test('no regressions on the forms without a lot number', () => {
   assert.equal(parseCard("'96 Topps #1 Ken Griffey Jr.").year, '1996');
-  assert.equal(parseCard('96-97 Fleer #1 Michael Jordan').year, '1996');
+  assert.equal(parseCard('96-97 Fleer #1 Michael Jordan').year, '1996-97');
   assert.equal(parseCard('21 Topps Chrome #1 Shohei Ohtani').year, '2021');
   assert.equal(parseCard('2020 Panini Prizm #278 Joe Burrow - PSA 10').year, '2020');
   assert.equal(parseCard('2020 Panini Prizm #278 Joe Burrow - PSA 10').setName, 'Panini Prizm');

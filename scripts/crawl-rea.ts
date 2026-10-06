@@ -11,6 +11,7 @@
 import * as cheerio from 'cheerio';
 import type { AuctionLot, LotCategory } from '../app/types';
 import { assertInvariants } from '../app/lib/validate';
+import { saleCloseFor } from './lib/sale-close-dates';
 import { getHtml, decodeHtml, classifySports, pseudoArtist, readAuth, stampRealizedUsd, stampUpcomingUsd, seasonToDate, writeMergedSegment, writeMergedSegmentWithLive, settledOnly, liveOnly, mapPool } from './lib/sports-crawl';
 import { readSegment } from './corpus-io';
 import { reportLegHealth, reportAndExit } from './lib/leg-health';
@@ -83,10 +84,15 @@ export function parseReaLot(html: string, id: number | string, house: 'REA' | 'H
 
   const catLabel = map['category'] || map['auction category'] || '';
   const auctionLabel = map['auction'] || '';
-  // the archive posts only the auction's season/month ("2026 Summer") — the
-  // day is a mid-month stub, flagged datePrecision:'month' so nothing reads it
-  // as a real close day (the live bid page, when read, carries the real one)
-  const saleDate = seasonToDate(auctionLabel) || seasonToDate(rawTitle) || null;
+  // the archive posts only the auction's season/month ("2026 Summer"). The
+  // close day comes from the cited close-date table (sale-close-dates.ts):
+  // the real close ('day') or a conservative season-end bound ('season'),
+  // never after today (a sold row is known by the day it is read). A label
+  // the table leaves alone (REA monthly sales, which close inside their
+  // month) keeps the mid-month stub flagged datePrecision:'month' so nothing
+  // reads it as a real close day (the live bid page carries the real one).
+  const close = saleCloseFor(house, auctionLabel, TODAY);
+  const saleDate = close ? close.date : (seasonToDate(auctionLabel) || seasonToDate(rawTitle) || null);
   if (!saleDate) return null; // can't date it → skip (invariant needs YYYY-MM-DD)
 
   const cat = classifySports(catLabel, title);
@@ -112,7 +118,7 @@ export function parseReaLot(html: string, id: number | string, house: 'REA' | 'H
     auctionHouse: house,
     saleName: auctionLabel || null,
     saleDate,
-    datePrecision: 'month',
+    datePrecision: close ? close.precision : 'month',
     lotNumber: map['lot #'] ? parseInt(map['lot #'].replace(/[^0-9]/g, ''), 10) || null : null,
     ...stampRealizedUsd(soldNum, saleDate),
     // v2 auth fields (existing schema): the grade + who certified it

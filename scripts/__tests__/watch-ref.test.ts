@@ -8,7 +8,9 @@
 import { test } from 'node:test';
 import * as assert from 'assert';
 import { watchKey, watchKeyKind } from '../../app/lib/comps';
-import { readWatchReference, vetReference } from '../../app/lib/watch-ref';
+import { readWatchReference, vetReference, splitWatchRef, refSuffixMaterial, readWatchKey, readDescriptionReference } from '../../app/lib/watch-ref';
+import { coarseWatchMaterial } from '../../app/lib/comps';
+import { watchMaterialCoarse, numericWatchRef } from '../../app/lib/identity';
 import { extractReference } from '../lib/identity-enrich';
 import { enrichWatchReferences } from '../lib/corpus-normalize';
 
@@ -50,7 +52,8 @@ test('movement / case / serial numbers are never a reference', () => {
 
 test('bare refs only in the brand shape; bare model words and cross-brand lines rejected', () => {
   assert.equal(readWatchReference('A steel Rolex 116610LN with box and papers', 'rolex'), '116610ln');
-  assert.equal(readWatchReference('Audemars Piguet 26240ST Royal Oak Chronograph', 'audemars-piguet'), '26240st');
+  // (Oct 6: AP's material code is not part of the key: 26240ST/26240OR are one reference)
+  assert.equal(readWatchReference('Audemars Piguet 26240ST Royal Oak Chronograph', 'audemars-piguet'), '26240');
   assert.equal(readWatchReference('Cartier Tank Française W51002Q3 steel', 'cartier'), 'w51002q3');
   assert.equal(readWatchReference('Rolex: a 9ct gold midsize wristwatch signed rolex, 57371, london hallmark 1949', 'rolex'), null);
   assert.equal(readWatchReference('Rolex, Oyster, Precision, wristwatch, 34,5 mm.', 'rolex'), null);            // bare "oyster"
@@ -82,4 +85,70 @@ test('enrichWatchReferences re-derives: heals serials and model names, leaves ot
   // idempotent
   enrichWatchReferences(lots as any);
   assert.deepEqual(lots.map(l => l.reference), [null, '5513', '145.022', '1675', '12345']);
+});
+
+/* ── Oct 6 2026 identity fix wave: core reference + suffix material, glued
+   text, whole loose tokens, 2-digit Patek refs, description fallback, ONE
+   material reader. Titles are real Oct 5 corpus titles. */
+
+test('Patek/AP material suffixes leave the key and feed the material reader', () => {
+  const pk = (t: string) => readWatchKey(t, 'patek-philippe')?.key;
+  assert.equal(pk('PATEK PHILIPPE, REF. 3970EP DIAMOND INDEX PLATINUM'), '3970');
+  assert.equal(pk('Reference 5015J | A yellow gold automatic wristwatch'), '5015');
+  assert.equal(pk('Nautilus, Reference 5740/1G-001 | A white gold perpetual calendar'), '5740/1');
+  assert.equal(pk("REF. 5268/200R-001, MOVEMENT NO. 7'450'514"), '5268/200');
+  assert.equal(readWatchKey('ROYAL OAK, REF.25820SP, A PLATINUM AND STAINLESS STEEL', 'audemars-piguet')?.key, '25820');
+  assert.equal(readWatchKey('reference 15204or.oo.1240or.01 royal oak openworked', 'audemars-piguet')?.key, '15204');
+  // Rolex letter suffixes are models, not metals: kept
+  assert.equal(readWatchKey('ROLEX Ref. 116500LN Daytona', 'rolex')?.key, '116500ln');
+  assert.deepEqual(splitWatchRef('patek-philippe', '5711/1a'), { core: '5711/1', material: 'steel' });
+  assert.deepEqual(splitWatchRef('audemars-piguet', 'ba25682.002qua'), { core: '25682', material: 'gold' });
+  assert.equal(splitWatchRef('patek-philippe', '20044m').core, '20044m');            // a clock ref, untouched
+  // the suffix is the material when the text names none
+  assert.equal(refSuffixMaterial('World Time, Ref: 5110G-001, Sold 5th June 2004', 'patek-philippe'), 'gold');
+  assert.equal(coarseWatchMaterial({ title: 'Royal Oak Quantieme Perpetuel Automatique, No.041, Ref: 25686PT, Circa 1992', medium: null, artist: 'audemars-piguet' }), 'platinum');
+  assert.equal(coarseWatchMaterial({ title: 'Aquanaut, Ref: 5165A, Purchased 30 January 2008', medium: null, artist: 'patek-philippe' }), 'steel');
+});
+
+test('glued catalogue text, whole loose tokens, Swiss thousands marks', () => {
+  assert.equal(readWatchReference('ref 6032pink gold chronograph wristwatch circa 1961', 'rolex'), '6032');
+  assert.equal(readWatchReference('submariner, ref 5513stainless steel wristwatch with braceletcirca 1984', 'rolex'), '5513');
+  assert.equal(readWatchReference('ref 2499possibly unique and highly important', 'patek-philippe'), '2499');
+  assert.equal(readWatchReference('nautilus, ref 5711plimited edition platinum and diamond-set wristwatch', 'patek-philippe'), '5711');
+  assert.equal(readWatchReference('Ref: 55229B10, c. 1980s', 'cartier'), '55229b10');               // was truncated to 55229b
+  assert.equal(readWatchReference("A LADY'S 18K WHITE GOLD WRISTWATCH SIGNED AUDEMARS PIGUET, REF. 66'714BC/", 'audemars-piguet'), '66714');
+  assert.equal(readWatchReference('Rolex GMT-Master Ref. 1675 a fine example', 'rolex'), '1675');  // not "1675a"
+});
+
+test('2-digit Patek refs are references, not the model line', () => {
+  assert.equal(readWatchKey('Calatrava, Ref: 96, Circa 1960', 'patek-philippe')?.key, '96');
+  assert.equal(readWatchKey('a gold wristwatch circa 1940 ref 96j calatrava mvt 920055', 'patek-philippe')?.key, '96');
+  // a 2-digit "ref" on a Rolex is not a Rolex reference: the model line stays
+  assert.equal(readWatchKey('Rolex Submariner Ref: 14, steel', 'rolex')?.key, 'submariner');
+});
+
+test('description fallback: labelled refs only, watches only', () => {
+  assert.equal(readDescriptionReference("Rolex. A 14k gold self-winding wristwatch with curved shoulders Oyster Perpetual, Ref.6092, so called 'Bombay', circa 1952", 'rolex'), '6092');
+  assert.equal(readDescriptionReference('signed Patek Philippe, Geneve, No.1616249, recent with quartz movement', 'patek-philippe'), null);
+  const lots = [
+    { ...W('patek-philippe', 'PATEK PHILIPPE GOLD BRACELET WATCH'), formKey: 'wristwatch', description: 'PATEK PHILIPPE GOLD BRACELET WATCH signed Patek Philippe & Co., Geneve, ref. 2591, no. 780491, c. 1956', reference: null },
+    { ...W('patek-philippe', '2007'), formKey: 'unknown', description: 'limited edition patek philippe lithograph depicting a ref.5098p 2007', reference: null },
+  ];
+  enrichWatchReferences(lots);
+  assert.deepEqual(lots.map(l => l.reference), ['2591', null]);
+});
+
+test('ONE material reader: steel-and-gold is two-tone, a two-tone DIAL is not', () => {
+  const m = (title: string, artist?: string) => watchMaterialCoarse({ title, medium: null, artist });
+  assert.equal(m("'ZENITH' DAYTONA, REF 16523 STAINLESS STEEL AND YELLOW GOLD CHRONOGRAPH WRISTWATCH"), 'two-tone');
+  assert.equal(m('Patek Philippe. A Rare 18k Gold Chronograph Wristwatch with Two-Tone Dial'), 'gold');
+  assert.equal(m('a stainless steel wristwatch with tropical two-tone sector dial, circa 1940'), 'steel');
+  assert.equal(m("Cartier: A 1920's gold Santos wristwatch , the white dial with Roman numerals and blued steel moon hands"), 'gold');
+  assert.equal(m('a yellow gold concealed dial bracelet watch, circa 1970s'), 'gold');
+  assert.equal(m('Omega. Montre bracelet en acier mouvement mécanique Ref: 131.019, Circa 1960'), 'steel');
+  // identity and comps read the same
+  const t = { title: 'Rolex Submariner Ref 16613 yellow gold and stainless steel', medium: null };
+  assert.equal(watchMaterialCoarse(t), coarseWatchMaterial(t));
+  // the exact-identity key is the core reference
+  assert.equal(numericWatchRef({ artist: 'patek-philippe', reference: '5970' }), 'patek-philippe|5970');
 });

@@ -168,8 +168,11 @@ export interface AuctionLot {
   compExclude?: string;
   /** How precise saleDate is. Absent = 'day'. 'month' = a synthesized mid-month
       stamp (seasonToDate: "2018 Spring" → 04-15); 'year' = a June-1 placeholder
-      (Sotheby's artist-page scrape). Crawler-stamped values win over normalize. */
-  datePrecision?: 'day' | 'month' | 'year' | 'unknown';
+      (Sotheby's artist-page scrape); 'season' = a conservative upper bound on
+      an unpublished close (scripts/lib/sale-close-dates.ts — the day is read
+      as-is, so the sale counts as known only from that bound on).
+      Crawler-stamped values win over normalize. */
+  datePrecision?: 'day' | 'month' | 'year' | 'season' | 'unknown';
   url: string;
   /** Stamped at BUILD time by scripts/build-upcoming.ts onto the eager
       upcoming.json lots ONLY (comps median vs estimate midpoint, or the
@@ -261,8 +264,14 @@ export interface AuctionLot {
   editionTotal?: number | null;
   /** non-numbered proof designation */
   editionMarker?: EditionMarker | null;
-  /** case/movement/serial (watches, instruments) */
+  /** labelled serial blocking key (watches, instruments), kind-qualified:
+      "sn-<case/serial no.>" else "mvt-<movement no.>" (app/lib/normalize.ts
+      extractSerials) — a case number never equals a movement number */
   serialNo?: string | null;
+  /** labelled case / serial number (≥4 digits, separators folded). CORPUS-ONLY */
+  caseNo?: string | null;
+  /** labelled movement number (≥4 digits, separators folded). CORPUS-ONLY */
+  movementNo?: string | null;
   /** game-used "photo-matched" in title — strongest sports exact signal */
   photoMatched?: boolean;
   /** auth bodies (PSA/DNA, MeiGray, Beckett, LOA/COA) */

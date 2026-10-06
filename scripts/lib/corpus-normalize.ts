@@ -3,8 +3,8 @@ import { subCatOf, sportSlugOf } from './sub-cats';
 import { extractReference } from './identity-enrich';
 import { looksLikeCard, playerSlugOf } from '../../app/lib/cards';
 import { classifyForm, objectClassOf, cleanGoldinTitle, watchKey } from '../../app/lib/comps';
-import { vetReference } from '../../app/lib/watch-ref';
-import { titleTokens as titleTokensOf, toUsdDated, fxRateFor } from '../../app/lib/normalize';
+import { vetReference, readDescriptionReference, splitWatchRef } from '../../app/lib/watch-ref';
+import { titleTokens as titleTokensOf, extractEdition, extractSerials, toUsdDated, fxRateFor } from '../../app/lib/normalize';
 import { isCurrency } from '../../app/types';
 import { christiesLocationCurrency } from './houses/common';
 import { ARTIST_MARKET } from '../../app/constants';
@@ -14,6 +14,9 @@ import { parseSignerName, SIGNER_PARSER_VERSION } from './autograph-signer';
 import { leadsWithSetCode } from './set-codes';
 import { attachExtractions, fillWatchReferencesFromExtract } from './extract/apply';
 import { segmentOf } from '../corpus-io';
+import { saleDayOf, SALE_DAY_HOUSES } from './sale-day';
+import { seasonToDate } from './sports-crawl';
+import { saleCloseFor } from './sale-close-dates';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    corpus-normalize.ts — build-time corpus-hygiene passes.
@@ -226,17 +229,32 @@ export function rerouteRelicCards(lots: Lot[]): { total: number; examples: strin
 // reference now reads the title. Other makers are never touched.
 // ─────────────────────────────────────────────────────────────────────────────
 const WATCH_MAKER_SLUGS = new Set(['rolex', 'patek-philippe', 'cartier', 'audemars-piguet', 'omega']);
+const DESC_REF_FORMS = new Set(['wristwatch', 'pocket-watch']);
 export function enrichWatchReferences(lots: Lot[]): number {
   let filled = 0, healed = 0, cleared = 0;
   for (const l of lots) {
     if (!WATCH_MAKER_SLUGS.has(l.artist)) continue;
     const x = l as Lot & { referenceSrc?: string };
     const prev = l.reference ?? null;
-    const regex = watchKey(l) ?? extractReference(l);
+    const fromTitle = watchKey(l) ?? extractReference(l);
+    // (Oct 6) the title prints no reference number: a LABELLED one in the
+    // description beats the model-line name (1,377 lots carried theirs only there)
+    // — only for a WATCH lot: a Patek "lithograph depicting a ref. 5098p"
+    // or an AP cufflink must not join the reference's pool
+    const desc = (l as Lot & { description?: string | null }).description;
+    const watchLot = !l.formKey || DESC_REF_FORMS.has(String(l.formKey));
+    const regex = fromTitle && /\d/.test(fromTitle) ? fromTitle
+      : ((watchLot ? readDescriptionReference(desc, l.artist) : null) ?? fromTitle);
     if (x.referenceSrc === 'llm' && prev) {
       const regexRef = regex && /\d/.test(regex) ? regex : null;
       if (regexRef) { l.reference = regexRef; delete x.referenceSrc; healed++; }
       else if (!vetReference(l.artist, String(prev), l.title)) { l.reference = regex; delete x.referenceSrc; cleared++; }
+      else {
+        // a kept extraction ref keys on its core too (5970J → 5970)
+        const lc = String(prev).toLowerCase().replace(/\s+/g, '');
+        const core = splitWatchRef(l.artist, lc).core;
+        if (core !== lc) l.reference = core;
+      }
       continue;
     }
     if ((prev || null) === (regex || null)) continue;
@@ -265,13 +283,45 @@ export function reconcileSaleDates(lots: Lot[]): number {
   for (const l of lots) {
     const dt = l.saleDateTime;
     if (!dt || !l.saleDate) continue;
-    const trueDay = dt.slice(0, 10);
+    // the timestamp's SALE-LOCAL day where lib/sale-day owns the house (a
+    // London-midnight 23:00Z stamp must not drag the localized day back a day)
+    const trueDay = saleDayOf(l.auctionHouse, dt, { saleName: l.saleName, currency: (l as { nativeCurrency?: string }).nativeCurrency }) || dt.slice(0, 10);
     if (trueDay.length === 10 && trueDay < l.saleDate.slice(0, 10)) {
       l.saleDate = trueDay;
       fixed++;
     }
   }
   return fixed;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 4a · localizeSaleDates — saleDate in the SALE'S time zone (Oct 2026 identity
+// audit). Goldin / Christie's / Sotheby's parsers took the UTC day of a local
+// stamp (lib/sale-day has the evidence): 369,558 Goldin lots a day late (a
+// 10 PM ET Thursday close is 02:00Z Friday), 20,831 Christie's a day early
+// (London/Geneva/HK/Dubai local midnight written in UTC), 5,147 Sotheby's.
+// The parsers now stamp the local day; this re-derives the rows already in the
+// corpus. Only a saleDate that IS the old UTC day of its own saleDateTime is
+// rewritten (any other saleDate came from elsewhere — reconcileSaleDates owns
+// those), so the pass is idempotent and never touches a hand-set date.
+// ─────────────────────────────────────────────────────────────────────────────
+export function localizeSaleDates(lots: Lot[]): { total: number; byHouse: Record<string, number> } {
+  const byHouse: Record<string, number> = {};
+  let total = 0;
+  for (const l of lots) {
+    const house = l.auctionHouse as string;
+    if (!SALE_DAY_HOUSES.has(house)) continue;
+    const dt = l.saleDateTime;
+    if (typeof dt !== 'string' || typeof l.saleDate !== 'string') continue;
+    const cur = l.saleDate.slice(0, 10);
+    if (cur !== dt.slice(0, 10)) continue;
+    const day = saleDayOf(house, dt, { saleName: l.saleName, currency: (l as { nativeCurrency?: string }).nativeCurrency });
+    if (!day || day === cur) continue;
+    l.saleDate = l.saleDate.length > 10 ? day + l.saleDate.slice(10) : day;
+    byHouse[house] = (byHouse[house] || 0) + 1;
+    total++;
+  }
+  return { total, byHouse };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -373,11 +423,15 @@ export function dedupeWrightFamilyMirrors(lots: Lot[]): number {
     const l = lots[i];
     const house = (l as { auctionHouse?: string }).auctionHouse || '';
     if (!WRIGHT_FAMILY.has(house)) continue;
-    const idm = String((l as { id?: string }).id || '').match(/-(\d+)~?$/);
-    if (idm) consider(`id:${idm[1]}`, i, l);
+    // the platform id: numeric (wright-301456) or the older alphanumeric lot
+    // code (wright-RA4 ≡ lama-RA4, wright-ABMG2 ≡ lama-ABMG2 — 9 mirrored pairs,
+    // Oct 2026 identity audit). A code is short, so it keys WITH the title.
+    const idm = String((l as { id?: string }).id || '').match(/-([A-Za-z0-9]+)~?$/);
+    if (idm) consider(/^\d+$/.test(idm[1]) ? `id:${idm[1]}` : `aid:${idm[1]}|${normTitle(l.title)}`, i, l);
     if (drop.has(i)) continue; // already dropped by the id key
     const tail = String((l as { url?: string }).url || '').replace(/^https?:\/\/[^/]+/, '');
-    if (/^\/auctions\/.+\/\d+\/?$/.test(tail)) consider(`path:${tail.replace(/\/$/, '')}`, i, l);
+    // the slot is numeric or lettered ("…/modern-design/2412a", "…/RA4")
+    if (/^\/auctions\/.+\/[A-Za-z0-9]+\/?$/.test(tail)) consider(`path:${tail.replace(/\/$/, '')}`, i, l);
   }
   if (!drop.size) return 0;
   // O(n) in-place compaction — assemble persists this array, so the dedupe
@@ -475,7 +529,7 @@ export function nullDeadChristiesSsoUrls(lots: Lot[]): number {
    ═══════════════════════════════════════════════════════════════════════════ */
 type DQLot = Lot & {
   compExclude?: string;
-  datePrecision?: 'day' | 'month' | 'year' | 'unknown';
+  datePrecision?: 'day' | 'month' | 'year' | 'season' | 'unknown';
   resultsPending?: boolean;
   realizedUsd?: number | null;
   hammerUsd?: number | null;
@@ -496,6 +550,7 @@ export const COMP_EXCLUDE = {
   lastTrackedBid: 'last-tracked-bid',       // Goldin provisional price, not a hammer
   seedNonLotUrl: 'seed-nonlot-url',         // hand-entered seed pointing at a search/artist page
   estimateUponRequest: 'estimate-upon-request', // artist-page scrape, title carried the est. label
+  relistedUnpaid: 'relisted-unpaid',        // NFL Auction: the same item relisted after this "sale"
 } as const;
 
 const markExclude = (l: DQLot, reason: string): boolean => {
@@ -579,13 +634,19 @@ export function dedupeRRSameSaleItems(lots: Lot[]): number {
 // NOT a lot key (5 distinct Condo seeds share one). Keeper: the CRAWLED row
 // (alg/uuid; Christie's numeric) over a slug/seed row — for sold pairs whose
 // dates disagree the crawled date is the real one — then status, then id.
+// PHILLIPS runs two id schemes too (Oct 2026 identity audit, 7 pairs): the
+// crawled `phillips-<SALE>-<lot>` (NY011125-370: sale code + lot, dated) and a
+// bare `phillips-<detailId>` artist-page row (undated, no lot#) pointing at the
+// same /detail/<maker>/<detailId> page. Keeper: the sale-code row.
 const LOT_PATH: Record<string, RegExp> = {
   "Sotheby's": /^\/(?:[a-z]{2}\/)?buy\/auction\/\d{4}\/[^/]+\/[^/]+$/,
   "Christie's": /^\/(?:[a-z]{2}\/)?lot\/lot-\d+$/,
+  Phillips: /^\/detail\/[^/]+\/\d+$/,
 };
 const isCrawledId = (house: string, id: string): boolean =>
   house === "Sotheby's" ? /^sothebys-(?:alg-|[0-9a-f]{8}-[0-9a-f]{4}-)/i.test(id)
-    : house === "Christie's" ? /^christies-(?:auc-)?\d+~?$/.test(id) : true;
+    : house === "Christie's" ? /^christies-(?:auc-)?\d+~?$/.test(id)
+    : house === 'Phillips' ? /^phillips-[A-Z]{2}\d{6}-/.test(id) : true;
 export function dedupeUrlSchemeCollisions(lots: Lot[]): number {
   const best = new Map<string, number>();
   const drop = new Set<number>();
@@ -604,6 +665,48 @@ export function dedupeUrlSchemeCollisions(lots: Lot[]): number {
     if (keepNew) { drop.add(prev); best.set(k, i); } else drop.add(i);
   }
   return compact(lots, drop);
+}
+
+// ── NFL AUCTION RELISTS (Oct 2026 identity audit): NFL Auction sells only
+// league/club/foundation-consigned items — a buyer cannot consign one back —
+// so the SAME item (same iSynApp photo id + same title) closing "sold" and
+// then listed again a few weeks later means the first sale did not complete
+// (non-paying winner → relist). 78 such rows: every same-photo/same-title
+// pair is ≤60 days apart (median 28d) with an empty 60–120d band, and the
+// relist hammers at ~0.73× the unpaid high bid. Keep the later sale; the
+// earlier row becomes 'unknown-result' (not a sale), comp-excluded, and
+// carries `relistedAs` = the relist's id as its evidence. Pairs 5–12 months
+// apart (67) are left alone — a reused photo for an identical game-issued
+// jersey cannot be ruled out there. Idempotent (only 'sold' rows are marked).
+export const NFL_RELIST_MAX_DAYS = 120;
+export function markNflRelists(lots: Lot[]): { marked: number; usd: number } {
+  const norm = (t: unknown) => normTitle(String(t || '').replace(/\s*\|\s*the official auction site.*$/i, ''));
+  const groups = new Map<string, DQLot[]>();
+  for (const l of lots as DQLot[]) {
+    if (l.auctionHouse !== 'NFL Auction') continue;
+    const im = /img-(\d+)/.exec(String(l.imageUrl || ''));
+    const d = typeof l.saleDate === 'string' ? l.saleDate.slice(0, 10) : '';
+    if (!im || !/^\d{4}-\d\d-\d\d$/.test(d)) continue;
+    const k = `${im[1]}|${norm(l.title)}`;
+    const g = groups.get(k); if (g) g.push(l); else groups.set(k, [l]);
+  }
+  let marked = 0, usd = 0;
+  groups.forEach(g => {
+    if (g.length < 2) return;
+    g.sort((a, b) => String(a.saleDate).localeCompare(String(b.saleDate)) || String(a.id).localeCompare(String(b.id)));
+    for (let i = 0; i + 1 < g.length; i++) {
+      const a = g[i], b = g[i + 1];
+      if (a.status !== 'sold' || a.id === b.id) continue;
+      const gap = (Date.parse(String(b.saleDate).slice(0, 10)) - Date.parse(String(a.saleDate).slice(0, 10))) / 864e5;
+      if (!(gap > 0 && gap <= NFL_RELIST_MAX_DAYS)) continue;
+      (a as { status: string }).status = 'unknown-result';
+      (a as { relistedAs?: string }).relistedAs = String(b.id);
+      a.compExclude = COMP_EXCLUDE.relistedUnpaid;
+      usd += priceOf(a) || 0;
+      marked++;
+    }
+  });
+  return { marked, usd };
 }
 
 // ── BRUUN RASMUSSEN filed as Bonhams (131 rows, `bonhams-brk_<sale>-<hex>`):
@@ -924,6 +1027,40 @@ export function stampDatePrecision(lots: Lot[]): { month: number; year: number }
   return { month, year };
 }
 
+// ── SEASON CLOSE DATES (identity fix wave, Oct 2026): REA / H&S archive rows
+// were dated by seasonToDate's mid-month stub ("2019 Summer" → 2019-07-15,
+// 'month') while the sales close weeks later (REA Summer mid-Aug, REA Fall
+// early Dec, H&S month labels up to two months before the close) — so the
+// engine read their prices as known before the sale ended. Re-date every row
+// still carrying the stub (datePrecision 'month', no saleDateTime, saleDate ==
+// the stub its saleName produces) to the cited close day ('day') or the
+// conservative season-end bound ('season') from sale-close-dates.ts; fxAsOf
+// follows when it was the stub (USD rows: rate 1, the stamp is the date).
+// Rows with a real close (live bid-page endTime → saleDateTime) are never
+// touched; REA monthly sales (close inside their label month) keep the stub.
+// Idempotent: a re-dated row no longer matches the stub.
+export function redateSeasonSales(lots: Lot[], now: Date = new Date()): { total: number; bySale: Record<string, number> } {
+  const asOf = now.toISOString().slice(0, 10);
+  const bySale: Record<string, number> = {};
+  let total = 0;
+  for (const l of lots as DQLot[]) {
+    if (l.auctionHouse !== 'REA' && l.auctionHouse !== 'Huggins & Scott') continue;
+    if (l.datePrecision !== 'month' || l.saleDateTime) continue;
+    const name = typeof l.saleName === 'string' ? l.saleName : '';
+    const stub = name ? seasonToDate(name) : null;
+    if (!stub || l.saleDate !== stub) continue;
+    const close = saleCloseFor(l.auctionHouse, name, asOf);
+    if (!close) continue;
+    l.saleDate = close.date;
+    l.datePrecision = close.precision;
+    if ((l as { fxAsOf?: string | null }).fxAsOf === stub) (l as { fxAsOf?: string | null }).fxAsOf = close.date;
+    const k = `${l.auctionHouse}|${name}`;
+    bySale[k] = (bySale[k] || 0) + 1;
+    total++;
+  }
+  return { total, bySale };
+}
+
 // ── HAMMER == ALL-IN (Wright 989 · LAMA 338): older Wright-platform rows copied
 // the premium-inclusive price into the hammer field, so every hammer-basis read
 // (inferHammerUsd, houseCal, max-bid guidance) took a realized price as the
@@ -964,6 +1101,7 @@ export type HygieneReport = {
   compExclude: Record<string, number>;
   images: Record<string, number>;
   datePrecision: { month: number; year: number };
+  seasonDates: { total: number; bySale: Record<string, number> };
   hammer: { recomputed: number; nulled: number };
 };
 
@@ -973,6 +1111,9 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   // keyed by id + hash of the CRAWLED text — before any pass rewrites a title.
   // Inert (one log line, zero mutation) without the extraction gate.
   attachExtractions(ls);
+  // real REA / H&S close days before any pass reads saleDate
+  const seasonDates = redateSeasonSales(ls, opts.now);
+  console.log(`[normalize] season sales re-dated to their close: ${seasonDates.total} rows across ${Object.keys(seasonDates.bySale).length} sales`);
   const rrUrls = deriveRRAuctionUrls(ls);
   if (rrUrls) console.log(`[normalize] rrauction url backfill: ${rrUrls} lots derived from id (lot-detail/<lotId>)`);
   const deadSso = nullDeadChristiesSsoUrls(ls);
@@ -983,12 +1124,17 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   const rrDupes = dedupeRRSameSaleItems(ls);
   const urlDupes = dedupeUrlSchemeCollisions(ls);
   const bruun = { ...dedupeBruunUnderBonhams(ls), restamped: restampBruunCurrency(ls) };
+  const nflRelists = markNflRelists(ls);
   // currency labels first, then every non-USD row's USD figures re-derived at
   // today's table (before any pass reads a USD price)
   const saleroom = restampChristiesSaleroomCurrency(ls);
+  // sale-local day BEFORE the FX restamp (dated rates key on saleDate) and
+  // after the saleroom currency labels (Sotheby's zone is read from currency)
+  const localized = localizeSaleDates(ls);
+  console.log(`[normalize] saleDate → sale-local day: ${localized.total} (${Object.entries(localized.byHouse).map(([k, v]) => `${k}=${v}`).join(' ') || 'none'})`);
   const fx = { saleroom: saleroom.restamped, quarantined: saleroom.quarantined, restamped: restampFx(ls) };
   console.log(`[normalize] fx: christie's saleroom currency re-labelled=${fx.saleroom} quarantined=${fx.quarantined} · USD fields re-derived from native on ${fx.restamped} rows`);
-  console.log(`[normalize] dedupe: rr stub rows=${rrStubs} · rr same-sale item dupes=${rrDupes} · sotheby's/christie's url-scheme dupes=${urlDupes} · bruun-under-bonhams dropped=${bruun.dropped} relabelled=${bruun.relabelled} DKK-restamped=${bruun.restamped}`);
+  console.log(`[normalize] dedupe: rr stub rows=${rrStubs} · rr same-sale item dupes=${rrDupes} · sotheby's/christie's/phillips url-scheme dupes=${urlDupes} · bruun-under-bonhams dropped=${bruun.dropped} relabelled=${bruun.relabelled} DKK-restamped=${bruun.restamped} · nfl relists (earlier sale unpaid)=${nflRelists.marked} ($${Math.round(nflRelists.usd)})`);
   // drop misattributed lots AFTER healExpansionRows cleans titles below? No —
   // isMisattributed reads the raw title (car marques / life-dates survive any
   // title clean), and dropping early shrinks every pass that follows.
@@ -1002,6 +1148,8 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   // healExpansionRows runs FIRST: it cleans titles (every parser below reads
   // them) and stamps the missing identity tokens.
   const healed = healExpansionRows(ls);
+  const edSer = rederiveEditionsSerials(ls);
+  console.log(`[normalize] editions re-derived=${edSer.editions} · serials re-derived=${edSer.serials}`);
   const techMoved = rerouteCultureTech(ls);
   const yearsNulled = clampImpossibleYears(ls);
   const reroute = rerouteScienceMisroutes(ls);
@@ -1056,7 +1204,7 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
     `datePrecision month=${datePrecision.month} year=${datePrecision.year} · ` +
     `wright-family hammer==all-in recomputed=${hammer.recomputed} nulled=${hammer.nulled}`
   );
-  return { rrStubs, rrDupes, urlDupes, bruun, fx, foreignMaker, setCodeCards, staleUpcoming, staleHouse, compExclude, images, datePrecision, hammer };
+  return { rrStubs, rrDupes, urlDupes, bruun, fx, foreignMaker, setCodeCards, staleUpcoming, staleHouse, compExclude, images, datePrecision, seasonDates, hammer };
 }
 
 /* ── CULTURE→SCIENCE REROUTE (Aug 14) — Apple/computing lots filed under the
@@ -1177,6 +1325,37 @@ function bareEditionFraction(s: string): boolean {
     if (den >= 8 && num <= den && den <= 3000) return true;
   }
   return false;
+}
+
+/* ── EDITION / SERIAL RE-DERIVATION (Oct 2026) — editionOf/editionTotal/
+   editionMarker and serialNo are stamped ONCE by the crawl-time normalize
+   (ray-crawl.ts, schemaVersion 2) and never re-read, so a parser fix would
+   only reach freshly crawled lots. Re-derive them here from the stored title
+   + description with the current extractEdition/extractSerials: the old
+   readers took dimension fractions as editions ("10 7/8 in" → 7/8: 8,059
+   rows) and any word after "case"/"movement" as a serial ("with": 6,646).
+   On the Oct 5 corpus the old readers re-run on the stored text reproduce
+   every stored value, so the only movement is the parser fix itself.
+   Writes only on change (unaffected rows stay byte-identical); caseNo/
+   movementNo are set only when present. Idempotent. */
+export function rederiveEditionsSerials(lots: Lot[]): { editions: number; serials: number } {
+  let editions = 0, serials = 0;
+  for (const l of lots) {
+    if ((l as { schemaVersion?: number }).schemaVersion !== 2) continue;
+    const desc = (l as { description?: string | null }).description || undefined;
+    const ed = extractEdition(l.title, desc);
+    if ((l.editionOf ?? null) !== ed.editionOf || (l.editionTotal ?? null) !== ed.editionTotal || (l.editionMarker ?? null) !== ed.editionMarker) {
+      l.editionOf = ed.editionOf; l.editionTotal = ed.editionTotal; l.editionMarker = ed.editionMarker;
+      editions++;
+    }
+    const s = extractSerials(l.title, desc);
+    let moved = false;
+    if ((l.serialNo ?? null) !== s.serialNo) { l.serialNo = s.serialNo; moved = true; }
+    if ((l.caseNo ?? null) !== s.caseNo) { if (s.caseNo) l.caseNo = s.caseNo; else delete l.caseNo; moved = true; }
+    if ((l.movementNo ?? null) !== s.movementNo) { if (s.movementNo) l.movementNo = s.movementNo; else delete l.movementNo; moved = true; }
+    if (moved) serials++;
+  }
+  return { editions, serials };
 }
 
 const ART_CAT_MAKERS = new Set(Object.entries(ARTIST_MARKET).filter(([, m]) => m === 'art').map(([k]) => k));

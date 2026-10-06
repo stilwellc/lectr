@@ -15,6 +15,7 @@ import { fxRateFor, toUsdDated } from '../../app/lib/normalize';
 import { readSegment, writeSegment } from '../corpus-io';
 import type { PriceBasis, Currency, AuctionLot } from '../../app/types';
 import { leadsWithSetCode } from './set-codes';
+import { saleCloseFor } from './sale-close-dates';
 
 // Nightly crawls a BOUNDED window; the segment must ACCUMULATE. Read the last-
 // good segment, union the fresh lots over it (fresh id wins), write the union.
@@ -392,8 +393,16 @@ export function readAuth(cat: SportsCategory, title: string, description: string
 }
 
 /** Season/quarter label → an approximate mid-month sale date (YYYY-MM-DD). REA
- *  and H&S publish "2018 Spring" etc.; the exact day isn't posted. */
-export function seasonToDate(label: string): string | null {
+ *  and H&S publish "2018 Spring" etc.; the exact day isn't posted.
+ *  With `house` = 'REA' | 'Huggins & Scott' the label resolves through the
+ *  cited close-date table (scripts/lib/sale-close-dates.ts) first — the real
+ *  close day, or a conservative season-end bound — and only a label that table
+ *  leaves to the month stub (REA monthly sales) falls through to it. */
+export function seasonToDate(label: string, house?: string): string | null {
+  if (house) {
+    const close = saleCloseFor(house, label);
+    if (close) return close.date;
+  }
   const m = label.match(/(20[0-2]\d)/);
   if (!m) return null;
   const year = m[1];

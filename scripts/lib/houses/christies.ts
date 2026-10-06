@@ -13,6 +13,7 @@ import { parseEstimateRange } from '../estimate-range';
 import type { ArtistConfig } from './artists';
 import { DEEP, type EnrichResult, INCREMENTAL_CRAWL, INCREMENTAL_MODE_REASON, MEDIUM_PATTERNS, UA, balancedObjectAfter, christiesLocationCurrency, detectCurrency, isSaleDayPast, noteEnrichFail, noteExpected, noteFetched, parseDrop, sleep, stampMoney, statusWithMoney } from './common';
 import { routeItem } from './routing';
+import { saleDayOf } from '../sale-day';
 
 // ── Christie's Crawler ──
 // Christie's embeds lot data as JSON in window.chrComponents.configurableSearch.
@@ -139,7 +140,10 @@ export function parseChristiesJson(jsonStr: string, artistSlug: string): Auction
         priceRealized = parseInt(priceMatch[0].replace(/,/g, ''));
       }
 
-      const saleDate = lot.start_date ? lot.start_date.split('T')[0] : '';
+      // the sale-location calendar day (lib/sale-day), not the UTC day of the stamp
+      const saleDate = lot.start_date
+        ? saleDayOf("Christie's", lot.start_date, { saleName: lot.sale?.location ? `${lot.sale.location} Sale ${lot.sale?.number || ''}` : null, currency }) || lot.start_date.split('T')[0]
+        : '';
       const auctionInPast = saleDate ? isSaleDayPast(saleDate) : true; // default to past if no date
       const isSold = priceRealized != null && priceRealized > 0;
       const imageUrl = lot.image?.image_src || null;
@@ -414,7 +418,10 @@ export async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'spo
           resultsPending = true;
         }
       }
-      const saleDay = saleDate.split('T')[0];
+      // the sale-location calendar day (lib/sale-day): www stamps a sale as its
+      // LOCAL midnight in UTC (London BST → 23:00Z the day before), so the UTC
+      // day read 20,831 lots a day early. A now-anchor stays the UTC day.
+      const saleDay = (saleDate === endDate && saleDayOf("Christie's", saleDate, { currency: cur })) || saleDate.split('T')[0];
       const christiesAucDescription = lot.description_txt && String(lot.description_txt).length < 4000
         ? String(lot.description_txt).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || null
         : null;

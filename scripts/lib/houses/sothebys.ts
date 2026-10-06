@@ -13,6 +13,7 @@ import { buildSkippableSaleNames, RESULT_PENDING_MS } from '../skip-set';
 import type { ArtistConfig } from './artists';
 import { type EnrichResult, INCREMENTAL_CRAWL, INCREMENTAL_MODE_REASON, MEDIUM_PATTERNS, UA, noteEnrichFail, noteFetched, parseDrop, sleep, stampMoney, statusWithMoney } from './common';
 import { routeItem } from './routing';
+import { saleDayOf } from '../sale-day';
 
 // ── Sotheby's Crawler ──
 // Parses lot links from the artist page HTML.
@@ -400,7 +401,9 @@ export async function enrichSothebysCloseTimes(lots: AuctionLot[]): Promise<void
         const d = new Date(raw);
         if (isNaN(d.getTime())) return;
         const iso = d.toISOString();
-        lot.saleDate = iso.slice(0, 10);
+        // the sale-location calendar day (lib/sale-day): a 9:30 PM ET close is
+        // 01:30Z the next UTC day
+        lot.saleDate = saleDayOf("Sotheby's", iso, { currency: (lot as AuctionLot & { nativeCurrency?: string }).nativeCurrency }) || iso.slice(0, 10);
         (lot as AuctionLot & { saleDateTime?: string }).saleDateTime = iso;
         // genuinely future now → it stands on its own date; drop the keep-visible flag
         if (d.getTime() > Date.now()) (lot as AuctionLot & { resultsPending?: boolean }).resultsPending = false;
@@ -557,7 +560,9 @@ export async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'spor
       } else {
         continue; // closed past the results window & unsold — a true bought-in
       }
-      const saleDay = saleDate.split('T')[0];
+      // the sale-location calendar day (lib/sale-day) of a genuine endDate; a
+      // now-anchor stays the UTC day
+      const saleDay = (saleDate === meta.endDate && saleDayOf("Sotheby's", saleDate, { currency: auctionCur })) || saleDate.split('T')[0];
 
       const est = lot.estimateV2;
       const rendition = lot.media?.images?.[0]?.renditions;

@@ -26,7 +26,7 @@ import { AuctionLot, ObjectType, SoldComp } from '../types';
 // the engine band/backtest. Imported from stats (not value) so value.ts can
 // import the shape gate below without a module cycle.
 import { quantileSorted as quantile, medianSorted } from './stats';
-import { readWatchKey } from './watch-ref';
+import { readWatchKey, refSuffixMaterial } from './watch-ref';
 
 export type Form =
   | 'book' | 'ephemera' | 'poster' | 'photograph' | 'textile'
@@ -305,10 +305,16 @@ export function watchKeyKind(lot: Pick<AuctionLot, 'title'> & { artist?: string 
   return readWatchKey(lot.title, lot.artist)?.kind ?? null;
 }
 
-/** Coarse watch material from title+medium. Gold shades deliberately collapse
-    (fine split measured no better: 0.305 vs 0.303). */
-export function coarseWatchMaterial(lot: Pick<AuctionLot, 'title' | 'medium'>): string | null {
-  const t = `${(lot.title || '')} ${(lot.medium || '')}`.toLowerCase();
+/** Coarse watch CASE material from title+medium — the ONE material reader
+    (identity.watchMaterialCoarse delegates here; Oct 6 2026). Gold shades
+    deliberately collapse (fine split measured no better: 0.305 vs 0.303).
+    Dial/hand descriptions are not the case: "yellow gold wristwatch with
+    two-tone dial" is gold, "gold … blued steel hands" is gold (427 lots read
+    two-tone off the dial). When the text names no metal, a Patek/AP
+    reference suffix does (5970J, 15202ST — watch-ref.refSuffixMaterial). */
+const WATCH_DIAL_PHRASE = /\btwo[- ]?(?:tone|colou?r(?:ed)?)\s+(?:[a-z'-]+\s+){0,2}?dial\b|\b(?:gold(?:en)?|gilt)(?:[- ]plated)?\s+(?:dial|hands|numerals|markers|indexes|indices|batons|hour markers)\b|\b(?:blued? )?steel (?:[a-z'-]+ )?hands\b/g;
+export function coarseWatchMaterial(lot: Pick<AuctionLot, 'title' | 'medium'> & { artist?: string }): string | null {
+  const t = `${(lot.title || '')} ${(lot.medium || '')}`.toLowerCase().replace(WATCH_DIAL_PHRASE, ' ');
   const gold = /\b(gold|or jaune|or gris|or rose|or blanc)\b|\b18k\b|\b14k\b|\b18ct\b|\b9ct\b/.test(t);
   const steel = /\b(steel|stainless|acier)\b/.test(t);
   if ((gold && steel) || /two[- ]tone/.test(t)) return 'two-tone';
@@ -316,7 +322,7 @@ export function coarseWatchMaterial(lot: Pick<AuctionLot, 'title' | 'medium'>): 
   if (gold) return 'gold';
   if (steel) return 'steel';
   if (/titanium/.test(t)) return 'titanium';
-  return null;
+  return refSuffixMaterial(lot.title, lot.artist);
 }
 
 /* ── WATCH VARIANT CLASSES (Oct 6 2026) — ONE source (moved from
