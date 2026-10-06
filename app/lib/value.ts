@@ -27,6 +27,7 @@ import { weightedMedian, quantileSorted } from './stats';
 import { lotShapeOf, shapesCompatible, isCompExcluded } from './comps';
 import type { CardGateCell } from './cards-gate';
 import { numericWatchRef, editionIdentityKey, isEditionLot, WATCH_SLUGS } from './identity';
+import { compBoundaryFault, compPurityFault, isIdentityLessTitle } from './comp-purity';
 
 /** THE signal-label vocabulary — one source (P2, Sep 2 2026). Re-exported from
  *  lanes.ts; UI files that hardcode the strings should import from there
@@ -52,7 +53,13 @@ export function basisNote(kind: 'estimate' | 'bid' | 'value' = 'estimate'): stri
   }
 }
 
-export interface Comp { id: string; match: Match; realizedUsd: number; saleDate: string; }
+export interface Comp {
+  id: string; match: Match; realizedUsd: number; saleDate: string;
+  /** (Oct 6 2026, pricing wave 2) the comp's own lot row — resolveComps
+   *  attaches it so the comp-purity readers (title, medium, edition class,
+   *  signedness, subject) can judge the comp against the target */
+  lot?: AuctionLot;
+}
 
 /* ── ENGINE VERSION + THE SHADOW/PROMOTE SEAM (Oct 3 2026) ────────────────
    Every served value carries `engineVersion`; every backtest observation and
@@ -95,6 +102,33 @@ export interface EngineFlags {
   /** (Oct 6) confidence demotes at most ONE notch (else-if), on the record's
    *  error of the PUBLISHED value (rp), not the comp pool's (r) */
   confOnPublished?: boolean;
+  /** (Oct 6, pricing wave 2) HARD comp boundaries (comp-purity.compBoundaryFault):
+   *  signed vs unsigned, a different subject, a different designator
+   *  ("Apollo 13" vs "Apollo 10"), a different object class — such a comp
+   *  never enters the pool */
+  compBoundary?: boolean;
+  /** (Oct 6, pricing wave 2) THE PURITY GATE: a flag needs ≥ PURITY.minPure
+   *  comps with an object-naming title, the target's medium family and
+   *  edition class, ≤ PURITY.maxAgeY old and within PURITY.band× of the pool
+   *  median; else signal = null. The signal is also stripped whenever the
+   *  comp ratio sits outside the ×5 estimate-band sanity. */
+  purityGate?: boolean;
+  /** (Oct 6, pricing wave 2) the value pool itself keeps only pure comps when
+   *  ≥ PURITY.minPure of them exist (else the pool stands, unflagged).
+   *  Measured, NOT adopted: holdout medErr 28.4% → 29.0% (§13) */
+  purityPool?: boolean;
+  /** (Oct 6, pricing wave 2) RECENCY: no comp carries more than
+   *  COMP_WEIGHT_CAP of the pool's weight; a pool whose every comp is older
+   *  than PURITY.maxAgeY abstains ('stale'). Measured, NOT adopted: holdout
+   *  medErr 28.4% → 28.7%, live ±30% 54.1% → 53.7%; the stale abstention
+   *  leaves the remaining values' error unchanged (§13) */
+  weightCap?: boolean;
+  /** (Oct 6, pricing wave 2) estimate lots with ≥ EXACT_BLEND.minN exact comps
+   *  (cosine ≥ EXACT_BLEND.cos) put at least EXACT_BLEND.w on the comps.
+   *  Measured, NOT adopted: holdout medErr 28.4% → 29.6%; a point-in-time
+   *  fit per house × exact count learned LOWER weights (0.05–0.30) than the
+   *  tier weights and did not transfer to the test year (§13) */
+  exactBlend?: boolean;
 }
 /** The engine before the Oct 3 pass (raw-estimate Flags, premium-only
  *  anchor, ungated card tiers) — kept so the harnesses can replay it. */
@@ -115,11 +149,26 @@ export const ENGINE_FLAGS_HOUSE_GATE: EngineFlags = {
  *  0.2–3.3pt (mean 1.4); value medErr 32.3% = 32.3%, ±30% 47.7% → 47.8%;
  *  band coverage 72.0% → 68.2%. Measured and NOT adopted: calHalfLife1y
  *  (fewer flags, odds calibration 1.4 → 3.1pt), singleFigure (flat: 1,152
- *  flags, same edge). docs/ENGINE_LANES.md §11. */
-export const ENGINE_FLAGS_CURRENT: EngineFlags = {
+ *  flags, same edge). docs/ENGINE_LANES.md §11. Kept so the harnesses can
+ *  replay it against CURRENT. */
+export const ENGINE_FLAGS_HAMMER_BASIS: EngineFlags = {
   ...ENGINE_FLAGS_HOUSE_GATE,
   version: '2026.10.06-hammer-basis',
   hammerBasis: true, confOnPublished: true,
+};
+/** (Oct 6 2026, pricing wave 2) COMP PURITY: the purity gate on every
+ *  directional read + the ×5 strip, and the hard comp boundaries. Measured
+ *  (docs/ENGINE_LANES.md §13): live (Sep 14 book graded to Oct 5) flag
+ *  precision 47.5% → 56.0%, edge 24.7 → 38.7pt, estimate-lot medErr 26.5% →
+ *  26.4%, band 70.7% → 71.8%; holdout precision 49.9% → 49.6%, edge 21.4 →
+ *  20.1pt (within EDGE_TOL_PT), medErr 28.0% → 27.7% on the same lots; the
+ *  hand-judged comp sample good 42.7% → 65.5%, wrong 18.0% → 11.0% among
+ *  the comps that may carry a call. Measured and NOT adopted: purityPool,
+ *  weightCap, exactBlend (§13). */
+export const ENGINE_FLAGS_CURRENT: EngineFlags = {
+  ...ENGINE_FLAGS_HAMMER_BASIS,
+  version: '2026.10.06-comp-purity',
+  purityGate: true, compBoundary: true,
 };
 /** The candidate under evaluation. Equal to CURRENT's flags when nothing is
  *  pending — a candidate run then reports a no-op comparison. */
@@ -393,6 +442,7 @@ export type AbstainReason =
   | 'no-identity'       // card/TCG tiers: the title yields no comp key
   | 'dispersion'        // pool disagrees with itself past the guard
   | 'no-value'          // weighted median collapsed to 0
+  | 'stale'             // (Oct 6) every comp in the pool sold > PURITY.maxAgeY ago
   | 'card:pool<2'       // card tiers: exact/ladder pools too thin, no player pool
   | 'card:player<5'     // card tier 3: player pool under the floor (legacy)
   | 'card:player-tier'  // (Sep 27) only a PLAYER median exists — abstains (2.87× live)
@@ -589,18 +639,21 @@ export const BLEND_W_DEFAULT: Record<string, number> = { high: 0.4, medium: 0.25
 export function blendPredict(
   lot: { artist: string; auctionHouse?: string | null; buyerPremiumPct?: number | null },
   estMid: number, estKind: EstKind, compMedian: number, confidence: string,
-  cal: EngineCalibration | null = CAL,
+  cal: EngineCalibration | null = CAL, nExact = 0,
 ): { value: number; w: number } {
   const market = cal?.marketBySlug?.[lot.artist];
   const ratio = compMedian > 0 && estMid > 0 ? compMedian / estMid : 1;
   const b = cal?.blend;
+  // (Oct 6, FLAGS.exactBlend) a pool holding ≥ EXACT_BLEND.minN exact comps
+  // (the same object by title) earns at least EXACT_BLEND.w on the comps
+  const exactW = (w: number) => (FLAGS.exactBlend && nExact >= EXACT_BLEND.minN ? Math.max(w, exactBlendW(lot.auctionHouse)) : w);
   if (FLAGS.houseAnchor) {
     const hf = houseFactorOf(market ?? TIDX?.marketBySlug?.[lot.artist], lot.auctionHouse, estKind);
-    const w = b?.w[confidence] ?? BLEND_W_DEFAULT[confidence] ?? 0.1;
+    const w = exactW(b?.w[confidence] ?? BLEND_W_DEFAULT[confidence] ?? 0.1);
     if (hf) return { value: estMid * Math.exp((1 - w) * hf.log + w * Math.log(ratio)), w };
   }
   if (b) {
-    const w = b.w[confidence] ?? BLEND_W_DEFAULT[confidence] ?? 0.1;
+    const w = exactW(b.w[confidence] ?? BLEND_W_DEFAULT[confidence] ?? 0.1);
     // house × market intercept (the house's own estimate habit) → market → global
     const ek = estKind === 's' ? 'b' : estKind;
     const a = (market != null && lot.auctionHouse ? b.a[`${market}|${lot.auctionHouse}:${ek}`] : undefined)
@@ -611,8 +664,44 @@ export function blendPredict(
   }
   // uncalibrated: house mid × the lot's own premium × (comps vs house all-in)^w
   const pm = lotAllInFactor(lot, estMid);
-  const w = BLEND_W_DEFAULT[confidence] ?? 0.1;
+  const w = exactW(BLEND_W_DEFAULT[confidence] ?? 0.1);
   return { value: estMid * pm * Math.pow(ratio / pm, w), w };
+}
+
+/* ── PRICING WAVE 2 (Oct 6 2026): comp purity, recency cap, exact blend ── */
+/** The purity gate's bar (EngineFlags.purityGate / purityPool): a flag needs
+ *  ≥ minPure comps that pass comp-purity.compPurityFault, sold ≤ maxAgeY
+ *  before the valuation, and inside band× of the pure comps' median. */
+export const PURITY = { minPure: 3, maxAgeY: 10, band: 5, ratioCap: 5 };
+/** The most of a pool's weight one comp may carry (EngineFlags.weightCap) —
+ *  an effective pool of at least 1 / 0.35 ≈ 3 comps. */
+export const COMP_WEIGHT_CAP = { share: 0.35 };
+/** EngineFlags.exactBlend: ≥ minN comps at title cosine ≥ cos → comp weight
+ *  ≥ w (per house where measured — EXACT_BLEND.byHouse). */
+export const EXACT_BLEND: { minN: number; cos: number; w: number; byHouse: Record<string, number> } = { minN: 2, cos: 0.95, w: 0.5, byHouse: {} };
+export function exactBlendW(house: string | null | undefined): number {
+  const v = house ? EXACT_BLEND.byHouse[house] : undefined;
+  return typeof v === 'number' ? v : EXACT_BLEND.w;
+}
+/** Water-fill weights so no one carries more than `cap` of the total (its
+ *  excess goes to the others pro rata). Under 1/cap weights the cap cannot
+ *  hold — every weight becomes equal. */
+export function capWeights(ws: number[], cap = COMP_WEIGHT_CAP.share): number[] {
+  const n = ws.length;
+  const tot = ws.reduce((s, w) => s + Math.max(0, w), 0);
+  if (!n || !(tot > 0)) return ws.slice();
+  if (n * cap <= 1) return ws.map(() => 1 / n);
+  const share = ws.map(w => Math.max(0, w) / tot);
+  const fixed = new Array<boolean>(n).fill(false);
+  for (let it = 0; it < n; it++) {
+    let fixedMass = 0, freeMass = 0;
+    for (let i = 0; i < n; i++) { if (fixed[i]) fixedMass += cap; else freeMass += share[i]; }
+    const scale = freeMass > 0 ? (1 - fixedMass) / freeMass : 0;
+    let changed = false;
+    for (let i = 0; i < n; i++) if (!fixed[i] && share[i] * scale > cap + 1e-12) { fixed[i] = true; changed = true; }
+    if (!changed) return share.map((s, i) => (fixed[i] ? cap : s * scale));
+  }
+  return share.map(() => 1 / n);
 }
 
 /** Whether the engine applies the no-estimate bias (measured: no — see
@@ -691,11 +780,15 @@ export function estimateValueEx(
   // seat 3 comps, retry once at the relaxed tier-b gate (validated: marginal
   // quality indistinguishable from the main engine) — never mix the two.
   let tier: 'main' | 'fallback' = 'main';
-  let pool = comps
+  // (Oct 6, FLAGS.compBoundary) a comp across a HARD boundary — signed vs
+  // unsigned, another subject, another designator, another object class —
+  // never enters either gate's pool (comp-purity.compBoundaryFault)
+  const src = FLAGS.compBoundary ? comps.filter(c => !c.lot || !compBoundaryFault(lot, c.lot)) : comps;
+  let pool = src
     .filter(c => passesGate(c.match) && c.realizedUsd > 0)
     .sort((a, b) => b.match.score - a.match.score);
   if (pool.length < 3) {
-    const relaxed = comps
+    const relaxed = src
       .filter(c => passesGateWith(FALLBACK_GATE, c.match) && c.realizedUsd > 0)
       .sort((a, b) => b.match.score - a.match.score);
     if (relaxed.length < 3) return { value: null, abstain: comps.length ? 'pool<3' : 'no-candidates' };
@@ -703,12 +796,33 @@ export function estimateValueEx(
     tier = 'fallback';
   }
 
+  const refMs = (() => { const t = new Date(lot.saleDate || '').getTime(); return isNaN(t) ? Date.now() : t; })();
+  const ageYOf = (c: Comp) => { const t = new Date(c.saleDate || '').getTime(); return isNaN(t) ? Infinity : (refMs - t) / 31_557_600_000; };
+  // (Oct 6, FLAGS.purityGate / purityPool) THE PURE COMPS: an object-naming
+  // title, the target's medium family + edition class (comp-purity), sold ≤
+  // PURITY.maxAgeY before the valuation, inside PURITY.band× of their own
+  // median. A target whose own title names no object has none.
+  const targetIdLess = FLAGS.purityGate || FLAGS.purityPool ? isIdentityLessTitle(lot) : false;
+  const pureOf = (cs: Comp[]): Comp[] => {
+    if (targetIdLess) return [];
+    const st = cs.filter(c => ageYOf(c) <= PURITY.maxAgeY && !(c.lot && compPurityFault(lot, c.lot)));
+    if (!st.length) return st;
+    const m = quantile(st.map(c => c.realizedUsd).sort((a, b) => a - b), 0.5);
+    return st.filter(c => c.realizedUsd <= m * PURITY.band && c.realizedUsd >= m / PURITY.band);
+  };
+  if (FLAGS.purityPool) {
+    const p = pureOf(pool);
+    if (p.length >= PURITY.minPure) pool = p;
+  }
+
   const top = pool.slice(0, TOP_K);
+  // (Oct 6, FLAGS.weightCap) a pool whose every comp is older than
+  // PURITY.maxAgeY says nothing about today's price
+  if (FLAGS.weightCap && top.every(c => ageYOf(c) > PURITY.maxAgeY)) return { value: null, abstain: 'stale' };
   // Recency decay (validated ADOPT, halflife 2y): a comp's weight halves every
   // 2 years of age relative to the lot's own sale (or now for a live lot).
   // Measured on temporal holdout: identical coverage, edge 23.9→25.0pt, +199
   // flags with clean churn (removed flags realize like unflagged).
-  const refMs = (() => { const t = new Date(lot.saleDate || '').getTime(); return isNaN(t) ? Date.now() : t; })();
   // hl=2y for estimate lots (directional signal); hl=1y on the no-estimate
   // (Goldin absolute) path — memorabilia cycles faster, and the uncapped
   // holdout measured MdAPE 41.2%→38.8% at hl≈1y there.
@@ -726,8 +840,15 @@ export function estimateValueEx(
   const adjOf = (c: Comp) => c.realizedUsd * timeFactor(TIDX?.marketBySlug?.[lot.artist] ?? market, c.saleDate);
   // the CERTIFIED statistic (compRatio → the Flags) stays on the unadjusted
   // pool; the time-adjusted median is the value's comp input
-  let compRawUsd = weightedMedian(top.map(c => [c.realizedUsd, (c.match.cosine ** 2) * decay(c)] as [number, number]));
-  let compAdjUsd = weightedMedian(top.map(c => [adjOf(c), (c.match.cosine ** 2) * decay(c)] as [number, number]));
+  // (Oct 6, FLAGS.weightCap) no single comp carries more than
+  // COMP_WEIGHT_CAP of the pool (24% of live pools had one comp > 50%)
+  const wmed = (cs: Comp[], px: (c: Comp) => number) => {
+    const ws = cs.map(c => (c.match.cosine ** 2) * decay(c));
+    const cw = FLAGS.weightCap ? capWeights(ws) : ws;
+    return weightedMedian(cs.map((c, i) => [px(c), cw[i]] as [number, number]));
+  };
+  let compRawUsd = wmed(top, c => c.realizedUsd);
+  let compAdjUsd = wmed(top, adjOf);
   if (!(compRawUsd > 0) || !(compAdjUsd > 0)) return { value: null, abstain: 'no-value' };
   const vals = top.map(c => c.realizedUsd).sort((a, b) => a - b);
   const adjVals = top.map(adjOf).sort((a, b) => a - b);
@@ -775,6 +896,7 @@ export function estimateValueEx(
 
   // DIRECTIONAL signal (estimate lots)
   let signal: ValueResult['signal'] = null;
+  let partial: string | null = null;
   let compRatio: number | null = null;
   let flagRatio: number | null = null;
   let houseF: number | undefined;
@@ -797,8 +919,8 @@ export function estimateValueEx(
       const exactPool = top.filter(c => c.match.cls === 'physicalMatch'
         || (c.match.cls === 'modelMatch' && c.match.cosine >= 0.92));
       if (exactPool.length) {
-        compRawUsd = weightedMedian(exactPool.map(c => [c.realizedUsd, (c.match.cosine ** 2) * decay(c)] as [number, number]));
-        compAdjUsd = weightedMedian(exactPool.map(c => [adjOf(c), (c.match.cosine ** 2) * decay(c)] as [number, number]));
+        compRawUsd = wmed(exactPool, c => c.realizedUsd);
+        compAdjUsd = wmed(exactPool, adjOf);
         compRatio = ratioOf(compRawUsd);
         if (confidence === 'high') confidence = 'medium';
       }
@@ -837,6 +959,14 @@ export function estimateValueEx(
     const strength = (flagRatio >= 2 && br >= 60) || flagRatio <= 0.55 ? 'strong'
       : flagRatio >= 1.3 || flagRatio <= 0.75 ? 'moderate' : 'slight';
     signal = { label, strength, beatRatePct: uncal ? 0 : br };
+    // (Oct 6, FLAGS.purityGate) no directional read without the evidence for
+    // one: a comp ratio outside the ×5 estimate-band sanity is a data fault
+    // (engineFlagOf already hid it; the signal itself kept 'strong, 64%'),
+    // and a read needs ≥ PURITY.minPure pure comps
+    if (FLAGS.purityGate) {
+      if (!(compRatio <= PURITY.ratioCap && compRatio >= 1 / PURITY.ratioCap)) { signal = null; partial = 'flag:ratio-x5'; }
+      else if (pureOf(top).length < PURITY.minPure) { signal = null; partial = 'flag:purity'; }
+    }
   }
 
   // THE PUBLISHED VALUE (Sep 27 2026 engine pass). Measured live (659 estimate
@@ -850,7 +980,8 @@ export function estimateValueEx(
   let blendW: number | undefined;
   let predUsd: number;
   if (estMid && estMid > 0) {
-    const bp = blendPredict(lot, estMid, estKind, compAdjUsd, confidence);
+    const nExact = top.filter(c => c.match.cosine >= EXACT_BLEND.cos).length;
+    const bp = blendPredict(lot, estMid, estKind, compAdjUsd, confidence, CAL, nExact);
     predUsd = bp.value; blendW = bp.w;
   } else {
     // The no-estimate market×tier bias (calibration.bias) is FITTED and
@@ -919,6 +1050,7 @@ export function estimateValueEx(
     tier,
     exact,
     idn: idn || undefined,
+    ...(partial ? { abstain: partial } : {}),
     compMedianUsd: Math.round(compRawUsd),
     compAdjUsd: Math.round(compAdjUsd),
     ...(blendW != null ? { blendW: Math.round(blendW * 100) / 100 } : {}),
@@ -938,6 +1070,18 @@ export function vsBidRead(lot: { auctionHouse?: string | null; buyerPremiumPct?:
   const bidAllIn = bid * lotAllInFactor(lot, bid);
   const pct = Math.round((bidAllIn / compValueUsd - 1) * 100);
   return { label: pct <= -12 ? 'below recent comps' : pct >= 12 ? 'above recent comps' : 'in line', pct };
+}
+
+/** (Oct 6 2026, pricing wave 2) THE BID READ'S CLOCK: the comps-vs-bid read
+ *  (vsBid) means something only near the hammer — inside the last
+ *  VSBID_WINDOW_DAYS before the close a live bid is close to its final; far
+ *  out it is merely early (the closing surge is still ahead). True when the
+ *  lot closes within the window of `nowMs` (an undated close never reads). */
+export const VSBID_WINDOW_DAYS = 1;
+export function vsBidLive(lot: { saleDate?: string | null; saleDateTime?: string | null }, nowMs: number): boolean {
+  const closeMs = Date.parse(String(lot.saleDateTime || lot.saleDate || ''));
+  if (!Number.isFinite(closeMs)) return false;
+  return (closeMs - nowMs) / 86_400_000 <= VSBID_WINDOW_DAYS;
 }
 
 /* ── THE COMP CANDIDATE INDEX (Oct 5 2026 scale pass) ─────────────────────
@@ -1044,7 +1188,7 @@ export function resolveComps(
     // admit down to the RELAXED tier-b gate — estimateValue applies the strict
     // gate first and only reaches for these when the strict pool is thin
     if (!passesGateWith(FALLBACK_GATE, m)) continue;
-    out.push({ id: c.id, match: m, realizedUsd: compAllInUsd(c), saleDate: c.saleDate });
+    out.push({ id: c.id, match: m, realizedUsd: compAllInUsd(c), saleDate: c.saleDate, lot: c });
   }
   return out;
 }

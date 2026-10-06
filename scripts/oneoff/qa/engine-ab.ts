@@ -22,12 +22,12 @@ import {
 } from '../../backtest-core';
 import {
   estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, houseFactorOf, FLAG_GATE,
-  ENGINE_FLAGS_LEGACY, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_CANDIDATE, ENGINE_FLAGS_HOUSE_GATE, type EngineFlags, type EngineCalibration,
+  ENGINE_FLAGS_LEGACY, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_CANDIDATE, ENGINE_FLAGS_HOUSE_GATE, ENGINE_FLAGS_HAMMER_BASIS, type EngineFlags, type EngineCalibration,
 } from '../../../app/lib/value';
 import type { AuctionLot } from '../../../app/types';
 
 const arg = (n: string): string | null => { const i = process.argv.indexOf(`--${n}`); return i >= 0 ? process.argv[i + 1] : null; };
-const FLAGSETS: Record<string, EngineFlags> = { legacy: ENGINE_FLAGS_LEGACY, 'house-gate': ENGINE_FLAGS_HOUSE_GATE, current: ENGINE_FLAGS_CURRENT, candidate: ENGINE_FLAGS_CANDIDATE };
+const FLAGSETS: Record<string, EngineFlags> = { legacy: ENGINE_FLAGS_LEGACY, 'house-gate': ENGINE_FLAGS_HOUSE_GATE, 'hammer-basis': ENGINE_FLAGS_HAMMER_BASIS, current: ENGINE_FLAGS_CURRENT, candidate: ENGINE_FLAGS_CANDIDATE };
 
 function main() {
   const dir = arg('corpus') || 'data/corpus';
@@ -45,6 +45,11 @@ function main() {
   };
   const fa = tweak(A, arg('a-flags')), fb = tweak(B, arg('b-flags'));
   const calMode = arg('cal') || 'legacy';
+  // (Oct 6, wave 2) engine constant overrides for sweeps: --set PURITY.maxAgeY=99,EXACT_BLEND.w=0.6
+  if (arg('set')) {
+    const V = require('../../../app/lib/value') as Record<string, Record<string, unknown>>;
+    for (const kv of arg('set')!.split(',')) { const [k, v] = kv.split('='); const [o, f] = k.split('.'); V[o][f] = +v; }
+  }
   if (arg('lift') != null) FLAG_GATE.minLiftPt = +arg('lift')!;
   if (arg('min-odds-hammer') != null) FLAG_GATE.minOddsHammer = +arg('min-odds-hammer')!;
   const t0 = Date.now();
