@@ -83,8 +83,9 @@ export function houseAllInFactor(house: string | null | undefined, hammerUsd?: n
  *  USED BY the price-bleed sentinel's honesty test (scripts/assemble.ts
  *  computeSentinel): the 29+ standing REA "poison" signatures were real flat
  *  increments × the OLDER premiums that the flat 1.175 could not see. And
- *  (Oct 5 2026, engine) by lotAllInFactor → inferHammerUsd / buyerFields /
- *  vsBidRead whenever the lot carries a saleDate: measured on the live book
+ *  (Oct 5 2026, engine) by lotHammerFromAllIn (inferHammerUsd, maxHammerFor,
+ *  value.buyerFields) and lotAllInFactor (the bid read) whenever the lot
+ *  carries a saleDate: measured on the live book
  *  (Sep 14 snapshot, 145 REA lots sold by Oct 5, true hammer = realized ÷ the
  *  era premium) the served expected hammer moved median abs error 40.3% →
  *  34.8%, ±30% 37.9% → 46.2%, hammers ≤ max bid 57.9% → 49.7% (nominal 30);
@@ -120,9 +121,14 @@ export const DATED_PREMIUMS: Record<string, Array<[string, number]>> = {
  *  Jun 2002 (same GBP) — a CSK repeat cluster in that window reads as poison
  *  (the safe direction).
  *
- *  USED BY the sentinel honesty test only (scripts/assemble.ts
- *  computeSentinel → houseHammerFromAllInAt). NOT wired into lotAllInFactor /
- *  inferHammerUsd — that is the engine owner's call. */
+ *  USED BY the sentinel honesty test (scripts/assemble.ts computeSentinel →
+ *  houseHammerFromAllInAt) and (Oct 5 2026) the engine's hammer basis:
+ *  lotHammerFromAllIn (inferHammerUsd, maxHammerFor, value.buyerFields) and
+ *  lotAllInFactor read the schedule in force on the lot's saleDate (USD
+ *  bands — the engine's amounts are USD). Christie's / Sotheby's USD-sale
+ *  hammers inferred through the undated factors were round bid increments
+ *  7% / 20% of the time; through this inverse 98% / 99%. All-in figures are
+ *  unchanged; docs/ENGINE_LANES.md §10 has the before/after. */
 type TieredEra = { from: string; rates: number[]; ceilings: Record<string, number[]>; rateOverride?: Record<string, number[]> };
 export const DATED_TIERED_PREMIUMS: Record<string, TieredEra[]> = {
   // Christie's — captures of christies.com's buyer's-premium page (checked Oct 5 2026):
@@ -343,9 +349,30 @@ export function lotAllInFactor(lot: { auctionHouse?: string | null; buyerPremium
   return houseAllInFactor(lot.auctionHouse, usd);
 }
 
+/** The HAMMER behind a premium-inclusive amount for this lot: its stamped
+ *  premium, else — for a house with a dated schedule and a lot with a
+ *  saleDate — the exact inverse of the schedule in force that day
+ *  (houseHammerFromAllInAt: the tiered band walk, REA's era rate), else
+ *  allIn ÷ the undated schedule read at `bandUsd` (default: the amount).
+ *  (Oct 5 2026) The engine's every all-in → hammer conversion runs here:
+ *  read through the UNDATED schedule only 7% (Christie's) / 20% (Sotheby's)
+ *  of USD-sale hammers come out a round bid increment; through this inverse
+ *  98% / 99% (docs/ENGINE_LANES.md §10). */
+export function lotHammerFromAllIn(
+  lot: { auctionHouse?: string | null; buyerPremiumPct?: number | null; saleDate?: string | null },
+  allInUsd: number, bandUsd?: number | null,
+): number {
+  if (!(allInUsd > 0)) return 0;
+  const bp = lot.buyerPremiumPct;
+  if (typeof bp === 'number' && bp > 0 && bp < 60) return allInUsd / (1 + bp / 100);
+  const h = lot.auctionHouse;
+  if (lot.saleDate && h && (DATED_TIERED_PREMIUMS[h] || DATED_PREMIUMS[h])) return houseHammerFromAllInAt(h, allInUsd, lot.saleDate);
+  return allInUsd / houseAllInFactor(h, bandUsd ?? allInUsd);
+}
+
 /** Max-bid guidance: the walk-away HAMMER for a target all-in value. */
-export function maxHammerFor(allInUsd: number, lot: { auctionHouse?: string | null; buyerPremiumPct?: number | null }): number {
-  return Math.floor(allInUsd / lotAllInFactor(lot, allInUsd));
+export function maxHammerFor(allInUsd: number, lot: { auctionHouse?: string | null; buyerPremiumPct?: number | null; saleDate?: string | null }): number {
+  return Math.floor(lotHammerFromAllIn(lot, allInUsd));
 }
 
 /** THE hammer inference (P1-5, Sep 2 2026): the lot's published hammer when
@@ -355,12 +382,12 @@ export function maxHammerFor(allInUsd: number, lot: { auctionHouse?: string | nu
  *  hammer-basis read — indices.houseAccuracy, build-market houseCal +
  *  seasonality, the backtest's hammer perfs — goes through here; there is no
  *  flat /1.25 left in the engine. */
-export function inferHammerUsd(lot: { auctionHouse?: string | null; buyerPremiumPct?: number | null; hammerUsd?: number | null; realizedUsd?: number | null; priceUsd?: number | null }): number {
+export function inferHammerUsd(lot: { auctionHouse?: string | null; buyerPremiumPct?: number | null; hammerUsd?: number | null; realizedUsd?: number | null; priceUsd?: number | null; saleDate?: string | null }): number {
   const h = lot.hammerUsd;
   if (typeof h === 'number' && h > 0) return h;
   const realized = (lot.realizedUsd && lot.realizedUsd > 0 ? lot.realizedUsd : lot.priceUsd) || 0;
   if (!(realized > 0)) return 0;
-  return realized / lotAllInFactor(lot, realized);
+  return lotHammerFromAllIn(lot, realized);
 }
 
 /** Houses whose bid ladder is PERCENTAGE-based, not flat: each next bid is the

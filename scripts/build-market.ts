@@ -90,6 +90,15 @@ const CARD_HL_Y = 0.25;
 /** tier 2 (grade-adjusted) prices from rungs at most this many grades from the
  *  card's own (Oct 5 2026 — see the tier's note in priceCard) */
 const CARD_GA_MAX_STEP = 0.5;
+/** Card tiers that never publish, whatever their gate cell reads (Oct 5 2026).
+ *  grade-adj: the neighbour-rung pricer clears the bar on its point-in-time
+ *  record (trailing 365d: medium 48.5%, low 46.5% within ±30%) but NOT on the
+ *  live forward test — the Sep 14 book re-served, graded on sales to Oct 5:
+ *  the 86 values the gate would have published landed 35.7% (medium, n28) /
+ *  39.7% (low, n58) within ±30%, bias 0.75–0.89 (the tier's 120-day bias
+ *  correction, ×1.146, pushed them high). It keeps abstaining until its own
+ *  forward record (value tape) clears the bar; the record keeps scoring it. */
+const CARD_TIER_HOLD = new Set<string>(['grade-adj']);
 const MARKET_BY_SLUG: Record<string, string> = {};
 for (const [mkt, slugs] of Object.entries(MARKETS)) for (const s of slugs) MARKET_BY_SLUG[s] = mkt;
 
@@ -1068,9 +1077,11 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         // across whole grades. Point-in-time record of the tier (every sold
         // card priced as of its own day; trailing 365d): ±30% hit medium
         // 34.6% → 48.5%, low 28.8% → 46.5% (year to Oct 2025: medium 31.8%
-        // → 55.5%, low 26.4% → 41.3%); live (Sep 14 book): medium 19.3% →
-        // 57.1%, low 33.0% → 44.8%. It prices fewer cards (the far-rung
-        // ones abstain 'card:pool<2'). docs/ENGINE_LANES.md §10.
+        // → 55.5%, low 26.4% → 41.3%); live (Sep 14 book, raw tier value):
+        // medium 19.3% → 57.1%, low 33.0% → 44.8%. It prices fewer cards
+        // (the far-rung ones abstain 'card:pool<2'). Publication stays held
+        // (CARD_TIER_HOLD — the bias-corrected live values missed the bar).
+        // docs/ENGINE_LANES.md §10.
         const target = c.gradeNum;
         const adj = ladderR
           .filter(s => !(s as PLot)._card?.gradeQual)
@@ -1101,11 +1112,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     // cell abstains with the cell's reason code (ENGINE_FLAGS.cardGate).
     let cardCalib: CardCalibration;
     {
-      // (Oct 5 2026) 12,000 → 120,000: the neighbour-rung grade-adj tier
-      // seats fewer rows, and at a 1-in-9 sample its 120-day calibration
-      // fell under tierMinN and its gate cells hovered at minN — every
-      // recent sold card is priced now at 1× (~100k; the pass is O(pool))
-      const CAL_MAX = 120000;
+      const CAL_MAX = 12000;
       const cut = NOW_MS - CARD_GATE.windowDays * 864e5;
       const recentSold = (sportsSold as PLot[]).filter(s => CARD_SLUGS.has(s.artist) && s._card && saleMsOf(s) > cut && saleMsOf(s) < NOW_MS && !hasConditionFlag(s.title));
       const step = Math.max(1, Math.ceil(recentSold.length / CAL_MAX));
@@ -1139,9 +1146,13 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         low = Math.round(value * tc.lo); high = Math.round(value * tc.hi); mbAllIn = value * tc.mb;
       }
       // (Oct 5 2026) a tier with no calibration publishes nothing: its band
-      // would be the raw spread of one or two comps (live: 26% coverage)
+      // would be the raw spread of one or two comps (live: 26% coverage); and
+      // a HELD tier publishes nothing whatever its cell reads (see
+      // CARD_TIER_HOLD)
       const g0 = cardGate(cal, market, tier, confidence);
-      const g = tc ? g0 : { ...g0, pass: false, reason: 'card:uncalibrated' as const };
+      const g = !tc ? { ...g0, pass: false, reason: 'card:uncalibrated' as const }
+        : CARD_TIER_HOLD.has(tier) ? { ...g0, pass: false, reason: 'card:gate-accuracy' as const }
+          : g0;
       const flagsNow = getEngineFlags();
       // shadow: the candidate's verdict on the same priced value (never served)
       if (SHADOW) {

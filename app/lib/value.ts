@@ -22,7 +22,7 @@
  */
 import type { AuctionLot } from '../types';
 import { similarity, sizeRatio, type IdfTable, type Match } from './similarity';
-import { lotAllInFactor } from './premiums';
+import { lotAllInFactor, lotHammerFromAllIn } from './premiums';
 import { weightedMedian, quantileSorted } from './stats';
 import { lotShapeOf, shapesCompatible, isCompExcluded } from './comps';
 import type { CardGateCell } from './cards-gate';
@@ -181,17 +181,22 @@ export interface BuyerFields {
   engineVersion: string;
 }
 export function buyerFields(
-  lot: { auctionHouse?: string | null; buyerPremiumPct?: number | null },
+  lot: { auctionHouse?: string | null; buyerPremiumPct?: number | null; saleDate?: string | null },
   predAllIn: number, lowAllIn: number, highAllIn: number, mbAllIn?: number | null,
 ): BuyerFields {
-  const pf = lotAllInFactor(lot, predAllIn / 1.25);
   let mb = typeof mbAllIn === 'number' && mbAllIn > 0 ? mbAllIn
     : lowAllIn > 0 && lowAllIn < predAllIn ? predAllIn * Math.pow(lowAllIn / predAllIn, MAXBID_T) : predAllIn;
   if (mb > predAllIn) mb = predAllIn;
   if (lowAllIn > 0 && mb < lowAllIn) mb = lowAllIn;
-  const r = (x: number) => Math.round(x / pf);
+  // every figure through the lot's own all-in → hammer inverse (the dated
+  // schedule in force on its sale date where the house has one; else the
+  // undated schedule read at the predicted hammer's band, as before)
+  const hammerOf = (x: number) => lotHammerFromAllIn(lot, x, predAllIn / 1.25);
+  const xh = hammerOf(predAllIn);
+  const pf = xh > 0 ? predAllIn / xh : lotAllInFactor(lot, predAllIn / 1.25);
+  const r = (x: number) => Math.round(hammerOf(x));
   return {
-    expectedHammerUsd: r(predAllIn), bandLowUsd: r(lowAllIn), bandHighUsd: r(highAllIn), maxBidUsd: r(mb),
+    expectedHammerUsd: Math.round(xh), bandLowUsd: r(lowAllIn), bandHighUsd: r(highAllIn), maxBidUsd: r(mb),
     premiumFactor: Math.round(pf * 1000) / 1000, engineVersion: FLAGS.version,
   };
 }
