@@ -106,6 +106,12 @@ export async function crawlSothebys(artist: ArtistConfig): Promise<AuctionLot[]>
         const cur = estMatch[3].toUpperCase();
         if (isCurrency(cur)) {
           currency = cur;
+        } else {
+          // (Oct 6 2026) FAIL CLOSED: an estimate in a currency we cannot
+          // convert is no estimate — the USD default printed a foreign
+          // estimate at face value as dollars
+          estimateLow = null;
+          estimateHigh = null;
         }
       }
 
