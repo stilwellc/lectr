@@ -113,7 +113,7 @@ The engine's **relative signal is real and robust** — flagged lots beat unflag
    Cross-house dedupe is a measured NON-issue (1 true dup in 36,310). [S/M]
 10. Sotheby's GraphQL slug enumeration 2020–2024 (+2–5k est-bearing; diversifies the
     85%-Bonhams watch pool; live cards are 67% Sotheby's but backtest values n=91). [M]
-11. Heritage crawler — only AFTER Phillips (advertised on /about, zero code today). [L]
+11. ~~Heritage crawler~~ — EXCLUDED: DataDome bot wall, no API, and Heritage has sued a scraper ($1.75M). Not advertised anywhere on the site. Do not revisit.
 12. Accept the honest ceiling: 31.9% of targets have ZERO same-maker candidates at any
     gate (Picasso: 3,462 such lots). Set per-category coverage expectations.
 

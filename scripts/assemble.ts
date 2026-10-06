@@ -41,7 +41,10 @@ const isGoldinSold = (l: Record<string, unknown>) => l.auctionHouse === 'Goldin'
 // client shards so served payload stays lean.
 const isArchiveTier = (l: Record<string, unknown>) => isGoldinSold(l) || l.archived === true;
 
-export type SentinelSignature = { house: string; price: number; n: number; top: number; topDate: string; hammer: number; honest: boolean };
+/** `hammer` is the implied hammer in `currency` (the SALE currency when the
+ *  rows carry one — Christie's/Sotheby's sell in GBP/EUR/CHF/HKD and the USD
+ *  price is that all-in × FX; absent = USD, the pre-Oct-5 shape). */
+export type SentinelSignature = { house: string; price: number; n: number; top: number; topDate: string; hammer: number; honest: boolean; currency?: string };
 
 /**
  * The price-bleed sentinel's DECISION, extracted pure so it is testable
@@ -80,9 +83,17 @@ export function sentinelVerdict(
  * the percentage-ladder houses, BID_LADDER_PCT) the price sits on the house's
  * observed 10% geometric ladder — peers are that house's other prices that clear
  * ≥3× (a real rung repeats; a bleed has no ladder around it).
+ *
+ * NATIVE CURRENCY + TIERED ERAS (Oct 5 2026): the honesty test runs in the
+ * SALE currency on the dominant date's own all-in figure (premiumNative, else
+ * realizedNative) — a London lot's round increment is £5,000, and £6,250 × a
+ * yearly FX rate is never a round dollar figure. The hammer comes from ONE
+ * schedule per signature (house × dominant saleDate × currency, premiums.ts
+ * houseHammerFromAllInAt): REA's flat eras, Christie's / Sotheby's tiered
+ * eras inverted band by band. Never a search over factors for a round answer.
  */
 export function computeSentinel(
-  lots: Array<{ status?: string; auctionHouse?: string | null; saleDate?: string | null; priceUsd?: number | null; realizedUsd?: number | null }>,
+  lots: Array<{ status?: string; auctionHouse?: string | null; saleDate?: string | null; priceUsd?: number | null; realizedUsd?: number | null; nativeCurrency?: string | null; premiumNative?: number | null; realizedNative?: number | null }>,
   premiums: {
     lotAllInFactor: (lot: { auctionHouse?: string | null }, usd?: number | null) => number;
     isRoundIncrement: (h: number, tol?: number, ladder?: { pct: number; peers: Iterable<number> }) => boolean;
@@ -92,11 +103,19 @@ export function computeSentinel(
      *  dominant saleDate — REA charged 15/16/17.5/18.5/20/23% across the years
      *  the corpus spans, and an old price ÷ one flat factor never looked round. */
     houseAllInFactorAt?: (house: string, usd: number, saleDate: string | null) => number;
+    /** (Oct 5 2026) hammer from all-in at a sale date in the sale currency —
+     *  REA's flat eras + Christie's/Sotheby's TIERED eras (band-walk inverse).
+     *  Preferred over houseAllInFactorAt when given. */
+    houseHammerFromAllInAt?: (house: string, allIn: number, saleDate: string | null, currency?: string | null) => number;
   },
 ): SentinelSignature[] {
-  const { lotAllInFactor, isRoundIncrement, BID_LADDER_PCT, houseAllInFactorAt } = premiums;
+  const { lotAllInFactor, isRoundIncrement, BID_LADDER_PCT, houseAllInFactorAt, houseHammerFromAllInAt } = premiums;
   const sentinel: SentinelSignature[] = [];
   const byHouse = new Map<string, Map<number, Map<string, number>>>();
+  // house|price|date → count per `CUR|nativeAllIn` (only when the row carries a
+  // non-USD sale currency + native figure) — the dominant one is the
+  // signature's native all-in
+  const natives = new Map<string, Map<string, number>>();
   const ladderCounts = new Map<string, Map<number, number>>();
   for (const l of lots) {
     if (l.status !== 'sold') continue;
@@ -111,6 +130,14 @@ export function computeSentinel(
     const m = byHouse.get(h) || new Map<number, Map<string, number>>(); byHouse.set(h, m);
     const d = m.get(p) || new Map<string, number>(); m.set(p, d);
     d.set(l.saleDate || '?', (d.get(l.saleDate || '?') || 0) + 1);
+    const cur = typeof l.nativeCurrency === 'string' ? l.nativeCurrency.toUpperCase() : '';
+    const nat = l.premiumNative ?? l.realizedNative;
+    if (houseHammerFromAllInAt && cur && cur !== 'USD' && typeof nat === 'number' && nat > 0) {
+      const k = `${h}|${p}|${l.saleDate || '?'}`;
+      const nm = natives.get(k) || new Map<string, number>(); natives.set(k, nm);
+      const nk = `${cur}|${nat}`;
+      nm.set(nk, (nm.get(nk) || 0) + 1);
+    }
   }
   const ladderPeers = new Map<string, number[]>();
   ladderCounts.forEach((lc, h) => {
@@ -122,10 +149,20 @@ export function computeSentinel(
     let n = 0, top = 0, topDate = '';
     d.forEach((c, dt) => { n += c; if (c > top) { top = c; topDate = dt; } });
     if (n >= 15 && top / n >= 0.6) {
-      const hammer = p / (houseAllInFactorAt && topDate !== '?' ? houseAllInFactorAt(h, p, topDate) : lotAllInFactor({ auctionHouse: h }, p));
+      // the dominant date's sale currency + native all-in (USD rows: the price)
+      let currency = 'USD', allIn = p, best = 0;
+      natives.get(`${h}|${p}|${topDate}`)?.forEach((c, k) => {
+        if (c > best) { best = c; const i = k.indexOf('|'); currency = k.slice(0, i); allIn = Number(k.slice(i + 1)); }
+      });
+      // a native figure only counts when it IS the dominant date's shape (≥ half its rows)
+      if (best * 2 < top) { currency = 'USD'; allIn = p; }
+      const date = topDate !== '?' ? topDate : null;
+      const hammer = houseHammerFromAllInAt
+        ? houseHammerFromAllInAt(h, allIn, date, currency)
+        : p / (houseAllInFactorAt && date ? houseAllInFactorAt(h, p, date) : lotAllInFactor({ auctionHouse: h }, p));
       const pct = BID_LADDER_PCT[h];
       const honest = isRoundIncrement(hammer) || (!!pct && isRoundIncrement(p, 1, { pct, peers: ladderPeers.get(h) || [] }));
-      sentinel.push({ house: h, price: p, n, top, topDate, hammer: Math.round(hammer * 100) / 100, honest });
+      sentinel.push({ house: h, price: p, n, top, topDate, hammer: Math.round(hammer * 100) / 100, honest, ...(currency !== 'USD' ? { currency } : {}) });
     }
   }));
   sentinel.sort((a, b) => b.n - a.n);
@@ -266,6 +303,11 @@ async function main() {
   // (Oct 5 2026) and REA's premium ERAS (premiums.ts DATED_PREMIUMS): the 36
   // standing REA signatures were flat increments × the 15/16/18.5% premiums of
   // 2004-2013 that the flat 1.175 divided wrong — now honest; REA poison 36 → 0.
+  // (Oct 5 2026, later) Christie's / Sotheby's: the test now runs in the SALE
+  // currency (premiumNative) under the TIERED schedule of the sale's era
+  // (premiums.ts DATED_TIERED_PREMIUMS, cited per era) — the 32 standing
+  // signatures (Christie's 19, Sotheby's 13) were £/€/CHF/HK$ round hammers
+  // × 18–28% read as USD ÷ today's factor; poison 32 → 0, no other house moved.
   let sentinel: SentinelSignature[] = [];
   {
     sentinel = computeSentinel(allLots as never, await import('../app/lib/premiums'));
@@ -299,7 +341,7 @@ async function main() {
     for (const s of sentinel) {
       const known = prevSigs.has(`${s.house}|${s.price}`);
       const tag = s.honest ? 'honest tie' : (known ? 'POISON (known/standing)' : 'POISON (NEW)');
-      const msg = `[assemble] SENTINEL ${tag}: ${s.house} $${s.price.toLocaleString()} ×${s.n} (${s.top} on ${s.topDate}; hammer ${s.hammer}${s.honest ? ' = round increment' : ''})`;
+      const msg = `[assemble] SENTINEL ${tag}: ${s.house} $${s.price.toLocaleString()} ×${s.n} (${s.top} on ${s.topDate}; hammer ${s.currency ? s.currency + ' ' : ''}${s.hammer}${s.honest ? ' = round increment' : ''})`;
       if (s.honest || known) console.log(msg);
       else { console.warn(msg); console.log(`::warning title=sentinel price bleed::${s.house} $${s.price.toLocaleString()} x${s.n} (${s.top} on ${s.topDate}) — NEW repeat cluster; inspect before trusting comps`); }
     }
