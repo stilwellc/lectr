@@ -11,7 +11,6 @@ import { useChartDraw } from '../../hooks/useChartDraw';
 import { demandSeries, formatDemand } from '../../lib/demand';
 import type { MarketData } from '../../hooks/useRayData';
 import { verifiedMovers } from '../../preview/terminal/verified';
-import ArtistAvatar from '../ArtistAvatar';
 import Flick from '../Flick';
 
 interface Props {
@@ -32,30 +31,6 @@ interface VerifiedRead {
   changePct: number;
   horizon: string;
   dir: 'up' | 'down';
-}
-
-function computeSparkData(lots: AuctionLot[]): SparkPoint[] {
-  const sold = lots.filter(l => l.status === 'sold' && l.priceUsd);
-  if (sold.length === 0) return [];
-
-  const quarters: Record<string, number[]> = {};
-  for (const lot of sold) {
-    const d = new Date(lot.saleDate);
-    if (isNaN(d.getTime())) continue;
-    // UTC getters: saleDate is date-only (UTC midnight); local getters can
-    // shift a sale into the previous quarter/year depending on timezone.
-    const q = Math.floor(d.getUTCMonth() / 3) + 1;
-    const key = `${d.getUTCFullYear()} Q${q}`;
-    if (!quarters[key]) quarters[key] = [];
-    quarters[key].push(lot.priceUsd!);
-  }
-
-  return Object.entries(quarters)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, prices]) => ({
-      date,
-      avgPrice: prices.reduce((s, p) => s + p, 0) / prices.length,
-    }));
 }
 
 function SparkTooltip({ active, payload, priceBasis, rebased }: { active?: boolean; payload?: Array<{ payload: SparkPoint }>; priceBasis?: boolean; rebased?: boolean }) {
@@ -537,7 +512,7 @@ export default function ArtistSparklines({ statsByArtist, allLots, limit = 6, ma
       </div>
 
       <div className="ray-spark-grid">
-        {ordered.map((artist, i) => (
+        {ordered.map((artist) => (
           <ArtistCard
             key={artist.slug}
             artist={artist}

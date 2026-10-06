@@ -142,7 +142,7 @@ function summarize(name: string, rs: Res[]) {
     'BM flags', String(bm.length).padStart(3), 'BM hold', bm.length ? (100 * bmHold / bm.length).toFixed(0) + '%' : '—');
 }
 console.log('\n=== variant results (n=' + anchors.length + ' anchors) ===');
-for (const [name, rs] of results) summarize(name, rs);
+for (const [name, rs] of Array.from(results)) summarize(name, rs);
 
 // ── error-driver diagnosis on the BASELINE pools: material purity vs error ──
 // re-run baseline capturing pool material mix

@@ -32,9 +32,6 @@ export default function PortfolioHeader({ statsByArtist, allLots }: Props) {
     const recentSold = allLots.filter(l =>
       l.status === 'sold' && l.priceUsd && new Date(l.saleDate) >= oneYearAgo
     );
-    const avgPrice12mo = recentSold.length
-      ? recentSold.reduce((s, l) => s + (l.priceUsd || 0), 0) / recentSold.length
-      : 0;
 
     const lotsWithEstimate = allLots.filter(l =>
       l.status === 'sold' && l.priceUsd && l.estimateHigh && l.estimateHigh > 0

@@ -38,7 +38,7 @@ console.log(`[equiv] LEGACY:  ${legacy.physPairs} pairs → ${legacy.physGroups}
 // compare the PARTITION, not the labels: same set of member-sets.
 const partition = (m: Map<string, string>) => {
   const byG = new Map<string, string[]>();
-  for (const [id, g] of m) (byG.get(g) || byG.set(g, []).get(g)!).push(id);
+  for (const [id, g] of Array.from(m)) (byG.get(g) || byG.set(g, []).get(g)!).push(id);
   return new Set(Array.from(byG.values()).map(ids => ids.sort().join('|')));
 };
 const A = partition(hoisted.groupOf), B = partition(legacy.groupOf);

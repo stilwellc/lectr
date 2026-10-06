@@ -9,7 +9,6 @@ import { Colophon } from '../components/Terminal';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import Masthead, { Accent } from '../components/Masthead';
 import Flick from '../components/Flick';
-import { lotSignal } from '../components/LotCard';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, overEstimatePct } from '../utils';
 import { ARTIST_LABEL } from '../constants';
 import type { AuctionLot } from '../types';

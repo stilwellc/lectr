@@ -72,7 +72,7 @@ async function main() {
     if (clean.length) { const r = writeMergedSegment(cfg.seg, clean); total = r.total; }
   }
 
-  async function worker(w: number) {
+  async function worker(_w: number) {
     let held = await clearContext(browser, cfg.host);
     while (nextId <= end) {
       const id = nextId++;

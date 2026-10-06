@@ -204,9 +204,9 @@ export async function crawlSothebys(artist: ArtistConfig): Promise<AuctionLot[]>
       const auctionYear = yearMatch ? parseInt(yearMatch[1]) : null;
       // Bare links carry no estimate and no result — never 'upcoming' (would
       // be a phantom that can't resolve) and never 'sold' (no realized price).
-      let status: LotStatus = 'bought_in';
+      const status: LotStatus = 'bought_in';
       let saleDate = '';
-      if (auctionYear) saleDate = `${auctionYear}-06-01`;
+      if (auctionYear) saleDate =`${auctionYear}-06-01`;
 
       const fullUrl = href.startsWith('http') ? href : `https://www.sothebys.com${href}`;
       lots.push({
@@ -475,7 +475,7 @@ export async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'spor
       const prior = (readSegment('sothebys') as unknown as AuctionLot[]) || [];
       const names = buildSkippableSaleNames(
         prior as unknown as import('../skip-set').SkipLot[],
-        l => true, // segment is already Sotheby's-only; superset keying is the safe direction
+        () => true, // segment is already Sotheby's-only; superset keying is the safe direction
       );
       for (const [name, count] of Array.from(names.entries())) skippableSales.set(name, count);
       // A sale surfaced by TODAY's live department/series discovery is being
@@ -493,7 +493,7 @@ export async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'spor
   }
 
   let sothebysSkipped = 0, sothebysFetched = 0, sothebysCarried = 0;
-  for (const { sale, kind } of jobs) {
+  for (const { sale } of jobs) {
     // Incremental fast path: fully resolved + old + not resurfaced in discovery
     // → don't re-fetch. Its lots ride through via the merge's carry-forward.
     if (INCREMENTAL_CRAWL && skippableSales.has(sothebysNameOf(sale))) {
