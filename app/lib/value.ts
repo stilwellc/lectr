@@ -117,6 +117,12 @@ export interface EngineFlags {
    *  ≥ PURITY.minPure of them exist (else the pool stands, unflagged).
    *  Measured, NOT adopted: holdout medErr 28.4% → 29.0% (§13) */
   purityPool?: boolean;
+  /** (Oct 6, pricing wave 2) RECENCY: no comp carries more than
+   *  COMP_WEIGHT_CAP of the pool's weight; a pool whose every comp is older
+   *  than PURITY.maxAgeY abstains ('stale'). Measured, NOT adopted: holdout
+   *  medErr 28.4% → 28.7%, live ±30% 54.1% → 53.7%; the stale abstention
+   *  leaves the remaining values' error unchanged (§13) */
+  weightCap?: boolean;
   /** (Oct 6, pricing wave 2) estimate lots with ≥ EXACT_BLEND.minN exact comps
    *  (cosine ≥ EXACT_BLEND.cos) put at least EXACT_BLEND.w on the comps.
    *  Measured, NOT adopted: holdout medErr 28.4% → 29.6%; a point-in-time
@@ -158,7 +164,7 @@ export const ENGINE_FLAGS_HAMMER_BASIS: EngineFlags = {
  *  20.1pt (within EDGE_TOL_PT), medErr 28.0% → 27.7% on the same lots; the
  *  hand-judged comp sample good 42.7% → 65.5%, wrong 18.0% → 11.0% among
  *  the comps that may carry a call. Measured and NOT adopted: purityPool,
- *  exactBlend (§13). */
+ *  weightCap, exactBlend (§13). */
 export const ENGINE_FLAGS_CURRENT: EngineFlags = {
   ...ENGINE_FLAGS_HAMMER_BASIS,
   version: '2026.10.06-comp-purity',
@@ -436,6 +442,7 @@ export type AbstainReason =
   | 'no-identity'       // card/TCG tiers: the title yields no comp key
   | 'dispersion'        // pool disagrees with itself past the guard
   | 'no-value'          // weighted median collapsed to 0
+  | 'stale'             // (Oct 6) every comp in the pool sold > PURITY.maxAgeY ago
   | 'card:pool<2'       // card tiers: exact/ladder pools too thin, no player pool
   | 'card:player<5'     // card tier 3: player pool under the floor (legacy)
   | 'card:player-tier'  // (Sep 27) only a PLAYER median exists — abstains (2.87× live)
@@ -666,12 +673,35 @@ export function blendPredict(
  *  ≥ minPure comps that pass comp-purity.compPurityFault, sold ≤ maxAgeY
  *  before the valuation, and inside band× of the pure comps' median. */
 export const PURITY = { minPure: 3, maxAgeY: 10, band: 5, ratioCap: 5 };
+/** The most of a pool's weight one comp may carry (EngineFlags.weightCap) —
+ *  an effective pool of at least 1 / 0.35 ≈ 3 comps. */
+export const COMP_WEIGHT_CAP = { share: 0.35 };
 /** EngineFlags.exactBlend: ≥ minN comps at title cosine ≥ cos → comp weight
  *  ≥ w (per house where measured — EXACT_BLEND.byHouse). */
 export const EXACT_BLEND: { minN: number; cos: number; w: number; byHouse: Record<string, number> } = { minN: 2, cos: 0.95, w: 0.5, byHouse: {} };
 export function exactBlendW(house: string | null | undefined): number {
   const v = house ? EXACT_BLEND.byHouse[house] : undefined;
   return typeof v === 'number' ? v : EXACT_BLEND.w;
+}
+/** Water-fill weights so no one carries more than `cap` of the total (its
+ *  excess goes to the others pro rata). Under 1/cap weights the cap cannot
+ *  hold — every weight becomes equal. */
+export function capWeights(ws: number[], cap = COMP_WEIGHT_CAP.share): number[] {
+  const n = ws.length;
+  const tot = ws.reduce((s, w) => s + Math.max(0, w), 0);
+  if (!n || !(tot > 0)) return ws.slice();
+  if (n * cap <= 1) return ws.map(() => 1 / n);
+  const share = ws.map(w => Math.max(0, w) / tot);
+  const fixed = new Array<boolean>(n).fill(false);
+  for (let it = 0; it < n; it++) {
+    let fixedMass = 0, freeMass = 0;
+    for (let i = 0; i < n; i++) { if (fixed[i]) fixedMass += cap; else freeMass += share[i]; }
+    const scale = freeMass > 0 ? (1 - fixedMass) / freeMass : 0;
+    let changed = false;
+    for (let i = 0; i < n; i++) if (!fixed[i] && share[i] * scale > cap + 1e-12) { fixed[i] = true; changed = true; }
+    if (!changed) return share.map((s, i) => (fixed[i] ? cap : s * scale));
+  }
+  return share.map(() => 1 / n);
 }
 
 /** Whether the engine applies the no-estimate bias (measured: no — see
@@ -786,6 +816,9 @@ export function estimateValueEx(
   }
 
   const top = pool.slice(0, TOP_K);
+  // (Oct 6, FLAGS.weightCap) a pool whose every comp is older than
+  // PURITY.maxAgeY says nothing about today's price
+  if (FLAGS.weightCap && top.every(c => ageYOf(c) > PURITY.maxAgeY)) return { value: null, abstain: 'stale' };
   // Recency decay (validated ADOPT, halflife 2y): a comp's weight halves every
   // 2 years of age relative to the lot's own sale (or now for a live lot).
   // Measured on temporal holdout: identical coverage, edge 23.9→25.0pt, +199
@@ -807,8 +840,15 @@ export function estimateValueEx(
   const adjOf = (c: Comp) => c.realizedUsd * timeFactor(TIDX?.marketBySlug?.[lot.artist] ?? market, c.saleDate);
   // the CERTIFIED statistic (compRatio → the Flags) stays on the unadjusted
   // pool; the time-adjusted median is the value's comp input
-  let compRawUsd = weightedMedian(top.map(c => [c.realizedUsd, (c.match.cosine ** 2) * decay(c)] as [number, number]));
-  let compAdjUsd = weightedMedian(top.map(c => [adjOf(c), (c.match.cosine ** 2) * decay(c)] as [number, number]));
+  // (Oct 6, FLAGS.weightCap) no single comp carries more than
+  // COMP_WEIGHT_CAP of the pool (24% of live pools had one comp > 50%)
+  const wmed = (cs: Comp[], px: (c: Comp) => number) => {
+    const ws = cs.map(c => (c.match.cosine ** 2) * decay(c));
+    const cw = FLAGS.weightCap ? capWeights(ws) : ws;
+    return weightedMedian(cs.map((c, i) => [px(c), cw[i]] as [number, number]));
+  };
+  let compRawUsd = wmed(top, c => c.realizedUsd);
+  let compAdjUsd = wmed(top, adjOf);
   if (!(compRawUsd > 0) || !(compAdjUsd > 0)) return { value: null, abstain: 'no-value' };
   const vals = top.map(c => c.realizedUsd).sort((a, b) => a - b);
   const adjVals = top.map(adjOf).sort((a, b) => a - b);
@@ -879,8 +919,8 @@ export function estimateValueEx(
       const exactPool = top.filter(c => c.match.cls === 'physicalMatch'
         || (c.match.cls === 'modelMatch' && c.match.cosine >= 0.92));
       if (exactPool.length) {
-        compRawUsd = weightedMedian(exactPool.map(c => [c.realizedUsd, (c.match.cosine ** 2) * decay(c)] as [number, number]));
-        compAdjUsd = weightedMedian(exactPool.map(c => [adjOf(c), (c.match.cosine ** 2) * decay(c)] as [number, number]));
+        compRawUsd = wmed(exactPool, c => c.realizedUsd);
+        compAdjUsd = wmed(exactPool, adjOf);
         compRatio = ratioOf(compRawUsd);
         if (confidence === 'high') confidence = 'medium';
       }

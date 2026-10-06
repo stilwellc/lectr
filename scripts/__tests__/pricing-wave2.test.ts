@@ -1,14 +1,30 @@
 /**
- * Pricing fix wave 2 (Oct 6 2026) — the engine-side contracts: the purity gate and the hard comp boundaries.
+ * Pricing fix wave 2 (Oct 6 2026) — the engine-side contracts: the purity gate, the hard comp boundaries, the recency weight cap.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  capWeights, COMP_WEIGHT_CAP,
   estimateValueEx, setEngineFlags, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_HAMMER_BASIS, type Comp,
   blendPredict, EXACT_BLEND,
 } from '../../app/lib/value';
 import { buildIdf, type Match } from '../../app/lib/similarity';
 import type { AuctionLot } from '../../app/types';
+
+test('capWeights: no weight above the cap, mass conserved, order kept; under 1/cap weights → equal', () => {
+  const w = capWeights([10, 1, 1, 1, 1]);
+  assert.ok(Math.abs(w.reduce((s, x) => s + x, 0) - 1) < 1e-9);
+  assert.ok(Math.max(...w) <= COMP_WEIGHT_CAP.share + 1e-9);
+  assert.ok(Math.abs(w[0] - COMP_WEIGHT_CAP.share) < 1e-9);
+  assert.ok(Math.abs(w[1] - w[4]) < 1e-12);
+  // already under the cap: proportions unchanged
+  const u = capWeights([1, 1, 1, 1]);
+  assert.deepEqual(u.map(x => Math.round(x * 1000)), [250, 250, 250, 250]);
+  // two big ones both capped, the rest share the remainder
+  const b = capWeights([5, 5, 1, 1]);
+  assert.ok(Math.abs(b[0] - 0.35) < 1e-9 && Math.abs(b[1] - 0.35) < 1e-9 && Math.abs(b[2] - 0.15) < 1e-9);
+  assert.deepEqual(capWeights([9, 1]), [0.5, 0.5]);
+});
 
 // ── the engine: purity gate + hard boundaries (estimateValueEx) ─────────────
 const M = (cosine: number): Match => ({ score: Math.round(cosine * 100), cosine, cls: 'similar', reasons: [] });
