@@ -13,9 +13,9 @@ import { useSavedLots } from '../hooks/useSavedLots';
 import { useRefs } from '../hooks/useRefs';
 import { safeHref } from '../lib/safe-href';
 import { splitTitle, deglue, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
-import { signalWithPool, appraiseLot, soldCompBand, isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
-import { lotAllInFactor, maxHammerFor } from '../lib/premiums';
-import { valueFloor } from '../lib/lanes';
+import { appraiseLot, soldCompBand, isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
+import { lotAllInFactor } from '../lib/premiums';
+import { lotFloor, lotMaxBid, lotProjectedClose } from '../lib/verdict';
 import { formatEstimate, estimateOnly, lotSignal, confidenceMeter } from './LotCard';
 import { daysWord, Colophon } from './Terminal';
 import ArtistNav from './ArtistNav';
@@ -46,7 +46,7 @@ import PlateImg from './PlateImg';
  *  and cardComps.med at n = 1, so "Max bid" and "still under the floor"
  *  leaned on a floor the engine itself would not certify. */
 function gatedFloor(lot: AuctionLot): number | null {
-  return valueFloor(lot)?.floor ?? null;
+  return lotFloor(lot);
 }
 
 /* The copy button styles itself (id-guarded head injection, LotCard's
@@ -588,8 +588,10 @@ export default function LotPage({ lotId, initialLot }: {
       // read against the same header (the contradiction Collin caught).
       return { pool, n: ev.n || pool.length, med: ev.compMedianUsd ?? ev.compValueUsd, form: lot.formKey || null, kind: 'form' as const };
     }
-    const read = signalWithPool(lot, poolLots);
-    return read ? { pool: read.pool, n: read.pool.length, med: read.signal.med, form: read.signal.form as string, kind: read.signal.kind } : null;
+    // (Oct 6 2026, wave 3) NO FALLBACK READ: the engine declined (no signal,
+    // abstained, or a ×5 data fault) — the client must not synthesize a
+    // directional read of its own. The 'no read' state renders.
+    return null;
   }, [lot, poolLots, band, hasPack, pack]);
 
   // build-shipped evidence rows for engine calls whose poolIds aren't on-wire
@@ -752,7 +754,11 @@ export default function LotPage({ lotId, initialLot }: {
   const saved = isSaved(lot.id);
   const isSold = lot.status === 'sold' || lot.status === 'bought_in';
   const houseColor = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
-  const beatRate = lot.value?.signal?.beatRatePct ?? null;
+  // (Oct 6 2026, wave 3) the calibrated odds print only on a BELOW call: on
+  // an above / at read the bucket's beat rate is not a rate "of flags like
+  // this" (and an uncalibrated read carries 0) — suppressed, never reworded
+  const beatRate = lot.value?.signal?.label?.startsWith('below') && (lot.value.signal.beatRatePct || 0) > 0
+    ? lot.value.signal.beatRatePct : null;
   const caption = `${lot.lotNumber != null ? `Lot ${lot.lotNumber} · ` : ''}${lot.auctionHouse}${lot.saleName ? ` · ${cleanText(lot.saleName)}` : ''}`;
   // poolPartial (above): an engine pool that resolved only PART of its stamped
   // ids is the same fault as a client read — the rows under an honest
@@ -999,26 +1005,31 @@ export default function LotPage({ lotId, initialLot }: {
                 />
               )}
               {isUpcoming && (() => {
-                const floor = gatedFloor(lot);
-                if (!floor) return null;
+                // (Oct 6 2026, wave 3) the engine's own max bid (verdict.ts —
+                // one source), not the hammer under the band's all-in low
+                const mb = lotMaxBid(lot);
+                if (!mb) return null;
                 return (
                   <LeaderRow
                     k="Max bid"
-                    v={`≤ ${formatPrice(maxHammerFor(floor, lot))} hammer`}
-                    sub={`walk-away at the value floor · ${formatPrice(floor)} all-in`}
+                    v={`≤ ${formatPrice(mb.hammer)} hammer`}
+                    sub={`walk-away at the value floor · ${formatPrice(mb.allIn)} all-in`}
                   />
                 );
               })()}
-              {isUpcoming && lot.bidProj?.allIn != null && (() => {
+              {isUpcoming && lotProjectedClose(lot) != null && (() => {
+                // (Oct 6 2026, wave 3) only a projection whose cell is
+                // validated on the graded tape (bidProj.ok) prints.
                 // the build stamps bidProj.floor UNGATED (value.low at any
                 // confidence); the floor a reader may lean on is the gated
                 // one — no gated floor, no "under the floor" and no lamp
+                const proj = lotProjectedClose(lot)!;
                 const floor = gatedFloor(lot);
-                const below = !!floor && lot.bidProj!.allIn < floor;
+                const below = !!floor && proj < floor;
                 return (
                   <LeaderRow
                     k="Projected close"
-                    v={`~${formatPrice(lot.bidProj!.allIn)}`}
+                    v={`~${formatPrice(proj)}`}
                     tone={below ? 'up' : undefined}
                     sub={floor
                       ? (below ? `still under the ${formatPrice(floor)} floor` : `vs ${formatPrice(floor)} floor`)
@@ -1119,7 +1130,8 @@ export default function LotPage({ lotId, initialLot }: {
                   k="This card"
                   v={lot.cardComps.med != null ? formatPrice(lot.cardComps.med) : '—'}
                   sub={`${lot.cardComps.n} ${lot.cardComps.n === 1 ? 'sale' : 'sales'}, same card & grade`}
-                  tone={lot.cardComps.med != null && (lot.currentBid || 0) > 0 && lot.currentBid! < lot.cardComps.med ? 'up' : undefined}
+                  // (wave 3) the median is all-in: the bid is compared all-in too
+                  tone={lot.cardComps.med != null && (lot.currentBid || 0) > 0 && lot.currentBid! * lotAllInFactor(lot, lot.currentBid!) < lot.cardComps.med ? 'up' : undefined}
                 />
               )}
               {isUpcoming && lot.cardComps && lot.cardComps.lastSales.length > 0 && (

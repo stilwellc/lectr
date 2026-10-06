@@ -727,6 +727,48 @@ export function calibrationFor(st: BacktestState, before: string, marketBySlug: 
   };
 }
 
+// ── CALIBRATION BASIS (Oct 6 2026, wave 3) ──
+/** The price basis the engine's odds are read on: the HAMMER under
+ *  EngineFlags.hammerBasis, else the all-in realized. */
+export type CalBasis = 'hammer' | 'all-in';
+export function engineBasis(): CalBasis { return getEngineFlags().hammerBasis ? 'hammer' : 'all-in'; }
+/** The basis a calibration fit on `calObs` actually carries: calibrationOf
+ *  reads a row on the hammer only when the row has its hammer fields (pc /
+ *  hba) — a state never rehydrated fits all-in odds even under the hammer
+ *  engine. 'hammer' only when the engine is on it AND ≥ 99% of rows carry
+ *  the fields. */
+export function calibrationBasisOf(calObs: CalObs[]): CalBasis {
+  if (engineBasis() !== 'hammer' || !calObs.length) return 'all-in';
+  const ok = calObs.filter(o => typeof o.pc === 'number' && typeof o.hba === 'boolean').length;
+  return ok >= 0.99 * calObs.length ? 'hammer' : 'all-in';
+}
+/** Observations per scoring engine version (rows without one: 'legacy'). */
+export function rowsByEngineVersionOf(calObs: { ev?: string }[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const o of calObs) { const v = o.ev || 'legacy'; out[v] = (out[v] || 0) + 1; }
+  return out;
+}
+/** The engine version most of the record's rows were scored on (ties: the
+ *  later version string); an empty record is the current engine's. */
+export function rowsEngineVersionOf(calObs: { ev?: string }[]): string {
+  let best: string | null = null, bn = -1;
+  for (const [v, n] of Object.entries(rowsByEngineVersionOf(calObs))) if (n > bn || (n === bn && best != null && v > best)) { best = v; bn = n; }
+  return best ?? ENGINE_VERSION;
+}
+/** Rows missing a hammer field the hammer engine reads. */
+export function rowsMissingHammer(st: BacktestState): number {
+  return st.calObs.filter(o => typeof o.pc !== 'number' || typeof o.hb !== 'boolean' || typeof o.hba !== 'boolean').length;
+}
+/** The hammer fields for every row that lacks them, from the corpus rows
+ *  (no replay): the house-bias index over `lots` + rehydrateState's id
+ *  lookup. What --summarize and build-market's calibration fallback run. */
+export function rehydrateFromCorpus(st: BacktestState, lots: L[], log: (m: string) => void): ReturnType<typeof rehydrateState> {
+  const marketBySlug: Record<string, string> = {};
+  for (const a of ARTISTS) marketBySlug[a.slug] = a.market;
+  const hb = makeHouseBiasIndexer(lots as AuctionLot[], marketBySlug);
+  return rehydrateState(st, null, log, hb, lots);
+}
+
 // ── REHYDRATION (P0-1a) ──
 /** Repair a legacy state whose calObs rows predate a field. pf/fl/et are
  *  arithmetic identities of the row itself (pf = realized/estMid − 1 =
@@ -1399,6 +1441,9 @@ export function summarizeState(st: BacktestState, generatedAt: string) {
   const maxBidCalibration = maxBidCalibrationOf(calObs, st.noEst || []);
   const onVersion = calObs.filter(o => o.ev === ENGINE_VERSION).length;
   const calibration = {
+    /** (Oct 6, wave 3) the price basis these odds were fit on — build-market
+     *  refuses a calibration whose basis is not the engine's */
+    basis: calibrationBasisOf(calObs),
     edges: cal.edges,
     watchKt,
     bandCoverage,
@@ -1420,7 +1465,14 @@ export function summarizeState(st: BacktestState, generatedAt: string) {
 
   return {
     generatedAt,
-    engineVersion: ENGINE_VERSION,
+    /** (Oct 6, wave 3) the engine the record's ROWS were scored on (the
+     *  version most rows carry) — never the current engine's name stamped
+     *  on a record none of whose rows it scored */
+    engineVersion: rowsEngineVersionOf(calObs),
+    /** the engine this summary was written under */
+    currentEngineVersion: ENGINE_VERSION,
+    /** observations per scoring engine version */
+    rowsByEngineVersion: rowsByEngineVersionOf(calObs),
     stateEngineVersion: st.engineVersion || null,
     /** share of observations scored on the current engine version — <100 means
      *  the record still carries rows from an older labeler (refresh with a

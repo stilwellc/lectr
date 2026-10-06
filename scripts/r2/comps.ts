@@ -11,7 +11,7 @@ import type { AuctionLot } from '../../app/types';
 import type { LotPack, PackRow } from '../../app/lib/page-data';
 import { marketOf } from '../../app/constants';
 import {
-  signalWithPool, appraiseLot, soldCompBand, isSportsScienceObject, areComparable,
+  appraiseLot, soldCompBand, isSportsScienceObject, areComparable,
   scienceReferenceBand, cultureReferenceBand, makerReferenceBand,
 } from '../../app/lib/comps';
 import { scoreComparable } from '../../app/lib/comp-score';
@@ -89,16 +89,9 @@ export function compsFor(src: CompSource, lot: AuctionLot): CompsAnswer {
           rows: [...resolved].sort(byDateDesc).map(slim), ps: pricesOf(resolved),
         };
       }
-    } else {
-      const read = signalWithPool(lot, pool);
-      if (read) {
-        pack.c = {
-          n: read.pool.length, med: read.signal.med ?? null, form: String(read.signal.form), kind: read.signal.kind,
-          resolved: read.pool.length, rows: [...read.pool].sort(byDateDesc).map(slim), ps: pricesOf(read.pool),
-        };
-        pack.sig = read.signal;
-      }
     }
+    // (Oct 6 2026, wave 3) NO FALLBACK READ: a lot the engine declined gets
+    // no comp call and no signal (was the client signalWithPool read)
   }
   const ap = appraiseLot(lot, pool);
   pack.ap = ap ? { value: ap.value, n: ap.n, kind: ap.kind, confidence: String(ap.confidence) } : null;

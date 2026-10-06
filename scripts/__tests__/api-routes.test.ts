@@ -159,19 +159,18 @@ test('version + one lot + many lots', async () => {
   assert.equal((await call(`/api/lots?ids=${Array.from({ length: 13 }, (_, i) => `x${i}`).join(',')}`)).status, 400);
 });
 
-test('comps: the precomputed client read equals the read over the whole book', async () => {
+test('comps: an uncalled lot gets NO fallback read (wave 3) — context rows + appraisal only', async () => {
   const book = main.filter(l => l.artist === 'pablo-picasso');
-  const want = signalWithPool(anchor, book)!;
-  assert.ok(want, 'fixture must produce a read');
+  // the client read WOULD call this lot — the API must not ship it
+  assert.ok(signalWithPool(anchor, book), 'fixture must be readable client-side');
   const r = await call(`/api/comps?lot=${anchor.id}`);
   // stored gzip is decompressed in the Function (Pages ignores encodeBody:'manual'); the edge compresses
   assert.equal(r.headers.get('Content-Encoding'), null, 'answers are served as plain JSON');
   const j = await body(r);
-  assert.equal(j.pack.c.n, want.pool.length);
-  assert.equal(j.pack.c.med, want.signal.med);
-  assert.deepEqual(j.pack.c.rows.map((x: AuctionLot) => x.id).sort(), want.pool.map(l => l.id).sort());
+  assert.equal(j.pack.c ?? null, null, 'no comp call without an engine call');
+  assert.equal(j.pack.sig ?? null, null, 'no directional signal without an engine call');
   assert.equal(j.pack.ap.value, appraiseLot(anchor, book)!.value);
-  assert.equal(j.pack.sig.label, want.signal.label);
+  assert.ok(j.ctx.length > 0, 'the context list renders instead');
 });
 
 test('comps: engine call resolves its pool ids, including off-wire rows', async () => {
@@ -183,9 +182,9 @@ test('comps: engine call resolves its pool ids, including off-wire rows', async 
 });
 
 test('comps: watch reference, sports band over main+archive, culture band, provenance, context, window', async () => {
-  const w = signalWithPool(watch, main.filter(l => l.artist === 'rolex'));
+  // an uncalled watch: no fallback read (wave 3)
   const jw = await body(await call(`/api/comps?lot=${watch.id}`));
-  assert.equal(jw.pack.c?.n ?? null, w ? w.pool.length : null);
+  assert.equal(jw.pack.c ?? null, null);
 
   const band = soldCompBand(jersey, [...main, ...archive].filter(l => l.artist === 'game-used'))!;
   assert.ok(band);

@@ -47,6 +47,7 @@ import type { AuctionLot } from '../app/types';
 import {
   prepare, targetsOf, mkState, replayTargets, mergeStates, assertRecord,
   summarizeState, summaryLine, ENGINE_VERSION, unsoldCapturedCells, backfillUnsold, type BacktestState,
+  engineBasis, rowsMissingHammer, rehydrateFromCorpus,
 } from './backtest-core';
 
 // Sidecar accumulator state for the incremental. backtest.json holds only the
@@ -208,9 +209,17 @@ if (require.main === module) {
       // aggregation that needs no new observations
       const st = readStateFile(STATE_FILE);
       if (!st) throw new Error(`[backtest] --summarize: no readable state at ${STATE_FILE}`);
+      // (Oct 6, wave 3) ODDS ON THE HAMMER: rows scored before the hammer
+      // fields existed get them by corpus lookup first (no replay) — else
+      // calibrationOf silently fits all-in odds under the hammer engine
+      if (engineBasis() === 'hammer' && rowsMissingHammer(st)) {
+        console.log(`[backtest] --summarize: ${rowsMissingHammer(st)} rows lack the hammer fields — rehydrating from the corpus`);
+        rehydrateFromCorpus(st, readCorpusShared() as unknown as Parameters<typeof rehydrateFromCorpus>[1], console.log);
+      }
       const prev = (() => { try { return JSON.parse(fs.readFileSync(path.join(dataDir, 'backtest.json'), 'utf8')) as { generatedAt?: string }; } catch { return null; } })();
       const out = summarizeState(st, prev?.generatedAt || new Date().toISOString().slice(0, 10));
       assertRecord(out);
+      if (out.calibration.basis !== engineBasis()) throw new Error(`[backtest] --summarize: calibration basis ${out.calibration.basis} ≠ engine basis ${engineBasis()} — refusing to publish`);
       fs.mkdirSync(dataDir, { recursive: true });
       fs.writeFileSync(path.join(dataDir, 'backtest.json'), JSON.stringify(out));
       console.log('backtest.json (re-summarized):', summaryLine(out));

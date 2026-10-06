@@ -62,6 +62,69 @@ function estUsd(lot: AuctionLot): { lo: number | null; hi: number | null } {
   return { lo: lot.estLowUsd ?? lot.estimateLow ?? null, hi: lot.estHighUsd ?? lot.estimateHigh ?? null };
 }
 
+/* ── THE LOT READ'S FIGURES — one source (Oct 6 2026, pricing wave 3) ──
+   LotPage, LotCard and the verdict read every bid-facing number here. */
+
+/** a value whose comp ratio the build would call a data fault (×5 sanity) */
+function saneValue(lot: AuctionLot): NonNullable<AuctionLot['value']> | null {
+  const v = lot.value;
+  if (!v || !(v.compValueUsd > 0)) return null;
+  if (v.compRatio != null && (v.compRatio > 5 || v.compRatio < 1 / 5)) return null;
+  return v;
+}
+
+/** THE VALUE FLOOR a reader may bid against — lanes.valueFloor, the ONE floor
+ *  rule (value.low only at non-low confidence, else 0.85 × the exact-card
+ *  median at n ≥ 3). */
+export function lotFloor(lot: AuctionLot): number | null {
+  return valueFloor(lot)?.floor ?? null;
+}
+
+/** THE MAX BID (hammer) and its all-in: the engine's own calibrated
+ *  value.maxBidUsd (MAXBID_Q of hammers landed at or under it; floored at
+ *  the live bid) wherever the floor rule certifies the value — the page used
+ *  to print maxHammerFor(value.low), the band's all-in low edge, ~20% under
+ *  the engine's max bid. A card-median floor (no engine max bid) keeps the
+ *  hammer that lands exactly on it. null = no certified floor. */
+export function lotMaxBid(lot: AuctionLot): { hammer: number; allIn: number } | null {
+  const fl = valueFloor(lot);
+  if (!fl) return null;
+  const v = saneValue(lot) as (NonNullable<AuctionLot['value']> & { maxBidUsd?: number }) | null;
+  const hammer = fl.src === 'value.low' && v && (v.maxBidUsd || 0) > 0
+    ? v.maxBidUsd!
+    : maxHammerFor(fl.floor, lot);
+  if (!(hammer > 0)) return null;
+  return { hammer, allIn: Math.round(hammer * lotAllInFactor(lot, hammer)) };
+}
+
+/** THE PROJECTED CLOSE (all-in): only a projection whose house × days-out ×
+ *  band cell is validated on the graded tape (build-upcoming stamps
+ *  bidProj.ok) — an unvalidated cell ran 1.3–4.7× off. */
+export function lotProjectedClose(lot: AuctionLot): number | null {
+  const p = lot.bidProj;
+  return p && p.ok === true && p.allIn > 0 ? p.allIn : null;
+}
+
+/** THE CARD'S COMPS FIGURE on the BID's basis (hammer): a live bid is a
+ *  hammer bid, so "comps ~$X" over "$Y bid" must be the comps' hammer — the
+ *  card printed the all-in comp value over the hammer bid. A value the build
+ *  floored at the live bid (bidFloor) is not a comps figure: the comps' own
+ *  hammer is recovered from the comps-vs-bid read, else nothing prints. A
+ *  card value the engine marked context-only (abstain 'card:…') never prints. */
+export function cardCompsHammer(lot: AuctionLot): number | null {
+  const v = lot.value as (NonNullable<AuctionLot['value']> & { expectedHammerUsd?: number; premiumFactor?: number; bidFloor?: number; abstain?: string | null }) | null | undefined;
+  if (!v || v.basis !== 'card-comp' || !v.estimateUsd) return null;
+  if (typeof v.abstain === 'string' && v.abstain.startsWith('card:')) return null;
+  if (v.bidFloor) {
+    const bid = lot.currentBid || 0;
+    if (!(bid > 0) || !v.vsBid) return null;
+    const compsAllIn = (bid * lotAllInFactor(lot, bid)) / (1 + v.vsBid.pct / 100);
+    return Math.round(maxHammerFor(compsAllIn, lot));
+  }
+  if (v.expectedHammerUsd && v.expectedHammerUsd > 0) return v.expectedHammerUsd;
+  return Math.round(v.premiumFactor && v.premiumFactor > 0 ? v.estimateUsd / v.premiumFactor : maxHammerFor(v.estimateUsd, lot));
+}
+
 /** The verdict, or null when the engine made no sane value call. */
 export function lotVerdict(lot: AuctionLot): Verdict | null {
   const v = lot.value;
@@ -98,7 +161,7 @@ export function lotVerdict(lot: AuctionLot): Verdict | null {
     compMedianAllIn: v.compMedianUsd ?? null,
     compN: v.n || 0,
     floorAllIn: fl ? fl.floor : null,
-    maxBid: ve.maxBidUsd && ve.maxBidUsd > 0 ? ve.maxBidUsd : fl ? maxHammerFor(fl.floor, lot) : null,
+    maxBid: lotMaxBid(lot)?.hammer ?? null,
     premiumPct: Math.round((f - 1) * 100),
   };
 }

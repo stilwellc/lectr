@@ -73,7 +73,10 @@ function LotValueBlock({ lot, allLots, market, backtest }: { lot: AuctionLot; al
           <span style={{ color: under ? 'var(--color-up)' : over ? 'var(--color-fg)' : 'var(--color-text-secondary)', fontWeight: 500 }}>
             {under ? 'Trading below' : over ? 'Trading above' : 'At'} comparable market
           </span>
-          <span style={{ color: 'var(--color-text-muted)' }}> · comparable sales carry a {dir.beatRatePct}% rate of beating estimates like this · {v.n} sales</span>
+          {/* (Oct 6 2026, wave 3) the beat rate prints only on a below call
+              with calibrated odds — on above / at reads it is not the rate
+              the sentence claims (suppressed, not reworded) */}
+          <span style={{ color: 'var(--color-text-muted)' }}>{under && dir.beatRatePct > 0 ? ` · comparable sales carry a ${dir.beatRatePct}% rate of beating estimates like this` : ''} · {v.n} sales</span>
         </div>
       )}
       {/* no value stamp, but the crawl-stamped card signal exists — the same
@@ -527,9 +530,9 @@ export default function ComparableModal({
   // ONE LOT, ONE NUMBER: the card signal is stamped from the BACKTESTED engine
   // (lot.value) at build time — so when the engine made the call, the modal
   // renders the ENGINE's numbers (same median, same pct, poolIds resolved to
-  // rows). Only for engine-declined lots does the client signalWithPool make
-  // the call; 'at comparable market' means the engine looked and called it
-  // fair — no call, no client second-guessing.
+  // rows). An engine-declined lot gets NO call (Oct 6 2026, wave 3: the
+  // client signalWithPool fallback is gone); 'at comparable market' means the
+  // engine looked and called it fair — no call, no client second-guessing.
   const called = useMemo(() => {
     const ev = (lot as AuctionLot & { value?: { signal?: { label: string } | null; compRatio?: number | null; flagRatio?: number | null; compValueUsd?: number; compMedianUsd?: number | null; n?: number; confidence?: string; poolIds?: string[] } | null }).value;
     // ×5 ESTIMATE-BAND SANITY (mirrors scripts/build-upcoming.ts): a compRatio
@@ -554,14 +557,16 @@ export default function ComparableModal({
           pct: Math.round((below ? (ev.flagRatio ?? ev.compRatio) - 1 : 1 - (ev.flagRatio ?? ev.compRatio)) * 100),
           basis: ev.n || pool.length,
           med: ev.compMedianUsd ?? ev.compValueUsd,
-          kind: 'form' as const,
+          kind: 'form' as 'form' | 'edition',
           form: ((lot as { formKey?: string }).formKey || 'unknown') as ReturnType<typeof signalWithPool> extends { signal: { form: infer F } } | null ? F : never,
           confidence: (ev.confidence === 'high' ? 'high' : ev.confidence === 'medium' ? 'medium' : 'low') as 'high' | 'medium' | 'low',
         },
         pool,
       };
     }
-    return signalWithPool(lot, allLots);
+    // (Oct 6 2026, wave 3) NO FALLBACK READ: when the engine declined, the
+    // client never makes a directional call of its own — 'no read' renders
+    return null;
   }, [lot, allLots]);
 
   // EVIDENCE FALLBACK: the engine's pool draws on the corpus-only tier, so

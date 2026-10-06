@@ -88,7 +88,8 @@ export interface RepeatSaleHorizon {
   publishable: boolean;
   reason: string;             // '' when publishable, else why not
   /** the same lag ending on neighbouring periods (one earlier; any later
-      complete period the volume rule skipped) — reported, never gated */
+      complete period the volume rule skipped); a one-earlier read further
+      from the point than the CI is wide unpublishes the horizon (Oct 6 2026) */
   endSensitivity?: { end: string; changePct: number }[];
 }
 export interface RepeatSaleResult {
@@ -576,6 +577,13 @@ function spanCheck(start: string, end: string, years: number, c: Ctx):
   return { ok: true, diff, se: Math.sqrt(c.varOfDiff(colE, colS)) };
 }
 
+/** The endpoint spread of a horizon: max − min of the read over its own
+ *  endpoint and the given alternative endpoints (points of percent change). */
+export function endSensitivityGap(changePct: number, alts: { changePct: number }[]): number {
+  const xs = [changePct, ...alts.map(a => a.changePct)].filter(Number.isFinite);
+  return xs.length ? Math.max(...xs) - Math.min(...xs) : 0;
+}
+
 function computeHorizon(
   back: number,
   lastComplete: string | null,
@@ -617,15 +625,25 @@ function computeHorizon(
     return notPub(`CI too wide (±${halfWidth.toFixed(1)}% vs point ${changePct.toFixed(1)}%) — magnitude is noise`);
   }
 
-  // END-POINT SENSITIVITY (reported, never gated): the same lag ending one
-  // period earlier, and ending on any later complete period the volume rule
-  // skipped — how much of the read is the choice of endpoint.
+  // END-POINT SENSITIVITY: the same lag ending one period earlier, and ending
+  // on any later complete period the volume rule skipped — how much of the
+  // read is the choice of endpoint.
   const endSensitivity: { end: string; changePct: number }[] = [];
   for (const e of [shiftQuarter(end, 1)].concat(laterEnds)) {
     const s0 = shiftQuarter(e, back);
     if (!c.fit.quarters.includes(e) || !c.fit.quarters.includes(s0)) continue;
     const bE = c.betaOf(e).b, bS = c.betaOf(s0).b;
     if (isFinite(bE) && isFinite(bS)) endSensitivity.push({ end: e, changePct: 100 * (Math.exp(bE - bS) - 1) });
+  }
+  // (Oct 6 2026, wave 3) THE ENDPOINT GATE: when ending the same lag one
+  // quarter earlier swings the read by more than the whole 95% CI is wide,
+  // the CI understates the uncertainty — the number is the choice of
+  // quarter. (The later ends are periods the volume rule already judged too
+  // thin to end on; they stay reported, not gated.)
+  const prevEnd = shiftQuarter(end, 1);
+  const spread = endSensitivityGap(changePct, endSensitivity.filter(e => e.end === prevEnd));
+  if (spread > hiPct - loPct) {
+    return { ...notPub(`endpoint-sensitive (one-quarter shift moves the read ${spread.toFixed(1)}pt, wider than the CI ${(hiPct - loPct).toFixed(1)}pt)`), endSensitivity };
   }
   return { changePct, ciLoPct: loPct, ciHiPct: hiPct, publishable: true, reason: '', endSensitivity };
 }

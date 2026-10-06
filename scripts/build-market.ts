@@ -19,7 +19,7 @@ import { ARTISTS } from '../app/constants';
 import { buildIdf, buildVectors } from '../app/lib/similarity';
 import { groupRepeatSales, repeatSaleEligible, withVectors } from './lib/repeat-sale';
 import { buildMakerIndicesParallel } from './lib/maker-pool';
-import { buildCompCandidateIndex, compCandidates, type CompCandidateIndex, resolveComps, estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, noEstGateOf, buyerFields, vsBidRead, floorAtBid, vsBidLive, VSBID_WINDOW_DAYS, quantile, knownKey, ENGINE_VERSION, ENGINE_FLAGS_CANDIDATE, type ValueResult, type AbstainReason } from '../app/lib/value';
+import { buildCompCandidateIndex, compCandidates, type CompCandidateIndex, resolveComps, estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, noEstGateOf, buyerFields, vsBidRead, floorAtBid, vsBidLive, VSBID_WINDOW_DAYS, quantile, knownKey, ENGINE_VERSION, ENGINE_FLAGS_CANDIDATE, CARD_THIN, type ValueResult, type AbstainReason } from '../app/lib/value';
 import { fitCardCalibration, cardGate, CARD_GATE, type CardResidual, type CardCalibration } from '../app/lib/cards-gate';
 import { inferHammerUsd } from '../app/lib/premiums';
 import { pokemonKey } from './sub-markets';
@@ -124,6 +124,36 @@ function readGz(f: string): AuctionLot[] {
   return readGzRows(path.join(CORPUS, f + '.gz')) as AuctionLot[];
 }
 
+/** (Oct 6 2026, wave 3) The served backtest summary whose calibration is on
+ *  the ENGINE's basis (backtest-core.engineBasis): `bt` itself when its
+ *  calibration.basis matches (a legacy calibration carries none = all-in);
+ *  else the calibration re-fit from the backtest state with the hammer fields
+ *  rehydrated from `lots`; else `{ calibration: null }` (uncalibrated) —
+ *  never a wrong-basis one. */
+export function calibrationOnEngineBasis<T extends { calibration?: Record<string, unknown> | null; engineVersion?: string; generatedAt?: string }>(
+  bt: T, lots: AuctionLot[], stateFile?: string,
+): T | { calibration: Record<string, unknown> | null; generatedAt: string; engineVersion: string } {
+  const core = require('./backtest-core') as typeof import('./backtest-core');
+  const want = core.engineBasis();
+  const have = bt?.calibration ? ((bt.calibration as { basis?: string }).basis || 'all-in') : null;
+  if (!bt?.calibration || have === want) return bt;
+  console.warn(`[market] calibration REFUSED: basis ${have} ≠ engine basis ${want} (engine ${bt.engineVersion || 'legacy'}, generatedAt ${bt.generatedAt}) — re-fitting from the backtest state`);
+  try {
+    const bb = require('./build-backtest') as typeof import('./build-backtest');
+    const st = bb.readStateFile(stateFile || bb.STATE_FILE);
+    if (st) {
+      core.rehydrateFromCorpus(st, lots as never, m => console.log(m));
+      const out = core.summarizeState(st, new Date().toISOString().slice(0, 10));
+      if (out.calibration.basis === want) {
+        console.log(`[market] calibration re-fit on the ${want} basis from the backtest state (${out.calibration.n} rows)`);
+        return { calibration: out.calibration as unknown as Record<string, unknown>, generatedAt: `state-refit ${out.generatedAt}`, engineVersion: out.engineVersion };
+      }
+      console.warn(`[market] state re-fit is still on ${out.calibration.basis} — running uncalibrated`);
+    } else console.warn('[market] no backtest state to re-fit from — running uncalibrated');
+  } catch (e) { console.warn('[market] calibration re-fit failed — running uncalibrated:', (e as Error).message); }
+  return { calibration: null, generatedAt: 'refused', engineVersion: 'none' };
+}
+
 async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   const t0 = Date.now();
   // the valuation clock — Date.now() for the nightly; a past day for the
@@ -152,9 +182,16 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   // beatRate relevel + conformal band multipliers) — displayed figures only,
   // never the signal label, so there is no feedback loop into the record.
   try {
-    const bt = opts.calibration !== undefined
+    let bt = opts.calibration !== undefined
       ? { calibration: opts.calibration, generatedAt: 'supplied', engineVersion: 'supplied' }
       : JSON.parse(fs.readFileSync(path.join(SERVED, 'backtest.json'), 'utf8'));
+    // (Oct 6, wave 3) THE BASIS GATE: odds fit on the all-in realized must
+    // never be read at the hammer engine's thresholds. A served calibration
+    // whose basis is not the engine's (a legacy one carries none = all-in) is
+    // refused; the newest correct one is re-fit from the backtest state with
+    // the hammer fields rehydrated from this corpus (no replay). Nothing
+    // correct → uncalibrated, never the wrong-basis odds.
+    if (opts.calibration === undefined) bt = calibrationOnEngineBasis(bt, all);
     const cal = bt.calibration as (Record<string, unknown> & { beatRate?: { global?: unknown }; n?: number; bandByMarket?: object; blend?: { w?: Record<string, number> }; bias?: object; valueBand?: object }) | null;
     if (cal?.beatRate?.global) {
       // carries beatRate + band + bandByMarket + mdape (P1-2/P2) + the Sep 27
@@ -1077,7 +1114,11 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
       if (exactOk) {
         // Tier 1 — exact same card + grade, recent comps venue-adjusted to this house.
         const pool = exactR.map(s => ({ p: venueAdj(s, house), ms: saleMsOf(s) }));
-        out.value = Math.round(recentMedian(pool));
+        // (Oct 6, wave 3, FLAGS.cardThinMedian) a thin pool prices at its
+        // plain median: the short-half-life weighted median of 2–3 sales is
+        // simply the newest one
+        out.value = Math.round(getEngineFlags().cardThinMedian && pool.length <= CARD_THIN.n
+          ? statsMedian(pool.map(x => x.p)) : recentMedian(pool));
         [out.low, out.high] = dispersionBand(pool.map(x => x.p));
         out.poolIds = exactR.map(s => s.id); out.poolN = exactR.length;
         // (Oct 6, pricing wave 2) ONE sale is one price, not a market: a
