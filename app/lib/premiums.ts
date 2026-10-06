@@ -65,8 +65,20 @@ export function houseAllInFactor(house: string | null | undefined, hammerUsd?: n
  *    2012 – Spring 2014 (Apr)    1.185  100%
  *    Fall 2014 (Oct) – Jul 2025  1.20   85–100%
  *    Sep 2025 → today            1.23   79–90%
- *  REA's published terms (Wayback captures of robertedwardauctions.com) are
- *  cited per era below where a capture exists.
+ *  CONFIRMED against REA's published terms ("A N% buyer's premium will be
+ *  added to all winning bids" — one flat rate, no card/cash variant; checked
+ *  Oct 5 2026 on Wayback captures):
+ *    15%   web.archive.org/web/20040302013238/http://www.robertedwardauctions.com/site/terms.asp
+ *    16%   web.archive.org/web/20051109084900/http://www.robertedwardauctions.com/site/terms.asp
+ *    17.5% web.archive.org/web/20071009013020/http://bid.robertedwardauctions.com/terms.aspx
+ *    18.5% web.archive.org/web/20120511121233/http://bid.robertedwardauctions.com/terms.aspx
+ *          (still 18.5% at …/20140407193704/…/terms.aspx)
+ *    20%   web.archive.org/web/20150301124756/http://bid.robertedwardauctions.com/terms.aspx
+ *          (… through …/20250801160420/https://bid.collectrea.com/terms-and-conditions)
+ *    23%   web.archive.org/web/20251006210043/https://bid.collectrea.com/terms-and-conditions
+ *          effective Sep 1 2025 (REA customer notice, reported by postwarcards.com).
+ *  The capture dates lag the changes; the boundaries below are the sale
+ *  seasons the corpus quantization pins (Spring 2014 = 18.5, Fall 2014 = 20).
  *
  *  USED BY the price-bleed sentinel's honesty test (scripts/assemble.ts
  *  computeSentinel): the 29+ standing REA "poison" signatures were real flat
@@ -81,7 +93,7 @@ export const DATED_PREMIUMS: Record<string, Array<[string, number]>> = {
     ['2007-01-01', 1.175],
     ['2012-01-01', 1.185],
     ['2014-07-01', 1.20],
-    ['2025-08-01', 1.23],
+    ['2025-09-01', 1.23], // REA's stated effective date
   ],
 };
 
