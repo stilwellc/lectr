@@ -22,6 +22,10 @@ export interface GateThresholds {
   g2: { spreadMin: number; dipBlocks: boolean };
   g3: { highMaxMedErr: number; highMustBeatLow: boolean };
   g4: { minCoveragePct: number };
+  /** (Oct 6 2026) G5 BLOCKING per path × tier on the live value tape (rows on
+   *  the current engine version only): at n ≥ minN graded, median realized /
+   *  served value inside [biasLo, biasHi] and ≥ minWithin30Pct within ±30% */
+  g5: { minN: number; biasLo: number; biasHi: number; minWithin30Pct: number };
 }
 
 export const CURRENT_GATE: GateThresholds = {
@@ -32,4 +36,5 @@ export const CURRENT_GATE: GateThresholds = {
   g2: { spreadMin: 5, dipBlocks: true },
   g3: { highMaxMedErr: 1.6, highMustBeatLow: true },
   g4: { minCoveragePct: 10 },
+  g5: { minN: 30, biasLo: 0.8, biasHi: 1.25, minWithin30Pct: 40 },
 };

@@ -195,10 +195,15 @@ export function runValidateEngine(o: ValidateOpts = {}): { failures: number } {
   const markets = MARKET_KEYS.filter(m => !onlyMarket || m === onlyMarket).concat('other');
   const valErr: Record<string, Record<string, number[]>> = {};   // market → confidence → errs
   const houseErr: Record<string, number[]> = {};
+  // (Oct 6 2026) the PURE comp read's error (the time-adjusted comp median,
+  // compAdjUsd) reported beside the published (blended) value's — on estimate
+  // lots the published value leans on the house estimate, which hid how far
+  // the comps alone sit from the realized price
+  const compErr: Record<string, number[]> = {};
   const sigGlobal = mkSig();
   const sigByM: Record<string, Record<string, { beat: number; n: number }>> = {};
   const testN: Record<string, number> = {};
-  for (const m of markets) { valErr[m] = { high: [], medium: [], low: [] }; houseErr[m] = []; sigByM[m] = mkSig(); testN[m] = 0; }
+  for (const m of markets) { valErr[m] = { high: [], medium: [], low: [] }; houseErr[m] = []; compErr[m] = []; sigByM[m] = mkSig(); testN[m] = 0; }
 
   let covered = 0, done = 0;
   for (const lot of test) {
@@ -225,6 +230,7 @@ export function runValidateEngine(o: ValidateOpts = {}): { failures: number } {
     covered++;
     const err = Math.abs(Math.log(v.compValueUsd / lot.realizedUsd!));
     valErr[m][v.confidence].push(err);
+    if ((v.compAdjUsd || 0) > 0) compErr[m].push(Math.abs(Math.log(v.compAdjUsd! / lot.realizedUsd!)));
     if (lot.estLowUsd && lot.estHighUsd) {
       const em = (lot.estLowUsd + lot.estHighUsd) / 2;
       // the house benchmark on the SAME all-in basis as the value (the
@@ -254,6 +260,7 @@ export function runValidateEngine(o: ValidateOpts = {}): { failures: number } {
     console.log(`  ${m} (n${testN[m]} test)`);
     for (const c of ['high', 'medium', 'low']) console.log(`    ${c.padEnd(7)} ${report(valErr[m][c])}`);
     console.log(`    house   ${hasHouse ? report(houseErr[m]) : '— (no estimates: engine is the only value)'}`);
+    console.log(`    comps   ${report(compErr[m])} (the pure comp read, before the blend)`);
     // G3 tier honesty
     const hi = tierMed(valErr[m].high), lo = tierMed(valErr[m].low);
     if (hi != null) {
@@ -351,9 +358,24 @@ export function runValidateEngine(o: ValidateOpts = {}): { failures: number } {
       if (cell.bandCoveragePct != null && cell.bandCoveragePct < 50) failures.push(`G5 live ${PATH_LABEL[k]}: bands cover ${cell.bandCoveragePct}% of outcomes (n${cell.n}, nominal 70%)`);
       else if (cell.bandCoveragePct != null && (cell.bandCoveragePct < 60 || cell.bandCoveragePct > 85)) warnings.push(`G5 live ${PATH_LABEL[k]}: band coverage ${cell.bandCoveragePct}% (nominal 70%, n${cell.n})`);
       if (k === 'e' && cell.flagged != null && cell.unflagged != null && cell.flagged <= cell.unflagged) failures.push(`G5 live flags: flagged lots realized ${cell.flagged}× estimate vs unflagged ${cell.unflagged}× — the live direction is not carried`);
+    }
+    // (Oct 6 2026) G5 BLOCKS PER PATH × TIER — the gate sees the product: at
+    // ≥ 30 graded rows of THIS engine version (the tape is version-filtered
+    // above, so legacy rows can never wedge a publish), the served value's
+    // median realized/value must sit in [0.8, 1.25] and ≥ 40% land within
+    // ±30%. Card tiers included — cards are graded here, on the values they
+    // were served, not excluded. Replayed over the served snapshots Sep 20 –
+    // Oct 5 (all versions) this would have blocked every night from Sep 21
+    // (no-estimate low 0.80×/34%, then card low 1.42–3.42×); on rows of the
+    // current version alone no cell has reached 30 graded yet.
+    for (const k of ['e', 'n', 'c']) {
       for (const c of ['high', 'medium', 'low']) {
         const t = graded[`path:${k}:${c}`];
-        if (t && t.bias != null) console.log(`      ${c.padEnd(7)} n${t.n} · medErr ${t.medAbsErrPct}% · bias ${t.bias}× · band ${t.bandCoveragePct}%`);
+        if (!t || t.bias == null) { if (t) console.log(`      ${PATH_LABEL[k]} ${c}: accruing (${t.n} graded)`); continue; }
+        console.log(`      ${PATH_LABEL[k]} ${c.padEnd(7)} n${t.n} · medErr ${t.medAbsErrPct}% · ±30% ${t.within30Pct}% · bias ${t.bias}× · band ${t.bandCoveragePct}%`);
+        if (t.n < 30) continue;
+        if (t.bias < 0.8 || t.bias > 1.25) failures.push(`G5 live ${PATH_LABEL[k]} · ${c}: realized/value ${t.bias}× (n${t.n}) outside [0.8, 1.25]`);
+        if (t.within30Pct != null && t.within30Pct < 40) failures.push(`G5 live ${PATH_LABEL[k]} · ${c}: ${t.within30Pct}% within ±30% (n${t.n}) under 40%`);
       }
     }
   }
@@ -389,6 +411,7 @@ export function runValidateEngine(o: ValidateOpts = {}): { failures: number } {
         test: testN[m], signal: sigByM[m], spreadPt: monotonic(sigByM[m]).spread, monotonic: monotonic(sigByM[m]).ok,
         tiers: Object.fromEntries(['high', 'medium', 'low'].map(c => [c, { n: valErr[m][c].length, medErr: tierMed(valErr[m][c]) }])),
         house: houseErr[m].length >= 15 ? Math.exp(pctile(houseErr[m], 0.5)) : null,
+        compOnly: compErr[m].length >= 15 ? { n: compErr[m].length, medErr: Math.exp(pctile(compErr[m], 0.5)) } : null,
       }])),
       failures, warnings,
     }, null, 2));
