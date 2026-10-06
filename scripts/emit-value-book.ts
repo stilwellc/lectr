@@ -38,7 +38,22 @@ import {
 } from '../app/lib/identity';
 import { marketOf } from '../app/constants';
 import { extractSignerSlug } from './lib/autograph-signer';
+import { parseCard } from '../app/lib/cards';
+import { hasConditionFlag } from '../app/lib/condition';
+import { isCompExcluded, lotShapeOf, coarseWatchMaterial } from '../app/lib/comps';
+import { mergeCardExtract, llmConditionFlag } from './lib/extract/apply';
+import { ENGINE_VERSION } from '../app/lib/value';
 import type { AuctionLot } from '../app/types';
+
+/** The book's OWN logic version (what admits a sale / ships a row) — stamped
+ *  in the header beside the engine version so Starling can tell a book-rule
+ *  change from an engine change. Bump on any admission/aggregation change.
+ *  2026.10.06: the Starling audit pass — comp exclusions + shape gate on every
+ *  sale, card grade qualifiers / Authentic / unparsed slabs / multi-card lots /
+ *  variant-mixed pools out, watch variant split (gem / special-dial / material)
+ *  + dual-reference abstain + watch n≥5 and band-dispersion abstain, and the
+ *  effective-sample guard on the recency-weighted median. */
+export const BOOK_VERSION = '2026.10.06';
 
 // ── Starling's slug (replicated verbatim so keys match) ──────────────────────
 function slug(s: string | null | undefined): string {
@@ -58,27 +73,101 @@ import { quantile } from '../app/lib/value';
 import { weightedMedian } from '../app/lib/stats';
 const lerpQuantile = quantile;
 
-// ── card + pokemon keys (module-private in sub-markets.ts — copied, minus the
-//    /serial suffix Starling doesn't carry) ──────────────────────────────────
-function cardKeyNoSerial(l: AuctionLot): string | null {
-  const c = l._card;
-  if (!c || !c.playerSlug || !c.year || !c.cardNo) return null;
-  // Serial-numbered parallels (/25, 1/1) are a DIFFERENT market than the base
-  // card — pooling them into the base key inflates its median, and Starling's
-  // eBay matcher joins base pools. Exclude them rather than mis-price the base.
-  if (c.serialOf != null) return null;
-  const grade = c.gradeCo && c.gradeNum != null ? `${c.gradeCo}${c.gradeNum}` : 'raw';
-  const set = (c.setName || '').toLowerCase().replace(/\s+/g, ' ').trim();
-  return `${c.playerSlug}|${c.year}|${set}|${c.cardNo}|${grade}`;
+/* ═══════════════════════════════════════════════════════════════════════════
+   SALE ADMISSION (Oct 6 2026 — the Starling audit). The book used to pool
+   every sold lot that produced a key; it bypassed the engine's own comp
+   exclusions. A book row is a price for ONE whole object of an exact
+   identity, so a sale enters only when the engine would admit it as a comp:
+     · never a compExclude-stamped lot (price < $10, > 50× est / < 2% est,
+       unconverted FX, last-tracked bid, seed/search urls, stale rows)
+     · never an unknown-precision date
+     · the form/part gate: a single, whole object (no pairs/sets/lots/
+       collections, no parts/fragments/accessories)
+   ═══════════════════════════════════════════════════════════════════════════ */
+export type SkipReason =
+  | 'comp-exclude' | 'date-unknown' | 'multi-lot' | 'part'
+  | 'condition' | 'grade-qualifier' | 'grade-authentic' | 'grade-unparsed' | 'slab-unkeyed'
+  | 'multi-card' | 'serial' | 'watch-dual-ref';
+
+export function saleAdmission(l: AuctionLot): SkipReason | null {
+  if (isCompExcluded(l)) return 'comp-exclude';
+  if ((l as { datePrecision?: string | null }).datePrecision === 'unknown') return 'date-unknown';
+  const shape = lotShapeOf(l.title);
+  if (shape.part) return 'part';
+  if (shape.count !== 1) return 'multi-lot';
+  return null;
 }
+
+// ── cards ────────────────────────────────────────────────────────────────────
+/** The card slugs the engine's card paths run on (build-market CARD_SLUGS). */
+const CARD_SLUGS = new Set(['sports-cards', 'graded-cards']);
+/** Any grading / authentication house or slab word. A title that names one
+ *  but whose card grade did not parse is NEVER a raw sale (TGA/GMA/KSA/ISA…
+ *  are not in the engine parser's grader set; SGC 100-scale, "PSA/DNA" auto
+ *  authentication and bare "slabbed"/"graded" all land here). */
+const SLAB_HINT_RE = /\b(?:PSA|BGS|BVG|SGC|CGC|CSG|HGA|TGA|GMA|KSA|ISA|AGS|MNT|PGI|GAI|CGA|Beckett|slab(?:bed)?|encapsulated|graded|authentic(?:ated)?)\b/i;
+/** two or more card numbers outside parentheses ("#4 Babe Ruth and #46 Joe
+ *  Sewell") — a multi-card lot, never one card */
+function cardNoCount(title: string): number {
+  return (title.replace(/\([^)]*\)/g, ' ').match(/#\s?[A-Za-z]{0,4}\d/g) || []).length;
+}
+
+export interface CardBookId {
+  key: string;
+  /** the parallel / autograph signature ('' = the base card) — the axis the
+   *  Starling key does not carry, so a pool is held to ONE signature */
+  variant: string;
+}
+
+/** A sold card lot → its book identity, or the reason it never enters one.
+ *  Key format is Starling's (`player|year|set|cardNo|GRADE`, GRADE = PSA9 …
+ *  or 'raw'); identity is the ENGINE's card parser (+ the advisory LLM fill),
+ *  so qualifiers / Authentic / unparsed graders are seen the same way the
+ *  engine sees them. */
+export function cardBookId(l: AuctionLot): CardBookId | SkipReason | null {
+  if (!CARD_SLUGS.has(l.artist)) return null;
+  const title = l.title || '';
+  if (hasConditionFlag(title) || llmConditionFlag(l)) return 'condition';
+  const c = mergeCardExtract(parseCard(title), l);
+  if (!c.playerSlug || !c.year || !c.cardNo) return null;
+  // Serial-numbered parallels (/25, 1/1) are a DIFFERENT market than the base
+  // card — Starling's key carries no serial, so they never enter a base pool.
+  if (c.serialOf != null) return 'serial';
+  if (cardNoCount(title) >= 2) return 'multi-card';
+  // grade qualifiers (OC/MC/ST/PD/MK/OF) trade far below the clean grade and
+  // Starling abstains on them — they never pool into a clean key
+  if (c.gradeQual) return 'grade-qualifier';
+  // slabbed Authentic / Altered: no numeric card grade — never 'raw'
+  if (c.gradeTag) return 'grade-authentic';
+  if (c.gradeUnparsed) return 'grade-unparsed';
+  // the trailing "- SGC 96" form is not range-checked by the parser: an SGC
+  // 100-point grade is not a 10-point grade (Starling abstains on those too)
+  if (c.gradeNum != null && !(c.gradeNum >= 1 && c.gradeNum <= 10)) return 'grade-unparsed';
+  const graded = c.gradeCo && c.gradeNum != null;
+  if (!graded && SLAB_HINT_RE.test(title)) return 'slab-unkeyed';
+  const grade = graded ? `${c.gradeCo}${c.gradeNum}` : 'raw';
+  const set = (c.setName || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  // 'sp' (short print) is a descriptor houses add or omit for the SAME card
+  // ("1957 Topps #77 Bill Russell Rookie [SP]") — never a purity axis
+  const parallel = (c.variant || '').split('+').filter(t => t && t !== 'sp').join('+');
+  const variant = [parallel, c.autoGrade ? `ag:${c.autoGrade}` : ''].filter(Boolean).join('|');
+  return { key: `${c.playerSlug}|${c.year}|${set}|${c.cardNo}|${grade}`, variant };
+}
+
 const PKMN_GRADE = /\b(PSA|BGS|CGC|SGC)\s*(?:GEM\s*MT|GEM\s*MINT|MINT|NM-?MT\+?|NM|EX-?MT|EX|VG)?\s*(10|[1-9](?:\.5)?)\b/i;
-function pokemonKey(l: AuctionLot): string | null {
+const PKMN_QUAL_AFTER = /^\s*\(?\s*(?:OC|MK|ST|PD|MC|OF)\s*\)?(?![a-z])/i;
+const PKMN_TAG = /\b(?:PSA|BGS|CGC|SGC)\s*[-:]?\s*(?:authentic|auth\b|altered)/i;
+export function pokemonKey(l: AuctionLot): string | SkipReason | null {
   if (l.artist !== 'pokemon') return null;
   const t = l.title || '';
+  if (hasConditionFlag(t)) return 'condition';
+  if (PKMN_TAG.test(t)) return 'grade-authentic';
   const yr = (t.match(/\b(19|20)\d{2}\b/) || [])[0];
   const no = (t.match(/#([A-Za-z0-9]+)\b/) || [])[1];
   const g = t.match(PKMN_GRADE);
   if (!yr || !no || !g) return null;
+  if (PKMN_QUAL_AFTER.test(t.slice((g.index || 0) + g[0].length))) return 'grade-qualifier';
+  if (cardNoCount(t) >= 2) return 'multi-card';
   const setPart = t
     .slice(t.indexOf(yr) + 4)
     .split('#')[0]
@@ -94,11 +183,50 @@ function pokemonKey(l: AuctionLot): string | null {
   return `${yr}|${setPart}|${no}|${ed}|${g[1].toUpperCase()}${g[2]}`;
 }
 
+// ── watches ──────────────────────────────────────────────────────────────────
+/** A slash-joined PAIR of full references ("5513/5517", "5512/5513") is a
+ *  dual-stamped case (British military Submariners, transitional cases) — not
+ *  one tradable reference. eBay text uses the same pair for homages, parts
+ *  and "fits 5513/5517" straps, so a pair key prices the wrong thing at
+ *  $100K+. A slash SUFFIX ("5711/1a", "3700/031", "5723/112r") is part of the
+ *  reference and stays. */
+export function isDualWatchRef(key: string): boolean {
+  const ref = key.slice(key.indexOf('|') + 1);
+  return /^\d{4,6}[a-z]{0,3}\/\d{4,6}[a-z]{0,3}$/.test(ref);
+}
+// gem-set cases/dials/bezels — "sapphire crystal" and "21 rubies/jewels"
+// (movement jewels) are standard spec, not gems
+const WATCH_NOT_GEM_RE = /\bsapphire[\s-]+(?:crystal|glass|case\s*-?\s*back|caseback|back)\b|\b\d{1,2}\s*(?:rubies|jewels)\b/gi;
+const WATCH_GEM_RE = /\b(?:diamonds?|diamond[- ]set|brilliants?|brilliant[- ]cut|gem[- ]?set|gem-?stones?|pav[eé]|baguettes?|sapphires?|rubies|ruby[- ]set|emeralds?|tsavorites?|rainbow|bejewell?ed|jewell?ed\s+(?:bezel|dial|case)|set with)\b/gi;
+// rare/special dials, special series and provenance that price far off the
+// plain reference (Milsub, Comex, Tiffany-signed, engraved presentation…)
+const WATCH_SPECIAL_RE = /\b(?:lacquer(?:ed)?(?: \w+)? dial|(?:green|yellow|pink|candy pink|red) dial|turquoise|tiffany|coral|celebration|bubbles? dial|stella|enamel(?:led)?|cloisonn[eé]|meteorite|mother[- ]of[- ]pearl|lapis|malachite|onyx|aventurine|opal|jade|tiger'?s?[- ]eye|tropical|paul newman|explorer dial|gilt dial|underline|exclamation|double red|red submariner|comex|military|milsub|royal navy|secret service|engraved|engraving|presentation|unique|prototype|one[- ]off|pi[eè]ce unique|retailed by|limited edition|limited series|anniversary|special edition|khanjar|crest dial|logo dial)\b/gi;
+const markerToken = (m: string, kind: 'gem' | 'sp') =>
+  `${kind}:${m.toLowerCase().replace(/[^a-z]+/g, '-').replace(/s$/, '')}`;
+
+export interface WatchSaleClass {
+  /** variant markers the sale's text carries ('gem:diamond', 'sp:tiffany',
+   *  'sp:paul-newman' …) — empty for a plain example of the reference */
+  markers: string[];
+  /** coarse case material (null = not stated) */
+  mat: string | null;
+}
+export function watchSaleClass(l: Pick<AuctionLot, 'title' | 'medium'>): WatchSaleClass {
+  const text = `${l.title || ''} ${l.medium || ''}`;
+  const gems = text.replace(WATCH_NOT_GEM_RE, ' ').match(WATCH_GEM_RE) || [];
+  const sps = text.match(WATCH_SPECIAL_RE) || [];
+  const markers = Array.from(new Set([...gems.map(m => markerToken(m, 'gem')), ...sps.map(m => markerToken(m, 'sp'))])).sort();
+  return { markers, mat: coarseWatchMaterial(l) };
+}
+
 type Vertical = 'sports-cards' | 'autographs' | 'pokemon' | 'art-editions' | 'watches' | 'design';
 
-/** Route a lot to its identity key + Starling vertical, or null to skip.
- *  Autographs first (signer+format), then pokémon, then market-dispatched. */
-function keyForLot(l: AuctionLot): { key: string; v: Vertical } | null {
+interface KeyHit { key: string; v: Vertical; variant?: string; watch?: WatchSaleClass }
+
+/** Route a lot to its identity key + Starling vertical, a skip reason, or
+ *  null when it has no book identity. Autographs first (signer+format), then
+ *  pokémon, then market-dispatched. */
+export function keyForLot(l: AuctionLot): KeyHit | SkipReason | null {
   // Autographs: science/culture (excl. pokémon) + the autographs slug.
   if (AUTOGRAPH_SLUGS.has(l.artist)) {
     const fmt = autographFormatOf(l.title);
@@ -109,16 +237,18 @@ function keyForLot(l: AuctionLot): { key: string; v: Vertical } | null {
   }
   if (l.artist === 'pokemon') {
     const k = pokemonKey(l);
-    return k ? { key: k, v: 'pokemon' } : null;
+    return k && k.includes('|') ? { key: k, v: 'pokemon' } : (k as SkipReason | null);
   }
   const m = marketOf(l.artist);
   if (m === 'sports') {
-    const k = cardKeyNoSerial(l);
-    return k ? { key: k, v: 'sports-cards' } : null;
+    const c = cardBookId(l);
+    return c && typeof c === 'object' ? { key: c.key, v: 'sports-cards', variant: c.variant } : c;
   }
   if (WATCH_SLUGS.has(l.artist)) {
     const k = numericWatchRef(l);
-    return k ? { key: k, v: 'watches' } : null;
+    if (!k) return null;
+    if (isDualWatchRef(k)) return 'watch-dual-ref';
+    return { key: k, v: 'watches', watch: watchSaleClass(l) };
   }
   if (m === 'art') {
     if (!isEditionLot(l)) return null;
@@ -198,6 +328,15 @@ interface ValueBookRow {
   lastSale: string;
   trend: number | null;
   conf: 'high' | 'medium' | 'thin';
+  /** (additive, Oct 6) cards: the parallel/autograph signature every sale in
+   *  the row shares ('auto', 'color+refractor', 'auto|ag:10' …); absent =
+   *  the base card. Starling's key has no variant axis — a listing whose
+   *  variant differs from the row's is not this row's object. */
+  variant?: string;
+  /** (additive, Oct 6) watches: the case material the row's sales share
+   *  ('steel' | 'gold' | 'two-tone' | 'platinum' | 'titanium'); absent =
+   *  not stated in the sales. A listing in another material is not this row. */
+  mat?: string;
 }
 
 const YEAR_MS = 365.25 * 864e5;
@@ -205,10 +344,149 @@ const YEAR_MS = 365.25 * 864e5;
 export interface ValueBook {
   schema: 1;
   builtAt: string;
+  /** (additive, Oct 6) the served engine version (ENGINE_FLAGS_CURRENT) */
+  engineVersion: string;
+  /** (additive, Oct 6) the book's own rule version (BOOK_VERSION) */
+  bookVersion: string;
   rows: ValueBookRow[];
   context: ContextRow[];
   gradeLadder: unknown;
   indexes: Record<string, unknown>;
+  /** (additive, Oct 6) what the build kept out and why — sale skips by
+   *  reason, pools abstained by reason, watch pools split (variant sales
+   *  dropped) — so a reader can audit the book without the corpus */
+  audit: { skipped: Record<string, number>; abstained: Record<string, number>; watchSplit: number };
+}
+
+type Sale = [usd: number, ms: number];
+interface Pool { v: Vertical; sales: { p: Sale; date: string; variant?: string; watch?: WatchSaleClass }[] }
+
+/** Vertical-aware dispersion tolerance (IQR ratio) for the MEDIUM tier. Graded
+ *  cards are fungible (same card+grade → same price) so stay strict;
+ *  autographs and editions legitimately spread wide (content/state-driven),
+ *  and the honest lo–hi band already carries that uncertainty. High tier
+ *  stays strict for all — a high call means a genuinely clustered pool. */
+const MEDIUM_DISP: Record<Vertical, number> = {
+  'sports-cards': 2.5,
+  pokemon: 2.5,
+  design: 3.0,
+  watches: 3.5,
+  'art-editions': 3.5,
+  autographs: 5.0,
+};
+/** Watches: a reference row needs n ≥ 5 single-variant sales (no thin tier)
+ *  and its 15–85 band within 2.5× — a wider band on ONE reference means the
+ *  pool still mixes variants the titles don't name (dial colours,
+ *  provenance), and the median is not a price for the listing Starling will
+ *  see. The band is read on the trailing WATCH_BAND_YEARS when that window
+ *  alone carries WATCH_MIN_N sales, so twenty years of price drift on a
+ *  vintage reference is not mistaken for a variant mix. */
+export const WATCH_MIN_N = 5;
+export const WATCH_MAX_BAND = 2.5;
+const WATCH_BAND_YEARS = 5;
+/** Variant purity: the dominant signature must hold ≥ 75% of a pool's sales
+ *  (the rest are dropped); below that the pool abstains. */
+const VARIANT_DOMINANCE = 0.75;
+/** Material purity for a watch pool, over sales whose material is stated. */
+const MATERIAL_DOMINANCE = 0.8;
+
+/** Kish effective sample size of the recency weights. */
+function effectiveN(ws: number[]): number {
+  let s = 0, s2 = 0;
+  for (const w of ws) { s += w; s2 += w * w; }
+  return s2 > 0 ? (s * s) / s2 : 0;
+}
+
+/** Narrow a pool to one variant (cards) / one plain material variant
+ *  (watches). Returns the kept sales + any pool-level abstain reason. */
+export function purifyPool(pool: Pool): { sales: Pool['sales']; abstain: string | null; split: boolean; variant?: string; mat?: string } {
+  if (pool.v === 'sports-cards') {
+    const by = new Map<string, number>();
+    for (const s of pool.sales) by.set(s.variant || '', (by.get(s.variant || '') || 0) + 1);
+    let top = '', topN = -1;
+    by.forEach((n, k) => { if (n > topN || (n === topN && k < top)) { top = k; topN = n; } });
+    if (topN / pool.sales.length < VARIANT_DOMINANCE) return { sales: [], abstain: 'card-variant-mixed', split: false };
+    const kept = pool.sales.filter(s => (s.variant || '') === top);
+    return { sales: kept, abstain: null, split: kept.length < pool.sales.length, variant: top || undefined };
+  }
+  if (pool.v === 'watches') {
+    // A marker most of the pool carries IS the reference (every 3960 is the
+    // 'Anniversary Edition', every 5976/1G the 40th-anniversary Nautilus);
+    // a marker only a minority carries is a variant of it — those sales leave.
+    const freq = new Map<string, number>();
+    for (const s of pool.sales) for (const m of s.watch?.markers || []) freq.set(m, (freq.get(m) || 0) + 1);
+    const intrinsic = new Set(Array.from(freq.entries()).filter(([, n]) => n / pool.sales.length >= 0.5).map(([m]) => m));
+    const plain = pool.sales.filter(s => !(s.watch?.markers || []).some(m => !intrinsic.has(m)));
+    const mats = new Map<string, number>();
+    let known = 0;
+    for (const s of plain) if (s.watch?.mat) { known++; mats.set(s.watch.mat, (mats.get(s.watch.mat) || 0) + 1); }
+    let top: string | undefined, topN = 0;
+    mats.forEach((n, k) => { if (n > topN || (n === topN && top !== undefined && k < top)) { top = k; topN = n; } });
+    if (known && topN / known < MATERIAL_DOMINANCE) {
+      // MIXED materials (a 6265 in steel and in gold): split — the row prices
+      // the CHEAPEST documented material, so a listing in a pricier material
+      // can never read as under it. Only stated-material sales count here
+      // (an unstated one could be either), the cheapest subset must carry a
+      // row on its own (n ≥ WATCH_MIN_N), and no thinner material may sit
+      // under it (steel is not always the cheap case on vintage Patek).
+      const byMat = new Map<string, Pool['sales']>();
+      for (const s of plain) if (s.watch?.mat) (byMat.get(s.watch.mat) || byMat.set(s.watch.mat, []).get(s.watch.mat)!).push(s);
+      const med = (xs: Pool['sales']) => quantile(xs.map(x => x.p[0]).sort((a, b) => a - b), 0.5);
+      const subs = Array.from(byMat.entries()).filter(([, xs]) => xs.length >= 2).map(([m, xs]) => ({ m, xs, med: med(xs) })).sort((a, b) => a.med - b.med);
+      const cheapest = subs[0];
+      if (!cheapest || cheapest.xs.length < WATCH_MIN_N) return { sales: [], abstain: 'watch-material-mixed', split: false };
+      return { sales: cheapest.xs, abstain: null, split: true, mat: cheapest.m };
+    }
+    const kept = plain.filter(s => !s.watch?.mat || s.watch.mat === top);
+    return { sales: kept, abstain: null, split: kept.length < pool.sales.length, mat: top };
+  }
+  return { sales: pool.sales, abstain: null, split: false };
+}
+
+/** Aggregate one purified pool into a row (or the reason it abstains). */
+export function aggregatePool(
+  k: string, v: Vertical, sales: Sale[], last: string, REF_MS: number,
+): { row: ValueBookRow } | { abstain: string } {
+  const n = sales.length;
+  const minN = v === 'watches' ? WATCH_MIN_N : 3;
+  if (n < minN) return { abstain: n < 3 ? 'n<3' : 'watch-n' }; // n=3 ships as the labeled 'thin' tier (not watches)
+  const vals = sales.map(x => x[0]).sort((a, b) => a - b);
+  const disp = quantile(vals, 0.75) / Math.max(quantile(vals, 0.25), 1);
+  let conf: 'high' | 'medium' | 'thin' | null = null;
+  if (n >= 6 && disp <= 1.5) conf = 'high';
+  else if (n >= 4 && disp <= (MEDIUM_DISP[v] ?? 2.5)) conf = 'medium';
+  else if (n === 3 && disp <= (MEDIUM_DISP[v] ?? 2.5) * 1.4) conf = 'thin';
+  if (!conf) return { abstain: 'dispersion' }; // wide-dispersion pools still never ship
+  const q15 = lerpQuantile(vals, 0.15), q85 = lerpQuantile(vals, 0.85);
+  if (v === 'watches') {
+    const recent = sales.filter(([, ms]) => REF_MS - ms <= WATCH_BAND_YEARS * YEAR_MS).map(x => x[0]).sort((a, b) => a - b);
+    const bv = recent.length >= WATCH_MIN_N ? recent : vals;
+    if (lerpQuantile(bv, 0.85) / Math.max(lerpQuantile(bv, 0.15), 1) > WATCH_MAX_BAND) return { abstain: 'watch-band' };
+  }
+
+  // Staleness gate: a pool whose LATEST sale is >4y old is not a tradable
+  // book — "60% under" a 2015 median is not a live call. (2–4y rows ship and
+  // Starling badges them "aging"; older is dropped.)
+  if (REF_MS - Date.parse(last) > 4 * YEAR_MS) return { abstain: 'stale' };
+
+  const ws = sales.map(([, ms]) => Math.pow(0.5, (REF_MS - ms) / YEAR_MS / 2));
+  // Recency-weighted median — UNLESS the weights put the whole call on one
+  // sale (Kish effective n < 2: one recent sale against a decade-old pool).
+  // That made a single $151,652 signed W517 Ruth the "raw" price over five
+  // $230–$1,410 sales. Then the plain median speaks for the pool.
+  const med = Math.round(effectiveN(ws) < 2 ? quantile(vals, 0.5) : weightedMedian(sales.map(([usd], i) => [usd, ws[i]] as [number, number])));
+  // Band from unweighted quantiles, CLAMPED to contain the recency-weighted
+  // median — a med outside its own band (11% of rows otherwise, when recent
+  // sales run hot/cold vs the all-time distribution) breaks the display
+  // semantics and the honesty of "the band".
+  const lo = Math.min(Math.round(q15), med);
+  const hi = Math.max(Math.round(q85), med);
+
+  // 1Y trend: trailing-12mo median vs prior-12mo median (fraction), else null.
+  const t12 = sales.filter(([, ms]) => REF_MS - ms <= YEAR_MS).map(x => x[0]).sort((a, b) => a - b);
+  const p12 = sales.filter(([, ms]) => REF_MS - ms > YEAR_MS && REF_MS - ms <= 2 * YEAR_MS).map(x => x[0]).sort((a, b) => a - b);
+  const trend = t12.length && p12.length ? Number((quantile(t12, 0.5) / quantile(p12, 0.5) - 1).toFixed(3)) : null;
+  return { row: { k, v, med, lo, hi, n, n12: t12.length, lastSale: last, trend, conf } };
 }
 
 /** Build the book from the full corpus (main tier + archive, readCorpus order).
@@ -221,8 +499,11 @@ export function buildValueBook(all: AuctionLot[]): ValueBook {
   normalizeCorpus(all);
 
   // Pool settled sales by identity key.
-  const pools = new Map<string, { v: Vertical; prices: [number, number][]; last: string }>();
-  const ctxPools = new Map<string, { v: ContextRow['v']; kind: ContextRow['kind']; prices: [number, number][]; last: string }>();
+  const pools = new Map<string, Pool>();
+  const ctxPools = new Map<string, { v: ContextRow['v']; kind: ContextRow['kind']; prices: Sale[]; last: string }>();
+  const skipped: Record<string, number> = {};
+  const abstained: Record<string, number> = {};
+  const bump = (o: Record<string, number>, r: string) => { o[r] = (o[r] || 0) + 1; };
   let sold = 0;
   for (const l of all) {
     if (l.status !== 'sold') continue;
@@ -230,6 +511,14 @@ export function buildValueBook(all: AuctionLot[]): ValueBook {
     if (!price || price <= 0 || !l.saleDate) continue;
     const ms = Date.parse(l.saleDate);
     if (!Number.isFinite(ms)) continue;
+    const adm = saleAdmission(l);
+    if (adm) {
+      // counted only for lots that would otherwise have keyed (the audit's
+      // question is "what did the book stop pooling")
+      const kv0 = keyForLot(l);
+      if (kv0 && typeof kv0 === 'object') bump(skipped, adm);
+      continue;
+    }
     for (const c of contextKeysForLot(l)) {
       const ck = `${c.kind}:${c.key}`;
       let cp = ctxPools.get(ck);
@@ -239,73 +528,39 @@ export function buildValueBook(all: AuctionLot[]): ValueBook {
     }
     const kv = keyForLot(l);
     if (!kv) continue;
+    if (typeof kv === 'string') { bump(skipped, kv); continue; }
     sold++;
     let p = pools.get(kv.key);
-    if (!p) {
-      p = { v: kv.v, prices: [], last: l.saleDate };
-      pools.set(kv.key, p);
-    }
-    p.prices.push([price, ms]);
-    if (l.saleDate > p.last) p.last = l.saleDate;
+    if (!p) { p = { v: kv.v, sales: [] }; pools.set(kv.key, p); }
+    p.sales.push({ p: [price, ms], date: l.saleDate, variant: kv.variant, watch: kv.watch });
   }
-  console.log(`[value-book] ${sold.toLocaleString()} keyed sales → ${pools.size.toLocaleString()} keys`);
+  console.log(`[value-book] ${sold.toLocaleString()} keyed sales → ${pools.size.toLocaleString()} keys; skipped ${JSON.stringify(skipped)}`);
 
-  // Aggregate each key: recency-weighted median + band + confidence tier + trend.
+  // Aggregate each key: purify (one variant) → recency-weighted median + band
+  // + confidence tier + trend.
   const rows: ValueBookRow[] = [];
-  for (const [k, p] of Array.from(pools.entries())) {
-    const n = p.prices.length;
-    if (n < 3) continue; // n=3 ships as the labeled 'thin' tier (Starling demands extra depth)
-    const vals = p.prices.map((x: [number, number]) => x[0]).sort((a: number, b: number) => a - b);
-    const disp = quantile(vals, 0.75) / Math.max(quantile(vals, 0.25), 1);
-    // Vertical-aware dispersion tolerance for the MEDIUM tier. Graded cards are
-    // fungible (same card+grade → same price) so stay strict; autographs and
-    // editions legitimately spread wide (content/state-driven), and the honest
-    // lo–hi band already carries that uncertainty. High tier stays strict for
-    // all — a high call means a genuinely clustered pool.
-    const MEDIUM_DISP: Record<Vertical, number> = {
-      'sports-cards': 2.5,
-      pokemon: 2.5,
-      design: 3.0,
-      watches: 3.5,
-      'art-editions': 3.5,
-      autographs: 5.0,
-    };
-    let conf: 'high' | 'medium' | 'thin' | null = null;
-    if (n >= 6 && disp <= 1.5) conf = 'high';
-    else if (n >= 4 && disp <= (MEDIUM_DISP[p.v] ?? 2.5)) conf = 'medium';
-    else if (n === 3 && disp <= (MEDIUM_DISP[p.v] ?? 2.5) * 1.4) conf = 'thin';
-    if (!conf) continue; // wide-dispersion pools still never ship
-
-    // Staleness gate: a pool whose LATEST sale is >4y old is not a tradable
-    // book — "60% under" a 2015 median is not a live call. (2–4y rows ship and
-    // Starling badges them "aging"; older is dropped.)
-    if (REF_MS - Date.parse(p.last) > 4 * YEAR_MS) continue;
-
-    const wpairs: [number, number][] = p.prices.map(([usd, ms]) => [
-      usd,
-      Math.pow(0.5, (REF_MS - ms) / YEAR_MS / 2),
-    ]);
-    const med = Math.round(weightedMedian(wpairs));
-    // Band from unweighted quantiles, CLAMPED to contain the recency-weighted
-    // median — a med outside its own band (11% of rows otherwise, when recent
-    // sales run hot/cold vs the all-time distribution) breaks the display
-    // semantics and the honesty of "the band".
-    const lo = Math.min(Math.round(lerpQuantile(vals, 0.15)), med);
-    const hi = Math.max(Math.round(lerpQuantile(vals, 0.85)), med);
-
-    // 1Y trend: trailing-12mo median vs prior-12mo median (fraction), else null.
-    const t12 = p.prices.filter(([, ms]) => REF_MS - ms <= YEAR_MS).map((x: [number, number]) => x[0]).sort((a: number, b: number) => a - b);
-    const p12 = p.prices
-      .filter(([, ms]) => REF_MS - ms > YEAR_MS && REF_MS - ms <= 2 * YEAR_MS)
-      .map((x: [number, number]) => x[0])
-      .sort((a: number, b: number) => a - b);
-    const trend =
-      t12.length && p12.length ? Number((quantile(t12, 0.5) / quantile(p12, 0.5) - 1).toFixed(3)) : null;
-
-    rows.push({ k, v: p.v, med, lo, hi, n, n12: t12.length, lastSale: p.last, trend, conf });
+  let watchSplit = 0;
+  for (const [k, pool] of Array.from(pools.entries())) {
+    if (pool.sales.length < 3) continue; // never a row; not an abstain worth counting
+    const pur = purifyPool(pool);
+    if (pur.abstain) { bump(abstained, pur.abstain); continue; }
+    if (!pur.sales.length) { bump(abstained, pool.v === 'watches' ? 'watch-all-special' : 'empty'); continue; }
+    const last = pur.sales.reduce((m, s) => (s.date > m ? s.date : m), pur.sales[0].date);
+    const agg = aggregatePool(k, pool.v, pur.sales.map(s => s.p), last, REF_MS);
+    if ('abstain' in agg) {
+      // a pool that only fell under the bar BECAUSE its variants were split
+      // off is the honest outcome of the split — count it as such
+      bump(abstained, pur.split && pur.sales.length < pool.sales.length && (agg.abstain === 'n<3' || agg.abstain === 'watch-n') ? `${agg.abstain}-after-split` : agg.abstain);
+      continue;
+    }
+    if (pur.variant) agg.row.variant = pur.variant;
+    if (pur.mat) agg.row.mat = pur.mat;
+    if (pool.v === 'watches' && pur.split) watchSplit++;
+    rows.push(agg.row);
   }
 
   rows.sort((a, b) => (a.v < b.v ? -1 : a.v > b.v ? 1 : b.med - a.med));
+  console.log(`[value-book] abstained ${JSON.stringify(abstained)} · watch rows built from a split pool: ${watchSplit}`);
 
   // context tier: n≥3, staleness-gated, no dispersion bar (labeled rollups)
   const context: ContextRow[] = [];
@@ -313,15 +568,15 @@ export function buildValueBook(all: AuctionLot[]): ValueBook {
     const n = p.prices.length;
     if (n < 3) continue;
     if (REF_MS - Date.parse(p.last) > 4 * YEAR_MS) continue;
-    const vals = p.prices.map((x: [number, number]) => x[0]).sort((a: number, b: number) => a - b);
-    const wpairs: [number, number][] = p.prices.map(([usd, ms]) => [usd, Math.pow(0.5, (REF_MS - ms) / YEAR_MS / 2)]);
-    const med = Math.round(weightedMedian(wpairs));
+    const vals = p.prices.map(x => x[0]).sort((a, b) => a - b);
+    const ws = p.prices.map(([, ms]) => Math.pow(0.5, (REF_MS - ms) / YEAR_MS / 2));
+    const med = Math.round(effectiveN(ws) < 2 ? quantile(vals, 0.5) : weightedMedian(p.prices.map(([usd], i) => [usd, ws[i]] as [number, number])));
     context.push({
       k: ck.slice(ck.indexOf(':') + 1), v: p.v, kind: p.kind,
       med,
       lo: Math.min(Math.round(lerpQuantile(vals, 0.15)), med),
       hi: Math.max(Math.round(lerpQuantile(vals, 0.85)), med),
-      n, n12: p.prices.filter(([, ms]: [number, number]) => REF_MS - ms <= YEAR_MS).length, lastSale: p.last,
+      n, n12: p.prices.filter(([, ms]) => REF_MS - ms <= YEAR_MS).length, lastSale: p.last,
     });
   }
   context.sort((a, b) => (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : b.n - a.n));
@@ -329,9 +584,9 @@ export function buildValueBook(all: AuctionLot[]): ValueBook {
   for (const c of context) byKind[c.kind] = (byKind[c.kind] ?? 0) + 1;
   console.log(`[value-book] context tier: ${context.length.toLocaleString()} rollups ${JSON.stringify(byKind)}`);
 
-  // schema stays 1 — `context` is ADDITIVE (current Starling ignores unknown
-  // fields; the v2 sync reads it when present). Bumping would break the live
-  // board overnight for zero gain.
+  // schema stays 1 — `context`, `engineVersion`, `bookVersion`, `audit` and
+  // the row `variant`/`mat` fields are ADDITIVE (Starling ignores unknown
+  // fields). Bumping would break the live board overnight for zero gain.
   // grade ladder + certified vertical indexes ride along from market.json —
   // Starling prices grade-adjacent cards (basis 'ladder') and shows trend.
   let gradeLadder: unknown = null;
@@ -344,7 +599,14 @@ export function buildValueBook(all: AuctionLot[]): ValueBook {
       if (hs.length) indexes[v] = Object.fromEntries(hs.map(([k, h]) => [k, h.changePct]));
     }
   } catch { console.warn('[value-book] market.json not readable — no ladder/indexes this emit'); }
-  const book: ValueBook = { schema: 1 as const, builtAt: new Date().toISOString(), rows, context, gradeLadder, indexes };
+  const book: ValueBook = {
+    schema: 1 as const,
+    builtAt: new Date(REF_MS).toISOString(),
+    engineVersion: ENGINE_VERSION,
+    bookVersion: BOOK_VERSION,
+    rows, context, gradeLadder, indexes,
+    audit: { skipped, abstained, watchSplit },
+  };
 
   // Per-vertical tally for the log.
   const byV: Record<string, number> = {};
