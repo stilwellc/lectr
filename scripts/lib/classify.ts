@@ -326,6 +326,32 @@ export function watchMakerFix(l: ClassifyLot): string | null {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 11 · ART / DESIGN ATTRIBUTION — a bare surname anywhere in the text routed
+// lots that are not BY the maker: "After Pablo Picasso", "Attributed to",
+// "Circle of", appropriations ("Jacqueline, after Picasso" by Vik Muniz,
+// Mike Bidlo), offset exhibition posters, Joan Miró books published by the
+// Pierre Matisse Gallery, Le Corbusier paintings under Jeanneret, Paloma
+// Picasso jewellery. None has a tracked home → evicted.
+// ═══════════════════════════════════════════════════════════════════════════
+const MAKER_SURNAMES = 'picasso|warhol|matisse|haring|lichtenstein|basquiat|calder|koons|ruscha|kaws|condo|clemente|scharf|pettibon|bacon|nakashima|eames|prouv[ée]|jeanneret|le corbusier';
+const NOT_BY_LEAD_RE = new RegExp(String.raw`^\s*(?:(?:after|d'apr[eè]s)\s+(?:a design by\s+)?(?:[a-z.'-]+\s+){0,2}(?:${MAKER_SURNAMES})\b|(?:attributed to|circle of|school of|follower of|manner of|in the manner of|style of|workshop of|studio of)\b)`, 'i');
+const NOT_BY_INLINE_RE = new RegExp(String.raw`\b(?:${MAKER_SURNAMES})\s*,\s*after\b|\(after (?:[a-z.'-]+\s+)?(?:${MAKER_SURNAMES})\)|,\s*after (?:[a-z.'-]+\s+)?(?:${MAKER_SURNAMES})\b|\bafter (?:[a-z.'-]+\s+)?(?:${MAKER_SURNAMES})\s*(?:\(pictures of|['‘’"])`, 'i');
+const ART_DESIGN_MAKERS = new Set(Object.entries(ARTIST_MARKET).filter(([, m]) => m === 'art' || m === 'design').map(([k]) => k));
+
+export function attributionFix(l: ClassifyLot): string | null {
+  if (!ART_DESIGN_MAKERS.has(l.artist)) return null;
+  const t = String(l.title || '');
+  const d = String(l.description || '').slice(0, 300);
+  if (NOT_BY_LEAD_RE.test(t) || NOT_BY_LEAD_RE.test(d) || NOT_BY_INLINE_RE.test(t)) return DROP;
+  if (/exhibition (?:poster|announcement)|poster for the exhibition|affiche (?:d.)?exposition/i.test(t) && !/\bsigned\b/i.test(t)) return DROP;
+  const td = `${t} ${d}`;
+  if (l.artist === 'henri-matisse' && /pierre matisse/i.test(td) && !/henri matisse|matisse, henri|h\. ?matisse/i.test(td)) return DROP;
+  if (l.artist === 'pierre-jeanneret' && /le corbusier|charles-?[ée]douard/i.test(td) && !/pierre jeanneret|jeanneret, pierre|perriand/i.test(td)) return DROP;
+  if (l.artist === 'pablo-picasso' && /paloma picasso/i.test(t) && /\b(?:by paloma|for tiffany|tiffany|earrings?|earclips?|necklace|bracelet|brooch|ring|pendant|jewel|sautoir|gold)\b/i.test(t)) return DROP;
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 2 · ART CATEGORY — Madoura ceramics and unique works filed as prints. The
 // crawler's print test ran before its ceramic test and five artists defaulted
 // to 'print' with no evidence; normalize never moved print → sculpture and
@@ -402,6 +428,7 @@ export const RECLASS_RULES: ReclassRule[] = [
   { cls: 'sale-name-gates', apply: saleGateFix },
   { cls: 'sports-catch-all-programmes', apply: sportsCatchAllFix },
   { cls: 'watch-jewelry-tudor', apply: watchMakerFix },
+  { cls: 'art-design-attribution', apply: attributionFix },
 ];
 
 /** Category rules: same contract, but they return the corrected CATEGORY. */

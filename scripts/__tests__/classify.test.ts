@@ -244,3 +244,20 @@ test('class 10 · player names on object lots come from the known-player roster'
   // without a roster the parser behaves as before
   assert.equal(playerOf('Barry Bonds Baseball', 'sports-memorabilia').player, 'Barry Bonds Baseball');
 });
+
+test('class 11 · attribution: after / attributed / appropriation / exhibition posters / namesakes are evicted', () => {
+  const A = (artist: string, title: string, description = '') => move({ auctionHouse: 'Bonhams', artist, category: 'print', title, description });
+  assert.equal(A('pablo-picasso', 'La Faune', 'After Pablo Picasso (1881-1973) La Faune'), DROP);
+  assert.equal(A('andy-warhol', 'Flowers 11.73', 'After Andy Warhol (1928-1987) Flowers 11.73'), DROP);
+  assert.equal(A('pablo-picasso', 'AFTER PABLO PICASSO (1881-1973) Mère et Enfant'), DROP);
+  assert.equal(A('pablo-picasso', 'VIK MUNIZ (B. 1961) Jacqueline, after Picasso (Pictures of Pigment)'), DROP);
+  assert.equal(A('pablo-picasso', 'Pablo Picasso, after: "Picasso dans les musées sovietiques". Two exhibition posters. Sheet size 60 x 45 cm eac'), DROP);
+  assert.equal(A('andy-warhol', 'Marilyn (Exhibition poster for Warhol: The Tate Gallery)'), DROP);
+  assert.equal(A('henri-matisse', 'JOAN MIRO Gravures pour une exposition , New York, Pierre Matisse, 1973 (D. 606-9, M. 894, C. books 174)'), DROP);
+  assert.equal(A('pierre-jeanneret', 'LE CORBUSIER (CHARLES JEANNERET DIT; 1887-1965) Baigneuse'), DROP);
+  assert.equal(A('pablo-picasso', 'a pair of 18ct gold and amethyst earclips, by paloma picasso,'), DROP);
+  // by the maker — kept (incl. a Warhol print TITLED "after the party", Picasso's portrait of Paloma)
+  assert.equal(A('andy-warhol', 'after the party (f. & s. 183)'), 'andy-warhol');
+  assert.equal(A('pablo-picasso', 'Pablo Picasso Paloma et sa poupée sur fond noir (B. 727; M. 229)'), 'pablo-picasso');
+  assert.equal(A('jeff-koons', 'Cracked Egg (Red)', 'Jeff Koons (born 1955) Cracked Egg (Red)'), 'jeff-koons');
+});
