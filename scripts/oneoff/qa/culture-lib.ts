@@ -77,6 +77,6 @@ export function cultureAxes(title:string):CultureAxes{
   const shortS=shortSubjectOf(title);
   const person=shortS??personOf(title);
   const franchise=franchiseOf(title);
-  const subjects=[...new Set([person,franchise].filter(Boolean))] as string[];
+  const subjects=Array.from(new Set([person,franchise].filter(Boolean))) as string[];
   return { person, franchise, itemClass:itemClassOf(title), subjects };
 }

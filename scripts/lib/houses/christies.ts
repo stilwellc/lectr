@@ -353,7 +353,7 @@ export async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'spo
   }
 
   let skipped = 0, fetched = 0, carried = 0;
-  for (const { sale, kind } of jobs) {
+  for (const { sale } of jobs) {
     // Incremental fast path: this sale is fully resolved + old + not resurfaced
     // in discovery → don't re-fetch. Its lots ride through via carry-forward.
     if (INCREMENTAL_CRAWL && skippableSaleNames.has(nameOf(sale))) {

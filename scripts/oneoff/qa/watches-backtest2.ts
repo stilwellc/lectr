@@ -70,7 +70,7 @@ for (const a of anchors) {
   if (++done % 500 === 0) console.error('...', done);
 }
 const med = (arr: number[]) => { const s = arr.slice().sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : NaN; };
-for (const [name, rs] of results) {
+for (const [name, rs] of Array.from(results)) {
   const reads = rs.filter(r => r.med !== null);
   const abs = reads.map(r => Math.abs((r.realized - r.med!) / r.med!));
   const hi = reads.filter(r => r.conf === 'high' || r.conf === 'very-high');

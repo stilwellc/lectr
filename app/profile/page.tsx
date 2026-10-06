@@ -1032,7 +1032,6 @@ export default function SavedPage() {
       }
     }
     flipPos.current = next;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flipKey, measureBoard]);
   // a dossier opening/closing shifts every row below it — re-baseline after
   // the expansion settles or the next sort animates from stale tops

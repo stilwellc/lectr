@@ -3,12 +3,9 @@
 import './lib/http-tape';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as cheerio from 'cheerio';
 import { computeStats } from './compute-stats';
 import { PRICE_BASIS } from './price-basis';
 import { soldByYear, houseCoverage } from './coverage';
-import { routeCulture, isCultureSale } from './culture';
-import { isSportsSale, routeSportsLot } from './sports-sale';
 
 // ── Types ──
 // Imported from app/types.ts — the app's types are the single source of truth.
@@ -17,29 +14,26 @@ import { isSportsSale, routeSportsLot } from './sports-sale';
 // imports app/lib/comps and build-upcoming — and the mirror had drifted.)
 
 import type {
-  AuctionLot, AuctionHouse, LotStatus, Currency, LotCategory,
-  MarketStats, PricePoint, HouseCount, PriceBasis,
+  AuctionLot, LotCategory,
+  MarketStats,
 } from '../app/types';
 
 // Shared crawler plumbing: transient-failure retry (5xx/network/timeout only,
 // never 4xx), the incremental skip-set predicate, and robust estimate-range
 // parsing. All pure/no-side-effect modules — safe as static imports.
-import { fetchWithRetry } from './lib/fetch-retry';
-import { buildSkippableSaleNames, RESULT_PENDING_MS } from './lib/skip-set';
-import { parseEstimateRange } from './lib/estimate-range';
+import { RESULT_PENDING_MS } from './lib/skip-set';
 
 // v2 foundation — the single, deterministic normalization layer. Every FUTURE
 // row is born v2 by stamping these (native money fact + dated USD, persisted
 // identity keys) at parse/classify time. imageHash is the only I/O function and
 // runs INCREMENTALLY (a bounded batch per crawl — decision #3), never all 41k.
 import {
-  toUsdDated, fxRateFor, normalizeDimensions, extractYear, canonMedium,
+  normalizeDimensions, extractYear, canonMedium,
   extractEdition, extractSerial, extractCollectibleTags, classifyEntity,
   objectFingerprint, titleTokens,
   modelKey as normModelKey, watchKey as normWatchKey,
   normalizeTitle as normNormalizeTitle,
 } from '../app/lib/normalize';
-import { looksLikeCard } from '../app/lib/cards';
 
 // Per-house crawlers (fetch + parse + enrich) live in scripts/lib/houses/.
 import { ARTISTS, type ArtistConfig } from './lib/houses/artists';
@@ -683,7 +677,7 @@ async function main() {
   // sportOf lives in app/utils (pure, no client deps; same fn the UI uses).
   const { sportOf } = await import('../app/utils');
   const SPORT_SLUGS = new Set(['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia']);
-  let categoryCounts: Record<string, number> = {};
+  const categoryCounts: Record<string, number> = {};
   for (const lot of allLots) {
     lot.category = classifyLot(lot);
     // W17 — object-class tag for the watch-maker ambiguity (a Cartier
@@ -1145,7 +1139,6 @@ async function main() {
     allLots as unknown as Record<string, unknown>[],
     (l: Record<string, unknown>) => isGoldinSold(l as unknown as AuctionLot),
   );
-  const mb = (p: string) => (fs.statSync(p).size / (1024 * 1024)).toFixed(2);
   console.log(`[Ray] Wrote corpus ${io.corpusMb}+${io.archiveMb}MB gz | served lots.json ${io.servedMb}MB (slim)`);
   fs.writeFileSync(statsPath, JSON.stringify(statsByArtist, null, 2));
   fs.writeFileSync(path.join(DATA_DIR, 'meta.json'), JSON.stringify({

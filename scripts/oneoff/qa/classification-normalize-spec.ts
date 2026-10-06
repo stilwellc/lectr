@@ -73,7 +73,7 @@ for (const l of p2o) console.log(`  [${l.status}${l.priceUsd ? ' $' + Math.round
 
 // ── engine impact: hindsight error before/after on affected artists ────────
 const artists = new Set([...o2p, ...p2o].map(l => l.artist));
-console.log('\naffected artists:', [...artists].join(', '));
+console.log('\naffected artists:', Array.from(artists).join(', '));
 
 const flipIds = new Set([...o2p, ...p2o].map(l => l.id));
 function applyNormalize(arr: AuctionLot[]): AuctionLot[] {
@@ -86,7 +86,7 @@ function applyNormalize(arr: AuctionLot[]): AuctionLot[] {
   });
 }
 
-for (const artist of artists) {
+for (const artist of Array.from(artists)) {
   const before = lots.filter(l => l.artist === artist);
   if (before.length < 50) continue;
   const after = applyNormalize(before);

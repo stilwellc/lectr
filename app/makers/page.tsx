@@ -933,7 +933,6 @@ export default function MakersPage() {
       }, 420));
     }
     flipPos.current = next;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flipKey]);
   // dossier open/close shifts rows without changing flipKey — re-measure
   useEffect(() => {

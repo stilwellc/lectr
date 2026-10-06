@@ -45,9 +45,6 @@ function fnv1a(s: string): string {
 function norm(s: string | null | undefined): string {
   return (s || '').toLowerCase().trim();
 }
-function roundDim(n: number | null | undefined): string {
-  return n == null ? '' : String(Math.round(n));
-}
 
 /* ── title normalization (mirrors comps.normalizeTitle) ──────────────────── */
 function normalizeTitle(t: string | null | undefined): string {

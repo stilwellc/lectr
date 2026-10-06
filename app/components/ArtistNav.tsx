@@ -58,7 +58,7 @@ const NAV_ICONS: Record<string, React.ReactNode> = {
   </>} />,
 };
 
-export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts = {}, lastCrawl }: { activeSlug: string | null; savedCount?: number; upcomingCounts?: Record<string, number>; lastCrawl?: string }) {
+export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts = {} }: { activeSlug: string | null; savedCount?: number; upcomingCounts?: Record<string, number>; lastCrawl?: string }) {
   const [open, setOpen] = useState(false);
   const [lit, setLit] = useState(false);
   const [query, setQuery] = useState('');

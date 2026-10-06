@@ -8,8 +8,6 @@
  *
  * Run: npx tsx scripts/gate-ab.ts
  */
-import * as zlib from 'zlib';
-import * as fs from 'fs';
 import * as path from 'path';
 import type { AuctionLot } from '../app/types';
 import { buildIdf, buildVectors, SIM_FLAGS } from '../app/lib/similarity';

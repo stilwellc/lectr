@@ -288,7 +288,7 @@ export function similarity(a: AuctionLot & { _v?: Record<string, number> }, b: A
 }
 
 /** Decide which identity claim the score justifies. */
-function classify(a: AuctionLot, b: AuctionLot, cos: number, bonus: number, reasons: string[]): MatchClass {
+function classify(a: AuctionLot, b: AuctionLot, cos: number, bonus: number, _reasons: string[]): MatchClass {
   const strong = cos + bonus;
   if (strong < 0.75) return 'similar';       // comp-worthy at best; caller may still drop it
 

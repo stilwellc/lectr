@@ -77,7 +77,7 @@ function looksLikePerson(name: string): boolean {
 
 /** Strip dates, parentheticals, quoted signatures, honorifics, trailing punct. */
 function cleanName(raw: string): string {
-  let s = raw
+  const s = raw
     .replace(/\([^)]*\)/g, ' ') // (1879-1955)
     .replace(/["“”][^"“”]*["“”]/g, ' ') // ("A Einstein")
     .replace(/\b(?:c\.?|circa)\s*\d{3,4}.*$/i, ' ') // c. 1864 …
@@ -86,7 +86,7 @@ function cleanName(raw: string): string {
     .replace(/[.,;:]+\s*$/, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  let toks = s.split(/\s+/).filter(Boolean);
+  const toks = s.split(/\s+/).filter(Boolean);
   while (toks.length && HONORIFICS.has(toks[0].toLowerCase())) toks.shift();
   // drop a trailing dangling particle
   while (toks.length && PARTICLES.has(toks[toks.length - 1].toLowerCase())) toks.pop();

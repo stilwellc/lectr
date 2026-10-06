@@ -469,9 +469,8 @@ export async function persistCorpusAndServed(
   // the columnar sink is ADVISORY: a failure drops it, never the write
   let sink = opts.sink ?? null;
   const tierOf: Uint8Array = new Uint8Array(allLots.length);
-  let nArch = 0;
-  for (let i = 0; i < allLots.length; i++) if (isArchived(allLots[i])) { tierOf[i] = 1; nArch++; }
-  const served = (tier: number) => allLots.filter((l, i) => tierOf[i] === tier && !isCorpusOnly(l));
+  for (let i = 0; i < allLots.length; i++) if (isArchived(allLots[i])) { tierOf[i] = 1; }
+  const served =(tier: number) => allLots.filter((l, i) => tierOf[i] === tier && !isCorpusOnly(l));
   // served first — slimForClient reads the IN-MEMORY rows (a NaN or an
   // undefined-valued key serializes differently once roundtripped)
   const sMain = writeShardedStream('lots', served(0));

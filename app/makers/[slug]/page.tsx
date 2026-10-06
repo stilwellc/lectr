@@ -373,7 +373,6 @@ function MakerDecadeBand({ lots, label }: { lots: AuctionLot[]; label: string })
 // merged archive rows; the hero re-renders with them too. Kept as a leaf so
 // both the standard (phase-2) and archive (phase-3) bodies reuse it verbatim.
 function MakerSections({
-  slug,
   stats,
   label,
   chartLots,
