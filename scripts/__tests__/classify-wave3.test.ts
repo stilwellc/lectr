@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { subCatOf, sportOfSale, cultureTextDomain, curatedDomainOf } from '../lib/sub-cats';
 import { stampSubCats, clearJunkModelKeys } from '../lib/corpus-normalize';
 import { isWatchModelLine } from '../../app/lib/watch-ref';
-import { parseCard, cardLadderKey, cardKey } from '../../app/lib/cards';
+import { parseCard, cardLadderKey, cardKey, playerOf, knownPlayerSet } from '../../app/lib/cards';
 
 type R = Record<string, any>;
 
@@ -133,4 +133,22 @@ test('cardKey 3 · a numberless pre-war catalog card keys on code + player + pos
   assert.equal(L('1912 T202 Hassan Triple Folder "Close at the Plate" Payne/Walsh PSA EX-MT 6'), null);
   assert.equal(L('1913 T200 Fatima Team Card New York Nationals with Christy Mathewson and Jim Thorpe PSA POOR 1'), null);
   assert.equal(L('1933 Goudey #53 Babe Ruth PSA 5'), 'babe-ruth|1933|goudey|53');
+});
+
+test('player 4 · sold sports objects: the one known player anywhere in the head; descriptor names trimmed', () => {
+  const known = new Set(['babe-ruth', 'jim-brown', 'kobe-bryant', 'grayson-allen', 'jackie-robinson', 'hank-aaron', 'warren-spahn', 'san-francisco', 'fc-barcelona']);
+  const P = (t: string, slug = 'autographs') => playerOf(t, slug, known).player;
+  assert.equal(P('9/1/1957 Jim Brown Signed Cleveland Browns (at S.F. 49ers) Game Program PSA/DNA LOA', 'programs-publications'), 'Jim Brown');
+  assert.equal(P('Jan. 1996 - Kobe Bryant Signed, Inscribed Philadelphia Sports The Fan Magazine - Beckett LOA'), 'Kobe Bryant');
+  assert.equal(P("grayson allen 'china games' phoenix suns 2025-2026 game worn icon edition jersey", 'game-used'), 'Grayson Allen');
+  assert.equal(P('HIGH-GRADE JACKIE ROBINSON SIGNED & INSCRIBED "BEST WISHES" INDEX CARD - PSA/DNA MINT 9'), 'Jackie Robinson');
+  // two known players, a team-signed ball, a city, a club: no one player
+  assert.equal(P('1958 Signed Photograph of Hank Aaron and Warren Spahn'), null);
+  assert.equal(P('1957 Milwaukee Braves Team Signed ONL Baseball Incl. Hank Aaron'), null);
+  assert.equal(P('Historic 2011 Houston Astros vs San Francisco Giants Full Ticket', 'tickets-passes'), null);
+  assert.equal(P('Raphinha Signed FC Barcelona Jersey - Beckett'), null);
+  // a descriptor run is never a known player ("Babe Ruth Type" → Babe Ruth)
+  const k2 = knownPlayerSet(['Babe Ruth', 'Babe Ruth', 'Babe Ruth', 'Babe Ruth Type', 'Babe Ruth Type', 'Babe Ruth Type']);
+  assert.equal(k2.has('babe-ruth-type'), false);
+  assert.equal(playerOf('1932 Babe Ruth Type I Original Photo - PSA/DNA', 'type-1-photos', k2).player, 'Babe Ruth');
 });
