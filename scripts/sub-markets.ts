@@ -25,6 +25,7 @@ import { buildRepeatSaleIndex } from './repeat-sales';
 import { bidCompetitionSeries } from '../app/lib/demand';
 import { subCatLabel } from './lib/sub-cats';
 import { editionIdentityKey as editionKey, isEditionLot } from '../app/lib/identity';
+import { cardSetKey, cardYearKey, isMultiCardTitle } from '../app/lib/cards';
 
 // ── the emitted row (mirrors SubMarketRead in app/hooks/useRayData.ts) ──
 export interface SubMarketRead {
@@ -225,14 +226,22 @@ function slugDemandSeries(soldLots: AuctionLot[]): { period: string; value: numb
  * of that key are a repeat sale. Grade is part of the key on purpose — a PSA 10
  * and a PSA 9 of the same card are different markets. Returns null when the lot
  * isn't a structured card (→ excluded from the index).
+ *
+ * (Oct 6) A SIGNED copy is a different object than the unsigned card (an
+ * autographed Mantle rookie resold against a plain one is not a repeat sale):
+ * the key carries `|s`. Multi-card lots never key; the set and year read
+ * through the engine's normalizers (cardSetKey / cardYearKey) so a REA and a
+ * Goldin sale of one card pair up.
  */
-function cardKey(l: AuctionLot): string | null {
-  const c = l._card;
+export function cardRepeatKey(l: AuctionLot): string | null {
+  const c = l._card as (AuctionLot['_card'] & { multi?: boolean; gradeTier?: string | null }) | undefined;
   if (!c || !c.playerSlug || !c.year || !c.cardNo) return null;
-  const grade = c.gradeCo && c.gradeNum != null ? `${c.gradeCo}${c.gradeNum}` : 'raw';
-  const set = (c.setName || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (c.multi || isMultiCardTitle(l.title || '')) return null;
+  const grade = c.gradeCo && c.gradeNum != null ? `${c.gradeCo}${c.gradeNum}${c.gradeTier ? `-${c.gradeTier}` : ''}` : 'raw';
+  const set = cardSetKey(c.setName);
   const serial = c.serialOf != null ? `/${c.serialOf}` : '';
-  return `${c.playerSlug}|${c.year}|${set}|${c.cardNo}|${grade}${serial}`;
+  const signed = c.auto ? '|s' : '';
+  return `${c.playerSlug}|${cardYearKey(c.year)}|${set}|${c.cardNo}|${grade}${serial}${signed}`;
 }
 
 /** Reference-level watch identity: same maker + same reference is "the same
@@ -266,9 +275,9 @@ export function tryRepeatSale(sold: AuctionLot[], vertical: string): {
       certify", emitted on the row so the ladder is self-documenting */
   attemptReason?: string;
 } | null {
-  let pool: AuctionLot[] = []; let key: (l: AuctionLot) => string | null = cardKey;
-  const cardLots = sold.filter(l => cardKey(l) != null);
-  if (cardLots.length >= 400) { pool = cardLots; key = cardKey; }
+  let pool: AuctionLot[] = []; let key: (l: AuctionLot) => string | null = cardRepeatKey;
+  const cardLots = sold.filter(l => cardRepeatKey(l) != null);
+  if (cardLots.length >= 400) { pool = cardLots; key = cardRepeatKey; }
   else if (vertical === 'watches') {
     const refLots = sold.filter(l => watchRefKey(l) != null);
     if (refLots.length >= 400) { pool = refLots; key = watchRefKey; }
@@ -317,20 +326,46 @@ export interface VerticalRepeatSale {
 // edition + grade. Grades were healed into gradeLabel corpus-wide; the key
 // re-derives from the title so it works on any row. High precision: all of
 // year/cardNo/grade required.
-const PKMN_GRADE = /\b(PSA|BGS|CGC|SGC)\s*(?:GEM\s*MT|GEM\s*MINT|MINT|NM-?MT\+?|NM|EX-?MT|EX|VG)?\s*(10|[1-9](?:\.5)?)\b/i;
+// (Oct 6) + the CHARACTER after the number, the language and reverse-holo
+// axes kept (a Japanese or Reverse Holo printing is a different card), the
+// label tier (Pristine / Black Label) on the grade, a year RANGE read as one
+// token, rarity words folded out of the set, multi-card lots excluded.
+const PKMN_GRADE = /\b(PSA|BGS|CGC|SGC)\s*(?:(?:GEM\s*MT|GEM\s*MINT|MINT|NM-?MT\+?|NM|EX-?MT|EX|VG|PRISTINE|BLACK\s*LABEL|GOLD\s*LABEL)\s*)*(10|[1-9](?:\.5)?)\b/i;
+// rarity words houses add or omit for the SAME card ("Neo Genesis 1st Edition
+// Rare Holofoil #16" = "Neo Genesis 1st Edition #16")
+const PKMN_SET_FOLD = /\b(?:pok[eé]mon|(?:special\s+|secret\s+|ultra\s+|hyper\s+|illustration\s+|double\s+|shiny\s+|amazing\s+|radiant\s+)*rare|holo(?:foil|graphic)?|foil|gold\s+star|sir|ir|r|1st\s+edition|shadowless|unlimited|reverse|japanese|english|korean|chinese|german|french|italian|spanish)\b/gi;
+const PKMN_LANG = /\b(japanese|korean|chinese|german|french|italian|spanish)\b/i;
+const PKMN_CHAR_FOLD = /\b(?:holo(?:foil|graphic)?|(?:special\s+|secret\s+|ultra\s+|hyper\s+|illustration\s+|double\s+|art\s+)*rare|full\s+art|foil|reverse|1st\s+edition|shadowless|unlimited|signed|autographed)\b/gi;
 export function pokemonKey(l: AuctionLot): string | null {
   if (l.artist !== 'pokemon') return null;
   const t = l.title || '';
-  const yr = (t.match(/\b(19|20)\d{2}\b/) || [])[0];
-  const no = (t.match(/#([A-Za-z0-9]+)\b/) || [])[1];
+  const ym = t.match(/\b((?:19|20)\d{2})(?:-\d{2,4})?\b/);
+  const nm = t.match(/#([A-Za-z0-9]+)\b/);
   const g = t.match(PKMN_GRADE);
-  if (!yr || !no || !g) return null;
-  const setPart = t.slice(t.indexOf(yr) + 4).split('#')[0]
-    .replace(/\b(pok[eé]mon|holo(?:foil)?|1st edition|shadowless|unlimited|reverse|japanese|english)\b/gi, ' ')
+  if (!ym || !nm || !g) return null;
+  if (isMultiCardTitle(t)) return null;
+  const tier = /black\s*label/i.test(g[0]) ? '-bl' : /gold\s*label/i.test(g[0]) ? '-gold' : /pristine/i.test(g[0]) ? '-pristine' : '';
+  return composePokemonKey({
+    year: ym[1], setText: t.slice((ym.index || 0) + ym[0].length).split('#')[0], cardNo: nm[1],
+    // the character named after the number, up to the grade / dash
+    afterNo: t.slice((nm.index || 0) + nm[0].length), title: t, grade: `${g[1].toUpperCase()}${g[2]}${tier}`,
+  });
+}
+
+/** The ONE Pokémon key format (year|set|no|character|edition-lang-rev|GRADE),
+ *  shared with the LLM-extraction fallback (scripts/lib/extract/apply.ts). */
+export function composePokemonKey(o: { year: string; setText: string; cardNo: string; afterNo: string; title: string; grade: string; edition?: string | null }): string | null {
+  const setPart = o.setText.replace(PKMN_SET_FOLD, ' ')
     .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).slice(0, 4).join('-');
   if (!setPart) return null;
-  const ed = /1st edition/i.test(t) ? '1st' : /shadowless/i.test(t) ? 'shadowless' : 'unl';
-  return `${yr}|${setPart}|${no}|${ed}|${g[1].toUpperCase()}${g[2]}`;
+  const ch = o.afterNo.split(/\s[-–—]\s|\b(?:PSA|BGS|CGC|SGC)\b/)[0]
+    .replace(PKMN_CHAR_FOLD, ' ').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).slice(0, 3).join('-');
+  const t = o.title;
+  const ed = /1st edition/i.test(t) ? '1st' : /shadowless/i.test(t) ? 'shadowless'
+    : o.edition === '1st' ? '1st' : o.edition === 'shadowless' ? 'shadowless' : 'unl';
+  const lang = (t.match(PKMN_LANG) || [])[1];
+  const axes = [ed, lang ? lang.toLowerCase().slice(0, 2) : '', /\breverse\b/i.test(t) ? 'rev' : ''].filter(Boolean).join('-');
+  return `${o.year}|${setPart}|${o.cardNo}|${ch}|${axes}|${o.grade}`;
 }
 
 export function buildVerticalRepeatSale(sold: AuctionLot[], vertical: string): VerticalRepeatSale | null {
@@ -343,7 +378,7 @@ export function buildVerticalRepeatSale(sold: AuctionLot[], vertical: string): V
     pool = sold.filter(l => isEditionLot(l) && editionKey(l) != null); key = editionKey;
     basis = 'same edition resold'; scope = 'prints & multiples';
   } else if (vertical === 'sports') {
-    pool = sold.filter(l => cardKey(l) != null); key = cardKey;
+    pool = sold.filter(l => cardRepeatKey(l) != null); key = cardRepeatKey;
     basis = 'same card, same grade, resold'; scope = 'cards';
   } else if (vertical === 'tcg') {
     // tcg's strong identity: graded Pokémon (year|set|no|edition|grade).
