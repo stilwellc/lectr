@@ -136,6 +136,9 @@ export type CalObs = {
   hl?: number;
   /** (Oct 3) realized beat the HOUSE-ADJUSTED top (value.adjustedTop) */
   ba?: boolean;
+  /** (Oct 6) the call was 'above comparable market' (absent on older rows →
+   *  isAboveObs recovers it from the label rule) */
+  ab?: boolean;
 };
 /** (Sep 27) a NO-ESTIMATE hedonic observation — the pure comp path's record
  *  (Goldin/no-estimate objects). Feeds the no-estimate bias correction and
@@ -469,6 +472,7 @@ export function scoreSold(prep: Prepared, st: BacktestState, lot: L): boolean {
       ageY: Math.max(0, (st.nowMs - new Date(lot.saleDate).getTime()) / 31_557_600_000),
       pf: realized / estMid - 1,
       fl: isBelow,
+      ab: isAbove,
       // watches era-gate MEASUREMENT (spec 8a precondition): reference-keyed
       // vs model-name-keyed error splits fall out of the Sunday full replay
       kt: prep.marketBySlug[lot.artist] === 'watches' ? ((lot as L & { reference?: string | null }).reference ? 'ref' : 'model') : undefined,
@@ -1151,17 +1155,7 @@ export function summarizeState(st: BacktestState, generatedAt: string) {
   const cal = calibrationOf(calObs, st.noEst || []);
   // PER-MARKET RECORD (Aug 13 value audit): the +41/+16 receipt was global-
   // only — a watches user read an art/design-dominant number. Split it.
-  const byMarket: Record<string, { flagged: { n: number; medPct: number | null }; unflagged: { n: number; medPct: number | null } }> = {};
-  {
-    const medOf = (a: number[]) => { if (a.length < 50) return null; const x = [...a].sort((p, q) => p - q); return Math.round(x[Math.floor(x.length / 2)] * 1000) / 10; };
-    for (const m of marketsOf(calObs)) {
-      const rows = calObs.filter(o => o.m === m && typeof o.pf === 'number');
-      byMarket[m] = {
-        flagged: { n: rows.filter(o => o.fl).length, medPct: medOf(rows.filter(o => o.fl).map(o => o.pf!)) },
-        unflagged: { n: rows.filter(o => !o.fl).length, medPct: medOf(rows.filter(o => !o.fl).map(o => o.pf!)) },
-      };
-    }
-  }
+  const byMarket = recordByMarketOf(calObs);
   // WATCH KEY-TYPE SPLIT — the era-gate measurement (fills as replays run)
   const watchKt: Record<string, { n: number; medAbsErr: number | null }> = {};
   for (const kt of ['ref', 'model']) {
@@ -1286,6 +1280,40 @@ export function valueRecordOf(calObs: CalObs[], noEst: NoEstObs[]): Record<strin
   if (noEst.length) {
     out.noEstimate = { all: cell(noEst) };
     for (const c of CONFS) out.noEstimate[c] = cell(noEst.filter(o => o.conf === c));
+  }
+  return out;
+}
+
+/** An observation's "above comparable market" call. Rows scored since Oct 6
+ *  carry it (ab); older rows recover it from the label rule itself
+ *  (value.ts: 'above' ⇔ not 'below' and flag ratio ≤ 0.75, the flag ratio
+ *  being fr, or cr on rows from before the house-normalized flag). */
+export const isAboveObs = (o: CalObs): boolean => (typeof o.ab === 'boolean' ? o.ab : !o.fl && (o.fr ?? o.cr) <= 0.75);
+
+export type RecordCell = { n: number; medPct: number | null };
+export type MarketRecord = {
+  flagged: RecordCell; unflagged: RecordCell; above: RecordCell;
+  /** single-figure estimates ("$500+", RR) — scored, but a different yardstick
+   *  (no range, the figure is a floor), so never pooled into the cells above */
+  singleFigure: { flagged: RecordCell; unflagged: RecordCell; above: RecordCell };
+};
+/** PER-MARKET RECORD CELLS (/value "The record" when a market is selected).
+ *  Same population as the global headline buckets: RANGE-estimate lots only
+ *  (et 'b'); 'unflagged' = the at-market calls, never the above-market ones
+ *  (the headline keeps those in their own 'above' arm). Single-figure lots are
+ *  reported separately. medPct needs n >= 50. */
+export function recordByMarketOf(calObs: CalObs[]): Record<string, MarketRecord> {
+  const medOf = (a: number[]) => { if (a.length < 50) return null; const x = [...a].sort((p, q) => p - q); return Math.round(x[Math.floor(x.length / 2)] * 1000) / 10; };
+  const cell = (rows: CalObs[]): RecordCell => ({ n: rows.length, medPct: medOf(rows.map(o => o.pf!)) });
+  const arms = (rows: CalObs[]) => ({
+    flagged: cell(rows.filter(o => o.fl)),
+    unflagged: cell(rows.filter(o => !o.fl && !isAboveObs(o))),
+    above: cell(rows.filter(o => !o.fl && isAboveObs(o))),
+  });
+  const out: Record<string, MarketRecord> = {};
+  for (const m of marketsOf(calObs)) {
+    const rows = calObs.filter(o => o.m === m && typeof o.pf === 'number');
+    out[m] = { ...arms(rows.filter(o => o.et !== 'p')), singleFigure: arms(rows.filter(o => o.et === 'p')) };
   }
   return out;
 }

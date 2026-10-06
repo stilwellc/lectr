@@ -200,7 +200,19 @@ if (require.main === module) {
   const dataDir = arg('out') || path.join(process.cwd(), 'public', 'data', 'ray');
   const legDir = arg('leg-dir') || path.join(process.cwd(), 'data', 'backtest-legs');
   try {
-    if (flag('merge')) {
+    if (flag('summarize')) {
+      // RE-SUMMARIZE ONLY: re-derive backtest.json from the saved accumulator
+      // state (no corpus load, no replay) — for a change to the record's
+      // aggregation that needs no new observations
+      const st = readStateFile(STATE_FILE);
+      if (!st) throw new Error(`[backtest] --summarize: no readable state at ${STATE_FILE}`);
+      const prev = (() => { try { return JSON.parse(fs.readFileSync(path.join(dataDir, 'backtest.json'), 'utf8')) as { generatedAt?: string }; } catch { return null; } })();
+      const out = summarizeState(st, prev?.generatedAt || new Date().toISOString().slice(0, 10));
+      assertRecord(out);
+      fs.mkdirSync(dataDir, { recursive: true });
+      fs.writeFileSync(path.join(dataDir, 'backtest.json'), JSON.stringify(out));
+      console.log('backtest.json (re-summarized):', summaryLine(out));
+    } else if (flag('merge')) {
       const mk = arg('markets');
       mergeLegs(dataDir, legDir, mk ? mk.split(',').map(s => s.trim()).filter(Boolean) : null);
     } else {
