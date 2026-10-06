@@ -23,9 +23,13 @@ const FLAT: Record<string, number> = {
   'Memory Lane': 1.20,
   'Love of the Game': 1.195,
   'RR Auction': 1.25,
-  'Wright': 1.25,          // measured 1.250
+  'Wright': 1.25,          // measured 1.250 (undated fallback — DATED_PREMIUMS has the eras)
   'Rago': 1.25,
   'LAMA': 1.25,
+  // (Oct 6 2026) Bruun Rasmussen (Copenhagen): 30% on top of the hammer at
+  // live auctions = 24% commission + 25% VAT on it; online 28% (22.4% + VAT).
+  // bruun-rasmussen.dk/m/pages/about/price-list-buyer (checked Oct 6 2026).
+  'Bruun Rasmussen': 1.30,
 };
 
 // tiered schedules for the estimate houses (hammer-USD bands, descending BP)
@@ -98,6 +102,55 @@ export const DATED_PREMIUMS: Record<string, Array<[string, number]>> = {
     ['2012-01-01', 1.185],
     ['2014-07-01', 1.20],
     ['2025-09-01', 1.23], // REA's stated effective date
+  ],
+  /* (Oct 6 2026) WRIGHT / RAGO / LAMA — the flat 1.25 was wrong for every sale
+     since Jan 2023 (measured 2026 realized/hammer 1.28). Base buyer's premium
+     from the published terms of sale (Wayback captures, checked Oct 6 2026);
+     break dates pinned by the corpus (last sale at the old rate → first at the
+     new), medians from sold rows carrying both hammer and realized:
+       Wright 15%  (corpus only, ≤ Mar 2003)                     med 1.15 n=236
+              17%  (corpus only, Apr–Oct 2003)                   med 1.17 n=100
+              18%  web.archive.org/web/20040615134917/http://www.wright20.com:80/frames/terms.html   n=59
+              20%  …/20041211192304/http://www.wright20.com:80/frames/terms.html                    n=388
+              25%  …/20090219070734/http://wright20.com:80/terms.php (still at …/20221030162117/
+                   https://www.wright20.com/buying/terms-of-sale)                                   n=2,851
+              26%  …/20240826045952/https://www.wright20.com/buying/terms-of-sale (Rago's identical
+                   text from …/20230208143103/https://www.ragoarts.com/buying/terms-of-sale)       n=1,358
+              27%  …/20250324062418/https://www.wright20.com/buying/terms-of-sale/                  n=1,232
+              28%  "effective for auctions occurring after March 15, 2026" —
+                   …/20260315145427/https://www.wright20.com/buying/terms-of-sale                   n=531
+       Rago   25% (…/20200321115853/https://www.ragoarts.com/buying/terms-of-sale) → the shared
+              Wright/Rago terms from 2023 (26 / 27 / 28%).
+       LAMA   its own sales: 20% (2007–Jun 2009), 22.5% (Dec 2009–Oct 2010; 735 = 600 × 1.225),
+              25% 2011–2021 (corpus increment quantization, as REA); lamodern.com has run on
+              Wright's platform since, and LAMA-labelled hammer rows are Wright/Rago lots — the
+              shared schedule from 2023.
+     Upper hammer tiers (e.g. 28% to $2M, 22% above) touch only lots over
+     ~$500k and are not modelled; ~10–15% of rows carry a +3–5pt online-
+     platform surcharge (mean 2026 Wright 1.2835 vs median 1.28). */
+  Wright: [
+    ['0000-01-01', 1.15],
+    ['2003-04-01', 1.17],
+    ['2003-11-01', 1.18],
+    ['2004-07-01', 1.20],
+    ['2009-01-01', 1.25],
+    ['2023-01-01', 1.26],
+    ['2025-01-01', 1.27],
+    ['2026-03-16', 1.28],
+  ],
+  Rago: [
+    ['0000-01-01', 1.25],
+    ['2023-01-01', 1.26],
+    ['2025-01-01', 1.27],
+    ['2026-03-16', 1.28],
+  ],
+  LAMA: [
+    ['0000-01-01', 1.20],
+    ['2009-11-01', 1.225],
+    ['2011-01-01', 1.25],
+    ['2023-01-01', 1.26],
+    ['2025-01-01', 1.27],
+    ['2026-03-16', 1.28],
   ],
 };
 

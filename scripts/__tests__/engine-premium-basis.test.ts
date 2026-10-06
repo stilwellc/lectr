@@ -11,7 +11,10 @@ import {
   lotHammerFromAllIn, inferHammerUsd, maxHammerFor, lotAllInFactor, houseAllInFactor,
   houseHammerFromAllInAt, allInFromHammer, tieredScheduleAt,
 } from '../../app/lib/premiums';
-import { buyerFields } from '../../app/lib/value';
+import { buyerFields, compAllInUsd, resolveComps } from '../../app/lib/value';
+import { buildIdf, buildVectors } from '../../app/lib/similarity';
+import { titleTokens } from '../../app/lib/normalize';
+import type { AuctionLot } from '../../app/types';
 
 test('lotHammerFromAllIn: REA era rates by sale date; undated lots keep the house schedule', () => {
   assert.equal(lotHammerFromAllIn({ auctionHouse: 'REA', saleDate: '2026-04-15' }, 12_300), 10_000); // 23% from Sep 2025
@@ -21,7 +24,7 @@ test('lotHammerFromAllIn: REA era rates by sale date; undated lots keep the hous
 });
 
 test('lotHammerFromAllIn: a house with no dated schedule converts exactly as the undated factor did', () => {
-  for (const h of ['Goldin', 'Wright', 'Bonhams', 'Phillips', 'RR Auction']) {
+  for (const h of ['Goldin', 'Bonhams', 'Phillips', 'RR Auction']) {
     for (const x of [800, 25_000, 2_400_000]) {
       assert.equal(lotHammerFromAllIn({ auctionHouse: h, saleDate: '2026-03-01' }, x, x / 1.25), x / houseAllInFactor(h, x / 1.25), `${h} ${x}`);
     }
@@ -58,4 +61,39 @@ test('buyerFields: hammer-basis figures through the dated inverse (REA 2026), un
   assert.equal(gol.expectedHammerUsd, Math.round(12_200 / 1.22));
   assert.equal(gol.maxBidUsd, Math.round(10_980 / 1.22));
   assert.equal(gol.premiumFactor, 1.22);
+});
+
+test('compAllInUsd (Oct 6): hammer-basis comps are grossed to all-in at their own sale-date premium; all-in rows untouched', () => {
+  // all-in rows (and rows without a basis) pass through
+  assert.equal(compAllInUsd({ realizedUsd: 8320, hammerUsd: 6500, priceBasis: 'realized', auctionHouse: 'Bonhams', saleDate: '2026-10-01' }), 8320);
+  assert.equal(compAllInUsd({ realizedUsd: 5000, auctionHouse: 'Goldin' }), 5000);
+  // a Wright hammer-only row: hammer × the premium in force on its sale date
+  const w = { realizedUsd: 15000, hammerUsd: 15000, priceBasis: 'hammer-only', auctionHouse: 'Wright', saleDate: '2004-10-03' };
+  assert.equal(compAllInUsd(w), Math.round(15000 * lotAllInFactor(w, 15000) * 100) / 100);
+  assert.ok(compAllInUsd(w) > 15000);
+  // the struts 'hammer' stamp at REA's 2004 era rate (15%); a stamped premium wins
+  assert.equal(compAllInUsd({ realizedUsd: 10000, hammerUsd: 10000, priceBasis: 'hammer', auctionHouse: 'REA', saleDate: '2004-04-15' }), 11500);
+  assert.equal(compAllInUsd({ realizedUsd: 10000, priceBasis: 'hammer', auctionHouse: "Hake's", buyerPremiumPct: 20, saleDate: '2026-09-30' }), 12000);
+});
+
+test('resolveComps (Oct 6): a hammer-only comp enters the pool grossed to all-in', () => {
+  const T = 'Marilyn Monroe (Marilyn) screenprint in colors 1967';
+  const mk = (id: string, extra: Record<string, unknown>) => ({
+    id, artist: 'andy-warhol', title: T, titleTokens: titleTokens(T), category: 'print',
+    auctionHouse: 'Wright', saleDate: '2004-10-03', status: 'sold', ...extra,
+  }) as unknown as AuctionLot;
+  const lot = mk('t', { status: 'upcoming', saleDate: '2026-11-01' });
+  const hammerRow = mk('h', { realizedUsd: 15000, hammerUsd: 15000, priceBasis: 'hammer-only' });
+  const allInRow = mk('a', { realizedUsd: 18750, priceBasis: 'realized' });
+  // unrelated rows so the shared title words carry idf weight
+  const filler = ['Campbell Soup I tomato screenprint 1968', 'Flowers offset lithograph 1964', 'Mao portrait silkscreen 1972', 'Electric Chair screenprint 1971']
+    .map((t, i) => ({ ...mk(`f${i}`, { realizedUsd: 1000 }), title: t, titleTokens: titleTokens(t) }) as AuctionLot);
+  const all = [lot, hammerRow, allInRow, ...filler];
+  const tbl = buildIdf(all);
+  buildVectors(all, tbl);
+  const comps = resolveComps(lot, [hammerRow, allInRow], tbl);
+  assert.equal(comps.length, 2);
+  const byId = new Map(comps.map(c => [c.id, c.realizedUsd]));
+  assert.equal(byId.get('a'), 18750);
+  assert.equal(byId.get('h'), compAllInUsd({ realizedUsd: 15000, hammerUsd: 15000, priceBasis: 'hammer-only', auctionHouse: 'Wright', saleDate: '2004-10-03' }));
 });

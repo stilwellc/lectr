@@ -11,7 +11,7 @@ import { isSportsSale, routeSportsLot } from '../../sports-sale';
 import { fetchWithRetry } from '../fetch-retry';
 import { buildSkippableSaleNames, RESULT_PENDING_MS } from '../skip-set';
 import type { ArtistConfig } from './artists';
-import { type EnrichResult, INCREMENTAL_CRAWL, INCREMENTAL_MODE_REASON, MEDIUM_PATTERNS, UA, noteEnrichFail, noteFetched, parseDrop, sleep, stampMoney } from './common';
+import { type EnrichResult, INCREMENTAL_CRAWL, INCREMENTAL_MODE_REASON, MEDIUM_PATTERNS, UA, noteEnrichFail, noteFetched, parseDrop, sleep, stampMoney, statusWithMoney } from './common';
 import { routeItem } from './routing';
 
 // ── Sotheby's Crawler ──
@@ -337,10 +337,11 @@ async function sothebysAuctionMeta(slug: string): Promise<{ uuid: string; endDat
   } catch { return null; }
 }
 
-async function sothebysAuctionLots(uuid: string): Promise<{ currency: Currency; lots: any[] }> {
+async function sothebysAuctionLots(uuid: string): Promise<{ currency: Currency | null; lots: any[] }> {
   const out: any[] = [];
   let offset = 0;
-  let currency: Currency = 'USD';
+  // null until the API names a currency the money layer converts (fail-closed)
+  let currency: Currency | null = null;
   for (let guard = 0; guard < 40; guard++) {
     try {
       const res = await fetchWithRetry(SOTHEBYS_GQL, {
@@ -566,9 +567,22 @@ export async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'spor
       // currency (may differ from the sale's, e.g. an HKD lot in a mixed sale);
       // estimates are in the sale currency. The finalPrice is buyer-inclusive
       // (a Sotheby's realized/premium number), so it maps to premiumNative.
-      const finalCur = (finalPrice?.currency || auctionCur) as Currency;
+      // fail-closed (Oct 6 2026): the finalPrice's own currency when it names
+      // one, else the sale's — validated, never an unchecked cast (an INR /
+      // SGD sale used to ride through as whatever string it was)
+      const finalCur: Currency | null = finalPrice?.currency ? (isCurrency(finalPrice.currency) ? finalPrice.currency : null) : auctionCur;
       const premiumNative = isSold && finalPrice ? parseFloat(finalPrice.amount) : null;
 
+      const sMoney = stampMoney({
+        isSold,
+        nativeCurrency: finalCur,
+        saleDate: saleDay,
+        hammerNative: null,
+        premiumNative,
+        estLowNative: est?.lowEstimate?.amount ? parseFloat(est.lowEstimate.amount) : null,
+        estHighNative: est?.highEstimate?.amount ? parseFloat(est.highEstimate.amount) : null,
+        priceBasis: 'realized',
+      });
       lots.push({
         id: `sothebys-${lot.lotId}`,
         artist,
@@ -584,17 +598,8 @@ export async function crawlSothebysAuctions(scope: 'watches' | 'science' | 'spor
         saleDate: saleDay,
         saleDateTime: saleDate, // GraphQL gives a genuine ISO timestamp
         lotNumber: lot.lotNumber?.lotDisplayNumber ? parseInt(lot.lotNumber.lotDisplayNumber, 10) || null : null,
-        ...stampMoney({
-          isSold,
-          nativeCurrency: finalCur,
-          saleDate: saleDay,
-          hammerNative: null,
-          premiumNative,
-          estLowNative: est?.lowEstimate?.amount ? parseFloat(est.lowEstimate.amount) : null,
-          estHighNative: est?.highEstimate?.amount ? parseFloat(est.highEstimate.amount) : null,
-          priceBasis: 'realized',
-        }),
-        status: status as any,
+        ...sMoney,
+        status: statusWithMoney(status, sMoney) as any,
         resultsPending,
         url: `https://www.sothebys.com/en/buy/auction/${sale}/${lot.slug?.lotSlug || lot.lotId}`,
       } as AuctionLot);

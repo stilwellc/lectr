@@ -7,7 +7,7 @@ import * as cheerio from 'cheerio';
 import type { AuctionLot, LotCategory, PriceBasis } from '../../../app/types';
 import { fetchWithRetry } from '../fetch-retry';
 import type { ArtistConfig } from './artists';
-import { type EnrichResult, MEDIUM_PATTERNS, UA, detectCurrency, noteEnrichFail, noteFetched, parseDrop, sleep, stampMoney } from './common';
+import { type EnrichResult, MEDIUM_PATTERNS, UA, detectCurrency, noteEnrichFail, noteFetched, parseDrop, sleep, stampMoney, statusWithMoney } from './common';
 
 // ── Phillips Crawler ──
 // Phillips embeds lot data as a JSON string in ReactDOM.hydrate props for ArtistLanding.
@@ -138,6 +138,17 @@ export async function crawlPhillips(artist: ArtistConfig): Promise<AuctionLot[]>
         saleDate = lot.saleDate;
       }
 
+      // currencySign null = unknown/ambiguous → fail-closed (no price, comp-excluded)
+      const money = stampMoney({
+        isSold,
+        nativeCurrency: currency,
+        saleDate: saleDate || null,
+        hammerNative: hammer,
+        premiumNative: hammerBP,
+        estLowNative: lot.lowEstimate ?? null,
+        estHighNative: lot.highEstimate ?? null,
+        priceBasis: phillipsBasis,
+      });
       lots.push({
         id: `phillips-${saleNum}-${lotNum}`,
         artist: artist.slug,
@@ -152,17 +163,8 @@ export async function crawlPhillips(artist: ArtistConfig): Promise<AuctionLot[]>
         saleName: lot.saleTitle || '',
         saleDate,
         lotNumber: lotNum ? parseInt(lotNum) : null,
-        ...stampMoney({
-          isSold,
-          nativeCurrency: currency,
-          saleDate: saleDate || null,
-          hammerNative: hammer,
-          premiumNative: hammerBP,
-          estLowNative: lot.lowEstimate ?? null,
-          estHighNative: lot.highEstimate ?? null,
-          priceBasis: phillipsBasis,
-        }),
-        status: isSold ? 'sold' : auctionInPast ? 'bought_in' : 'upcoming',
+        ...money,
+        status: statusWithMoney(isSold ? 'sold' : auctionInPast ? 'bought_in' : 'upcoming', money),
         url: detailLink.startsWith('http') ? detailLink : `https://www.phillips.com${detailLink}`,
       });
     }

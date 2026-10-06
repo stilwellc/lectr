@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import type { AuctionLot } from '../../app/types';
 import {
   quantile, knownKey, UNKNOWN_KEY, quarterKey, timeFactor, resolveComps, estimateValueEx,
-  blendPredict, vsBidRead, setCalibration, setTimeIndex, type Comp, type TimeIndex, type EngineCalibration,
+  blendPredict, vsBidRead, setCalibration, setTimeIndex, setEngineFlags, ENGINE_FLAGS_HOUSE_GATE, ENGINE_FLAGS_CURRENT, type Comp, type TimeIndex, type EngineCalibration,
 } from '../../app/lib/value';
 import {
   lotShapeOf, shapesCompatible, sameShape, plateOfWhole, isCompExcluded, comparableTo, estUsdBand,
@@ -21,9 +21,9 @@ import {
 } from '../../app/lib/comps';
 import { buildIdf, buildVectors, similarity, type Match } from '../../app/lib/similarity';
 import { titleTokens } from '../../app/lib/normalize';
-import { houseAllInFactor, houseAllInFactorAt, lotAllInFactor } from '../../app/lib/premiums';
+import { houseAllInFactor, houseAllInFactorAt, lotAllInFactor, lotHammerFromAllIn } from '../../app/lib/premiums';
 
-afterEach(() => { setCalibration(null); setTimeIndex(null); });
+afterEach(() => { setCalibration(null); setTimeIndex(null); setEngineFlags(null); });
 
 type R = Record<string, unknown>;
 const print = (id: string, title: string, o: R = {}): AuctionLot & { _v?: Record<string, number> } => ({
@@ -206,6 +206,14 @@ test('resolveComps: a comp is admitted only once KNOWN before the cut (month/yea
 test('estimateValueEx: estimate lot → directional signal + house×premium blend + pool band (uncalibrated, by hand)', () => {
   const { lot, cands, tbl } = marilynPool();
   const comps = resolveComps(lot, cands, tbl, '2026-09-20');
+  // (Oct 6) under CURRENT (the hammer basis) the comp ratio is the comps'
+  // hammer — the all-in median through the lot's dated premium inverse
+  const ham = estimateValueEx(lot, comps, tbl).value!;
+  assert.ok(Math.abs(ham.compRatio! - lotHammerFromAllIn(lot, 160000) / 100000) < 1e-9);
+  assert.ok(ham.compRatio! < 1.6);
+  assert.equal(ham.engineVersion, ENGINE_FLAGS_CURRENT.version);
+  // the rest pins the all-in engine (the house-gate flag set) by hand
+  setEngineFlags(ENGINE_FLAGS_HOUSE_GATE);
   const { value, abstain } = estimateValueEx(lot, comps, tbl);
   assert.equal(abstain, null);
   assert.ok(value);

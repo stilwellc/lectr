@@ -34,24 +34,16 @@ import * as path from 'path';
 import { readSegment, writeSegment } from './corpus-io';
 import { toUsdDated, fxRateFor } from '../app/lib/normalize';
 import type { AuctionLot, Currency, PriceBasis } from '../app/types';
+import { detectCurrency } from './lib/houses/common';
 
 const WRITE = process.argv.includes('--write');
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 const CONC = 4;
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-// currency from Phillips' currencySign — same order as ray-crawl's detectCurrency
-function detectCurrency(text: string): Currency {
-  if (!text) return 'USD';
-  if (text.includes('GBP') || text.includes('£')) return 'GBP';
-  if (text.includes('EUR') || text.includes('€')) return 'EUR';
-  if (text.includes('HKD') || text.includes('HK$')) return 'HKD';
-  if (text.includes('CNY') || text.includes('¥')) return 'CNY';
-  if (text.includes('AUD') || text.includes('AU$')) return 'AUD';
-  if (text.includes('CHF')) return 'CHF';
-  return 'USD';
-}
-
+// currency from Phillips' currencySign — the shared fail-closed reader
+// (lib/houses/common.detectCurrency: null for a currency the money layer
+// cannot convert; such a result is left unresolved, never stamped USD)
 // ── money stamping — same sold-branch shape as ray-crawl's stampMoney (not
 // exported there; importing ray-crawl would run its main).
 function stampSold(cur: Currency, saleDate: string, premiumNative: number, estLowNative: number | null, estHighNative: number | null) {
@@ -177,6 +169,7 @@ async function fetchMakerLots(makerId: string): Promise<Map<string, RawLot>> {
     const realized = raw.hammerPlusBP ?? raw.hammerPlusCommission ?? raw.hammerPrice ?? null;
     if (realized != null && realized > 0) {
       const cur = detectCurrency(raw.currencySign || '');
+      if (!cur) { unmatched++; continue; } // unconvertible currency — keep state, never guess
       // prefer the API's sale date (unknown-result lots have an empty saleDate)
       const saleDate = (raw.auctionStartDateTimeOffset || '').slice(0, 10) || l.saleDate || '';
       const estLow = raw.lowEstimate != null ? raw.lowEstimate : (l.estLowNative ?? null);

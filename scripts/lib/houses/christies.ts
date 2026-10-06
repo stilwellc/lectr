@@ -11,7 +11,7 @@ import { fetchWithRetry } from '../fetch-retry';
 import { buildSkippableSaleNames } from '../skip-set';
 import { parseEstimateRange } from '../estimate-range';
 import type { ArtistConfig } from './artists';
-import { DEEP, type EnrichResult, INCREMENTAL_CRAWL, INCREMENTAL_MODE_REASON, MEDIUM_PATTERNS, UA, balancedObjectAfter, detectCurrency, isSaleDayPast, noteEnrichFail, noteExpected, noteFetched, parseDrop, sleep, stampMoney } from './common';
+import { DEEP, type EnrichResult, INCREMENTAL_CRAWL, INCREMENTAL_MODE_REASON, MEDIUM_PATTERNS, UA, balancedObjectAfter, christiesLocationCurrency, detectCurrency, isSaleDayPast, noteEnrichFail, noteExpected, noteFetched, parseDrop, sleep, stampMoney, statusWithMoney } from './common';
 import { routeItem } from './routing';
 
 // ── Christie's Crawler ──
@@ -117,7 +117,10 @@ export function parseChristiesJson(jsonStr: string, artistSlug: string): Auction
       const lotUrl = lot.url || `https://www.christies.com/en/lot/lot-${lotId}`;
 
       const estimateStr = lot.estimate_txt || '';
-      const currency = detectCurrency(estimateStr);
+      // the estimate names the sale currency; an estimate-on-request lot falls
+      // back to the realized string; neither → null (fail-closed, never USD)
+      const currency = detectCurrency(estimateStr) ?? detectCurrency(lot.price_realised_txt || '')
+        ?? christiesLocationCurrency(lot.sale?.location);
       // RANGE-AWARE estimate parse (lib/estimate-range). The old
       // `([\d,]+)\s*[-–]\s*([\d,]+)` regex could not cross a repeated currency
       // token ("GBP 200,000 - GBP 300,000") or an em dash, silently dropping
@@ -161,6 +164,16 @@ export function parseChristiesJson(jsonStr: string, artistSlug: string): Auction
         ? String(lot.description_txt).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || null
         : null;
 
+      const money = stampMoney({
+        isSold,
+        nativeCurrency: currency,
+        saleDate: saleDate || null,
+        hammerNative: null,
+        premiumNative: priceRealized,
+        estLowNative: estimateLow,
+        estHighNative: estimateHigh,
+        priceBasis: 'realized',
+      });
       lots.push({
         id: `christies-${lotId}`,
         artist: artistSlug,
@@ -175,17 +188,8 @@ export function parseChristiesJson(jsonStr: string, artistSlug: string): Auction
         saleName: lot.sale?.location ? `${lot.sale.location} Sale ${saleNum}` : '',
         saleDate,
         lotNumber: lotNum ? parseInt(lotNum) : null,
-        ...stampMoney({
-          isSold,
-          nativeCurrency: currency,
-          saleDate: saleDate || null,
-          hammerNative: null,
-          premiumNative: priceRealized,
-          estLowNative: estimateLow,
-          estHighNative: estimateHigh,
-          priceBasis: 'realized',
-        }),
-        status: isSold ? 'sold' : auctionInPast ? 'bought_in' : 'upcoming',
+        ...money,
+        status: statusWithMoney(isSold ? 'sold' : auctionInPast ? 'bought_in' : 'upcoming', money),
         url: lotUrl.startsWith('http') ? lotUrl : `https://www.christies.com${lotUrl}`,
       });
     }
@@ -213,14 +217,11 @@ const CHRISTIES_SPORTS_SEEDS = ['the-golden-age-of-baseball-selections-of-works-
 // names too varied to keyword-filter, so routeItem keeps only tracked makers.
 const CHRISTIES_ART_SEEDS = ['avant-garde-s-including-thinking-italian-24607', 'art-contemporain-vente-du-jour-24609', 'art-moderne-24608'];
 
-export function parseChristiesCurrency(txt: string): Currency {
-  if (/HK\$|HKD/.test(txt)) return 'HKD';
-  if (/£|GBP/.test(txt)) return 'GBP';
-  if (/€|EUR/.test(txt)) return 'EUR';
-  if (/CHF/.test(txt)) return 'CHF';
-  if (/CN¥|RMB|CNY/.test(txt)) return 'CNY';
-  if (/AU\$|AUD/.test(txt)) return 'AUD';
-  return 'USD';
+/** The sale currency of a Christie's lot from its realized + estimate text —
+ *  detectCurrency's fail-closed read (Oct 6 2026: null for a currency the
+ *  money layer cannot convert, never a silent 'USD'). */
+export function parseChristiesCurrency(txt: string): Currency | null {
+  return detectCurrency(txt);
 }
 
 async function christiesAuctionLots(slug: string): Promise<any[]> {
@@ -418,6 +419,16 @@ export async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'spo
         ? String(lot.description_txt).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || null
         : null;
 
+      const auctionMoney = stampMoney({
+        isSold,
+        nativeCurrency: cur,
+        saleDate: saleDay,
+        hammerNative: null,
+        premiumNative: isSold ? realisedNum : null,
+        estLowNative: lot.estimate_low ? parseFloat(lot.estimate_low) : null,
+        estHighNative: lot.estimate_high ? parseFloat(lot.estimate_high) : null,
+        priceBasis: 'realized',
+      });
       lots.push({
         id: `christies-auc-${lot.object_id}`,
         artist,
@@ -435,17 +446,8 @@ export async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'spo
         lotNumber: null,
         // W2: price realised is buyer-inclusive → premiumNative; keep native +
         // convert with a dated rate. Estimates are in the same sale currency.
-        ...stampMoney({
-          isSold,
-          nativeCurrency: cur,
-          saleDate: saleDay,
-          hammerNative: null,
-          premiumNative: isSold ? realisedNum : null,
-          estLowNative: lot.estimate_low ? parseFloat(lot.estimate_low) : null,
-          estHighNative: lot.estimate_high ? parseFloat(lot.estimate_high) : null,
-          priceBasis: 'realized',
-        }),
-        status: status as any,
+        ...auctionMoney,
+        status: statusWithMoney(status, auctionMoney) as any,
         resultsPending,
         url: lot.url || `https://www.christies.com/en/auction/${sale}`,
       } as AuctionLot);

@@ -17,14 +17,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { readCorpus as readCorpusShared, slimForClient, isServedUpcoming } from './corpus-io';
 import {
-  computeDeepSignal, signalWithPool, soldCompBand, isSportsScienceObject, sportsForm, classifyForm, FORM_LABEL,
+  engineFlagOf, soldCompBand, isSportsScienceObject, sportsForm, classifyForm, FORM_LABEL,
 } from '../app/lib/comps';
 import { demandSeries, realizedCohortSeries, bidCompetitionSeries } from '../app/lib/demand';
 import { ARTIST_LABEL, marketArtists, marketOf, MARKETS } from '../app/constants';
 import { lotAllInFactor } from '../app/lib/premiums';
-import { appendCalls, type Call } from './lib/calls-ledger';
+import { appendCalls, readCalls, type Call } from './lib/calls-ledger';
 import { hasConditionFlag } from '../app/lib/condition';
-import { gapRead, sleeperRead, valueFloor, closeGrowth, type CloseCurve } from '../app/lib/lanes';
+import { gapRead, sleeperRead, valueFloor, closeGrowth, validateGapCells, gapCellKey, type CloseCurve } from '../app/lib/lanes';
 import { CARD_TIER_CODE } from './lib/calls-ledger';
 import type { AuctionLot as EngineLot } from '../app/types';
 import type { AuctionLot, RealizedPoint, BidCompetitionPoint } from '../app/types';
@@ -85,6 +85,13 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
     if (cc?.buckets?.length) closeCurve = cc;
   } catch { /* no curve yet */ }
   const freshCalls: Call[] = [];
+  // THE GAP'S PUBLISH GATE (Oct 6 2026, lanes.validateGapCells): the cells
+  // whose graded projections land within [0.8, 1.25] of realized at n ≥ 50
+  const gapCells = validateGapCells(readCalls());
+  {
+    const pass = Object.entries(gapCells).filter(([, c]) => c.pass).map(([k, c]) => `${k} (n${c.n} ${c.ratio}×)`);
+    console.log(`[upcoming] gap cells validated: ${pass.length ? pass.join(' · ') : 'none'}`);
+  }
   const todayCall = new Date().toISOString().slice(0, 10);
   // results-pending grace: keep a just-closed lot visible only through the day
   // after its sale while results post; anything older that never resolved (e.g.
@@ -162,66 +169,15 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
   }
   const sameArtist = (lot: AuctionLot): AuctionLot[] => byArtist.get(lot.artist) || [];
 
-  // evidence rows for FALLBACK-signal lots (client-engine pools over the full
-  // corpus) — merged into build-market's comp-evidence.json below
-  const fallbackEvidence = new Map<string, { i: string; t: string; h: string; d: string; p: number }[]>();
   const upcoming = upcomingLots
     .map(l => {
       const lot = l as unknown as AuctionLot;
-      // THE ENGINE OWNS THE CARD SIGNAL (measured head-to-head on 25k targets:
-      // engine flags realized +40%/63% vs the never-backtested client
-      // algorithm's +28%/57%). When build-market stamped a value with an
-      // opinion, the card renders the ENGINE's call — same pool, same number
-      // as the modal and the published record. The client computeDeepSignal
-      // remains only as a fallback for lots the engine declined (its flags
-      // still beat unflagged), with the contradiction guard as before.
-      type EngineValue = { signal?: { label: string; beatRatePct: number } | null; compRatio?: number | null; flagRatio?: number | null; compValueUsd?: number; compMedianUsd?: number; n?: number; confidence?: 'high' | 'medium' | 'low' } | null;
-      const ev = (lot as { value?: EngineValue }).value;
-      let signal = null as ReturnType<typeof computeDeepSignal>;
-      // ×5 ESTIMATE-BAND SANITY (mirrors the comps.ts form-pool guard): a
-      // compRatio implying the comp median sits more than 5× outside the lot's
-      // own estimate band is nearly always a collision of unrelated objects /
-      // a data fault — stamp NO signal at the source, and no client fallback
-      // either (the engine's inputs are the fault; recomputing won't fix it).
-      const evSane = !ev || ev.compRatio == null || (ev.compRatio <= 5 && ev.compRatio >= 1 / 5);
-      if (ev && ev.signal && !evSane) {
-        // data-fault flag killed at the source — the card carries no signal
-      } else if (ev && ev.signal) {
-        // (Oct 3) the printed % is the FLAG ratio the signal was called on —
-        // comps vs the HOUSE-ADJUSTED estimate (value.flagRatio); compRatio
-        // (raw) only for values stamped before the house-normalized engine
-        const fr = ev.flagRatio ?? ev.compRatio;
-        if (ev.signal.label.startsWith('below') && fr != null) {
-          signal = {
-            label: 'Below Market', pct: Math.round((fr - 1) * 100),
-            basis: ev.n || 0, med: ev.compMedianUsd ?? ev.compValueUsd, kind: 'form',
-            form: (lot as { formKey?: string }).formKey || 'unknown',
-            confidence: ev.confidence === 'high' ? 'high' : ev.confidence === 'medium' ? 'medium' : 'low',
-          } as NonNullable<ReturnType<typeof computeDeepSignal>>;
-        } else if (ev.signal.label.startsWith('above') && fr != null) {
-          signal = {
-            label: 'Above Market', pct: Math.round((1 - fr) * 100),
-            basis: ev.n || 0, med: ev.compMedianUsd ?? ev.compValueUsd, kind: 'form',
-            form: (lot as { formKey?: string }).formKey || 'unknown',
-            confidence: ev.confidence === 'high' ? 'high' : ev.confidence === 'medium' ? 'medium' : 'low',
-          } as NonNullable<ReturnType<typeof computeDeepSignal>>;
-        }
-        // 'at comparable market' → no flag, and no client fallback either:
-        // the engine looked and called it fairly priced.
-      } else {
-        // fallback read — capture the POOL too: its sales live in the full
-        // build corpus (incl. the off-wire tier), so the client can't resolve
-        // them and the comps surface would contradict the signal it prints.
-        // The rows go into comp-evidence.json alongside the engine pools.
-        const read = signalWithPool(lot, sameArtist(lot));
-        signal = read?.signal ?? null;
-        if (read && signal && read.pool.length) {
-          fallbackEvidence.set(String(l.id), read.pool.slice(0, 10).map(s => ({
-            i: String(s.id), t: (s.title || '').slice(0, 90), h: String(s.auctionHouse || ''),
-            d: String(s.saleDate || '').slice(0, 10), p: Math.round(s.priceUsd || 0),
-          })).filter(r => r.p > 0));
-        }
-      }
+      // THE ENGINE OWNS THE SIGNAL (Oct 6 2026: and ONLY the engine). A lot
+      // the engine declined to value carries no flag — the client
+      // computeDeepSignal fallback (never backtested) is gone; the ×5
+      // estimate-band sanity and the flag-ratio print live in
+      // comps.engineFlagOf, shared with the client.
+      const signal = engineFlagOf(lot);
       // EAGER-SLIM (the leak kill): this map used to spread the RAW corpus row
       // into the payload, so every eager lot shipped the full engine schema —
       // titleTokens, objectFingerprint, fx*, hammer/realized twins, bidHistory
@@ -270,7 +226,8 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
             // used to take ANY value.low / ANY card median, so the served
             // floor disagreed with the lane and the close-board that read it.
             const floor = valueFloor(l as { value?: { low?: number; confidence?: string } | null; cardComps?: { med?: number | null; n?: number } | null })?.floor ?? null;
-            emitted.bidProj = { g, allIn: projAllIn, ...(floor ? { floor, below: projAllIn < floor } : {}) };
+            const ok = floor ? gapCells[gapCellKey(String(l.id), daysOut, projAllIn, floor)]?.pass === true : false;
+            emitted.bidProj = { g, allIn: projAllIn, ...(floor ? { floor, below: projAllIn < floor } : {}), ...(ok ? { ok } : {}) };
             if (floor) freshCalls.push({ id: String(l.id), d: todayCall, k: 'vsbid', p: projAllIn, f: floor, m: marketOf(l.artist) });
           }
         }
@@ -482,8 +439,9 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
     const nowMs = Date.now();
     const rows: Array<{ m: string; id: string; depth: number; allIn: number; floor: number; closes: string }> = [];
     for (const e of upcoming) {
-      const bp = (e as { bidProj?: { allIn: number; floor?: number; below?: boolean } }).bidProj;
+      const bp = (e as { bidProj?: { allIn: number; floor?: number; below?: boolean; ok?: boolean } }).bidProj;
       if (!bp?.below || !bp.floor || !(bp.allIn > 0)) continue;
+      if (bp.ok !== true) continue; // (Oct 6) only a validated projection cell
       if (hasConditionFlag((e as { title?: string }).title)) continue; // dirty lot, clean floor — never a board seat
       const sdt = (e as { saleDateTime?: string | null }).saleDateTime || (e as { saleDate?: string }).saleDate;
       const closeMs = sdt ? new Date(String(sdt)).getTime() : NaN;
@@ -508,19 +466,6 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
     console.log(`[upcoming] deep value (proj ≥25% under floor, closes ≤3.5d): ${dvCounts}`);
   }
   const out = { generatedAt: new Date().toISOString(), tape, demand, realized, bidComp, recentSold, deepValue, lots: upcoming };
-  // merge fallback-signal pools into comp-evidence.json (engine pools were
-  // written by build-market moments earlier in the same pipeline)
-  if (fallbackEvidence.size) {
-    const evPath = path.join(dataDir, 'comp-evidence.json');
-    let ev: { generatedAt: string; byLot: Record<string, unknown> } = { generatedAt: new Date().toISOString().slice(0, 10), byLot: {} };
-    try { ev = JSON.parse(fs.readFileSync(evPath, 'utf8')); } catch { /* fresh file */ }
-    let added = 0;
-    Array.from(fallbackEvidence.entries()).forEach(([id, rows]) => {
-      if (!ev.byLot[id] && rows.length) { ev.byLot[id] = rows; added++; }
-    });
-    fs.writeFileSync(evPath, JSON.stringify(ev));
-    console.log(`[upcoming] comp evidence: +${added} fallback-signal lots (file now ${Object.keys(ev.byLot).length})`);
-  }
   fs.writeFileSync(path.join(dataDir, 'upcoming.json'), JSON.stringify(out));
   const kb = Math.round(fs.statSync(path.join(dataDir, 'upcoming.json')).size / 1024);
   const recentCounts = Object.keys(recentSold).map(k => `${k}:${recentSold[k].length}`).join(' ');

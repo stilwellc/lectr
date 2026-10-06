@@ -268,3 +268,22 @@ All-in figures (value error, ±30%, band coverage 72.0% holdout / 72.8% live, th
 The flagged-vs-unflagged ordering and the ~21-point edge survive; the levels do not. Within the captured cells the SOLD-only flagged median is +39% (hammer +10%) — survivors there look like survivors everywhere; the drop is the bought-ins counted.
 
 **Per-market cells (byMarket, /value "The record" for a selected market)** are now the headline's population: range-estimate rows in captured cells, bought-ins in the median (n ≥ 50 concluded to publish), 'unflagged' = at-market calls only (above-market calls were being counted as unflagged), with `above` its own arm. Single-figure estimates ("$500+", RR) are a different yardstick (a floor, not a range) and are reported separately as `singleFigure` (sold-only — no single-figure bought-in is ever a target); `soldOnly` keeps the all-house sold arms. The old culture/science/sports cells were 90–99% single-figure RR rows (culture flagged n 30,288 of which 544 range); sports range-estimate flags run −10.7% sold-only, the +26.8% shown was the RR single-figure rows (+38%). Culture, science and sports have no captured range-estimate population (cells under n 50 → medPct null → /value falls back to the global line).
+
+## 12 · OCT 6 2026 ENGINE PASS — the Flags on the hammer basis (`2026.10.06-hammer-basis`)
+
+**12.1 One basis.** House estimates are hammer-basis; comp medians are all-in. The comp/flag ratio compared the two, so "at market" read ≈1.25: the 1.3 'below' threshold sat just past at-market (weak flags) and 0.75 'above' sat 40% under it. With `EngineFlags.hammerBasis` the comps' median is read through the LOT's dated premium inverse (`premiums.lotHammerFromAllIn`) before dividing by the estimate mid, so at-market reads 1 and 1.3 / 0.75 are symmetric. The odds (`beatRatePct`) count a beat only when the HAMMER clears the (house-adjusted) top: backtest-core `calibrationOf` buckets on `fr / pc` and reads `hba` (`hb` raw); the certified buckets' `beat` is the hammer beat (`st.beatBasis = 'hammer'`); validate-engine G1/G2 count hammer beats. `calObs` keeps `cr`/`fr` all-in and adds `pc` (the comps' premium factor at the lot's schedule), `hb`, `hba`, `sf`, `hbs`; rehydration fills them by id lookup (168,022 / 168,022 rows on the Oct 5 corpus). The printed % everywhere reads `flagRatio` (`comps.engineFlagOf`, ComparableModal). `FLAG_GATE.minOddsHammer` = 45 (swept 55 / 45 / 35: 56 / 1,148 / 1,350 flags).
+
+**12.2 Confidence** demotes at most one notch, on the record's error of the PUBLISHED value (`EngineFlags.confOnPublished`): before, every 2026 art / culture / sports value read 'low'.
+
+**12.3 Measured** (oneoff/qa/engine-ab.ts, test year from Oct 1 2025, 4,917 estimate + 1,020 no-estimate lots; ONE yardstick for both: the hammer over the house-adjusted top):
+
+| | house-gate (Oct 3) | hammer-basis (Oct 6) |
+|---|---|---|
+| flags | 2,257 | 1,148 |
+| flag precision (hammer > adjusted top) | 43.4% (printed odds averaged 66) | 49.7% (odds 50) |
+| edge (median hammer / adjusted mid, flagged − unflagged) | 19.0pt | 21.2pt |
+| flagged odds vs realized, per quarter (25Q4 / 26Q1 / Q2 / Q3) | 0.5 / 4.2 / 5.8 / 1.7pt (all-in yardstick) | 1.6 / 0.2 / 3.3 / 0.3pt |
+| value medErr / ±30% / band coverage | 32.3% / 47.7% / 72.0% | 32.3% / 47.8% / 68.2% |
+| tiers (medErr high / medium / low) | 21.7% / 25.2% / 34.6% (n 270 / 682 / 4,985) | 24.1% / 29.1% / 38.0% (n 657 / 2,532 / 2,748) |
+
+Per market the edge rose in art (21.0 → 25.4pt), culture, watches and fell in science (21.0 → 14.2pt) and sports (5.2 → −5.0pt on 39 flags). Live (the Sep 14 book replayed with every Oct 6 change, 948 graded): flagged hammer > high 52.3% → 56.9% vs unflagged 37.0% → 37.8%. Measured and NOT adopted: a 1-year odds half-life (`calHalfLife1y`: 1,047 flags, flagged odds error 1.4 → 3.1pt) and the single-figure estimate kind (`singleFigure`: 1,152 flags, edge and error flat). Counting bought-in lots as misses needs bought-in calObs rows (a full replay) — not done.

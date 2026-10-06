@@ -34,7 +34,13 @@ export {
 /* ══════════════════════════════════════════════════════════════════════════
    FX — dated, reproducible, checked-in.
 
-   A STATIC per-sale-YEAR table (Collin's decision #1). Deterministic, diffable,
+   A STATIC per-sale-YEAR table (Collin's decision #1). 1989 → 2026 (Oct 6
+   2026: extended back from 2000 — 8,121 sold lots from 1989–1999 converted at
+   the 2000 rate, GBP 6–17% low; 1989–1999 = Fed G.5A annual averages via FRED
+   AEXUSUK / AEXSZUS / AEXHKUS / AEXUSAL / AEXCHUS / AEXJPUS / AEXDNUS /
+   AEXSDUS / AEXNOUS / AEXUSEU, USD per unit, the per-USD series inverted; EUR
+   exists from 1999, so an earlier "EUR" figure takes 1999's rate). CNY
+   1989–1993 is the pre-unification official rate (Jan 1994 unification). Deterministic, diffable,
    no live API: a 2015 GBP sale converts at 2015's rate, not today's. Keyed
    [currency][year]; fxRateFor falls back to the NEAREST checked-in year when a
    sale year is missing (e.g. a 2027 pre-sale uses the latest known rate). USD
@@ -46,31 +52,43 @@ export const FX_BY_YEAR: Record<Currency, Record<number, number>> = {
   USD: yearsAll(1.0),
   // GBP→USD annual averages
   GBP: {
+    // 1989–1999: Fed G.5A (FRED) — see the header
+    1989: 1.6382, 1990: 1.7841, 1991: 1.7674, 1992: 1.7663, 1993: 1.5016,
+    1994: 1.5319, 1995: 1.5785, 1996: 1.5607, 1997: 1.6376, 1998: 1.6573,
+    1999: 1.6172,
     2000: 1.516, 2001: 1.441, 2002: 1.503, 2003: 1.635, 2004: 1.833,
     2005: 1.820, 2006: 1.843, 2007: 2.002, 2008: 1.853, 2009: 1.566,
     2010: 1.546, 2011: 1.604, 2012: 1.585, 2013: 1.565, 2014: 1.648,
     2015: 1.528, 2016: 1.355, 2017: 1.289, 2018: 1.335, 2019: 1.277,
     2020: 1.284, 2021: 1.376, 2022: 1.237, 2023: 1.244, 2024: 1.279,
-    // 2025 = annual average of daily fixes (Fed H.10 / ECB reference rates);
-    // 2026 = Jan–Aug YTD average (ECB reference 8 Jan 2026: EUR/USD 1.1675,
-    // EUR/GBP 0.8687 → GBP/USD 1.344; ATO monthly Jan–Feb 2026 cross-checked).
-    // Replaced the 1.300/1.300 placeholders (Sep 2 2026 audit). Re-stamp 2026
-    // with the full-year average in Jan 2027.
-    2025: 1.270, 2026: 1.330,
+    // 2025 (Oct 6 2026, was a 1.270 placeholder): ECB euro reference rates
+    // (eurofxref-hist), annual mean of the daily USD/GBP cross = 1.3184; Fed
+    // G.5A (FRED AEXUSUK) 1.3192. 2026 = Jan–Aug YTD average (ECB reference
+    // 8 Jan 2026: EUR/USD 1.1675, EUR/GBP 0.8687 → GBP/USD 1.344; ATO monthly
+    // Jan–Feb 2026 cross-checked). Re-stamp 2026 with the full-year average
+    // in Jan 2027.
+    2025: 1.318, 2026: 1.330,
   },
   // EUR→USD annual averages
   EUR: {
+    // 1989–1999: Fed G.5A (FRED) — see the header
+    1999: 1.0653,
     2000: 0.924, 2001: 0.896, 2002: 0.946, 2003: 1.131, 2004: 1.244,
     2005: 1.245, 2006: 1.256, 2007: 1.371, 2008: 1.471, 2009: 1.393,
     2010: 1.326, 2011: 1.392, 2012: 1.286, 2013: 1.328, 2014: 1.329,
     2015: 1.110, 2016: 1.107, 2017: 1.130, 2018: 1.181, 2019: 1.120,
     2020: 1.142, 2021: 1.183, 2022: 1.053, 2023: 1.082, 2024: 1.082,
-    // 2025 annual avg / 2026 Jan–Aug YTD (ECB reference 8 Jan 2026: 1.1675;
-    // dollar softened through H1) — placeholders 1.080/1.080 replaced Sep 2 2026
-    2025: 1.080, 2026: 1.150,
+    // 2025 (Oct 6 2026, was a 1.080 placeholder): ECB reference-rate annual
+    // mean 1.1300; Fed G.5A (FRED AEXUSEU) 1.1306. 2026 Jan–Aug YTD (ECB
+    // reference 8 Jan 2026: 1.1675; dollar softened through H1)
+    2025: 1.130, 2026: 1.150,
   },
   // HKD→USD (HKD is pegged ~7.75–7.85/USD → ~0.128 USD)
   HKD: {
+    // 1989–1999: Fed G.5A (FRED) — see the header
+    1989: 0.1282, 1990: 0.1284, 1991: 0.1287, 1992: 0.1292, 1993: 0.1293,
+    1994: 0.1294, 1995: 0.1293, 1996: 0.1293, 1997: 0.1291, 1998: 0.1291,
+    1999: 0.1289,
     2000: 0.128, 2001: 0.128, 2002: 0.128, 2003: 0.128, 2004: 0.128,
     2005: 0.129, 2006: 0.129, 2007: 0.128, 2008: 0.128, 2009: 0.129,
     2010: 0.129, 2011: 0.128, 2012: 0.129, 2013: 0.129, 2014: 0.129,
@@ -81,6 +99,10 @@ export const FX_BY_YEAR: Record<Currency, Record<number, number>> = {
   },
   // AUD→USD annual averages
   AUD: {
+    // 1989–1999: Fed G.5A (FRED) — see the header
+    1989: 0.7919, 1990: 0.7807, 1991: 0.7787, 1992: 0.7352, 1993: 0.6799,
+    1994: 0.7316, 1995: 0.7407, 1996: 0.7828, 1997: 0.7437, 1998: 0.6291,
+    1999: 0.6454,
     2000: 0.581, 2001: 0.518, 2002: 0.543, 2003: 0.654, 2004: 0.736,
     2005: 0.762, 2006: 0.753, 2007: 0.839, 2008: 0.853, 2009: 0.792,
     2010: 0.920, 2011: 1.033, 2012: 1.036, 2013: 0.968, 2014: 0.903,
@@ -92,6 +114,10 @@ export const FX_BY_YEAR: Record<Currency, Record<number, number>> = {
   },
   // CHF→USD annual averages
   CHF: {
+    // 1989–1999: Fed G.5A (FRED) — see the header
+    1989: 0.6109, 1990: 0.7194, 1991: 0.6966, 1992: 0.7110, 1993: 0.6765,
+    1994: 0.7317, 1995: 0.8466, 1996: 0.8090, 1997: 0.6890, 1998: 0.6894,
+    1999: 0.6647,
     2000: 0.593, 2001: 0.593, 2002: 0.643, 2003: 0.743, 2004: 0.804,
     2005: 0.803, 2006: 0.798, 2007: 0.834, 2008: 0.924, 2009: 0.921,
     2010: 0.961, 2011: 1.130, 2012: 1.066, 2013: 1.079, 2014: 1.093,
@@ -103,6 +129,10 @@ export const FX_BY_YEAR: Record<Currency, Record<number, number>> = {
   },
   // CNY→USD annual averages
   CNY: {
+    // 1989–1999: Fed G.5A (FRED) — see the header
+    1989: 0.2654, 1990: 0.2087, 1991: 0.1875, 1992: 0.1811, 1993: 0.1730,
+    1994: 0.1157, 1995: 0.1195, 1996: 0.1199, 1997: 0.1202, 1998: 0.1205,
+    1999: 0.1208,
     2000: 0.121, 2001: 0.121, 2002: 0.121, 2003: 0.121, 2004: 0.121,
     2005: 0.122, 2006: 0.125, 2007: 0.132, 2008: 0.144, 2009: 0.146,
     2010: 0.148, 2011: 0.155, 2012: 0.158, 2013: 0.163, 2014: 0.163,
@@ -112,11 +142,73 @@ export const FX_BY_YEAR: Record<Currency, Record<number, number>> = {
     // ≈6.9 ⇒ 0.145 (ATO Jan 2026: 1 AUD = 4.8825 CNY at AUD ≈0.71 USD)
     2025: 0.139, 2026: 0.145,
   },
+  /* (Oct 6 2026) DKK / SEK / NOK / JPY — Bruun Rasmussen (Bonhams' Copenhagen
+     brand) estimates arrived as DKK and, with no DKK row here, were relabelled
+     USD at fxRate 1 (~6.5× too high). SOURCE: Federal Reserve G.5A annual
+     averages of the H.10 noon buying rates (federalreserve.gov/releases/g5a;
+     republished as FRED AEXDNUS / AEXSDUS / AEXNOUS / AEXJPUS), inverted to
+     USD per unit (1 ÷ the annual average of currency-per-USD; cross-checked
+     against our own average of the daily DEXDNUS/DEXSDUS/DEXNOUS/DEXJPUS
+     series — identical to 4 decimals 2000–2025). 2026 = Jan 2 – Sep 30 2026
+     average of the daily H.10 rates (188 business days). 4 decimals (JPY 6:
+     a yen is under 1¢). Re-stamp 2026 with the full-year G.5A in Jan 2027. */
+  // DKK→USD (Danish krone)
+  DKK: {
+    // 1989–1999: Fed G.5A (FRED) — see the header
+    1989: 0.1366, 1990: 0.1616, 1991: 0.1562, 1992: 0.1656, 1993: 0.1542,
+    1994: 0.1573, 1995: 0.1786, 1996: 0.1724, 1997: 0.1513, 1998: 0.1492,
+    1999: 0.1431,
+    2000: 0.1235, 2001: 0.1200, 2002: 0.1268, 2003: 0.1520, 2004: 0.1670,
+    2005: 0.1668, 2006: 0.1683, 2007: 0.1838, 2008: 0.1965, 2009: 0.1867,
+    2010: 0.1777, 2011: 0.1868, 2012: 0.1726, 2013: 0.1780, 2014: 0.1781,
+    2015: 0.1487, 2016: 0.1486, 2017: 0.1516, 2018: 0.1584, 2019: 0.1499,
+    2020: 0.1528, 2021: 0.1590, 2022: 0.1413, 2023: 0.1451, 2024: 0.1450,
+    2025: 0.1512, 2026: 0.1554,
+  },
+  // SEK→USD (Swedish krona)
+  SEK: {
+    // 1989–1999: Fed G.5A (FRED) — see the header
+    1989: 0.1549, 1990: 0.1688, 1991: 0.1652, 1992: 0.1717, 1993: 0.1283,
+    1994: 0.1296, 1995: 0.1400, 1996: 0.1491, 1997: 0.1308, 1998: 0.1258,
+    1999: 0.1209,
+    2000: 0.1090, 2001: 0.0967, 2002: 0.1028, 2003: 0.1238, 2004: 0.1361,
+    2005: 0.1339, 2006: 0.1357, 2007: 0.1480, 2008: 0.1519, 2009: 0.1307,
+    2010: 0.1388, 2011: 0.1541, 2012: 0.1477, 2013: 0.1536, 2014: 0.1458,
+    2015: 0.1186, 2016: 0.1169, 2017: 0.1171, 2018: 0.1150, 2019: 0.1057,
+    2020: 0.1085, 2021: 0.1165, 2022: 0.0988, 2023: 0.0943, 2024: 0.0946,
+    2025: 0.1020, 2026: 0.1065,
+  },
+  // NOK→USD (Norwegian krone)
+  NOK: {
+    // 1989–1999: Fed G.5A (FRED) — see the header
+    1989: 0.1447, 1990: 0.1597, 1991: 0.1541, 1992: 0.1609, 1993: 0.1408,
+    1994: 0.1417, 1995: 0.1578, 1996: 0.1548, 1997: 0.1411, 1998: 0.1324,
+    1999: 0.1281,
+    2000: 0.1135, 2001: 0.1112, 2002: 0.1253, 2003: 0.1412, 2004: 0.1484,
+    2005: 0.1553, 2006: 0.1560, 2007: 0.1708, 2008: 0.1774, 2009: 0.1590,
+    2010: 0.1654, 2011: 0.1785, 2012: 0.1719, 2013: 0.1701, 2014: 0.1588,
+    2015: 0.1239, 2016: 0.1191, 2017: 0.1209, 2018: 0.1230, 2019: 0.1136,
+    2020: 0.1061, 2021: 0.1163, 2022: 0.1040, 2023: 0.0946, 2024: 0.0930,
+    2025: 0.0963, 2026: 0.1047,
+  },
+  // JPY→USD (yen)
+  JPY: {
+    // 1989–1999: Fed G.5A (FRED) — see the header
+    1989: 0.007243, 1990: 0.006897, 1991: 0.007430, 1992: 0.007888, 1993: 0.009003,
+    1994: 0.009787, 1995: 0.010642, 1996: 0.009193, 1997: 0.008260, 1998: 0.007634,
+    1999: 0.008792,
+    2000: 0.009276, 2001: 0.008226, 2002: 0.007986, 2003: 0.008625, 2004: 0.009246,
+    2005: 0.009082, 2006: 0.008598, 2007: 0.008492, 2008: 0.009672, 2009: 0.010674,
+    2010: 0.011392, 2011: 0.012548, 2012: 0.012529, 2013: 0.010246, 2014: 0.009457,
+    2015: 0.008261, 2016: 0.009203, 2017: 0.008921, 2018: 0.009058, 2019: 0.009173,
+    2020: 0.009365, 2021: 0.009104, 2022: 0.007607, 2023: 0.007117, 2024: 0.006603,
+    2025: 0.006686, 2026: 0.006308,
+  },
 };
 
 function yearsAll(v: number): Record<number, number> {
   const o: Record<number, number> = {};
-  for (let y = 2000; y <= 2026; y++) o[y] = v;
+  for (let y = 1989; y <= 2026; y++) o[y] = v;
   return o;
 }
 
