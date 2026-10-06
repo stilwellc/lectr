@@ -27,7 +27,7 @@ import { weightedMedian, quantileSorted } from './stats';
 import { lotShapeOf, shapesCompatible, isCompExcluded } from './comps';
 import type { CardGateCell } from './cards-gate';
 import { numericWatchRef, editionIdentityKey, isEditionLot, WATCH_SLUGS } from './identity';
-import { compBoundaryFault, compPurityFault, isIdentityLessTitle, isIdentityLessArtTarget, sameWorkComp, mediumFamilyMatch } from './comp-purity';
+import { compBoundaryFault, compPurityFault, isIdentityLessTitle, isIdentityLessArtTarget, sameWorkComp, mediumFamilyMatch, objectBoundaryFault, isBareSubjectTitle, type Boundary5Rules } from './comp-purity';
 
 /** THE signal-label vocabulary — one source (P2, Sep 2 2026). Re-exported from
  *  lanes.ts; UI files that hardcode the strings should import from there
@@ -203,6 +203,21 @@ export interface EngineFlags {
    *  only (Sep 24 tape: floored lots closing within 24h realized 1.00× the
    *  bid, 10 of 14 exactly at it) */
   bidLift24h?: boolean;
+  /** (Oct 6, pricing wave 5) OBJECT-TYPE BOUNDARIES (comp-purity
+   *  objectBoundaryFault, the BOUNDARY5 rules): a cut signature never prices
+   *  a letter, a manuscript never a letter, another space mission or flight
+   *  status, a subject-only archive title ("Woodrow Wilson") never prices an
+   *  object, jewelry / material culture never priced by paper (the work /
+   *  colorway rules are measured and off — §16) */
+  objectBoundary?: boolean;
+  /** (Oct 6, pricing wave 5) a memorabilia target whose own title is only a
+   *  subject (comp-purity.isBareSubjectTitle) abstains ('identity-less') when
+   *  its comps span more than MEM_ID_LESS.spread× (0 = always) */
+  memIdLessAbstain?: boolean;
+  /** (Oct 6, pricing wave 5) another named work of the suite / another
+   *  colorway (comp-purity workConflict / colorConflict) is a PURITY fault —
+   *  it carries no directional call; the value pool keeps it */
+  workPurity?: boolean;
 }
 /** The engine before the Oct 3 pass (raw-estimate Flags, premium-only
  *  anchor, ungated card tiers) — kept so the harnesses can replay it. */
@@ -266,12 +281,30 @@ export const ENGINE_FLAGS_WAVE3: EngineFlags = {
  *  inside the final day. Measured per rule on the wave-3 engine
  *  (docs/ENGINE_LANES.md §15). Measured and NOT adopted: sameWork (no live
  *  lot qualifies), mediumKnownPool (live worse), bidLiftOff (Sep 14 tape
- *  worse). */
-export const ENGINE_FLAGS_CURRENT: EngineFlags = {
+ *  worse). Kept so the harnesses can replay it. */
+export const ENGINE_FLAGS_WAVE4: EngineFlags = {
   ...ENGINE_FLAGS_WAVE3,
   version: '2026.10.06-wave4',
   partialHabit: true, poolScale: true, flagHold: true, cardBandWide: true, uncalNoOdds: true, bidLift24h: true,
 };
+/** (Oct 6 2026, pricing wave 5) OBJECT-TYPE BOUNDARIES: a cut signature
+ *  never prices a letter, a manuscript never anything else, another space
+ *  mission or flight status, a subject-only archive title never prices an
+ *  object, jewelry / material culture never priced by paper or photographs
+ *  (BOUNDARY5); a subject-only memorabilia title abstains. Measured on the
+ *  wave-4 engine (docs/ENGINE_LANES.md §16): hand-judged TEST comps wrong
+ *  17.0% → 15.0% (culture 8.9 → 6.0%); holdout same-lot medErr 31.7 →
+ *  31.6%, 133 values withdrawn at 56.8% medErr, flags precision 54.0 →
+ *  54.1%, edge 24.3 → 25.3pt; live Sep 14 medErr 22.8% = 22.8% (14
+ *  withdrawn at 32.7%), flag hit rate 67.1 → 67.9%; Sep 24 unchanged.
+ *  Measured and NOT adopted: the work / colorway boundaries in the pool and
+ *  as purity faults (workPurity), bulk, stamped unique-vs-multiple. */
+export const ENGINE_FLAGS_WAVE5: EngineFlags = {
+  ...ENGINE_FLAGS_WAVE4,
+  version: '2026.10.06-wave5',
+  objectBoundary: true, memIdLessAbstain: true,
+};
+export const ENGINE_FLAGS_CURRENT: EngineFlags = ENGINE_FLAGS_WAVE5;
 /** The candidate under evaluation. Equal to CURRENT's flags when nothing is
  *  pending — a candidate run then reports a no-op comparison. */
 export const ENGINE_FLAGS_CANDIDATE: EngineFlags = { ...ENGINE_FLAGS_CURRENT, version: `${ENGINE_FLAGS_CURRENT.version}+cand` };
@@ -811,6 +844,13 @@ export const STALE_FLOOR = { ageY: 5, allIn: 0 };
  *  quantity is OFF: measured, it cost the holdout culture cell (medErr 29.1
  *  → 29.6%, edge 31.9 → 31.0pt) */
 export const BOUNDARY2 = { designator: 1, catalogue: 1, unit: 1, quantity: 0 };
+/** (wave 5) EngineFlags.objectBoundary's sub-rules (1 = on) — the harness
+ *  sweep (comp-purity.Boundary5Rules) */
+export const BOUNDARY5: Required<Boundary5Rules> = { format: 1, idLessComp: 1, idLessArt: 0, mission: 1, flight: 1, jewelry: 1, work: 0, color: 0, stampedUnique: 0, bulk: 0 };
+/** (wave 5) EngineFlags.memIdLessAbstain: the comp spread (max / min of the
+ *  top comps) past which a subject-only memorabilia title abstains; 0 =
+ *  abstain whenever the title names no object */
+export const MEM_ID_LESS = { spread: 0 };
 /** (wave 3) EngineFlags.cardThinMedian: the exact-tier pool size at or under
  *  which the plain median prices the card */
 export const CARD_THIN = { n: 3 };
@@ -940,7 +980,9 @@ export function estimateValueEx(
   // unsigned, another subject, another designator, another object class —
   // never enters either gate's pool (comp-purity.compBoundaryFault)
   const bOpts = { ext: !!FLAGS.boundary2, watchVariant: !!FLAGS.watchVariant, rules: BOUNDARY2 };
-  const src = FLAGS.compBoundary ? comps.filter(c => !c.lot || !compBoundaryFault(lot, c.lot, bOpts)) : comps;
+  let src = FLAGS.compBoundary ? comps.filter(c => !c.lot || !compBoundaryFault(lot, c.lot, bOpts)) : comps;
+  // (Oct 6, wave 5, FLAGS.objectBoundary) the object-type boundaries
+  if (FLAGS.objectBoundary) src = src.filter(c => !c.lot || !objectBoundaryFault(lot, c.lot, BOUNDARY5));
   let pool = src
     .filter(c => passesGate(c.match) && c.realizedUsd > 0)
     .sort((a, b) => b.match.score - a.match.score);
@@ -968,7 +1010,7 @@ export function estimateValueEx(
   const targetIdLess = FLAGS.purityGate || FLAGS.purityPool ? isIdentityLessTitle(lot) : false;
   const pureOf = (cs: Comp[]): Comp[] => {
     if (targetIdLess) return [];
-    const st = cs.filter(c => ageYOf(c) <= PURITY.maxAgeY && !(c.lot && compPurityFault(lot, c.lot)));
+    const st = cs.filter(c => ageYOf(c) <= PURITY.maxAgeY && !(c.lot && compPurityFault(lot, c.lot, !!FLAGS.workPurity)));
     if (!st.length) return st;
     const m = quantile(st.map(c => c.realizedUsd).sort((a, b) => a - b), 0.5);
     return st.filter(c => c.realizedUsd <= m * PURITY.band && c.realizedUsd >= m / PURITY.band);
@@ -986,6 +1028,13 @@ export function estimateValueEx(
   if (FLAGS.idLessAbstain && isIdentityLessArtTarget(lot)) {
     const ps = top.map(c => c.realizedUsd).filter(p => p > 0);
     if (ps.length && Math.max(...ps) / Math.min(...ps) > ID_LESS.spread) return { value: null, abstain: 'identity-less' };
+  }
+  // (Oct 6, wave 5, FLAGS.memIdLessAbstain) a memorabilia title that is only
+  // its subject ("Woodrow Wilson") names no object: the same row is a cut
+  // signature or a signed photograph — no value
+  if (FLAGS.memIdLessAbstain && isBareSubjectTitle(lot)) {
+    const ps = top.map(c => c.realizedUsd).filter(p => p > 0);
+    if (!MEM_ID_LESS.spread || (ps.length && Math.max(...ps) / Math.min(...ps) > MEM_ID_LESS.spread)) return { value: null, abstain: 'identity-less' };
   }
   // (Oct 6, FLAGS.weightCap) a pool whose every comp is older than
   // PURITY.maxAgeY says nothing about today's price

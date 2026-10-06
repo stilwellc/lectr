@@ -365,3 +365,41 @@ Per market the edge rose in art (21.0 → 25.4pt), culture, watches and fell in 
 - Bonhams (live bias 1.57, n 11) and Phillips (live engine 23.7% vs house estimate 16.1%, n 36): holdout Bonhams 29.3% vs house mid 30.4% (n 388), Phillips 24.1% vs 26.7% (n 375) — the live gaps are one hot sale and n 36; no change.
 
 **Client (NEEDS-REVIEW commit, separate):** lotMaxBid prints the engine's value.maxBidUsd only (no 0.85 × card-median floor, no maxHammerFor(low) on ×5-faulted values); lanes.valueFloor drops the card-median branch; LotPage / ComparableModal / /profile / /value no longer import appraiseLot, signalWithPool or soldCompBand (scripts/__tests__/client-fallbacks.test.ts fails if anything under app/ does); pack.a / pack.ap ship only for engine-valued lots; the intraday close-board bid re-floors the value (floorAtBid). For the owner: CalibrationCurve.tsx still labels the odds "beat the high estimate, all-in" — since §12 they are the HAMMER over the house-adjusted top (label text not changed here).
+
+## 16 · OCT 6 2026 PRICING WAVE 5 — object-type comp boundaries (`2026.10.06-wave5`)
+
+**Why.** The round-2 re-audit judged 200 live comp sets (1,175 comps): 31% good / 47% acceptable / 22% wrong; cards 99% good, non-card 24% wrong (Hake's 85%, Sotheby's 60%, Christie's 38%). The wrong comps are different objects sharing a person or maker's name, RR's subject-only archive titles ("Woodrow Wilson"), and unique works mixed with multiples.
+
+**Harness.** `oneoff/qa/comp-precision.ts` re-runs today's pool selection (backtest-core.compsOne → estimateValueEx, Oct 5 corpus with categorization wave 3) on every hand-judged lot of the three comp audits (600 lots, 3,864 per-comp verdicts; the latest round wins). It scores the pool each engine serves against the verdicts and lists the judged pairs a rule drops, by grade. It also reports expected hammer vs the appraiser's hammer. DEV / TEST is md5(lot id) parity. Rules were tuned on DEV only. Cards are out of scope: they price on their own key and judged 99% good.
+
+**Adopted** (`EngineFlags.objectBoundary` with `BOUNDARY5`, and `memIdLessAbstain`; readers in comp-purity.ts):
+- **Paper format** (`paperFormatOf`): a cut signature never prices a letter, and the reverse; a manuscript never prices anything else. On DEV, letter ~ signature judged 12 wrong / 10 acceptable / 0 good, and manuscript ~ letter 10 / 0 / 0. Letter ~ document ~ check stays one family (19 good or acceptable, 0 wrong). Signature ~ signed document also stays (16 acceptable / 7 wrong).
+- **Subject-only titles** (`isBareSubjectTitle`): the bare-name reader, confirmed by the lot's own stamps. The title (or either side of a topic colon) is the lot's subject / entity / player, or it has ≤ 2 words that name no object. Such a comp never prices an object-naming target. A memorabilia TARGET with such a title abstains (`'identity-less'`).
+- **Space missions and flight status** (`missionsOf`, `flightOf`): a mission is a designator across programs too (Skylab 2 ≠ Apollo 11). Lunar-surface flown, flown and unflown are three markets.
+- **Jewelry / material culture** (`objectClassesOf5`): bracelets, charms, fobs, pinbacks and ribbons (Hake's) are never priced by paper or photographs.
+
+**Measured** on the wave-4 engine:
+
+| | wave 4 | wave 5 (adopted) |
+|---|---|---|
+| judged TEST comps in today's pools, wrong share (non-card) | 17.0% (867 judged) | 15.0% (805) |
+| · culture / science | 8.9% / 30.2% | 6.0% / 28.6% |
+| · RR / Christie's / Sotheby's / Wright | 14.2 / 18.1 / 30.0 / 16.4% | 11.2 / 18.1 / 30.0 / 16.4% |
+| · Hake's (3 judged comps, 1 lot) | 100% | lot abstains |
+| judged DEV comps wrong share | 14.7% | 9.2% |
+| judged TEST pairs dropped (good / acceptable / wrong) | — | 7 / 22 / 55 of 560 / 837 / 382 |
+| TEST judged lots valued; appraiser error (same lots) | 198; 16.9% | 191; 16.9% (8 withdrawn at 19.2%) |
+| holdout values (all) / same-lot medErr / ±30% | 5,655 / 31.6% / 48.4% | 5,528 / 31.6% / 48.4% |
+| holdout withdrawn / changed | — | 133 at 56.8% medErr (55 Sotheby's science at 96%) / 138: 43.7 → 40.1% |
+| holdout flags / precision / edge (adj) | 591 / 54.0% / 24.3pt | 591 / 54.1% / 25.3pt |
+| live Sep 14 values / medErr / band | 947 / 22.8% / 75.3% | 933 / 22.8% / 75.5% (14 withdrawn at 32.7%) |
+| live Sep 14 flags hammer > high | 79: 67.1% | 78: 67.9% |
+| live Sep 24 | 337 / 18.8% | unchanged (no lot touched) |
+
+On the 17 changed Sep 14 values, error went 20.7% → 22.0% (n small). Judged "acceptable" comps are dropped too (the pool loses close but not exact objects). The holdout same-lot error does not move.
+
+**Measured and NOT adopted:**
+- **Another named work of a suite** (`workConflict`: each title carries a content word the other lacks, e.g. "Minotaure caressant une femme" vs "Minotaure, buveur et femmes"). Also **another colorway** (`colorConflict`, "Balloon Dog (Red)" vs "(Blue)"). On DEV it dropped 26 wrong / 7 acceptable / 2 good pairs. But in the pool, holdout art went 27.2 → 27.5% on the same lots, with 57 art values withdrawn at ~27% (no worse than the values kept). As a purity fault only (`workPurity`): holdout art flags 213 → 184 (precision 53.5 → 53.8%), and live Sep 24 lost a correct flag (61.5 → 58.3%). Plates of one portfolio often trade alike (judged good: "Homage to Euclid" vs other La mémoire élémentaire plates). Art TEST wrong share therefore stays 21.9%; Christie's / Sotheby's art needs a price-aware or catalogue-aware test, not a title test.
+- **Bulk** (count ≥ 3 / collection / archive vs one): DEV 8 wrong / 16 acceptable (the wave-3 quantity rule was rejected on the holdout too).
+- **Stamped unique vs multiple** (art subCat originals vs prints) and **subject-only art comps**: no comp in today's pools (the formKey gate already separates them).
+- **Known misses, seen on TEST, not tuned:** "Apollo 17 Lunar Flown Checklist Page" reads as plain 'flown', so 6 good lunar-surface comps were dropped. "USS Constitution Ashtray" is a 2-word object title read as subject-only.

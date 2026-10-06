@@ -37,8 +37,10 @@ import { ART_SLUGS, WATCH_SLUGS, AUTOGRAPH_SLUGS, editionIdentityKey, editionCla
 import { canonMedium } from './normalize';
 
 export type PurityLot = Pick<AuctionLot, 'artist' | 'title'> & Partial<Pick<AuctionLot,
-  'medium' | 'mediumCanon' | 'formKey' | 'description' | 'saleName' | 'category' | 'entity' | 'entityClass'>> & {
+  'medium' | 'mediumCanon' | 'formKey' | 'description' | 'saleName' | 'category' | 'entity' | 'entityClass' | 'subCat' | 'drill'>> & {
   playerSlug?: string | null;
+  /** culture item class (corpus-normalize stampCultureAxes) */
+  itemClass?: string | null;
 };
 
 const MARKET_OF = new Map<string, string>(ARTISTS.map(a => [a.slug, a.market]));
@@ -102,6 +104,34 @@ export function isIdentityLessTitle(l: PurityLot): boolean {
   return false;
 }
 
+/** Object nouns the wave-2 OBJECT_WORD list lacks — a Title Case object
+ *  name ("Cosmonaut Suit", "Ed Sullivan Emmy Award Nomination") is not a
+ *  bare person name. */
+const OBJECT_WORD_5 = /\b(?:awards?|nominations?|suits?|spacesuits?|valves?|computers?|modules?|panels?|switch(?:es)?|spacecraft|capsules?|parachutes?|tools?|instruments?|cameras?|lenses?|meteorites?|fossils?|rocks?|samples?|fabric|beta cloth|bills?|currency|notes?|stamps?|buttons?|pinbacks?|bracelets?|charms?|fobs?|ribbons?|toys?|dolls?|banners?|pennants?|robes?|belts?|boots?|scarf|scarves|sunglasses|glasses|spectacles|chairs?|desks?|tables?|lamps?|clocks?)\b/i;
+const keyOf = (s: string) => fold(s.toLowerCase()).replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+/** (wave 5, EngineFlags.objectBoundary / memIdLessAbstain) A memorabilia
+ *  title that is only a SUBJECT — the bare-name reader's shape, confirmed:
+ *  the title (or either side of a topic colon) IS the lot's own stamped
+ *  subject / entity / player ("Woodrow Wilson", "Rod Steiger", "Vivien Leigh
+ *  and Laurence Olivier", "John F. Kennedy: John Jr and Caroline"), or a
+ *  title of at most two words naming no object ("Gemini", "Project
+ *  Gemini"). RR's 2003–2010 archive titles a lot by its subject alone: the
+ *  same "Woodrow Wilson" row is a cut signature or a signed photograph. */
+export function isBareSubjectTitle(l: PurityLot): boolean {
+  if (!isMemorabiliaLot(l)) return false;
+  const t = (l.title || '').trim();
+  if (!t) return false;
+  if (/^\[[^\]]*\]\.?$/.test(t)) return true;
+  if (!isBareNameTitle(t) || OBJECT_WORD_5.test(t)) return false;
+  const whole = keyOf(t);
+  if (whole.split(' ').length <= 2) return true;
+  const i = t.indexOf(':');
+  const segs = [whole, ...(i > 0 ? [keyOf(t.slice(0, i)), keyOf(t.slice(i + 1))] : [])];
+  const x = l as PurityLot & { subjectKeys?: string[] | null; playerName?: string | null };
+  const keys = new Set([...(x.subjectKeys || []), x.entity || '', x.playerName || '', (x.playerSlug || '').replace(/-/g, ' ')].map(keyOf).filter(Boolean));
+  return segs.some(s => keys.has(s) || Array.from(keys).some(k => k.includes(' ') && s.startsWith(k + ' ')));
+}
+
 /* ── medium family + edition class ────────────────────────────────────── */
 const MEDIUM_FAMILY: Record<string, string> = {
   'gelatin-silver-print': 'photo', 'c-print': 'photo', cibachrome: 'photo', polaroid: 'photo', inkjet: 'photo', photograph: 'photo',
@@ -150,8 +180,11 @@ export function mediumFamilyMatch(t: PurityLot, c: PurityLot): boolean | null {
 /** The static PURITY fault of comp `c` for target `t` (EngineFlags.purityGate),
  *  or null when the comp may carry a call. Recency and the geomedian band
  *  are pool-level and checked by the engine. */
-export function compPurityFault(t: PurityLot, c: PurityLot): 'identity-less' | 'medium' | 'edition' | null {
+export function compPurityFault(t: PurityLot, c: PurityLot, work = false): 'identity-less' | 'medium' | 'edition' | 'work' | null {
   if (isIdentityLessTitle(c)) return 'identity-less';
+  // (wave 5, EngineFlags.workPurity) another named work / colorway of the
+  // suite carries no call (it stays in the value pool)
+  if (work && (workConflict(t, c) || colorConflict(t, c))) return 'work';
   return mediumConflict(t, c);
 }
 
@@ -454,4 +487,194 @@ export function sameWorkComp(t: WorkLot, c: WorkLot, dimTol = 0.1): boolean {
   if (!a || !b) return false;
   const near = (x: number, y: number) => Math.abs(x - y) <= dimTol * Math.max(x, y);
   return near(a[0], b[0]) && near(a[1], b[1]);
+}
+
+/* ── wave 5 (Oct 6 2026): OBJECT-TYPE BOUNDARIES ─────────────────────────
+   The round-2 re-audit (1,175 comps across 200 live lots) still read 22%
+   wrong, 24% outside the cards: a letter priced by bare signatures, a
+   handwritten manuscript page by letters, a Skylab 2 medallion by Apollo 11
+   ones, a charm bracelet by RR's bare "John F. Kennedy" rows, one Vollard
+   plate by another plate of the suite. Each reader below is a text fact on
+   both titles (plus the classify stamps where they are evidence); each
+   abstains when either side says nothing. */
+
+/** The PAPER FORMAT a memorabilia title sells — finer than the 'paper'
+ *  object class: a handwritten manuscript page, a letter, a check, a
+ *  document, a bare signature. The first named wins in that order ("Letter
+ *  Signed" is a letter, "Signed Document" a document, "Signature" a cut). */
+const PAPER_FORMATS: [string, RegExp][] = [
+  ['manuscript', /\b(?:manuscripts?|holograph|handwritten (?:notes?|lyrics?|drafts?|pages?|poems?|speech|music|score)|musical (?:quotation|manuscript)|lyrics? (?:sheet|page)|AMQS|AMS)\b/i],
+  ['letter', /\b(?:letters?|ALS|TLS|LS|ANS|note signed|notes signed)\b/i],
+  ['check', /\b(?:checks?|cheques?)\b/i],
+  ['document', /\b(?:documents?|DS|contracts?|commissions?|land grants?|deeds?|pardons?|appointments?|passports?|agreements?|military discharge|indentures?|warrants?|bonds?|stock certificates?)\b/i],
+  ['signature', /\b(?:signatures?|cut signature|signed (?:card|index card|album page|slip|sheet of paper|government card|white house card))\b/i],
+];
+export function paperFormatOf(title: string | null | undefined): string | null {
+  const t = title || '';
+  if (!t.trim()) return null;
+  for (const [k, re] of PAPER_FORMATS) if (re.test(t)) return k;
+  return null;
+}
+/** The format pairs that are different markets (judged DEV pairs: letter ~
+ *  signature 12 wrong / 10 acceptable / 0 good, manuscript ~ letter 10 / 0 /
+ *  0): a cut signature never prices a letter (or the reverse), a manuscript
+ *  never prices anything else. Letter ~ document ~ check stay one family
+ *  (19 good / acceptable, 0 wrong), and a signature ~ a signed document
+ *  reads acceptable (16 / 7). */
+export function paperFormatConflict(a: string | null | undefined, b: string | null | undefined): boolean {
+  const fa = paperFormatOf(a), fb = paperFormatOf(b);
+  if (!fa || !fb || fa === fb) return false;
+  if (fa === 'manuscript' || fb === 'manuscript') return true;
+  return (fa === 'signature' && fb === 'letter') || (fa === 'letter' && fb === 'signature');
+}
+
+/** Space MISSIONS a title names ("apollo 11", "skylab 2", "sts 41", "gemini
+ *  7", "expedition 7"): a mission is a designator ACROSS programs too — a
+ *  Skylab 2 medallion is not an Apollo 11 one. A range ("STS-1-STS-5")
+ *  names every mission in it. */
+const MISSION_RE = /\b(apollo|gemini|mercury|skylab|sts|soyuz|vostok|voskhod|expedition|artemis|salyut|shenzhou)[ -]?(\d{1,3})\b/g;
+export function missionsOf(title: string | null | undefined): Set<string> {
+  const t = fold((title || '').toLowerCase()).replace(/\s+/g, ' ');
+  const out = new Set<string>();
+  for (const m of Array.from(t.matchAll(MISSION_RE))) out.add(`${m[1]}${+m[2]}`);
+  const rg = t.match(/\b(apollo|gemini|mercury|skylab|sts)[ -]?(\d{1,3})\s*(?:-|–|to|through)\s*(?:\1[ -]?)?(\d{1,3})\b/);
+  if (rg && +rg[3] > +rg[2] && +rg[3] - +rg[2] < 200) for (let i = +rg[2]; i <= +rg[3]; i++) out.add(`${rg[1]}${i}`);
+  return out;
+}
+export function missionConflict(a: string | null | undefined, b: string | null | undefined): boolean {
+  const ma = missionsOf(a);
+  if (!ma.size) return false;
+  const mb = missionsOf(b);
+  if (!mb.size) return false;
+  let shared = false;
+  ma.forEach(k => { if (mb.has(k)) shared = true; });
+  return !shared;
+}
+/** Flight status a space title states: 'surface' (carried to the lunar
+ *  surface — its own market), 'flown', 'unflown', or null. */
+export function flightOf(title: string | null | undefined): 'surface' | 'flown' | 'unflown' | null {
+  const t = (title || '').toLowerCase();
+  if (/\bun-?flown\b|\bnot flown\b|\bnon-?flown\b/.test(t)) return 'unflown';
+  if (/\blunar[- ]surface\b|\bsurface[- ](?:flown|carried)\b/.test(t)) return 'surface';
+  if (/\bflown\b|\bcarried (?:aboard|on|in space)\b/.test(t)) return 'flown';
+  return null;
+}
+export function flightConflict(a: string | null | undefined, b: string | null | undefined): boolean {
+  const fa = flightOf(a), fb = flightOf(b);
+  return !!fa && !!fb && fa !== fb;
+}
+
+/** Jewelry / personal accessories (Hake's charm bracelets, fobs) and
+ *  Hake's-style material culture (pinbacks, ribbons, banks, toys) — object
+ *  classes the wave-2 table had no word for. */
+const JEWELRY_RE = /\b(?:bracelets?|charms?|necklaces?|brooch(?:es)?|pendants?|earrings?|cuff ?links?|tie (?:clips?|bars?|tacks?)|lockets?|fobs?|stickpins?)\b/i;
+const MATERIAL_CULTURE_RE = /\b(?:pinbacks?|buttons?|celluloids?|ribbons?|banks?|toys?|dolls?|figurines?|games?|puzzles?|lunch ?box(?:es)?|bandannas?|neckties?|mugs?|bottles?)\b/i;
+export function objectClassesOf5(title: string | null | undefined): Set<string> {
+  const out = objectClassesOf(title);
+  const t = title || '';
+  if (JEWELRY_RE.test(t)) out.add('jewelry');
+  if (MATERIAL_CULTURE_RE.test(t)) out.add('material');
+  return out;
+}
+
+const WORK_STOP = new Set(['the', 'and', 'a', 'an', 'of', 'in', 'on', 'with', 'from', 'for', 'to', 'at', 'by', 'le', 'la', 'les', 'de', 'du', 'des', 'et', 'au', 'aux', 'un', 'une', 'en', 'sur', 'dans', 'der', 'die', 'das', 'und', 'mit', 'el', 'los', 'las', 'con', 'il', 'lo', 'di', 'plate', 'state', 'proof', 'one', 'print', 'prints', 'portfolio', 'suite', 'series', 'set', 'signed', 'numbered', 'edition', 'circa', 'untitled', 'sans', 'titre', 'ohne', 'titel']);
+const ROMAN_TOK = /^[ivxlc]+$/;
+/** The content words of an art work's own title (before any "from
+ *  <series>"), the maker's name and catalogue citation already stripped by
+ *  the edition-identity reader; numbers, romans, stopwords and "Untitled"
+ *  dropped. Design titles are catalogue lines (place, dates, materials), not
+ *  names — never read. */
+export function workWordsOf(l: PurityLot): string[] | null {
+  if (!ART_SLUGS.has(l.artist)) return null;
+  const k = editionIdentityKey(l as never);
+  if (!k) return null;
+  const core = k.split('|')[1];
+  if (!core || core.startsWith('cr:')) return null;
+  const head = core.split(/\bfrom\b/)[0];
+  const ws = head.split(' ').filter(w => w.length >= 3 && !/\d/.test(w) && !ROMAN_TOK.test(w) && !WORK_STOP.has(w));
+  return ws.length ? ws : null;
+}
+const sameWord = (a: string, b: string) => a === b || (a.length >= 4 && b.length >= 4 && (a.startsWith(b) || b.startsWith(a)));
+/** Two named works that each carry a word the other lacks ("Minotaure
+ *  caressant une femme" vs "Minotaure, buveur et femmes", "Figure au corsage
+ *  rayé" vs "Femme au corsage à fleurs", "All Points" vs "We the People"):
+ *  different works sharing a series or a motif. A title that only ADDS words
+ *  ("Toros" / "Vallauris 1956 Toros") is not a conflict. */
+export function workConflict(t: PurityLot, c: PurityLot): boolean {
+  const a = workWordsOf(t);
+  if (!a) return false;
+  const b = workWordsOf(c);
+  if (!b) return false;
+  const missA = a.some(w => !b.some(v => sameWord(w, v)));
+  const missB = b.some(w => !a.some(v => sameWord(w, v)));
+  return missA && missB;
+}
+const COLOR_RE = /\b(red|blue|yellow|green|orange|purple|violet|magenta|pink|black|white|gold|silver|grey|gray|brown|turquoise|rouge|bleu|jaune|vert|noir|blanc)\b/g;
+/** The COLORWAY words a title names ("Balloon Dog (Red)" vs "(Blue)"). */
+export function colorsOf(title: string | null | undefined): Set<string> {
+  const t = fold((title || '').toLowerCase());
+  return new Set(Array.from(t.matchAll(COLOR_RE)).map(m => (m[1] === 'gray' ? 'grey' : m[1])));
+}
+/** Art: both titles name colorways and share none (design titles are
+ *  catalogue lines whose color words are materials). */
+export function colorConflict(t: PurityLot, c: PurityLot): boolean {
+  if (!ART_SLUGS.has(t.artist)) return false;
+  const a = colorsOf(t.title), b = colorsOf(c.title);
+  if (!a.size || !b.size) return false;
+  let shared = false;
+  a.forEach(k => { if (b.has(k)) shared = true; });
+  return !shared;
+}
+/** Unique vs multiple from the classify stamps: art subCat 'originals' vs
+ *  'prints' (both stamped). */
+export function stampedUniqueConflict(t: PurityLot, c: PurityLot): boolean {
+  if (!ART_SLUGS.has(t.artist)) return false;
+  const u = (l: PurityLot) => (l.subCat === 'originals' ? 'u' : l.subCat === 'prints' ? 'm' : null);
+  const a = u(t), b = u(c);
+  return !!a && !!b && a !== b;
+}
+/** An explicit BULK lot — a count of ≥ 3 ("(52) …"), "collection of",
+ *  "archive" — vs a title naming one piece. */
+export function bulkOf(title: string | null | undefined): 'bulk' | 'one' | null {
+  const t = (title || '').toLowerCase();
+  if (!t.trim()) return null;
+  const p = t.match(/\((\d{1,3})\)/);
+  if ((p && +p[1] >= 3) || /\b(?:collection|archive|lot|group|set) of\b|\bcollection \(\d+\)|\barchive\b/.test(t)) return 'bulk';
+  return 'one';
+}
+
+/** Wave 5 rule switches (1 = on) — value.BOUNDARY5 carries the adopted set. */
+export type Boundary5Rules = { format?: number; idLessComp?: number; idLessArt?: number; mission?: number; flight?: number; jewelry?: number; work?: number; color?: number; stampedUnique?: number; bulk?: number };
+export type Boundary5Fault = 'format' | 'identity-less' | 'mission' | 'flight' | 'object' | 'work' | 'color' | 'edition' | 'quantity';
+/** (EngineFlags.objectBoundary) the wave-5 hard boundary fault of comp `c`
+ *  for target `t`, or null. Memorabilia: paper format, identity-less comp
+ *  titles, space mission / flight status, jewelry / material-culture
+ *  classes, bulk lots. Art / design: a different named work, a different
+ *  colorway, unique vs multiple from the stamps. */
+export function objectBoundaryFault(t: PurityLot, c: PurityLot, rules: Boundary5Rules): Boundary5Fault | null {
+  const on = (k: keyof Boundary5Rules) => (rules[k] ?? 0) !== 0;
+  if (isMemorabiliaLot(t)) {
+    if (on('idLessComp') && !isBareSubjectTitle(t) && isBareSubjectTitle(c)) return 'identity-less';
+    if (on('format') && paperFormatConflict(t.title, c.title)) return 'format';
+    if (on('mission') && missionConflict(t.title, c.title)) return 'mission';
+    if (on('flight') && flightConflict(t.title, c.title)) return 'flight';
+    if (on('jewelry')) {
+      const oa = objectClassesOf5(t.title), ob = objectClassesOf5(c.title);
+      if ((oa.has('jewelry') || ob.has('jewelry') || oa.has('material') || ob.has('material')) && oa.size && ob.size) {
+        let shared = false;
+        oa.forEach(k => { if (ob.has(k)) shared = true; });
+        if (!shared) return 'object';
+      }
+    }
+    if (on('bulk')) {
+      const a = bulkOf(t.title), b = bulkOf(c.title);
+      if (a && b && a !== b) return 'quantity';
+    }
+    return null;
+  }
+  if (on('idLessArt') && ART_SLUGS.has(t.artist) && editionIdentityKey(t as never) && isIdentityLessTitle(c)) return 'identity-less';
+  if (on('work') && workConflict(t, c)) return 'work';
+  if (on('color') && colorConflict(t, c)) return 'color';
+  if (on('stampedUnique') && stampedUniqueConflict(t, c)) return 'edition';
+  return null;
 }
