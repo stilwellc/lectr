@@ -1709,6 +1709,8 @@ function descHead(title: string, desc: string): string {
 export function cultureItemClass(l: { title?: string | null; description?: string | null; saleName?: string | null; auctionHouse?: string | null }): string {
   const title = String(l.title || '').replace(/["“”]/g, ' ');
   if (CULT_CARD_RE.test(title)) return 'card';
+  // the word "prop" names the kind wherever it sits ("Stormtrooper Helmet Prop")
+  if (/\bprops?\b/i.test(title)) return 'prop';
   const fromTitle = earliestCultKind(title) ?? (CULT_AUTOGRAPH_FALLBACK_RE.test(title) ? 'autograph-other' : null);
   if (fromTitle) return fromTitle;
   const head = descHead(title, String(l.description || ''));
