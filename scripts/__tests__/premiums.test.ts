@@ -27,6 +27,25 @@ test('houseAllInFactor: flat houses, tiered houses by hammer band, 1.25 fallback
   assert.equal(houseAllInFactor(null), 1.25);
 });
 
+test('houseAllInFactorAt (Oct 6): Wright / Rago / LAMA dated eras — 25% → 26% (2023) → 27% (2025) → 28% after Mar 15 2026', () => {
+  const at = (h: string, d: string) => houseAllInFactorAt(h, 5000, d);
+  assert.equal(at('Wright', '2002-05-01'), 1.15);
+  assert.equal(at('Wright', '2008-12-11'), 1.20);
+  assert.equal(at('Wright', '2009-02-26'), 1.25);
+  assert.equal(at('Wright', '2022-12-15'), 1.25);
+  assert.equal(at('Wright', '2023-01-11'), 1.26);
+  assert.equal(at('Wright', '2025-01-08'), 1.27);
+  assert.equal(at('Wright', '2026-03-13'), 1.27);
+  assert.equal(at('Wright', '2026-03-17'), 1.28);
+  assert.equal(at('Rago', '2026-03-25'), 1.28);
+  assert.equal(at('Rago', '2019-06-01'), 1.25);
+  assert.equal(at('LAMA', '2010-05-01'), 1.225);
+  assert.equal(at('LAMA', '2026-05-19'), 1.28);
+  assert.equal(houseAllInFactor('Bruun Rasmussen'), 1.30);
+  // a stamped premium still wins
+  assert.equal(lotAllInFactor({ auctionHouse: 'Wright', saleDate: '2026-09-30', buyerPremiumPct: 33 }), 1.33);
+});
+
 test('houseAllInFactorAt: REA era schedule by saleDate; other houses / bad dates fall back to the undated schedule', () => {
   const at = (d: string | null) => houseAllInFactorAt('REA', 2000, d);
   assert.equal(at('2003-11-01'), 1.15, 'before the first era → first rate');

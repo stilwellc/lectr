@@ -24,7 +24,7 @@ test('lotHammerFromAllIn: REA era rates by sale date; undated lots keep the hous
 });
 
 test('lotHammerFromAllIn: a house with no dated schedule converts exactly as the undated factor did', () => {
-  for (const h of ['Goldin', 'Wright', 'Bonhams', 'Phillips', 'RR Auction']) {
+  for (const h of ['Goldin', 'Bonhams', 'Phillips', 'RR Auction']) {
     for (const x of [800, 25_000, 2_400_000]) {
       assert.equal(lotHammerFromAllIn({ auctionHouse: h, saleDate: '2026-03-01' }, x, x / 1.25), x / houseAllInFactor(h, x / 1.25), `${h} ${x}`);
     }
