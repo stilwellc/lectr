@@ -12,6 +12,7 @@ import { parseSignerName, SIGNER_PARSER_VERSION } from './autograph-signer';
 import { leadsWithSetCode } from './set-codes';
 import { attachExtractions, fillWatchReferencesFromExtract } from './extract/apply';
 import { segmentOf } from '../corpus-io';
+import { saleDayOf, SALE_DAY_HOUSES } from './sale-day';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    corpus-normalize.ts — build-time corpus-hygiene passes.
@@ -263,13 +264,45 @@ export function reconcileSaleDates(lots: Lot[]): number {
   for (const l of lots) {
     const dt = l.saleDateTime;
     if (!dt || !l.saleDate) continue;
-    const trueDay = dt.slice(0, 10);
+    // the timestamp's SALE-LOCAL day where lib/sale-day owns the house (a
+    // London-midnight 23:00Z stamp must not drag the localized day back a day)
+    const trueDay = saleDayOf(l.auctionHouse, dt, { saleName: l.saleName, currency: (l as { nativeCurrency?: string }).nativeCurrency }) || dt.slice(0, 10);
     if (trueDay.length === 10 && trueDay < l.saleDate.slice(0, 10)) {
       l.saleDate = trueDay;
       fixed++;
     }
   }
   return fixed;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 4a · localizeSaleDates — saleDate in the SALE'S time zone (Oct 2026 identity
+// audit). Goldin / Christie's / Sotheby's parsers took the UTC day of a local
+// stamp (lib/sale-day has the evidence): 369,558 Goldin lots a day late (a
+// 10 PM ET Thursday close is 02:00Z Friday), 20,831 Christie's a day early
+// (London/Geneva/HK/Dubai local midnight written in UTC), 5,147 Sotheby's.
+// The parsers now stamp the local day; this re-derives the rows already in the
+// corpus. Only a saleDate that IS the old UTC day of its own saleDateTime is
+// rewritten (any other saleDate came from elsewhere — reconcileSaleDates owns
+// those), so the pass is idempotent and never touches a hand-set date.
+// ─────────────────────────────────────────────────────────────────────────────
+export function localizeSaleDates(lots: Lot[]): { total: number; byHouse: Record<string, number> } {
+  const byHouse: Record<string, number> = {};
+  let total = 0;
+  for (const l of lots) {
+    const house = l.auctionHouse as string;
+    if (!SALE_DAY_HOUSES.has(house)) continue;
+    const dt = l.saleDateTime;
+    if (typeof dt !== 'string' || typeof l.saleDate !== 'string') continue;
+    const cur = l.saleDate.slice(0, 10);
+    if (cur !== dt.slice(0, 10)) continue;
+    const day = saleDayOf(house, dt, { saleName: l.saleName, currency: (l as { nativeCurrency?: string }).nativeCurrency });
+    if (!day || day === cur) continue;
+    l.saleDate = l.saleDate.length > 10 ? day + l.saleDate.slice(10) : day;
+    byHouse[house] = (byHouse[house] || 0) + 1;
+    total++;
+  }
+  return { total, byHouse };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -923,6 +956,8 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   const players = recoverPlayerSlugs(ls);
   const signers = recoverAutographSigners(ls);
   const cultureStamped = stampCultureAxes(ls);
+  const localized = localizeSaleDates(ls);
+  console.log(`[normalize] saleDate → sale-local day: ${localized.total} (${Object.entries(localized.byHouse).map(([k, v]) => `${k}=${v}`).join(' ') || 'none'})`);
   const datesFixed = reconcileSaleDates(ls);
   const restamped = restampIdentityKeys(ls);
   const sub = stampSubCats(ls);

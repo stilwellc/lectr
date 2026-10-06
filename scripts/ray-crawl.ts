@@ -22,6 +22,7 @@ import type {
 // never 4xx), the incremental skip-set predicate, and robust estimate-range
 // parsing. All pure/no-side-effect modules — safe as static imports.
 import { RESULT_PENDING_MS } from './lib/skip-set';
+import { saleDayOf } from './lib/sale-day';
 
 // v2 foundation — the single, deterministic normalization layer. Every FUTURE
 // row is born v2 by stamping these (native money fact + dated USD, persisted
@@ -631,7 +632,8 @@ async function main() {
           const d = new Date(raw);
           if (isNaN(d.getTime())) return;
           const iso = d.toISOString();
-          lot.saleDate = iso.slice(0, 10);
+          // the sale-location calendar day (lib/sale-day), not the UTC day
+          lot.saleDate = saleDayOf("Christie's", iso, { saleName: lot.saleName, currency: (lot as AuctionLot & { nativeCurrency?: string }).nativeCurrency }) || iso.slice(0, 10);
           (lot as AuctionLot & { saleDateTime?: string }).saleDateTime = iso;
           dated++;
           if (d.getTime() > Date.now()) {
