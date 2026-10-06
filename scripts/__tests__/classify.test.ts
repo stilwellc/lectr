@@ -156,11 +156,23 @@ test('class 6 · sale-name gates: pop/film sales are not sports; RR space sale p
   assert.equal(G({ auctionHouse: "Christie's", artist: 'sports-memorabilia', title: 'THE INVISIBLE MAN, UNIVERSAL, 1933', saleName: 'Television And Film Memorabilia And Posters' }), 'entertainment-memorabilia');
   assert.equal(G({ auctionHouse: "Christie's", artist: 'sports-memorabilia', title: 'A 1924 Cunard/Anchor-Donaldson calendar', saleName: 'The Wayne Lapoe Collection Of Oceanliner Memorabilia And Art' }), DROP);
   // …but a sports lot in a pop sale stays sports, and real sports sales are untouched
-  assert.equal(G({ auctionHouse: "Christie's", artist: 'sports-memorabilia', title: 'Muhammad Ali signed boxing glove', saleName: 'Pop Memorabilia' }), 'sports-memorabilia');
-  assert.equal(G({ auctionHouse: "Christie's", artist: 'sports-memorabilia', title: 'TY COBB LETTER', saleName: 'Sports Memorabilia' }), 'sports-memorabilia');
+  assert.equal(G({ auctionHouse: "Christie's", artist: 'sports-memorabilia', title: 'Muhammad Ali signed boxing glove', saleName: 'Pop Memorabilia' }), 'autographs'); // stays sports (class 7 types it)
+  assert.equal(G({ auctionHouse: "Christie's", artist: 'sports-memorabilia', title: 'TY COBB LETTER', saleName: 'Sports Memorabilia' }), 'autographs'); // stays sports (class 7 types it)
   // RR: a space catalogue lists astronauts by bare name
   assert.equal(G({ auctionHouse: 'RR Auction', artist: 'entertainment-memorabilia', title: 'John Young', saleName: 'Space & Aviation Auction' }), 'space-exploration');
   assert.equal(G({ auctionHouse: 'RR Auction', artist: 'entertainment-memorabilia', title: 'Charles Lindbergh Signed Photograph with the \'Spirit of St. Louis\'', saleName: 'Space & Aviation' }), 'entertainment-memorabilia');
   assert.equal(G({ auctionHouse: 'RR Auction', artist: 'entertainment-memorabilia', title: 'Jack Swigert\'s Skylab II and III Robbins Medals', saleName: 'Fine Autographs and Artifacts' }), 'space-exploration');
   assert.equal(G({ auctionHouse: 'RR Auction', artist: 'science-tech', title: 'Magic Sam and Mac Thompson Signatures', saleName: 'Fine Autographs and Artifacts' }), 'entertainment-memorabilia');
+});
+
+test('class 7 · sports-sale catch-all: programmes → programs, signed → autographs, RR autograph-house prior', () => {
+  const K = (o: R) => move({ saleName: 'Sports Memorabilia', ...o });
+  assert.equal(K({ auctionHouse: "Christie's", artist: 'sports-memorabilia', title: 'A RUN OF FIVE PROGRAMMES FOR THE AMATEUR BOXING CHAMPIONSHIP at The Royal Albert Hall, comprising: the 45th, 2', saleName: 'Sporting Memorabilia' }), 'programs-publications');
+  assert.equal(K({ auctionHouse: "Christie's", artist: 'tickets-passes', title: 'A BLACKBURN ROVERS V. HUDDERSFIELD TOWN, F.A. CUP FINAL, MATCH PROGRAMME, 21/4/28' }), 'programs-publications');
+  assert.equal(K({ auctionHouse: "Christie's", artist: 'sports-memorabilia', title: 'BILL TERRY SINGLE SIGNED BASEBALL' }), 'autographs');
+  assert.equal(K({ auctionHouse: 'RR Auction', artist: 'sports-memorabilia', title: 'Barry Bonds Baseball', saleName: 'Fine Autographs and Artifacts' }), 'autographs');
+  assert.equal(K({ auctionHouse: 'RR Auction', artist: 'sports-memorabilia', title: 'Ted Williams Signed Baseball', saleName: 'Fine Autographs and Artifacts' }), 'autographs');
+  assert.equal(K({ auctionHouse: 'RR Auction', artist: 'sports-memorabilia', title: 'Seoul 1988 Summer Olympics Winner\'s Diploma', saleName: 'Olympic Memorabilia' }), 'trophies-awards');
+  assert.equal(K({ auctionHouse: 'RR Auction', artist: 'tickets-passes', title: 'Tiger Woods Signed Golf Score Card', saleName: 'Fine Autograph and Artifacts' }), 'autographs');
+  assert.equal(K({ auctionHouse: "Sotheby's", artist: 'sports-memorabilia', title: 'Beijing 2008 Summer Olympics Pin Set' }), 'sports-memorabilia');
 });

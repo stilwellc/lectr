@@ -45,6 +45,13 @@ const INSTRUMENT = /\b(telescope|microscope|orrery|astrolabe|sextant|octant|slid
 
 export interface RRRoute { slug: string; }
 
+/** RR is an AUTOGRAPH house: a sports lot its title doesn't otherwise type
+ *  ("Barry Bonds Baseball", "Joe Frazier Boxing Glove") is a signed piece —
+ *  Olympic insignia/pins/medals/torches excepted. */
+export function rrSportsPrior(slug: string, text: string): string {
+  return slug === 'sports-memorabilia' && !/\b(olympics?|pins?|badges?|insignia|medals?|torch|pennants?|tickets?)\b/i.test(text) ? 'autographs' : slug;
+}
+
 /** Route an RR Auction lot to an entity slug, or null to drop it.
  *  Science is matched, never defaulted — unmatched lots go to routeCulture. */
 // RR's SALE is a strong prior for space: a "Space & Aviation" catalogue lists
@@ -60,7 +67,7 @@ export function routeRRLot(title: string, description = '', saleName = ''): stri
   // 1. sports memorabilia — an athlete's signed piece is sports
   if (SPORTS.test(t)) {
     const s = routeSportsLot(title, description);
-    if (s) return s;
+    if (s) return rrSportsPrior(s, t);
   }
 
   // 2. natural history

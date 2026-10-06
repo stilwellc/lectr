@@ -21,7 +21,8 @@ import { looksLikeCard } from '../../app/lib/cards';
 import { leadsWithSetCode } from './set-codes';
 import { ARTIST_MARKET } from '../../app/constants';
 import { routeCulture, isCultureSale } from '../culture';
-import { routeRRLot } from '../rr-auction';
+import { routeRRLot, rrSportsPrior } from '../rr-auction';
+import { routeSportsLot } from '../sports-sale';
 
 export const DROP = 'DROP' as const;
 
@@ -60,6 +61,8 @@ const CARD_BRAND_RE = /\b(topps|bowman|panini|upper deck|fleer|donruss|goudey|pl
 const CARD_OBJECT_RE = /\b(jerseys?|uniform|bats?|gloves?|cleats|boots|helmet|trunks|shorts|jacket|shoes?|sneakers?|shirt|robe|photo|photograph|(?:signed|official|game|onl|oml|oal|obal|nfl|nba|wilson|spalding|rawlings) (?:base|basket|foot|soccer |golf )?ball|puck|pennant|banner|trophy|ring|belt|ticket|stub|pass|poster|painting|lithograph|display|plaque|bobblehead|statue|program|magazine|letter|check|contract|cut|envelope|cover|bobb(?:ing|in'?|le)[- ]?heads?|statues?|figurines?|miniatures?|pins?|pinbacks?|buttons?|coins?)\b/i;
 const CARD_WORD_RE = /(?<!(?:playing|index|business|schedule|cabinet|greeting|christmas|post|place|calling|report|score|signature|membership|id|identification|scorer'?s|admission|pass|program|trade|cigarette pack|souvenir|menu|lobby|title|window|wedding|signed|autographed|3x5|3 x 5|birthday|holiday|ration|draft|war|sympathy|note|recipe) )\bcards?\b(?![- ]used)|\bhand[- ]cut\b/i;
 const FLAT_OBJECT_RE = /\b(?:photos?|photographs?|lithographs?|prints?|posters?|paintings?|canvas|display|framed|plaque|letter|check|contract|magazine)\b/i;
+/** cards that are not trading cards (looksLikeCard reads "Golf Score Card" via the Score brand) */
+const NON_TRADING_CARD_RE = /\b(?:index|business|score|greeting|lobby|3 ?x ?5|signature|membership|cabinet|place|calling|report) ?cards?\b/i;
 /** a photo USED for a card ("Image Used for 1933 Goudey Cards!") is a photo */
 const PHOTO_FOR_CARD_RE = /\b(?:photo|photograph|image|negative|artwork)\b[^.]{0,60}\bused (?:for|on|as)\b/i;
 /** card-ish words that only count when no object noun is named ("SGC Encapsulated" also slabs cut signatures) */
@@ -78,6 +81,7 @@ export function isCardTitle(title: string | null | undefined): boolean {
   if (!t.trim()) return false;
   if (leadsWithSetCode(t) || SHORT_YEAR_SET_CODE_RE.test(t)) return true;
   if (PHOTO_FOR_CARD_RE.test(t)) return false;
+  if (NON_TRADING_CARD_RE.test(t) && !CARD_NO_RE.test(t) && !/\btrading cards?\b/i.test(t)) return false;
   // a photo/print/display named without a card word or number is that object
   // (looksLikeCard reads "Signed 16 x 20 Photograph (Upper Deck)" as a card)
   if (FLAT_OBJECT_RE.test(t) && !CARD_WORD_RE.test(t) && !CARD_NO_RE.test(t)) return false;
@@ -106,10 +110,12 @@ export function isCardTitle(title: string | null | undefined): boolean {
 export const SEALED_RE = /\b(unopened|factory[- ]sealed|sealed (?:box|case|pack)(?:e?s)?|wax (?:pack|box|case)(?:e?s)?|hobby (?:box|case)(?:e?s)?|blaster(?: box(?:es)?)?|cello (?:pack|box)(?:e?s)?|rack (?:pack|box)(?:e?s)?|jumbo (?:pack|box)(?:e?s)?|vending (?:box|case)(?:e?s)?|fat packs?|booster (?:box|pack)(?:e?s)?)\b/i;
 /** EXPLICIT use language — a jersey is not game-used because it is a jersey */
 export const GAME_USED_RE = /\b(game[- ]?(?:used|worn|issued)|match[- ]?(?:used|worn|issued)|player[- ]?worn|team[- ]?issued|fight[- ]?worn|tour(?:nament)?[- ]?(?:used|worn)|race[- ]?(?:used|worn)|warm[- ]?up[- ]?worn|practice[- ]?(?:worn|used)|bench[- ]?worn|event[- ]?worn|psa\/dna gu \d+|photo[- ]?match(?:ed)?|gamer|mears|meigray|worn by|used by)\b/i;
-const TROPHY_RE = /\b(trophy|trophies|awards?|awarded|championship rings?|world series rings?|super bowl rings?|title belt|winners?'? medal|olympic (?:gold |silver |bronze )?medal|mvp award|heisman|plaque award|presentational ring|(?:final four|championship|title|world series|super bowl|pennant|all-star|league) rings?|presented to)\b/i;
+const TROPHY_RE = /\b(trophy|trophies|awards?|awarded|medals?|diplomas?|championship rings?|world series rings?|super bowl rings?|title belt|winners?'? medal|olympic (?:gold |silver |bronze )?medal|mvp award|heisman|plaque award|presentational ring|(?:final four|championship|title|world series|super bowl|pennant|all-star|league) rings?|presented to)\b/i;
 const TICKET_RE = /\b(tickets?|stubs?|full ticket|season pass|press pass(?! (?:cards?|#))|credentials?|all[- ]access pass)\b/i;
 const TYPE1_RE = /\b(type (?:1|i|one)\b|type-1|original (?:news service |wire |press )?photo(?:graph)?|wire photo|press photo|news service photo)\b/i;
-export const SIGNED_RE = /\b(signed|autograph(?:ed|s)?|inscribed|signatures?|cut signature|auto\.)\b/i;
+/** an athlete's letter / check / contract is an autograph item */
+const AUTOGRAPH_DOC_RE = /\b(letters?|contracts?|endorsements?)\b/i;
+export const SIGNED_RE = /\b(signed|autograph(?:ed|s)?|signatures?|cut signature|auto\.)\b/i;
 
 /** Kind of a NON-card sports object. `catchAll` is the house's memorabilia
  *  twin ('sports-memorabilia' at Goldin/Christie's/Sotheby's, 'memorabilia' at
@@ -123,7 +129,7 @@ export function sportsObjectKind(title: string | null | undefined, catchAll: 'sp
   if (TICKET_RE.test(t) && !PUBLICATION_RE.test(t)) return 'tickets-passes';
   if (PUBLICATION_RE.test(t) && !SIGNED_RE.test(t)) return 'programs-publications';
   if (TYPE1_RE.test(t) && !SIGNED_RE.test(t)) return 'type-1-photos';
-  if (SIGNED_RE.test(t)) return 'autographs';
+  if (SIGNED_RE.test(t) || AUTOGRAPH_DOC_RE.test(t)) return 'autographs';
   if (PUBLICATION_RE.test(t)) return 'programs-publications';
   return catchAll;
 }
@@ -285,6 +291,23 @@ export function saleGateFix(l: ClassifyLot): string | null {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 7 · THE SPORTS-SALE CATCH-ALL — Christie's/Sotheby's/RR sports lots that
+// routeSportsLot could not type went to sports-memorabilia (65% wrong) and
+// programmes/scorecards to tickets. Re-run the shared ladder (sports-sale.ts
+// routeSportsLot, RR's autograph-house prior) over those two buckets.
+// ═══════════════════════════════════════════════════════════════════════════
+const CATCH_ALL_HOUSES = new Set(["Christie's", "Sotheby's", 'RR Auction']);
+export function sportsCatchAllFix(l: ClassifyLot): string | null {
+  if (!CATCH_ALL_HOUSES.has(l.auctionHouse || '') || (l.artist !== 'sports-memorabilia' && l.artist !== 'tickets-passes')) return null;
+  const t = String(l.title || '');
+  const d = l.auctionHouse === 'RR Auction' ? '' : String(l.description || '');
+  let k = routeSportsLot(t, d);
+  if (!k) return null;
+  if (l.auctionHouse === 'RR Auction') k = rrSportsPrior(k, `${t} ${d}`);
+  return k;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 2 · ART CATEGORY — Madoura ceramics and unique works filed as prints. The
 // crawler's print test ran before its ceramic test and five artists defaulted
 // to 'print' with no evidence; normalize never moved print → sculpture and
@@ -359,6 +382,7 @@ export const RECLASS_RULES: ReclassRule[] = [
     apply: l => (GENERALIST_HOUSES.has(l.auctionHouse || '') ? scienceVerdict(l) : null),
   },
   { cls: 'sale-name-gates', apply: saleGateFix },
+  { cls: 'sports-catch-all-programmes', apply: sportsCatchAllFix },
 ];
 
 /** Category rules: same contract, but they return the corrected CATEGORY. */

@@ -34,6 +34,8 @@ export function isSportsSale(slug: string): boolean {
   return SPORTS_SALE.test(s) && !NOT_SPORTS_SALE.test(s);
 }
 
+import { isCardTitle, sportsObjectKind } from './lib/classify';
+
 const CARD_MAKERS = /\b(topps|panini|bowman|upper deck|fleer|donruss|goudey|leaf|o-pee-chee|rookie card|trading card|tobacco (card|silk))\b/i;
 const NON_SPORT_TCG = /\bpok[eé]mon\b|yu-?gi-?oh|magic the gathering|\bmtg\b/i;
 const GAME_USED = /\b(game[- ](used|worn|issued)|match[- ](used|worn)|player[- ]worn|team[- ]issued|tour[- ](used|worn)|worn (jersey|uniform|cleats|boots|gloves|jacket|cap|shirt|kit)|game (bat|ball|jersey|uniform|glove|worn)|match[- ]worn (shirt|jersey|boots)|bat used|ball used)\b/i;
@@ -46,9 +48,11 @@ const TICKET = /\b(ticket|stub|full ticket|season pass|press pass|all[- ]access 
 export function routeSportsLot(title: string, description = ''): string | null {
   const t = `${title} ${description}`.toLowerCase();
   if (NON_SPORT_TCG.test(t)) return null;      // a Pokémon lot in a mixed sale
-  if (GAME_USED.test(t)) return 'game-used';
-  if (TROPHY.test(t)) return 'trophies-awards';
-  if (TICKET.test(t)) return 'tickets-passes';
-  if (CARD_MAKERS.test(t)) return 'sports-cards';
-  return 'sports-memorabilia';                 // the catch-all — still a sport item
+  // ONE ladder (Oct 6 2026 audit): the old order sent programmes/scorecards
+  // to tickets and 65% of the catch-all was really autographs, programs,
+  // photos or cards. Card detector first (title only — a description's
+  // "Topps" provenance line is not the object), then the shared sports
+  // object ladder over the title + the head of the description.
+  if (isCardTitle(title)) return 'sports-cards';
+  return sportsObjectKind(`${title} ${description.slice(0, 300)}`, 'sports-memorabilia');
 }
