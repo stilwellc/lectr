@@ -87,7 +87,8 @@ test('label tiers and the smaller graders key apart from the plain grade', () =>
   // a "Gold Label" SET name is not a grade tier
   assert.equal(parseCard('1999 Topps Gold Label #1 Mike Piazza - PSA GEM MT 10').gradeTier, null);
   assert.equal(key('2021 Topps Chrome UCL Sapphire Edition #100 Lionel Messi - TAG GEM MT 10'), 'lionel-messi|2021|toppschromeuclsapphireedition|100|v:color|TAG10');
-  assert.equal(key('1948 Leaf #45 Ken Keltner SP – GAI 5'), 'ken-keltner|1948|leaf|45|v:sp|GAI5');
+  // (Oct 6 re-audit) a pre-1980 "SP" is a scarcity note on the base card, not a variant
+  assert.equal(key('1948 Leaf #45 Ken Keltner SP – GAI 5'), 'ken-keltner|1948|leaf|45|GAI5');
   // lowercase "tag" is not a grader
   assert.equal(parseCard('1952 Topps #1 Andy Pafko with original price tag').gradeUnparsed, false);
 });
@@ -134,4 +135,24 @@ test('repeat-sale card key: signed and unsigned copies never pair; REA joins Gol
   assert.ok(signed!.endsWith('|s'));
   assert.equal(rk('1986-1987 Fleer Basketball #57 Michael Jordan Rookie PSA MINT 9'), rk('87 Fleer #57 Michael Jordan Rookie Card - PSA MINT 9'));
   assert.equal(rk('1963 Topps Complete Set (576) Including #537 Pete Rose Rookie PSA EX-MT 6'), null);
+});
+
+test('variant junk: set names and short-print notes are not parallels; comics and magazines are not cards (Oct 6 re-audit)', () => {
+  assert.equal(key('1911 T3 Turkey Red #17 Clark Griffith PSA VG-EX 4'), 'clark-griffith|1911|t3turkeyred|17|PSA4');
+  assert.equal(key('1954 Red Man Tobacco #NL-25 Willie Mays PSA VG-EX 4'), 'willie-mays|1954|redmantobacco|nl-25|PSA4');
+  // vintage SP: the same card with or without the house's note
+  assert.equal(key('1957 Topps #77 Bill Russell SP Rookie PSA 7.5 NM+'), key('1957 Topps #77 Bill Russell Rookie PSA 7.5 NM+'));
+  // "SP" inside the product name / card number is not a short print
+  assert.equal(key('2005 SP Game Used Authentic Fabrics Autographed #AAFLJ LeBron James (21/100) - PSA GEM MT 10'), 'lebron-james|2005|spgameusedauthenticfabricsautographed|aaflj|v:auto|/100|PSA10');
+  assert.equal(parseCard('2008 Upper Deck SP Game Used #142 Kevin Durant Rookie Card (#604/999) - PSA GEM MT 10').variant, null);
+  assert.equal(parseCard('2021 Panini Immaculate Sneak Peek Brand Logo #SP-KMJ Karl Malone Patch Card (#1/1) - PSA EX-MT 6').variant, '1of1+relic');
+  // a modern short-print variation still keys apart from the base
+  assert.equal(parseCard('2021 Topps Chrome #1 Shohei Ohtani SP Variation - PSA 10').variant, 'sp+var');
+  assert.equal(parseCard('2002 Upper Deck Superstars #MJTWA Michael Jordan/Tiger Woods Legendary Leaders Autographs (19/25) PSA 10 GEM MINT').variant, null);
+  // comic books / magazine issues abstain; card products named for them stay cards
+  assert.equal(key('1943 Classic Comics #13 Dr. Jekyll and Mr. Hyde Original First Edition Key Issue Comic Book--CGC 7.5'), null);
+  assert.equal(key('1963 Marvel Comics Amazing Spider-Man #5 Early Doctor Doom Appearance - CGC 4.5'), null);
+  assert.equal(key('1973 Marvel Tomb of Dracula #10 First Appearance of Blade the Vampire Slayer - CGC 7.5'), null);
+  assert.equal(key('04 Topps Bazooka Comics #15 LeBron James Rookie Card – PSA GEM MT 10'), 'lebron-james|2004|toppsbazookacomics|15|PSA10');
+  assert.equal(key('1998 Fleer Sports Illustrated #105 Cal Ripken Jr. – PSA NM-MT 8'), 'cal-ripken-jr|1998|fleersportsillustrated|105|PSA8');
 });

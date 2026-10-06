@@ -41,6 +41,10 @@ export interface CardId {
   /** (Oct 6) a multi-card lot (sets, pairs, "Collection (25)", two #numbers) —
    *  never one card's identity: cardKey/cardLadderKey abstain */
   multi?: boolean;
+  /** (Oct 6 identity re-audit) a comic book / magazine issue filed with the
+   *  cards (CGC-graded comics at H&S, SLAM newsstand covers) — never a card
+   *  identity: cardKey/cardLadderKey abstain */
+  notCard?: boolean;
 }
 // (Oct 6) the gap never crosses a '#' (an insert code "Autograph #DA-32" is
 // not an autograph grade 32) — and a gap naming a card grader is the CARD
@@ -75,7 +79,11 @@ const GRADE_QUAL_RE = /^\s*\(?\s*(OC|MK|ST|PD|MC|OF)\s*\)?(?![a-z])/i;
 const AUTO_GAP_RE = /auth|auto|dna|sig/i;
 // parallel / variant tokens (whole title, outside the set name). Team names
 // that carry a colour word are masked first ("Red Sox" is not a Red parallel).
-const TEAM_MASK_RE = /\b(red sox|white sox|blue jays|red wings|green bay|golden state|golden knights|blue devils|crimson tide|orange bowl|black knights|silver bullets|gold rush|browns|reds|blues|golden bears|redskins|green wave|royals)\b/gi;
+// (Oct 6 identity re-audit) set and person names that carry a colour /
+// pattern word are masked the same way: 'Turkey Red' (T3) and 'Red Man'
+// (tobacco) are sets, not Red parallels (1,897 keys); 'Tiger Woods' in a
+// multi-player title is not a Tiger-stripe pattern
+const TEAM_MASK_RE = /\b(turkey red|red man|tiger woods|red sox|white sox|blue jays|red wings|green bay|golden state|golden knights|blue devils|crimson tide|orange bowl|black knights|silver bullets|gold rush|browns|reds|blues|golden bears|redskins|green wave|royals)\b/gi;
 const VARIANT_TOKENS: [RegExp, string][] = [
   [/\b(?:autograph(?:ed)?|signed|auto)\b/i, 'auto'],
   [/\b(?:patch|jersey|relic|swatch|memorabilia)\b/i, 'relic'],
@@ -85,6 +93,7 @@ const VARIANT_TOKENS: [RegExp, string][] = [
   [/\b(?:1\/1|one of one)\b/i, '1of1'],
   [/\b(?:variation|var\.|image variation|photo variation)\b/i, 'var'],
   [/\berror\b/i, 'error'],
+  // (read outside the set name and card number, modern cards only — SP_TOKEN)
   [/\bs?sp\b|\bshort print\b/i, 'sp'],
   [/\bdie[- ]?cut\b/i, 'diecut'],
   [/\bholo(?:foil|gram)?\b/i, 'holo'],
@@ -101,6 +110,27 @@ const VARIANT_TOKENS: [RegExp, string][] = [
   [/\bgr[ae]y back\b/i, 'grayback'],
   [/\bwhite back\b/i, 'whiteback'],
 ];
+/** (Oct 6 identity re-audit) 'SP' is a variant only when the house names a
+ *  short print OUTSIDE the set name and card number ("SP Authentic", "SP Game
+ *  Used", "#SP-JAZ" are the product / the number — 3.1k keys), and only on a
+ *  modern card: a pre-1980 "SP" / "Short Print" is a scarcity note on the
+ *  base card (1948-49 Leaf, 1953 Topps) some houses print and others don't —
+ *  it split one card's sales across two keys (737). */
+const SP_TOKEN = 'sp';
+/** (Oct 6 identity re-audit) a comic book or magazine issue keyed as a card:
+ *  H&S files CGC-graded Marvel/Timely/DC comics with its cards, Goldin SLAM
+ *  newsstand covers. Card products named for a magazine or comic (Bazooka
+ *  Comics, Sports Illustrated for Kids, Life Magazine hand-cuts, magazine
+ *  promo cards) carry a card word or brand and stay cards. */
+const MONTH_ISSUE = '(?:jan|feb|mar|apr|may|june?|july?|aug|sept?|oct|nov|dec)[a-z]*';
+const NOT_A_CARD_RE = new RegExp(String.raw`\bcomic books?\b|\b(?:marvel|dc|timely|quality|leading|atlas|fawcett|classic|gold key|dell|harvey|archie|ec) comics\b|\bnewsstand\b|\b(?:first|1st|last) issue\b|\bvol(?:ume)?\.? \d+,? #\d|#\d+[a-z]? ${MONTH_ISSUE} (?:19|20)\d\d\b`, 'i');
+const COMIC_APPEARANCE_RE = /\b(?:first|1st|early|second) (?:[a-z]+ )?appearance\b/i;
+const CARD_PRODUCT_WORD_RE = /\b(?:cards?|topps|fleer|bowman|bazooka|upper deck|panini|donruss|leaf|promo|stickers?|insert)\b/i;
+/** a comic book / magazine issue title (never a card identity) */
+export function isComicOrMagazineTitle(title: string): boolean {
+  const t = title || '';
+  return (NOT_A_CARD_RE.test(t) || (COMIC_APPEARANCE_RE.test(t) && /\bCGC\b/.test(t))) && !CARD_PRODUCT_WORD_RE.test(t);
+}
 /** a leading lot number immediately followed by a 4-digit year */
 // several cards in one lot (the count in parens follows a set/lot word or ends
 // the title: "Complete Set (576)", "Rookie Card Collection (25)")
@@ -169,7 +199,7 @@ export function parseCard(title: string): CardId {
     player: null, playerSlug: null, year: null, setName: null, cardNo: null,
     gradeCo: null, gradeNum: null, serialOf: null, rookie: false, auto: false,
     gradeQual: null, gradeTag: null, gradeUnparsed: false, variant: null, autoGrade: null,
-    gradeTier: null, multi: false,
+    gradeTier: null, multi: false, notCard: false,
   };
   const t = (title || '').trim();
   if (!t) return out;
@@ -287,13 +317,21 @@ export function parseCard(title: string): CardId {
   // (Oct 6) an MBA "Silver/Gold Diamond Certified" sticker is not a parallel
   let vt = t.replace(TEAM_MASK_RE, ' ').replace(/\bMBA\s+(?:silver|gold|platinum|black|red|blue)\s+diamond(?:\s+certified)?\b/gi, ' ');
   if (out.player) vt = vt.split(out.player).join(' ');
+  let spScope = vt;
+  if (out.setName) spScope = spScope.split(out.setName).join(' ');
+  spScope = spScope.replace(/#[A-Za-z0-9/.-]+/g, ' ');
+  const vintage = !!out.year && parseInt(out.year, 10) < 1980;
   const toks: string[] = [];
-  for (const [re, tok] of VARIANT_TOKENS) if (re.test(vt) && !toks.includes(tok)) toks.push(tok);
+  for (const [re, tok] of VARIANT_TOKENS) {
+    const src = tok === SP_TOKEN ? (vintage ? '' : spScope) : vt;
+    if (re.test(src) && !toks.includes(tok)) toks.push(tok);
+  }
   out.variant = toks.length ? toks.sort().join('+') : null;
 
   // MULTI-CARD lots (Oct 6): a set / pair / "Collection (25)" / two card
   // numbers is several cards — its price is never one card's
   out.multi = isMultiCardTitle(t);
+  out.notCard = isComicOrMagazineTitle(t);
   return out;
 }
 
@@ -591,7 +629,7 @@ export function cardSetKey(setName: string | null | undefined): string {
  *  variant signature + serial run (a /99 Gold parallel is a different card
  *  from the base, at every grade). */
 export function cardLadderKey(id: CardId): string | null {
-  if (!id.playerSlug || !id.year || !id.cardNo || id.multi) return null;
+  if (!id.playerSlug || !id.year || !id.cardNo || id.multi || id.notCard) return null;
   const set = cardSetKey(id.setName);
   const v = id.variant ? `|v:${id.variant}` : '';
   const s = id.serialOf ? `|/${id.serialOf}` : '';
