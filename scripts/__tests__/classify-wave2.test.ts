@@ -133,6 +133,20 @@ test('class 8 · Julien\'s / Propstore lots are sports only with sport evidence'
   assert.equal(J('MICHAEL JACKSON SIGNED BAD DISPLAY', 'equipment-artifacts', 'Sports Legends and Music Icons'), 'entertainment-memorabilia');
 });
 
+test('class 11 · Goldin\'s item-type facet: a music / film object is not game-used', () => {
+  const G = (title: string, artist = 'game-used') => move({ auctionHouse: 'Goldin', artist, saleName: 'Goldin Thematic Auction', title });
+  assert.equal(G('Simmone MacKinnon "Allie Reese" Production-Made Cropped Rash Guard from Baywatch (1989-2001) - Baywatch Production COA'), 'entertainment-memorabilia');
+  assert.equal(G('Production-Made Death Eater Thorn Wand Prop from Harry Potter and the Deathly Hallows (2010-2011) - 13.5" - Coronado Trading OOA'), 'movie-tv');
+  assert.equal(G('1946 Gilda Framed Belgian Movie Poster - 21.75 x 26'), 'entertainment-memorabilia');
+  // sealed / graded records and modern tour posters are mass items
+  assert.equal(G('The Beatles - "Anthology 1" - Sealed Vinyl Record - Europe Release, Tri-Fold, 3x Vinyl - Apple Records - 1995'), DROP);
+  assert.equal(G('July 14-15, 2018 Eminem Revival Tour Poster - 11 x 17'), DROP);
+  assert.equal(G('James Taylor - "Handy Man" - Test Pressing Vinyl - 12", 33 1/3 RPM - Columbia Records - 1977 - VMG EX 8.0'), DROP);
+  // sport evidence keeps a sports lot
+  assert.equal(G('2021 Jonah Williams Los Angeles Rams White Practice-Used Jersey – Rams COA'), 'game-used');
+  assert.equal(G('1952 Rocky Marciano/Jersey Joe Walcott Type I Original Photo by Sam Goldstein - 7 x 9.25 - PSA/DNA', 'type-1-photos'), 'type-1-photos');
+});
+
 test('class 1 · culture kind reads the description when the title is a bare name; signed pieces; plurals', () => {
   const K = (title: string, description = '', o: R = {}) => subCatOf({ artist: 'entertainment-memorabilia', title, itemClass: cultureItemClass({ title, description, ...o }) }).subCat;
   // the object lives in the description (Christie's / Sotheby's culture titles)

@@ -21,7 +21,7 @@ import { looksLikeCard } from '../../app/lib/cards';
 import { classifyForm } from '../../app/lib/comps';
 import { leadsWithSetCode } from './set-codes';
 import { ARTIST_MARKET } from '../../app/constants';
-import { routeCulture, isCultureSale } from '../culture';
+import { routeCulture, isCultureSale, cultureSlugOf } from '../culture';
 import { routeRRLot, rrSportsPrior, rrAthleteRoute, rrSpaceTitle } from '../rr-auction';
 import { routeSportsLot } from '../sports-sale';
 import { athleteIn } from './athlete-roster';
@@ -324,6 +324,15 @@ const NON_SPORT_SALE_RE = /pop memorabilia|pop culture|television|\bfilm\b|movie
 // house's decorative-arts / luxury-goods sales, has no home).
 // ═══════════════════════════════════════════════════════════════════════════
 export const ENTERTAINMENT_HOUSES = new Set(["Julien's", 'Propstore']);
+/** a non-sport object leaving the sports market: its culture slug, or DROP
+ *  when it is a mass item (the culture mass marks, a sealed / graded record,
+ *  a re-release or reprint poster, a poster lot) — unless a celebrity SIGNED it */
+const MASS_MEDIA_RE = /\b(?:vinyl|test pressing|vmg|amg|re-?release|reprint|reproduction|11\s*x\s*17|posters|tour poster)\b/i;
+export function cultureHome(t: string, desc = ''): string {
+  const signedPiece = SIGNED_RE.test(t) && !MASS_EVEN_SIGNED_RE.test(t) && !COMIC_RE.test(t) && !NON_SPORT_TCG_RE.test(t);
+  if (!signedPiece && (CULTURE_MASS_RE.test(t) || MASS_MEDIA_RE.test(t) || COMIC_RE.test(t) || NON_SPORT_TCG_RE.test(t) || MASS_TOY_RE.test(t))) return DROP;
+  return cultureSlugOf(t, desc);
+}
 /** sport words that cannot be a costume / prop / generic object */
 export const SPORT_STRONG_RE = /\bali (?:and|&|vs\.?) |\b(?:and|&|vs\.?) ali\b|\b(frazier|baseball|football|basketball|hockey|boxing|boxer|golf|golfer|tennis|olympics?|soccer|wrestl(?:ing|er)|nascar|formula (?:1|one)|world series|super bowl|stanley cup|world cup|fifa|all[- ]star game|hall of fame|mlb|nfl|nba|nhl|ufc|wwe|wwf|heavyweight|(?:game|match|fight|race)[- ](?:used|worn|issued)|yankees|dodgers|red sox|white sox|cubs|lakers|celtics|bulls|knicks|packers|cowboys|steelers|49ers|canadiens|maple leafs|bruins|boca juniors|real madrid|barcelona|manchester united|aston villa|liverpool|juventus|pel[eé]|maradona|muhammad ali|babe ruth|mantle|gretzky)\b/i;
 const SPORTS_SALE_NAME_RE = /\bsports?\b|baseball|basketball|football|boxing|golf|soccer|hockey|olympic|nba|nfl|holyfield|pel[eé]|di st[eé]fano/i;
@@ -338,10 +347,25 @@ export function entertainmentHouseFix(l: ClassifyLot): string | null {
   const t = String(l.title || '');
   if (isSportsEvidence(t, String(l.saleName || ''))) return null;
   if (NO_HOME_SALE_RE.test(String(l.saleName || ''))) return DROP;
-  const to = routeCulture(t, String(l.description || '').slice(0, 300).replace(/class="[^"]*"|lot closed[^]*$/i, ''));
-  if (to) return to;
-  // a celebrity-SIGNED lobby card / album sleeve is an autograph, not the mass object
-  return SIGNED_RE.test(t) && !MASS_EVEN_SIGNED_RE.test(t) && !COMIC_RE.test(t) ? 'entertainment-memorabilia' : DROP;
+  return cultureHome(t, String(l.description || '').slice(0, 300).replace(/class="[^"]*"|lot closed[^]*$/i, ''));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// (wave 2) 11 · GOLDIN'S ITEM-TYPE FACET — the crawl trusted Goldin's
+// 'Game-Used Memorabilia' / 'Tickets and Passes' / 'Awards and Trophies' item
+// types (goldin.ts GOLDIN_FACET_PASSES fallback) without its Sport category,
+// so a sealed Beatles LP, a Star Wars costume piece, a Baywatch production
+// garment or an Eminem tour poster became game-used. A sports-object row
+// that reads music / film / TV and carries no sport evidence goes to the
+// culture router (or, mass, nowhere).
+// ═══════════════════════════════════════════════════════════════════════════
+export const GOLDIN_NON_SPORT_RE = /\b(?:vinyl|test pressing|cassette|laserdisc|8-track|production[- ](?:made|used)|screen[- ](?:used|worn|matched)|ursa authentic|movie poster|film poster|concert poster|tour poster|star wars|star trek|marvel|disney|beatles|elvis presley|rolling stones|nirvana|hollywood|actor|actress|filming|baywatch|(?:from|in) (?:the )?(?:film|movie|tv series|series))\b/i;
+const NON_CARD_SPORTS_SLUGS = new Set(['game-used', 'sports-memorabilia', 'tickets-passes', 'trophies-awards', 'type-1-photos', 'autographs', 'programs-publications', 'equipment-artifacts']);
+export function goldinNonSportFix(l: ClassifyLot): string | null {
+  if (l.auctionHouse !== 'Goldin' || !NON_CARD_SPORTS_SLUGS.has(l.artist)) return null;
+  const t = String(l.title || '');
+  if (!GOLDIN_NON_SPORT_RE.test(t) || isSportsEvidence(t)) return null;
+  return cultureHome(t);
 }
 
 export function saleGateFix(l: ClassifyLot): string | null {
@@ -559,6 +583,7 @@ export const RECLASS_RULES: ReclassRule[] = [
   },
   { cls: 'sports-catch-all-programmes', apply: sportsCatchAllFix },
   { cls: 'entertainment-house-not-sports', apply: entertainmentHouseFix },
+  { cls: 'goldin-facet-non-sport', apply: goldinNonSportFix },
   { cls: 'watch-jewelry-tudor', apply: watchMakerFix },
   { cls: 'art-design-attribution', apply: attributionFix },
   { cls: 'culture-mass-leaks', apply: cultureMassFix },
