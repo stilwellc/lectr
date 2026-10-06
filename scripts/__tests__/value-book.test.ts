@@ -151,3 +151,19 @@ test('buildValueBook: header carries builtAt + engineVersion + bookVersion; excl
   assert.equal(book.audit.skipped['grade-authentic'], 1);
   assert.equal(book.audit.skipped['comp-exclude'], 1);
 });
+
+test('watch variant helpers have ONE source (app/lib/comps) shared with the value book', async () => {
+  const comps = await import('../../app/lib/comps');
+  const vb = await import('../emit-value-book');
+  assert.equal(vb.watchSaleClass, comps.watchSaleClass);
+  assert.equal(vb.isDualWatchRef, comps.isDualWatchRef);
+  assert.equal(vb.WATCH_MIN_N, comps.WATCH_MIN_N);
+  // a minority gem-set sale leaves; a dominant material keeps the unstated sales
+  const S = (p: number, title: string) => ({ p, c: comps.watchSaleClass({ title, medium: '' }) });
+  const pool = [S(10, 'Rolex 126610LN steel'), S(11, 'Rolex 126610LN stainless steel'), S(12, 'Rolex 126610LN'),
+    S(10.5, 'Rolex 126610LN steel'), S(40, 'Rolex 126610LN steel diamond bezel')];
+  const r = comps.purifyWatchSales(pool, s => s.c, s => s.p, 3);
+  assert.deepEqual(r.sales.map(s => s.p), [10, 11, 12, 10.5]);
+  assert.equal(r.mat, 'steel');
+  assert.equal(r.abstain, null);
+});
