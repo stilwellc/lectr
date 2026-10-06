@@ -117,9 +117,9 @@ test('cache: hit on same id+text+version, miss when the text changes or the prom
 test('cap: RAY_EXTRACT_MAX bounds the night; live unkeyed lots go first, then live keyed, sold unkeyed, sold keyed', () => {
   const lots = [
     lot('1983 Topps #482 Tony Gwynn Rookie Card - PSA MINT 9', { id: 'sold-keyed' }),
-    lot('1983 Topps 482 Tony Gwynn Rookie Card – PSA MINT 9', { id: 'sold-unkeyed' }),
+    lot('1983 Topps Tony Gwynn Rookie Card – PSA MINT 9', { id: 'sold-unkeyed' }),
     lot('1983 Topps #482 Tony Gwynn Rookie Card - PSA MINT 9', { id: 'live-keyed', status: 'upcoming' }),
-    lot('1983 Topps 482 Tony Gwynn Rookie Card – PSA MINT 9', { id: 'live-unkeyed', status: 'upcoming' }),
+    lot('1983 Topps Tony Gwynn Rookie Card – PSA MINT 9', { id: 'live-unkeyed', status: 'upcoming' }),
     lot('Oil on canvas', { id: 'art', artist: 'andy-warhol' }),
   ];
   const all = selectCandidates(lots, new ExtractCache(), 100);
@@ -211,10 +211,12 @@ test('replay: submit → collect → validate → cache → attach → advisory 
 
   // cards: fills the '#'-less identity into the SAME key the regex gives the '#' form
   const regexTwin = cardKey(parseCard('1983 Topps #482 Tony Gwynn Rookie Card - PSA MINT 9'));
-  assert.equal(cardKey(parseCard(gwynn.title)), null, 'regex alone cannot key it');
+  // (Oct 6 sports labeling wave) the regex now reads Goldin's '#'-less number
+  // itself; the advisory merge keeps that same twin key
+  assert.equal(cardKey(parseCard(gwynn.title)), regexTwin, 'regex keys the #-less form');
   const merged = mergeCardExtract(parseCard(gwynn.title), gwynn) as ReturnType<typeof parseCard> & { llmFilled?: string[] };
   assert.equal(cardKey(merged), regexTwin);
-  assert.ok(merged.llmFilled?.includes('cardNo'));
+  assert.ok(!merged.llmFilled?.includes('cardNo'), 'nothing left to fill');
 
   // never override a hard regex grade: the fixture says 10, the regex reads BGS 9
   const fr = parseCard(faulk.title);

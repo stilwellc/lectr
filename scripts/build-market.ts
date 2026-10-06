@@ -1280,7 +1280,10 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
       // player into _pid/_pname (same objects live in `all`), so reuse it —
       // fall back to a fresh playerOf() parse for any lot §3 skipped (no
       // realizedUsd/saleDate). Idempotent: re-running overwrites the same slug.
-      if (l.status === 'sold' && !CARD_SLUGS.has(l.artist)) {
+      // (Oct 6, sports labeling wave) every CLOSED object lot — a passed /
+      // unresolved jersey names its athlete exactly as a sold one does (the
+      // re-audit counted bought-in lots with no player as missing)
+      if (l.status !== 'upcoming' && !CARD_SLUGS.has(l.artist)) {
         const sw = l as AuctionLot & { _pid?: string | null; _pname?: string | null; playerSlug?: string | null; playerName?: string | null };
         let pid = sw._pid ?? null, pname = sw._pname ?? null;
         if (pid == null) { const p = playerOf(l.title || '', l.artist, knownPlayers); pid = p.playerSlug; pname = p.player; }

@@ -1,9 +1,9 @@
 import type { AuctionLot } from '../../app/types';
 import { subCatOf, sportSlugOf, sportOfSale, sportWordOf, cultureTextDomain, curatedDomainOf, watchRefKey, watchFamilyOf, type SubCatMaps } from './sub-cats';
 import { SUBJECT_DOMAINS } from './subject-domains';
-import { athleteIn } from './athlete-roster';
+import { athleteIn, ATHLETES } from './athlete-roster';
 import { extractReference } from './identity-enrich';
-import { looksLikeCard, playerSlugOf, parseCard, cardYearKey } from '../../app/lib/cards';
+import { looksLikeCard, playerSlugOf, parseCard, cardYearKey, knownPlayerSet } from '../../app/lib/cards';
 import { classifyForm, objectClassOf, cleanGoldinTitle, watchKey, isPersonNameRun, personNameOf } from '../../app/lib/comps';
 import { vetReference, readDescriptionReference, splitWatchRef, isWatchModelLine } from '../../app/lib/watch-ref';
 import { titleTokens as titleTokensOf, extractEdition, extractSerials, toUsdDated, fxRateFor } from '../../app/lib/normalize';
@@ -1023,10 +1023,32 @@ export function rerouteSetCodeCards(lots: Lot[]): number {
 // nightly, so a rule fixes the back-catalogue as well as tomorrow's crawl.
 // A rule moves a lot to its correct artist slug or evicts it (no valid home);
 // per-class counts are logged so a rule's blast radius is visible nightly.
+/** (Oct 6, sports labeling wave) A CARD row's playerName is the card
+ *  parser's player — the one build-market stamps on a live card. A sold card
+ *  keeps the name stamped while it was live, by whatever parser ran then:
+ *  5.2k carry set / brand runs ("Baseball Hall", "Red Man Tobacco", "Post
+ *  Cereal Complete", "Playoff Contenders" on a Tom Brady card). Re-read it;
+ *  with no parsed player keep only an athlete — the roster, or a player the
+ *  card parser reads across the corpus (`known`: a "Darrelle Revis Patch Card
+ *  Collection (11)" lot keeps Revis). */
+export function restampCardPlayer(w: { title?: string | null; playerName?: string | null; playerSlug?: string | null }, known?: ReadonlySet<string>): string | null {
+  const c = parseCard(String(w.title || ''));
+  if (c.player && c.playerSlug) {
+    if ((w.playerSlug || playerSlugOf(w.playerName || null)) === c.playerSlug) return null;
+    w.playerName = c.player; w.playerSlug = c.playerSlug;
+    return 'card-player-restamped';
+  }
+  const slug = w.playerSlug || playerSlugOf(w.playerName || null);
+  if (slug && (ATHLETES.has(slug.replace(/-/g, ' ')) || known?.has(slug))) return null;
+  delete w.playerName; delete w.playerSlug;
+  return 'card-player-cleared';
+}
+
 export function reclassifyCorpus(lots: Lot[]): { byClass: Record<string, number>; dropped: number } {
   const byClass: Record<string, number> = {};
   const drop = new Set<number>();
   let stalePlayers = 0;
+  let knownCardPlayers: Set<string> | null = null;
   for (let i = 0; i < lots.length; i++) {
     const r = reclassifyLot(lots[i] as Lot & { saleName?: string | null; description?: string | null });
     for (const c of r.fired) byClass[c] = (byClass[c] || 0) + 1;
@@ -1039,6 +1061,15 @@ export function reclassifyCorpus(lots: Lot[]): { byClass: Record<string, number>
     const w = lots[i] as Lot & { playerName?: string | null; playerSlug?: string | null };
     if ((w.playerName || w.playerSlug) && ARTIST_MARKET[w.artist as keyof typeof ARTIST_MARKET] !== 'sports') {
       delete w.playerName; delete w.playerSlug; stalePlayers++;
+    } else if ((w.playerName || w.playerSlug) && (w.artist === 'sports-cards' || w.artist === 'graded-cards')) {
+      // the corpus's card-parsed players (knownPlayerSet), built once, lazily
+      if (!knownCardPlayers) {
+        const names: (string | null)[] = [];
+        for (const l of lots) if (l.artist === 'sports-cards' || l.artist === 'graded-cards') names.push(parseCard(String(l.title || '')).player);
+        knownCardPlayers = knownPlayerSet(names);
+      }
+      const r2 = restampCardPlayer(w, knownCardPlayers);
+      if (r2) byClass[r2] = (byClass[r2] || 0) + 1;
     }
   }
   if (stalePlayers) byClass['stale-player-cleared'] = stalePlayers;

@@ -63,6 +63,10 @@ export interface CardId {
    2". The player is the 2-word capitalised run (3 with a middle initial)
    right before the first pose / team / grade word; the issue's brand words
    before it ("White Border", "George Close Candy") are skipped. */
+// (sports wave) E98's own issue name ("Set of 30", quoted or not) is not a lot
+// (no lookbehind: this module ships to the browser)
+const E98_SET_OF_30_RE = /["“]?\bset of 30\b["”]?/i;
+const maskE98 = (t: string, by: string) => (/\bE98\b/.test(t) ? t.replace(E98_SET_OF_30_RE, by) : t);
 const CATALOG_RE = /\b((?:[TEDMNRWH]|PC|WG)-?\d{1,3}(?:-\d{1,2})?)\b/;
 const CATALOG_MULTI_RE = /\(\d[\d,+]*\)|\b(?:collection|lots?|pair|trio|quartet|group|sets?|run|folders?|team card|uncut|panel|sheet|album|box|pack|wrapper|display|banner|poster|proof|lithograph|premium|cabinets?|and|with)\b|&|\//i;
 const CATALOG_GRADE_CUT_RE = /\s(?:-|–|—)\s|\b(?:PSA|SGC|BVG|BGS|GAI|CGC|KSA|GMA|Beckett|Graded|Authentic)\b|\(|!|,/;
@@ -70,12 +74,24 @@ const POSE_WORDS = new Set(('portrait batting bat bats fielding throwing pitchin
 const TEAM_WORDS = new Set(('boston brooklyn chicago cincinnati cleveland detroit new york philadelphia pittsburgh st. st louis washington baltimore buffalo providence newark jersey toronto montreal kansas city minneapolis milwaukee indianapolis louisville columbus rochester atlanta nashville memphis birmingham mobile montgomery chattanooga little rock orleans shreveport portsmouth nationals americans national american league nl al sox cubs giants phillies').split(' '));
 const BACK_WORDS = /^(?:polar|bear|sovereign|piedmont|sweet|caporal|old|mill|hindu|tolstoi|drum|uzit|lenox|broad|leaf|broadleaf|cycle|carolina|brights|beauty|hassan|ty|cobb|el|principe|gales|\d{3})$/;
 const ISSUE_WORDS = new Set(('border borders background tobacco cigarettes cigarette candy caramel caramels bakery bread gum baking co. co bros. bros company anonymous series type cards card old judge mill sweet caporal hassan mecca fatima piedmont polar bear ramly obak coupon turkey cabinets postcards postcard sepia strip champions prize fighters cracker sporting news supplements supplement exhibits exhibit tango eggs brand standard general clement fleischmann close creole hess california goodwin duke kimball allen ginter honest long cut plug dixie lids pins pin silks silk blankets felts life zeenut world wide goudey chicle diamond stars portraits action big chewing helmar stamps stamp swamp garter chips contentnea photo cycle sovereign beauty broad hindu tolstoi uzit drum lenox carolina brights mono rochester dockman sons publications kashin pastel').split(' '));
+// (sports wave) a two-word slab grade ("SGC EX/NM 6", "PSA NM/MT 8") is not a '/' lot
+const GRADE_SLASH_RE = /\b(?:EX|NM|MT|VG|GD|FR|GOOD|MINT)\s*\/\s*(?:EX|NM|MT|VG|MINT)\b\+?/gi;
+// (sports wave) a colour that is a SURNAME ("Mordecai Brown", "Red Dooin",
+// "Red Ty Cobb" on E98) vs a colour that names the background / border / cap
+const COLOUR_WORDS = /^(?:white|red|green|blue|brown|orange|yellow|gold|pink|gray|grey|black|dark|light)$/;
+const COLOUR_NOUN_NEXT = /^(?:background|backgrounds|border|borders|back|backs|cap|caps|sleeves|sweater|letters?|lettering|name|stockings|sox)$/;
 function catalogIdentity(t: string): { player: string; code: string; pose: string | null } | null {
-  const s = t.replace(/&quot;|["“”]/g, '"').replace(/&amp;/g, '&');
+  const s0 = t.replace(/&quot;|["“”]/g, '"').replace(/&amp;/g, '&')
+    // (sports wave) a quoted NICKNAME inside the name (Joe "Iron Man"
+    // McGinnity) is not an issue sub-brand; a provenance / type parenthetical
+    // ("(Paul Pollard Collection)", "(Type 3)") is neither a lot nor the grade
+    .replace(/([A-Z][a-z.]+)\s+"[^"]{1,24}"\s+(?=[A-Z][a-z])/g, '$1 ')
+    .replace(/\((?:[^()]*\bcollection|type|series|var\.?|variation)\b[^()]*\)/gi, ' ');
+  const s = maskE98(s0, ' "Set of 30" ');
   if (s.includes('#')) return null;
   const cm = s.match(CATALOG_RE);
   if (!cm) return null;
-  if (CATALOG_MULTI_RE.test(s.replace(/\b(?:white|gold) borders?\b/gi, ' ').replace(/"[^"]*"/g, ' '))) return null;
+  if (CATALOG_MULTI_RE.test(s.replace(/\b(?:white|gold) borders?\b/gi, ' ').replace(/"[^"]*"/g, ' ').replace(GRADE_SLASH_RE, ' '))) return null;
   const code = cm[1].toLowerCase().replace(/^([a-z]+)-/, '$1');
   // quoted sub-brands ("Set of 30", "Series 6") separate the issue from the name
   const rest = s.slice((cm.index || 0) + cm[0].length).replace(/"[^"]*"/g, ' | ');
@@ -86,10 +102,17 @@ function catalogIdentity(t: string): { player: string; code: string; pose: strin
   // the issue's own words lead ("White Border", "Brown Background", "Old Judge")
   const lw = (w: string) => w.toLowerCase().replace(/[^a-z.'-]/g, '');
   let start = 0;
-  while (start < words.length && (ISSUE_WORDS.has(lw(words[start])) || POSE_WORDS.has(lw(words[start])))) start++;
+  const nameNext = (i: number) => { const nx = lw(words[i + 1] || ''); return !!nx && /^[A-Z]/.test(words[i + 1]) && !ISSUE_WORDS.has(nx) && !POSE_WORDS.has(nx) && !TEAM_WORDS.has(nx); };
+  while (start < words.length && (words[start] === '|' || ISSUE_WORDS.has(lw(words[start])) || POSE_WORDS.has(lw(words[start])))) {
+    // a capitalised colour directly before a name word starts the name
+    if (COLOUR_WORDS.test(lw(words[start])) && /^[A-Z]/.test(words[start]) && nameNext(start)) break;
+    start++;
+  }
   let end = words.length;
   for (let i = start + 1; i < words.length; i++) {
     const w = words[i].toLowerCase().replace(/[^a-z.'-]/g, '');
+    // one name word so far + a colour not naming a background / border: the surname
+    if (COLOUR_WORDS.test(w) && i - Math.max(start, words.slice(0, i).lastIndexOf('|') + 1) === 1 && !COLOUR_NOUN_NEXT.test(lw(words[i + 1] || ''))) continue;
     if (POSE_WORDS.has(w) || POSE_WORDS.has(w.split('-')[0]) || TEAM_WORDS.has(w)) { end = i; break; }
   }
   const bar = words.slice(0, end).lastIndexOf('|');
@@ -132,8 +155,22 @@ const TIER_RES: [RegExp, string][] = [[/\bblack\s*label\b/i, 'bl'], [/\bgold\s*l
 // never the autograph-authentication form PSA/DNA
 const GRADER_ANY_RE = new RegExp(`\\b(${GRADERS})\\b(?!\\s*\\/\\s*DNA)`, 'gi');
 const GRADE_ANY_RE = new RegExp(`\\b(${GRADERS})\\b(?!\\s*\\/\\s*DNA)([^0-9()]{0,24}?)(\\d{1,2}(?:\\.5)?)(?![\\d.])`, 'gi');
-const GRADE_TAG_RE = new RegExp(`\\b(${GRADERS})\\b(?!\\s*\\/\\s*DNA)\\s*[-:]?\\s*(authentic|auth\\b|altered|a\\b)`, 'gi');
+const GRADE_TAG_RE = new RegExp(`\\b(${GRADERS})\\b(?!\\s*\\/\\s*DNA)\\s*[-:]?\\s*(authentic|auth\\b|aut\\b|altered|a\\b)`, 'gi');
 const GRADE_QUAL_RE = /^\s*\(?\s*(OC|MK|ST|PD|MC|OF)\s*\)?(?![a-z])/i;
+/** (Oct 6, sports labeling wave) SGC's LEGACY 100-point grades ("SGC EX 60",
+ *  "SGC 88 NM/MT", "SGC POOR 10") read as the 10-point grade printed beside
+ *  them on today's slabs — 9.8k REA / H&S / LOTG cards parsed no grade (no key)
+ *  and 5.5k entered the repeat-sale index as RAW. Two-digit values ≥ 20 are
+ *  only ever the legacy scale; a 10 is legacy only beside POOR/PR. */
+const SGC_LEGACY: Record<string, string> = { 100: '10', 98: '10', 96: '9', 92: '8.5', 88: '8', 86: '7.5', 84: '7', 82: '6.5', 80: '6', 70: '5.5', 60: '5', 55: '4.5', 50: '4', 45: '3.5', 40: '3', 35: '2.5', 30: '2', 20: '1.5' };
+const SGC_LEGACY_RE = /\b(SGC)\b(?!\s*\/\s*DNA)([^0-9()#,;]{0,24}?)\b(100|98|96|92|88|86|84|82|80|70|60|55|50|45|40|35|30|20|10)\b(?![\d.])/g;
+function sgcTenPoint(t: string): string {
+  if (!/\bSGC\b/.test(t)) return t;
+  return t.replace(SGC_LEGACY_RE, (m, co: string, gap: string, n: string) => {
+    if (n === '10') return /\b(?:POOR|PR)\b/i.test(gap) ? `${co}${gap}1` : m;
+    return `${co}${gap}${SGC_LEGACY[n]}`;
+  });
+}
 // a gap between the grader and the number that reads as an AUTOGRAPH grade
 const AUTO_GAP_RE = /auth|auto|dna|sig/i;
 // parallel / variant tokens (whole title, outside the set name). Team names
@@ -198,6 +235,44 @@ export function isComicOrMagazineTitle(title: string): boolean {
 // "Including / Featuring / with" listing)
 const MULTI_CARD_RE = /\b(?:lots? of|set of|run of|group of|(?:complete|near[- ]complete|near|team|master|partial|starter)[- ]sets?\s*(?:\(\d|[:,-]?\s*(?:including|featuring|with)\b)|(?:collection|lot|group|set|stack|trio|quartet)\s*\(\d+\)|pair\b|\(\d+\)\s*$|\(\d+\)\s*[-–—])/i;
 const LOT_NO_BEFORE_YEAR = /^\d{1,5}\s+(?=(?:19|20)\d{2}(?:-\d{2})?\b)/;
+/** (Oct 6, sports labeling wave) REA / LOTG / H&S lead a signed card with the
+ *  word ("Signed 1958 Topps Football #62 Jim Brown Rookie PSA VG-EX 4 with MINT
+ *  9 Signature") — the year, set and key were lost on 3.8k cards. The word is
+ *  skipped like a lot number; the autograph still reads from the title. */
+const CARD_LEAD_BEFORE_YEAR = /^(?:\d{1,5}|(?:(?:dual|triple|multi)[- ])?signed|autographed)\s+(?=(?:19|20)\d{2}(?:-\d{2})?\b)/i;
+/** (Oct 6, sports labeling wave) Goldin's older title form prints the card
+ *  number WITHOUT '#': "2019 Topps 475 Pete Alonso Rookie Card – PSA GEM MT
+ *  10", "2022 Bowman Draft Bd80 Elly De La Cruz Rookie Card – PSA MINT 9"
+ *  (16.9k keyless Goldin cards). A number-shaped token (digits, or 1–4 letters
+ *  then digits) counts as the card number only when a 2+ word name run follows
+ *  it and the run ends the title or meets the card's tail (a dash, a paren, a
+ *  card / grade word) — "Topps F1 Turbo Attax 330 Max Verstappen" reads 330,
+ *  never F1. */
+const BARE_NO_RE = /^(?:[A-Za-z]{1,4}-?)?\d{1,4}[A-Za-z]?$/;
+const BARE_NAME_TAIL_RE = /^(?:$|[-–—(]|(?:Rookie|RC|Card|Signed|Auto|Autograph(?:ed)?|Patch|Relic|PSA|BGS|SGC|CGC|BVG)\b)/;
+// a numbered series / volume is the set, not the card number; a sealed
+// product names no card
+const BARE_SERIES_WORD = /^(?:psa|bgs|sgc|cgc|gem|mint|mt|nm|ex|vg|good|poor|fair|series|serie|vol\.?|volume|edition|set|chapter|wave|round|part|pack|box|no\.?|year|week|game|f1)$/i;
+const BARE_NOT_A_CARD = /\b(?:factory[- ]sealed|sealed|unopened|hobby|blaster|retail|boxe?s?|packs?|cases?|wax|cello|rack|lots?|collection)\b/i;
+function bareNumberIdentity(afterYear: string): { cardNo: string; setName: string; player: string } | null {
+  if (BARE_NOT_A_CARD.test(afterYear)) return null;
+  const toks = afterYear.trim().split(/\s+/);
+  for (let j = 1; j < toks.length - 1; j++) {
+    const tok = toks[j];
+    if (!BARE_NO_RE.test(tok) || /^(?:19|20)\d{2}$/.test(tok) || BARE_SERIES_WORD.test(toks[j - 1]) || BARE_SERIES_WORD.test(tok)) continue;
+    const rest = toks.slice(j + 1).join(' ');
+    const m = rest.match(LEADING_PLAYER_ANY);
+    if (!m) continue;
+    const name = trimNameRun(m[1], true);
+    if (!name || NOT_A_PLAYER_WORD.test(name)) continue;
+    const tail = rest.slice(rest.indexOf(name) + name.length).trim();
+    if (!BARE_NAME_TAIL_RE.test(tail)) continue;
+    const setName = toks.slice(0, j).join(' ');
+    if (setName.length > 90 || !/[A-Za-z]/.test(setName)) return null;
+    return { cardNo: tok.toUpperCase(), setName, player: name };
+  }
+  return null;
+}
 const SERIAL_RE = /\(#?\s*\d*\s*\/\s*(\d+)\)/;
 // the player: capitalized-word run right after #CARDNO (cards) — allows
 // lowercase particles (de, van), diacritics, O'/Mc names, Jr/Sr/II suffixes
@@ -206,6 +281,8 @@ const AFTER_NO_PLAYER = new RegExp(
   String.raw`#[A-Za-z0-9/.-]+\s+((?:${NAME_TOKEN}|de|van|von|der|jr\.?|sr\.?|II|III)(?:\s+(?:${NAME_TOKEN}|de|van|von|der|Jr\.?|Sr\.?|II|III)){1,3})`
 );
 const LEADING_PLAYER = new RegExp(String.raw`^((?:${NAME_TOKEN}\s+){1,2}${NAME_TOKEN})`);
+// a leading run that may carry the particles / suffixes a card-number run does
+const LEADING_PLAYER_ANY = new RegExp(String.raw`^((?:${NAME_TOKEN}|de|van|von|der|la|da|dos)(?:\s+(?:${NAME_TOKEN}|de|van|von|der|la|da|dos|Jr\.?|Sr\.?|II|III)){1,3})`);
 // words that end a player-name run (descriptors, never surnames)
 // (Oct 6) a name run also ends at a GRADER or GRADE word ("Willie Mays PSA
 // EX-MT 6" minted the player willie-mays-psa-ex-mt: 40k lots) and at card
@@ -214,7 +291,9 @@ const LEADING_PLAYER = new RegExp(String.raw`^((?:${NAME_TOKEN}\s+){1,2}${NAME_T
 const GRADE_NAME_STOP = /^(PSA|BGS|SGC|CGC|BVG|CSG|HGA|TAG|GAI|BCCG|KSA|GMA|Beckett|GEM|MINT|MT|NM|EX|VG|GOOD|FAIR|POOR|PR|Authentic|Graded|All|Buyback|Holographic|Holo|Rare|Checklist|Gem|Mint)$/;
 // two-word descriptors whose first word is also a surname (Reggie White,
 // Danny Gray): stop only when the pair reads as the descriptor
-const PAIR_NAME_STOP = /^(?:(?:White|Gray|Grey|Blue|Yellow|Cream)\s+(?:Back|Border)|High\s+(?:Number|#)|Short\s+Print|(?:Secret|Ultimate|Ultra|Super)\s+Rare)/;
+// (sports wave) + "Hand-Cut" / "Hand Cut" (Bazooka / Post panels: "Mickey
+// Mantle Hand-Cut" minted the player mickey-mantle-hand-cut)
+const PAIR_NAME_STOP = /^(?:(?:White|Gray|Grey|Blue|Yellow|Cream)\s+(?:Back|Border)|High\s+(?:Number|#)|Short\s+Print|(?:Secret|Ultimate|Ultra|Super)\s+Rare|Hand[- ]?Cut\b)/i;
 // a colour word ends a run only once a 2+ word name is kept ("Patrick Mahomes
 // II Orange #42/49"), never before ("Vida Blue", "Red Grange")
 const COLOR_NAME_STOP = /^(Silver|Gold|Red|Blue|Green|Orange|Purple|Pink|Black|Bronze|Platinum|Yellow|Teal|Aqua|Emerald|Ruby|Sapphire)$/;
@@ -245,6 +324,8 @@ function trimNameRun(run: string, lead = false): string | null {
     if (lead && LEAD_NAME_STOP.test(w)) break;
     const w0 = w.split(/[-/]/)[0];
     if (GRADE_NAME_STOP.test(w0) || (kept.length >= 2 && COLOR_NAME_STOP.test(w0))) break;
+    // a LEADING "Hand Cut" ("#13 Hand Cut Willie Mays") is skipped, not a stop
+    if (!kept.length && /^Hand(?:-Cut|\s+Cut)?$/i.test(w) && /^Hand[- ]?Cut\b/i.test(words.slice(i, i + 2).join(' '))) { if (!/-/.test(w)) i++; continue; }
     if (PAIR_NAME_STOP.test(words.slice(i, i + 2).join(' '))) break;
     kept.push(w);
   }
@@ -278,29 +359,31 @@ export function parseCard(title: string): CardId {
     const near = gap + ' ' + rest.slice(0, 24);
     for (const [re, tier] of TIER_RES) if (re.test(near)) { out.gradeTier = tier; break; }
   };
-  const g = t.match(GRADE_RE);
+  // (sports wave) the card grade reads through SGC's legacy 100-point scale
+  const tg = sgcTenPoint(t);
+  const g = tg.match(GRADE_RE);
   if (g && !AUTO_GAP_RE.test(g[2])) {
     const headLen = g[0].indexOf(g[1]) + g[1].length + g[2].length + g[3].length;
-    setGrade(g[1], g[3], t.slice((g.index || 0) + headLen), g[2]);
+    setGrade(g[1], g[3], tg.slice((g.index || 0) + headLen), g[2]);
   }
   if (out.gradeNum == null) {
     GRADE_ANY_RE.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = GRADE_ANY_RE.exec(t))) {
+    while ((m = GRADE_ANY_RE.exec(tg))) {
       const n = parseFloat(m[3]);
       if (!isGrader(m[1]) || AUTO_GAP_RE.test(m[2]) || !(n >= 1 && n <= 10)) continue;
-      setGrade(m[1], m[3], t.slice(m.index + m[0].length), m[2]);
+      setGrade(m[1], m[3], tg.slice(m.index + m[0].length), m[2]);
       break;
     }
   }
   if (out.gradeNum == null) {
     let tag: RegExpExecArray | null = null;
     GRADE_TAG_RE.lastIndex = 0;
-    for (let m = GRADE_TAG_RE.exec(t); m; m = GRADE_TAG_RE.exec(t)) if (isGrader(m[1])) { tag = m; break; }
+    for (let m = GRADE_TAG_RE.exec(tg); m; m = GRADE_TAG_RE.exec(tg)) if (isGrader(m[1])) { tag = m; break; }
     if (tag) { out.gradeCo = tag[1].toUpperCase(); out.gradeTag = 'A'; }
     else {
       GRADER_ANY_RE.lastIndex = 0;
-      for (let m = GRADER_ANY_RE.exec(t); m; m = GRADER_ANY_RE.exec(t)) if (isGrader(m[1])) { out.gradeUnparsed = true; break; }
+      for (let m = GRADER_ANY_RE.exec(tg); m; m = GRADER_ANY_RE.exec(tg)) if (isGrader(m[1])) { out.gradeUnparsed = true; break; }
     }
   }
   // the AUTOGRAPH grade (dual-graded signed slabs): PSA/DNA or "Auto N"
@@ -324,13 +407,15 @@ export function parseCard(title: string): CardId {
   if (ser) out.serialOf = parseInt(ser[1], 10);
 
   out.rookie = /\brookie\b|\bRC\b/i.test(t);
-  out.auto = /\b(autograph|signed|auto)\b/i.test(t);
+  // (sports wave) + "Autographed" (REA: "Autographed 1954 Bowman #65 Mickey Mantle") — a
+  // signed copy keys apart from the plain card in the repeat-sale index
+  out.auto = /\b(autograph(?:ed)?|signed|auto)\b/i.test(t);
 
   // year: leading 4-digit (with optional -yy) or bare 2-digit ('96, 21, 00).
   // A LOT NUMBER may lead ("77 1962 Topps …" — Memory Lane / Lelands / LOTG):
   // a short number directly before a 4-digit year is skipped, never read as a
   // '77 two-digit year (Sep 28 2026: it minted 1977 for a 1962 card).
-  const lotPre = (t.match(LOT_NO_BEFORE_YEAR) || [''])[0];
+  const lotPre = (t.match(CARD_LEAD_BEFORE_YEAR) || [''])[0];
   const ty = t.slice(lotPre.length);
   // (Oct 6) a 4-digit range end ("1986-1987 Fleer" — REA/Lelands) and a
   // 2-digit range ("34-36 Diamond Stars") are the YEAR, not the set's first
@@ -347,6 +432,11 @@ export function parseCard(title: string): CardId {
   const noParens = t.replace(/\([^)]*\)/g, ' ');
   const no = noParens.match(/#([A-Za-z0-9/.-]+)/);
   if (no) out.cardNo = no[1].toUpperCase();
+  const yrRaw = lotPre + (y4 ? y4[0] : y2 ? y2[0] : '');
+  // (sports wave) the '#'-less Goldin number form — never on a catalog card
+  // (its numbers are backs / series, "350-460/30")
+  const bare = !no && out.year && !CATALOG_RE.test(t) && !isMultiCardTitle(t) ? bareNumberIdentity(noParens.slice(yrRaw.length)) : null;
+  if (bare) { out.cardNo = bare.cardNo; out.setName = bare.setName; }
 
   // set: the words between the year and the #cardNo (insert/parallel included —
   // deliberately: "Topps Finest Mystery Borderless" IS the market identity)
@@ -355,17 +445,18 @@ export function parseCard(title: string): CardId {
     // year's last two digits landed inside the year itself whenever they
     // repeat its start ("2020 Panini Prizm" → setName "20 Panini Prizm",
     // "2000 Bowman" → "0 Bowman"), corrupting every 2020-set identity.
-    const yrRaw = lotPre + (y4 ? y4[0] : y2 ? y2[0] : '');
     const afterYear = noParens.slice(yrRaw.length);
     const uptoNo = afterYear.slice(0, afterYear.indexOf('#'));
     const set = uptoNo.replace(/\s+/g, ' ').trim();
-    if (set && set.length <= 70) out.setName = set;
+    // (sports wave) 70 → 90: a long insert name is still the set ("Topps
+    // Triple Threads Rookies And Future Phenoms Autograph Relics Emerald")
+    if (set && set.length <= 90) out.setName = set;
   }
 
   // player: capitalized run after the card number; fallback to a leading name
   // (some card titles lead with the player, lot-style)
   const after = noParens.match(AFTER_NO_PLAYER);
-  const run = after ? trimNameRun(after[1]) : null;
+  const run = after ? trimNameRun(after[1]) : bare ? bare.player : null;
   const lead = !run ? (() => { const m = t.match(LEADING_PLAYER); return m ? trimNameRun(m[1], true) : null; })() : null;
   out.player = run || lead;
   out.playerSlug = playerSlugOf(out.player);
@@ -374,7 +465,11 @@ export function parseCard(title: string): CardId {
   // anywhere in the title, with the player's own name and colour-word team
   // names masked ("Vida Blue", "Red Sox" are not parallels)
   // (Oct 6) an MBA "Silver/Gold Diamond Certified" sticker is not a parallel
-  let vt = t.replace(TEAM_MASK_RE, ' ').replace(/\bMBA\s+(?:silver|gold|platinum|black|red|blue)\s+diamond(?:\s+certified)?\b/gi, ' ');
+  // (sports wave) a "Jersey Number" parallel (a serial matching the player's
+  // number) is not a relic, and Upper Deck "Collector's Choice" is a set, not
+  // a Choice pattern parallel
+  let vt = t.replace(TEAM_MASK_RE, ' ').replace(/\bMBA\s+(?:silver|gold|platinum|black|red|blue)\s+diamond(?:\s+certified)?\b/gi, ' ')
+    .replace(/\bjersey (?:number|#)s?\b(?!\s+(?:patch|relic|swatch))/gi, ' ').replace(/\bcollector['’]?s choice\b/gi, ' ');
   if (out.player) vt = vt.split(out.player).join(' ');
   let spScope = vt;
   if (out.setName) spScope = spScope.split(out.setName).join(' ');
@@ -389,7 +484,7 @@ export function parseCard(title: string): CardId {
 
   // MULTI-CARD lots (Oct 6): a set / pair / "Collection (25)" / two card
   // numbers is several cards — its price is never one card's
-  out.multi = isMultiCardTitle(t);
+  out.multi = isMultiCardTitle(maskE98(t, ' '));
   out.notCard = isComicOrMagazineTitle(t);
   // (wave 3) a numberless pre-war catalog card: player + code + pose
   if (!out.cardNo && !out.multi && !out.notCard) {
@@ -412,7 +507,7 @@ export function parseCard(title: string): CardId {
    runs that card titles also produce are excluded by word. */
 // (Oct 6) + lot-description leads that a card parse now stops at the sport
 // word on ("Assorted Brands Baseball …", "Nineteenth Century Baseball …")
-const NOT_A_PLAYER_WORD = /\b(type|original|signed|kanji-signed|kanji|assorted|brands|vintage|modern|century|nineteenth|various|greats|hofers?|hof|team|teams|checklist|leaders?|league|leagues|rookies|stars|all|world|series|highlights?|cards?|set|sets|collection|lot|hall|fame|champions?|championship|giants|yankees|dodgers|cubs|sox|cardinals|tigers|pirates|athletics|senators|browns|braves|reds|phillies|orioles|indians|colts|packers|bears|celtics|lakers|bulls|knicks|canadiens|bruins|rangers|mets|jets|patriots|cowboys|steelers|49ers|raiders|eagles|lions|rams|chiefs|broncos|giants|warriors|heat|nets|spurs|beatles|stones|best|the|of|and|edition|special|in|action|record|breaker|boyhood|photo|future|prospects?|draft|picks?|batting|pitching|home|run|kings?|super|bowl|unopened|box|pack|wax|sports|illustrated|press|pass|panini|topps|upper|deck)\b/i;
+const NOT_A_PLAYER_WORD = /\b(type|original|signed|kanji-signed|kanji|assorted|brands|vintage|modern|century|nineteenth|various|greats|hofers?|hof|team|teams|checklist|leaders?|league|leagues|rookies|stars|all|world|series|highlights?|cards?|set|sets|collection|lot|hall|fame|champions?|championship|giants|yankees|dodgers|cubs|sox|cardinals|tigers|pirates|athletics|senators|browns|braves|reds|phillies|orioles|indians|colts|packers|bears|celtics|lakers|bulls|knicks|canadiens|bruins|rangers|mets|jets|patriots|cowboys|steelers|49ers|raiders|eagles|lions|rams|chiefs|broncos|giants|warriors|heat|nets|spurs|beatles|stones|best|the|of|and|edition|special|in|action|record|breaker|boyhood|photo|future|prospects?|draft|picks?|batting|pitching|home|run|kings?|super|bowl|unopened|box|pack|wax|sports|illustrated|press|pass|panini|topps|upper|deck|uncut|sheets?|panels?|proofs?|album|display|poster|padres|mariners|astros|rockies|marlins|rays|nationals|expos|brewers|diamondbacks|royals|twins|angels|guardians|pilots|dolphins|jaguars|texans|titans|seahawks|vikings|buccaneers|falcons|panthers|chargers|bengals|ravens|commanders|redskins|oilers|hornets|pacers|pistons|cavaliers|bucks|raptors|wizards|nuggets|suns|clippers|grizzlies|pelicans|rockets|mavericks|timberwolves|blazers|penguins|flyers|capitals|islanders|sabres|canucks|blackhawks|avalanche|predators|hurricanes)\b/i;
 export function knownPlayerSet(cardPlayers: Iterable<string | null | undefined>, minCount = 3): Set<string> {
   const n = new Map<string, number>();
   for (const name of Array.from(cardPlayers)) {
@@ -459,6 +554,14 @@ export function playerOf(title: string, slug: string, known?: ReadonlySet<string
   if (slug === 'sports-cards') {
     const c = parseCard(title);
     return { player: c.player, playerSlug: c.playerSlug };
+  }
+  // (sports wave) Sotheby's NBA desk titles are all lower case and fixed-form:
+  // "jase richardson orlando magic 2025-2026 game worn association edition
+  // jersey", "marcus morris sr. ‘christmas day’ philadelphia 76ers …" — 3.0k
+  // sold lots read no player (the capitalised-run reader can't see them)
+  if (title && title === title.toLowerCase()) {
+    const lower = lowerCaseNbaName(title);
+    if (lower) return lower;
   }
   // object titles lead with the athlete — often after a year ("1986 Michael
   // Jordan Game-Worn…") or a year-range; strip that prefix first
@@ -529,12 +632,51 @@ export function playerOf(title: string, slug: string, known?: ReadonlySet<string
   // an unknown name directly followed by USE language ("Andy Barkett Game
   // Used …") is still the athlete — game-used lots exist for players no card
   // set carries
-  if (!g.player && name && known && !NOT_A_PLAYER_WORD.test(name)
-    && stripped.startsWith(name) && /^\s+(?:Game|Match|Player|Team)[- ](?:Used|Worn|Issued)/i.test(stripped.slice(name.length))) {
+  // (sports wave) … and so is one directly followed by the SIGNED form and a
+  // worn / used sporting object — never a ball, which presidents and singers
+  // sign too ("Miguel Almiron Signed Newcastle United Home Jersey",
+  // "Brian Wilson Autographed … Game Worn Jersey") — autograph desks sell
+  // athletes no card set carries. Team / place runs never qualify, and a
+  // known player named inside the run wins ("Extraordinary Babe Ruth Single
+  // Signed Baseball" is Babe Ruth).
+  if (g.player) return g;
+  const kp = knownPlayerIn(title, known);
+  if (kp.player) return kp;
+  if (name && known && !NOT_A_PLAYER_WORD.test(name) && !SIGNED_NOT_A_PERSON.test(name)
+    && stripped.startsWith(name) && (/^\s+(?:Game|Match|Player|Team)[- ](?:Used|Worn|Issued)/i.test(stripped.slice(name.length))
+      || (SIGNED_OBJECT_AFTER_NAME.test(stripped.slice(name.length)) && !SIGNED_NAME_DESCRIPTOR.test(name)))) {
     return { player: name, playerSlug: playerSlugOf(name) };
   }
-  return g.player ? g : knownPlayerIn(title, known);
+  return kp;
 }
+/** (sports wave) the athlete leading an all-lower-case NBA / WNBA desk title:
+ *  the run before the team's city / nickname, a season year, a quoted
+ *  occasion (‘christmas day’) or a "|" — 2–4 name words (a jr. / sr. / ii
+ *  suffix allowed), and only when the rest reads as a team-issued object. */
+const NBA_STOP_WORDS = new Set(('atlanta boston brooklyn charlotte chicago cleveland dallas denver detroit golden houston indiana los la memphis miami milwaukee minnesota new oklahoma orlando philadelphia phoenix portland sacramento san toronto utah washington las seattle connecticut ' +
+  'hawks celtics nets hornets bulls cavaliers mavericks nuggets pistons warriors rockets pacers clippers lakers grizzlies heat bucks timberwolves pelicans knicks thunder magic 76ers suns blazers trail kings spurs raptors jazz wizards aces dream sky sun wings fever sparks lynx liberty mercury storm mystics valkyries ' +
+  'nba wnba game match team signed autographed and & set of with team-issued game-worn game-issued draft worn issued used practice media player university college school high state').split(' '));
+const NBA_OBJECT_TAIL = /\b(?:nba|wnba|game[- ](?:worn|issued|used)|match[- ](?:worn|issued)|edition|warm-?up|shooting shirt|draft combine)\b/;
+const NOT_A_NAME_LEAD = /^(?:game|set|pair|nike|air|adidas|jordan|official|signed|autographed|team|the|a|an|\d.*)$/;
+function lowerCaseNbaName(title: string): { player: string; playerSlug: string | null } | null {
+  const toks = title.trim().split(/\s+/);
+  const name: string[] = [];
+  for (const tk of toks) {
+    if (NBA_STOP_WORDS.has(tk) || /^\d/.test(tk) || /^[‘'"“|(]/.test(tk)) break;
+    name.push(tk);
+    if (name.length > 4) return null;
+  }
+  const core = name.filter(w => !/^(?:jr\.?|sr\.?|ii|iii|iv)$/.test(w));
+  if (core.length < 2 || core.length > 3 || NOT_A_NAME_LEAD.test(name[0])) return null;
+  if (!name.every(w => /^[A-Za-zÀ-ɏ.'’-]+$/.test(w)) || NOT_A_PLAYER_WORD.test(name.join(' '))) return null;
+  if (!NBA_OBJECT_TAIL.test(toks.slice(name.length).join(' '))) return null;
+  const player = name.map(w => (/^(?:ii|iii|iv)$/.test(w) ? w.toUpperCase() : w.replace(/(^|[-.])([a-zà-ɏ])/g, (_m, a: string, b: string) => a + b.toUpperCase()))).join(' ');
+  return { player, playerSlug: playerSlugOf(player) };
+}
+const SIGNED_OBJECT_AFTER_NAME = /^\s+(?:Single[- ])?(?:Signed|Autographed)\s+(?:(?!and\b|&|with\b)[\w'’.-]+\s+){0,6}?(?:jersey|hockey puck|puck|helmet|mini[- ]helmet|glove|boxing glove|cleats?|hockey stick|stick)\b/i;
+// an unknown name read this way must look like a person: no descriptor / adverb words, no truncated token ("Guti. Haz")
+const SIGNED_NAME_DESCRIPTOR = /\b(?:star|stars|pitchers?|hitters?|legends?|greats?|rare|scarce|beautiful|superb|boldly|divine|no-hit|dalai|lama|pope|president|boldly|nicely|beautifully|boldy|neatly)\b|^[A-Za-z]{2,}\.\s/i;
+const SIGNED_NOT_A_PERSON = /\b(?:university|college|state|united|city|fc|club|national|olympic|dolphins|jaguars|texans|titans|seahawks|vikings|buccaneers|falcons|panthers|saints|chargers|bengals|ravens|bills|commanders|marlins|rays|astros|rockies|padres|mariners|nationals|brewers|diamondbacks|guardians|twins|royals|angels|heat|magic|hornets|hawks|pacers|pistons|cavaliers|bucks|raptors|wizards|thunder|nuggets|jazz|suns|kings|clippers|grizzlies|pelicans|rockets|mavericks|timberwolves|blazers|penguins|flyers|capitals|islanders|devils|sabres|senators|maple|leafs|oilers|flames|canucks|jets|predators|blackhawks|avalanche|stars|wild|ducks|sharks|coyotes|kraken|hurricanes|lightning|panthers|bruins|canadiens)\b/i;
 
 /** (Oct 6 2026, categorization wave 3) The ONE known player an object title
  *  names anywhere in its head — the leading-run reader misses a date or lot

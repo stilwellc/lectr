@@ -28,7 +28,9 @@ test('cards: a clean grade keys PLAYER|YEAR|SET|NO|GRADE; qualifiers / Authentic
   assert.equal(keyOf(cardBookId(card('1968 Topps #177 Nolan Ryan Rookie - PSA MINT 9 (OC)'))), 'grade-qualifier');
   assert.equal(keyOf(cardBookId(card('1968 Topps #177 Nolan Ryan Rookie - PSA 7 MK'))), 'grade-qualifier');
   assert.equal(keyOf(cardBookId(card('1968 Topps #177 Nolan Ryan Rookie - PSA Authentic'))), 'grade-authentic');
-  assert.equal(keyOf(cardBookId(card('1968 Topps #177 Nolan Ryan Rookie - SGC 96'))), 'grade-unparsed');
+  // (Oct 6 sports labeling wave) SGC's legacy 100-point "96" is the 10-point MINT 9
+  assert.equal(keyOf(cardBookId(card('1968 Topps #177 Nolan Ryan Rookie - SGC 96'))), 'nolan-ryan|1968|topps|177|SGC9');
+  assert.equal(keyOf(cardBookId(card('1968 Topps #177 Nolan Ryan Rookie - SGC'))), 'grade-unparsed');
   // graders outside the engine parser's set are still never 'raw'
   assert.equal(keyOf(cardBookId(card('1968 Topps #177 Nolan Ryan Rookie TGA 2.5'))), 'slab-unkeyed');
   assert.equal(keyOf(cardBookId(card('1989 Score #257 Barry Sanders Signed Rookie Card - BAS Authentic, Beckett 10'))), 'slab-unkeyed');

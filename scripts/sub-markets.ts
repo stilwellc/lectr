@@ -199,7 +199,13 @@ export function cardRepeatKey(l: AuctionLot): string | null {
   const c = l._card as (AuctionLot['_card'] & { multi?: boolean; gradeTier?: string | null }) | undefined;
   if (!c || !c.playerSlug || !c.year || !c.cardNo) return null;
   if (c.multi || isMultiCardTitle(l.title || '')) return null;
-  const grade = c.gradeCo && c.gradeNum != null ? `${c.gradeCo}${c.gradeNum}${c.gradeTier ? `-${c.gradeTier}` : ''}` : 'raw';
+  // (Oct 6, sports labeling wave) a slab whose grade didn't parse, or an
+  // Authentic / altered slab, is not a RAW card: 12k sales ("SGC Authentic",
+  // "BVG/JSA", unparsed grades) paired with raw copies of their card
+  const cx = c as typeof c & { gradeUnparsed?: boolean; gradeTag?: string | null };
+  if (cx.gradeUnparsed) return null;
+  const grade = c.gradeCo && c.gradeNum != null ? `${c.gradeCo}${c.gradeNum}${c.gradeTier ? `-${c.gradeTier}` : ''}`
+    : c.gradeCo && cx.gradeTag ? `${c.gradeCo}${cx.gradeTag}` : 'raw';
   const set = cardSetKey(c.setName);
   const serial = c.serialOf != null ? `/${c.serialOf}` : '';
   const signed = c.auto ? '|s' : '';
