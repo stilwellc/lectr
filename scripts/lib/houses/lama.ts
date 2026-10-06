@@ -7,7 +7,8 @@ import * as cheerio from 'cheerio';
 import type { AuctionLot, LotCategory } from '../../../app/types';
 import { fetchWithRetry } from '../fetch-retry';
 import type { ArtistConfig } from './artists';
-import { DEEP, UA, isSaleDayPast, noteFetched, parseDrop, sleep, stampMoney } from './common';
+import { UA, isSaleDayPast, noteFetched, parseDrop, sleep, stampMoney } from './common';
+import { WRIGHT_HISTORY, WRIGHT_HOUSE_SKIPS, wrightGroupHouseOf } from './wright';
 
 // ── LAMA (Los Angeles Modern Auctions) ──
 // LAMA joined the Rago/Wright group in 2021 and sells on the SAME Laravel/
@@ -18,6 +19,13 @@ import { DEEP, UA, isSaleDayPast, noteFetched, parseDrop, sleep, stampMoney } fr
 // It is NOT Rago: distinct host, distinct house, clean `lama-` ids. Doctrine:
 // LAMA runs a small buy-now "direct sales" channel — those lots are dropped
 // (an ask is not a hammer). Verified Aug 2026 (real Chrome UA defeats its 403).
+//
+// ATTRIBUTION (Oct 2026): the artist feed is GROUP-WIDE — lamodern.com returns
+// the SAME paginator as wright20.com (Picasso: 1,153 lots across Wright, Rago,
+// LAMA, Toomey, Poster Auctions). Every item used to be stamped LAMA, so the
+// Picasso "LAMA" history 2000–2024 was mostly Wright and Rago sales. Only items
+// whose auction_house id is LAMA's are kept here; the Wright crawler owns the
+// Wright + Rago items of the same feed (wright.ts wrightGroupHouseOf).
 export async function crawlLama(artist: ArtistConfig): Promise<AuctionLot[]> {
   const slug = artist.lama || artist.wright;
   if (!slug) return [];
@@ -51,8 +59,9 @@ export async function crawlLama(artist: ArtistConfig): Promise<AuctionLot[]> {
     console.log(`  [LAMA] page 1/${lastPage}: ${items.length} lots`);
     for (const it of items) { const p = parseLamaItem(it, artist.slug); if (p) lots.push(p); }
 
-    // deep mode walks the artist's full LAMA history (bounded like Wright's)
-    if (DEEP && lastPage > 1) {
+    // deep mode (RAY_DEEP / WRIGHT_DEEP) walks the artist's full LAMA history
+    // (bounded like Wright's)
+    if (WRIGHT_HISTORY && lastPage > 1) {
       const cap = Math.min(lastPage, 30);
       for (let pg = 2; pg <= cap; pg++) {
         await sleep(600);
@@ -79,6 +88,11 @@ export function parseLamaItem(item: any, artistSlug: string): AuctionLot | null 
   // A doctrine drop is NOT a parse error (it used to be counted as one, which
   // is why the lama [health] line read parse_errors=1 every night).
   if (item.is_buy_now || item.is_direct_sales) { console.log(`  [LAMA] skip buy-now/direct-sales (doctrine): ${String(item.name || '').slice(0, 80)}`); return null; }
+
+  // the SELLING house: keep LAMA's own lots only (no house signal = the
+  // historical LAMA default); a sibling house's lot is a doctrine skip
+  const house = wrightGroupHouseOf(item);
+  if (house !== null && house !== 'LAMA') { WRIGHT_HOUSE_SKIPS[house] = (WRIGHT_HOUSE_SKIPS[house] || 0) + 1; return null; }
 
   const title = item.name || 'Untitled';
   const lotNum = item.lot_number || null;
