@@ -1,13 +1,16 @@
 /**
- * Pricing fix wave 2 (Oct 6 2026) — the engine-side contracts: the purity gate, the hard comp boundaries, the recency weight cap.
+ * Pricing fix wave 2 (Oct 6 2026) — the engine-side contracts: the purity
+ * gate, the hard comp boundaries, the (measured, off) exact blend and recency
+ * cap, the bid read's clock, card variant identity.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  capWeights, COMP_WEIGHT_CAP,
+  capWeights, COMP_WEIGHT_CAP, vsBidLive, VSBID_WINDOW_DAYS,
   estimateValueEx, setEngineFlags, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_HAMMER_BASIS, type Comp,
   blendPredict, EXACT_BLEND,
 } from '../../app/lib/value';
+import { parseCard, cardKey } from '../../app/lib/cards';
 import { buildIdf, type Match } from '../../app/lib/similarity';
 import type { AuctionLot } from '../../app/types';
 
@@ -24,6 +27,29 @@ test('capWeights: no weight above the cap, mass conserved, order kept; under 1/c
   const b = capWeights([5, 5, 1, 1]);
   assert.ok(Math.abs(b[0] - 0.35) < 1e-9 && Math.abs(b[1] - 0.35) < 1e-9 && Math.abs(b[2] - 0.15) < 1e-9);
   assert.deepEqual(capWeights([9, 1]), [0.5, 0.5]);
+});
+
+test('vsBidLive: the comps-vs-bid read only inside the last day of the sale', () => {
+  const now = Date.parse('2026-10-05T13:00:00Z');
+  assert.equal(VSBID_WINDOW_DAYS, 1);
+  assert.equal(vsBidLive({ saleDateTime: '2026-10-06T02:00:00Z' }, now), true);
+  assert.equal(vsBidLive({ saleDateTime: '2026-10-09T02:00:00Z' }, now), false);
+  assert.equal(vsBidLive({ saleDate: '2026-10-06' }, now), true);
+  assert.equal(vsBidLive({}, now), false);
+});
+
+test('card identity: named print variations never share a key with the base card', () => {
+  const k = (t: string) => cardKey(parseCard(t));
+  const base = k('2018 Bowman Chrome #1 Shohei Ohtani, Batting Rookie Card - PSA GEM MT 10');
+  const bag = k('2018 Bowman Chrome #1 Shohei Ohtani, Carrying Bag Rookie Card - PSA GEM MT 10');
+  assert.ok(base && bag && base !== bag);
+  const gray = k('1956 Topps #30 Jackie Robinson, Gray Back - PSA NM-MT 8');
+  const white = k('1956 Topps #30 Jackie Robinson, White Back - PSA NM-MT 8');
+  assert.ok(gray && white && gray !== white);
+  assert.equal(gray, k('1956 Topps #30 Jackie Robinson Gray Back PSA NM-MT 8'));
+  const yel = k('1969 Topps #500 Mickey Mantle, Last Name in Yellow - PSA VG-EX 4');
+  const wht = k('1969 Topps #500 Mickey Mantle, Last Name in White - PSA VG-EX 4');
+  assert.ok(yel && wht && yel !== wht);
 });
 
 // ── the engine: purity gate + hard boundaries (estimateValueEx) ─────────────

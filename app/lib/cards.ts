@@ -90,6 +90,16 @@ const VARIANT_TOKENS: [RegExp, string][] = [
   [/\bholo(?:foil|gram)?\b/i, 'holo'],
   [/\b(?:shimmer|mojo|wave|cracked ice|atomic|camo|tie[- ]dye|neon|disco|hyper|pulsar|la[sz]er|snakeskin|zebra|tiger|scope|velocity|lucky envelopes?|fast break|choice|no huddle|sparkle|glitter)\b/i, 'pattern'],
   [/\b(?:silver|gold|red|blue|green|orange|purple|pink|black|bronze|platinum|yellow|teal|aqua|emerald|ruby|sapphire)\b/i, 'color'],
+  // (Oct 6, pricing wave 2) named print variations the hand-judged live
+  // sample caught pooled with the base card: the 2018 Bowman Chrome #1 Ohtani
+  // "Carrying Bag" SP ($23.5k) with the "Batting" base ($6–7k); the 1969 Topps
+  // Mantle "Last Name in Yellow" vs white letters; the 1956 Topps Gray vs
+  // White Back
+  [/\bcarrying bag\b/i, 'bag'],
+  [/\b(?:(?:last |first )?name in yellow|yellow (?:letters?|lettering|name))\b/i, 'yellowletter'],
+  [/\b(?:(?:last |first )?name in white|white (?:letters?|lettering|name))\b/i, 'whiteletter'],
+  [/\bgr[ae]y back\b/i, 'grayback'],
+  [/\bwhite back\b/i, 'whiteback'],
 ];
 /** a leading lot number immediately followed by a 4-digit year */
 // several cards in one lot (the count in parens follows a set/lot word or ends

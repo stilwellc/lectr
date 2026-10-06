@@ -19,7 +19,7 @@ import { ARTISTS } from '../app/constants';
 import { buildIdf, buildVectors } from '../app/lib/similarity';
 import { groupRepeatSales, repeatSaleEligible, withVectors } from './lib/repeat-sale';
 import { buildMakerIndicesParallel } from './lib/maker-pool';
-import { buildCompCandidateIndex, compCandidates, type CompCandidateIndex, resolveComps, estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, noEstGateOf, buyerFields, vsBidRead, floorAtBid, quantile, knownKey, ENGINE_VERSION, ENGINE_FLAGS_CANDIDATE, type ValueResult, type AbstainReason } from '../app/lib/value';
+import { buildCompCandidateIndex, compCandidates, type CompCandidateIndex, resolveComps, estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, noEstGateOf, buyerFields, vsBidRead, floorAtBid, vsBidLive, VSBID_WINDOW_DAYS, quantile, knownKey, ENGINE_VERSION, ENGINE_FLAGS_CANDIDATE, type ValueResult, type AbstainReason } from '../app/lib/value';
 import { fitCardCalibration, cardGate, CARD_GATE, type CardResidual, type CardCalibration } from '../app/lib/cards-gate';
 import { inferHammerUsd } from '../app/lib/premiums';
 import { pokemonKey } from './sub-markets';
@@ -1080,7 +1080,10 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         out.value = Math.round(recentMedian(pool));
         [out.low, out.high] = dispersionBand(pool.map(x => x.p));
         out.poolIds = exactR.map(s => s.id); out.poolN = exactR.length;
-        out.confidence = exactR.length >= 4 ? 'high' : 'medium';
+        // (Oct 6, pricing wave 2) ONE sale is one price, not a market: a
+        // lone exact comp prices at most 'low' (67 of 147 live card values
+        // stood on n=1 at 'medium')
+        out.confidence = exactR.length >= 4 ? 'high' : exactR.length >= 2 ? 'medium' : 'low';
         out.tier = 'exact';
         return out;
       }
@@ -1371,6 +1374,21 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
       if (f !== lw.value) { lw.value = f; if (f.bidFloor != null) floored++; }
     }
     console.log(`[market] live-bid floor: ${floored} served values lifted to the bid on the lot`);
+  }
+  // THE BID READ'S CLOCK (Oct 6 2026, pricing wave 2, value.vsBidLive): a
+  // bid far from the close is merely early — the closing surge is ahead of it
+  // (8+ days out a Goldin lot closes at ~5.7× its nightly bid), so "below
+  // recent comps" on it read 130 of 147 live card values. The comps-vs-bid
+  // read ships only inside VSBID_WINDOW_DAYS of the close.
+  {
+    let cleared = 0;
+    for (const l of all) {
+      if (l.status !== 'upcoming') continue;
+      const lw = l as AuctionLot & { value?: ValueResult | null; saleDateTime?: string | null };
+      if (!lw.value?.vsBid) continue;
+      if (!vsBidLive(lw, NOW_MS)) { lw.value = { ...lw.value, vsBid: null }; cleared++; }
+    }
+    console.log(`[market] bid read: ${cleared} vs-bid reads withheld (close > ${VSBID_WINDOW_DAYS}d away)`);
   }
   // the point-in-time evaluation seam stops here: every upcoming lot now
   // carries the value/abstain/cardComps it would have been served

@@ -1072,6 +1072,18 @@ export function vsBidRead(lot: { auctionHouse?: string | null; buyerPremiumPct?:
   return { label: pct <= -12 ? 'below recent comps' : pct >= 12 ? 'above recent comps' : 'in line', pct };
 }
 
+/** (Oct 6 2026, pricing wave 2) THE BID READ'S CLOCK: the comps-vs-bid read
+ *  (vsBid) means something only near the hammer — inside the last
+ *  VSBID_WINDOW_DAYS before the close a live bid is close to its final; far
+ *  out it is merely early (the closing surge is still ahead). True when the
+ *  lot closes within the window of `nowMs` (an undated close never reads). */
+export const VSBID_WINDOW_DAYS = 1;
+export function vsBidLive(lot: { saleDate?: string | null; saleDateTime?: string | null }, nowMs: number): boolean {
+  const closeMs = Date.parse(String(lot.saleDateTime || lot.saleDate || ''));
+  if (!Number.isFinite(closeMs)) return false;
+  return (closeMs - nowMs) / 86_400_000 <= VSBID_WINDOW_DAYS;
+}
+
 /* ── THE COMP CANDIDATE INDEX (Oct 5 2026 scale pass) ─────────────────────
    resolveComps scores every candidate it is handed; the live book handed it
    the lot's WHOLE maker roster, so valuing the upcoming book cost
