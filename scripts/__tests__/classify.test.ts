@@ -125,3 +125,26 @@ test('class 4 · expansion-house sports kind: card first, game-used needs use la
   // other houses untouched
   assert.equal(X('game-used', 'Mickey Mantle Signed Bat - JSA', 'NFL Auction'), 'game-used');
 });
+
+test('class 5 · science at Christie\'s/Sotheby\'s must be earned by the title', () => {
+  const S = (artist: string, title: string, saleName = '', house = "Christie's") => move({ auctionHouse: house, artist, title, saleName });
+  // books & letters by scientists → science-tech; other books/artworks → evicted
+  assert.equal(S('scientific-instruments', 'KEPLER, Johannes (1571-1630). Dioptrice seu Demonstratio eorum quae visui & visibilibus propter conspicilla no'), 'science-tech');
+  assert.equal(S('scientific-instruments', 'KING, Augusta Ada, Countess of Lovelace (1815-52). Autograph letter signed to Albany Fonblanque (1793-1872). A'), 'science-tech');
+  assert.equal(S('space-exploration', 'LAPLACE, Pierre Simon, Marquis de (1749-1827). Traité de mécanique céleste . Paris: Crapelet for J.B.M. Duprat'), 'science-tech');
+  assert.equal(S('scientific-instruments', 'TAYLOR, ZACHARY, President . Autograph letter signed ("Z. Taylor") to Dr. A.P. Merrill in Natchez, Mississippi'), 'entertainment-memorabilia');
+  assert.equal(S('scientific-instruments', 'ARKWRIGHT, Richard (1732-92). The Trial of a Cause instituted by Richard Pepper Arden, Esq; his Majesty\'s Atto'), DROP);
+  assert.equal(S('scientific-instruments', 'Screaming Eagle--Vintage 2004 6 magnums per lot', 'Fine And Rare Wines Featu'), DROP);
+  assert.equal(S('scientific-instruments', 'ISAMU NOGUCHI (1904-1988) Pylon', 'Post War To Present'), DROP);
+  assert.equal(S('space-exploration', 'apollo and marsyas', 'Master Paintings Sculptur', "Sotheby's"), DROP);
+  assert.equal(S('space-exploration', 'A rare TM (Masudaya) battery-operated Sonicon Rocket', 'The Paul Lips Robot And S'), DROP);
+  assert.equal(S('space-exploration', 'HUANG YONGYU (b. 1924) Chicken and Duck Talk', 'Fine Chinese Modern Paint'), DROP);
+  assert.equal(S('fossils', 'a george iii portland stone, blue john, specimen marbles and fossilised limestone table, the top late 18th/ear', 'The Pimlico Road', "Sotheby's"), DROP);
+  // genuine science stays
+  assert.equal(S('space-exploration', 'FLOWN Lunar Module Pin from Apollo X. Approx. ¾ in. tall lapel pin', 'Space Exploration'), 'space-exploration');
+  assert.equal(S('scientific-instruments', 'An English 3¾-inch terrestrial globe SMITH & SON, [C.1850]', 'Travel Science  Natural H'), 'scientific-instruments');
+  assert.equal(S('scientific-instruments', 'ensemble de trois sphères armillaires et un globe terrestre d\'époque louis-philippe, vers 1845', '', "Sotheby's"), 'scientific-instruments');
+  assert.equal(S('fossils', 'A MEGALODON TOOTH NORTH CAROLINA', 'Travel Science And Natura'), 'fossils');
+  // RR / Goldin run their own routing — untouched here
+  assert.equal(S('space-exploration', 'apollo and marsyas', '', 'RR Auction'), 'space-exploration');
+});

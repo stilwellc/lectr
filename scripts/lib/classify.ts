@@ -194,6 +194,60 @@ export function expansionSportsKind(l: ClassifyLot): string | null {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 5 · SCIENCE AT THE GENERALIST HOUSES — Christie's/Sotheby's lots were routed
+// on the FULL description (apollo|lunar|rocket|celestial|calculat|anatomical|
+// laboratory|prototype|computer|first edition …): a Bernini "Apollo e Dafne",
+// a vanitas with a globe, Kepler's Dioptrice and wine lots became science
+// (Christie's scientific-instruments 82% wrong). A science slug must now be
+// earned by the TITLE: an instrument/space/fossil/meteorite object noun.
+// Books and papers by a scientist → science-tech; historic letters →
+// entertainment-memorabilia (the historic catch-all); everything else has no
+// home and is evicted.
+// ═══════════════════════════════════════════════════════════════════════════
+export const GENERALIST_HOUSES = new Set(["Christie's", "Sotheby's", 'Bonhams', 'Phillips']);
+const METEOR_RE = /meteorite|pallasite|tektite|moldavite|chondrite|gibeon|seymchan|impactite|campo del cielo|sikhote|muonionalusta|achondrite|martian|\bnwa \d|lunar (?:meteorite|rock)|mars rock|octahedrite|ataxite|iron,|\bslice\b|end piece|individual/i;
+const FOSSIL_RE = /fossil|dinosaur|trilobite|ammonite|megalodon|mammoth|mastodon|mosasaur|tyrannosaur|triceratops|pterosaur|ichthyosaur|plesiosaur|raptor|saurus|\bskull\b|skeleton|\btooth\b|\bteeth\b|tusk|claw|amber|coprolite|stromatolite|crinoid|petrified|orthoceras|sabre[- ]tooth|saber[- ]tooth|cave bear|archaeopteryx|\beggs?\b|\bjaw\b|vertebra|femur|horn core|crocodile|palm frond/i;
+const FOSSIL_NOT_RE = /\b(table|chair|cabinet|commode|console|desk|tazza|urn|lamp|photograph)\b/i;
+const SPACE_RE = /\bapollo\s*\d|\bapollo (?:program|mission|lunar|command|capsule|spacecraft|astronaut|era|[ivx]+\b)|nasa|astronaut|cosmonaut|space ?suit|space[- ]flown|\bflown\b|lunar (?:module|surface|rover|sample|orbiter|landing|map)|moon (?:rock|landing|walk|map|globe)|sputnik|vostok|voskhod|soyuz|skylab|space shuttle|(?:project|capsule|program|friendship|faith) (?:mercury|gemini)|(?:mercury|gemini)[- ](?:\d|atlas|redstone|titan|astronaut|spacecraft|capsule|program|mission)|saturn v|space station|space exploration|spacecraft|rocket|launch|mission (?:patch|control|report|log|emblem|plan)|satellite|\biss\b|mir space|lunokhod|\bv-2\b|x-15|space program|space race/i;
+const SPACE_TOY_RE = /battery[- ]operated|tin toy|\brobot\b|masudaya|yonezawa|\btoy\b|clockwork|friction/i;
+const SCI_BOOK_RE = /\b(4to|8vo|12mo|16mo|folio|2°|4°|8°|vols?\.|volumes?|first edition|edited by|translated|london:|paris:|leipzig:|amsterdam:|berlin:|printed|treatise|monograph|edition|the life and letters|book of hours|illuminated manuscript|on vellum|atlas|journal|proceedings|transactions|offprint|pamphlet|essay|elements of)\b/i;
+const SCI_LETTER_RE = /\b(autograph letters? signed|letters? signed|typed letters? signed|autograph (?:note|manuscript|document) signed|document signed|als|tls)\b/i;
+const SCI_DOC_RE = /\b(autograph letter|letter signed|signed letter|typed letter|document signed|als|tls|manuscript|notebook|signed photograph|signed photo|autograph|inscribed|signature|letters?)\b/i;
+export const SCIENTIST_RE = /einstein|newton|darwin|curie|tesla|edison|galile[oi]|kepler|copernic|pascal|laplace|faraday|\bbohr\b|oppenheimer|feynman|hawking|lovelace|babbage|turing|euclid|novum organum|boyle|hooke|huygens|leibniz|lavoisier|vesalius|harvey, william|halley|herschel|maxwell|planck|heisenberg|schr[oö]dinger|fermi|von neumann|wozniak|steve jobs|bill gates|marconi|alexander graham bell|bell, alexander|wright brothers|orville wright|wilbur wright|wright, orville|pasteur|freud|hubble|carl sagan|crick|benjamin franklin|franklin, benjamin|brah[eé]|ptolemy|lister|jenner|nobel|rabi\b|bernoulli|euler|helmholtz|gauss|samuel (?:f\. ?b\. )?morse|morse, samuel|volta\b|amp[eè]re|kelvin|joule|rutherford|dirac|pauli\b|hertz\b|uranometria|principia/i;
+const INSTRUMENT_RE = /sph[eè]res? armillaires?|globe (?:terrestre|c[ée]leste)|longue[- ]vue|lunette|telescope|microscope|astrolab|sextant|octant|orrery|armillary|barometer|thermometer|theodolite|chronometer|slide rule|(?:terrestrial|celestial|library|pocket|table|lunar|relief|manuscript|floor|armillary|mars) globes?|globes? (?:by|maker)|enigma|cipher machine|calculating machine|calculator|computer|macintosh|apple[- ]?(?:1|i\b|ii)|altair|typewriter|scientific instrument|quadrant|planetarium|tellurion|sundial|diptych dial|compendium|nocturnal|circumferentor|graphometer|spectroscope|electrometer|galvanometer|electrical machine|air[- ]pump|magic lantern|phonograph|telegraph|transistor|integrated circuit|microprocessor|patent model|difference engine|punch card|mainframe|kenbak|trs-80|abacus|surveying|dip circle|planimeter|hydrometer|gyroscope|ophthalmoscope|stethoscope|surgical|apothecary|anatomical model|camera\b|\blens\b/i;
+const INSTRUMENT_WEAK_RE = /globe|prototype|model of|clock|regulator|engine|radio|television|telephone|balance|compass|level|instrument|medical|dental|anatomical/i;
+const SCI_SALE_RE = /scien|instrument|travel|natural history|technolog|camera|photographic|mechanical|cyber|computing|horolog|medicine|engineering|space/i;
+/** "NAME (1738-1821) …", "HUANG YONGYU (b. 1924)" — an artwork or a book by a person */
+const LIFEDATE_LEAD_RE = /^\s*[[A-Z][^()]{1,70}\((?:b\.|born|n[ée]e? en|fl\.|active|ca?\.?|circa|d\.)?\s?\d{3,4}/;
+const SCIENCE_SLUGS_ALL = new Set(['meteorites', 'fossils', 'space-exploration', 'scientific-instruments']);
+
+/** Re-validate a science slug from the lot's own title (+ sale name prior). */
+export function scienceVerdict(l: ClassifyLot): string | null {
+  const a = l.artist;
+  if (!SCIENCE_SLUGS_ALL.has(a)) return null;
+  const t = String(l.title || '');
+  const sale = String(l.saleName || '');
+  if (a === 'meteorites') return METEOR_RE.test(t) || METEOR_RE.test(String(l.medium || '')) ? null : DROP;
+  if (a === 'space-exploration' && !SPACE_TOY_RE.test(t) && (SPACE_RE.test(t) || /space/i.test(sale))) return null;
+  if (SCI_LETTER_RE.test(t)) return SCIENTIST_RE.test(t) ? 'science-tech' : 'entertainment-memorabilia';
+  if (SCI_BOOK_RE.test(t)) return SCIENTIST_RE.test(t) ? 'science-tech' : DROP;
+  if (a === 'scientific-instruments' && INSTRUMENT_RE.test(t) && !LIFEDATE_LEAD_RE.test(t)) return null;
+  if (a === 'fossils' && FOSSIL_RE.test(t) && !FOSSIL_NOT_RE.test(t) && !LIFEDATE_LEAD_RE.test(t)) return null;
+  if (SCI_DOC_RE.test(t)) return SCIENTIST_RE.test(t) ? 'science-tech' : 'entertainment-memorabilia';
+  if (LIFEDATE_LEAD_RE.test(t)) return SCIENTIST_RE.test(t) ? 'science-tech' : DROP;
+  if (a === 'scientific-instruments') {
+    if (INSTRUMENT_WEAK_RE.test(t) && SCI_SALE_RE.test(sale)) return null;
+    if (SPACE_RE.test(t) && !SPACE_TOY_RE.test(t)) return 'space-exploration';
+    return DROP;
+  }
+  if (a === 'space-exploration') {
+    if ((INSTRUMENT_RE.test(t) || (INSTRUMENT_WEAK_RE.test(t) && SCI_SALE_RE.test(sale))) && !SPACE_TOY_RE.test(t)) return 'scientific-instruments';
+    return DROP;
+  }
+  return DROP; // fossils with no fossil noun
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 2 · ART CATEGORY — Madoura ceramics and unique works filed as prints. The
 // crawler's print test ran before its ceramic test and five artists defaulted
 // to 'print' with no evidence; normalize never moved print → sculpture and
@@ -263,6 +317,10 @@ export const RECLASS_RULES: ReclassRule[] = [
     },
   },
   { cls: 'sports-kind-card-first-gu-language', apply: expansionSportsKind },
+  {
+    cls: 'science-title-object-noun',
+    apply: l => (GENERALIST_HOUSES.has(l.auctionHouse || '') ? scienceVerdict(l) : null),
+  },
 ];
 
 /** Category rules: same contract, but they return the corrected CATEGORY. */
