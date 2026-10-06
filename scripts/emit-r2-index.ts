@@ -33,9 +33,9 @@ import zlib from 'node:zlib';
 import type { AuctionLot } from '../app/types';
 import { ARTISTS, MARKETS, marketArtists, marketOf } from '../app/constants';
 import {
-  BLOB_CAP, FORMAT_VERSION, ID_BUCKETS, LOC_SHARDS, REF_PAGE, ROW_DROP, TABLE_MAX_PAGES, TABLE_PAGE,
+  BLOB_CAP, FORMAT_VERSION, blobKey, ID_BUCKETS, LOC_SHARDS, REF_PAGE, ROW_DROP, TABLE_MAX_PAGES, TABLE_PAGE,
   displayRow, idBucketOf, locShardOf, refKey, tableKey,
-  type IdEntry, type Loc, type Manifest, type PagedLoc, type SummaryJson, type TablePageBody,
+  type Current, type IdEntry, type Loc, type Manifest, type PagedLoc, type SummaryJson, type TablePageBody,
 } from '../functions/_lib/format';
 import { bookPartitionsOf, culturePartitionsOf } from './r2/pools';
 import { compsFor, isEmptyAnswer, type CompSource } from './r2/comps';
@@ -89,7 +89,7 @@ class BlobWriter {
   }
   private rotate() {
     if (this.fd >= 0) fs.closeSync(this.fd);
-    const name = `blob-${this.blobs.length}.bin`;
+    const name = blobKey(this.blobs.length);
     this.blobs.push(name);
     this.fd = fs.openSync(path.join(this.dir, name), 'w');
     this.size = 0;
@@ -207,6 +207,14 @@ export function emitR2Index(input: EmitInput, outRoot: string, log: (s: string) 
   const stats: Record<string, number> = {};
   const t0 = Date.now();
   const lap = () => ((Date.now() - t0) / 1000).toFixed(0) + 's';
+  /** a summary goes up twice: PLAIN under p:<scope> (the API streams it
+   *  straight from R2 — summaries run to ~10MB raw, too much to gunzip inside
+   *  a 10ms-CPU Function) and gzip under s:<scope> (readers before Oct 6) */
+  const summary = (scope: string, sum: SummaryJson) => {
+    const txt = JSON.stringify(sum);
+    locs.set(`p:${scope}`, w.put(Buffer.from(txt)));
+    locs.set(`s:${scope}`, w.gz(sum));
+  };
 
   // ── 1 · the book: main (eager re-attached) ∪ archive-only ∪ extras ───────
   const reattach = reattacher(input.eager);
@@ -308,7 +316,7 @@ export function emitR2Index(input: EmitInput, outRoot: string, log: (s: string) 
     emitTable(`m:${slug}`, book.filter(l => l.status === 'sold'));
     // the summary carries the maker's rows MINUS the eager ones — the client
     // lays the eager upcoming lots (live bid state, signal) over it by id
-    locs.set(`s:m:${slug}`, w.gz(buildSummary(`m:${slug}`, book.filter(l => !eagerIds.has(l.id)))));
+    summary(`m:${slug}`, buildSummary(`m:${slug}`, book.filter(l => !eagerIds.has(l.id))));
     // one watch reference's sold rows, newest first (/api/ref)
     const byRef = new Map<string, Row[]>();
     for (const l of book) {
@@ -331,7 +339,7 @@ export function emitR2Index(input: EmitInput, outRoot: string, log: (s: string) 
     const rows = main.filter(l => set.has(l.artist)).concat(ARCHIVE_MARKETS.has(m.key) ? archiveOnly.filter(l => set.has(l.artist)) : []);
     emitTable(`k:${m.key}`, rows.filter(l => l.status === 'sold' && (l.priceUsd || 0) > 0));
     // the /analytics pools read only concluded rows (sold, bought in), no players
-    locs.set(`s:k:${m.key}`, w.gz(buildSummary(`k:${m.key}`, rows.filter(l => l.status === 'sold' || l.status === 'bought_in'), { players: false })));
+    summary(`k:${m.key}`, buildSummary(`k:${m.key}`, rows.filter(l => l.status === 'sold' || l.status === 'bought_in'), { players: false }));
     // settled flags (/receipts): the row + the flag it carried while live
     const flagged = settledRows.filter(l => m.key === 'all' || set.has(l.artist)).slice(0, SETTLED_KEEP)
       .map(l => ({ ...displayRow(l), signal: l.signal }));
@@ -374,7 +382,10 @@ export function emitR2Index(input: EmitInput, outRoot: string, log: (s: string) 
     blobs: w.blobs, rows: store.length, comps: nComps, compsWindow: cutoff,
   };
   fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(manifest));
-  fs.writeFileSync(path.join(outRoot, 'api', 'current.json'), JSON.stringify({ version, prefix }));
+  // the pointer carries the loc-shard directory inline: a cold isolate goes
+  // pointer → loc shard → answer, with no dir.bin / manifest hop in between
+  const current: Current = { version, prefix, locDir: Array.from(dirArr.subarray(ID_BUCKETS * 3)) };
+  fs.writeFileSync(path.join(outRoot, 'api', 'current.json'), JSON.stringify(current));
   const objects = [...w.blobs.map(b => prefix + b), prefix + 'dir.bin', prefix + 'manifest.json', 'api/current.json'];
   fs.writeFileSync(path.join(outRoot, 'api', 'UPLOAD_ORDER.txt'), objects.join('\n') + '\n');
   stats.objects = objects.length; stats.blobBytes = w.total;

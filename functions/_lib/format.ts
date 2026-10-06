@@ -11,11 +11,17 @@
  *
  * R2 layout (bucket lectr-data, binding CORPUS):
  *
- *   api/current.json               { version, prefix } — the ONE overwritten object
+ *   api/current.json               { version, prefix, locDir } — the ONE overwritten
+ *                                  object; locDir = the LOC_SHARDS triples of dir.bin
+ *                                  inline (~3KB), so a cold table/summary request
+ *                                  never waits on dir.bin or the manifest
  *   api/v/<version>/manifest.json  small: version, crawl stamp, blob names, counts
+ *                                  (read by /api/version only — blob n is always
+ *                                  blobKey(n))
  *   api/v/<version>/dir.bin        Uint32 triples [blob, offset, length]:
  *                                  ID_BUCKETS id buckets, then LOC_SHARDS loc shards
- *   api/v/<version>/blob-<n>.bin   ≤ BLOB_CAP bytes of concatenated gzip members
+ *   api/v/<version>/blob-<n>.bin   ≤ BLOB_CAP bytes of concatenated objects (an object
+ *                                  larger than the cap gets a blob of its own)
  *
  * id bucket (plain JSON, ≤6KB): id → IdEntry
  *   [rowBlob, rowOff, rowLen]                    comps not precomputed
@@ -24,7 +30,9 @@
  * where the row is one PLAIN JSON object (served by concatenation, no parse).
  *
  * loc shard (plain JSON, ≤6KB): key → Loc | PagedLoc | facets
- *   s:m:<slug> | s:k:<market>               column summary (SummaryJson)
+ *   p:m:<slug> | p:k:<market>               column summary (SummaryJson), PLAIN JSON —
+ *                                           streamed from R2 untouched (no gunzip CPU)
+ *   s:m:<slug> | s:k:<market>               the same summary, gzip (pre-Oct-6 readers)
  *   t:<scope>|<sort>|<cat>|<sport>          a paged table ('*' = no filter)
  *   r:<maker>|<ref>                         a watch reference's sold rows, paged
  *   z:<market>                              settled flags response
@@ -34,8 +42,11 @@
 export const FORMAT_VERSION = 2;
 export const ID_BUCKETS = 8192;
 export const LOC_SHARDS = 128;
-/** a single blob object stays well under the R2 REST single-PUT ceiling */
-export const BLOB_CAP = 64 * 1024 * 1024;
+/** blobs stay small (a few MB): the nightly uploads them in parallel, a
+ *  failed PUT retries cheaply, and no request ranges into a 64MB object
+ *  written minutes earlier. Was 64MB through Oct 5. */
+export const BLOB_CAP = 8 * 1024 * 1024;
+export const blobKey = (n: number) => `blob-${n}.bin`;
 /** table pages: fixed size, materialized depth (deeper → `capped`) */
 export const TABLE_PAGE = 20;
 export const TABLE_MAX_PAGES = 25;
@@ -72,7 +83,13 @@ export interface Manifest {
   comps: number;
   compsWindow: string;
 }
-export interface Current { version: string; prefix: string }
+export interface Current {
+  version: string;
+  prefix: string;
+  /** dir.bin's loc-shard triples, flat (LOC_SHARDS × 3). Optional: a
+   *  pointer written before it existed still reads (via dir.bin). */
+  locDir?: number[];
+}
 
 export const tableKey = (scope: string, sort: 'date' | 'price', cat: string | null, sport: string | null) =>
   `t:${scope}|${sort}|${cat ?? '*'}|${sport ?? '*'}`;
