@@ -254,6 +254,19 @@ export function readDescriptionReference(text: string | null | undefined, maker:
   return r && vetReference(maker, r, t) ? canon(maker, r) : null;
 }
 
+/** (Oct 6 2026, pricing wave 7) A house's STRUCTURED reference field — the
+ *  Phillips maker API's `wReferenceNo` ("1680, repeated inside caseback",
+ *  "26300ST.OO.1110ST.08", "5711/1A-011") — read as a labelled reference
+ *  and keyed on its core like a title reference. The first line / clause
+ *  only: a multi-watch field ("The first: 5912.30.22 … The second: …")
+ *  reads nothing. */
+export function readHouseReference(raw: string | null | undefined, maker: string): string | null {
+  if (!raw || !WATCH_MAKERS.has(maker)) return null;
+  const first = String(raw).split(/[\r\n;]/)[0].trim();
+  if (!first || /^the (first|second|third)\b/i.test(first)) return null;
+  return readDescriptionReference(`ref. ${first}`, maker);
+}
+
 // The enrichment's historical labelled reader (identity-enrich, pre-Sep-28):
 // any "Ref" label, 2–6 digits with letter prefixes and hyphen/slash/dot suffix
 // chains ("Ref: 55229B10", "Ref: OT 2364", "Ref: 96", "PK2990-1"). Oct 6: the

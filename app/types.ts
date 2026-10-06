@@ -236,6 +236,12 @@ export interface AuctionLot {
   modelKey?: string | null;
   /** persisted watchKey() — ref number or model line (daytona, nautilus) */
   reference?: string | null;
+  /** (Oct 6 2026, pricing wave 7) the house's own STRUCTURED reference field,
+      raw (Phillips maker API `wReferenceNo`: "1680, repeated inside
+      caseback"). Phillips titles never print the reference; corpus-normalize
+      reads this (watch-ref.readHouseReference) into `reference` when the
+      title carries no numeric one. */
+  houseReference?: string | null;
   /** persisted normalizeTitle() — Layer-A pool key */
   normalizedTitle?: string | null;
   /** Normalized token set for the similarity scorer (step 2) — persisted so
