@@ -81,3 +81,18 @@ test('hit rates carry misses in the denominator; medRatio stays over sold rows',
   assert.equal(rec.vsbid.graded, 40);
   assert.equal(rec.vsbid.belowHit, 50);
 });
+
+test("belowHit grades only the calls that projected UNDER the floor (the 'below' claim)", () => {
+  const rows: Call[] = [];
+  // 30 projections already at/above the floor that sold above it — no 'below' claim
+  for (let i = 0; i < 30; i++) rows.push({ id: `a${i}`, d: '2026-09-01', k: 'vsbid', p: 150, f: 120, r: 160, sd: '2026-09-10' });
+  // 20 below-floor claims: 10 held (sold ≥ floor), 5 sold under, 5 unsold
+  for (let i = 0; i < 10; i++) rows.push({ id: `h${i}`, d: '2026-09-01', k: 'vsbid', p: 100, f: 120, r: 125, sd: '2026-09-10' });
+  for (let i = 0; i < 5; i++) rows.push({ id: `u${i}`, d: '2026-09-01', k: 'vsbid', p: 100, f: 120, r: 90, sd: '2026-09-10' });
+  for (let i = 0; i < 5; i++) rows.push({ id: `m${i}`, d: '2026-09-01', k: 'vsbid', p: 100, f: 120, o: 'u', sd: '2026-09-10' });
+  const rec = summarizeCalls(rows, TODAY);
+  assert.equal(rec.vsbid.belowHit, 50);
+  assert.equal(rec.vsbid.graded, 50, 'graded still counts every settled projection');
+  // under 20 below-floor claims → withheld
+  assert.equal(summarizeCalls(rows.slice(0, 45), TODAY).vsbid.belowHit, null);
+});

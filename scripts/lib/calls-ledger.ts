@@ -187,6 +187,7 @@ export function summarizeCalls(rows: Call[], asOf: string = new Date().toISOStri
   const gap = summarize('gap');
   const quiet = summarize('quiet');
   const hasF = (c: Call) => typeof c.f === 'number';
+  const isBelowClaim = (c: Call) => hasF(c) && c.p < c.f!;
   return {
     card: {
       n: card.all.length, graded: card.graded,
@@ -201,8 +202,12 @@ export function summarizeCalls(rows: Call[], asOf: string = new Date().toISOStri
       n: vsbid.all.length, graded: vsbid.graded,
       medRatio: round3(vsbid.med),
       // the 'below' claim graded: did the lot really land at/above the floor
-      // (i.e. the flagged price was genuinely under the market)?
-      belowHit: floorHeld(vsbid.g.filter(hasF), vsbid.miss.filter(hasF)),
+      // (i.e. the flagged price was genuinely under the market)? ONLY over
+      // calls that MADE the claim — projected close under the floor (p < f).
+      // Every floor-carrying projection used to count, so the ~60% whose
+      // projection already sat at/above the floor (no 'below' claim, and an
+      // easy hit) padded the rate (76% → ~52% on the Oct 5 ledger).
+      belowHit: floorHeld(vsbid.g.filter(isBelowClaim), vsbid.miss.filter(isBelowClaim)),
     },
     gap: {
       n: gap.all.length, graded: gap.graded,
