@@ -25,7 +25,7 @@ import {
   ID_RE, MAX_IDS, REF_PAGE, SLUG_RE, TABLE_PAGE, pageRange, refKey, tableKey,
   type Loc, type PagedLoc, type TablePageBody,
 } from './format';
-import { Store, NotFound, StoreUnavailable, type Env, type R2ObjectBodyLike } from './store';
+import { Store, NotFound, StoreUnavailable, type EdgeCache, type Env, type R2ObjectBodyLike } from './store';
 
 const MAX_PAGE = 5000;
 const MAKER_SLUGS = new Set<string>(ARTISTS.map(a => a.slug));
@@ -33,8 +33,6 @@ const MARKET_KEYS = new Set<string>(MARKETS.map(m => m.key));
 
 class BadRequest extends Error {}
 
-/** Cache API surface (caches.default in Workers) — optional so Node tests run. */
-interface EdgeCache { match(req: Request): Promise<Response | undefined>; put(req: Request, res: Response): Promise<void> }
 export interface Ctx { waitUntil?(p: Promise<unknown>): void }
 
 const BASE_HEADERS: Record<string, string> = {
@@ -111,13 +109,27 @@ async function table(store: Store, scope: string, sp: URLSearchParams): Promise<
   const sport = labelParam(sp, 'sport');
   const page = intParam(sp, 'page', 0, 0, MAX_PAGE);
   intParam(sp, 'size', TABLE_PAGE, TABLE_PAGE, TABLE_PAGE); // fixed page size
-  const facets = (await store.loc(`f:${scope}`)) as unknown as Facets | null;
-  return pagedResponse(store, tableKey(scope, sort, cat, sport), page, TABLE_PAGE, facets);
+  const key = tableKey(scope, sort, cat, sport);
+  // the facets and the table live in different loc shards: read both at once
+  const [facets] = await Promise.all([store.loc(`f:${scope}`) as Promise<unknown> as Promise<Facets | null>, store.loc(key)]);
+  return pagedResponse(store, key, page, TABLE_PAGE, facets);
 }
 
 async function located(store: Store, key: string): Promise<Response | null> {
   const l = (await store.loc(key)) as Loc | null;
   return l ? gzipThrough(await store.range(l)) : null;
+}
+/** a column summary: the PLAIN copy streamed from R2 untouched (zero CPU —
+ *  the market books run to ~10MB raw, far past 10ms to gunzip), else the
+ *  gzip copy of an index written before the plain one existed */
+async function summary(store: Store, scope: string): Promise<Response> {
+  const [p, s] = await Promise.all([store.loc(`p:${scope}`), store.loc(`s:${scope}`)]);
+  if (p) {
+    const obj = await store.range(p as Loc);
+    return new Response(obj.body ?? await obj.arrayBuffer(), { status: 200, headers: { ...BASE_HEADERS } });
+  }
+  if (s) return gzipThrough(await store.range(s as Loc));
+  throw new NotFound();
 }
 
 // ── routes ─────────────────────────────────────────────────────────────────
@@ -158,7 +170,7 @@ async function route(store: Store, path: string[], sp: URLSearchParams): Promise
     }
     case 'maker': {
       if (path.length !== 2 || !SLUG_RE.test(a) || !MAKER_SLUGS.has(a)) break;
-      if (sp.get('view') === 'summary') return (await located(store, `s:m:${a}`)) ?? (() => { throw new NotFound(); })();
+      if (sp.get('view') === 'summary') return summary(store, `m:${a}`);
       return table(store, `m:${a}`, sp);
     }
     case 'archive': {
@@ -170,7 +182,7 @@ async function route(store: Store, path: string[], sp: URLSearchParams): Promise
     case 'market': {
       if (path.length !== 2 || !MARKET_KEYS.has(a)) break;
       if (sp.get('view') !== 'summary') throw new BadRequest('view=summary');
-      return (await located(store, `s:k:${a}`)) ?? (() => { throw new NotFound(); })();
+      return summary(store, `k:${a}`);
     }
     case 'ref': {
       if (path.length !== 3 || !SLUG_RE.test(a) || !MAKER_SLUGS.has(a)) break;
@@ -214,7 +226,7 @@ export async function handleApi(request: Request, env: Env, ctx: Ctx = {}, cache
   if (path.length === 0 || path.length > 3 || url.search.length > 2000) return errorResponse(400, 'bad path');
 
   let store: Store;
-  try { store = await Store.open(env); } catch {
+  try { store = await Store.open(env, { cache, origin: url.origin, waitUntil: ctx.waitUntil ? q => ctx.waitUntil!(q) : undefined }); } catch {
     // the rollout probe: clients check /api/version once and hide or explain
     // API-backed sections — answer it plainly (200) so a not-yet-published
     // index never shows up as a failed request in the console
@@ -251,12 +263,15 @@ export async function handleApi(request: Request, env: Env, ctx: Ctx = {}, cache
     return errorResponse(500, 'internal error');
   }
   if (cache && res.status === 200) {
-    const [a, b] = res.body ? res.body.tee() : [null, null];
+    // buffered, not tee()d: answers are KB–low-MB, and a tee couples the
+    // client's stream to cache.put's consumer (a slow put must never be
+    // able to hold a response open)
+    const buf = await res.arrayBuffer();
     const h = new Headers(res.headers);
     h.set('Cache-Control', EDGE_CC);
-    const p = cache.put(key, new Response(b, { status: 200, headers: h })).catch(() => { /* best effort */ });
+    const p = cache.put(key, new Response(buf.slice(0), { status: 200, headers: h })).catch(() => { /* best effort */ });
     if (ctx.waitUntil) ctx.waitUntil(p); else await p;
-    res = new Response(a, { status: res.status, headers: res.headers });
+    res = new Response(buf, { status: res.status, headers: res.headers });
   }
   return finish(res, false);
 }

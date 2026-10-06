@@ -326,10 +326,13 @@ deploy, 25 MiB per file).
 precomputed nightly by `scripts/emit-r2-index.ts`; a request maps a key to a
 byte range and hands the stored bytes back. The edge never computes a comp,
 sorts a table or scans a pool. The only JSON the edge parses is one
-plain-JSON id bucket or location shard (≤6KB), plus a 60s pointer and a
-manifest once per isolate. Lot rows are plain JSON spliced into the response
-unparsed. Comps answers, table pages, summaries and settled flags are stored
-gzip and served as-is (`Content-Encoding: gzip`).
+plain-JSON id bucket or location shard (≤6KB), plus the pointer (~3KB) once a
+minute per isolate. Lot rows are plain JSON spliced into the response
+unparsed. Column summaries (up to ~10MB raw for `market/all`) are stored
+**plain** and streamed from R2 untouched — zero CPU. Comps answers, table
+pages and settled flags (≤20KB) are stored gzip and gunzipped in the Function
+(Pages drops `encodeBody: 'manual'`, so stored gzip cannot pass through), then
+Cloudflare re-compresses at the edge.
 
 | endpoint | answers | used by |
 | --- | --- | --- |
@@ -384,14 +387,60 @@ stores 200s in the edge Cache API under a key that includes the corpus
 version, so a new nightly is a new key and nothing is purged by hand. Failures
 are `no-store` 503 (`Retry-After: 30`), never an empty 200.
 
+**Cold start (fixed Oct 6).** Oct 3–5 the first request after a nightly took
+up to 32s and a Picasso summary once hung >60s; warm-isolate misses were
+0.3–1.1s. On Pages nearly every uncached request lands on a cold isolate, and
+a cold isolate walked pointer → dir.bin → manifest → loc shard → loc shard →
+answer: 5–6 serial R2 round trips at 85–200ms each. On top of that, summaries
+were gunzipped inside the Function: 23ms of CPU for `market/all` (9.4MB raw),
+11ms for Picasso, over the 10ms Free-plan cap. Now:
+
+- `api/current.json` carries the 128 loc-shard triples inline (`locDir`), and
+  blob *n* is always `blob-<n>.bin`. A table or summary request is pointer →
+  loc shard(s) (fetched in parallel) → answer. Neither dir.bin nor the
+  manifest sits on that path (the manifest is read by `/api/version` only).
+- The small write-once index reads (dir.bin, id buckets, loc shards) go
+  through the colo's Cache API under `<origin>/__store/<key>?r=off-len`
+  (immutable, 3 days). The pointer is cached there too (30s). One cold
+  isolate pays R2; every other isolate in that colo gets them in a few ms.
+- The pointer is memoized per isolate. It is fresh for 60s, then served stale
+  while a background refresh runs (`waitUntil`). A blocking refresh happens
+  only after 10 min idle, and if R2 fails then, the last pointer is used.
+- Summaries are streamed plain (`p:` keys). The gzip `s:` copies stay for
+  readers deployed before Oct 6.
+- Responses go into the edge cache buffered, not `tee()`d. A slow
+  `cache.put` can no longer hold the client's stream open.
+- Blobs are ≤8MB (they were 64MB). They upload 6 at a time, and the pointer
+  still goes last.
+- A post-upload warm step (`scripts/r2/warm-api.ts`) waits until lectr.bid
+  serves the new version, then GETs ~45 hot answers. A visitor is never the
+  one who pays for the first read.
+
+Measured at the edge (`wrangler dev --remote`, EWR, against the production
+index, read-only; median of 5, fresh-isolate memos):
+
+| route | before | after | after, colo-cached index |
+| --- | --- | --- | --- |
+| `archive?market=all&page=1` | 628ms · 6 R2 reads | 277ms · 4 | 80ms · 1 |
+| `maker/pablo-picasso?view=summary` | 465ms · 5 | 306ms · 4 | 124ms · 1 |
+| `maker/rolex?sort=price&page=3` | 572ms · 6 | 299ms · 4 | 112ms · 1 |
+| `lot/:id` | 473ms · 5 | 334ms · 4 | 117ms · 1 |
+| `comps?lot=` | 516ms · 5 | 404ms · 4 | 107ms · 1 |
+
+A warm isolate is one R2 read (~80–100ms). An edge-cache hit is about 5ms.
+Cold range reads into the 64MB blobs measured 100–200ms, the same as small
+objects. Blob size alone does not explain the 32s. The fix removes the serial
+hops and the CPU overrun, and warms the new version before anyone visits.
+
 **CPU, measured** (`npx tsx scripts/r2/bench-api.ts <out-dir>` runs the
 same handler in Node over the real emitted index, `process.cpuUsage()` per
 request, R2 = in-memory ranges; Miniflare doesn't enforce CPU limits and
-Workers freeze timers during compute). On the Oct 2 book, worst **cold**
-(fresh isolate: pointer + manifest + dir.bin) is 1.6ms, with an occasional GC
-spike to 4.3ms. Worst **warm** is 0.6ms (`/api/market/all?view=summary`, a
-1.2MB pass-through). Picasso-print comps: 0.3ms cold, 0.1ms warm. The deepest
-archive page: 0.2ms. The game-used maker summary (230KB): 0.3ms.
+Workers freeze timers during compute). On the Oct 2 book (Oct 6 layout),
+routes stay at or under 1.9ms cold and 0.6ms warm. The exceptions are GC
+spikes up to 7.6ms and `/api/market/all?view=summary`, which costs 5–8ms in
+Node only because the bench copies the 9.4MB plain body. On Workers that body
+is R2's native stream, with no JS in the loop. Before Oct 6 that one summary
+cost 23ms of gunzip, and the Picasso summary cost 11ms.
 
 **Free-plan request budget.** 100,000 Function requests a day. A session
 spends one `/api/version` check plus what it opens: an archive page or a
@@ -406,22 +455,24 @@ against 10M/month free.
 
 | object | contents |
 | --- | --- |
-| `api/current.json` | `{ version, prefix }` — the ONE overwritten object (read via the binding, which is strongly consistent; memoized 60s per isolate) |
-| `api/v/<version>/manifest.json` | version, crawl stamp, blob names, row/comps counts, comps window |
-| `api/v/<version>/dir.bin` | Uint32 triples `[blob, offset, length]`: 8,192 id buckets then 128 location shards (100KB, read once per isolate as a typed view) |
-| `api/v/<version>/blob-<n>.bin` | ≤64MB each: plain-JSON lot rows, gzip comps answers, gzip table/ref pages, gzip summaries, plain-JSON id buckets + location shards |
+| `api/current.json` | `{ version, prefix, locDir }` is the ONE overwritten object. `locDir` holds dir.bin's 128 loc-shard triples, flat. It is read via the binding, which is strongly consistent, then memoized 60s per isolate (stale-while-revalidate to 10 min) and colo-cached 30s |
+| `api/v/<version>/manifest.json` | version, crawl stamp, blob names, row/comps counts, comps window (`/api/version` only) |
+| `api/v/<version>/dir.bin` | Uint32 triples `[blob, offset, length]`: 8,192 id buckets then 128 location shards (100KB). Read once per isolate as a typed view, colo-cached; lot/comps routes only |
+| `api/v/<version>/blob-<n>.bin` | ≤8MB each (an object above the cap gets its own blob): plain-JSON lot rows, gzip comps answers, gzip table/ref pages, plain + gzip summaries, plain-JSON id buckets + location shards |
 
 Id bucket entry (`functions/_lib/format.ts`): `[rowBlob, rowOff, rowLen]` (no
 comps precomputed), `+ [-1]` (computed, nothing to print), or
-`+ [cBlob, cOff, cLen]` (the gzip answer). Location keys: `s:` summaries,
+`+ [cBlob, cOff, cLen]` (the gzip answer). Location keys: `p:` summaries
+(plain, served), `s:` the same summaries gzip (pre-Oct-6 readers),
 `t:<scope>|<sort>|<cat>|<sport>` tables (`[blob, start, total, …pageLens]`,
 pages consecutive), `f:<scope>` chip facets (inline), `r:<maker>|<ref>` ref
 ledgers, `z:<market>` settled flags.
 
-Tonight's real book (lastCrawl 2026-10-02) has 609,815 rows, 34,129 comps
-answers, 900 table combos (10,034 pages) and 9,932 ref ledgers. That's **12
-objects, 523MB** (the plain-JSON rows are 335MB of it, the price of zero-parse
-lot reads), emitted in about 3 minutes locally. The upload is 12 PUTs.
+The Oct 2 book (lastCrawl 2026-10-02) has 609,815 rows, ~34k comps answers,
+900 table combos (10,034 pages) and 9,932 ref ledgers. On the Oct 6 layout
+that is **74 objects, 557MB** (the plain-JSON rows are 335MB of it, the price
+of zero-parse lot reads; the plain summaries add ~34MB). It emits in about
+3 minutes locally. The upload is 74 PUTs, 6 in parallel.
 
 ### Nightly: emit + upload (after assemble's R2 push)
 
@@ -429,9 +480,14 @@ lot reads), emitted in about 3 minutes locally. The upload is 12 PUTs.
 (`data/r2-api/`, gitignored) from the served payload assemble just built
 (+ `data/corpus/*.json.gz`, optional, to resolve engine pool ids that never
 ship on the wire). `scripts/r2-api-push.sh` uploads it in
-`api/UPLOAD_ORDER.txt` order — payloads first, `api/current.json` LAST —
-verifying every PUT's etag against the local md5, 3 tries each. A failure
-leaves the pointer on the previous version (the API keeps answering).
+`api/UPLOAD_ORDER.txt` order. Payloads go first, `R2_PUT_PARALLEL` (6) at a
+time, and `api/current.json` goes LAST, only after every payload is verified.
+Each PUT's etag is checked against the local md5, with 3 tries each. A
+failure leaves the pointer on the previous version (the API keeps answering).
+Then `scripts/r2/warm-api.ts` waits for lectr.bid to serve the new version
+(≤5 min) and GETs the hot answers once (every market's summary, archive
+page 0 and settled flags, plus 10 big makers' summary and first page). It is
+read-only, never fails the nightly, and prints a timing table.
 
 Add to `.github/workflows/nightly.yml`, job `assemble`, right after the
 `Push corpus + served to R2` step (`id: push`):
@@ -443,6 +499,7 @@ Add to `.github/workflows/nightly.yml`, job `assemble`, right after the
       # api/v/<version>/, pointer flipped LAST. Best-effort: a failure keeps
       # the API on the previous version.
       - name: Emit + push the lot-API index → R2
+        id: lotapi
         if: ${{ steps.push.outcome == 'success' }}
         continue-on-error: true
         timeout-minutes: 25
@@ -452,11 +509,18 @@ Add to `.github/workflows/nightly.yml`, job `assemble`, right after the
         run: |
           NODE_OPTIONS=--max-old-space-size=12288 npx tsx scripts/emit-r2-index.ts --served public/data/ray --corpus data/corpus --out data/r2-api
           bash scripts/r2-api-push.sh data/r2-api
+      # Warm the new version through the public site before any visitor
+      # pays the cold reads (read-only GETs; never fails the run).
+      - name: Warm the lot API
+        if: ${{ steps.lotapi.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 8
+        run: npx tsx scripts/r2/warm-api.ts --out data/r2-api --base https://lectr.bid --wait 300
 ```
 
-Retention: each version is about 525MB. Add an R2 lifecycle rule (Collin, once):
+Retention: each version is about 560MB. Add an R2 lifecycle rule (Collin, once):
 `npx wrangler r2 bucket lifecycle add lectr-data api-versions api/v/ --expire-days 5`.
-That keeps about 2.6GB, inside the free 10GB. The pointer always names the
+That keeps about 2.8GB, inside the free 10GB. The pointer always names the
 newest version. To roll back, point `api/current.json` at an older
 `api/v/<version>/`.
 
@@ -494,6 +558,7 @@ R2_LOCAL=1 bash scripts/r2-api-push.sh data/r2-api         # → .wrangler/state
 npx tsx scripts/r2/bench-api.ts data/r2-api                # per-route CPU
 npm run build
 npx wrangler@4.120.1 pages dev out --persist-to .wrangler/state   # site + /api on :8788
+npx tsx scripts/r2/warm-api.ts --base http://localhost:8788 --wait 30   # warm + time the hot set
 ```
 
 ## 4. Cache + version skew
