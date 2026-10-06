@@ -31,8 +31,20 @@ export type Call = {
   s?: string;
   // grading (filled once the lot sells)
   r?: number;           // realized USD
-  sd?: string;          // sale date
+  sd?: string;          // sale date (or, for a miss, the close it was graded against)
+  /** last-known close date of the lot (stamped every night it is in the
+      corpus) — the clock an unsold / vanished lot is graded against */
+  cd?: string;
+  /** outcome when the lot did NOT sell: 'u' = unsold (bought in / no result /
+      vanished from the corpus) — graded a MISS once the close is 7 days past;
+      'w' = withdrawn (the claim was never tested: void, neither graded nor
+      pending). A later sale overwrites either (self-healing for a lot that
+      only vanished for a crawl hiccup). */
+  o?: 'u' | 'w';
 };
+
+/** grace after the close before a non-sale is final (results post late) */
+export const MISS_GRACE_DAYS = 7;
 
 const LEDGER = path.join(CORPUS_DIR, 'calls-ledger.json.gz');
 
@@ -101,66 +113,119 @@ export type CallsRecord = {
   asOf: string;
 };
 
-/** Grade calls against sold outcomes; persist grades; return the summary. */
-export function gradeCalls(soldById: Map<string, { realizedUsd: number; saleDate: string }>): CallsRecord {
-  const rows = readCalls();
+export type LotOutcome = { status?: string; saleDate?: string | null };
+const UNSOLD = new Set(['bought_in', 'unknown-result', 'unsold', 'passed']);
+const addDays = (d: string, n: number) => new Date(Date.parse(d.slice(0, 10) + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+
+/** Grade the ledger rows in place; true if any row changed. A SOLD lot
+ *  grades with its realized price (always — it also overwrites an earlier
+ *  miss). A lot that did NOT sell is graded a MISS 7 days after its close:
+ *  bought in / no result on the house's page, or VANISHED from the corpus
+ *  (houses that drop pass-ins — RR, Huggins & Scott, NFL/MLB — leave no other
+ *  trace). Before Oct 2026 these sat "pending" forever (1,100+ rows, 11 of the
+ *  17 Sleepers), so every hit rate was computed over survivors only.
+ *  `statusById` must be the FULL corpus (id → status/saleDate); without it
+ *  only sales grade (vanished cannot be told from not-loaded). */
+export function gradeRows(
+  rows: Call[],
+  soldById: Map<string, { realizedUsd: number; saleDate: string }>,
+  statusById?: Map<string, LotOutcome>,
+  today: string = new Date().toISOString().slice(0, 10),
+): boolean {
   let changed = false;
   for (const c of rows) {
-    if (c.r !== undefined) continue;
+    if (typeof c.r === 'number' && c.r > 0) continue;
     const s = soldById.get(c.id);
-    if (s && s.realizedUsd > 0) { c.r = s.realizedUsd; c.sd = s.saleDate; changed = true; }
+    if (s && s.realizedUsd > 0) { c.r = s.realizedUsd; c.sd = s.saleDate; delete c.o; changed = true; continue; }
+    if (!statusById) continue;
+    const l = statusById.get(c.id);
+    const lsd = l?.saleDate ? l.saleDate.slice(0, 10) : null;
+    if (lsd && lsd !== c.cd) { c.cd = lsd; changed = true; }
+    // the clock: the lot's close date, else (a vanished legacy row that never
+    // had one stamped) the call date — a lot GONE from the corpus is no
+    // longer for sale either way, the grace only absorbs a crawl hiccup
+    const close = c.cd || c.d;
+    const due = addDays(close, MISS_GRACE_DAYS) <= today;
+    let o: Call['o'] | undefined;
+    if (!l) o = due ? 'u' : undefined;
+    else if (l.status === 'withdrawn') o = 'w';
+    else if (UNSOLD.has(String(l.status)) && due) o = 'u';
+    if (o !== c.o) {
+      if (o) { c.o = o; c.sd = close; } else { delete c.o; delete c.sd; }
+      changed = true;
+    }
   }
-  if (changed) fs.writeFileSync(LEDGER, gzipNdjson(rows as unknown as Record<string, unknown>[]));
+  return changed;
+}
 
+const isSold = (c: Call) => typeof c.r === 'number' && c.r > 0 && c.p > 0;
+const isMiss = (c: Call) => c.o === 'u' && c.p > 0;
+const pct = (num: number, den: number) => Math.round(100 * num / den);
+const round3 = (x: number | null) => x !== null ? Math.round(x * 1000) / 1000 : null;
+
+/** The published summary. `graded` = sold + misses. medRatio (realized ÷
+ *  predicted) needs a hammer, so it runs over SOLD rows only; every HIT RATE
+ *  carries the misses in its denominator (an unsold lot did not land within
+ *  ±30%, did not hold its floor, did not clear). Thresholds (20) are on the
+ *  hit-rate denominator. */
+export function summarizeCalls(rows: Call[], asOf: string = new Date().toISOString().slice(0, 10)): CallsRecord {
   const summarize = (k: Call['k'], s?: string) => {
     const all = rows.filter(c => c.k === k && (s === undefined || (c.s || 'm') === s));
-    const g = all.filter(c => typeof c.r === 'number' && c.r! > 0 && c.p > 0);
+    const g = all.filter(isSold);
+    const miss = all.filter(isMiss);
     const ratios = g.map(c => c.r! / c.p).sort((a, b) => a - b);
     const med = ratios.length >= 20 ? ratios[Math.floor(ratios.length / 2)] : null;
-    return { all, g, ratios, med };
+    return { all, g, miss, ratios, med, graded: g.length + miss.length };
   };
+  const within30 = (t: ReturnType<typeof summarize>) => t.graded >= 20 && t.ratios.length >= 20
+    ? pct(t.ratios.filter(x => x >= 0.7 && x <= 1.3).length, t.graded) : null;
+  /** floor-held rate: sold at/above the floor ÷ (sold + missed) floor rows */
+  const floorHeld = (sold: Call[], miss: Call[]) => sold.length + miss.length >= 20
+    ? pct(sold.filter(c => c.r! >= c.f!).length, sold.length + miss.length) : null;
   const card = summarize('card');
   const vsbid = summarize('vsbid');
   const gap = summarize('gap');
   const quiet = summarize('quiet');
-  const belowG = vsbid.g.filter(c => typeof c.f === 'number');
-  const gapFloorG = gap.g.filter(c => typeof c.f === 'number');
+  const hasF = (c: Call) => typeof c.f === 'number';
   return {
     card: {
-      n: card.all.length, graded: card.g.length,
-      medRatio: card.med !== null ? Math.round(card.med * 1000) / 1000 : null,
-      within30Pct: card.ratios.length >= 20
-        ? Math.round(100 * card.ratios.filter(x => x >= 0.7 && x <= 1.3).length / card.ratios.length) : null,
+      n: card.all.length, graded: card.graded,
+      medRatio: round3(card.med),
+      within30Pct: within30(card),
       byTier: Object.fromEntries(['x', 'g', 'p', 't', 'm'].map(code => {
         const t = summarize('card', code);
-        return [code, {
-          n: t.all.length, graded: t.g.length,
-          medRatio: t.med !== null ? Math.round(t.med * 1000) / 1000 : null,
-          within30Pct: t.ratios.length >= 20
-            ? Math.round(100 * t.ratios.filter(x => x >= 0.7 && x <= 1.3).length / t.ratios.length) : null,
-        }];
+        return [code, { n: t.all.length, graded: t.graded, medRatio: round3(t.med), within30Pct: within30(t) }];
       })),
     },
     vsbid: {
-      n: vsbid.all.length, graded: vsbid.g.length,
-      medRatio: vsbid.med !== null ? Math.round(vsbid.med * 1000) / 1000 : null,
+      n: vsbid.all.length, graded: vsbid.graded,
+      medRatio: round3(vsbid.med),
       // the 'below' claim graded: did the lot really land at/above the floor
       // (i.e. the flagged price was genuinely under the market)?
-      belowHit: belowG.length >= 20
-        ? Math.round(100 * belowG.filter(c => c.r! >= c.f!).length / belowG.length) : null,
+      belowHit: floorHeld(vsbid.g.filter(hasF), vsbid.miss.filter(hasF)),
     },
     gap: {
-      n: gap.all.length, graded: gap.g.length,
-      medRatio: gap.med !== null ? Math.round(gap.med * 1000) / 1000 : null,
-      floorHit: gapFloorG.length >= 20
-        ? Math.round(100 * gapFloorG.filter(c => c.r! >= c.f!).length / gapFloorG.length) : null,
+      n: gap.all.length, graded: gap.graded,
+      medRatio: round3(gap.med),
+      floorHit: floorHeld(gap.g.filter(hasF), gap.miss.filter(hasF)),
     },
     quiet: {
-      n: quiet.all.length, graded: quiet.g.length,
-      medRatio: quiet.med !== null ? Math.round(quiet.med * 1000) / 1000 : null,
-      underPct: quiet.ratios.length >= 20
-        ? Math.round(100 * quiet.ratios.filter(x => x <= 1).length / quiet.ratios.length) : null,
+      n: quiet.all.length, graded: quiet.graded,
+      medRatio: round3(quiet.med),
+      underPct: quiet.graded >= 20 && quiet.ratios.length >= 20
+        ? pct(quiet.ratios.filter(x => x <= 1).length, quiet.graded) : null,
     },
-    asOf: new Date().toISOString().slice(0, 10),
+    asOf,
   };
+}
+
+/** Grade calls against outcomes; persist grades; return the summary. */
+export function gradeCalls(
+  soldById: Map<string, { realizedUsd: number; saleDate: string }>,
+  statusById?: Map<string, LotOutcome>,
+  today: string = new Date().toISOString().slice(0, 10),
+): CallsRecord {
+  const rows = readCalls();
+  if (gradeRows(rows, soldById, statusById, today)) fs.writeFileSync(LEDGER, gzipNdjson(rows as unknown as Record<string, unknown>[]));
+  return summarizeCalls(rows, today);
 }

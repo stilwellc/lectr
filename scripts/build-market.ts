@@ -1461,8 +1461,14 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   {
     const { gradeCalls } = require('./lib/calls-ledger');
     const soldById = new Map<string, { realizedUsd: number; saleDate: string }>();
-    for (const l of all) if (l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate) soldById.set(String(l.id), { realizedUsd: l.realizedUsd!, saleDate: l.saleDate });
-    const rec = gradeCalls(soldById);
+    // statusById = the FULL corpus: a call whose lot is bought in, has no
+    // result, or VANISHED from it grades as a miss 7 days after its close
+    const statusById = new Map<string, { status?: string; saleDate?: string | null }>();
+    for (const l of all) {
+      statusById.set(String(l.id), { status: l.status, saleDate: l.saleDate });
+      if (l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate) soldById.set(String(l.id), { realizedUsd: l.realizedUsd!, saleDate: l.saleDate });
+    }
+    const rec = gradeCalls(soldById, statusById, TODAY);
     (markets.all.analytics as unknown as Record<string, unknown>).callsRecord = rec;
     console.log(`[market] calls record — card: ${rec.card.graded}/${rec.card.n} graded medRatio=${rec.card.medRatio} within30=${rec.card.within30Pct}% · vsbid: ${rec.vsbid.graded}/${rec.vsbid.n} medRatio=${rec.vsbid.medRatio} belowHit=${rec.vsbid.belowHit}%`);
     // the receipts tape — graded rows with lot identity, served to /receipts
