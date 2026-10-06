@@ -162,12 +162,23 @@ const ART_KIND: Record<string, string> = {
   'original-2d': 'originals', 'work-on-paper': 'originals', 'painting': 'originals',
   'sculpture': 'sculpture', 'photograph': 'photographs', 'book': 'books',
 };
-// (wave 2) class 10 · an editioned multiple: a KAWS vinyl figure filed sculpture is
-// sculpture; skateboard decks / plates / plush are multiples (prints)
-function artKind(formKey: string, category: string): string {
+// (wave 2) class 9 · art kinds the form key misses: an artist's BOOK with no
+// "book" word (Ruscha's "Real Estate Opportunities", Warhol's "25 Cats
+// Name(d) Sam", Matisse's "Florilège des Amours de Ronsard, Albert Skira",
+// Picasso's "Vingt Poèmes"), a printed poster / magazine woodcut the form key
+// read as a book ("New York is Book Country vintage poster"), an editioned
+// multiple (skateboard decks are prints; a KAWS vinyl figure is sculpture),
+// and a category the form key could not place.
+const ARTIST_BOOK_RE = /\b(?:livres? d'artistes?|artists?'? books?|illustrated books?|zines?|vols?\.\s*[ivx\d]|volumes?|edited by|published by|skira|t[ée]riade|letterpress|black sparrow|po[eè]mes|poems|first edition|dummy cop(?:y|ies)|twentysix gasoline stations|every building on the sunset strip|real estate opportun\w*|various small fires|royal road test|nine swimming pools|some los angeles apartments|thirtyfour parking lots|a few palm trees|colored people|babycakes|dutch details|crackers|holy cats|a gold book|floril[eè]ge des amours|lettres portugaises|pasipha[ée]|po[ée]sies|vingt po[eè]mes|le chant des morts|toreros|1 cent life)\b/i;
+const ART_PRINT_OBJECT_RE = /\b(?:posters?|woodcut|screenprint|silkscreen|lithograph|etching|offset)\b/i;
+const ART_CAT_KIND: Record<string, string> = { print: 'prints', original: 'originals', sculpture: 'sculpture', photograph: 'photographs' };
+function artKind(formKey: string, category: string, title: string, medium: string): string {
+  const tm = `${title} ${medium}`;
   let k = ART_KIND[formKey] ?? null;
   if (formKey === 'object-edition') k = category === 'sculpture' ? 'sculpture' : 'prints';
-  return k ?? 'other';
+  if (k === 'books' && (/\bposters?\b/i.test(tm) || (ART_PRINT_OBJECT_RE.test(tm) && !/\bbooks?\b|\bvolumes?\b|\bvols?\./i.test(title)))) k = 'prints';
+  else if (k !== 'books' && ARTIST_BOOK_RE.test(tm) && !/\bplates?\b|\bfrom\b|\bportfolio\b/i.test(title)) k = 'books';
+  return k ?? ((formKey === 'unknown' || formKey === 'design') ? ART_CAT_KIND[category] : null) ?? 'other';
 }
 
 const DESIGN_MATERIALS = ['walnut', 'teak', 'oak', 'rosewood', 'plywood', 'steel', 'aluminum', 'fiberglass', 'bronze', 'glass', 'upholstery'];
@@ -290,7 +301,7 @@ export function subCatOf(l: Lot, sportMaps?: { byPid: Map<string, string>; byPla
   }
 
   if (vert === 'art') {
-    return { subCat: artKind(formKey, (l.category as string) || ''), drill: null, flown: null };
+    return { subCat: artKind(formKey, (l.category as string) || '', title, String(l.medium || '')), drill: null, flown: null };
   }
 
   if (vert === 'design') {

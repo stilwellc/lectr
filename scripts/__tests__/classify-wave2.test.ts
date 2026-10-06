@@ -235,6 +235,20 @@ test('class 6 · a print with no print evidence: the originals sale / price says
   assert.equal(ART({ artist: 'andy-warhol', title: 'Sportswear Jeans Intern', auctionHouse: 'Rago', saleName: 'Post War + Contemporary Art' }), null);
 });
 
+test('class 9 · art makers are never design; artist books and printed posters get their kind', () => {
+  assert.equal(ART({ artist: 'andy-warhol', title: 'mao (feldman & schellmann ii.99)', category: 'design', saleName: 'Sothebys Designer Showhouse' }), 'print');
+  assert.equal(ART({ artist: 'ed-ruscha', title: 'Real Estate Opportunties', category: 'design', auctionHouse: 'Wright', saleName: 'Modern Art & Design' }), 'unknown');
+  assert.equal(ART({ artist: 'pablo-picasso', title: 'Bird', category: 'design', auctionHouse: 'LAMA', saleName: 'Modern Design' }), 'sculpture');
+  const K = (artist: string, title: string, formKey: string, category = 'print', medium = '') => subCatOf({ artist, title, formKey, category, medium }).subCat;
+  assert.equal(K('henri-matisse', 'HENRI MATISSE (1869-1954) Florilège des Amours de Ronsard , Albert Skira, Paris, 1948', 'print'), 'books');
+  assert.equal(K('pablo-picasso', 'PABLO PICASSO (1881-1973) Luis de Góngora y Argote, Vingt Poèmes', 'print'), 'books');
+  assert.equal(K('ed-ruscha', 'Real Estate Opportunties', 'unknown', 'unknown'), 'books');
+  assert.equal(K('keith-haring', 'New York is Book Country vintage poster', 'book', 'print', 'screenprint in colors'), 'prints');
+  assert.equal(K('raymond-pettibon', 'A set of two Raymond Pettibon skateboards', 'object-edition', 'original'), 'prints');
+  assert.equal(K('kaws', 'Together (Set of Three)', 'object-edition', 'sculpture'), 'sculpture');
+  assert.equal(K('roy-lichtenstein', 'Crak!', 'unknown', 'print'), 'prints');
+});
+
 test('class 1 · culture kind reads the description when the title is a bare name; signed pieces; plurals', () => {
   const K = (title: string, description = '', o: R = {}) => subCatOf({ artist: 'entertainment-memorabilia', title, itemClass: cultureItemClass({ title, description, ...o }) }).subCat;
   // the object lives in the description (Christie's / Sotheby's culture titles)

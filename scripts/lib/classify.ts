@@ -623,6 +623,9 @@ export function artCategoryFix(l: ClassifyLot): string | null {
       && (l.artist === 'andy-warhol' ? /\bevening\b/i.test(sale) : ORIGINALS_SALE_RE.test(sale));
     if (saleSays || (price >= 500_000 && !/\b(?:set|portfolio|complete|suite)\b/i.test(s))) return 'original';
   }
+  // (wave 2) class 9 · an art maker's lot is never 'design' (Wright / LAMA
+  // "Modern Art & Design" sales stamped it): a print by its evidence, else unknown
+  if (cat === 'design') return PRINT_EVIDENCE_RE.test(tm) ? 'print' : 'unknown';
   return null;
 }
 

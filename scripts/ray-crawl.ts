@@ -123,12 +123,15 @@ function classifyLot(lot: AuctionLot): LotCategory {
   // 4. Check sale name for category clues
   if (/prints?\s*[&+]\s*multiples?/i.test(saleName) || /prints?\s+unlimited/i.test(saleName)) return 'print';
   if (/photograph/i.test(saleName)) return 'photograph';
-  if (/design/i.test(saleName) || /furniture/i.test(saleName)) return 'design';
+  // (wave 2) only a DESIGN maker's lot is design by its sale: Wright / LAMA
+  // "Modern Art & Design" sales filed Picasso ceramics, KAWS figures and Ruscha
+  // books by the art makers as 'design' (artCategoryFix re-derives the stored rows)
+  if (isDesignArtist && (/design/i.test(saleName) || /furniture/i.test(saleName))) return 'design';
 
   // 5. Check URL path
   if (/\/prints?\b/i.test(url)) return 'print';
   if (/\/photograph/i.test(url)) return 'photograph';
-  if (/\/design/i.test(url)) return 'design';
+  if (isDesignArtist && /\/design/i.test(url)) return 'design';
 
   // 6. Artist-level defaults
   if (isDesignArtist) return 'design';
