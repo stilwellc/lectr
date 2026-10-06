@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   isIdentityLessTitle, isBareNameTitle, mediumConflict, compPurityFault, designatorConflict, designatorsOf,
-  autographMaterialOf, subjectConflict, compBoundaryFault, type PurityLot,
+  autographMaterialOf, subjectConflict, compBoundaryFault, isIdentityLessArtTarget, type PurityLot,
 } from '../../app/lib/comp-purity';
 
 const rr = (title: string, o: Partial<PurityLot> = {}): PurityLot => ({ artist: 'entertainment-memorabilia', category: 'object', title, ...o });
@@ -89,4 +89,35 @@ test('hard boundaries: signed vs unsigned, object class, designator; abstain wit
   assert.equal(compBoundaryFault(art('andy-warhol', 'Marilyn (signed)'), art('andy-warhol', 'Marilyn')), null);
   // watches: a reference is its own identity tier — never a designator conflict
   assert.equal(compBoundaryFault({ artist: 'rolex', title: 'Submariner Ref 5513' }, { artist: 'rolex', title: 'Submariner Ref 5512' }), null);
+});
+
+test('wave 3 boundaries (ext): lone "I" + plate designators, catalogue numbers, plate vs portfolio, item counts', () => {
+  const ext = { ext: true };
+  const pic = (t: string) => art('pablo-picasso', t);
+  // a lone "I" closing a designator; II = 2
+  assert.equal(designatorsOf('Minotaure aveugle guidé par une Fillette, I, from La Suite Vollard', true).get('fillette'), '1');
+  assert.equal(designatorsOf('Minotaure aveugle guidé par une Fillette II, from: La Suite Vollard', true).get('fillette'), '2');
+  assert.equal(compBoundaryFault(pic('Minotaure aveugle guidé par une Fillette, I, from La Suite Vollard'), pic('Pablo Picasso Minotaure aveugle guidé par une Fillette II, from: La Suite Vollard'), ext), 'designator');
+  assert.equal(compBoundaryFault(pic('Minotaure aveugle guidé par une Fillette, I, from La Suite Vollard'), pic('Minotaure aveugle guidé par une Fillette I, pl. 94, from La Suite Vollard'), ext), null);
+  assert.equal(compBoundaryFault(pic('Minotaure aveugle guidé par une Fillette, I, from La Suite Vollard'), pic('Pablo Picasso Minotaure aveugle guidé par une Fillette II, from: La Suite Vollard')), null, 'off without ext');
+  // a pronoun stays a pronoun
+  assert.equal(designatorsOf('Nelson Mandela Signed Booklet - I Am Prepared to Die', true).size, 0);
+  // catalogue numbers: a different plate; the same plate in another citation form
+  assert.equal(compBoundaryFault(pic('Homme dévoilant une Femme, Plate 5 from La Suite Vollard (B. 138; Ba. 203)'), pic('Minotaure, buveur et femmes, Plate 92 from La Suite Vollard (B. 200; Ba. 368)'), ext), 'designator');
+  const ali = art('andy-warhol', 'Muhammad Ali (Feldman & Schellmann II.179)');
+  assert.equal(compBoundaryFault(ali, art('andy-warhol', 'Muhammad Ali (F. & S. 179)'), ext), null);
+  assert.ok(compBoundaryFault(ali, art('andy-warhol', 'ANDY WARHOL Muhammad Ali (F. & S. II.179-182)'), ext), 'the set of four');
+  // single plate vs the whole portfolio, either way round
+  assert.equal(compBoundaryFault(art('andy-warhol', 'Ten Landscapes'), art('andy-warhol', 'Landscape 2, from Ten Landscapes'), ext), 'unit');
+  assert.equal(compBoundaryFault(art('keith-haring', 'Untitled (from the Pop Shop I portfolio)'), art('keith-haring', 'Pop Shop I'), ext), 'unit');
+  assert.equal(compBoundaryFault(art('keith-haring', 'Untitled, from Three Lithographs'), art('keith-haring', 'Three Lithographs: one plate'), ext), null);
+  assert.equal(compBoundaryFault(art('keith-haring', 'Untitled, from Three Lithographs'), art('keith-haring', 'KEITH HARING Three Lithographs'), ext), 'unit');
+  // memorabilia counts and multi-signer lots
+  assert.equal(compBoundaryFault(rr('Funny Ladies (19) Documents Signed, with Jean Arthur, Fanny Brice, and Carol Burnett'), rr('Fanny Brice Signed Document'), ext), 'quantity');
+  assert.equal(compBoundaryFault(rr('Yardbirds Signatures with Eric Clapton'), rr('Eric Clapton Signature'), ext), 'quantity');
+  assert.equal(compBoundaryFault(rr('Harry S. Truman Typed Letter Signed'), rr('Harry S. Truman Typed Letter Signed'), ext), null);
+  // the identity-less art target
+  assert.ok(isIdentityLessArtTarget(pic('Homme assis')));
+  assert.ok(!isIdentityLessArtTarget(pic('Homme assis (B. 123)')));
+  assert.ok(!isIdentityLessArtTarget({ ...pic('Homme assis'), medium: 'etching' }));
 });

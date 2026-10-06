@@ -13,7 +13,8 @@ import {
   rowsEngineVersionOf, rowsByEngineVersionOf,
 } from '../backtest-core';
 import { calibrationOnEngineBasis } from '../build-market';
-import { setEngineFlags, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_HOUSE_GATE, ENGINE_VERSION } from '../../app/lib/value';
+import { setEngineFlags, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_HOUSE_GATE, ENGINE_FLAGS_COMP_PURITY, ENGINE_VERSION, estimateValueEx, type Comp } from '../../app/lib/value';
+import { buildIdf, type Match } from '../../app/lib/similarity';
 import { lotMaxBid, lotProjectedClose, cardCompsHammer, lotVerdict } from '../../app/lib/verdict';
 import { maxHammerFor } from '../../app/lib/premiums';
 import type { AuctionLot } from '../../app/types';
@@ -82,6 +83,29 @@ test('lot read figures (verdict.ts): max bid = the engine max bid, projection on
   assert.equal(cardCompsHammer({ ...cc, value: { ...cc.value!, abstain: 'card:player-median-context-only' } } as AuctionLot), null);
   assert.equal(cardCompsHammer({ ...cc, value: { ...cc.value!, bidFloor: 275 } } as AuctionLot), null, 'a bid-floored value is not a comps figure');
   assert.equal(lotVerdict(l)!.maxBid, 950);
+});
+
+// ── the engine (estimateValueEx) ─────────────────────────────────────────
+const M = (cosine: number): Match => ({ score: Math.round(cosine * 100), cosine, cls: 'similar', reasons: [] });
+const artRow = (id: string, title: string, saleDate: string, o: Record<string, unknown> = {}): AuctionLot =>
+  ({ id, title, artist: 'pablo-picasso', category: 'print', status: 'sold', saleDate, ...o } as unknown as AuctionLot);
+const artComp = (id: string, title: string, usd: number, saleDate = '2025-12-01', o: Record<string, unknown> = {}): Comp =>
+  ({ id, match: M(0.9), realizedUsd: usd, saleDate, lot: artRow(id, title, saleDate, o) });
+const artTarget = (title: string, o: Record<string, unknown> = {}): AuctionLot => ({
+  id: 't', title, artist: 'pablo-picasso', category: 'print', auctionHouse: 'Phillips', status: 'upcoming',
+  saleDate: '2026-09-20', estLowUsd: 80000, estHighUsd: 120000, ...o,
+} as unknown as AuctionLot);
+
+test('identity-less art (wave 3): a bare title whose comps span > 20× abstains; a cited / described one does not', () => {
+  setEngineFlags(ENGINE_FLAGS_CURRENT);
+  const comps = [artComp('a', 'Homme assis', 48000), artComp('b', 'Homme assis', 118000), artComp('c', 'Homme assis', 8_000_000), artComp('d', 'Homme assis', 190000)];
+  const r = estimateValueEx(artTarget('Homme assis'), comps, buildIdf([]));
+  assert.equal(r.value, null);
+  assert.equal(r.abstain, 'identity-less');
+  assert.ok(estimateValueEx(artTarget('Homme assis', { medium: 'etching' }), comps, buildIdf([])).value, 'medium evidence names the object');
+  setEngineFlags(ENGINE_FLAGS_COMP_PURITY);
+  assert.ok(estimateValueEx(artTarget('Homme assis'), comps, buildIdf([])).value, 'the previous engine valued it');
+  setEngineFlags(null);
 });
 
 test('record stamp: backtest.json names the engine its ROWS came from, not the current engine', () => {
