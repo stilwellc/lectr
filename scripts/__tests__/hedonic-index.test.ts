@@ -3,6 +3,7 @@
  *  · year-precision dates never enter the fit (their quarter is invented)
  *  · the MARKET index fails a horizon on a ≥15pp source/house share shift
  *    between its endpoints (the maker index keeps its >40%/<12% rule)
+ *  · CIs are clustered by SALE (lots in one sale share a shock)
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,16 +21,19 @@ const NOW = new Date('2026-08-15T00:00:00Z'); // current stub = 2026-Q3 → last
 
 /** Synthetic market: 10 makers, 2 houses, 160 lots/quarter, a true +20%/yr
  *  drift; `shareB(q)` is house B's share of quarter q; 8 sales per house-quarter. */
-function market(shareB: (q: string) => number, seed = 1, sigma = 0.25): AuctionLot[] {
+function market(shareB: (q: string) => number, seed = 1, sigma = 0.25, saleSd = 0): AuctionLot[] {
   const r = rng(seed);
   const lots: AuctionLot[] = [];
   QUARTERS.forEach((q, qi) => {
     const [y, qn] = q.split('-Q').map(Number);
+    const shock = new Map<string, number>();
     for (let i = 0; i < 160; i++) {
       const maker = `maker-${i % 10}`;
       const house = r.u() < shareB(q) ? 'House B' : 'House A';
-      const lnP = 9 + (i % 10) * 0.3 + (house === 'House B' ? 0.4 : 0) + Math.log(1.2) * (qi / 4) + sigma * r.n();
-      const month = (qn - 1) * 3 + 1 + (i % 3);
+      const sk = `${house}|${i % 8}`;
+      if (!shock.has(sk)) shock.set(sk, saleSd * r.n());
+      const lnP = 9 + (i % 10) * 0.3 + (house === 'House B' ? 0.4 : 0) + Math.log(1.2) * (qi / 4) + shock.get(sk)! + sigma * r.n();
+      const month = (qn - 1) * 3 + 1 + ((i % 8) % 3);
       lots.push({
         id: `${q}-${i}`, artist: maker, status: 'sold', realizedUsd: Math.exp(lnP),
         saleDate: `${y}-${String(month).padStart(2, '0')}-10`, auctionHouse: house,
@@ -82,4 +86,38 @@ test('year-precision (and unknown) dates never enter the fit', () => {
   // a MONTH-precision date keeps its true quarter
   const month = stubs.map(s => ({ ...s, datePrecision: 'month' } as unknown as AuctionLot));
   assert.equal(buildHedonicIndex(lots.concat(month), NOW).series.find(p => p.period === '2025-Q2')!.n, base + 40);
+});
+
+/** the 2026-Q2 series point (base 2024-Q1, true level 1.2^(9/4)) and its log-CI half-width */
+const endPoint = (lots: AuctionLot[]) => {
+  const pt = buildHedonicIndex(lots, NOW).series.find(p => p.period === '2026-Q2')!;
+  return { pt, half: Math.log(pt.ciHi / pt.ciLo) / 2 };
+};
+const TRUE_LEVEL = 100 * Math.pow(1.2, 9 / 4);
+
+test('sale-clustered CI: shared sale shocks widen the interval vs per-lot clusters', () => {
+  const lots = market(() => 0.5, 3, 0.25, 0.3);
+  const shared = endPoint(lots).half;
+  // the same lots, every lot its own "sale" → the sandwich has nothing to cluster
+  const solo = endPoint(lots.map((l, i) => ({ ...l, saleName: `solo ${i}`, saleDate: l.saleDate } as AuctionLot))).half;
+  assert.ok(shared > 1.5 * solo, `clustered half-width ${shared.toFixed(4)} vs per-lot ${solo.toFixed(4)}`);
+});
+
+test('sale-clustered CI: covers the true level near nominal when sales carry shocks', () => {
+  let hit = 0;
+  const N = 30;
+  for (let seed = 100; seed < 100 + N; seed++) {
+    const { pt } = endPoint(market(() => 0.5, seed, 0.25, 0.3));
+    if (pt.ciLo <= TRUE_LEVEL && TRUE_LEVEL <= pt.ciHi) hit++;
+  }
+  // a model-only (iid) CI covers well under half the time on this design
+  assert.ok(hit / N >= 0.8, `coverage ${hit}/${N}`);
+});
+
+test('sale-clustered CI never narrows below the model-based CI', () => {
+  // no sale shock: clustered ≈ model; the max() keeps the model floor
+  const lots = market(() => 0.5, 5, 0.25, 0);
+  const clustered = endPoint(lots).half;
+  const solo = endPoint(lots.map((l, i) => ({ ...l, saleName: `solo ${i}` } as AuctionLot))).half;
+  assert.ok(clustered >= solo * 0.9, `${clustered} vs ${solo}`);
 });
