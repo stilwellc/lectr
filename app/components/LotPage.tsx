@@ -754,7 +754,11 @@ export default function LotPage({ lotId, initialLot }: {
   const saved = isSaved(lot.id);
   const isSold = lot.status === 'sold' || lot.status === 'bought_in';
   const houseColor = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
-  const beatRate = lot.value?.signal?.beatRatePct ?? null;
+  // (Oct 6 2026, wave 3) the calibrated odds print only on a BELOW call: on
+  // an above / at read the bucket's beat rate is not a rate "of flags like
+  // this" (and an uncalibrated read carries 0) — suppressed, never reworded
+  const beatRate = lot.value?.signal?.label?.startsWith('below') && (lot.value.signal.beatRatePct || 0) > 0
+    ? lot.value.signal.beatRatePct : null;
   const caption = `${lot.lotNumber != null ? `Lot ${lot.lotNumber} · ` : ''}${lot.auctionHouse}${lot.saleName ? ` · ${cleanText(lot.saleName)}` : ''}`;
   // poolPartial (above): an engine pool that resolved only PART of its stamped
   // ids is the same fault as a client read — the rows under an honest

@@ -73,7 +73,10 @@ function LotValueBlock({ lot, allLots, market, backtest }: { lot: AuctionLot; al
           <span style={{ color: under ? 'var(--color-up)' : over ? 'var(--color-fg)' : 'var(--color-text-secondary)', fontWeight: 500 }}>
             {under ? 'Trading below' : over ? 'Trading above' : 'At'} comparable market
           </span>
-          <span style={{ color: 'var(--color-text-muted)' }}> · comparable sales carry a {dir.beatRatePct}% rate of beating estimates like this · {v.n} sales</span>
+          {/* (Oct 6 2026, wave 3) the beat rate prints only on a below call
+              with calibrated odds — on above / at reads it is not the rate
+              the sentence claims (suppressed, not reworded) */}
+          <span style={{ color: 'var(--color-text-muted)' }}>{under && dir.beatRatePct > 0 ? ` · comparable sales carry a ${dir.beatRatePct}% rate of beating estimates like this` : ''} · {v.n} sales</span>
         </div>
       )}
       {/* no value stamp, but the crawl-stamped card signal exists — the same
