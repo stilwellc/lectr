@@ -1,4 +1,5 @@
 import { medianOr } from './lib/stats';
+import { closeMs } from './lib/close-time';
 
 // Neutral ivory ramp: houses are distinguished by LIGHTNESS, not hue — hue is
 // reserved for meaning (wine = emphasis, gold = site primary). Each step mixes
@@ -441,13 +442,21 @@ export function trueSaleDay(l: { saleDate?: string | null; saleDateTime?: string
  *  predicates wrote `saleDate >= today || (resultsPending && saleDate >= today)`
  *  whose second disjunct was subsumed and never admitted anything, so those
  *  surfaces hid results-pending lots a day earlier than the lander's payload
- *  intended. Pass the reader's localToday() client-side. */
+ *  intended. Pass the reader's localToday() client-side.
+ *
+ *  CLOSED IS CLOSED (Oct 5 2026): a lot whose close instant (closing.ts
+ *  closeMs — the stamped time, else the end of its sale day on the reader's
+ *  clock) has passed is never live, results pending or not. Read at call
+ *  time, so in the browser it is the reader's clock at render. */
 export function isLiveUpcoming(
   l: { status: string; saleDate?: string | null; saleDateTime?: string | null; resultsPending?: boolean },
   todayIso: string = localToday(),
   graceDays = 1,
+  nowMs: number = Date.now(),
 ): boolean {
   if (l.status !== 'upcoming') return false;
+  const close = closeMs(l);
+  if (close != null && close <= nowMs) return false;
   const day = trueSaleDay(l);
   if (!day) return false;
   if (day >= todayIso) return true;

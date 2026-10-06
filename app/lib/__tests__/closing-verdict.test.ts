@@ -9,6 +9,7 @@ import { closeMs, closeShort, closeWord, closesWithin, isOpen } from '../closing
 import { houseAsOfMap, parseStatus, staleHouses } from '../house-status';
 import { lotVerdict, fmtUsd } from '../verdict';
 import type { AuctionLot } from '../../types';
+import { isLiveUpcoming } from '../../utils';
 
 const H = 3_600_000;
 
@@ -39,6 +40,19 @@ test('results-pending lots past their close are closed, never live', () => {
   const lot = { status: 'upcoming', saleDate: '2026-10-01', resultsPending: true };
   assert.equal(isOpen(lot, new Date(2026, 9, 3, 12).getTime()), false);
   assert.equal(closeWord(lot, new Date(2026, 9, 3, 12).getTime()), 'closed');
+});
+
+test('isLiveUpcoming: a lot past its close never counts as live', () => {
+  const close = Date.parse('2026-10-05T15:00:00.000Z');
+  const timed = { status: 'upcoming', saleDate: '2026-10-05', saleDateTime: '2026-10-05T15:00:00.000Z' };
+  assert.equal(isLiveUpcoming(timed, '2026-10-05', 1, close - 1), true);
+  assert.equal(isLiveUpcoming(timed, '2026-10-05', 1, close), false);
+  // results pending past the day's end: closed, the grace never resurrects it
+  const pending = { status: 'upcoming', saleDate: '2026-10-04', resultsPending: true };
+  assert.equal(isLiveUpcoming(pending, '2026-10-05', 1, new Date(2026, 9, 5, 9).getTime()), false);
+  // a day-only lot is live through its own day
+  const dayOnly = { status: 'upcoming', saleDate: '2026-10-05' };
+  assert.equal(isLiveUpcoming(dayOnly, '2026-10-05', 1, new Date(2026, 9, 5, 22).getTime()), true);
 });
 
 test('status.json parses defensively; absent houses fall back to lastSeen', () => {
