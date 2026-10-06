@@ -13,6 +13,8 @@ import { leadsWithSetCode } from './set-codes';
 import { attachExtractions, fillWatchReferencesFromExtract } from './extract/apply';
 import { segmentOf } from '../corpus-io';
 import { saleDayOf, SALE_DAY_HOUSES } from './sale-day';
+import { seasonToDate } from './sports-crawl';
+import { saleCloseFor } from './sale-close-dates';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    corpus-normalize.ts — build-time corpus-hygiene passes.
@@ -525,7 +527,7 @@ export function nullDeadChristiesSsoUrls(lots: Lot[]): number {
    ═══════════════════════════════════════════════════════════════════════════ */
 type DQLot = Lot & {
   compExclude?: string;
-  datePrecision?: 'day' | 'month' | 'year' | 'unknown';
+  datePrecision?: 'day' | 'month' | 'year' | 'season' | 'unknown';
   resultsPending?: boolean;
   realizedUsd?: number | null;
   hammerUsd?: number | null;
@@ -941,6 +943,40 @@ export function stampDatePrecision(lots: Lot[]): { month: number; year: number }
   return { month, year };
 }
 
+// ── SEASON CLOSE DATES (identity fix wave, Oct 2026): REA / H&S archive rows
+// were dated by seasonToDate's mid-month stub ("2019 Summer" → 2019-07-15,
+// 'month') while the sales close weeks later (REA Summer mid-Aug, REA Fall
+// early Dec, H&S month labels up to two months before the close) — so the
+// engine read their prices as known before the sale ended. Re-date every row
+// still carrying the stub (datePrecision 'month', no saleDateTime, saleDate ==
+// the stub its saleName produces) to the cited close day ('day') or the
+// conservative season-end bound ('season') from sale-close-dates.ts; fxAsOf
+// follows when it was the stub (USD rows: rate 1, the stamp is the date).
+// Rows with a real close (live bid-page endTime → saleDateTime) are never
+// touched; REA monthly sales (close inside their label month) keep the stub.
+// Idempotent: a re-dated row no longer matches the stub.
+export function redateSeasonSales(lots: Lot[], now: Date = new Date()): { total: number; bySale: Record<string, number> } {
+  const asOf = now.toISOString().slice(0, 10);
+  const bySale: Record<string, number> = {};
+  let total = 0;
+  for (const l of lots as DQLot[]) {
+    if (l.auctionHouse !== 'REA' && l.auctionHouse !== 'Huggins & Scott') continue;
+    if (l.datePrecision !== 'month' || l.saleDateTime) continue;
+    const name = typeof l.saleName === 'string' ? l.saleName : '';
+    const stub = name ? seasonToDate(name) : null;
+    if (!stub || l.saleDate !== stub) continue;
+    const close = saleCloseFor(l.auctionHouse, name, asOf);
+    if (!close) continue;
+    l.saleDate = close.date;
+    l.datePrecision = close.precision;
+    if ((l as { fxAsOf?: string | null }).fxAsOf === stub) (l as { fxAsOf?: string | null }).fxAsOf = close.date;
+    const k = `${l.auctionHouse}|${name}`;
+    bySale[k] = (bySale[k] || 0) + 1;
+    total++;
+  }
+  return { total, bySale };
+}
+
 // ── HAMMER == ALL-IN (Wright 989 · LAMA 338): older Wright-platform rows copied
 // the premium-inclusive price into the hammer field, so every hammer-basis read
 // (inferHammerUsd, houseCal, max-bid guidance) took a realized price as the
@@ -980,6 +1016,7 @@ export type HygieneReport = {
   compExclude: Record<string, number>;
   images: Record<string, number>;
   datePrecision: { month: number; year: number };
+  seasonDates: { total: number; bySale: Record<string, number> };
   hammer: { recomputed: number; nulled: number };
 };
 
@@ -989,6 +1026,9 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   // keyed by id + hash of the CRAWLED text — before any pass rewrites a title.
   // Inert (one log line, zero mutation) without the extraction gate.
   attachExtractions(ls);
+  // real REA / H&S close days before any pass reads saleDate
+  const seasonDates = redateSeasonSales(ls, opts.now);
+  console.log(`[normalize] season sales re-dated to their close: ${seasonDates.total} rows across ${Object.keys(seasonDates.bySale).length} sales`);
   const rrUrls = deriveRRAuctionUrls(ls);
   if (rrUrls) console.log(`[normalize] rrauction url backfill: ${rrUrls} lots derived from id (lot-detail/<lotId>)`);
   const deadSso = nullDeadChristiesSsoUrls(ls);
@@ -1072,7 +1112,7 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
     `datePrecision month=${datePrecision.month} year=${datePrecision.year} · ` +
     `wright-family hammer==all-in recomputed=${hammer.recomputed} nulled=${hammer.nulled}`
   );
-  return { rrStubs, rrDupes, urlDupes, bruun, foreignMaker, setCodeCards, staleUpcoming, staleHouse, compExclude, images, datePrecision, hammer };
+  return { rrStubs, rrDupes, urlDupes, bruun, foreignMaker, setCodeCards, staleUpcoming, staleHouse, compExclude, images, datePrecision, seasonDates, hammer };
 }
 
 /* ── CULTURE→SCIENCE REROUTE (Aug 14) — Apple/computing lots filed under the

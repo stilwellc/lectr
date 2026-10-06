@@ -140,7 +140,7 @@ test('H&S archive month index: lot detail links in page order, absolute; ids and
   assert.equal(monthIndexRank('/search'), 0);
 });
 
-test('H&S archive lot page: <li> fields → a month-precision sold row at the archive "Sold For"', () => {
+test('H&S archive lot page: <li> fields → a sold row dated at the sale\'s cited close, at the archive "Sold For"', () => {
   const url = 'https://hugginsandscott.com/auction/2026/Summer/3/1967-topps-581-tom-seaver-rookie-psa-mint-9';
   const l = parseReaLot(fx('hs-archive-2026-summer-3.html'), idFromUrl(url), 'Huggins & Scott', url) as unknown as Row;
   assert.ok(l);
@@ -148,8 +148,8 @@ test('H&S archive lot page: <li> fields → a month-precision sold row at the ar
   assert.equal(l.title, '1967 Topps #581 Tom Seaver Rookie PSA MINT 9', 'generic <title> → the lot heading');
   assert.equal(l.year, '1967');
   assert.equal(l.saleName, '2026 Summer');
-  assert.equal(l.saleDate, '2026-07-15', 'season → mid-month stub');
-  assert.equal(l.datePrecision, 'month');
+  assert.equal(l.saleDate, '2026-09-10', 'season label → the cited close day (sale-close-dates.ts), not the 07-15 stub');
+  assert.equal(l.datePrecision, 'day');
   assert.equal(l.lotNumber, 3);
   assert.equal(l.realizedUsd, 31200);
   assert.equal(l.gradeLabel, 'PSA MINT 9');

@@ -165,8 +165,11 @@ export interface AuctionLot {
   compExclude?: string;
   /** How precise saleDate is. Absent = 'day'. 'month' = a synthesized mid-month
       stamp (seasonToDate: "2018 Spring" → 04-15); 'year' = a June-1 placeholder
-      (Sotheby's artist-page scrape). Crawler-stamped values win over normalize. */
-  datePrecision?: 'day' | 'month' | 'year' | 'unknown';
+      (Sotheby's artist-page scrape); 'season' = a conservative upper bound on
+      an unpublished close (scripts/lib/sale-close-dates.ts — the day is read
+      as-is, so the sale counts as known only from that bound on).
+      Crawler-stamped values win over normalize. */
+  datePrecision?: 'day' | 'month' | 'year' | 'season' | 'unknown';
   url: string;
   /** Stamped at BUILD time by scripts/build-upcoming.ts onto the eager
       upcoming.json lots ONLY (comps median vs estimate midpoint, or the
