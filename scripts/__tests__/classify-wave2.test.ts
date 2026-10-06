@@ -39,7 +39,7 @@ test('regression a · wrongful evictions: signed historic documents, culture-sal
   assert.equal(move({ auctionHouse: 'Goldin', artist: 'entertainment-memorabilia', title: '2023 Hit Parade Iron Throne Edition Series 27 Hobby Box - Possible Emilia Clarke, Kit Harington, Peter Dinklage Signed Cards' }), DROP);
   assert.equal(move({ auctionHouse: 'Propstore', artist: 'pop-memorabilia', title: 'Lot # 1524: Marvel Comics - Charles Lippincott Collection: Star Wars No. 1 Comic Signed by Charles Lippincott, Roy Thomas, and Howard Chaykin CBCS 5.5' }), DROP);
   // a sports card in culture goes home — a roster athlete or a vintage issue with no sport word
-  assert.equal(move({ auctionHouse: 'RR Auction', artist: 'entertainment-memorabilia', saleName: 'Sports', title: '1966 Philadelphia Gum Gale Sayers RC PSA EX 5' }), 'graded-cards');
+  assert.equal(move({ auctionHouse: 'RR Auction', artist: 'entertainment-memorabilia', saleName: 'Sports', title: '1966 Philadelphia Gum Gale Sayers RC PSA EX 5' }), 'sports-cards');
   assert.equal(move({ auctionHouse: 'RR Auction', artist: 'entertainment-memorabilia', title: '1952 Red Man Complete SGC Graded Set (52)' }), 'graded-cards');
   // a "set" of crew signatures is not a card set
   assert.equal(move({ auctionHouse: 'RR Auction', artist: 'entertainment-memorabilia', title: 'USS Pueblo: Extraordinary near-complete set of the USS Pueblo crew' }), 'entertainment-memorabilia');
@@ -96,4 +96,23 @@ test('athlete roster: corpus card players, never teams / phrases / namesakes', (
   assert.equal(athleteIn('1960s TV Series High-Grade Complete Sets (3): Beverly Hillbillies, Munsters, and Superman'), null);
   assert.equal(athleteIn('Marilyn Monroe Signed Photograph'), null);
   assert.equal(athleteIn('John F. Kennedy 1959 Signed Photograph with Inscription Mentioning Ted Williams', 2), null);
+});
+
+test('class 4 · RR athlete autographs by bare name are sports, not culture', () => {
+  const R = (title: string) => move({ auctionHouse: 'RR Auction', artist: 'entertainment-memorabilia', saleName: 'Fine Autographs and Artifacts', title });
+  assert.equal(R('Ted Williams and Carl Yastrzemski'), 'autographs');
+  assert.equal(R('Warren Spahn and John Sain Signed Photograph'), 'autographs');
+  assert.equal(R('Sugar Ray Robinson Signed Photograph'), 'autographs');
+  assert.equal(R('Roger Clemens (2) Signed Baseballs'), 'autographs');
+  assert.equal(R('“Pistol” Pete Maravich'), 'autographs');
+  // a pair with a non-athlete, a name deep in the title, a non-sport subject: culture stays
+  assert.equal(R('Gale Sayers and Billy Dee Williams'), 'entertainment-memorabilia');
+  assert.equal(R('Frank Thomas and Ollie Johnston Group Lot'), 'entertainment-memorabilia');
+  assert.equal(R('John F. Kennedy 1959 Signed Photograph with Inscription Mentioning Ted Williams'), 'entertainment-memorabilia');
+  assert.equal(R('Orville Wright'), 'entertainment-memorabilia');
+  // the crawler reads the same roster
+  assert.equal(routeRRLot('Ty Cobb Signature', '', 'Fine Autographs and Artifacts'), 'autographs');
+  // the sports houses' pop desk: a roster athlete is sports unless the object reads non-sport
+  assert.equal(move({ auctionHouse: 'SCP', artist: 'pop-memorabilia', title: 'Hack Wilson Autographed Album Page - PSA/DNA Authentic' }), 'autographs');
+  assert.equal(move({ auctionHouse: 'Lelands', artist: 'pop-memorabilia', title: '208 Wilt Chamberlain Stilt Record Label Acetate & More' }), 'pop-memorabilia');
 });

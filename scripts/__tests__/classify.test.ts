@@ -270,7 +270,8 @@ test('class 12 · culture mass leaks: graded tapes, sealed boxes, toys, non-spor
   assert.equal(C('2023 Union Arena Ua02Bt/Jjk Jujutsu Kaisen 068 Suguru Geto – PSA MINT 9'), DROP);
   assert.equal(C('2023 Disney Lorcana EN 1 The First Chapter Enchanted #206 Stitch - Carefree Surfer - PSA GEM MT 10'), DROP);
   assert.equal(C('1887 N172 John Clarkson CHI Right Hand, Right Profile - PSA EX 5 (Highest Graded!)', 'entertainment-memorabilia', 'RR Auction'), 'graded-cards');
-  assert.equal(C('1933 Goudey #31 Tony Lazzeri PSA EX 5', 'entertainment-memorabilia', 'RR Auction'), 'graded-cards');
+  // (wave 2) a roster athlete's card at RR routes through RR's own sports ladder — its card slug is sports-cards
+  assert.equal(C('1933 Goudey #31 Tony Lazzeri PSA EX 5', 'entertainment-memorabilia', 'RR Auction'), 'sports-cards');
   // encapsulated autographs, graded tickets, signed cards and original posters are real culture lots
   assert.equal(C('Cher Signature - PSA GEM MT 10', 'entertainment-memorabilia', 'RR Auction'), 'entertainment-memorabilia');
   assert.equal(C('John F. Kennedy Typed Letter Signed as President - PSA MINT 9', 'entertainment-memorabilia', 'RR Auction'), 'entertainment-memorabilia');

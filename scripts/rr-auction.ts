@@ -24,6 +24,7 @@
 
 import { routeCulture } from './culture';
 import { routeSportsLot } from './sports-sale';
+import { athleteIn, ATHLETES } from './lib/athlete-roster';
 
 // ── SPORTS — a signed jersey/ball/photo of an athlete is sports memorabilia.
 // Broad athlete/discipline signal; routeSportsLot does the fine routing.
@@ -55,6 +56,36 @@ export function rrSportsPrior(slug: string, text: string): string {
   return slug === 'sports-memorabilia' && !/\b(olympics?|pins?|badges?|insignia|medals?|torch|pennants?|tickets?)\b/i.test(text) ? 'autographs' : slug;
 }
 
+/** (wave 2) RR titles an athlete's signed piece by the bare name ("Ty Cobb",
+ *  "Ted Williams and Stan Musial", "Sugar Ray Robinson Signed Photograph") —
+ *  no sport word, so step 1 below missed it and 14k sat in culture. A roster
+ *  athlete (scripts/lib/athlete-roster.ts, the corpus's own card players) is
+ *  sports, unless the title reads non-sport. */
+export function rrAthleteRoute(title: string): string | null {
+  // the signer LEADS an RR title (a nickname may precede: "“Pistol” Pete Maravich")
+  if (!athleteIn(title, 2) || RR_NON_SPORT.test(title)) return null;
+  // a pair title names two people: both must be sports ("Ted Williams and Stan
+  // Musial" yes; "Gale Sayers and Billy Dee Williams" — Brian's Song — and
+  // "Frank Thomas and Ollie Johnston" — Disney animators — no)
+  const head = title.split(/[:(–—]|\s-\s/)[0]
+    .replace(/\b(?:group lot|lot|signed|autographed|signatures?|photo(?:graph)?s?|documents?|letters?|cards?|books?|programs?|baseballs?|footballs?|basketballs?|balls?|bats?|items?)\b.*$/i, '').trim();
+  const parts = head.split(/\s+(?:and|&)\s+|,\s+/i).map(s => s.trim()).filter(Boolean);
+  if (parts.length > 1 && parts.some(p => /^(?:[A-Z][\w.'’]*\s+){1,2}[A-Z][\w.'’]*$/.test(p) && !athleteIn(p) && !athleteNickname(p) && !SPORTS.test(p.toLowerCase()) && !/\b(?:team|club|greats|hall|famers?|senators|yankees|dodgers|giants|cardinals|red sox|cubs)\b/i.test(p))) return null;
+  return rrSportsPrior(routeSportsLot(title, '') ?? 'sports-memorabilia', title);
+}
+/** "John Sain" ≈ roster "johnny sain": a two-word name whose first-name stem
+ *  (3 letters) + surname match a roster athlete. Three-word names must match
+ *  exactly ("Billy Dee Williams" is not Billy Williams). */
+function athleteNickname(name: string): boolean {
+  const w = name.toLowerCase().replace(/[^a-z ]/g, '').split(/\s+/).filter(Boolean);
+  if (w.length !== 2 || w[0].length < 3) return false;
+  for (const a of Array.from(ATHLETES)) {
+    const aw = a.split(' ');
+    if (aw.length === 2 && aw[1] === w[1] && aw[0].slice(0, 3) === w[0].slice(0, 3)) return true;
+  }
+  return false;
+}
+const RR_NON_SPORT =/\b(beatles|elvis|presley|president|presidential|white house|movie|film|hollywood|actor|actress|singer|band|album|record|guitar|concert|astronaut|apollo|nasa)\b/i;
 
 /** Route an RR Auction lot to an entity slug, or null to drop it.
  *  Science is matched, never defaulted — unmatched lots go to routeCulture. */
@@ -76,6 +107,8 @@ export function routeRRLot(title: string, description = '', saleName = ''): stri
     const s = routeSportsLot(title, description);
     if (s) return rrSportsPrior(s, t);
   }
+  const athlete = rrAthleteRoute(title);
+  if (athlete) return athlete;
 
   // 2. natural history
   if (METEORITE.test(t)) return 'meteorites';

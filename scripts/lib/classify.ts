@@ -22,7 +22,7 @@ import { classifyForm } from '../../app/lib/comps';
 import { leadsWithSetCode } from './set-codes';
 import { ARTIST_MARKET } from '../../app/constants';
 import { routeCulture, isCultureSale } from '../culture';
-import { routeRRLot, rrSportsPrior, rrSpaceTitle } from '../rr-auction';
+import { routeRRLot, rrSportsPrior, rrAthleteRoute, rrSpaceTitle } from '../rr-auction';
 import { routeSportsLot } from '../sports-sale';
 import { athleteIn } from './athlete-roster';
 
@@ -181,7 +181,9 @@ export function isMassToyOrComic(title: string | null | undefined): boolean {
 /** A sports expansion house's 'pop-memorabilia' lot → its real home. */
 export function sportsHousePopKind(title: string | null | undefined): string | null {
   const t = String(title || '');
-  const sport = SPORT_WORD_RE.test(t);
+  // (wave 2) a roster athlete is sports too, unless the object reads non-sport
+  // (an autograph-album page is an autograph, not a record album)
+  const sport = SPORT_WORD_RE.test(t) || (!!athleteIn(t) && !NON_SPORT_RE.test(t.replace(/\b(?:autograph(?:ed)? )?album pages?\b/gi, ' ')));
   if (!sport && isMassToyOrComic(t)) return DROP;
   if (!sport && NON_SPORT_RE.test(t)) return isCardTitle(t) || /non[- ]sport/i.test(t) ? DROP : null; // genuine pop item stays culture
   if (/\b(?:tickets?|stubs?)\b/i.test(t)) return 'tickets-passes';
@@ -521,6 +523,10 @@ export const RECLASS_RULES: ReclassRule[] = [
     apply: l => (GENERALIST_HOUSES.has(l.auctionHouse || '') ? scienceVerdict(l) : null),
   },
   { cls: 'sale-name-gates', apply: saleGateFix },
+  {
+    cls: 'rr-athlete-autographs',
+    apply: l => (l.auctionHouse === 'RR Auction' && CULTURE_SLUGS.has(l.artist) ? rrAthleteRoute(String(l.title || '')) : null),
+  },
   { cls: 'sports-catch-all-programmes', apply: sportsCatchAllFix },
   { cls: 'watch-jewelry-tudor', apply: watchMakerFix },
   { cls: 'art-design-attribution', apply: attributionFix },
