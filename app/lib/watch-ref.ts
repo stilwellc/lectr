@@ -133,13 +133,73 @@ function modelLine(t: string, maker: string | undefined): string | null {
 
 export type WatchKeyKind = 'ref' | 'model-name';
 
-/** The comp key: a labelled reference, else the model line. `maker` (the lot's
- *  artist slug) enables brand scoping of model lines; without it the generic
- *  list applies. */
+/* ── CORE REFERENCE + SUFFIX MATERIAL (Oct 6 2026 identity fix wave) ───────
+   Patek Philippe and Audemars Piguet print the CASE MATERIAL as a reference
+   suffix: Patek 5970J / 5970G / 5970R / 5970P (yellow / white / rose gold,
+   platinum), 5711/1A (acier), 3970E / 3970EJ (second series, gold); AP
+   15202ST / 15202BA / 15202OR (steel / yellow / rose gold). Keyed whole, one
+   reference became up to eight keys — 6,593 Patek lots ($582M) sat outside
+   their reference's main key — while the material axis the suffix carries
+   was invisible to the material gate. The key is now the CORE reference and
+   the suffix feeds the case-material reader (refSuffixMaterial, used by
+   comps.coarseWatchMaterial when the text names no metal).
+   Text glued onto a ref by the catalogue export ("ref 2509pink gold",
+   "ref. 21612gold plated", "ref 5711plimited edition") is cut off. */
+const PATEK_SUFFIX: Record<string, string> = { a: 'steel', j: 'gold', g: 'gold', r: 'gold', p: 'platinum', t: 'titanium' };
+const AP_CODE: Record<string, string> = { st: 'steel', or: 'gold', ba: 'gold', bc: 'gold', og: 'gold', pt: 'platinum', ti: 'titanium', sa: 'two-tone', sr: 'two-tone' };
+// English words / word heads a catalogue glued onto the ref's letter suffix
+const GLUE = /^(?:pink|gold|rose|red|yel|yell|whit|white|stee|stai|sta|pla|plat|with|very|made|and|circ|blac|blue|silv|lady|tita|wris|auto|cir|ca|fac|lim|mvt|cas|case|pos|no)$/;
+const GLUE_AHEAD = String.raw`(?=pink|gold|yellow|white|rose|red\b|steel|stainless|platinum|titanium|limited|factory|very|wrist|lady|automatic|circa|made|with|and\b|two)`;
+
+function unglue(tok: string): string {
+  const m = tok.match(/^([a-z]{0,3}\d[\d./-]*)([a-z]{2,})$/);
+  // no maker's reference suffix runs past four letters (Rolex BLNR): a
+  // longer run is a word ("2499possibly")
+  return m && (GLUE.test(m[2]) || m[2].length > 4) ? m[1] : tok;
+}
+
+/** The core reference and the case material its suffix encodes. Only Patek
+ *  Philippe and Audemars Piguet suffixes are material; other makers' keys
+ *  pass through (Rolex 116610LN/LV are distinct models, not metals). */
+export function splitWatchRef(maker: string | undefined, ref: string): { core: string; material: string | null } {
+  const r = unglue(ref);
+  if (maker === 'patek-philippe') {
+    const m = r.match(/^(\d{2,5}(?:\/\d{1,4})?)e?([ajgrpt]?)(?:-\d{3})?$/);
+    if (m) return { core: m[1], material: PATEK_SUFFIX[m[2]] ?? null };
+  } else if (maker === 'audemars-piguet') {
+    const m = r.match(/^([a-z]{2})?(\d{4,5})([a-z]{2})?(?![\d])/);
+    if (m) return { core: m[2], material: AP_CODE[m[3] ?? m[1] ?? ''] ?? null };
+  }
+  return { core: r, material: null };
+}
+
+/** Case material a printed reference suffix encodes (Patek J/G/R/P/A, AP
+ *  ST/BA/OR/BC/PT…), or null. */
+export function refSuffixMaterial(title: string | null | undefined, maker: string | undefined): string | null {
+  if (maker !== 'patek-philippe' && maker !== 'audemars-piguet') return null;
+  const t = prep(title);
+  const raw = labelled(t) ?? labelledLoose(t) ?? bare(t, maker);
+  return raw ? splitWatchRef(maker, raw).material : null;
+}
+
+// lower-case, whitespace-folded, and the Swiss thousands mark inside a number
+// removed ("REF. 66'714BC" is 66714bc, not 66)
+const prep = (s: string | null | undefined, ws = true) => {
+  const t = (s || '').toLowerCase().replace(/(\d)['’](\d)/g, '$1$2');
+  return ws ? t.replace(/\s+/g, ' ') : t;
+};
+
+const canon = (maker: string | undefined, raw: string) => splitWatchRef(maker, raw).core;
+
+/** The comp key: a labelled reference (core, material suffix dropped), else
+ *  the model line. `maker` (the lot's artist slug) enables brand scoping of
+ *  model lines and the suffix split; without it the generic list applies. */
 export function readWatchKey(title: string | null | undefined, maker?: string): { key: string; kind: WatchKeyKind } | null {
-  const t = (title || '').toLowerCase();
-  const r = labelled(t);
-  if (r) return { key: r, kind: 'ref' };
+  const t = prep(title, false);
+  // the strict label, else (tracked makers) the loose label — a printed
+  // "Calatrava, Ref: 96" is a reference, not the model line
+  const r = labelled(t) ?? (maker && WATCH_MAKERS.has(maker) ? labelledLoose(t.replace(/\s+/g, ' '), maker) : null);
+  if (r) return { key: canon(maker, r), kind: 'ref' };
   const m = modelLine(t, maker);
   if (m) return { key: m, kind: 'model-name' };
   return null;
@@ -149,23 +209,42 @@ export function readWatchKey(title: string | null | undefined, maker?: string): 
  *  ref in the brand's distinctive shape, else the maker's own model line. */
 export function readWatchReference(title: string | null | undefined, maker: string): string | null {
   if (!WATCH_MAKERS.has(maker)) return null;
-  const t = (title || '').toLowerCase().replace(/\s+/g, ' ');
-  return labelled(t) ?? labelledLoose(t) ?? bare(t, maker) ?? modelLine(t, maker)
+  const t = prep(title);
+  const r = labelled(t) ?? labelledLoose(t) ?? bare(t, maker);
+  if (r) return canon(maker, r);
+  return modelLine(t, maker)
     ?? (maker === 'cartier' && /\bmust de cartier\b/.test(t) ? 'mustdecartier' : null)
     ?? (maker === 'rolex' && /\boysterdate\b/.test(t) ? 'oysterdate' : null);
 }
 
+/** A LABELLED reference in free text (the lot description) — the fallback
+ *  when the title prints none (1,377 lots carry their ref only there). Bare
+ *  numbers and model lines are not read from descriptions. */
+export function readDescriptionReference(text: string | null | undefined, maker: string): string | null {
+  if (!WATCH_MAKERS.has(maker) || !text) return null;
+  const t = prep(text);
+  const r = labelled(t) ?? labelledLoose(t);
+  return r && vetReference(maker, r, t) ? canon(maker, r) : null;
+}
+
 // The enrichment's historical labelled reader (identity-enrich, pre-Sep-28):
 // any "Ref" label, 2–6 digits with letter prefixes and hyphen/slash/dot suffix
-// chains ("Ref: 55229B10", "Ref: OT 2364", "Ref: 96", "PK2990-1"). Only
-// consulted when the strict comp-key shape reads nothing, so its keys are the
-// ones those rows already carried.
-const LOOSE = /r[eé]f(?:erence)?\.?\s*[:.,-]?\s*([a-z]{0,3}\s?\d{2,6}(?:[\/.\-][a-z0-9]{1,10})*(?:\s?[a-z]{1,3})?)/;
-function labelledLoose(t: string): string | null {
-  const m = t.match(LOOSE);
+// chains ("Ref: 55229B10", "Ref: OT 2364", "Ref: 96", "PK2990-1"). Oct 6: the
+// token is read WHOLE — the old optional "\s?[a-z]{1,3}" tail took the next
+// word's head ("1675 a" → 1675a, "3940 yellow" → 3940yel) and the fixed-width
+// tail truncated long codes ("55229B10" → 55229b). Where it now feeds the
+// COMP key (readWatchKey) its core length is vetted per maker — a 2-digit
+// "Ref: 96" is a Patek reference, not a Rolex one; the enrichment fallback
+// keeps reading what it always read.
+const LOOSE = /r[eé]f(?:erence)?\.?\s*[:.,-]?\s*([a-z]{0,3}\s?\d{2,6}[a-z0-9]{0,12}(?:[\/.\-][a-z0-9]{1,10})*)(?![a-z0-9])/;
+const LOOSE_GLUED = new RegExp(String.raw`r[eé]f(?:erence)?\.?\s*[:.,-]?\s*(\d{3,6}[a-z]{0,2})` + GLUE_AHEAD);
+function labelledLoose(t: string, maker?: string): string | null {
+  // the glued form first: "ref 5711plimited" must read 5711p, not the run
+  const m = t.match(LOOSE_GLUED) ?? t.match(LOOSE);
   if (!m) return null;
-  const k = m[1].trim().replace(/\s+/g, '').replace(/[.,;:]+$/, '');
-  return /\d{2,}/.test(k) ? k : null;
+  const k = unglue(m[1].trim().replace(/\s+/g, '').replace(/[.,;:]+$/, ''));
+  if (!/\d{2,}/.test(k)) return null;
+  return !maker || vetReference(maker, k) ? k : null;
 }
 
 /** Is a STORED/extracted reference plausibly a reference for this maker — not

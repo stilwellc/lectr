@@ -3,7 +3,7 @@ import { subCatOf, sportSlugOf } from './sub-cats';
 import { extractReference } from './identity-enrich';
 import { looksLikeCard, playerSlugOf } from '../../app/lib/cards';
 import { classifyForm, objectClassOf, cleanGoldinTitle, watchKey } from '../../app/lib/comps';
-import { vetReference } from '../../app/lib/watch-ref';
+import { vetReference, readDescriptionReference, splitWatchRef } from '../../app/lib/watch-ref';
 import { titleTokens as titleTokensOf } from '../../app/lib/normalize';
 import { ARTIST_MARKET } from '../../app/constants';
 import { isMisattributed } from '../../app/lib/attribution';
@@ -225,17 +225,32 @@ export function rerouteRelicCards(lots: Lot[]): { total: number; examples: strin
 // reference now reads the title. Other makers are never touched.
 // ─────────────────────────────────────────────────────────────────────────────
 const WATCH_MAKER_SLUGS = new Set(['rolex', 'patek-philippe', 'cartier', 'audemars-piguet', 'omega']);
+const DESC_REF_FORMS = new Set(['wristwatch', 'pocket-watch']);
 export function enrichWatchReferences(lots: Lot[]): number {
   let filled = 0, healed = 0, cleared = 0;
   for (const l of lots) {
     if (!WATCH_MAKER_SLUGS.has(l.artist)) continue;
     const x = l as Lot & { referenceSrc?: string };
     const prev = l.reference ?? null;
-    const regex = watchKey(l) ?? extractReference(l);
+    const fromTitle = watchKey(l) ?? extractReference(l);
+    // (Oct 6) the title prints no reference number: a LABELLED one in the
+    // description beats the model-line name (1,377 lots carried theirs only there)
+    // — only for a WATCH lot: a Patek "lithograph depicting a ref. 5098p"
+    // or an AP cufflink must not join the reference's pool
+    const desc = (l as Lot & { description?: string | null }).description;
+    const watchLot = !l.formKey || DESC_REF_FORMS.has(String(l.formKey));
+    const regex = fromTitle && /\d/.test(fromTitle) ? fromTitle
+      : ((watchLot ? readDescriptionReference(desc, l.artist) : null) ?? fromTitle);
     if (x.referenceSrc === 'llm' && prev) {
       const regexRef = regex && /\d/.test(regex) ? regex : null;
       if (regexRef) { l.reference = regexRef; delete x.referenceSrc; healed++; }
       else if (!vetReference(l.artist, String(prev), l.title)) { l.reference = regex; delete x.referenceSrc; cleared++; }
+      else {
+        // a kept extraction ref keys on its core too (5970J → 5970)
+        const lc = String(prev).toLowerCase().replace(/\s+/g, '');
+        const core = splitWatchRef(l.artist, lc).core;
+        if (core !== lc) l.reference = core;
+      }
       continue;
     }
     if ((prev || null) === (regex || null)) continue;

@@ -16,6 +16,7 @@
  */
 import type { AuctionLot } from '../types';
 import { ARTISTS } from '../constants';
+import { coarseWatchMaterial } from './comps';
 
 export const WATCH_SLUGS = new Set<string>(ARTISTS.filter(a => a.market === 'watches').map(a => a.slug));
 
@@ -44,16 +45,11 @@ export function numericWatchRef(l: Pick<AuctionLot, 'artist' | 'reference'>): st
 
 /** Coarse case material — the price axis WITHIN a reference (a 3940 exists in
  *  three golds and platinum at very different money). null = unknown; an
- *  idExact ref match requires the materials not to conflict. */
-export function watchMaterialCoarse(l: Pick<AuctionLot, 'title' | 'medium'>): string | null {
-  const t = `${l.title || ''} ${l.medium || ''}`.toLowerCase();
-  if (/\bplatinum\b/.test(t)) return 'platinum';
-  if (/two[- ]tone|steel\s*(?:and|&|\/)\s*gold|gold\s*(?:and|&|\/)\s*steel/.test(t)) return 'two-tone';
-  if (/\b(?:yellow|rose|pink|white)\s+gold\b|\b18k\b|\b14k\b|\bgold\b/.test(t)) return 'gold';
-  if (/stainless|\bsteel\b/.test(t)) return 'steel';
-  if (/\btitanium\b/.test(t)) return 'titanium';
-  return null;
-}
+ *  idExact ref match requires the materials not to conflict. ONE reader
+ *  (Oct 6 2026): this used to be a second regex that missed "steel and
+ *  yellow gold" (1,502 lots) and read a "two-tone dial" as a two-tone case
+ *  (427); it is comps.coarseWatchMaterial now. */
+export const watchMaterialCoarse = (l: Pick<AuctionLot, 'title' | 'medium'> & { artist?: string }): string | null => coarseWatchMaterial(l);
 
 /* ── EDITION IDENTITY (Oct 6 2026 identity fix wave) ────────────────────────
    Edition pools are the art repeat-sale/comp unit, so the key must name ONE
