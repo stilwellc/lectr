@@ -132,6 +132,10 @@ function classifyLot(lot: AuctionLot): LotCategory {
 
   // 6. Artist-level defaults
   if (isDesignArtist) return 'design';
+  // (wave 2) the edition default stays — measured on the audit labels, a
+  // no-evidence lot by these five is a print 2:1 over everything else; the
+  // evidence that it is NOT (an originals sale, a price no print reaches, a
+  // ceramic / sculpture form) is read first by artCategoryFix above
   if (EDITION_DEFAULT_ARTISTS.has(lot.artist)) return 'print';
   if (ORIGINAL_DEFAULT_ARTISTS.has(lot.artist)) return 'original';
 

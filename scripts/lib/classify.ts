@@ -578,6 +578,12 @@ const KAWS_FIGURE_RE = /\b(?:companion|bff|chum|accomplice|dissected|small lie|t
 /** catalogue / edition evidence that a lot is a print (incl. the catalogue
  *  raisonné citations the Sotheby's text-less records print in the title) */
 const PRINT_EVIDENCE_RE = /poster|affiche|lithograph|linocut|linogravure|etching|aquatint|screen ?print|silkscreen|s[ée]rigraph|woodcut|engraving|drypoint|offset|edition of|numbered|artist.s proof|\bprint(?:ed|s)?\b|gicl[ée]e|monotype|multiple|pochoir|photogravure|\bplates?\b|portfolio|\bfrom\b|\bsuite\b|f\.?\s*(?:&|and)\s*s\.?|feldman|schellmann|\bbloch\b|mourlot|\bbaer\b|cramer|corlett|gemini|ulae|duthuit|\([a-z]{1,3}\.\s*\d+[a-z]?\)|\b\d{1,3}\s*\/\s*\d{1,4}\b|\bhc\b|\bp\.?\s?p\.?\b|\bproof\b|\bimpression\b|\bsheet\b|catalogue|catalog\b|\bbooks?\b/i;
+/** sales that do not sell prints: evening / day / works-on-paper / single-owner originals sales */
+const ORIGINALS_SALE_RE = /\bevening\b|\bday (?:sale|auction)\b|works on paper|impressionist|masterworks|paintings|drawings|uniques?\b|souvenirs de vacances|picasso in private|man beast|marina picasso/i;
+/** the houses whose originals sales are named as such (Rago / Wright / LAMA mix prints into "Post War + Contemporary Art") */
+const ORIGINALS_SALE_HOUSES = new Set(["Christie's", "Sotheby's", 'Phillips', 'Bonhams']);
+const PRINTS_SALE_RE = /prints?|multiples|editions?|posters?|photograph|design|showhouse|books?|literature/i;
+
 /** The corrected art CATEGORY for a tracked art maker's lot, or null when the
  *  current one stands. Ceramic → sculpture; a unique medium → original. */
 export function artCategoryFix(l: ClassifyLot): string | null {
@@ -601,7 +607,22 @@ export function artCategoryFix(l: ClassifyLot): string | null {
   }
   if (cat === 'original') return null;
   if (UNIQUE_MEDIUM_RE.test(s) && !printWord) return 'original';
+  // (wave 2) Warhol's canvases: "silkscreen ink" or "screenprint ink" on canvas
+  if (/(?:silkscreen|screen ?print) inks?\b[^.;]{0,40}\bon (?:canvas|linen)/i.test(s) && !EDITION_MARK_RE.test(s)) return 'original';
   if (SILKSCREEN_CANVAS_RE.test(s) && !EDITION_MARK_RE.test(s)) return 'original';
+  // (wave 2) class 6 · a 'print' (or design / unknown) with NO print evidence
+  // anywhere: the crawler's edition-default artists filed every text-less
+  // Sotheby's record as a print. The sale is the evidence — an evening / day /
+  // works-on-paper / originals sale does not sell prints — and so is a price
+  // no print of these makers reaches without saying so (≥ $300k).
+  if ((cat === 'print' || cat === 'unknown' || cat === 'design') && !PRINT_EVIDENCE_RE.test(s)) {
+    const price = Number(l.priceUsd || 0);
+    // Warhol's portfolios (Kiku, Flowers, Marilyn sets) do sell in DAY sales:
+    // for him only an evening sale or a price beyond any single print says so
+    const saleSays = ORIGINALS_SALE_HOUSES.has(l.auctionHouse || '') && !PRINTS_SALE_RE.test(sale)
+      && (l.artist === 'andy-warhol' ? /\bevening\b/i.test(sale) : ORIGINALS_SALE_RE.test(sale));
+    if (saleSays || (price >= 500_000 && !/\b(?:set|portfolio|complete|suite)\b/i.test(s))) return 'original';
+  }
   return null;
 }
 

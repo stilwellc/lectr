@@ -223,6 +223,18 @@ test('class 10 · ceramics / sculpture / KAWS figures with no medium text', () =
   assert.equal(ART({ artist: 'kaws', title: 'Untitled (Kimpsons)', category: 'original', medium: 'acrylic on canvas', auctionHouse: 'Phillips' }), null);
 });
 
+test('class 6 · a print with no print evidence: the originals sale / price says original', () => {
+  assert.equal(ART({ artist: 'pablo-picasso', title: 'crâne de chèvre', saleName: 'Impressionist Modern Art Day Sale', priceUsd: 430400 }), 'original');
+  assert.equal(ART({ artist: 'andy-warhol', title: 'taxi, 45th/broadway', saleName: 'Contemporary Art Evening', priceUsd: 870688 }), 'original');
+  assert.equal(ART({ artist: 'andy-warhol', title: 'Flowers', auctionHouse: 'Phillips', priceUsd: 2048622 }), 'original');
+  assert.equal(ART({ artist: 'andy-warhol', title: 'Diamond Dust Candy Box', medium: 'Synthetic polymer paint, screenprint ink, and diamond dust on canvas', auctionHouse: 'Wright' }), 'original');
+  // prints keep: a catalogue reference, a prints sale, a Warhol day sale, a mixed-sale house
+  assert.equal(ART({ artist: 'andy-warhol', title: 'mick jagger (f. & s. ii.139)', saleName: 'Contemporary Art Evening', priceUsd: 63412 }), null);
+  assert.equal(ART({ artist: 'pablo-picasso', title: 'danseuse au fauteuil en bois (d. 483)', saleName: 'Prints And Multiples' }), null);
+  assert.equal(ART({ artist: 'andy-warhol', title: 'kiku', saleName: 'Contemporary Art Day Auction', priceUsd: 50000 }), null);
+  assert.equal(ART({ artist: 'andy-warhol', title: 'Sportswear Jeans Intern', auctionHouse: 'Rago', saleName: 'Post War + Contemporary Art' }), null);
+});
+
 test('class 1 · culture kind reads the description when the title is a bare name; signed pieces; plurals', () => {
   const K = (title: string, description = '', o: R = {}) => subCatOf({ artist: 'entertainment-memorabilia', title, itemClass: cultureItemClass({ title, description, ...o }) }).subCat;
   // the object lives in the description (Christie's / Sotheby's culture titles)
