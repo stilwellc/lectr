@@ -308,6 +308,8 @@ export interface VerticalRepeatSale {
   horizons: Record<string, {
     publishable: boolean; changePct: number | null;
     ciLoPct: number | null; ciHiPct: number | null; reason?: string;
+    /** same lag on neighbouring end periods (repeat-sales.ts) — diagnostic */
+    endSensitivity?: { end: string; changePct: number }[];
   }>;
   series: { period: string; value: number; n: number }[];
 }
@@ -357,7 +359,7 @@ export function buildVerticalRepeatSale(sold: AuctionLot[], vertical: string): V
   let any = false;
   for (const [k, hz] of Object.entries(rs.horizons || {})) {
     if (!hz) continue;
-    horizons[k] = { publishable: !!hz.publishable, changePct: hz.changePct ?? null, ciLoPct: hz.ciLoPct ?? null, ciHiPct: hz.ciHiPct ?? null, ...(hz.reason ? { reason: hz.reason } : {}) };
+    horizons[k] = { publishable: !!hz.publishable, changePct: hz.changePct ?? null, ciLoPct: hz.ciLoPct ?? null, ciHiPct: hz.ciHiPct ?? null, ...(hz.reason ? { reason: hz.reason } : {}), ...(hz.endSensitivity?.length ? { endSensitivity: hz.endSensitivity } : {}) };
     if (hz.publishable) any = true;
   }
   if (!any) return null; // nothing certified — the block earns its place or stays out

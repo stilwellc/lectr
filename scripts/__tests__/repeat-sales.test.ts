@@ -124,3 +124,23 @@ test('flat market, clean data: every horizon near zero, CI covers zero → absta
     assert.ok(!z.publishable, `${h} must not certify a direction on a flat market (${z.changePct} ${z.reason})`);
   }
 });
+
+test('constituent windows: a 3Y read fails when one of its 1-year windows fails an integrity gate', () => {
+  // flat, then a x2.2 step at 2024-Q4 (an implausible +120% 1-year window);
+  // the 3Y that contains the step implies only ~30%/yr and used to certify
+  const step = QUARTERS.indexOf('2024-Q4');
+  const sales = market(6, 2500, { mult: (_h, qi) => (qi >= step ? 2.2 : 1) });
+  const r = buildRepeatSaleIndex(toLots(sales), keyOf, { now: NOW });
+  const h3 = r.horizons['3Y'];
+  assert.equal(h3.publishable, false);
+  assert.match(h3.reason, /constituent window 2023-Q4→2024-Q4 fails: implied/);
+});
+
+test('end-point sensitivity: a published horizon reports the same lag ending one period earlier', () => {
+  const sales = market(7, 2500, { mult: (_h, qi) => Math.exp(0.03 * qi) });
+  const r = buildRepeatSaleIndex(toLots(sales), keyOf, { now: NOW });
+  const h = r.horizons['1Y'];
+  assert.ok(h.publishable, h.reason);
+  assert.equal(h.endSensitivity?.[0]?.end, '2025-Q3');
+  assert.ok(Math.abs(h.endSensitivity![0].changePct - h.changePct!) < 5, 'a smooth market is insensitive to the endpoint');
+});

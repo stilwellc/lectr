@@ -87,6 +87,9 @@ export interface RepeatSaleHorizon {
   ciHiPct: number | null;
   publishable: boolean;
   reason: string;             // '' when publishable, else why not
+  /** the same lag ending on neighbouring periods (one earlier; any later
+      complete period the volume rule skipped) — reported, never gated */
+  endSensitivity?: { end: string; changePct: number }[];
 }
 export interface RepeatSaleResult {
   series: RepeatSalePoint[];
@@ -504,12 +507,16 @@ export function buildRepeatSaleIndex(
   const curQ = currentQuarter(now, o.periodsPerYear);
   const lastComplete = pickLastComplete(fit.quarters, curQ, periodStats);
 
+  // complete periods AFTER the chosen end (skipped by the volume rule) — the
+  // end-point sensitivity reports what the read would be had it ended there
+  const laterEnds = lastComplete ? fit.quarters.filter((q) => q > lastComplete && q < curQ) : [];
+  const ctx: Ctx = { fit, betaOf, varOfDiff, endpointStats, periodStats, o };
   const horizons: Record<string, RepeatSaleHorizon> = {};
   // horizon lags in PERIODS (quarters or halves)
   const perYr = o.periodsPerYear;
   const HZ: [string, number][] = [['1Y', perYr], ['3Y', 3 * perYr], ['5Y', 5 * perYr]];
   for (const [lbl, back] of HZ) {
-    horizons[lbl] = computeHorizon(lbl, back, lastComplete, fit, betaOf, varOfDiff, endpointStats, periodStats, o);
+    horizons[lbl] = computeHorizon(back, lastComplete, ctx, laterEnds);
   }
 
   const note =
@@ -523,41 +530,82 @@ export function buildRepeatSaleIndex(
   return { series, horizons, nPairs, nObjects, note };
 }
 
+type Ctx = {
+  fit: FitOut;
+  betaOf: (q: string) => { b: number; col: number | null };
+  varOfDiff: (a: number | null, b: number | null) => number;
+  endpointStats: (q: string) => { pairs: number; objects: number };
+  periodStats: Map<string, PeriodStat>;
+  o: Required<Omit<RepeatSaleOpts, 'now'>>;
+};
+
+/** The INTEGRITY gates of one start→end span: both endpoints carry a fitted
+ *  level, clear the pair/object floors, keep a comparable house mix, and the
+ *  implied compound rate is plausible. (The CI sign/width gates are NOT here:
+ *  a longer span may resolve a direction its 1-year pieces can't — that is
+ *  signal, not a defect.) Returns the failure reason or the log change. */
+function spanCheck(start: string, end: string, years: number, c: Ctx):
+  { ok: false; reason: string } | { ok: true; diff: number; se: number } {
+  const { fit, o } = c;
+  if (!fit.quarters.includes(start)) return { ok: false, reason: `no index-able quarter ${years}y before ${end}` };
+  if (!fit.quarters.includes(end)) return { ok: false, reason: `${end} has no index level (pooled)` };
+  if (start === end) return { ok: false, reason: 'start and end are the same quarter' };
+  const { b: bE, col: colE } = c.betaOf(end);
+  const { b: bS, col: colS } = c.betaOf(start);
+  if (!isFinite(bE) || !isFinite(bS)) return { ok: false, reason: 'an endpoint quarter has no index level (pooled)' };
+
+  // endpoint thinness gate — the repeat-sales analogue of the hedonic density gate
+  const sE = c.endpointStats(end), sS = c.endpointStats(start);
+  if (sE.pairs < o.horizonMinPairs) return { ok: false, reason: `${end} thin (${sE.pairs} pairs < ${o.horizonMinPairs})` };
+  if (sS.pairs < o.horizonMinPairs) return { ok: false, reason: `${start} thin (${sS.pairs} pairs < ${o.horizonMinPairs})` };
+  if (sE.objects < o.horizonMinObjects) return { ok: false, reason: `${end} too few objects (${sE.objects} < ${o.horizonMinObjects})` };
+  if (sS.objects < o.horizonMinObjects) return { ok: false, reason: `${start} too few objects (${sS.objects} < ${o.horizonMinObjects})` };
+  const brk = compositionBreak(c.periodStats.get(start), c.periodStats.get(end));
+  if (brk) return { ok: false, reason: `house mix breaks between ${start} and ${end} (${brk})` };
+
+  const diff = bE - bS;
+  // PLAUSIBILITY CEILING — the hedonic gate 6f mirrored (see hedonic-index):
+  // relative gates let an absurd estimate self-certify; judge the absolute
+  // implied compound rate. Repeat pairs are same-object (controls inherent),
+  // so the ceiling sits at the control-rich tier. `years` is the span in
+  // YEARS (it used to be back/4, which halved a half-year market's span).
+  const impliedCagr = Math.exp(diff / Math.max(0.25, years)) - 1;
+  if (Number.isFinite(impliedCagr) && Math.abs(impliedCagr) > 0.75) {
+    return { ok: false, reason: `implied ${(impliedCagr * 100).toFixed(0)}%/yr compound move over ${years.toFixed(1)}y exceeds the ±75%/yr plausibility ceiling — reads as pair-mix artifact, not price` };
+  }
+  return { ok: true, diff, se: Math.sqrt(c.varOfDiff(colE, colS)) };
+}
+
 function computeHorizon(
-  label: string,
   back: number,
   lastComplete: string | null,
-  fit: FitOut,
-  betaOf: (q: string) => { b: number; col: number | null },
-  varOfDiff: (a: number | null, b: number | null) => number,
-  endpointStats: (q: string) => { pairs: number; objects: number },
-  periodStats: Map<string, PeriodStat>,
-  o: Required<Omit<RepeatSaleOpts, 'now'>>,
+  c: Ctx,
+  laterEnds: string[],
 ): RepeatSaleHorizon {
   const notPub = (reason: string): RepeatSaleHorizon =>
     ({ changePct: null, ciLoPct: null, ciHiPct: null, publishable: false, reason });
 
   if (!lastComplete) return notPub('no complete quarter to end on (partial-quarter guard)');
+  const perYr = c.o.periodsPerYear;
+  const years = back / perYr;
   const end = lastComplete;
   const start = shiftQuarter(end, back);
-  if (!fit.quarters.includes(start)) return notPub(`no index-able quarter ${back / 4}y before ${end}`);
-  if (start === end) return notPub('start and end are the same quarter');
+  const span = spanCheck(start, end, years, c);
+  if (!span.ok) return notPub(span.reason);
 
-  const { b: bE, col: colE } = betaOf(end);
-  const { b: bS, col: colS } = betaOf(start);
-  if (!isFinite(bE) || !isFinite(bS)) return notPub('an endpoint quarter has no index level (pooled)');
+  // CONSTITUENT WINDOWS: a multi-year horizon is a chain of 1-year windows; if
+  // any of them fails an integrity gate (thin, pooled, house-mix break,
+  // implausible), the long span is built on that same broken quarter and must
+  // not certify either (TCG: 1Y rejected as a pair-mix artifact while the 3Y
+  // that contains it published +285%).
+  for (let k = 0; years > 1 && k < years; k++) {
+    const wEnd = shiftQuarter(end, k * perYr);
+    const wStart = shiftQuarter(wEnd, perYr);
+    const w = spanCheck(wStart, wEnd, 1, c);
+    if (!w.ok) return notPub(`constituent window ${wStart}→${wEnd} fails: ${w.reason}`);
+  }
 
-  // endpoint thinness gate — the repeat-sales analogue of the hedonic density gate
-  const sE = endpointStats(end), sS = endpointStats(start);
-  if (sE.pairs < o.horizonMinPairs) return notPub(`${end} thin (${sE.pairs} pairs < ${o.horizonMinPairs})`);
-  if (sS.pairs < o.horizonMinPairs) return notPub(`${start} thin (${sS.pairs} pairs < ${o.horizonMinPairs})`);
-  if (sE.objects < o.horizonMinObjects) return notPub(`${end} too few objects (${sE.objects} < ${o.horizonMinObjects})`);
-  if (sS.objects < o.horizonMinObjects) return notPub(`${start} too few objects (${sS.objects} < ${o.horizonMinObjects})`);
-  const brk = compositionBreak(periodStats.get(start), periodStats.get(end));
-  if (brk) return notPub(`house mix breaks between ${start} and ${end} (${brk})`);
-
-  const diff = bE - bS;
-  const se = Math.sqrt(varOfDiff(colE, colS));
+  const { diff, se } = span;
   const changePct = 100 * (Math.exp(diff) - 1);
   const loPct = 100 * (Math.exp(diff - 1.96 * se) - 1);
   const hiPct = 100 * (Math.exp(diff + 1.96 * se) - 1);
@@ -569,17 +617,17 @@ function computeHorizon(
     return notPub(`CI too wide (±${halfWidth.toFixed(1)}% vs point ${changePct.toFixed(1)}%) — magnitude is noise`);
   }
 
-  // PLAUSIBILITY CEILING — the hedonic gate 6f mirrored (see hedonic-index):
-  // relative gates let an absurd estimate self-certify; judge the absolute
-  // implied compound rate. Repeat pairs are same-object (controls inherent),
-  // so the ceiling sits at the control-rich tier.
-  const yearsSpanned = Math.max(0.25, back / 4);
-  const impliedCagr = Math.exp(diff / yearsSpanned) - 1;
-  if (Number.isFinite(impliedCagr) && Math.abs(impliedCagr) > 0.75) {
-    return notPub(`implied ${(impliedCagr * 100).toFixed(0)}%/yr compound move over ${yearsSpanned.toFixed(1)}y exceeds the ±75%/yr plausibility ceiling — reads as pair-mix artifact, not price`);
+  // END-POINT SENSITIVITY (reported, never gated): the same lag ending one
+  // period earlier, and ending on any later complete period the volume rule
+  // skipped — how much of the read is the choice of endpoint.
+  const endSensitivity: { end: string; changePct: number }[] = [];
+  for (const e of [shiftQuarter(end, 1)].concat(laterEnds)) {
+    const s0 = shiftQuarter(e, back);
+    if (!c.fit.quarters.includes(e) || !c.fit.quarters.includes(s0)) continue;
+    const bE = c.betaOf(e).b, bS = c.betaOf(s0).b;
+    if (isFinite(bE) && isFinite(bS)) endSensitivity.push({ end: e, changePct: 100 * (Math.exp(bE - bS) - 1) });
   }
-
-  return { changePct, ciLoPct: loPct, ciHiPct: hiPct, publishable: true, reason: '' };
+  return { changePct, ciLoPct: loPct, ciHiPct: hiPct, publishable: true, reason: '', endSensitivity };
 }
 
 /** Latest indexed period before the stub whose sold volume is ≥
