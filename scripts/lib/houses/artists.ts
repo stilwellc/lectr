@@ -204,14 +204,15 @@ export const ARTISTS: ArtistConfig[] = [
   // ── blue-chip modern/contemporary added Aug 2026. Sotheby's/Christie's lots
   // arrive via the auction crawlers + ART_MAKER_ROUTES (the per-artist page
   // path is flaky); Bonhams via Typesense name search; Wright/LAMA via slug
-  // (sparse for these art names but harmless). Phillips maker ids TBD — the
-  // Phillips search API was erroring; add { phillips: { id, slug } } once known.
-  { slug: 'jean-michel-basquiat', displayName: 'Jean-Michel Basquiat', sothebys: 'jean-michel-basquiat', christies: 'jean-michel-basquiat', wright: 'jean-michel-basquiat', bonhams: 'Jean-Michel Basquiat' },
-  { slug: 'roy-lichtenstein', displayName: 'Roy Lichtenstein', sothebys: 'roy-lichtenstein', christies: 'roy-lichtenstein', wright: 'roy-lichtenstein', bonhams: 'Roy Lichtenstein' },
-  { slug: 'francis-bacon', displayName: 'Francis Bacon', sothebys: 'francis-bacon', christies: 'francis-bacon', wright: 'francis-bacon', bonhams: 'Francis Bacon' },
-  { slug: 'alexander-calder', displayName: 'Alexander Calder', sothebys: 'alexander-calder', christies: 'alexander-calder', wright: 'alexander-calder', bonhams: 'Alexander Calder' },
-  { slug: 'rashid-johnson', displayName: 'Rashid Johnson', sothebys: 'rashid-johnson', christies: 'rashid-johnson', wright: 'rashid-johnson', bonhams: 'Rashid Johnson' },
-  { slug: 'jeff-koons', displayName: 'Jeff Koons', sothebys: 'jeff-koons', christies: 'jeff-koons', wright: 'jeff-koons', bonhams: 'Jeff Koons' },
+  // (sparse for these art names but harmless). Phillips maker ids (Oct 6
+  // 2026) read from the phillips.com/artist/<id>/<slug> URLs and checked
+  // against api.phillips.com/api/maker/<id>/lots (the search API errors).
+  { slug: 'jean-michel-basquiat', displayName: 'Jean-Michel Basquiat', sothebys: 'jean-michel-basquiat', christies: 'jean-michel-basquiat', wright: 'jean-michel-basquiat', bonhams: 'Jean-Michel Basquiat', phillips: { id: '11029', slug: 'jean-michel-basquiat' } },
+  { slug: 'roy-lichtenstein', displayName: 'Roy Lichtenstein', sothebys: 'roy-lichtenstein', christies: 'roy-lichtenstein', wright: 'roy-lichtenstein', bonhams: 'Roy Lichtenstein', phillips: { id: '10858', slug: 'roy-lichtenstein' } },
+  { slug: 'francis-bacon', displayName: 'Francis Bacon', sothebys: 'francis-bacon', christies: 'francis-bacon', wright: 'francis-bacon', bonhams: 'Francis Bacon', phillips: { id: '9823', slug: 'francis-bacon' } },
+  { slug: 'alexander-calder', displayName: 'Alexander Calder', sothebys: 'alexander-calder', christies: 'alexander-calder', wright: 'alexander-calder', bonhams: 'Alexander Calder', phillips: { id: '11020', slug: 'alexander-calder' } },
+  { slug: 'rashid-johnson', displayName: 'Rashid Johnson', sothebys: 'rashid-johnson', christies: 'rashid-johnson', wright: 'rashid-johnson', bonhams: 'Rashid Johnson', phillips: { id: '4718', slug: 'rashid-johnson' } },
+  { slug: 'jeff-koons', displayName: 'Jeff Koons', sothebys: 'jeff-koons', christies: 'jeff-koons', wright: 'jeff-koons', bonhams: 'Jeff Koons', phillips: { id: '11031', slug: 'jeff-koons' } },
 
   // ── The watches vertical: makers, not artists. Phillips (the watch house)
   // maker pages + Christie's maker pages + Bonhams keyword search.
