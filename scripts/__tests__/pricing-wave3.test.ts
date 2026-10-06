@@ -14,6 +14,9 @@ import {
 } from '../backtest-core';
 import { calibrationOnEngineBasis } from '../build-market';
 import { setEngineFlags, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_HOUSE_GATE, ENGINE_VERSION } from '../../app/lib/value';
+import { lotMaxBid, lotProjectedClose, cardCompsHammer, lotVerdict } from '../../app/lib/verdict';
+import { maxHammerFor } from '../../app/lib/premiums';
+import type { AuctionLot } from '../../app/types';
 
 type Row = BacktestState['calObs'][number];
 const row = (o: Partial<Row>): Row => ({ r: 1, cr: 1.5, conf: 'medium', m: 'art', ageY: 1, beat: true, ...o } as unknown as Row);
@@ -61,6 +64,24 @@ test('build-market refuses a wrong-basis calibration: re-fit from the state, els
   setEngineFlags(ENGINE_FLAGS_HOUSE_GATE);
   assert.equal(calibrationOnEngineBasis(legacy, []), legacy);
   setEngineFlags(ENGINE_FLAGS_CURRENT);
+});
+
+test('lot read figures (verdict.ts): max bid = the engine max bid, projection only when validated, card comps on the hammer', () => {
+  const base = { id: 'goldin-x', artist: 'sports-cards', title: 't', auctionHouse: 'Goldin', status: 'upcoming', saleDate: '2026-10-10' } as unknown as AuctionLot;
+  const val = { compValueUsd: 1250, low: 1000, high: 1600, confidence: 'medium', maxBidUsd: 950, compRatio: null } as unknown as AuctionLot['value'];
+  const l = { ...base, value: val } as AuctionLot;
+  assert.equal(lotMaxBid(l)!.hammer, 950, 'the engine max bid, not the hammer under value.low');
+  assert.ok(lotMaxBid(l)!.allIn > 950);
+  assert.equal(lotMaxBid({ ...l, value: { ...val!, confidence: 'low' } } as AuctionLot), null, 'no certified floor → no max bid');
+  const card = { ...base, cardComps: { med: 1000, n: 3 } } as unknown as AuctionLot;
+  assert.equal(lotMaxBid(card)!.hammer, maxHammerFor(850, card), 'a card-median floor keeps the hammer on it');
+  assert.equal(lotProjectedClose({ ...l, bidProj: { g: 1.5, allIn: 2000 } } as AuctionLot), null, 'an unvalidated cell never prints');
+  assert.equal(lotProjectedClose({ ...l, bidProj: { g: 1.5, allIn: 2000, ok: true } } as AuctionLot), 2000);
+  const cc = { ...base, currentBid: 275, value: { compValueUsd: 458, estimateUsd: 458, low: 400, high: 520, confidence: 'medium', basis: 'card-comp', expectedHammerUsd: 375, vsBid: null } } as unknown as AuctionLot;
+  assert.equal(cardCompsHammer(cc), 375, 'the comps HAMMER over a hammer bid');
+  assert.equal(cardCompsHammer({ ...cc, value: { ...cc.value!, abstain: 'card:player-median-context-only' } } as AuctionLot), null);
+  assert.equal(cardCompsHammer({ ...cc, value: { ...cc.value!, bidFloor: 275 } } as AuctionLot), null, 'a bid-floored value is not a comps figure');
+  assert.equal(lotVerdict(l)!.maxBid, 950);
 });
 
 test('record stamp: backtest.json names the engine its ROWS came from, not the current engine', () => {

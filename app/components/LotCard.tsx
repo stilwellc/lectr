@@ -10,6 +10,7 @@ import ComparableModal from './ComparableModal';
 import Flick from './Flick';
 import { computeDeepSignal, FORM_LABEL, signalMagnitude } from '../lib/comps';
 import { safeHref } from '../lib/safe-href';
+import { cardCompsHammer } from '../lib/verdict';
 
 // stable empty-array identity — a fresh `[]` default each render would defeat
 // the buySignal useMemo and the memo() wrapper below.
@@ -253,10 +254,13 @@ function LotCard({
   // (the photo glow ring already fires from value.vsBid via cardTone). Non-card
   // engine values (basis 'hedonic'/absent) are untouched — they render through
   // buySignal / LotValueBlock as before.
+  // (Oct 6 2026, wave 3) the figure is the comps' HAMMER — the bid under it
+  // is a hammer bid (verdict.cardCompsHammer: one basis, one source)
+  const cardCompsHammerUsd = isUpcoming ? cardCompsHammer(lot) : null;
   const cardComp =
-    isUpcoming && lot.value && lot.value.basis === 'card-comp' && lot.value.estimateUsd
+    isUpcoming && lot.value && cardCompsHammerUsd != null
       ? {
-          value: lot.value.estimateUsd,
+          value: cardCompsHammerUsd,
           tone:
             lot.value.vsBid?.label === 'below recent comps'
               ? ('up' as const)

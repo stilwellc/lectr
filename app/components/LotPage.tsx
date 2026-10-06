@@ -14,8 +14,8 @@ import { useRefs } from '../hooks/useRefs';
 import { safeHref } from '../lib/safe-href';
 import { splitTitle, deglue, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
 import { appraiseLot, soldCompBand, isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
-import { lotAllInFactor, maxHammerFor } from '../lib/premiums';
-import { valueFloor } from '../lib/lanes';
+import { lotAllInFactor } from '../lib/premiums';
+import { lotFloor, lotMaxBid, lotProjectedClose } from '../lib/verdict';
 import { formatEstimate, estimateOnly, lotSignal, confidenceMeter } from './LotCard';
 import { daysWord, Colophon } from './Terminal';
 import ArtistNav from './ArtistNav';
@@ -46,7 +46,7 @@ import PlateImg from './PlateImg';
  *  and cardComps.med at n = 1, so "Max bid" and "still under the floor"
  *  leaned on a floor the engine itself would not certify. */
 function gatedFloor(lot: AuctionLot): number | null {
-  return valueFloor(lot)?.floor ?? null;
+  return lotFloor(lot);
 }
 
 /* The copy button styles itself (id-guarded head injection, LotCard's
@@ -1005,26 +1005,31 @@ export default function LotPage({ lotId, initialLot }: {
                 />
               )}
               {isUpcoming && (() => {
-                const floor = gatedFloor(lot);
-                if (!floor) return null;
+                // (Oct 6 2026, wave 3) the engine's own max bid (verdict.ts —
+                // one source), not the hammer under the band's all-in low
+                const mb = lotMaxBid(lot);
+                if (!mb) return null;
                 return (
                   <LeaderRow
                     k="Max bid"
-                    v={`≤ ${formatPrice(maxHammerFor(floor, lot))} hammer`}
-                    sub={`walk-away at the value floor · ${formatPrice(floor)} all-in`}
+                    v={`≤ ${formatPrice(mb.hammer)} hammer`}
+                    sub={`walk-away at the value floor · ${formatPrice(mb.allIn)} all-in`}
                   />
                 );
               })()}
-              {isUpcoming && lot.bidProj?.allIn != null && (() => {
+              {isUpcoming && lotProjectedClose(lot) != null && (() => {
+                // (Oct 6 2026, wave 3) only a projection whose cell is
+                // validated on the graded tape (bidProj.ok) prints.
                 // the build stamps bidProj.floor UNGATED (value.low at any
                 // confidence); the floor a reader may lean on is the gated
                 // one — no gated floor, no "under the floor" and no lamp
+                const proj = lotProjectedClose(lot)!;
                 const floor = gatedFloor(lot);
-                const below = !!floor && lot.bidProj!.allIn < floor;
+                const below = !!floor && proj < floor;
                 return (
                   <LeaderRow
                     k="Projected close"
-                    v={`~${formatPrice(lot.bidProj!.allIn)}`}
+                    v={`~${formatPrice(proj)}`}
                     tone={below ? 'up' : undefined}
                     sub={floor
                       ? (below ? `still under the ${formatPrice(floor)} floor` : `vs ${formatPrice(floor)} floor`)
@@ -1125,7 +1130,8 @@ export default function LotPage({ lotId, initialLot }: {
                   k="This card"
                   v={lot.cardComps.med != null ? formatPrice(lot.cardComps.med) : '—'}
                   sub={`${lot.cardComps.n} ${lot.cardComps.n === 1 ? 'sale' : 'sales'}, same card & grade`}
-                  tone={lot.cardComps.med != null && (lot.currentBid || 0) > 0 && lot.currentBid! < lot.cardComps.med ? 'up' : undefined}
+                  // (wave 3) the median is all-in: the bid is compared all-in too
+                  tone={lot.cardComps.med != null && (lot.currentBid || 0) > 0 && lot.currentBid! * lotAllInFactor(lot, lot.currentBid!) < lot.cardComps.med ? 'up' : undefined}
                 />
               )}
               {isUpcoming && lot.cardComps && lot.cardComps.lastSales.length > 0 && (
