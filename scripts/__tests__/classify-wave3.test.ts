@@ -6,7 +6,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { subCatOf, sportOfSale, cultureTextDomain, curatedDomainOf } from '../lib/sub-cats';
-import { stampSubCats } from '../lib/corpus-normalize';
+import { stampSubCats, clearJunkModelKeys } from '../lib/corpus-normalize';
+import { isWatchModelLine } from '../../app/lib/watch-ref';
 
 type R = Record<string, any>;
 
@@ -95,4 +96,21 @@ test('drill 1f · watch family from the description head; design material from t
   assert.equal(Dz('teak, cane and rope'), 'teak');
   assert.equal(Dz('Pair of \'Committee\' Chairscirca 1953model no. PJ-SI-30-A, teak, cowhide'), 'teak');
   assert.equal(subCatOf({ artist: 'jean-prouve', formKey: 'seating', title: '"Antony Chair". Lounge chair with orange lacquered metal frame.' }).drill, 'steel');
+});
+
+test('modelKey 2 · a model key survives only as an identity: design codes, art catalogue numbers, watch model lines / printed refs', () => {
+  const lots: R[] = [
+    { id: 'g', artist: 'sports-cards', title: '2019 Panini Prizm #1 Zion - PSA GEM MT 10', modelKey: 'mt10' },
+    { id: 'p', artist: 'entertainment-memorabilia', title: 'Signed 8 x 10 Photo', modelKey: 'x10' },
+    { id: 'w', artist: 'patek-philippe', title: 'PATEK PHILIPPE. AN 18K GOLD WRISTWATCH', modelKey: 'an18' },
+    { id: 'wl', artist: 'rolex', title: 'Rolex Submariner', modelKey: 'submariner' },
+    { id: 'wr', artist: 'patek-philippe', title: 'Patek Philippe ref. 3919', reference: '3919/005', modelKey: '3919' },
+    { id: 'd', artist: 'charles-eames', title: 'LCW chair', modelKey: 'lcw' },
+    { id: 'a', artist: 'andy-warhol', title: 'Marilyn (F. & S. II.31)', modelKey: 'ii31' },
+  ];
+  assert.equal(clearJunkModelKeys(lots as never), 3);
+  const mk = (id: string) => lots.find(l => l.id === id)!.modelKey ?? null;
+  assert.deepEqual(['g', 'p', 'w', 'wl', 'wr', 'd', 'a'].map(mk), [null, null, null, 'submariner', '3919', 'lcw', 'ii31']);
+  assert.equal(isWatchModelLine('rolex', 'daytona'), true);
+  assert.equal(isWatchModelLine('rolex', 'nautilus'), false);
 });

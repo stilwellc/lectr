@@ -5,7 +5,7 @@ import { athleteIn } from './athlete-roster';
 import { extractReference } from './identity-enrich';
 import { looksLikeCard, playerSlugOf, parseCard, cardYearKey } from '../../app/lib/cards';
 import { classifyForm, objectClassOf, cleanGoldinTitle, watchKey, isPersonNameRun, personNameOf } from '../../app/lib/comps';
-import { vetReference, readDescriptionReference, splitWatchRef } from '../../app/lib/watch-ref';
+import { vetReference, readDescriptionReference, splitWatchRef, isWatchModelLine } from '../../app/lib/watch-ref';
 import { titleTokens as titleTokensOf, extractEdition, extractSerials, toUsdDated, fxRateFor } from '../../app/lib/normalize';
 import { isCurrency } from '../../app/types';
 import { christiesLocationCurrency } from './houses/common';
@@ -287,6 +287,34 @@ export function enrichWatchReferences(lots: Lot[]): number {
   }
   if (healed || cleared) console.log(`[normalize] watch references re-derived: healed=${healed} cleared=${cleared}`);
   return filled;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3b · clearJunkModelKeys (Oct 6 2026 categorization wave 3) — the crawler
+// stamped comps.modelKey (a FURNITURE model-code reader) on every lot, so a
+// card's grade ("PSA GEM MT 10" → mt10: 63k rows), a photo's size ("8 x 10" →
+// x10), a watch's metal ("AN 18K GOLD" → an18) became a "model" — 229k rows,
+// and similarity.ts paid a same-model bonus between any two PSA 10s. A model
+// key is kept only where it is an identity: design (LCW, PJ-SI-30-A), art
+// (catalogue numbers: F. & S. II.31) and a watch's own model LINE. Deleted,
+// not nulled: the readers fall back the same way on an absent field.
+// ─────────────────────────────────────────────────────────────────────────────
+export function clearJunkModelKeys(lots: Lot[]): number {
+  let cleared = 0;
+  for (const l of lots) {
+    const x = l as Lot & { modelKey?: string | null };
+    if (x.modelKey == null) continue;
+    const m = ARTIST_MARKET[l.artist as keyof typeof ARTIST_MARKET];
+    if (m === 'design' || m === 'art') continue;
+    if (m === 'watches' && isWatchModelLine(l.artist, x.modelKey)) continue;
+    // a watch key that IS the printed reference ("REF. 3919" → 3919 / ref3919)
+    const ref = String(l.reference || '').toLowerCase().replace(/\s+/g, '');
+    const core = String(x.modelKey).toLowerCase().replace(/^ref/, '');
+    if (m === 'watches' && ref && /\d{3}/.test(core) && ref.startsWith(core)) continue;
+    delete x.modelKey;
+    cleared++;
+  }
+  return cleared;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1321,6 +1349,8 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   const refsFilled = enrichWatchReferences(ls);
   // regex first; the extraction fills only a reference still empty (src:'llm')
   fillWatchReferencesFromExtract(ls);
+  const junkModelKeys = clearJunkModelKeys(ls);
+  console.log(`[normalize] junk modelKeys cleared (grade / size / metal tokens outside design, art and watch model lines): ${junkModelKeys}`);
   const players = recoverPlayerSlugs(ls);
   const junkEntities = healCrawlEntities(ls);
   if (junkEntities) console.log(`[normalize] crawl entity tags trimmed to a person's name / cleared: ${junkEntities}`);

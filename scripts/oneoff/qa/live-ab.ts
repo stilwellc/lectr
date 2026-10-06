@@ -57,6 +57,7 @@ async function main() {
   try {
     const cn = require(path.join(code, 'scripts/lib/corpus-normalize'));
     if (cn.restampBruunCurrency) console.log(`[live-ab] normalize: ${cn.restampBruunCurrency(lots)} Bruun Rasmussen rows re-stamped DKK`);
+    if (cn.clearJunkModelKeys) console.log(`[live-ab] normalize: ${cn.clearJunkModelKeys(lots)} junk modelKeys cleared`);
   } catch { /* older code */ }
   const want = new Set<string>();
   const book = process.argv.includes('--book'); // the whole upcoming book (outcome may be absent)
