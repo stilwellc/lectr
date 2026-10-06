@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { subCatOf, sportOfSale, cultureTextDomain, curatedDomainOf } from '../lib/sub-cats';
 import { stampSubCats, clearJunkModelKeys } from '../lib/corpus-normalize';
 import { isWatchModelLine } from '../../app/lib/watch-ref';
+import { parseCard, cardLadderKey, cardKey } from '../../app/lib/cards';
 
 type R = Record<string, any>;
 
@@ -113,4 +114,23 @@ test('modelKey 2 · a model key survives only as an identity: design codes, art 
   assert.deepEqual(['g', 'p', 'w', 'wl', 'wr', 'd', 'a'].map(mk), [null, null, null, 'submariner', '3919', 'lcw', 'ii31']);
   assert.equal(isWatchModelLine('rolex', 'daytona'), true);
   assert.equal(isWatchModelLine('rolex', 'nautilus'), false);
+});
+
+test('cardKey 3 · a numberless pre-war catalog card keys on code + player + pose / team / back', () => {
+  const L = (t: string) => cardLadderKey(parseCard(t));
+  assert.equal(L('1909-1911 T206 White Border Ty Cobb Portrait Green Background'), 'ty-cobb|t206|t206|-|p:portrait-green-background');
+  assert.equal(L('1909-1911 T206 White Border Rube Waddell Portrait SGC GOOD 30'), 'rube-waddell|t206|t206|-|p:portrait');
+  assert.equal(L('1912 T207 Brown Background Mike Mitchell Cincinnati PSA GOOD 2'), 'mike-mitchell|t207|t207|-|p:cincinnati');
+  assert.equal(L('1911 E94 George Close Candy Ty Cobb PSA NM 7 - Rare Orange Background!'), 'ty-cobb|e94|e94|-|p:orange-background');
+  // REA, Goldin and LOTG print the same card three ways — one key
+  const a = L('1909-1911 T206 White Border Christy Mathewson Portrait PSA VG-EX 4');
+  assert.equal(a, L('11 T206 White Border Christy Mathewson, Portrait - PSA VG-EX 4'));
+  assert.equal(a, L('27 1909-11 T206 Christy Mathewson (HOF - Portrait) - PSA VG-EX 4'));
+  assert.notEqual(L('1909-1911 T206 White Border Bill Dahlen Boston PSA VG+ 3.5'), L('1909-1911 T206 White Border Bill Dahlen Brooklyn PSA VG+ 3.5'));
+  assert.equal(cardKey(parseCard('1909-1911 T206 White Border Charlie Starr PSA EX 5')), 'charlie-starr|t206|t206|-|PSA5');
+  // lots, folders, team cards, a numbered card: no catalog key
+  assert.equal(L('1912 T207 Brown Background Collection (17) Including Eight Hall of Famers'), null);
+  assert.equal(L('1912 T202 Hassan Triple Folder "Close at the Plate" Payne/Walsh PSA EX-MT 6'), null);
+  assert.equal(L('1913 T200 Fatima Team Card New York Nationals with Christy Mathewson and Jim Thorpe PSA POOR 1'), null);
+  assert.equal(L('1933 Goudey #53 Babe Ruth PSA 5'), 'babe-ruth|1933|goudey|53');
 });
