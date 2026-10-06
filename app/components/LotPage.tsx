@@ -13,7 +13,7 @@ import { useSavedLots } from '../hooks/useSavedLots';
 import { useRefs } from '../hooks/useRefs';
 import { safeHref } from '../lib/safe-href';
 import { splitTitle, deglue, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
-import { appraiseLot, soldCompBand, isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
+import { isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
 import { lotAllInFactor } from '../lib/premiums';
 import { lotFloor, lotMaxBid, lotProjectedClose } from '../lib/verdict';
 import { formatEstimate, estimateOnly, lotSignal, confidenceMeter } from './LotCard';
@@ -557,8 +557,9 @@ export default function LotPage({ lotId, initialLot }: {
   const band = useMemo(() => {
     if (!lot || !isSportsScienceObject(lot)) return null;
     if (hasPack) return pack!.b ? { ...pack!.b, pool: packRowsToLots(pack!.b.rows) } : null;
-    return soldCompBand(lot, bandPoolLots);
-  }, [lot, bandPoolLots, hasPack, pack]);
+    // (Oct 6 2026, wave 4) no client-computed band: only the build's pack
+    return null;
+  }, [lot, hasPack, pack]);
   const called = useMemo(() => {
     if (!lot || band) return null;
     if (hasPack) {
@@ -660,10 +661,11 @@ export default function LotPage({ lotId, initialLot }: {
     if (sigMed != null) return sigMed;
     if (calledIsHonest && called?.med != null) return called.med;
     if (band) return band.median;
-    if (fullLoaded || makerPool) return appraiseLot(lot, poolLots)?.value ?? null;
-    if (hasPack) return pack!.a ?? null;
+    // (Oct 6 2026, wave 4) no client appraisal: the build's appraisal only,
+    // and only on a lot the engine valued
+    if (hasPack && lot.value) return pack!.a ?? null;
     return null;
-  }, [lot, sig, called, calledIsHonest, band, fullLoaded, makerPool, poolLots, hasPack, pack]);
+  }, [lot, sig, called, calledIsHonest, band, hasPack, pack]);
   const compsN = sig?.basis ?? (band ? band.n : (calledIsHonest ? called?.n : null)) ?? null;
 
   // ── reference comps: a low-confidence measured RANGE, never a flag ──
@@ -673,8 +675,11 @@ export default function LotPage({ lotId, initialLot }: {
   const refBand = useMemo(() => {
     if (!lot) return null;
     const mkt = ARTIST_MARKET[lot.artist];
+    if (hasPack && !fullLoaded) return pack!.r ?? null;
+    // (Oct 6 2026, wave 4) a client-computed reference range only on a lot
+    // the engine valued
+    if (!lot.value) return hasPack ? pack!.r ?? null : null;
     if (!fullLoaded) {
-      if (hasPack) return pack!.r ?? null;
       // science pools same-artist → the maker shard answers it exactly
       if (makerPool && mkt === 'science') return scienceReferenceBand(lot, makerPool);
       return null;

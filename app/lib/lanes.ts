@@ -30,19 +30,20 @@ export { SIGNAL_LABEL, type SignalLabel, basisNote } from './value';
 export interface ValueFloor { floor: number; src: 'value.low' | 'cardComps' }
 
 /** THE value floor a projected close is measured against — the strict rule
- *  (F6): `value.low` only at non-low confidence; else 0.85 × the exact-card
- *  median only at cardComps.n ≥ 3; else none. gapRead, build-upcoming's
- *  bidProj stamp and close-board's overlay ALL call this — there used to be
- *  three copies and build-upcoming's was ungated (any value.low, any card
- *  median), so the served floor disagreed with the lane it fed. */
+ *  (F6): `value.low` only at non-low confidence; else none. gapRead,
+ *  build-upcoming's bidProj stamp and close-board's overlay ALL call this —
+ *  there used to be three copies and build-upcoming's was ungated (any
+ *  value.low, any card median), so the served floor disagreed with the lane
+ *  it fed. (Oct 6 2026, wave 4) The 0.85 × exact-card-median branch is gone:
+ *  it resurrected a floor on cards the engine declined to value (publish
+ *  gate, stale pool) — 175 live lots, 84 of them under the bid already on
+ *  the lot. `cardComps` stays in the signature for the callers' types. */
 export function valueFloor(lot: {
   value?: { low?: number; confidence?: string } | null;
   cardComps?: { med?: number | null; n?: number } | null;
 }): ValueFloor | null {
   const v = lot.value;
   if (v && typeof v.low === 'number' && v.low > 0 && v.confidence !== 'low') return { floor: v.low, src: 'value.low' };
-  const cc = lot.cardComps;
-  if (cc && typeof cc.med === 'number' && cc.med > 0 && (cc.n || 0) >= 3) return { floor: Math.round(cc.med * 0.85), src: 'cardComps' };
   return null;
 }
 

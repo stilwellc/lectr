@@ -50,7 +50,7 @@ import {
 // forced-color cell classes re-plate the call. Never redefined here.
 import { CellGrid, FigureCell, FigGate, FigReplay, FigPools } from '../components/cells';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isLiveUpcoming, trueSaleDay, toneOf } from '../utils';
-import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
+import { dealScore, signalMagnitude } from '../lib/comps';
 import { medianOr } from '../lib/stats';
 import { gapRead, sleeperRead, type GapRead, type SleeperRead } from '../lib/lanes';
 
@@ -965,11 +965,9 @@ export default function ValuePage() {
     if (sigMed && rows && rows.length >= 3) {
       return { prices: rows.map(r => r.p).sort((a, b) => a - b), median: sigMed };
     }
-    // 4) last resort: the client engine over the corpus
-    if (!fullLoaded) return null;
-    const pool = signalWithPool(call.lot, marketLots);
-    if (!pool || pool.signal.med == null) return null;
-    return { prices: pool.pool.map(l => l.priceUsd!).sort((a: number, b: number) => a - b), median: pool.signal.med };
+    // (Oct 6 2026, wave 4) no client-engine last resort: a call without the
+    // engine's own pool or evidence rows prints no comp strip
+    return null;
   }, [call, callStamp, callPack, evidence, marketLots, fullLoaded]);
 
   const hasFlags = deals.length > 0;

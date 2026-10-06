@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { AuctionLot, MarketStats, RealizedPoint, BidCompetitionPoint } from '../types';
+import { floorAtBid } from '../lib/value';
 
 // Stable empty-array identity for pre-load fallbacks — a fresh `[]` each render
 // would defeat downstream memoization (e.g. useSoldArchive's allLotsWithArchive).
@@ -397,7 +398,14 @@ function loadRayData(): Promise<RayPayload> {
           || o.b > baseBid
           || o.n > baseN;
         if (!entryNewer) continue;
-        if (o.b > 0 && o.b >= baseBid) lw.currentBid = o.b;
+        if (o.b > 0 && o.b >= baseBid) {
+          lw.currentBid = o.b;
+          // (Oct 6 2026, wave 4) the engine's value is floored at the bid on
+          // the lot (value.floorAtBid, applied at build) — an intraday bid
+          // above last night's re-floors it, or the page prints an expected
+          // hammer under the bid it shows
+          if (o.b > baseBid && lw.value && lw.value.compValueUsd > 0) lw.value = floorAtBid(lw.value as unknown as Parameters<typeof floorAtBid>[0], lw, Date.now()) as unknown as typeof lw.value;
+        }
         if (o.n > 0 && o.n >= baseN) lw.bidCount = o.n;
         // (Oct 6) keep the build's cell validation (bidProj.ok) across the overlay
         if (o.proj) lw.bidProj = { g: lw.bidProj?.g ?? 1, allIn: o.proj, ...(o.floor ? { floor: o.floor, below: o.below } : {}), ...(lw.bidProj?.ok ? { ok: true } : {}) };

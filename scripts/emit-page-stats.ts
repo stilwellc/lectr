@@ -245,7 +245,8 @@ export async function emitPageStats(opts: PageStatsOpts = {}): Promise<void> {
         // pack.c here — a directional read the engine had abstained from)
         // appraisal — only where the certificate falls through to it
         const sigMed = (lot.signal as { med?: number } | null | undefined)?.med;
-        if (sigMed == null && (!pack.c || pack.c.med == null)) {
+        // (Oct 6 2026, wave 4) and only on a lot the ENGINE valued
+        if (lot.value && sigMed == null && (!pack.c || pack.c.med == null)) {
           const pool = sso ? (mainByArtistId.get(`${lot.artist}|${idKey(lot)}`) || []) : (mainByArtist.get(lot.artist) || []);
           pack.a = appraiseLot(lot, pool)?.value ?? null;
         }
