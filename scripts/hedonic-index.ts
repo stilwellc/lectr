@@ -97,8 +97,14 @@ const DENSITY_MIN_N = 120;         // endpoint quarter must have ≥ this many l
 const DENSITY_MIN_MAKERS = 8;      // …and ≥ this many distinct makers
 const PARTIAL_VOL_FRAC = 0.6;      // endpoint volume ≥ 60% of trailing-4Q median
 const CI_MAGNITUDE_MULT = 2.0;     // CI half-width must be < 2× |point estimate|
-const COMP_HI = 0.40;              // a single source/house >40% of one endpoint…
-const COMP_LO = 0.12;              // …while <12% of the other ⇒ composition break
+const MIX_SHIFT = 0.15;            // MARKET index: a single source/house whose share
+                                   // of the two endpoints differs by ≥15pp ⇒ mix-change
+                                   // break (Oct 2026: the >40%-vs-<12% rule let art 1Y
+                                   // publish across Christie's 6%→21% and a Sotheby's
+                                   // 0%→23% re-entry — the house dummy is then mostly
+                                   // identified off the time change it is meant to hold)
+const COMP_HI = 0.40;              // MAKER index (unchanged): a single source/house >40%
+const COMP_LO = 0.12;              //   of one endpoint while <12% of the other ⇒ break
 const MAKER_DOMINANCE = 0.60;      // if one maker-slug is >60% of an endpoint, the
                                    // "like-for-like" control is really that ONE
                                    // heterogeneous bucket — see gate 6e.
@@ -180,6 +186,12 @@ function extractRows(lots: AuctionLot[]): FeatureRow[] {
   const staged: (FeatureRow | null)[] = lots.map((l) => {
     const price = l.realizedUsd || 0;
     if (l.status !== 'sold' || price <= 0 || !l.saleDate) return null;
+    // a YEAR-precision (or unknown) date is a placeholder (Sotheby's '-06-01'
+    // stubs): its quarter is invented, so it cannot inform a quarter dummy.
+    // Month precision keeps its true quarter and stays (same rule as
+    // app/lib/indices.ts).
+    const prec = (l as AuctionLot & { datePrecision?: string | null }).datePrecision;
+    if (prec === 'year' || prec === 'unknown') return null;
     const q = quarterOf(l.saleDate);
     if (!q) return null;
     const maker = l.artist || 'maker:na';
@@ -417,7 +429,7 @@ function fitRobust(rows: FeatureRow[], design: Design): FitResult {
 }
 
 // ── the index (quarter coefficients → rebased levels + CIs) ──────────────────
-interface QuarterStat {
+export interface QuarterStat {
   n: number;
   makers: Set<string>;
   forms: Set<string>;              // distinct formKey — within-maker mix control depth
@@ -881,7 +893,7 @@ function computeHorizon(
   }
 
   // ── composition break (source AND house) — applies to BOTH modes ──
-  const comp = compositionBreak(sStat, eStat);
+  const comp = compositionBreak(sStat, eStat, mode);
   if (comp) return notPub(comp, nStart, nEnd);
 
   // ── gate 6c: CI resolves the sign + magnitude isn't pure noise ──
@@ -917,20 +929,31 @@ function computeHorizon(
   };
 }
 
-/** Composition break: any single source OR house that is >COMP_HI of one
- *  endpoint quarter but <COMP_LO of the other. Catches the Algolia backfill
- *  flood (and any house entering/leaving between the two dates). */
-function compositionBreak(a: QuarterStat, b: QuarterStat): string | null {
+/** Composition break between the two endpoint quarters, over source AND house.
+ *  'market' mode (Oct 2026): any single source/house whose share of one endpoint
+ *  differs from its share of the other by ≥ MIX_SHIFT (15pp) — catches the
+ *  Algolia backfill flood and any house entering/leaving/swelling between the
+ *  two dates: the house dummy cannot hold quality constant when it is
+ *  identified mostly off the same shift the quarter dummy is measuring.
+ *  'maker' mode keeps the long-standing rule: >COMP_HI of one endpoint while
+ *  <COMP_LO of the other. */
+export function compositionBreak(a: QuarterStat, b: QuarterStat, mode: 'market' | 'maker' = 'market'): string | null {
+  const breaks = (sa: number, sb: number): boolean => mode === 'market'
+    ? Math.abs(sa - sb) >= MIX_SHIFT - 1e-12
+    : (sa > COMP_HI && sb < COMP_LO) || (sb > COMP_HI && sa < COMP_LO);
   const check = (label: string, ma: Map<string, number>, mb: Map<string, number>, na: number, nb: number): string | null => {
-    const keys = new Set(Array.from(ma.keys()).concat(Array.from(mb.keys())));
-    for (const k of Array.from(keys)) {
+    const keys = Array.from(new Set(Array.from(ma.keys()).concat(Array.from(mb.keys())))).sort();
+    let worst: { k: string; sa: number; sb: number } | null = null;
+    for (const k of keys) {
       const sa = (ma.get(k) || 0) / na;
       const sb = (mb.get(k) || 0) / nb;
-      if ((sa > COMP_HI && sb < COMP_LO) || (sb > COMP_HI && sa < COMP_LO)) {
-        return `composition break: ${label} '${k}' is ${(Math.max(sa, sb) * 100).toFixed(0)}% of one endpoint but ${(Math.min(sa, sb) * 100).toFixed(0)}% of the other`;
-      }
+      if (breaks(sa, sb) && (!worst || Math.abs(sa - sb) > Math.abs(worst.sa - worst.sb))) worst = { k, sa, sb };
     }
-    return null;
+    // the reason keeps the long-standing template (it is printed verbatim on
+    // /analytics) — only the trigger changed
+    return worst
+      ? `composition break: ${label} '${worst.k}' is ${(Math.max(worst.sa, worst.sb) * 100).toFixed(0)}% of one endpoint but ${(Math.min(worst.sa, worst.sb) * 100).toFixed(0)}% of the other`
+      : null;
   };
   return check('source', a.srcShare, b.srcShare, a.n, b.n)
     || check('house', a.houseShare, b.houseShare, a.n, b.n);

@@ -584,7 +584,11 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     const mLots = all.filter(l => set.has(l.artist));
     markets[m] = buildMarketSeries(mLots, m);
     markets[m].analytics = marketAnalytics(mLots);
-    hedonic[m] = buildHedonicIndex(mLots);
+    // the MARKET hedonic reads the same population as its component maker
+    // indices: the Sotheby's Algolia backfill (thin metadata, its own price
+    // level) and the card mega-slug never enter (Oct 2026 — with them in, art
+    // 1Y read −28% off a backfill-heavy 2025-Q3 endpoint)
+    hedonic[m] = buildHedonicIndex(mLots.filter(l => !HEDONIC_EXCLUDE(l)));
     hedonic[m].composite = buildComposite(compositeFor(MARKETS[m]), MARKETS[m].length);
     const idxLen = markets[m].index.length;
     const h1 = hedonic[m].horizons['1Y'];
@@ -598,7 +602,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   const allMarketLots = all.filter(l => allSlugs.has(l.artist));
   markets.all = buildMarketSeries(allMarketLots, 'the market');
   markets.all.analytics = marketAnalytics(allMarketLots);
-  hedonic.all = buildHedonicIndex(allMarketLots);
+  hedonic.all = buildHedonicIndex(allMarketLots.filter(l => !HEDONIC_EXCLUDE(l)));
   hedonic.all.composite = buildComposite(compositeFor(rosterSlugs), rosterSlugs.length);
   const hAll1 = hedonic.all.horizons['1Y'];
   const cmpAll = hedonic.all.composite!;
