@@ -104,7 +104,11 @@ export function repeatSaleEligible(l: AuctionLot): boolean {
 export function strongSerial(l: Pick<AuctionLot, 'serialNo'> & { reference?: string | null }): string | null {
   const s = l.serialNo;
   if (!realSerial(s)) return null;
-  const n = String(s).toLowerCase();
+  // the normalize reader kind-qualifies serials ("sn-2685891" case/serial,
+  // "mvt-1165730" movement): the checks read the number, the kind stays in
+  // the canonical form so a case number never matches a movement number
+  const kind = /^(sn|mvt)-/i.exec(String(s));
+  const n = String(s).toLowerCase().slice(kind ? kind[0].length : 0);
   if (/^\d+(?:\.\d+)?\s*mm$/.test(n)) return null;
   if (/^\d{2,4}\.\d{2,4}$/.test(n)) return null;
   const c = n.replace(/[^a-z0-9]/g, '');
@@ -112,7 +116,7 @@ export function strongSerial(l: Pick<AuctionLot, 'serialNo'> & { reference?: str
   if (/^\d+$/.test(c) && c.length < 5) return null;
   // ≥4 digits: "NO.7" / "NO.4" are lot-label leftovers, not case numbers
   if ((c.match(/\d/g) || []).length < 4) return null;
-  return c;
+  return kind ? `${kind[1].toLowerCase()}:${c}` : c;
 }
 
 /** Catalogue-raisonné numbers in a title, as scheme → numbers. "F. & S.
@@ -188,7 +192,7 @@ export function repeatSalePair(a: AuctionLot, b: AuctionLot, tbl: IdfTable): boo
   // a 4-digit numeric serial is a model code UNLESS the limited-edition
   // number agrees too ("CASE NO. 1726 … NO. 68/97" on both)
   const serialAgree = (!!sa && sa === strongSerial(b))
-    || (sameSerialText && /^\d{4}$/.test(canon(a.serialNo)) && numberedAgree);
+    || (sameSerialText && /^\d{4}$/.test(canon(String(a.serialNo).replace(/^(sn|mvt)-/i, ''))) && numberedAgree);
   const editionAgree = a.editionMarker != null && numberedAgree
     && a.editionMarker === b.editionMarker && !fractionalEdition(a);
   const photoAgree = !!(a.photoMatched && b.photoMatched && a.entity && a.entity === b.entity);

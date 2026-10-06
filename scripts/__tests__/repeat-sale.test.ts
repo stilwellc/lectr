@@ -35,6 +35,12 @@ test('strongSerial: case diameters, lot labels, 4-digit model codes and ref-equa
   assert.equal(strongSerial({ serialNo: '116400', reference: '116400' }), null);
   assert.equal(strongSerial({ serialNo: 'Z074090' }), 'z074090');
   assert.equal(strongSerial({ serialNo: 'E-26204' }), 'e26204');
+  // kind-qualified serials from the normalize reader: the 4-digit rule reads
+  // the number, and a case number never equals a movement number
+  assert.equal(strongSerial({ serialNo: 'sn-2323' }), null);
+  assert.equal(strongSerial({ serialNo: 'sn-2685891' }), 'sn:2685891');
+  assert.notEqual(strongSerial({ serialNo: 'sn-1165730' }), strongSerial({ serialNo: 'mvt-1165730' }));
+  assert.equal(strongSerial({ serialNo: 'sn-116400', reference: '116400' }), null);
   assert.equal(strongSerial({ serialNo: '11701' }), '11701');
 });
 
