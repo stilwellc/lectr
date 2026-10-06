@@ -132,10 +132,12 @@ const SCI_KIND: Record<string, string> = {
   'science-tech': 'tech', 'meteorites': 'meteorites', 'fossils': 'fossils',
 };
 const SPACE_PROGRAM: [string, RegExp][] = [
-  // (wave 2) Skylab flew Apollo hardware (the Apollo Applications Program)
-  ['apollo', /apollo|skylab/i],
+  ['apollo', /apollo/i],
   ['mercury-gemini', /\bgemini\b|\bmercury\b/i],
   ['shuttle-iss', /shuttle|sts-\d|\biss\b/i],
+  // (wave 2) Skylab flew Apollo hardware (the Apollo Applications Program) —
+  // read after an explicit shuttle-era mention ("Skylab and Shuttle-Era Suits")
+  ['apollo', /skylab/i],
   ['soviet', /soyuz|sputnik|cosmonaut|vostok|voskhod|\bmir\b|lunokhod|\bsoviet\b|\bussr\b|\bn1-l3\b|gagarin|korolev/i],
   // (wave 2) RR's space catalogue titles a lot by the astronaut alone ("Neil
   // Armstrong Signed Photograph", "Gus Grissom Check"): the program of the
