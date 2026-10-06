@@ -10,9 +10,10 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import {
   calibrationBasisOf, engineBasis, rowsMissingHammer, mkState, summarizeState, type BacktestState,
+  rowsEngineVersionOf, rowsByEngineVersionOf,
 } from '../backtest-core';
 import { calibrationOnEngineBasis } from '../build-market';
-import { setEngineFlags, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_HOUSE_GATE } from '../../app/lib/value';
+import { setEngineFlags, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_HOUSE_GATE, ENGINE_VERSION } from '../../app/lib/value';
 
 type Row = BacktestState['calObs'][number];
 const row = (o: Partial<Row>): Row => ({ r: 1, cr: 1.5, conf: 'medium', m: 'art', ageY: 1, beat: true, ...o } as unknown as Row);
@@ -60,4 +61,17 @@ test('build-market refuses a wrong-basis calibration: re-fit from the state, els
   setEngineFlags(ENGINE_FLAGS_HOUSE_GATE);
   assert.equal(calibrationOnEngineBasis(legacy, []), legacy);
   setEngineFlags(ENGINE_FLAGS_CURRENT);
+});
+
+test('record stamp: backtest.json names the engine its ROWS came from, not the current engine', () => {
+  const rows = [{ ev: '2026.10.03-house-gate' }, { ev: '2026.10.03-house-gate' }, { ev: ENGINE_VERSION }, {}];
+  assert.equal(rowsEngineVersionOf(rows), '2026.10.03-house-gate');
+  assert.deepEqual(rowsByEngineVersionOf(rows), { '2026.10.03-house-gate': 2, [ENGINE_VERSION]: 1, legacy: 1 });
+  assert.equal(rowsEngineVersionOf([]), ENGINE_VERSION);
+  const st = mkState(Date.now());
+  st.calObs = [row({ ev: '2026.10.03-house-gate' } as Partial<Row>), row({ ev: '2026.10.03-house-gate' } as Partial<Row>)];
+  const out = summarizeState(st, '2026-10-06');
+  assert.equal(out.engineVersion, '2026.10.03-house-gate');
+  assert.equal(out.currentEngineVersion, ENGINE_VERSION);
+  assert.equal(out.rowsOnVersionPct, 0);
 });

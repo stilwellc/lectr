@@ -742,6 +742,19 @@ export function calibrationBasisOf(calObs: CalObs[]): CalBasis {
   const ok = calObs.filter(o => typeof o.pc === 'number' && typeof o.hba === 'boolean').length;
   return ok >= 0.99 * calObs.length ? 'hammer' : 'all-in';
 }
+/** Observations per scoring engine version (rows without one: 'legacy'). */
+export function rowsByEngineVersionOf(calObs: { ev?: string }[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const o of calObs) { const v = o.ev || 'legacy'; out[v] = (out[v] || 0) + 1; }
+  return out;
+}
+/** The engine version most of the record's rows were scored on (ties: the
+ *  later version string); an empty record is the current engine's. */
+export function rowsEngineVersionOf(calObs: { ev?: string }[]): string {
+  let best: string | null = null, bn = -1;
+  for (const [v, n] of Object.entries(rowsByEngineVersionOf(calObs))) if (n > bn || (n === bn && best != null && v > best)) { best = v; bn = n; }
+  return best ?? ENGINE_VERSION;
+}
 /** Rows missing a hammer field the hammer engine reads. */
 export function rowsMissingHammer(st: BacktestState): number {
   return st.calObs.filter(o => typeof o.pc !== 'number' || typeof o.hb !== 'boolean' || typeof o.hba !== 'boolean').length;
@@ -1452,7 +1465,14 @@ export function summarizeState(st: BacktestState, generatedAt: string) {
 
   return {
     generatedAt,
-    engineVersion: ENGINE_VERSION,
+    /** (Oct 6, wave 3) the engine the record's ROWS were scored on (the
+     *  version most rows carry) — never the current engine's name stamped
+     *  on a record none of whose rows it scored */
+    engineVersion: rowsEngineVersionOf(calObs),
+    /** the engine this summary was written under */
+    currentEngineVersion: ENGINE_VERSION,
+    /** observations per scoring engine version */
+    rowsByEngineVersion: rowsByEngineVersionOf(calObs),
     stateEngineVersion: st.engineVersion || null,
     /** share of observations scored on the current engine version — <100 means
      *  the record still carries rows from an older labeler (refresh with a
