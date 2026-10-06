@@ -282,12 +282,6 @@ function artKind(formKey: string, category: string, title: string, medium: strin
 }
 
 const DESIGN_MATERIALS = ['walnut', 'teak', 'oak', 'rosewood', 'plywood', 'steel', 'aluminum', 'fiberglass', 'bronze', 'glass', 'upholstery'];
-const DESIGN_MATERIAL_WORDS: [string, RegExp][] = [
-  ['walnut', /walnut|noyer/i], ['teak', /\bteak/i], ['oak', /\boak\b|\bch[eê]ne\b/i], ['rosewood', /rosewood|palissandre/i],
-  ['plywood', /plywood|contreplaqu/i], ['steel', /\bsteel|\bacier\b|t[ôo]le\b|\bmetal\b/i], ['aluminum', /alumin(?:i)?um/i],
-  ['fiberglass', /fib(?:er|re) ?glass|polyester/i], ['bronze', /\bbronze/i], ['glass', /\bglass\b|\bverre\b/i],
-  ['upholstery', /upholster/i],
-];
 
 // Design MODEL vocabulary (Oct 6 2026 audit): the title of a design lot is
 // often only a model code or a series name ("LCW", "DSR", "RKR-1", "ESU 400",
@@ -476,13 +470,6 @@ export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
     let drill: string | null = null;
     const mats = l.materialTokens as string[] | undefined;
     if (Array.isArray(mats)) for (const m of DESIGN_MATERIALS) if (mats.includes(m)) { drill = m; break; }
-    // (wave 3) no material tokens stamped: the material words the title or the
-    // description's head print ("teak, cane and rope", "walnut veneer plywood"),
-    // same priority order as the tokens
-    if (!drill) {
-      const s = `${title} ${descHeadOf(l)}`;
-      for (const [m, re] of DESIGN_MATERIAL_WORDS) if (re.test(s)) { drill = m; break; }
-    }
     return { subCat: designKind(formKey, title, String(l.description || '').slice(0, 300)), drill, flown: null };
   }
 
