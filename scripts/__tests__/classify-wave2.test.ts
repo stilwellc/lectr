@@ -288,8 +288,9 @@ test('class 1 · culture kind reads the description when the title is a bare nam
   assert.equal(K("Daniel Radcliffe's Personally-Owned Signed Shoes"), 'worn-personal');
   assert.equal(K('James Bond: Regin, Nadja Signed Photograph'), 'photos');
   assert.equal(K('Led Zeppelin Multi-Signed DVD Insert Booklet (3 Signatures) - Including Jimmy Page'), 'autographs');
-  // RR documents and cut signatures (rubric: a signed cut is a document)
-  assert.equal(K('Edward Rutledge Signature'), 'documents');
+  // RR documents; a bare '<Name> Signature' lot is an autograph (DEV label majority), a cut signature a document
+  assert.equal(K('Edward Rutledge Signature'), 'autographs');
+  assert.equal(K('Babe Ruth Cut Signature'), 'documents');
   assert.equal(K('Civil War: Confederate Bond'), 'documents');
   assert.equal(K('Henri de Toulouse-Lautrec: Sick with the flu, Lautrec writes his grandmother in early 1890'), 'documents');
   assert.equal(K('PAUL REUBENS PEE-WEE HERMAN SIGNATURE COSTUME'), 'worn-personal');

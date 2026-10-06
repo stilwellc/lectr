@@ -1750,7 +1750,10 @@ function cultItemClassOf(title: string): string {
    "<Name> Book / Program" signed-piece shorthand). */
 const CULT_CARD_RE = CULT_ITEM_RULES[0][0];
 const CULT_KIND_RULES: [RegExp, string][] = [
-  [/\bsigned (?:cut|index card)s?\b|\bcut signatures?\b|(?<!\d\s?)\bsignatures?\b(?!\s+(?:series|edition|model|collection|card|guitar|costume|look|style|suit|dress|hat|outfit|song|sound|move|role|scent|fragrance))/i, 'signed-cut'],
+  // a CUT signature is a document (rubric); a bare "<Name> Signature" lot is an
+  // autograph — the original labels (Audubon, Stalin, Veronica Lake, Woodrow
+  // Wilson) outvote the re-audit's historic ones (Crook, Rutledge) on DEV
+  [/\bsigned (?:cut|index card)s?\b|\bcut signatures?\b/i, 'signed-cut'],
   [/\b(?:checks?|cheques?)\b/i, 'check'],
   [/\b(?:signed|autographed|inscribed)\b.{0,30}\b(?:photo|photos|photograph|photographs|stills?|portraits?|cdvs?|snapshots?)\b|\b(?:photo|photos|photograph|photographs|stills?|portraits?)\b.{0,30}\b(?:signed|inscribed)\b/i, 'signed-photo'],
   // a signed FLAT / retail piece is an autograph (a signed programme, book,
