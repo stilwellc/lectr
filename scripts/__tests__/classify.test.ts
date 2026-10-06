@@ -106,3 +106,22 @@ test('class 3 · sports-house pop-memorabilia → sports kinds; toys/comics evic
   assert.equal(move({ auctionHouse: "Hake's", artist: 'unopened-wax', title: 'TEENAGE MUTANT NINJA TURTLES (1990) - SLUDGEMOBILE VEHICLE IN SEALED BOX.' }), DROP);
   assert.equal(move({ auctionHouse: "Hake's", artist: 'pop-memorabilia', title: 'LARGE I LIKE IKE BLUE PORTRAIT BUTTON.' }), 'pop-memorabilia');
 });
+
+test('class 4 · expansion-house sports kind: card first, game-used needs use language, vintage issues are cards', () => {
+  const X = (artist: string, title: string, house = 'REA') => move({ auctionHouse: house, artist, title });
+  assert.equal(X('autographs', '2016 Bowman Chrome Prospects Red Shimmer Autographed Refractor #CPA-JS Juan Soto #8/10 BGS GEM MINT 9.5 with 1'), 'graded-cards');
+  assert.equal(X('autographs', 'Signed 2003 Donruss Team Heroes #460 Ichiro Suzuki - PSA/DNA'), 'graded-cards');
+  assert.equal(X('autographs', '1939 Play Ball #48 Lefty Gomez Signed - PSA VG 3, PSA/DNA 8 Auto.', 'SCP'), 'graded-cards');
+  assert.equal(X('memorabilia', '1928 Fro-Joy #3 Babe Ruth BVG 2.5', 'Huggins & Scott'), 'graded-cards');
+  assert.equal(X('memorabilia', '172 1911 Zeenut PCL Henry Melchoir - SGC FAIR 20', 'Love of the Game'), 'graded-cards');
+  assert.equal(X('memorabilia', '1933 DeLong Gum #7 Lou Gehrig (HOF) - PSA FR 1.5', 'Love of the Game'), 'graded-cards');
+  assert.equal(X('game-used', 'Phil Rizzuto Autographed Lot of (3) with Jersey, Ball & 8x10 Photo', 'Huggins & Scott'), 'autographs');
+  assert.equal(X('game-used', 'Ty Cobb Vintage 12" Decal Mini-Bat - Rare Decal', 'Memory Lane'), 'memorabilia');
+  assert.equal(X('game-used', '89 Deion Sanders Cincinnati Reds Game Used Baseball Bat', 'Lelands'), 'game-used');
+  // not cards: index cards, photos named with a card maker, card-photos
+  assert.equal(X('autographs', 'Tris Speaker Signed 3x5 Card PSA/DNA MINT 9'), 'autographs');
+  assert.equal(X('type-1-photos', 'Mickey Mantle Signed 16 x 20 Photograph (Upper Deck)'), 'type-1-photos');
+  assert.equal(X('type-1-photos', 'Circa 1940s Babe Ruth Vintage Brown Brothers Photograph PSA/DNA Type IV - Image Used for 1933 Goudey Cards!'), 'type-1-photos');
+  // other houses untouched
+  assert.equal(X('game-used', 'Mickey Mantle Signed Bat - JSA', 'NFL Auction'), 'game-used');
+});

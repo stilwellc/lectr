@@ -56,7 +56,10 @@ const CARD_NO_RE = /#\s?[A-Za-z0-9][A-Za-z0-9/-]*/;
 const CARD_BRAND_RE = /\b(topps|bowman|panini|upper deck|fleer|donruss|goudey|play ball|o-pee-chee|score|pro set|hoops|skybox|prizm|optic|leaf|mosaic|stadium club|pinnacle|finest|metal universe|sp authentic|exquisite|national treasures|flawless|immaculate|kellogg'?s|bazooka|parkhurst|sportflics|playoff|contenders|spectra|obsidian|crown royale|zenith|flair|e-x2000|press pass|tobacco card)\b/i;
 /** the physical OBJECT nouns that make a branded/graded title memorabilia, not a card */
 const CARD_OBJECT_RE = /\b(jerseys?|uniform|bats?|gloves?|cleats|boots|helmet|trunks|shorts|jacket|shoes?|sneakers?|shirt|robe|photo|photograph|(?:signed|official|game|onl|oml|oal|obal|nfl|nba|wilson|spalding|rawlings) (?:base|basket|foot|soccer |golf )?ball|puck|pennant|banner|trophy|ring|belt|ticket|stub|pass|poster|painting|lithograph|display|plaque|bobblehead|statue|program|magazine|letter|check|contract|cut|envelope|cover|bobb(?:ing|in'?|le)[- ]?heads?|statues?|figurines?|miniatures?|pins?|pinbacks?|buttons?|coins?)\b/i;
-const CARD_WORD_RE = /(?<!playing )\bcards?\b(?![- ]used)|\bhand[- ]cut\b/i;
+const CARD_WORD_RE = /(?<!(?:playing|index|business|schedule|cabinet|greeting|christmas|post|place|calling|report|score|signature|membership|id|identification|scorer'?s|admission|pass|program|trade|cigarette pack|souvenir|menu|lobby|title|window|wedding|signed|autographed|3x5|3 x 5|birthday|holiday|ration|draft|war|sympathy|note|recipe) )\bcards?\b(?![- ]used)|\bhand[- ]cut\b/i;
+const FLAT_OBJECT_RE = /\b(?:photos?|photographs?|lithographs?|prints?|posters?|paintings?|canvas|display|framed|plaque|letter|check|contract|magazine)\b/i;
+/** a photo USED for a card ("Image Used for 1933 Goudey Cards!") is a photo */
+const PHOTO_FOR_CARD_RE = /\b(?:photo|photograph|image|negative|artwork)\b[^.]{0,60}\bused (?:for|on|as)\b/i;
 /** card-ish words that only count when no object noun is named ("SGC Encapsulated" also slabs cut signatures) */
 const CARD_WEAK_WORD_RE = /\b(?:psa|sgc|bgs|beckett)[- ]?(?:graded|encapsulated)\b|\bstickers?\b/i;
 const CARD_SET_RE = /\b(?:complete|partial|near[- ]complete|master|team)(?: (?:&|and) partial)? (?:base )?sets?\b|\bset \(\d+/i;
@@ -71,7 +74,12 @@ export const MASS_TOY_RE = /\b(funko|action figures?|carded figure|beanie bab(?:
 export function isCardTitle(title: string | null | undefined): boolean {
   const t = String(title || '');
   if (!t.trim()) return false;
-  if (looksLikeCard(t) || leadsWithSetCode(t) || SHORT_YEAR_SET_CODE_RE.test(t)) return true;
+  if (leadsWithSetCode(t) || SHORT_YEAR_SET_CODE_RE.test(t)) return true;
+  if (PHOTO_FOR_CARD_RE.test(t)) return false;
+  // a photo/print/display named without a card word or number is that object
+  // (looksLikeCard reads "Signed 16 x 20 Photograph (Upper Deck)" as a card)
+  if (FLAT_OBJECT_RE.test(t) && !CARD_WORD_RE.test(t) && !CARD_NO_RE.test(t)) return false;
+  if (looksLikeCard(t)) return true;
   if (CARD_WORD_RE.test(t)) return true;
   const obj = CARD_OBJECT_RE.test(t);
   if (CARD_WEAK_WORD_RE.test(t) && !obj) return true;
@@ -95,7 +103,7 @@ export function isCardTitle(title: string | null | undefined): boolean {
 // ═══════════════════════════════════════════════════════════════════════════
 export const SEALED_RE = /\b(unopened|factory[- ]sealed|sealed (?:box|case|pack)(?:e?s)?|wax (?:pack|box|case)(?:e?s)?|hobby (?:box|case)(?:e?s)?|blaster(?: box(?:es)?)?|cello (?:pack|box)(?:e?s)?|rack (?:pack|box)(?:e?s)?|jumbo (?:pack|box)(?:e?s)?|vending (?:box|case)(?:e?s)?|fat packs?|booster (?:box|pack)(?:e?s)?)\b/i;
 /** EXPLICIT use language — a jersey is not game-used because it is a jersey */
-export const GAME_USED_RE = /\b(game[- ]?(?:used|worn|issued)|match[- ]?(?:used|worn|issued)|player[- ]?worn|team[- ]?issued|fight[- ]?worn|tour(?:nament)?[- ]?(?:used|worn)|race[- ]?(?:used|worn)|warm[- ]?up[- ]?worn|practice[- ]?(?:worn|used)|bench[- ]?worn|photo[- ]?match(?:ed)?|gamer|mears|meigray|worn by|used by)\b/i;
+export const GAME_USED_RE = /\b(game[- ]?(?:used|worn|issued)|match[- ]?(?:used|worn|issued)|player[- ]?worn|team[- ]?issued|fight[- ]?worn|tour(?:nament)?[- ]?(?:used|worn)|race[- ]?(?:used|worn)|warm[- ]?up[- ]?worn|practice[- ]?(?:worn|used)|bench[- ]?worn|event[- ]?worn|psa\/dna gu \d+|photo[- ]?match(?:ed)?|gamer|mears|meigray|worn by|used by)\b/i;
 const TROPHY_RE = /\b(trophy|trophies|awards?|awarded|championship rings?|world series rings?|super bowl rings?|title belt|winners?'? medal|olympic (?:gold |silver |bronze )?medal|mvp award|heisman|plaque award|presentational ring|(?:final four|championship|title|world series|super bowl|pennant|all-star|league) rings?|presented to)\b/i;
 const TICKET_RE = /\b(tickets?|stubs?|full ticket|season pass|press pass(?! (?:cards?|#))|credentials?|all[- ]access pass)\b/i;
 const TYPE1_RE = /\b(type (?:1|i|one)\b|type-1|original (?:news service |wire |press )?photo(?:graph)?|wire photo|press photo|news service photo)\b/i;
@@ -162,6 +170,27 @@ export function sportsHousePopKind(title: string | null | undefined): string | n
   if (/\b(?:tickets?|stubs?)\b/i.test(t)) return 'tickets-passes';
   if (isCardTitle(t)) return 'graded-cards';
   return sportsObjectKind(t, 'memorabilia');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4 · SPORTS KIND AT THE EXPANSION HOUSES — classifySports tested autograph
+// before card and called any jersey|bat|glove|helmet|worn 'game-used'. A
+// signed card is a CARD (it comps as one); a signed retail bat is an
+// AUTOGRAPH. Card first; game-used only with explicit use language.
+// ═══════════════════════════════════════════════════════════════════════════
+const NON_CARD_SPORT_SLUGS = new Set(['autographs', 'memorabilia', 'game-used', 'equipment-artifacts', 'type-1-photos', 'trophies-awards', 'programs-publications', 'tickets-passes']);
+/** pro-model bats and graded GU stay game-used — the trade treats them as gamers */
+const PRO_MODEL_RE = /\b(?:pro(?:fessional)?[- ]model|\bgu \d)\b/i;
+
+export function expansionSportsKind(l: ClassifyLot): string | null {
+  if (!SPORTS_EXPANSION_HOUSES.has(l.auctionHouse || '') || !NON_CARD_SPORT_SLUGS.has(l.artist)) return null;
+  const t = String(l.title || '');
+  if (COMIC_RE.test(t) && !SPORT_WORD_RE.test(t)) return DROP;
+  if (!SEALED_RE.test(t) && isCardTitle(t)) return 'graded-cards';
+  if (l.artist === 'game-used' && !GAME_USED_RE.test(t) && !(PRO_MODEL_RE.test(t) && !SIGNED_RE.test(t))) {
+    return sportsObjectKind(t, 'memorabilia');
+  }
+  return null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -233,6 +262,7 @@ export const RECLASS_RULES: ReclassRule[] = [
       return sportsHousePopKind(l.title);
     },
   },
+  { cls: 'sports-kind-card-first-gu-language', apply: expansionSportsKind },
 ];
 
 /** Category rules: same contract, but they return the corrected CATEGORY. */

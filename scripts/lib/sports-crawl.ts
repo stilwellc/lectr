@@ -15,7 +15,7 @@ import { fxRateFor, toUsdDated } from '../../app/lib/normalize';
 import { readSegment, writeSegment } from '../corpus-io';
 import type { PriceBasis, Currency, AuctionLot } from '../../app/types';
 import { leadsWithSetCode } from './set-codes';
-import { NON_SPORT_RE, SPORT_WORD_RE } from './classify';
+import { NON_SPORT_RE, SPORT_WORD_RE, GAME_USED_RE, isCardTitle } from './classify';
 
 // Nightly crawls a BOUNDED window; the segment must ACCUMULATE. Read the last-
 // good segment, union the fresh lots over it (fresh id wins), write the union.
@@ -331,8 +331,13 @@ export function classifySports(catLabel: string, title: string): SportsCategory 
   // follows — "T206 … with Bat" must not fall into game-used below (Sep 27 audit:
   // ~13k pre-war cards filed as memorabilia/game-used). See set-codes.ts.
   if (leadsWithSetCode(title)) return 'graded-card';
+  // CARD FIRST (Oct 6 2026 audit): a signed card is a card, never an autograph
+  // or game-used lot — the shared routing detector (classify.ts isCardTitle).
+  if (isCardTitle(title)) return 'graded-card';
   if (/\b(ticket|stub|pass|full ticket)\b/.test(both)) return 'ticket';
-  if (/\b(game[- ]?used|game[- ]?worn|match[- ]?worn|player[- ]?worn|jersey|bat|glove|cleats|helmet|worn)\b/.test(both)) return 'game-used';
+  // game-used needs explicit USE language — a jersey/bat/helmet alone is a
+  // retail or signed item (5.5k signed bats/jerseys were filed game-used)
+  if (GAME_USED_RE.test(both)) return 'game-used';
   if (/\b(trophy|award|ring|medal|championship ring|mvp)\b/.test(both)) return 'trophy-award';
   if (/\b(type (1|i|one)|type-1|photograph|original photo|wire photo|press photo)\b/.test(both)) return 'photograph';
   if (/\b(program|yearbook|magazine|publication|pennant|scorecard)\b/.test(both)) return 'program-publication';
