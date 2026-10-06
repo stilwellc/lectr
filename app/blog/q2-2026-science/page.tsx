@@ -1,12 +1,11 @@
 import type { Metadata } from 'next';
-import { withShare } from '../../lib/og-meta';
 import QuarterInsight, { P, H, B } from '../../components/blog/QuarterInsight';
 import { PullQuote } from '../../components/blog/Editorial';
 
-export const metadata: Metadata = withShare({
+export const metadata: Metadata = {
   title: 'Q2 2026 science market in review — instruments and space, between the seasons',
   description: 'A pair of George IV globes on top of the cleaned instrument tape, an Aldrin-shot Apollo 11 photograph leading the space lots, and demand — not a fabricated return — doing the talking. Space and fossils run hot, meteorites soft. Science’s Q2, honestly reported off a de-polluted tape.',
-});
+};
 
 export default function Q2Science() {
   return (

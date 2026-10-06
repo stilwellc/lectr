@@ -8,12 +8,12 @@ import Masthead, { Accent } from '../../components/Masthead';
    ~680px measure, light display head, quiet sentence-case kickers. */
 const wrap: React.CSSProperties = { maxWidth: 728, margin: '0 auto', padding: '0 24px' };
 const p: React.CSSProperties = { fontSize: 17, lineHeight: 1.65, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
-const strong: React.CSSProperties = { color: 'var(--color-fg)', fontWeight: 500 };
+const strong: React.CSSProperties = { color: 'var(--color-fg)', fontWeight: 600 };
 
 /* the register head goes light — the masthead's inline 640 weight needs the
    later-in-cascade important to yield (same pattern as the blog index) */
 const HEAD_CSS = `
-.ray-blog-head .ray-masthead-h1{font-weight: 300 !important;letter-spacing:-0.02em !important;font-size:clamp(34px,4.6vw,44px) !important;line-height:1.08 !important}
+.ray-blog-head .ray-masthead-h1{font-weight:320 !important;letter-spacing:-0.02em !important;font-size:clamp(34px,4.6vw,44px) !important;line-height:1.08 !important}
 @media (max-width:480px){.ray-blog-head .ray-masthead-h1{font-size:clamp(28px,8vw,34px) !important}}
 `;
 

@@ -1,14 +1,13 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRayData } from '../hooks/useRayData';
-import { fetchSettledFlags, isApiUnavailable } from '../lib/api';
+import { useFullLotsOnDemand, retryFullLoad } from '../hooks/useRayData';
 import { markFallbackProjections } from '../lib/page-data';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon } from '../components/Terminal';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
-import Masthead from '../components/Masthead';
+import Masthead, { Accent } from '../components/Masthead';
 import Flick from '../components/Flick';
 import { lotSignal } from '../components/LotCard';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, overEstimatePct } from '../utils';
@@ -31,9 +30,8 @@ import type { AuctionLot } from '../types';
    the flag was stamped in the nightly data before the sale.
 
    Honesty rules: a metric prints only past its n-gate (the
-   gate is stated, not hidden); green/red ONLY for the market's
-   direction (hammer vs estimate) — an engine miss is neutral ink
-   with its size; the two records never sum together.
+   gate is stated, not hidden); green/red only on measured
+   outcomes; the two records never sum together.
    ============================================================ */
 
 interface ReceiptRow {
@@ -52,35 +50,6 @@ interface CallsRecord {
 }
 interface ReceiptsFile { record: CallsRecord; rows: ReceiptRow[]; generatedAt: string }
 
-/** THE MISS READ (Oct 3 2026). A call's error is the ENGINE being wrong, not
-    the market moving — so it prints in neutral ink, as a size (|error|) in a
-    band, never in the up/down green/red that this site reserves for the
-    market's own direction (hammer vs estimate). A +7,315% row used to print
-    GREEN, which read as a win; it is a 74× miss. */
-type MissBand = 'close' | 'off' | 'miss';
-function missRead(call: number, hammer: number): { band: MissBand; text: string; title: string } {
-  const ratio = hammer / call;
-  const err = Math.abs(ratio - 1);
-  const band: MissBand = err <= 0.15 ? 'close' : err <= 0.4 ? 'off' : 'miss';
-  const dir = ratio >= 1 ? 'over' : 'under';
-  const times = ratio >= 1 ? ratio : 1 / ratio;
-  const text = Math.round(err * 100) === 0
-    ? 'on the call'
-    : times >= 2
-      ? `${times >= 10 ? Math.round(times).toLocaleString() : times.toFixed(1)}× ${dir}`
-      : `${Math.round(err * 100)}% ${dir}`;
-  const bandWord = band === 'close' ? 'within 15% of the call' : band === 'off' ? 'off by 15–40%' : 'missed by more than 40%';
-  return { band, text, title: `Hammered ${dir} the call — ${bandWord}` };
-}
-const MISS_LABEL: Record<MissBand, string> = { close: 'close', off: 'off', miss: 'miss' };
-// neutral ink only: weight carries the band, never hue
-const MISS_STYLE: Record<MissBand, React.CSSProperties> = {
-  close: { color: 'var(--color-fg)', fontWeight: 500 },
-  off: { color: 'var(--color-text-secondary)', fontWeight: 500 },
-  miss: { color: 'var(--color-text-muted)', fontWeight: 500 },
-};
-const KIND_PLAIN: React.CSSProperties = { textTransform: 'none', letterSpacing: 0, fontFamily: 'var(--font-sans), sans-serif', fontSize: 10.5 };
-
 export default function ReceiptsPage() {
   // LAZY CORPUS (Sep 2026 perf pass). Everything on this page except the
   // Settled-flags tape — the forward ledger (receipts.json, 1KB), the replayed
@@ -88,20 +57,8 @@ export default function ReceiptsPage() {
   // section 3 reads the sold corpus, so the corpus now opens on the reader's
   // ask (see the block below) instead of streaming at first paint. Measured:
   // 256.4MB → 10.8-11.0MB before network idle.
-  const { allLots, lastCrawl, loading, backtest, market } = useRayData();
-  // THE SETTLED FLAGS come from the lot API (/api/settled-flags — the nightly
-  // picks every stamped Below Market lot that has since priced, newest first;
-  // a few KB). No corpus to wait on, so they load with the page.
-  const [flagRows, setFlagRows] = useState<AuctionLot[] | null>(null);
-  const [fullError, setFullError] = useState(false);
-  const [unavailable, setUnavailable] = useState(false);
-  const fullLoaded = flagRows !== null;
-  const requestFullLots = useCallback(() => {
-    setFullError(false);
-    fetchSettledFlags().then(r => setFlagRows(r), e => { if (isApiUnavailable(e)) setUnavailable(true); else setFullError(true); });
-  }, []);
-  const retryFullLoad = requestFullLots;
-  useEffect(() => { requestFullLots(); }, [requestFullLots]);
+  const { allLots, lastCrawl, loading, fullLoaded, fullError, fullRequested, requestFullLots, backtest, market } =
+    useFullLotsOnDemand(false);
 
   const [tape, setTape] = useState<ReceiptsFile | null | 'missing'>(null);
   useEffect(() => {
@@ -136,7 +93,7 @@ export default function ReceiptsPage() {
   const settledFlags = useMemo(() => {
     if (!fullLoaded) return [];
     const today = localToday();
-    return (flagRows || [])
+    return (allLots as AuctionLot[])
       .filter(l => (l.priceUsd || 0) > 0 && (l.saleDate || '').slice(0, 10) < today)
       .map(l => ({ l, sig: l.signal ?? null }))
       .filter((x): x is { l: AuctionLot; sig: NonNullable<AuctionLot['signal']> } =>
@@ -144,7 +101,7 @@ export default function ReceiptsPage() {
       .sort((a, b) => (b.l.saleDate || '').localeCompare(a.l.saleDate || ''))
       .slice(0, 20)
       .map(({ l, sig }) => ({ l, sig, vsEst: overEstimatePct(l) }));
-  }, [flagRows, fullLoaded]);
+  }, [allLots, fullLoaded]);
 
   const F = backtest?.flagged;
   const U = backtest?.unflagged;
@@ -163,14 +120,11 @@ export default function ReceiptsPage() {
             <Masthead
               kicker="The record"
               serial={lastCrawl || undefined}
-              title={record
-                ? <>{(record.card.graded + record.vsbid.graded + (record.gap?.graded ?? 0) + (record.quiet?.graded ?? 0)).toLocaleString()} calls logged before the sale, graded at the hammer.</>
-                : <>Calls logged before the sale, graded at the hammer.</>}
+              title={<>Every call, <Accent>graded</Accent> against the hammer.</>}
               sub={
                 <>
-                  The house prints an estimate; lectr prints where the hammer will land. Every call is logged the
-                  night the engine makes it — append-only, first call wins — then judged when the lot actually sells.
-                  Misses print as misses: how far off, never in the market&rsquo;s green or red.
+                  A call is logged the night the engine makes it — append-only, first call wins —
+                  then judged when the lot actually sells. What we said before, against what happened.
                 </>
               }
             />
@@ -265,10 +219,10 @@ export default function ReceiptsPage() {
                     <span>Work</span>
                     <span style={{ textAlign: 'right' }}>The call</span>
                     <span style={{ textAlign: 'right' }}>The hammer</span>
-                    <span style={{ textAlign: 'right' }}>How far off</span>
+                    <span style={{ textAlign: 'right' }}>vs call</span>
                   </div>
                   {rows.slice(0, 60).map(r => {
-                    const miss = missRead(r.p, r.r);
+                    const delta = Math.round((r.r / r.p - 1) * 100);
                     return (
                       <Link key={`${r.id}|${r.k}`} href={`/lot?id=${encodeURIComponent(r.id)}`} className="rcp-cols rcp-row">
                         <span className="rcp-date">{r.sd ? formatDate(r.sd) : '—'}</span>
@@ -282,10 +236,9 @@ export default function ReceiptsPage() {
                           : `Bid projection, logged ${r.d}${r.f ? ` · floor ${formatPrice(r.f)}` : ''}`}>
                           {formatPrice(r.p)}<span className="rcp-kind">{({ card: 'comps', vsbid: 'proj', gap: 'gap', quiet: 'quiet' } as const)[r.k] || r.k}</span>
                         </span>
-                        <span className="rcp-num" style={{ fontWeight: 500 }}>{formatPrice(r.r)}</span>
-                        <span className="rcp-num" style={MISS_STYLE[miss.band]} title={miss.title}>
-                          {miss.text}
-                          <span className="rcp-kind" style={KIND_PLAIN}>{MISS_LABEL[miss.band]}</span>
+                        <span className="rcp-num" style={{ fontWeight: 600 }}>{formatPrice(r.r)}</span>
+                        <span className="rcp-num" style={{ color: delta > 0 ? 'var(--color-up)' : delta < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 600 }}>
+                          {fmtSignedPct(delta)}
                         </span>
                       </Link>
                     );
@@ -303,11 +256,9 @@ export default function ReceiptsPage() {
                 </div>
                 <div className="rcp-tiles">
                   <div className="rcp-tile">
-                    <span className="kicker">Lots the engine flagged</span>
-                    {/* hammer vs the house estimate IS the market's own
-                        direction — the one place up/down color belongs */}
-                    <span className="rcp-fig" style={{ color: F.medianPerfPct > 0 ? 'var(--color-up)' : F.medianPerfPct < 0 ? 'var(--color-down-text)' : undefined }}>{fmtSignedPct(F.medianPerfPct)}</span>
-                    <span className="rcp-sub">realized vs the house estimate, median — flagged lots get bid up past the estimate · {F.n.toLocaleString()} settled flags · hammer-only {fmtSignedPct(F.hammerMedianPct ?? 0)}</span>
+                    <span className="kicker">Flagged below market</span>
+                    <span className="rcp-fig" style={{ color: 'var(--color-up)' }}>{fmtSignedPct(F.medianPerfPct)}</span>
+                    <span className="rcp-sub">realized vs estimate, median · {F.n.toLocaleString()} settled flags · hammer-only {fmtSignedPct(F.hammerMedianPct ?? 0)}</span>
                   </div>
                   <div className="rcp-tile">
                     <span className="kicker">Everything unflagged</span>
@@ -326,21 +277,32 @@ export default function ReceiptsPage() {
                 also the page's cheapest content to defer: at most 20 rows of
                 already-settled history, against the whole sold book. So it
                 opens on the ask — home's "Show the archive" pattern — instead
-                of streaming the corpus at first paint. (Oct 2026: the lot API
-                answers it in a few KB, so it now loads with the page.)
+                of streaming the corpus at first paint. Nothing is withheld:
+                the head, the promise and the button are always printed, and
+                the tape is one click away.
 
                 HONESTY: the list is `fullLoaded`-gated, never drawn from a
                 half-arrived corpus — a settled-flags tape missing shards is a
                 silently short record, not a slow one. */}
-            <div className="rcp-block ray-enter" style={{ paddingBottom: 48 }} aria-busy={!fullLoaded && !fullError && !unavailable ? true : undefined}>
+            <div className="rcp-block ray-enter" style={{ paddingBottom: 48 }} aria-busy={fullRequested && !fullLoaded ? true : undefined}>
               <div className="rcp-head">
                 <span className="kicker">Recently settled flags · the signal was in the nightly data before the sale</span>
                 <i className="rcp-rule" />
               </div>
 
-              {unavailable ? (
+              {!fullRequested ? (
                 <p className="rcp-note">
-                  The settled flags read the sold archive, which isn&rsquo;t available yet &mdash; it opens once tonight&rsquo;s index is published.
+                  Every lot that carried a Below Market flag while live and has since hammered, judged against its
+                  estimate. Reading them means loading the full sold book, so it waits to be asked for.{' '}
+                  <button
+                    type="button"
+                    className="rcp-link"
+                    aria-expanded={false}
+                    style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer' }}
+                    onClick={requestFullLots}
+                  >
+                    Show the settled flags <Flick size={9} />
+                  </button>
                 </p>
               ) : fullError && !fullLoaded ? (
                 <p className="rcp-note">
@@ -394,9 +356,9 @@ export default function ReceiptsPage() {
                       <Link key={l.id} href={`/lot?id=${encodeURIComponent(l.id)}`} className="rcp-cols rcp-row">
                         <span className="rcp-date">{formatDate(l.saleDate)}</span>
                         <span className="rcp-work"><b>{ARTIST_LABEL[l.artist] || l.artist}</b> {craftTitle(l.title)}</span>
-                        <span className="rcp-num" style={{ color: 'var(--color-text-secondary)' }}>+{Math.abs(Math.round(sig.pct))}%<span className="rcp-kind" style={KIND_PLAIN}>comps vs est.</span></span>
-                        <span className="rcp-num" style={{ fontWeight: 500 }}>{formatPrice(l.priceUsd!)}</span>
-                        <span className="rcp-num" style={vsEst != null ? { color: vsEst > 0 ? 'var(--color-up)' : vsEst < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 500 } : { color: 'var(--color-text-faint)' }}>
+                        <span className="rcp-num" style={{ color: 'var(--color-up)' }}>+{Math.abs(Math.round(sig.pct))}%<span className="rcp-kind">vs comps</span></span>
+                        <span className="rcp-num" style={{ fontWeight: 600 }}>{formatPrice(l.priceUsd!)}</span>
+                        <span className="rcp-num" style={vsEst != null ? { color: vsEst > 0 ? 'var(--color-up)' : vsEst < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 600 } : { color: 'var(--color-text-faint)' }}>
                           {vsEst != null ? fmtSignedPct(Math.round(vsEst)) : '—'}
                         </span>
                       </Link>

@@ -263,11 +263,7 @@ export default function HeroChart({
       onPointerMove={onMove}
       onPointerLeave={onLeave}
       role="img"
-      // the name carries the reading, not just the title — a screen reader
-      // hears what a sighted reader sees at the right edge (axe pass, Oct 3)
-      aria-label={anchor.points.length
-        ? `${anchor.label}, ${anchor.points[0].period} to ${anchor.points[anchor.points.length - 1].period}; latest ${fmtVal(anchor.points[anchor.points.length - 1].value, anchor.unit)}`
-        : `${anchor.label} chart`}
+      aria-label={`${anchor.label} chart`}
     >
       {/* ── MAIN STAGE ── */}
       <svg viewBox={`0 0 ${W} ${height}`} className={styles.hcSvg} style={{ height }} width={W} height={height}>

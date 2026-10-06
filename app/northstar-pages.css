@@ -24,7 +24,7 @@
 }
 .nsp-h1 {
   font-size: clamp(32px, 4.6vw, 52px);
-  font-weight: 300;
+  font-weight: 320;
   letter-spacing: -0.025em;
   line-height: 1.06;
   color: var(--color-fg);
@@ -54,7 +54,7 @@
   margin: 12px 0 8px;
 }
 .nsp-read .ns-cell-label { font-size: 13px; }
-.nsp-read .ns-cell-body { font-size: 13.5px; font-weight: 500; line-height: 1.5; max-width: 44ch; }
+.nsp-read .ns-cell-body { font-size: 13.5px; font-weight: 450; line-height: 1.5; max-width: 44ch; }
 
 /* ── sections: registration plate + quiet kicker + light headline ── */
 .nsp-section { margin-top: 40px; }
@@ -65,7 +65,7 @@
 .nsp-shead .ns-kicker { margin-bottom: 4px; }
 .nsp-h2 {
   font-size: clamp(20px, 2.3vw, 24px);
-  font-weight: 400;
+  font-weight: 350;
   letter-spacing: -0.02em;
   line-height: 1.15;
   color: var(--color-fg);
@@ -80,7 +80,7 @@
 .nsp-lk .t { color: var(--color-fg); }
 .nsp-lsub { font-size: 11px; color: var(--color-text-faint); margin-left: 8px; white-space: nowrap; }
 .nsp-lval { display: flex; align-items: baseline; justify-content: flex-end; gap: 10px; flex: none; text-align: right; }
-.nsp-lv { font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--color-fg); white-space: nowrap; }
+.nsp-lv { font-size: 13.5px; font-weight: 550; font-variant-numeric: tabular-nums; color: var(--color-fg); white-space: nowrap; }
 .nsp-lv.mono { font-family: var(--font-mono), monospace; font-weight: 500; }
 .nsp-lv.up { color: var(--color-up); }
 .nsp-lv.down { color: var(--color-down-text); }
@@ -88,7 +88,7 @@
 /* ── comp rows (LOTPAGE_CSS grammar) re-voiced: dotted, no serif ──── */
 .nsp-doss .lectr-lot-comp { border-bottom: 1px dotted var(--color-border-mid); }
 .nsp-doss .lectr-lot-comp-title { font-weight: 500; }
-.nsp-doss .lectr-lot-comp-p { font-weight: 500; }
+.nsp-doss .lectr-lot-comp-p { font-weight: 550; }
 .nsp-doss .lectr-lot-comp-thumb { border-color: var(--hairline); }
 .nsp-doss .lectr-lot-comp-thumb span {
   font-family: var(--font-sans), sans-serif; font-weight: 400; font-size: 15px;
@@ -114,7 +114,7 @@
 /* ── empty / loading states ───────────────────────────────────────── */
 .nsp-empty { padding-block: 80px; text-align: center; box-sizing: border-box; }
 .nsp-empty h1 {
-  font-size: clamp(26px, 4vw, 36px); font-weight: 300; letter-spacing: -0.02em;
+  font-size: clamp(26px, 4vw, 36px); font-weight: 340; letter-spacing: -0.02em;
   color: var(--color-fg); margin: 0 0 10px;
 }
 .nsp-empty p { color: var(--color-text-muted); font-size: 14px; margin: 0; line-height: 1.6; }
@@ -156,7 +156,7 @@ a.nsp-more:hover { color: var(--color-fg); }
 .nsp-modal-title {
   font-family: var(--font-sans), sans-serif;
   font-size: clamp(20px, 2.4vw, 24px);
-  font-weight: 300;
+  font-weight: 340;
   letter-spacing: -0.02em;
   line-height: 1.15;
   margin: 0 0 6px;

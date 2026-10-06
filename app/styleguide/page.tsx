@@ -45,7 +45,7 @@ export default function Styleguide() {
         <Room title="Type" note="authority through lightness — display never exceeds 400">
           <div style={{ display: 'grid', gap: 14 }}>
             <span style={{ fontSize: 52, fontWeight: 300, letterSpacing: '-0.02em', lineHeight: 1.06 }}>Display 300 · the page statement</span>
-            <span style={{ fontSize: 30, fontWeight: 400, letterSpacing: '-0.025em' }}>Room head 400 · .ray-h2</span>
+            <span style={{ fontSize: 30, fontWeight: 350, letterSpacing: '-0.025em' }}>Room head 350 · .ray-h2</span>
             <span className="ns-kicker" style={{ marginBottom: 0 }}>The kicker — quiet gray, sentence case, never tracked</span>
             <span style={{ fontSize: 15, lineHeight: 1.6, color: 'var(--color-text-secondary)', maxWidth: 560 }}>
               Body secondary at 15/1.6 — the reading voice. Numerals that count money ride the mono register:{' '}

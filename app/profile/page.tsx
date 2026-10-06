@@ -3,9 +3,7 @@
 import React, { useMemo, useCallback, useEffect, useLayoutEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
-import { retrySoldLedger, useRayData, useSoldLedger, type LedgerEntry } from '../hooks/useRayData';
-import { useSavedBook } from '../hooks/useSavedBook';
-import type { ApiLotPack } from '../lib/api';
+import { retryFullLoad, retrySoldLedger, useFullLotsOnDemand, useSoldLedger, type LedgerEntry } from '../hooks/useRayData';
 import { useSavedLots, SavedMeta } from '../hooks/useSavedLots';
 import { signalCallOf } from '../lib/account';
 import { useAuth } from '../lib/account';
@@ -14,7 +12,7 @@ import { useCollectionSnapshots } from '../lib/snapshots';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon, daysUntil as daysUntilOrNull } from '../components/Terminal';
 import LotCard, { lotSignal, formatEstimate, LiveStamp } from '../components/LotCard';
-import { dealScore } from '../lib/comps';
+import { appraiseLot, dealScore, soldCompBand, isSportsScienceObject, scienceReferenceBand, cultureReferenceBand, makerReferenceBand } from '../lib/comps';
 import { drillRowFor, drillSlugFor, type DrillRow } from '../lib/submarkets';
 import { sleeperRead } from '../lib/lanes';
 import HeroChart from '../preview/terminal/HeroChart';
@@ -22,8 +20,6 @@ import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import CountUp from '../components/CountUp';
 import Masthead, { Accent } from '../components/Masthead';
 import AlertsInbox from '../components/AlertsInbox';
-import PushOptIn from '../components/retention/PushOptIn';
-import ProCard from '../components/retention/ProCard';
 import Flick from '../components/Flick';
 import CloseClock from '../components/CloseClock';
 import { AwayMark, ReadsMark, WatchMark, RecordMark, CollectionMark, TapeMark, ArchiveMark, HorizonMark } from '../components/marks';
@@ -183,7 +179,7 @@ function CallCell({ meta }: { meta: SavedMeta | undefined }) {
     );
   }
   return (
-    <span className="num" style={{ color: call.dir === 'below' ? 'var(--color-up)' : 'var(--color-down-text)', fontWeight: 500 }}>
+    <span className="num" style={{ color: call.dir === 'below' ? 'var(--color-up)' : 'var(--color-down-text)', fontWeight: 600 }}>
       {call.dir === 'below' ? '+' : '−'}{Math.round(call.pct)}%
     </span>
   );
@@ -259,11 +255,11 @@ function PieceEditor({ paid, note, onSave, onClose }: {
     the cards view buried (the saved-delta narrative, the engine read with
     its basis, the live bid state) without leaving the ledger. Mounted only
     while open, so collapsed rows keep zero of its links in the tab order. */
-function RowDossier({ lot, meta, sig, appr, onRemove }: {
+function RowDossier({ lot, meta, sig, allLots, fullLoaded, onRemove }: {
   lot: AuctionLot; meta: SavedMeta | undefined; sig: LiveSignal | null;
-  /** the lot API's appraisal (/api/comps) — null until it answers */
-  appr: ApiLotPack['ap'] | null; onRemove: () => void;
+  allLots: AuctionLot[]; fullLoaded: boolean; onRemove: () => void;
 }) {
+  const appr = useMemo(() => (fullLoaded ? appraiseLot(lot, allLots) : null), [fullLoaded, lot, allLots]);
   const call = signalCallOf(meta);
   const days = daysUntil(lot.saleDate);
   const hasEst = (lot.estimateLow || 0) > 0 || (lot.estimateHigh || 0) > 0;
@@ -443,8 +439,8 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
           {meta?.estMid != null ? <>{formatPrice(meta.estMid)}<span className="sub">at save</span></> : '—'}
         </span>
         <CallCell meta={meta} />
-        <span className="num" style={{ fontWeight: 500 }}>{price}</span>
-        <span className="num" style={vsSaveEst != null ? { color: vsSaveEst > 0 ? 'var(--color-up)' : vsSaveEst < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 500 } : { color: 'var(--color-text-faint)' }}
+        <span className="num" style={{ fontWeight: 600 }}>{price}</span>
+        <span className="num" style={vsSaveEst != null ? { color: vsSaveEst > 0 ? 'var(--color-up)' : vsSaveEst < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 700 } : { color: 'var(--color-text-faint)' }}
           title={vsSaveEst != null ? 'vs the estimate at save — all-in price against the estimate midpoint' : 'No estimate on file — outside the vs-est median'}>
           {vsSaveEst != null ? <>{fmtSignedPct(vsSaveEst)}<span className="sub">vs est at save</span></> : '—'}
         </span>
@@ -513,10 +509,10 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
       </span>
       <span className="num">{formatEstimate(lot) || '—'}</span>
       <CallCell meta={meta} />
-      <span className="num" style={{ fontWeight: 500 }}>
+      <span className="num" style={{ fontWeight: 600 }}>
         {pending ? <span style={{ color: 'var(--color-text-faint)', fontWeight: 500 }}>pending</span> : formatPrice(lot.priceUsd!)}
       </span>
-      <span className="num" style={pct != null ? { color: pct > 0 ? 'var(--color-up)' : pct < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 500 } : { color: 'var(--color-text-faint)' }}>
+      <span className="num" style={pct != null ? { color: pct > 0 ? 'var(--color-up)' : pct < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 700 } : { color: 'var(--color-text-faint)' }}>
         {pct != null ? fmtSignedPct(Math.round(pct)) : '—'}
       </span>
       <span style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
@@ -547,13 +543,8 @@ export default function SavedPage() {
   // every figure below is already `fullLoaded`-gated, and a saved lot must
   // never resolve against half a corpus and be printed as an orphan.
   const deskNeedsCorpus = savedReady && (savedIds.length > 0 || ownedIds.length > 0);
-  // THE DESK'S BOOK (Oct 2026): exactly the saved rows + their comp reads,
-  // from the lot API (useSavedBook) — never the corpus. fullLoaded / fullError
-  // keep their meaning for every gate below: "the saves are resolved and
-  // appraised" / "part of that failed" (retry).
-  const { allLots: eagerLots, lastCrawl, loading, fromCache, market: marketData } = useRayData();
-  const book = useSavedBook([...savedIds, ...ownedIds], idAliases, eagerLots, deskNeedsCorpus);
-  const { lots: allLots, packs, loaded: fullLoaded, error: fullError, retry: retryFullLoad } = book;
+  const { allLots, lastCrawl, loading, fullLoaded, fullError, fromCache, market: marketData } =
+    useFullLotsOnDemand(deskNeedsCorpus);
   const { unseen: unseenAlerts } = useAlerts();
 
   const [savedView, setSavedView] = useState<SavedView>('ledger');
@@ -748,18 +739,18 @@ export default function SavedPage() {
         const m = metaFor(l.id);
         // YOUR number first: the recorded cost basis beats the hammer price
         const paid = m?.paidUsd ?? (l.priceUsd || null);
-        // the lot API's reads over this lot's own pool (/api/comps)
-        const pk = packs.get(l.id);
-        const appr = pk?.ap ?? null;
-        const band = !appr && pk?.b ? pk.b : null;
+        const appr = appraiseLot(l, allLots);
+        const band = !appr && isSportsScienceObject(l) ? soldCompBand(l, allLots) : null;
         const appraised = appr?.value ?? band?.median ?? null;
         const basis = appr ? `${appr.n} comps` : band ? `${band.n} realized comps` : null;
         let refRange: string | null = null;
         if (appraised == null && fullLoaded) {
-          // domain reference tiers first (science/culture: pack.r); then the
-          // maker band — a unique work reads against the maker's own sold
-          // record for the same form (pack.mr)
-          const rb = (pk?.r ?? null) ?? (pk?.mr ?? null);
+          const mkt = ARTIST_MARKET[l.artist];
+          // domain reference tiers first; then the maker band — a unique work
+          // reads against the maker's own sold record for the same form
+          const rb = (mkt === 'science' ? scienceReferenceBand(l, allLots)
+            : mkt === 'culture' ? cultureReferenceBand(l, allLots) : null)
+            ?? makerReferenceBand(l, allLots);
           if (rb) {
             refRange = rb.scope
               ? `${ARTIST_LABEL[l.artist] || l.artist} ${rb.scope} reference ${formatPrice(rb.q1)}–${formatPrice(rb.q3)} · ${rb.n} sales`
@@ -795,7 +786,7 @@ export default function SavedPage() {
     const appraisedOfPaid = rows.reduce((s, r) => s + (r.paid != null ? (r.appraised ?? r.paid) : 0), 0);
     const deltaPct = totalPaid > 0 ? Math.round((appraisedOfPaid / totalPaid - 1) * 100) : null;
     return { rows, totalPaid, totalAppraised, deltaPct };
-  }, [savedLots, ownedLotIds, packs, fullLoaded, marketData, soldOrphans, ownedIdSet, savedMeta, metaFor, savedIdOf]);
+  }, [savedLots, ownedLotIds, allLots, fullLoaded, marketData, soldOrphans, ownedIdSet, savedMeta, metaFor, savedIdOf]);
 
   /* ── sub-market exposure — the MARKET's read, labeled as such ── */
   const exposure = useMemo(() => {
@@ -937,7 +928,7 @@ export default function SavedPage() {
           });
           found++;
         } else {
-          const a = packs.get(l.id)?.ap;
+          const a = appraiseLot(l, allLots);
           if (a && a.kind === 'edition' && a.n >= 3) {
             rows.push({
               key: `dc-${claim(l).id}`, tag: 'Direct comps', lot: l,
@@ -968,7 +959,7 @@ export default function SavedPage() {
       });
     }
     return rows.slice(0, 8);
-  }, [upcoming, packs, fullLoaded, signalById]);
+  }, [upcoming, allLots, fullLoaded, signalById]);
 
   /* ── THE ROOM — the watching ledger with the brief fused in: every row
      carries its reason tag and the ledger sorts action-first. ── */
@@ -1288,7 +1279,7 @@ export default function SavedPage() {
                     <>
                       {' '}·{' '}
                       {/* a count of flags, not a market direction — ink (lamp law) */}
-                      <b style={{ color: 'var(--color-fg)', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
+                      <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                         {summary.flagged} below market
                       </b>
                     </>
@@ -1361,7 +1352,7 @@ export default function SavedPage() {
                     <div className="v">
                       {formatPrice(collection.totalAppraised)}
                       {collection.deltaPct != null && collection.deltaPct !== 0 && (
-                        <em style={{ fontStyle: 'normal', fontWeight: 500, marginLeft: 7, color: collection.deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
+                        <em style={{ fontStyle: 'normal', fontWeight: 600, marginLeft: 7, color: collection.deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
                           {fmtSignedPct(collection.deltaPct)}
                         </em>
                       )}
@@ -1372,7 +1363,7 @@ export default function SavedPage() {
                 {record && record.med != null && (
                   <a href="#record" style={{ display: 'block', minWidth: 120, color: 'inherit', textDecoration: 'none' }}>
                     <div className="k">Your record</div>
-                    <div className="v" style={{ fontWeight: 500, color: record.med > 0 ? 'var(--color-up)' : record.med < 0 ? 'var(--color-down-text)' : 'var(--color-fg)' }}>
+                    <div className="v" style={{ fontWeight: 600, color: record.med > 0 ? 'var(--color-up)' : record.med < 0 ? 'var(--color-down-text)' : 'var(--color-fg)' }}>
                       {fmtSignedPct(Math.round(record.med))}
                     </div>
                     <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 3 }}>{record.n} judged · vs estimate, median</div>
@@ -1381,7 +1372,7 @@ export default function SavedPage() {
                 {unseenAlerts > 0 && (
                   <a href="#inbox" style={{ display: 'block', minWidth: 120, color: 'inherit', textDecoration: 'none' }}>
                     <div className="k">Inbox</div>
-                    <div className="v">{unseenAlerts}<em style={{ fontStyle: 'normal', fontWeight: 500, marginLeft: 7, color: 'var(--color-fg)' }}>new</em></div>
+                    <div className="v">{unseenAlerts}<em style={{ fontStyle: 'normal', fontWeight: 600, marginLeft: 7, color: 'var(--color-fg)' }}>new</em></div>
                     <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 3 }}>nightly matches to your searches</div>
                   </a>
                 )}
@@ -1471,7 +1462,7 @@ export default function SavedPage() {
                           </Link>
                         </span>
                         <span className="num">{formatEstimate(lot) || '—'}</span>
-                        <span className="num" style={sig ? { color: sigInk(sig.label), fontWeight: 500 } : { color: 'var(--color-text-faint)' }}
+                        <span className="num" style={sig ? { color: sigInk(sig.label), fontWeight: 700 } : { color: 'var(--color-text-faint)' }}
                           aria-label={sig ? `${sig.label}, ${Math.abs(Math.round(sig.pct))} percent` : 'no signal'}>
                           {sig ? sigText(sig) : '—'}
                         </span>
@@ -1483,14 +1474,14 @@ export default function SavedPage() {
                             <span className="sub">+{newBids} {newBids === 1 ? 'bid' : 'bids'}</span>
                           ) : null}
                         </span>
-                        <span style={{ textAlign: 'right', fontSize: 13, color: days === 0 ? 'var(--color-fg)' : 'var(--color-text-secondary)', fontWeight: days <= 1 ? 500 : 400, whiteSpace: 'nowrap' }}>
+                        <span style={{ textAlign: 'right', fontSize: 13, color: days === 0 ? 'var(--color-fg)' : 'var(--color-text-secondary)', fontWeight: days <= 1 ? 600 : 500, whiteSpace: 'nowrap' }}>
                           {days === 0 && lot.saleDateTime
                             ? <CloseClock iso={lot.saleDateTime} windowHours={24} />
                             : hammerWord(days)}
                         </span>
                       </div>
                       {open && (
-                        <RowDossier lot={lot} meta={m} sig={sig} appr={fullLoaded ? packs.get(lot.id)?.ap ?? null : null}
+                        <RowDossier lot={lot} meta={m} sig={sig} allLots={allLots} fullLoaded={fullLoaded}
                           onRemove={() => { setOpenRow(null); toggle(savedIdOf(lot.id)); }} />
                       )}
                     </div>
@@ -1515,7 +1506,7 @@ export default function SavedPage() {
                       </span>
                       <span className="ck-mrow-right">
                         {sig && <b style={{ color: sigInk(sig.label) }} aria-label={`${sig.label}, ${Math.abs(Math.round(sig.pct))} percent`}>{sigText(sig)}</b>}
-                        <span className="ck-mham" style={days <= 1 ? { color: 'var(--color-fg)', fontWeight: 500 } : undefined}>
+                        <span className="ck-mham" style={days <= 1 ? { color: 'var(--color-fg)', fontWeight: 600 } : undefined}>
                           {days === 0 && lot.saleDateTime
                             ? <CloseClock iso={lot.saleDateTime} windowHours={24} />
                             : hammerWord(days)}
@@ -1540,9 +1531,6 @@ export default function SavedPage() {
               </div>
             </section>
           )}
-
-          {/* close alerts (browser push) — renders nothing until VAPID + Supabase are configured */}
-          <PushOptIn />
 
           {/* the inbox rides directly under the room — new matches are watch-adjacent */}
           <div id="inbox"><AlertsInbox /></div>
@@ -1683,7 +1671,7 @@ export default function SavedPage() {
                   {collection.deltaPct != null && collection.deltaPct !== 0 && (
                     <div>
                       <div className="k">Appraised vs bought</div>
-                      <div className="v" style={{ fontWeight: 500, color: collection.deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
+                      <div className="v" style={{ fontWeight: 600, color: collection.deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
                         {fmtSignedPct(collection.deltaPct)}
                       </div>
                     </div>
@@ -1712,7 +1700,7 @@ export default function SavedPage() {
                           : null;
                       return (
                         <Link key={row.slug} href={`/sub/${row.slug.replace(':', '/')}`} className="ray-coll-exposure-row">
-                          <span style={{ fontSize: 13.5, fontWeight: 500, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {row.label} <Flick size={9} style={{ marginLeft: 2 }} />
                           </span>
                           <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
@@ -1739,7 +1727,7 @@ export default function SavedPage() {
                       <div className="ns-ledger-row" style={{ gap: 12 }}>
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                            <div style={{ fontSize: 14, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{craftTitle(lot.title)}</div>
+                            <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{craftTitle(lot.title)}</div>
                           </Link>
                           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                             <span>{[ARTIST_LABEL[lot.artist] || lot.artist, lot.auctionHouse, lot.saleDate ? formatDate(lot.saleDate) : ''].filter(Boolean).join(' · ')}</span>
@@ -1755,16 +1743,16 @@ export default function SavedPage() {
                           </div>
                           {note && <div className="ck-piece-note">{note}</div>}
                         </div>
-                        <div style={{ width: 92, textAlign: 'right', flexShrink: 0, fontSize: 14.5, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}
+                        <div style={{ width: 92, textAlign: 'right', flexShrink: 0, fontSize: 14.5, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
                           title={paidIsOverride ? 'Your recorded cost basis' : 'Realized price — set what you paid to override'}>
                           {paid != null ? formatPrice(paid) : '—'}
                           {paidIsOverride && <span style={{ display: 'block', fontSize: 10, fontWeight: 500, color: 'var(--color-text-faint)' }}>your basis</span>}
                         </div>
                         <div style={{ width: 128, textAlign: 'right', flexShrink: 0 }}>
-                          <div style={{ fontSize: 14.5, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
+                          <div style={{ fontSize: 14.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
                             {appraised != null ? formatPrice(appraised) : '—'}
                             {deltaPct != null && deltaPct !== 0 && (
-                              <span style={{ marginLeft: 6, fontSize: 12, fontWeight: 500, color: deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
+                              <span style={{ marginLeft: 6, fontSize: 12, fontWeight: 600, color: deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
                                 {deltaPct > 0 ? '+' : '−'}{Math.abs(deltaPct)}%
                               </span>
                             )}
@@ -1916,7 +1904,7 @@ export default function SavedPage() {
                       <span>
                         {m?.title ? (
                           <>
-                            <span style={{ color: 'var(--color-fg)', fontWeight: 500 }}>
+                            <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>
                               was: {m.title}
                               {m.artist && <>, {ARTIST_LABEL[m.artist] || m.artist}</>}
                             </span>
@@ -1949,8 +1937,6 @@ export default function SavedPage() {
           )}
         </RayEntrance>
       )}
-      {/* the Pro fake door — measures interest; nothing is for sale */}
-      {authReady && (!user || savedReady) && <ProCard />}
       <Colophon record={null} />
     </div>
   );

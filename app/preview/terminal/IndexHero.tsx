@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { LazyMotion, domAnimation, m } from 'framer-motion';
 import type { MarketData, DemandPoint, DemandByMarket, RealizedByMarket } from '../../hooks/useRayData';
 import type { RealizedPoint, BidCompetitionPoint } from '../../types';
@@ -66,6 +67,53 @@ function RailMark({ k }: { k: 'onBlock' | 'trend' | 'bids' | 'below' | 'search' 
    ============================================================ */
 
 const EASE = [0.23, 1, 0.32, 1] as const;
+
+/* ── THE WORD REVEAL (north star §1.6, `text-reveal-word`) ────────────────
+   The masthead headline resolves word by word: each word enters at
+   opacity 0, scaleY(.95) scaleX(.92), blur(12px) and settles sharp on the
+   measured signature curve cubic-bezier(.76,.31,.04,1.01). ~48ms stagger,
+   whole line settled ~1.05s. Gated on the SAME fresh-arrival contract as
+   rise(): reduce || !play → initial:false → renders resolved instantly
+   (cached back-nav / prefers-reduced-motion never see the blur). Plays
+   once on entrance only — nothing rebinds it to hover or scroll. */
+const REVEAL_EASE = [0.76, 0.31, 0.04, 1.01] as const;
+const revealLine = {
+  hidden: {},
+  visible: { transition: { delayChildren: 0.04, staggerChildren: 0.048 } },
+};
+// a plain fade per word (§2.6: no blur, no scale — the words simply arrive)
+const revealWord = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { duration: 0.5, ease: REVEAL_EASE },
+  },
+};
+
+/** The headline, split into word spans for the reveal. innerText stays the
+ *  full sentence (spans hold the words, real spaces sit between them, so
+ *  copy/SEO read the exact string); the h2 carries the sentence as its
+ *  aria-label and the spans go aria-hidden so screen readers hear one
+ *  unbroken line, never nine fragments. */
+function RevealHeadline({ text, className, play }: { text: string; className: string; play: boolean }) {
+  const words = useMemo(() => text.split(' '), [text]);
+  return (
+    <m.h2
+      className={className}
+      aria-label={text}
+      variants={revealLine}
+      initial={play ? 'hidden' : false}
+      animate="visible"
+    >
+      {words.map((w, i) => (
+        <span key={i} aria-hidden>
+          {i > 0 ? ' ' : null}
+          <m.span className={styles.nsMastWord} variants={revealWord}>{w}</m.span>
+        </span>
+      ))}
+    </m.h2>
+  );
+}
 
 /* ── THE PULSE BOARD PRIMITIVES ─────────────────────────────────────────────
    The "Right now" panel is the lander's heartbeat: a bento of live blocks
@@ -242,20 +290,37 @@ export default function IndexHero({
   // display headline left, the thesis copy right, pill CTAs beneath left.
   // Impact through lightness (weight 300) — no display bold anywhere.
   // Same element on both shells; ns-split collapses under 900px.
-  // the board's head — the site's statement moved up to the call hero
-  // (CallHero); this plate names what it is, in the split grammar.
   const masthead = (
-    <div className={`ns-split ${styles.nsMast}`}>
+    <m.div className={`ns-split ${styles.nsMast}`} {...rise(0.02)}>
       <div>
-        <h2 className={styles.nsMastHead}>
-          {activeKey === 'all' ? 'The book tonight, market by market.' : `The ${marketLabel === 'TCG' ? 'TCG' : marketLabel.toLowerCase()} market tonight.`}
-        </h2>
+        {/* no kicker here — the headline opens the lander (Collin: the
+            eyebrow line spent a full row of prime space). It enters on the
+            north-star word reveal, same play gate as every rise. */}
+        <RevealHeadline
+          className={styles.nsMastHead}
+          text="Every lot on the block, priced against the record."
+          play={play && !reduce}
+        />
       </div>
-      <p className={styles.nsMastThesis}>
-        How far lots sell against their estimates, the indices that clear a 95% interval,
-        and what is on the block right now.
-      </p>
-    </div>
+      {/* right column: the doors first, the thesis under them (Collin) */}
+      <div>
+        <div className={styles.nsMastCtas}>
+          <a href="#on-the-block" className="ray-call-btn ray-call-btn-primary">
+            See what&rsquo;s on the block
+          </a>
+          <Link href="/value" className="ray-call-btn ray-call-btn-quiet">
+            Open the value desk
+          </Link>
+        </div>
+        <p className={styles.nsMastThesis}>
+          {/* the script mark IS the word — the light-mode ink swap in globals
+              retargets this src automatically */}
+          <img src="/brand/lectr-nav.png" alt="lectr" className={styles.nsMastMark} />
+          {' '}reads the live auction book each night and checks every ask against
+          where its comparables actually sold — {fmtInt(totalLots)} lots on file.
+        </p>
+      </div>
+    </m.div>
   );
 
   // ── THE PULSE BOARD — the shared "Right now" composition (desktop rail +
@@ -301,8 +366,8 @@ export default function IndexHero({
         {/* the one action on the board — butter, full width, unmissable */}
         {belowMkt ? (
           <button type="button" className={styles.pulseAction} data-below="true" onClick={onOpenBelow}
-            aria-label={`${belowMkt} lots flagged tonight — see them`}>
-            <span className={styles.pulseLabel}>Flagged tonight</span>
+            aria-label={`${belowMkt} below-market lots — see them`}>
+            <span className={styles.pulseLabel}>Below market now</span>
             <span className={styles.pulseTag}>
               <span className={styles.pulseTagVal}>{fmtInt(belowShown)}</span>
             </span>
@@ -314,7 +379,7 @@ export default function IndexHero({
           // permanent ghost there reads as a broken feature, not a fact).
           <div className={styles.pulseBlock} data-below="true">
             <span className={styles.pulseCellText}>
-              <span className={styles.pulseLabel}>Flagged tonight</span>
+              <span className={styles.pulseLabel}>Below market now</span>
               <span className={styles.pulseSub}>no flags in the live book</span>
             </span>
             <span className={`${styles.pulseTag} ${styles.pulseTagGhost}`} aria-hidden>

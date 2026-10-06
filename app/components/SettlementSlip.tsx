@@ -42,7 +42,7 @@ export default function SettlementSlip({
                 <span style={{ color: 'var(--paper-muted)' }}>{line.k}</span>
                 <span aria-hidden style={{ flex: 1, borderBottom: '2px dotted var(--paper-line)', transform: 'translateY(-3px)' }} />
                 <span style={{
-                  fontWeight: 500, fontVariantNumeric: 'tabular-nums',
+                  fontWeight: 700, fontVariantNumeric: 'tabular-nums',
                   color: line.signed == null || toneOf(line.signed) === 'flat'
                     ? 'var(--paper-ink)'
                     : toneOf(line.signed) === 'up' ? 'var(--paper-up)' : 'var(--paper-down)',

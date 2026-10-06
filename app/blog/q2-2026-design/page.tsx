@@ -1,12 +1,11 @@
 import type { Metadata } from 'next';
-import { withShare } from '../../lib/og-meta';
 import QuarterInsight, { P, H, B } from '../../components/blog/QuarterInsight';
 import { PullQuote } from '../../components/blog/Editorial';
 
-export const metadata: Metadata = withShare({
+export const metadata: Metadata = {
   title: 'Q2 2026 design market in review — small money, real heat',
   description: 'The smallest market we track put up the strongest demand of the quarter: the median design lot hammered nearly 50% over its midpoint and 69% beat the high estimate. The Q2 2026 numbers.',
-});
+};
 
 export default function Q2Design() {
   return (

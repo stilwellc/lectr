@@ -229,8 +229,9 @@ body {
   color: var(--color-fg);
   border: 1px solid var(--color-border-mid);
   font-size: var(--text-label);
-  font-weight: 500;
-  letter-spacing: 0;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
   text-decoration: none;
   transition: top var(--duration-fast) var(--ease-signature);
 }
@@ -458,8 +459,9 @@ h1 {
   position: relative;
   font-family: var(--font-mono);
   font-size: 12.5px;
-  font-weight: 500;
-  letter-spacing: 0;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
   text-decoration: none;
 }
 
@@ -688,8 +690,9 @@ h1 {
   padding: 6px 13px;
   font-family: var(--font-sans), sans-serif;
   font-size: 10.5px;
-  font-weight: 500;
-  letter-spacing: 0;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   color: var(--color-text-muted);
   cursor: pointer;
   white-space: nowrap;
@@ -736,8 +739,9 @@ h1 {
   cursor: pointer;
   font-family: var(--font-sans), sans-serif;
   font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--color-text-secondary);
   padding: 0;
   border-bottom: 1px solid rgba(242, 238, 227, 0.35);
@@ -817,7 +821,7 @@ h1 {
 }
 .ray-lot-plate-letter {
   font-family: var(--font-inter), sans-serif;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 44px;
   line-height: 1;
   color: color-mix(in srgb, var(--plate-ink, var(--color-accent-gold)) 66%, var(--color-text-faint));
@@ -858,8 +862,9 @@ h1 {
   cursor: pointer;
   font-family: var(--font-sans), sans-serif;
   font-size: 10.5px;
-  font-weight: 500;
-  letter-spacing: 0;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--color-text-muted);
   transition: color var(--duration-fast) var(--ease-signature);
 }
@@ -868,8 +873,9 @@ h1 {
 .ray-lot-comps {
   font-family: var(--font-sans), sans-serif;
   font-size: 10.5px;
-  font-weight: 500;
-  letter-spacing: 0;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--color-text-faint);
   display: inline-flex;
   align-items: center;
@@ -899,8 +905,9 @@ h1 {
   white-space: nowrap;
   font-family: var(--font-sans), sans-serif;
   font-size: 11.5px;
-  font-weight: 500;
-  letter-spacing: 0;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
   color: var(--color-text-muted);
   transition: color var(--duration-fast) var(--ease-signature), background var(--duration-fast) var(--ease-signature);
 }
@@ -1191,7 +1198,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-wordmark {
   font-family: var(--font-sans) !important;
   font-style: normal !important;
-  font-weight: 500 !important;
+  font-weight: 800 !important;
   font-size: 19px !important;
   letter-spacing: -0.03em !important;
   /* the slashed-R mark carries the brand color; the wordmark reads in fg */
@@ -1233,7 +1240,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   font-size: 11.5px !important;
   letter-spacing: 0.02em !important;
   text-transform: none !important;
-  font-weight: 500 !important;
+  font-weight: 600 !important;
 }
 .ray-artist-count { background: var(--color-bg-elevated) !important; color: var(--color-text-muted) !important; font-size: 11.5px !important; }
 
@@ -1251,7 +1258,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 }
 .ray-hero2-value {
   font-size: clamp(44px, 6.5vw, 68px);
-  font-weight: 500;
+  font-weight: 800;
   letter-spacing: -0.035em;
   line-height: 1;
   /* the numeral counts up THROUGH its own magnitudes ($0→$45M→$4.54B); tabular
@@ -1268,7 +1275,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   gap: 10px;
   margin: 12px 0 0;
   font-size: 15.5px;
-  font-weight: 500;
+  font-weight: 600;
 }
 .ray-hero2-delta .up { color: var(--color-up); }
 .ray-hero2-delta .down { color: var(--color-down); }
@@ -1281,7 +1288,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   cursor: pointer;
   font-family: var(--font-sans);
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--color-text-faint);
   padding: 6px 12px;
   border-radius: 8px;
@@ -1305,7 +1312,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-board-panel { background: var(--panel); padding: var(--card-pad); min-width: 0; }
 .ray-panel-k {
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0.01em;
   color: var(--color-text-muted);
   margin-bottom: 10px;
@@ -1344,7 +1351,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   padding-top: 9px;
   text-align: center;
 }
-.ray-deckcall .ray-deckcall-maker { font-size: 14px; font-weight: 500; }
+.ray-deckcall .ray-deckcall-maker { font-size: 14px; font-weight: 650; }
 
 /* R7 · the record band */
 .ray-recordband {
@@ -1375,7 +1382,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   text-align: left;
   font-family: var(--font-serif-display), Georgia, serif;
   font-size: clamp(32px, 3vw + 20px, 56px);
-  font-weight: 500;
+  font-weight: 620;
   line-height: 1.1;
   letter-spacing: -0.025em;
   color: var(--color-text-secondary, #d0d6e0);
@@ -1388,7 +1395,8 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   font-family: var(--font-mono-data), ui-monospace, monospace;
   font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   font-variant-numeric: tabular-nums;
   color: #62666d;
 }
@@ -1417,7 +1425,8 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   font-family: var(--font-mono-data), monospace;
   font-size: 10px;
   font-weight: 500;
-  letter-spacing: 0;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   color: #62666d;
 }
 .ray-close-line-links { display: flex; flex-wrap: wrap; column-gap: 28px; }
@@ -1426,7 +1435,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   align-items: center;
   padding: 15px 0; /* 44px+ touch on quiet type */
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 460;
   color: var(--color-text-muted);
   text-decoration: underline;
   text-underline-offset: 6px;
@@ -1437,7 +1446,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-close-line-links a:hover { color: var(--color-fg); text-decoration-color: var(--lw-28, rgba(255, 255, 255, 0.28)); }
 .ray-close-line-links a:focus-visible { outline: 1.5px solid var(--lw-35, rgba(255, 255, 255, 0.35)); outline-offset: 2px; }
 /* the one lit line — butter never brightens, the arrow answers the reach */
-.ray-close-starling { color: var(--color-butter, #e8dab6) !important; font-weight: 500; }
+.ray-close-starling { color: var(--color-butter, #e8dab6) !important; font-weight: 520; }
 .ray-close-starling:hover { text-decoration-color: var(--ba-4, rgba(232, 218, 182, 0.4)) !important; }
 .ray-close-starling span { display: inline-block; transition: transform 200ms var(--ease-signature); }
 .ray-close-starling:hover span { transform: translate(2px, -2px); }
@@ -1509,7 +1518,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   box-shadow: none;
 }
 
-.ray-deckcall-maker { font-size: 13.5px; font-weight: 500; color: var(--color-fg); }
+.ray-deckcall-maker { font-size: 13.5px; font-weight: 700; color: var(--color-fg); }
 .ray-deckcall-title {
   font-size: 12.5px;
   color: var(--color-text-muted);
@@ -1520,7 +1529,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.ray-deckcall-cta { position: relative; font-size: 12.5px; font-weight: 500; color: var(--color-text-secondary); margin-top: 10px; }
+.ray-deckcall-cta { position: relative; font-size: 12.5px; font-weight: 600; color: var(--color-text-secondary); margin-top: 10px; }
 /* the pen-draw: the underline draws left-to-right on parent hover */
 .ray-deckcall-cta::after {
   content: '';
@@ -1598,7 +1607,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   cursor: pointer;
   font-family: var(--font-sans);
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--color-text-muted);
   padding: 6px 14px;
@@ -1637,7 +1646,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   text-transform: none;
   letter-spacing: -0.01em;
   font-size: 13.5px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--color-fg);
   border-bottom: none;
 }
@@ -1681,7 +1690,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-lot-plate-letter {
   font-family: var(--font-sans);
   font-style: normal;
-  font-weight: 500;
+  font-weight: 700;
   font-size: 40px;
   letter-spacing: -0.02em;
   color: var(--color-text-faint);
@@ -1694,7 +1703,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   text-transform: none;
   letter-spacing: -0.01em;
   font-size: 13.5px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--color-text-muted);
   background: var(--color-bg-elevated);
   border-radius: 10px;
@@ -1941,12 +1950,12 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   max-height: 80vh;
   overflow-y: auto;
 }
-.ray-method h3 { font-size: 19px; font-weight: 500; letter-spacing: -0.02em; margin: 0 0 10px; color: var(--color-fg); }
+.ray-method h3 { font-size: 19px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 10px; color: var(--color-fg); }
 .ray-method-lede { font-size: 15.5px; line-height: 1.55; color: var(--color-text-secondary); margin: 0 0 14px; }
 .ray-method ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .ray-method li { font-size: 13.5px; line-height: 1.55; color: var(--color-text-muted); padding-left: 18px; position: relative; }
 .ray-method li::before { content: ''; position: absolute; left: 2px; top: 8px; width: 5px; height: 5px; border-radius: 100px; background: var(--color-text-faint); }
-.ray-method li b { color: var(--color-fg); font-weight: 500; }
+.ray-method li b { color: var(--color-fg); font-weight: 600; }
 .ray-method-foot { font-size: 12.5px; color: var(--color-text-faint); margin: 16px 0 0; line-height: 1.5; }
 .ray-method-close {
   margin-top: 16px;
@@ -1955,7 +1964,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   color: var(--color-text-secondary);
   font-family: var(--font-sans);
   font-size: 13.5px;
-  font-weight: 500;
+  font-weight: 600;
   border-radius: 10px;
   padding: 9px 18px;
   cursor: pointer;
@@ -1963,7 +1972,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-method-close:hover { color: var(--color-fg); }
 
 /* ── Today's call — the wedge moment on /value ── */
-.ray-call-artist { font-size: 22px; font-weight: 500; letter-spacing: -0.02em; color: var(--color-fg); }
+.ray-call-artist { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: var(--color-fg); }
 .ray-call-title { font-size: 15.5px; color: var(--color-text-muted); margin: 3px 0 2px; line-height: 1.45; }
 
 .ray-call-ctas { display: flex; gap: 10px; margin-top: auto; }
@@ -1980,7 +1989,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   text-decoration: none;
   font-family: var(--font-sans);
   font-size: 13.5px;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: -0.01em;
   border-radius: 12px;
   padding: 11px 20px;
@@ -2013,7 +2022,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   font-size: 12.5px;
   letter-spacing: -0.01em;
   color: var(--color-text-muted);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   font-family: var(--font-sans), sans-serif;
   transition: border-color var(--duration-fast) var(--ease-signature), color var(--duration-fast) var(--ease-signature), background var(--duration-fast) var(--ease-signature), transform 120ms var(--ease-signature);
@@ -2058,7 +2067,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-feedtable th {
   text-align: left;
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--color-text-faint);
   padding: 10px 14px;
@@ -2092,11 +2101,11 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   background: var(--color-bg-elevated);
   border: 1px solid color-mix(in srgb, var(--color-accent-gold) 13%, transparent);
   color: color-mix(in srgb, var(--color-accent-gold) 58%, var(--color-text-faint));
-  font-family: var(--font-inter), sans-serif; font-weight: 500; font-size: 17px; line-height: 1;
+  font-family: var(--font-inter), sans-serif; font-weight: 600; font-size: 17px; line-height: 1;
 }
-.ray-feedtable .t-artist { display: flex; align-items: center; min-height: 24px; color: var(--color-fg); font-weight: 500; text-decoration: none; }  /* ≥24px target (WCAG 2.2 AA, axe Oct 3) */
+.ray-feedtable .t-artist { display: block; color: var(--color-fg); font-weight: 600; text-decoration: none; }
 .ray-feedtable a.t-artist:hover { text-decoration: underline; text-underline-offset: 2px; }
-.ray-feedtable .t-title { display: block; min-height: 24px; line-height: 24px; color: var(--color-text-muted); max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+.ray-feedtable .t-title { color: var(--color-text-muted); max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
 /* the data cells speak mono — dates, days, bids, estimates, signals */
 .ray-feedtable .t-date, .ray-feedtable .t-days, .ray-feedtable .t-bids,
 .ray-feedtable .t-est, .ray-feedtable .t-sig-up, .ray-feedtable .t-sig-down {
@@ -2109,12 +2118,13 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-feedtable .t-bids { color: var(--color-text-muted); }
 .ray-feedtable .t-cat {
   font-size: 10.5px;
-  letter-spacing: 0;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--color-text-muted);
 }
-.ray-feedtable .t-est { color: var(--color-fg); font-weight: 500; }
-.ray-feedtable .t-sig-up { color: var(--color-up); font-weight: 500; }
-.ray-feedtable .t-sig-down { color: var(--color-down); font-weight: 500; }
+.ray-feedtable .t-est { color: var(--color-fg); font-weight: 600; }
+.ray-feedtable .t-sig-up { color: var(--color-up); font-weight: 600; }
+.ray-feedtable .t-sig-down { color: var(--color-down); font-weight: 600; }
 /* the toggle survives mobile: grid maps to the compact card, table to rows */
 
 /* ── freshness pulse ── */
@@ -2208,7 +2218,7 @@ body {
   justify-content: center;
   border-radius: 100px;
   flex: none;
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--color-text-secondary);
   background:
@@ -2280,7 +2290,7 @@ body {
 .ray-rail-top svg { flex: none; width: 16px; height: 16px; }
 .ray-rail-name {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 560;
   line-height: 1;
   letter-spacing: -0.01em;
   color: var(--color-text-secondary);
@@ -2321,7 +2331,7 @@ body {
   z-index: 1;
 }
 .ray-rail-cell[data-active=true]::before { transform: scaleX(1); }
-.ray-rail-cell[data-active=true] .ray-rail-name { color: var(--color-fg, #ffffff); font-weight: 500; }
+.ray-rail-cell[data-active=true] .ray-rail-name { color: var(--color-fg, #ffffff); font-weight: 620; }
 .ray-rail-cell[data-active=true] .ray-rail-top { color: var(--color-butter); }
 .ray-rail-cell[data-active=true] .ray-rail-read { color: var(--color-text-muted); }
 .ray-rail-cell[data-active=true] .ray-rail-read b { color: var(--color-fg, #f7f8f8); }
@@ -2343,7 +2353,7 @@ body {
 .ray-rail[data-variant=compact] .ray-rail-read { display: none; }
 .ray-rail[data-variant=compact] .ray-rail-top { flex-direction: row; gap: 7px; }
 .ray-rail[data-variant=compact] .ray-rail-top svg { width: 14px; height: 14px; }
-.ray-rail[data-variant=compact] .ray-rail-name { font-size: 12.5px; font-weight: 500; }
+.ray-rail[data-variant=compact] .ray-rail-name { font-size: 12.5px; font-weight: 520; }
 
 /* 900–1080: the squeeze — tighter cells, the anchor holds as components
    scroll under the spine; the right edge admits the clip honestly */
@@ -2379,7 +2389,7 @@ body {
   .ray-rail-cell:nth-child(n+5) { border-top: 1px solid var(--lw-06, rgba(255, 255, 255, 0.06)); }
   .ray-rail-top { flex-direction: column; gap: 5px; }
   .ray-rail-top svg { width: 15px; height: 15px; }
-  .ray-rail-name { font-size: 11.5px; font-weight: 500; }
+  .ray-rail-name { font-size: 11.5px; font-weight: 560; }
   .ray-rail-name-full { display: none; }
   .ray-rail-name-short { display: inline; }
   .ray-rail-read { display: none; }
@@ -2397,9 +2407,10 @@ body {
     justify-content: center;
     border-top: 1px solid var(--lw-10, rgba(255, 255, 255, 0.10));
     font-family: var(--font-mono), monospace;
-    font-size: 11.5px;
-    font-weight: 400;
-    letter-spacing: 0;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
     color: var(--color-text-muted);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -2501,10 +2512,10 @@ body {
 }
 .ray-watchstrip > * { position: relative; }
 .ray-watchstrip:hover { background: var(--color-hover-item); }
-.ray-watchstrip-k { display: block; font-size: 11.5px; font-weight: 500; color: var(--color-text-muted); margin-bottom: 6px; }
+.ray-watchstrip-k { display: block; font-size: 11.5px; font-weight: 650; color: var(--color-text-muted); margin-bottom: 6px; }
 .ray-watchstrip-line { display: block; font-size: 13.5px; color: var(--color-text-secondary); line-height: 1.5; }
-.ray-watchstrip-line b.up { font-weight: 500; }
-.ray-watchstrip-cta { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; color: var(--color-fg); margin-top: 8px; }
+.ray-watchstrip-line b.up { font-weight: 650; }
+.ray-watchstrip-cta { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--color-fg); margin-top: 8px; }
 
 /* the record collapses to one honest sentence + a door to the archive */
 
@@ -2517,7 +2528,7 @@ body {
   z-index: 2;
   pointer-events: none;
   font-size: 10.5px;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0;
   color: var(--color-fg);
   background: rgba(15, 14, 10, 0.72);
@@ -2552,7 +2563,7 @@ body {
   flex: 1;
   min-width: 0;
   font-size: 13.5px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--color-fg);
   white-space: nowrap;
   overflow: hidden;
@@ -2572,7 +2583,7 @@ body {
   min-width: 64px;
   text-align: right;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .ray-value-row[data-tone=up] .ray-value-row-sig { color: var(--color-up); }
@@ -2582,7 +2593,7 @@ body {
   min-width: 104px;
   text-align: right;
   font-size: 13.5px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--color-fg);
   font-variant-numeric: tabular-nums;
 }
@@ -2621,7 +2632,7 @@ body {
   background: var(--color-bg-elevated);
   color: var(--color-text-faint);
   font-family: var(--font-inter), sans-serif;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 18px;
   line-height: 1;
 }
@@ -2658,7 +2669,7 @@ body {
 }
 .ray-feedrow-maker {
   font-size: 13.5px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--color-fg);
   white-space: nowrap;
   overflow: hidden;
@@ -2681,7 +2692,7 @@ body {
 }
 .ray-feedrow-right b {
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--color-fg);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -2766,10 +2777,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* the blank plate: opaque eggshell — nothing loading shows through */
-  background: var(--color-bg);
-  transition: opacity 400ms cubic-bezier(0.4, 0, 0.2, 1);
-  /* decorative only — never intercept taps on the live page underneath */
+  background:
+        var(--color-bg-deep);
+  transition: opacity 240ms var(--ease-ui);
+  /* decorative splash only — never intercept the first 0.9s of taps/clicks on
+     the live page underneath (it's aria-hidden and purely visual). */
   pointer-events: none;
 }
 .ray-greeting-out { opacity: 0; pointer-events: none; }
@@ -2777,7 +2789,7 @@ body {
   height: 132px;
   width: auto;
   clip-path: inset(0 100% 0 0);
-  animation: lectrCloseWrite 900ms var(--ease-draw) 80ms forwards;
+  animation: lectrCloseWrite 480ms var(--ease-draw) 60ms forwards;
 }
 @media (max-width: 899px) { .ray-greeting-mark { height: 96px; } }
 
@@ -2796,7 +2808,7 @@ body {
   background: var(--color-fg);
   border-color: var(--color-fg);
   color: var(--color-bg);
-  font-weight: 500;
+  font-weight: 600;
 }
 .ray-toolbar-pill.ray-cat-pill-primary:hover { background: var(--color-text-secondary); border-color: var(--color-text-secondary); }
 .ray-toolbar-pill.ray-cat-pill {
@@ -2848,7 +2860,7 @@ html .lectr-recplate-k {
 .lectr-dossier-name {
   font-family: var(--font-sans), sans-serif;
   font-size: clamp(44px, 5.5vw, 72px);
-  font-weight: 300;
+  font-weight: 320;
   letter-spacing: -0.03em;
   line-height: 1.04;
   margin: 0;
@@ -2908,8 +2920,9 @@ html .lectr-recplate-k {
   gap: 10px;
   padding: 10px 2px 8px;
   font-size: 10.5px;
-  font-weight: 500;
-  letter-spacing: 0;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   color: var(--color-beige-text);
   border-top: 2px solid var(--color-fg);
   position: relative;
@@ -2968,14 +2981,15 @@ html .lectr-recplate-k {
   justify-content: center;
   gap: 10px;
   font-size: 11.5px;
-  font-weight: 500;
-  letter-spacing: 0;
+  font-weight: 650;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
   color: var(--paper-muted, #5A5240);
 }
 .ray-engine-eyebrow img { height: 18px; width: auto; filter: none; opacity: 0.9; }
 .ray-engine-head {
   font-family: var(--font-sans), sans-serif;
-  font-weight: 300;
+  font-weight: 340;
   font-size: clamp(26px, 2.9vw, 38px);
   line-height: 1.12;
   letter-spacing: -0.02em;
@@ -3003,8 +3017,8 @@ html .lectr-recplate-k {
   color: var(--paper-muted, #5A5240);
   font-variant-numeric: tabular-nums;
 }
-.ray-engine-stats b { color: var(--paper-ink, #1C1712); font-weight: 500; }
-.ray-engine-stats b.up { color: #0A5F33; }  /* 5.54:1 on the paper banner (#1e7a4d read 3.78 — axe Oct 3) */
+.ray-engine-stats b { color: var(--paper-ink, #1C1712); font-weight: 650; }
+.ray-engine-stats b.up { color: #1e7a4d; }
 .ray-engine-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--pa-3, rgba(28, 23, 18, 0.3)); align-self: center; }
 .ray-engine-cta {
   display: inline-block;
@@ -3012,7 +3026,7 @@ html .lectr-recplate-k {
   background: var(--paper-ink, #1C1712);
   color: var(--paper, #E2D9C4);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 550;
   padding: 12px 24px;
   border-radius: 999px;
   text-decoration: none;
@@ -3106,11 +3120,11 @@ html .lectr-recplate-k {
 .ck-gauge-cell:hover { background: var(--color-hover-item); }
 .ck-gauge-v {
   font-family: var(--font-mono), monospace;
-  font-size: 26px; font-weight: 500; letter-spacing: -0.01em;
+  font-size: 26px; font-weight: 600; letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums; color: var(--color-fg);
   display: flex; align-items: baseline; gap: 8px;
 }
-.ck-gauge-v em { font-style: normal; font-size: 13px; font-weight: 500; }
+.ck-gauge-v em { font-style: normal; font-size: 13px; font-weight: 600; }
 .ck-gauge-s { font-size: 11.5px; color: var(--color-text-muted); }
 @media (max-width: 640px) {
   .ck-gauge { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
@@ -3127,7 +3141,7 @@ html .lectr-recplate-k {
 }
 .ck-warn-btn {
   border: none; background: none; padding: 0; cursor: pointer;
-  font: inherit; font-weight: 500; color: var(--color-fg);
+  font: inherit; font-weight: 600; color: var(--color-fg);
   text-decoration: underline; text-underline-offset: 3px;
 }
 
@@ -3147,7 +3161,7 @@ html .lectr-recplate-k {
 .ck-read .ck-tag { flex: none; width: 96px; text-align: left; }
 .ck-read-title {
   flex: none; max-width: 34%; min-width: 90px;
-  font-size: 13px; font-weight: 500; color: var(--color-fg);
+  font-size: 13px; font-weight: 600; color: var(--color-fg);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .ck-read-fact {
@@ -3173,7 +3187,7 @@ html .lectr-recplate-k {
   transition: background var(--duration-fast) var(--ease-signature);
 }
 .ray-savedrow:hover { background: var(--color-hover-item); }
-.ray-savedrow .maker { font-size: 13px; font-weight: 500; color: var(--color-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ray-savedrow .maker { font-size: 13px; font-weight: 600; color: var(--color-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .ray-savedrow .work { font-size: 13px; color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .ray-savedrow .num {
   font-family: var(--font-mono), monospace; font-size: 12px;
@@ -3185,14 +3199,14 @@ html .lectr-recplate-k {
 .ck-tag {
   display: inline-block;
   font-family: var(--font-mono), monospace;
-  font-size: 10.5px; font-weight: 500; letter-spacing: 0;
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--color-text-muted);
   border: 1px solid var(--color-border);
   border-radius: 5px; padding: 2px 6px; white-space: nowrap;
 }
 .ck-tag[data-tone='up'] { color: var(--color-up); border-color: color-mix(in srgb, var(--color-up) 35%, transparent); }
 .ck-tag[data-tone='hot'] { color: var(--color-fg); border-color: var(--color-border-mid); }
-.ck-workmaker { display: block; font-size: 11px; font-weight: 500; color: var(--color-fg); }
+.ck-workmaker { display: block; font-size: 11px; font-weight: 600; color: var(--color-fg); }
 
 /* view toggle: quiet elevated fill, never a butter lamp */
 .ray-savedview-toggle { display: none; }
@@ -3206,7 +3220,7 @@ html .lectr-recplate-k {
 }
 .ray-savedview-btn {
   font-family: var(--font-sans), sans-serif;
-  font-size: 11.5px; font-weight: 500; letter-spacing: -0.01em;
+  font-size: 11.5px; font-weight: 600; letter-spacing: -0.01em;
   padding: 5px 14px; border-radius: 8px;
   border: 1px solid var(--color-border);
   background: transparent; color: var(--color-text-muted); cursor: pointer;
@@ -3225,7 +3239,7 @@ html .lectr-recplate-k {
 .ck-mrow-main { min-width: 0; display: grid; gap: 3px; }
 .ck-mrow-right { flex: none; display: grid; gap: 3px; justify-items: end; text-align: right; }
 .ck-mrow-right b { font-family: var(--font-mono), monospace; font-size: 13px; font-variant-numeric: tabular-nums; }
-.ck-mtitle { font-size: 13.5px; font-weight: 500; color: var(--color-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ck-mtitle { font-size: 13.5px; font-weight: 600; color: var(--color-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ck-msub { font-size: 11.5px; color: var(--color-text-muted); display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
 .ck-mnum { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ck-mham { font-size: 11.5px; color: var(--color-text-muted); white-space: nowrap; }
@@ -3241,7 +3255,7 @@ html .lectr-recplate-k {
 .ck-record-lead { display: grid; gap: 6px; }
 .ck-record-fig {
   font-family: var(--font-mono), monospace;
-  font-size: clamp(38px, 4.5vw, 52px); font-weight: 500;
+  font-size: clamp(38px, 4.5vw, 52px); font-weight: 600;
   letter-spacing: -0.02em; line-height: 1;
   font-variant-numeric: tabular-nums;
 }
@@ -3256,7 +3270,7 @@ html .lectr-recplate-k {
   gap: 0 14px; align-items: baseline;
 }
 .ray-own-btn {
-  font-family: var(--font-sans), sans-serif; font-size: 10.5px; font-weight: 500;
+  font-family: var(--font-sans), sans-serif; font-size: 10.5px; font-weight: 600;
   padding: 3px 10px; border-radius: 8px; cursor: pointer;
   border: 1px solid var(--color-border); background: transparent; color: var(--color-text-muted);
   transition: border-color var(--duration-fast) var(--ease-signature), color var(--duration-fast) var(--ease-signature);
@@ -3326,7 +3340,7 @@ html .lectr-recplate-k {
 .rcp-tile:first-child { border-left: none; padding-left: 2px; }
 .rcp-fig {
   font-family: var(--font-mono), monospace;
-  font-size: clamp(30px, 3vw, 40px); font-weight: 500;
+  font-size: clamp(30px, 3vw, 40px); font-weight: 600;
   letter-spacing: -0.02em; line-height: 1;
   font-variant-numeric: tabular-nums; color: var(--color-fg);
 }
@@ -3350,12 +3364,12 @@ html .lectr-recplate-k {
 .rcp-row:hover { background: var(--color-hover-item); }
 .rcp-date { font-size: 12px; color: var(--color-text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .rcp-work { font-size: 13px; color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.rcp-work b { color: var(--color-fg); font-weight: 500; margin-right: 6px; }
+.rcp-work b { color: var(--color-fg); font-weight: 600; margin-right: 6px; }
 .rcp-num {
   font-family: var(--font-mono), monospace; font-size: 12.5px;
   font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; color: var(--color-fg);
 }
-.rcp-kind { display: block; font-size: 10px; letter-spacing: 0; color: var(--color-text-faint); }
+.rcp-kind { display: block; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-faint); }
 @media (max-width: 720px) {
   .rcp-cols { grid-template-columns: minmax(0, 1fr) 96px 84px; }
   .rcp-cols > :nth-child(1), .rcp-cols > :nth-child(3) { display: none; }
@@ -3446,7 +3460,7 @@ html .lectr-recplate-k {
 .ck-dossier-note { font-size: 12.5px; color: var(--color-text-secondary); line-height: 1.5; }
 .ck-dossier-actions { display: flex; align-items: baseline; gap: 18px; }
 .ck-dossier-actions a, .ck-dossier-actions button {
-  font-size: 12px; font-weight: 500; color: var(--color-fg);
+  font-size: 12px; font-weight: 600; color: var(--color-fg);
   background: none; border: none; cursor: pointer; padding: 0;
   text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px;
 }
@@ -3495,7 +3509,7 @@ html .lectr-recplate-k {
 /* ── collection piece editor (cost basis + private note) ── */
 .ck-piece-editbtn {
   background: none; border: none; cursor: pointer; padding: 0;
-  font-size: 11px; font-weight: 500; color: var(--color-text-faint);
+  font-size: 11px; font-weight: 600; color: var(--color-text-faint);
   text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px;
   position: relative;
 }
@@ -3573,22 +3587,19 @@ html[data-lectr-light] {
   /* THE LAMP — butter at ink density (burnished gold). The same warm
      counterpoint dark mode plays, mirrored for paper. Direction ink
      (red/green) is sacred and untouched. */
-  /* THE CATALOGUE (Oct 3 2026): gold is the printer's mark only — folio,
-     FIG., seal (var(--gold-ink) / .ns-gold). Every butter/beige/accent
-     consumer (active pills, CTAs, .lit, links, accent words) prints in INK. */
-  --color-butter: #1C1917;         /* active pill fill, .lit — ink */
-  --color-butter-text: #1C1917;
-  --color-butter-deep: #44403B;
-  --color-butter-subtle: rgba(28, 25, 23, 0.06);
-  --color-butter-ink: #FDFCFC;     /* text ON ink fills */
-  --color-beige: #44403B;
-  --color-beige-text: #59544F;
-  --color-accent-gold: #44403B;
-  --color-accent-gold-text: #59544F;
-  --color-accent-wine: #44403B;
-  --color-accent-wine-text: #59544F;
-  --color-accent-coral: #44403B;
-  --color-lit: #1C1917;
+  --color-butter: #8F6B1E;         /* display accent, active pill fill, .lit */
+  --color-butter-text: #7A5A14;    /* text-safe vermilion (5.0:1 on bone) */
+  --color-butter-deep: #5F4610;    /* the quiet note */
+  --color-butter-subtle: rgba(143, 107, 30, 0.10);
+  --color-butter-ink: #FFF9EB;     /* text ON vermilion fills */
+  --color-beige: #8F6B1E;
+  --color-beige-text: #7A5A14;
+  --color-accent-gold: #8F6B1E;
+  --color-accent-gold-text: #7A5A14;
+  --color-accent-wine: #8F6B1E;
+  --color-accent-wine-text: #7A5A14;
+  --color-accent-coral: #8F6B1E;
+  --color-lit: #8F6B1E;
 
   /* DIRECTION — print-density green / brick red (both AA at their sizes) */
   --color-up: #0F7C43;
@@ -3598,13 +3609,13 @@ html[data-lectr-light] {
   --color-down-soft: rgba(193, 62, 44, 0.11);
 
   /* CHARTS — ink chrome, vermilion hero. The pop the black ground never had. */
-  --chart-hero: #1C1917;
+  --chart-hero: #8F6B1E;
   --chart-grid: rgba(28, 25, 23, 0.08);
   --chart-ref: rgba(28, 25, 23, 0.20);
   --chart-tick: #6B655D;
   --chart-line-2: #948D84;   /* 3.2:1 — comparison strokes must read on paper */
   --chart-ink: #6B655D;
-  --chart-cursor: rgba(28, 25, 23, 0.30);
+  --chart-cursor: rgba(143, 107, 30, 0.38);
 
   /* HOUSES / CATEGORIES — the curated light inks (slate/bronze, built for paper) */
   --ray-house-phillips: #3E6488;
@@ -3625,7 +3636,7 @@ html[data-lectr-light] {
 
   /* FOCUS / SELECTION / SHADOWS */
   --focus-ring: 2px solid #1C1917;
-  --selection-bg: rgba(28, 25, 23, 0.12);
+  --selection-bg: rgba(143, 107, 30, 0.20);
   --shadow-pop: 0 12px 32px rgba(28, 25, 23, 0.14);
   --shadow-modal: 0 24px 64px rgba(28, 25, 23, 0.20), 0 4px 16px rgba(28, 25, 23, 0.12);
 
@@ -3670,7 +3681,7 @@ html[data-lectr-light] .terminal-shell {
   --chart-ref: rgba(28, 25, 23, 0.20);
   --chart-tick: #6B655D;
   --chart-line-2: #948D84;   /* 3.2:1 — comparison strokes must read on paper */
-  --chart-cursor: rgba(28, 25, 23, 0.30);
+  --chart-cursor: rgba(143, 107, 30, 0.38);
 }
 
 /* the shell's flatten rules carry !important literals — matched here */
@@ -3756,20 +3767,20 @@ html[data-lectr-light] .ray-bidvel-dot { background: var(--color-fg); }
 
 /* gold-ink equivalents for butter-alpha accents */
 html[data-lectr-light] {
-  --ba-04: rgba(28, 25, 23, 0.05);
-  --ba-05: rgba(28, 25, 23, 0.062);
-  --ba-09: rgba(28, 25, 23, 0.112);
-  --ba-12: rgba(28, 25, 23, 0.15);
-  --ba-18: rgba(28, 25, 23, 0.225);
-  --ba-28: rgba(28, 25, 23, 0.35);
-  --ba-3: rgba(28, 25, 23, 0.375);
-  --ba-35: rgba(28, 25, 23, 0.438);
-  --ba-4: rgba(28, 25, 23, 0.5);
-  --ba-5: rgba(28, 25, 23, 0.625);
-  --ba-6: rgba(28, 25, 23, 0.75);
-  --ba-7: rgba(28, 25, 23, 0.875);
-  --ba-72: rgba(28, 25, 23, 0.9);
-  --ba-85: rgba(28, 25, 23, 0.95);
+  --ba-04: rgba(122, 90, 20, 0.05);
+  --ba-05: rgba(122, 90, 20, 0.062);
+  --ba-09: rgba(122, 90, 20, 0.112);
+  --ba-12: rgba(122, 90, 20, 0.15);
+  --ba-18: rgba(122, 90, 20, 0.225);
+  --ba-28: rgba(122, 90, 20, 0.35);
+  --ba-3: rgba(122, 90, 20, 0.375);
+  --ba-35: rgba(122, 90, 20, 0.438);
+  --ba-4: rgba(122, 90, 20, 0.5);
+  --ba-5: rgba(122, 90, 20, 0.625);
+  --ba-6: rgba(122, 90, 20, 0.75);
+  --ba-7: rgba(122, 90, 20, 0.875);
+  --ba-72: rgba(122, 90, 20, 0.9);
+  --ba-85: rgba(122, 90, 20, 0.95);
 }
 
 
@@ -3778,61 +3789,67 @@ html[data-lectr-light] {
 /* ── THE PORCELAIN: the Colophon becomes the closing INK VAULT — the maker's
    plate stays engraved in the dark, porcelain ink on the near-black band
    (its text tokens otherwise resolve to page ink and sink into the plate) ── */
-/* the colophon closes the catalogue on the same eggshell ground (§0.1:
-   no dark slabs) — a hairline above, the signature mark in ink */
 html[data-lectr-light] .ray-close {
-  background: #FDFCFC;
-  border-top-color: rgba(28, 25, 23, 0.10);
+  background: linear-gradient(180deg, #1B1A17, #171613 220px);
+  border-top-color: rgba(28, 25, 23, 0.35);
 }
-html[data-lectr-light] .ray-close .ray-close-thesis { color: #44403B; }
+html[data-lectr-light] .ray-close .ray-close-thesis { color: #E9E7DD; }
+html[data-lectr-light] .ray-close {
+  --color-fg: #F2F1E9;
+  --color-text-secondary: #CBC9BE;
+  --color-text-muted: #A3A194;
+  --color-text-faint: #8C8A7D;
+  --hairline: rgba(242, 241, 233, 0.12);
+  --color-border: rgba(242, 241, 233, 0.12);
+  --color-border-mid: rgba(242, 241, 233, 0.2);
+  --lw-06: rgba(242, 241, 233, 0.10);
+  --lw-10: rgba(242, 241, 233, 0.16);
+  --color-butter: #E8DAB6;
+  --color-butter-text: #E8DAB6;
+  --color-hover-item: rgba(242, 241, 233, 0.05);
+}
 
-/* ═══ THE VAULT IS RETIRED (Oct 3 2026, docs/NORTHSTAR_UI.md §0.1) — the
-   bands, paper rooms and the lander's roomPaper used to flip to a black ink
-   slab here. The catalogue prints on ONE ground: they re-token to eggshell
-   ink — no dark slab, no tan. Dark exists only as the ?light=0 skin. ═══ */
+/* ═══ THE INK VAULT — scoped to the TRUE paper bands only. The paper tokens
+   are consumed in two contexts: the certificate bands (flip to the vault)
+   and paper-styled chips/meters on white cards (must STAY cream/ink — the
+   global flip painted porcelain strokes onto white cards on /value). ═══ */
 html[data-lectr-light] .ray-band,
 html[data-lectr-light] .ray-paper,
 html[data-lectr-light] [class*='roomPaper'] {
-  --paper: #FDFCFC;
-  --paper-card: #FFFFFF;
-  --paper-mid: #FAF8F8;
-  --paper-deep: #F5F3F1;
-  --paper-ink: #1C1917;
-  --paper-secondary: #44403B;
-  --paper-muted: #6B655D;
-  --paper-faint: #726C63;
-  --paper-line: rgba(28, 25, 23, 0.10);
-  --paper-edge: rgba(28, 25, 23, 0.10);
-  --paper-up: #0F7C43;
-  --paper-down: #C13E2C;
-  --paper-up-text: #0F7C43;
-  --paper-down-text: #A5341F;
-  --tape-up: #0F7C43;
-  --tape-down: #C13E2C;
-  --tape-mut: #6B655D;
-  --seal-ink: rgba(107, 101, 93, 0.6);
-  --pa-05: rgba(28, 25, 23, 0.04);
-  --pa-08: rgba(28, 25, 23, 0.06);
-  --pa-16: rgba(28, 25, 23, 0.10);
-  --pa-18: rgba(28, 25, 23, 0.12);
-  --pa-22: rgba(28, 25, 23, 0.14);
-  --pa-25: rgba(28, 25, 23, 0.16);
-  --pa-3: rgba(28, 25, 23, 0.2);
-  --pa-32: rgba(28, 25, 23, 0.22);
-  --pa-35: rgba(28, 25, 23, 0.24);
-  --pa-36: rgba(28, 25, 23, 0.26);
-  --pa-4: rgba(28, 25, 23, 0.3);
-  --pa-5: rgba(28, 25, 23, 0.4);
-  --pa-55: rgba(28, 25, 23, 0.45);
-  --pa-6: rgba(28, 25, 23, 0.5);
-  --pa-8: rgba(28, 25, 23, 0.7);
-  --lw-06: rgba(28, 25, 23, 0.06);
-  --lw-10: rgba(28, 25, 23, 0.10);
-  --color-butter: #1C1917;
-  --color-butter-text: #1C1917;
-  --color-hover-item: rgba(28, 25, 23, 0.04);
+  --paper: #1B1A17;
+  --paper-card: #232220;
+  --paper-mid: #201F1C;
+  --paper-deep: #262421;
+  --paper-ink: #F2F1E9;
+  --paper-secondary: #CBC9BE;
+  --paper-muted: #A3A194;
+  --paper-faint: #8C8A7D;
+  --paper-line: rgba(242, 241, 233, 0.15);
+  --paper-edge: rgba(28, 25, 23, 0.55);
+  --paper-up: #57BE87;
+  --paper-down: #E0755F;
+  --paper-up-text: #63C58D;
+  --paper-down-text: #E58D7B;
+  --tape-up: #57BE87;
+  --tape-down: #E0755F;
+  --tape-mut: #A3A194;
+  --seal-ink: rgba(163, 161, 148, 0.7);
+  --pa-05: rgba(242, 241, 233, 0.05);
+  --pa-08: rgba(242, 241, 233, 0.08);
+  --pa-16: rgba(242, 241, 233, 0.16);
+  --pa-18: rgba(242, 241, 233, 0.18);
+  --pa-22: rgba(242, 241, 233, 0.22);
+  --pa-25: rgba(242, 241, 233, 0.25);
+  --pa-3: rgba(242, 241, 233, 0.3);
+  --pa-32: rgba(242, 241, 233, 0.32);
+  --pa-35: rgba(242, 241, 233, 0.35);
+  --pa-36: rgba(242, 241, 233, 0.36);
+  --pa-4: rgba(242, 241, 233, 0.4);
+  --pa-5: rgba(242, 241, 233, 0.5);
+  --pa-55: rgba(242, 241, 233, 0.55);
+  --pa-6: rgba(242, 241, 233, 0.6);
+  --pa-8: rgba(242, 241, 233, 0.8);
 }
-html[data-lectr-light] .ray-band { border-block-color: var(--hairline); }
 
 /* light: the lens-pill count reads muted-ink on the mint wash (faint was 2.96) */
 html[data-lectr-light] .ray-toolbar-pill-signal i { color: var(--color-text-muted); }
@@ -3842,8 +3859,8 @@ html[data-lectr-light] .ray-toolbar-pill-signal i { color: var(--color-text-mute
    replay seal — printed matter pinned INSIDE the ink vault. Restores the
    original paper palette on the receipt subtree only. ── */
 html[data-lectr-light] [class*='rcpt'] {
-  --paper-card: #FFFFFF;
-  --paper: #F5F3F1;
+  --paper-card: #FAF5E8;
+  --paper: #E2D9C4;
   --paper-ink: #1C1712;
   --paper-secondary: #3D3830;
   --paper-muted: #5A5240;
@@ -4000,11 +4017,11 @@ html[data-lectr-light] .ck-read { position: relative; }
 /* ── 6 · DENSITY — display figures drop to pen weight and grow. Thin
    numerals bloom on black; on bone they print like a ledger hand. ── */
 html[data-lectr-light] .ck-record-fig {
-  font-weight: 400;
+  font-weight: 420;
   font-size: clamp(44px, 5vw, 60px);
   letter-spacing: -0.03em;
 }
-html[data-lectr-light] .ck-gauge-v { font-weight: 400; }
+html[data-lectr-light] .ck-gauge-v { font-weight: 440; }
 
 /* the value lanes join the seal system */
 html[data-lectr-light] .vd-lane-mark {
@@ -4036,9 +4053,9 @@ html[data-lectr-light] .ray-figcap-no::before {
   content: 'FIG. ' counter(lectr-fig); /* unpadded — de-slop law 1 */
   font-family: var(--font-mono), monospace;
   font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  color: var(--gold-ink-text);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--color-butter-text);
   white-space: nowrap;
 }
 /* THE ONE DISPLAY GOLD — burnished, ink-density. Declared at the root so it
@@ -4135,7 +4152,7 @@ html[data-lectr-light] {
    is the system now, dark is the archive skin.) */
 .ray-h2 {
   font-size: 30px;
-  font-weight: 400;
+  font-weight: 350;
   letter-spacing: -0.025em;
   line-height: 1.12;
 }
@@ -4274,9 +4291,9 @@ a.ns-cell:active { transform: scale(0.99); }
    balances it top-right (composition, not dead space) */
 .ns-cell-statwrap { display: flex; flex-direction: column; gap: 5px; position: relative; z-index: 1; }
 .ns-cell-stat {
-  font-family: var(--font-sans), sans-serif;
+  font-family: var(--font-mono), monospace;
   font-size: clamp(34px, 2.9vw, 46px);
-  font-weight: 300;
+  font-weight: 500;
   letter-spacing: -0.02em;
   line-height: 1;
   color: var(--color-fg);
@@ -4292,7 +4309,7 @@ a.ns-cell:active { transform: scale(0.99); }
   pointer-events: none;
 }
 a.ns-cell:hover .ns-cell-mark { opacity: 0.95; transition: opacity 150ms var(--ease-house); }
-.ns-cell-label { font-size: 15px; font-weight: 500; color: var(--color-text-muted); margin-bottom: 5px; }
+.ns-cell-label { font-size: 15px; font-weight: 450; color: var(--color-text-muted); margin-bottom: 5px; }
 .ns-cell-body { font-size: 15px; line-height: 1.5; color: var(--color-fg); }
 
 /* the forced-color cell — grain over a signal gradient; text goes paper */
@@ -4308,14 +4325,6 @@ a.ns-cell:hover .ns-cell-mark { opacity: 0.95; transition: opacity 150ms var(--e
 .ns-cell-color[data-dir="up"] { background: linear-gradient(180deg, #1F4A2C 0%, #08170D 100%); }
 .ns-cell-color[data-dir="down"] { background: linear-gradient(180deg, #4E2016 0%, #170705 100%); }
 .ns-cell-color[data-dir="ink"] { background: linear-gradient(180deg, #34302B 0%, #0F0D0B 100%); }
-/* THE CATALOGUE (light): no forced-colour slab — the colour cell prints on
-   a cream plate; only its numeral carries the market's colour (§0.3) */
-html[data-lectr-light] .ns-cell-color { background: var(--color-bg-deep, #F5F3F1) !important; color: #1C1917; }
-html[data-lectr-light] .ns-cell-color::before { display: none; }
-html[data-lectr-light] .ns-cell-color .ns-cell-label { color: #6B655D; }
-html[data-lectr-light] .ns-cell-color .ns-cell-body { color: #1C1917; font-weight: 400; }
-html[data-lectr-light] .ns-cell-color[data-dir="up"] .ns-ccell-stat { color: var(--color-up); }
-html[data-lectr-light] .ns-cell-color[data-dir="down"] .ns-ccell-stat { color: var(--color-down); }
 .ns-cell-color::before {
   content: '';
   position: absolute;
@@ -4327,9 +4336,9 @@ html[data-lectr-light] .ns-cell-color[data-dir="down"] .ns-ccell-stat { color: v
   pointer-events: none;
 }
 .ns-ccell-stat {
-  font-family: var(--font-sans), sans-serif;
+  font-family: var(--font-mono), monospace;
   font-size: clamp(40px, 17cqw, 96px);
-  font-weight: 300;
+  font-weight: 500;
   letter-spacing: -0.03em;
   line-height: 0.95;
   font-variant-numeric: tabular-nums;
@@ -4345,7 +4354,7 @@ html[data-lectr-light] .ns-cell-color[data-dir="down"] .ns-ccell-stat { color: v
 .ns-cell-color .ns-cell-label { font-size: 16px; }
 .ns-cell-color .ns-cell-body {
   font-size: clamp(18px, 1.8vw, 23px);
-  font-weight: 500;
+  font-weight: 480;
   letter-spacing: -0.01em;
   line-height: 1.35;
   max-width: 30ch;
@@ -4386,7 +4395,7 @@ html[data-lectr-light] .ns-cell-color[data-dir="down"] .ns-ccell-stat { color: v
 }
 button.ns-stat { cursor: pointer; }
 .ns-stat-k { font-size: 11px; color: var(--color-text-muted); letter-spacing: 0.01em; }
-.ns-stat-v { font-size: 16.5px; font-weight: 500; color: var(--color-fg); font-variant-numeric: tabular-nums; }
+.ns-stat-v { font-size: 16.5px; font-weight: 550; color: var(--color-fg); font-variant-numeric: tabular-nums; }
 .ns-stat.is-active::after {
   content: '';
   position: absolute;
@@ -4410,7 +4419,7 @@ button.ns-stat { cursor: pointer; }
   pointer-events: none;
 }
 .ns-anno-k { color: var(--color-text-muted); font-size: 11px; }
-.ns-anno-v { color: var(--color-fg); font-weight: 500; font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: 6px; }
+.ns-anno-v { color: var(--color-fg); font-weight: 550; font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: 6px; }
 .ns-anno-dot { width: 7px; height: 7px; border-radius: 50%; }
 .ns-anno-dot[data-dir="up"] { background: var(--color-up); }
 .ns-anno-dot[data-dir="down"] { background: var(--color-down); }
@@ -4435,51 +4444,4 @@ button.ns-stat { cursor: pointer; }
   /* ledger rows wrap instead of squeezing a long value against its label */
   .ns-ledger-row { flex-wrap: wrap; row-gap: 2px; }
   .ns-ledger-row > * { min-width: 0; }
-}
-
-
-/* ════════════════════════════════════════════════════════════════════
-   THE CATALOGUE BACKSTOPS (Oct 3 2026 — docs/NORTHSTAR_UI.md Part 0).
-   ════════════════════════════════════════════════════════════════════ */
-/* §0.2 no uppercase labels, anywhere in the light site — component <style>
-   blocks that still carry the old microcap lose the transform here */
-html[data-lectr-light] body * { text-transform: none !important; }
-/* §0.2 three Inter weights: <b>/<strong> in running copy is emphasis (500),
-   never 700 */
-html[data-lectr-light] b, html[data-lectr-light] strong { font-weight: 500; }
-/* §0.3 the printer's mark — the ONLY sanctioned gold: folio numbers, the
-   word FIG., the seal. Other surfaces adopt it by class, never by token. */
-.ns-gold { color: var(--gold-ink-text, #7A5A14); }
-.ns-folio {
-  font-family: var(--font-mono), monospace;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  color: var(--gold-ink-text, #7A5A14);
-}
-/* /value's call plate wore the white-on-signal ramp over a dark gradient.
-   The gradient is gone (§0.1), so the plate's ink ramp returns to page ink;
-   the gap keeps the market's green (§0.3). Specificity out-ranks the
-   page-scoped ramp in app/value/page.tsx. */
-html[data-lectr-light] .terminal-shell .ns-cell-color.vd-call-cell .glass.lectr-cp {
-  --color-fg: #1C1917;
-  --color-bg: #FDFCFC;
-  --color-text-secondary: #44403B;
-  --color-text-muted: #6B655D;
-  --color-text-faint: #726C63;
-  --color-beige-text: #6B655D;
-  --color-beige: #6B655D;
-  --color-up: #0F7C43;
-  --hairline: rgba(28, 25, 23, 0.10);
-  --cream-hair: rgba(28, 25, 23, 0.26);
-  --color-border: rgba(28, 25, 23, 0.12);
-  --color-border-mid: rgba(28, 25, 23, 0.22);
-  --color-bg-elevated: #FFFFFF;
-  --color-hover-item: rgba(28, 25, 23, 0.04);
-}
-html[data-lectr-light] .terminal-shell .ns-cell-color.vd-call-cell .ray-call-btn-primary { background: #1C1917; color: #FDFCFC; }
-html[data-lectr-light] .terminal-shell .ns-cell-color.vd-call-cell .ray-call-btn-quiet {
-  background: #FFFFFF !important;
-  color: #1C1917 !important;
-  box-shadow: var(--ring-shadow) !important;
 }

@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { withShare } from '../../lib/og-meta';
 import { Fragment } from 'react';
 import QuarterInsight, { P, H, B } from '../../components/blog/QuarterInsight';
 import { PullQuote } from '../../components/blog/Editorial';
@@ -73,7 +72,7 @@ for (const slug of Object.keys(market.makerIndex ?? {})) {
 const moverSummary = movers.map(m => `${m.label} ${pct(m.changePct)} (${m.horizon})`).join(', ');
 const splitPhrase = up.length && down.length ? ` (${countWord(up.length)} up, ${countWord(down.length)} down)` : '';
 
-export const metadata: Metadata = withShare({
+export const metadata: Metadata = {
   title: 'Q2 2026 watch market in review — the deepest, most liquid tape we track',
   description:
     `1,811 watches, $240M, near-total sell-through — the deepest, most measurable market we cover${
@@ -83,7 +82,7 @@ export const metadata: Metadata = withShare({
         ? ` As of the ${asOf} corpus, ${countWord(movers.length)} maker${movers.length === 1 ? '' : 's'} clear${movers.length === 1 ? 's' : ''} the 95%-confidence bar: ${moverSummary}.`
         : ' As of the ' + asOf + ' corpus, no watch maker clears the 95%-confidence bar.'
     } What a confidence interval means, why almost everything abstains, and the Q2 2026 sales underneath.`,
-});
+};
 
 const dek =
   `1,811 watches sold for $240M — by far the most liquid, most measurable market we cover.${

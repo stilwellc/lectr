@@ -14,7 +14,7 @@ const EDITORIAL_CSS = `
 .lectr-dropcap::first-letter{
   float:left;
   font-family:var(--font-sans),sans-serif;
-  font-weight: 300;
+  font-weight:320;
   font-size:58px;
   line-height:1;
   letter-spacing:-0.02em;
@@ -34,7 +34,7 @@ const EDITORIAL_CSS = `
   border-left:2px solid var(--color-fg);
   font-family:var(--font-sans),sans-serif;
   font-size:clamp(21px,2.4vw,25px);
-  font-weight: 300;
+  font-weight:330;
   letter-spacing:-0.018em;
   line-height:1.32;
   color:var(--color-fg);

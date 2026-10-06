@@ -12,10 +12,10 @@ export interface Mover { label: string; chgPct: number; n: number; slug?: string
    ~680px measure, in-note heads bigger and lighter, the post title set in
    light Inter — authority through lightness, never boldness. */
 const wrap: React.CSSProperties = { maxWidth: 728, margin: '0 auto', padding: '0 24px' };
-const h2: React.CSSProperties = { fontFamily: 'var(--font-sans), sans-serif', fontSize: 24, fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.2, margin: '44px 0 12px' };
+const h2: React.CSSProperties = { fontFamily: 'var(--font-sans), sans-serif', fontSize: 24, fontWeight: 450, letterSpacing: '-0.02em', lineHeight: 1.2, margin: '44px 0 12px' };
 const p: React.CSSProperties = { fontSize: 17, lineHeight: 1.65, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
 const table: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', margin: '4px 0 8px', fontSize: 14 };
-const th: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', borderBottom: '1px solid var(--hairline)', color: 'var(--color-text-muted)', fontWeight: 500, fontSize: 12.5 };
+const th: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', borderBottom: '1px solid var(--hairline)', color: 'var(--color-text-muted)', fontWeight: 600, fontSize: 12.5 };
 const td: React.CSSProperties = { padding: '9px 10px', borderBottom: '1px solid var(--hairline)', color: 'var(--color-text-secondary)' };
 const tdNum: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--color-fg)', whiteSpace: 'nowrap' };
 
@@ -23,7 +23,7 @@ const tdNum: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumer
  *  note's opening paragraph — it takes the editorial drop cap (Editorial.tsx). */
 export function P({ children, lede }: { children: React.ReactNode; lede?: boolean }) { return <p style={p} className={lede ? 'lectr-dropcap' : undefined}>{children}</p>; }
 export function H({ children }: { children: React.ReactNode }) { return <h2 style={h2}>{children}</h2>; }
-export function B({ children }: { children: React.ReactNode }) { return <span style={{ color: 'var(--color-fg)', fontWeight: 500 }}>{children}</span>; }
+export function B({ children }: { children: React.ReactNode }) { return <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>{children}</span>; }
 
 /** Shared frame for the quarterly market notes — a stat band, the narrative
  *  sections, the top-sales table, movers, and the standing honesty footnote. */
@@ -61,7 +61,7 @@ export default function QuarterInsight({
           <p className="ns-kicker" style={{ margin: '0 0 14px' }}>
             <Link href="/blog" style={{ color: 'inherit', textDecoration: 'none' }}>Notes from the desk</Link>
           </p>
-          <h1 style={{ fontFamily: 'var(--font-sans), sans-serif', fontSize: 'clamp(30px, 4.4vw, 40px)', fontWeight: 300, letterSpacing: '-0.02em', lineHeight: 1.1, margin: '0 0 14px' }}>{title}</h1>
+          <h1 style={{ fontFamily: 'var(--font-sans), sans-serif', fontSize: 'clamp(30px, 4.4vw, 40px)', fontWeight: 330, letterSpacing: '-0.02em', lineHeight: 1.1, margin: '0 0 14px' }}>{title}</h1>
           {/* the provenance ledger — gray label over ink value, closed by the dotted rule */}
           <div className="ns-byline" style={{ margin: '0 0 18px' }}>
             <div>
@@ -88,7 +88,7 @@ export default function QuarterInsight({
             {stats.map(s => (
               <div key={s.label} className="ns-well" style={{ padding: '16px 18px' }}>
                 <div className="ns-well-label" style={{ marginBottom: 5 }}>{s.label}</div>
-                <div style={{ fontSize: 22, fontWeight: 500, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', color: s.tone === 'up' ? 'var(--color-up)' : s.tone === 'down' ? 'var(--color-down)' : 'var(--color-fg)' }}>{s.value}</div>
+                <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', color: s.tone === 'up' ? 'var(--color-up)' : s.tone === 'down' ? 'var(--color-down)' : 'var(--color-fg)' }}>{s.value}</div>
                 {s.sub && <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 3 }}>{s.sub}</div>}
               </div>
             ))}
@@ -122,10 +122,10 @@ export default function QuarterInsight({
                 display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 14px',
                 padding: '12px 2px 0', fontSize: 13.5, color: 'var(--color-text-muted)',
               }}>
-                <span style={{ color: 'var(--color-fg)', fontWeight: 500 }}>{headline.caption}</span>
+                <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>{headline.caption}</span>
                 {/* the sale line moves down into the FIG. folio on paper; dark keeps it here */}
                 <span className="lectr-fig-dark">{headline.house} · {headline.saleLine}</span>
-                <span style={{ marginLeft: 'auto', fontVariantNumeric: 'tabular-nums', color: 'var(--color-fg)', fontWeight: 500 }}>{formatPrice(headline.priceUsd)}</span>
+                <span style={{ marginLeft: 'auto', fontVariantNumeric: 'tabular-nums', color: 'var(--color-fg)', fontWeight: 700 }}>{formatPrice(headline.priceUsd)}</span>
               </figcaption>
               <FigCap>{headline.house} · {headline.saleLine}</FigCap>
               <div style={{ marginTop: 14 }}>

@@ -5,13 +5,12 @@ import { useBookTotals } from '../lib/book';
 import Link from 'next/link';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL, Market } from '../constants';
-import { craftTitle, formatDate, formatPrice, localToday, fmtSignedPct, isLiveUpcoming, trueSaleDay } from '../utils';
+import { craftTitle, formatDate, formatPrice, httpsImg, localToday, fmtSignedPct, isLiveUpcoming, trueSaleDay } from '../utils';
 import { lotSignal, confidenceMeter, formatEstimate } from './LotCard';
 import { dealScore, lotFitsMarket, signalMagnitude } from '../lib/comps';
 import { safeHref } from '../lib/safe-href';
 import Flick from './Flick';
 import CloseClock from './CloseClock';
-import LotPlate from './LotPlate';
 
 /**
  * Ray Terminal — what survived the restructure: the call the product stands
@@ -89,48 +88,72 @@ export function pickCall(lots: AuctionLot[], allLots: AuctionLot[], market: Mark
 const CALLPLATE_CSS = `
 .lectr-cp-body,.lectr-cp-fig,.lectr-cp-cert{display:contents}
 .lectr-cp-leaders{display:none}
+.lectr-cp-mono{display:flex;align-items:center;justify-content:center;background:var(--color-bg-elevated)}
+.lectr-cp-monorules{position:absolute;top:10px;left:12px;right:12px;height:5px;background:linear-gradient(to bottom,var(--color-fg) 0,var(--color-fg) 2px,transparent 2px,transparent 4px,var(--cream-hair, rgba(242,238,227,0.28)) 4px,var(--cream-hair, rgba(242,238,227,0.28)) 5px)}
+.lectr-cp-monoglyph{font-size:40px;font-weight:700;color:var(--color-text-faint);letter-spacing:0.02em;line-height:1}
 /* COMPACT density — no image plate: microcap head, maker/title, the dotted-
    leader certificate rows (always visible, every width), band slot, CTA. */
 .lectr-cp-compact{display:block;padding:22px 24px 20px}
-.lectr-cp-compact .lectr-cp-head{position:relative;margin-bottom:12px;padding-top:9px;border-top:2px solid var(--color-fg);font-size:13px;font-weight: 400;letter-spacing:0;color:var(--color-text-muted)}
+.lectr-cp-compact .lectr-cp-head{position:relative;margin-bottom:12px;padding-top:9px;border-top:2px solid var(--color-fg);font-size:10.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--color-beige-text)}
 .lectr-cp-compact .lectr-cp-head::before{content:"";position:absolute;top:2px;left:0;right:0;border-top:1px solid var(--hairline)}
 .lectr-cp-compact .lectr-cp-band{margin:2px -10px 0}
 .lectr-cp-compact .lectr-cp-leaders{display:block;margin-top:14px;border-top:2px dotted var(--hairline);padding-top:4px}
 .lectr-cp-compact .lectr-cp-row{display:flex;align-items:baseline;gap:10px;padding:10px 0;font-size:13.5px}
 .lectr-cp-compact .lectr-cp-k{color:var(--color-text-muted)}
 .lectr-cp-compact .lectr-cp-fill{flex:1;border-bottom:2px dotted var(--cream-hair, rgba(242,238,227,0.28));transform:translateY(-3px)}
-.lectr-cp-compact .lectr-cp-v{font-weight: 500;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
+.lectr-cp-compact .lectr-cp-v{font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
 .lectr-cp-compact .lectr-cp-v.up{color:var(--color-up)}
-.lectr-cp-compact .lectr-cp-sub{font-size:11.5px;font-weight: 500;color:var(--color-text-muted);margin-right:2px;white-space:nowrap}
-.lectr-cp-compact .lectr-cp-dots{font-size:10px;letter-spacing:1px;color:var(--color-text-muted);margin-right:7px}
-/* the compact plate's photograph — the shared LotPlate (4:5 cream mat)
-   beside the certificate. Phone: the plate leads at CallHero's phone width;
-   ≥900px: a right column, top-aligned with the certificate. */
+.lectr-cp-compact .lectr-cp-sub{font-size:11.5px;font-weight:500;color:var(--color-text-muted);margin-right:2px;white-space:nowrap}
+.lectr-cp-compact .lectr-cp-dots{font-size:10px;letter-spacing:1px;color:var(--color-beige);margin-right:7px}
+/* the compact plate's photograph — an elevated mat beside the certificate.
+   Mobile: mat above the leaders; ≥900px: a right column. No image → the
+   grid collapses to the single text column (never a dominant empty frame). */
 .lectr-cpc-grid{display:flex;flex-direction:column}
-.lectr-cpc-fig{order:-1;margin:2px 0 18px;width:78%;max-width:360px}
+/* phone: the photograph leads, as on the full plate — head, mat, certificate */
+.lectr-cpc-fig{order:-1;margin:2px 0 16px}
+.lectr-cpc-mat{background:var(--color-bg-elevated);border:1px solid var(--hairline);border-radius:12px;padding:14px}
+.lectr-cpc-img{height:200px;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:6px}
+.lectr-cpc-img img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+.lectr-cpc-cap{margin-top:10px;border-top:2px dotted var(--hairline);padding-top:8px;font-size:11.5px;color:var(--color-text-muted)}
 @media (min-width:900px){
-  .lectr-cp-compact .lectr-cpc-grid{display:grid;grid-template-columns:minmax(0,1fr) 34%;column-gap:40px;align-items:start}
+  .lectr-cp-compact .lectr-cpc-grid{display:grid;grid-template-columns:minmax(0,1fr) 36%;column-gap:34px;align-items:stretch}
+  .lectr-cp-compact .lectr-cpc-grid.lectr-cpc-noimg{display:block}
   .lectr-cpc-main{grid-column:1;grid-row:1;min-width:0}
-  .lectr-cpc-fig{grid-column:2;grid-row:1;margin:0;min-width:0;width:auto;max-width:none}
+  .lectr-cpc-fig{grid-column:2;grid-row:1;margin:0;min-width:0;display:flex}
+  .lectr-cpc-mat{flex:1;display:flex;flex-direction:column}
+  .lectr-cpc-img{flex:1;height:auto;min-height:280px}
 }
+/* FULL density, image failed: never a dominant empty frame — the monogram
+   plate shrinks to a modest square at every presentation. */
+.lectr-cp.lectr-cp-noimg .ray-plate-img{height:140px}
 @media (min-width:900px){
   .ray-board-belowrow .lectr-cp{padding:20px 24px 18px}
   .ray-board-belowrow .lectr-cp .lectr-cp-body{display:grid;grid-template-columns:42% minmax(0,1fr);grid-template-rows:auto 1fr;column-gap:36px}
   .ray-board-belowrow .lectr-cp .lectr-cp-fig{display:block;grid-column:1;grid-row:1/span 2;min-width:0}
   .ray-board-belowrow .lectr-cp .lectr-cp-cert{display:flex;flex-direction:column;grid-column:2;grid-row:2;min-width:0}
-  .ray-board-belowrow .lectr-cp .lectr-cp-head{grid-column:2;grid-row:1;position:relative;margin-bottom:12px;padding-top:9px;border-top:2px solid var(--color-fg);font-size:13px;font-weight: 400;letter-spacing:0;color:var(--color-text-muted)}
+  .ray-board-belowrow .lectr-cp .lectr-cp-head{grid-column:2;grid-row:1;position:relative;margin-bottom:12px;padding-top:9px;border-top:2px solid var(--color-fg);font-size:10.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--color-beige-text)}
   .ray-board-belowrow .lectr-cp .lectr-cp-head::before{content:"";position:absolute;top:2px;left:0;right:0;border-top:1px solid var(--hairline)}
+  .ray-board-belowrow .lectr-cp .ray-plate-mat{padding:18px;margin-bottom:0}
+  .ray-board-belowrow .lectr-cp .ray-plate-img{height:320px;background:var(--color-bg-elevated)}
+  .ray-board-belowrow .lectr-cp .ray-plate-img img{object-fit:contain}
+  .ray-board-belowrow .lectr-cp .ray-plate-cap{margin-top:12px;border-top:2px dotted var(--hairline);padding-top:9px;font-size:11.5px;color:var(--color-text-muted)}
+  .ray-board-belowrow .lectr-cp .lectr-cp-monoglyph{font-size:64px}
   .ray-board-belowrow .lectr-cp .lectr-cp-est{display:none}
   .ray-board-belowrow .lectr-cp .ray-sigrow{display:none}
   .ray-board-belowrow .lectr-cp .lectr-cp-leaders{display:block;margin-top:14px;border-top:2px dotted var(--hairline);padding-top:4px}
   .ray-board-belowrow .lectr-cp .lectr-cp-row{display:flex;align-items:baseline;gap:10px;padding:10px 0;font-size:13.5px}
   .ray-board-belowrow .lectr-cp .lectr-cp-k{color:var(--color-text-muted)}
   .ray-board-belowrow .lectr-cp .lectr-cp-fill{flex:1;border-bottom:2px dotted var(--cream-hair, rgba(242,238,227,0.28));transform:translateY(-3px)}
-  .ray-board-belowrow .lectr-cp .lectr-cp-v{font-weight: 500;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
+  .ray-board-belowrow .lectr-cp .lectr-cp-v{font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
   .ray-board-belowrow .lectr-cp .lectr-cp-v.up{color:var(--color-up)}
-  .ray-board-belowrow .lectr-cp .lectr-cp-sub{font-size:11.5px;font-weight: 500;color:var(--color-text-muted);margin-right:2px;white-space:nowrap}
-  .ray-board-belowrow .lectr-cp .lectr-cp-dots{font-size:10px;letter-spacing:1px;color:var(--color-text-muted);margin-right:7px}
+  .ray-board-belowrow .lectr-cp .lectr-cp-sub{font-size:11.5px;font-weight:500;color:var(--color-text-muted);margin-right:2px;white-space:nowrap}
+  .ray-board-belowrow .lectr-cp .lectr-cp-dots{font-size:10px;letter-spacing:1px;color:var(--color-beige);margin-right:7px}
   .ray-board-belowrow .lectr-cp .ray-deckcall-cta{margin-top:auto;padding-top:14px;border-top:2px dotted var(--hairline)}
+  /* wide plate, image failed: reflow text-first — the monogram becomes a
+     ~140px side square and the certificate column takes the width */
+  .ray-board-belowrow .lectr-cp.lectr-cp-noimg .lectr-cp-body{grid-template-columns:176px minmax(0,1fr)}
+  .ray-board-belowrow .lectr-cp.lectr-cp-noimg .ray-plate-img{height:140px}
+  .ray-board-belowrow .lectr-cp.lectr-cp-noimg .lectr-cp-monoglyph{font-size:40px}
 }
 `;
 
@@ -173,17 +196,17 @@ export function CallPlate({
   onSeeComps?: (lot: AuctionLot) => void;
 }) {
   const call = useMemo(() => pickCall(lots, allLots, market), [lots, allLots, market]);
+  // a hotlink-blocked photograph must never unmount the column — the fallback
+  // flips this state and the monogram plate takes the mat instead
+  const [failedImgId, setFailedImgId] = useState<string | null>(null);
 
   if (!call) return null;
   const { lot, signal } = call;
   const meter = confidenceMeter(signal!.confidence);
-  // the head names the call's REAL tier — pickCall gates on medium-or-better
-  // and ranks by calibrated odds; it never guarantees the top tier
-  const callHead = `Today\u2019s call · ${meter.word} confidence, ranked by calibrated odds`;
-  const confDotsLabel = `Confidence: ${meter.word}, ${(meter.dots.match(/●/g) || []).length} of 4`;
-  const callTitle = craftTitle(lot.title);
   const saved = isSaved ? isSaved(lot.id) : false;
+  const imgOk = !!lot.imageUrl && failedImgId !== lot.id;
   const makerName = ARTIST_LABEL[lot.artist] || lot.artist;
+  const monogram = makerName.trim().charAt(0).toUpperCase();
   const saleDay = trueSaleDay(lot) || lot.saleDate;
   // CLOSING-TIME SALIENCE — a call that closes today/tonight names the urgency
   // instead of a bare date. Same LOCAL-day arithmetic daysWord uses; the call
@@ -207,7 +230,7 @@ export function CallPlate({
     <button
       className="ray-save-btn"
       onClick={e => { e.preventDefault(); e.stopPropagation(); onToggleSave(lot.id, lot); }}
-      aria-label={saved ? `Remove ${callTitle} from saved` : `Save ${callTitle}`}
+      aria-label={saved ? 'Remove from saved' : 'Save lot'}
       // position/zIndex: on the full-density plate the button must ride ABOVE
       // the stretched /value link overlay (a sibling, never a descendant —
       // button-inside-link is invalid interactive nesting)
@@ -230,10 +253,10 @@ export function CallPlate({
       <div className="glass lit lectr-cp lectr-cp-compact">
         <style dangerouslySetInnerHTML={{ __html: CALLPLATE_CSS }} />
         <div className="ray-panel-k lectr-cp-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <span>{callHead}</span>
+          <span>Today&rsquo;s call · highest confidence, deepest gap</span>
           {saveBtn}
         </div>
-        <div className="lectr-cpc-grid">
+        <div className={`lectr-cpc-grid${imgOk ? '' : ' lectr-cpc-noimg'}`}>
           <div className="lectr-cpc-main">
             <div className="ray-call-artist">{makerName}</div>
             <div className="ray-call-title">{craftTitle(lot.title)}</div>
@@ -243,11 +266,11 @@ export function CallPlate({
               <LeaderRow k="Comps median" v={compsMed != null ? formatPrice(compsMed) : '—'} sub={`${signal!.basis ?? '—'} sales`} />
               <LeaderRow k="The gap" v={signalMagnitude(signal!.label, signal!.pct)} up sub="comps over ask" />
               <LeaderRow k="Confidence">
-                <span className="lectr-cp-dots" role="img" aria-label={confDotsLabel} title={confDotsLabel}>{meter.dots}</span>{meter.word}
+                <span className="lectr-cp-dots" aria-hidden>{meter.dots}</span>{meter.word}
               </LeaderRow>
               <LeaderRow k={closingWord ? 'Closing' : 'Hammers'} sub={lot.auctionHouse}>
                 {closingWord
-                  ? <span style={{ color: 'var(--color-fg)', fontWeight: 500 }}>
+                  ? <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>
                       {closingWord}
                       {lot.saleDateTime && <> · <CloseClock iso={lot.saleDateTime} windowHours={24} /></>}
                     </span>
@@ -256,7 +279,7 @@ export function CallPlate({
             </div>
             <div className="ray-call-ctas" style={{ marginTop: 16 }}>
               {onSeeComps ? (
-                <button className="ray-call-btn ray-call-btn-primary" onClick={() => onSeeComps(lot)} aria-label={`See the comps for ${callTitle}`}>
+                <button className="ray-call-btn ray-call-btn-primary" onClick={() => onSeeComps(lot)}>
                   See the comps
                 </button>
               ) : (
@@ -276,12 +299,25 @@ export function CallPlate({
               )}
             </div>
           </div>
-          {/* the plate (NORTHSTAR §0.4) — the shared LotPlate: cream 4:5
-              mat, object at 80%, FIG. caption; a dead hotlink shows the
-              maker's initial on the same mat */}
-          <div className="lectr-cpc-fig">
-            <LotPlate src={lot.imageUrl} monogram={makerName} fig={1} caption={caption} />
-          </div>
+          {imgOk && (
+            <div className="lectr-cpc-fig">
+              <div className="lectr-cpc-mat">
+                <div className="lectr-cpc-img">
+                  <img
+                    src={httpsImg(lot.imageUrl)}
+                    alt=""
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    onError={() => setFailedImgId(lot.id)}
+                    // cache hits never fire onError — complete with zero
+                    // naturalWidth at attach is a cached failure
+                    ref={el => { if (el && el.complete && el.naturalWidth === 0) setFailedImgId(lot.id); }}
+                  />
+                </div>
+                <div className="lectr-cpc-cap">{caption}</div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -293,7 +329,7 @@ export function CallPlate({
     // the save <button> floats above it (z2) — interactive controls are
     // siblings, never nested (B4-5: button-inside-link is invalid HTML and
     // undefined for keyboard/AT).
-    <div className="ray-board-panel ray-deckcall lectr-cp" style={{ position: 'relative' }}>
+    <div className={`ray-board-panel ray-deckcall lectr-cp${imgOk ? '' : ' lectr-cp-noimg'}`} style={{ position: 'relative' }}>
       <Link
         href="/value"
         aria-label="Today's call — see how we called it"
@@ -302,14 +338,35 @@ export function CallPlate({
       <style dangerouslySetInnerHTML={{ __html: CALLPLATE_CSS }} />
       <div className="lectr-cp-body">
         <div className="ray-panel-k lectr-cp-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <span>{callHead}</span>
+          <span>Today&rsquo;s call · highest confidence, deepest gap</span>
           {saveBtn}
         </div>
 
         {/* the plate: photograph on the elevated mat — or, when the house
             blocks the hotlink, the maker's monogram on the same ground */}
         <div className="lectr-cp-fig">
-          <LotPlate src={lot.imageUrl} monogram={makerName} fig={1} caption={caption} />
+          <div className="ray-plate-mat">
+            {imgOk ? (
+              <div className="ray-plate-img">
+                <img
+                  src={httpsImg(lot.imageUrl)}
+                  alt=""
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                  onError={() => setFailedImgId(lot.id)}
+                  // cache hits never fire onError — complete with zero
+                  // naturalWidth at attach is a cached failure
+                  ref={el => { if (el && el.complete && el.naturalWidth === 0) setFailedImgId(lot.id); }}
+                />
+              </div>
+            ) : (
+              <div className="ray-plate-img lectr-cp-mono">
+                <span className="lectr-cp-monorules" aria-hidden />
+                <span className="lectr-cp-monoglyph">{monogram}</span>
+              </div>
+            )}
+            <div className="ray-plate-cap">{caption}</div>
+          </div>
         </div>
 
         {/* the certificate */}
@@ -323,11 +380,11 @@ export function CallPlate({
             <LeaderRow k="Comps median" v={compsMed != null ? formatPrice(compsMed) : '—'} sub={`${signal!.basis ?? '—'} sales`} />
             <LeaderRow k="The gap" v={signalMagnitude(signal!.label, signal!.pct)} up sub="comps over ask" />
             <LeaderRow k="Confidence">
-              <span className="lectr-cp-dots" role="img" aria-label={confDotsLabel} title={confDotsLabel}>{meter.dots}</span>{meter.word}
+              <span className="lectr-cp-dots" aria-hidden>{meter.dots}</span>{meter.word}
             </LeaderRow>
             <LeaderRow k={closingWord ? 'Closing' : 'Hammers'}>
               {closingWord
-                ? <span style={{ color: 'var(--color-fg)', fontWeight: 500 }}>{closingWord}</span>
+                ? <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>{closingWord}</span>
                 : `${formatDate(saleDay)} · ${daysWord(saleDay)}`}
             </LeaderRow>
           </div>
@@ -387,7 +444,7 @@ const NS_CLOSE_CSS = `
 .ray-close-thesis {
   font-family: var(--font-sans), sans-serif;
   font-size: clamp(30px, 2.4vw + 16px, 44px);
-  font-weight: 300;
+  font-weight: 330;
   letter-spacing: -0.02em;
   line-height: 1.1;
   color: var(--color-fg);
@@ -416,10 +473,7 @@ const NS_CLOSE_CSS = `
   padding: 0 0 8px;
 }
 .ray-close-line-links { display: flex; flex-direction: column; align-items: flex-start; column-gap: 0; }
-.ray-close-line-links a { display: inline-flex; align-items: center; min-height: 32px; padding: 4px 0; font-size: 14.5px; font-weight: 500; color: var(--color-fg); }
-/* the starling link prints in TEXT-safe butter on porcelain (display butter
-   measured 4.42:1 on the about deck's ground) */
-html[data-lectr-light] .ray-close-starling { color: var(--color-butter-text) !important; }
+.ray-close-line-links a { padding: 8px 0; font-size: 14.5px; font-weight: 450; color: var(--color-fg); }
 .ray-close-line-links a:hover { color: var(--color-text-secondary); text-decoration-color: var(--color-border-mid); }
 .ray-close-line-links a:focus-visible { outline: 1.5px solid var(--color-border-mid); outline-offset: 2px; }
 .ray-close-base { margin-top: 64px; padding-top: 0; color: var(--color-text-faint); }
@@ -430,7 +484,7 @@ html[data-lectr-light] .ray-close-starling { color: var(--color-butter-text) !im
   .ray-close-thesis { font-size: 26px; }
   .ray-close-lines { margin-top: 28px; grid-template-columns: 1fr 1fr; gap: 20px 24px; }
   .ray-close-line-k { padding-bottom: 4px; font-size: 13px; }
-  .ray-close-line-links a { min-height: 32px; padding: 3px 0; font-size: 13.5px; }
+  .ray-close-line-links a { padding: 5px 0; font-size: 13.5px; }
   .ray-close-base { margin-top: 28px; }
 }
 html[data-lectr-light] .ray-close {
@@ -508,7 +562,7 @@ export function Colophon({ lotCount, houseCount, record, lastCrawl }: {
       <style dangerouslySetInnerHTML={{ __html: NS_CLOSE_CSS }} />
       <div className="rail ray-close-in">
         {/* the monument — the argument, set once, at the close */}
-        <p className="ray-close-thesis">The house prints a guess. The record prints the answer.</p>
+        <p className="ray-close-thesis">Every estimate, read against every hammer.</p>
 
         {/* the engraved spec line — provenance printed, the record cited */}
         <p className="ray-close-spec">
@@ -545,13 +599,10 @@ export function Colophon({ lotCount, houseCount, record, lastCrawl }: {
               <Link href="/value">Value</Link>
               <Link href="/receipts">The record</Link>
               <Link href="/makers">Makers</Link>
-              <Link href="/ref">Watch references</Link>
               <Link href="/analytics">Analytics</Link>
               <Link href="/profile">My profile</Link>
               <Link href="/about">How it works</Link>
-              <Link href="/glossary">Glossary</Link>
               <Link href="/blog">Notes from the desk</Link>
-              <Link href="/status">Data status</Link>
             </span>
           </div>
           <div className="ray-close-line" style={{ '--row-i': 2 } as React.CSSProperties}>

@@ -2,57 +2,68 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { AuctionLot } from '../types';
-import { useRayData } from './useRayData';
-import { fetchSummary, isApiUnavailable } from '../lib/api';
+import { useRayData, triggerFullLoad } from './useRayData';
+import { loadPageStats, loadMakerLots } from '../lib/page-data';
 
 /**
- * ONE MAKER'S BOOK, in columns (Oct 2026). /makers/<slug> used to stream the
- * whole served corpus, then (Sep 27) its own maker shards — up to 13 × 19MB
- * for the deepest culture slug. Its aggregate surfaces (hero, price chart,
- * decade band, player strip) only read status / price / date / category /
- * estimates / house / sport / player per row, so the lot API ships exactly
- * that (/api/maker/:slug?view=summary — main + archive tier for
- * sports/science, main-wins, minus the eager lots) plus the top-priced rows
- * whole for the record plates. This hook lays the eager upcoming lots over it
- * (live signal, bid state, close time), exactly as before. The sold TABLE
- * pages through /api/maker/:slug itself (PastResults remote mode).
+ * ONE MAKER'S BOOK, not the whole corpus (Sep 27 2026). /makers/<slug> used
+ * to stream every served shard (~35MB brotli, plus the ~25MB archive for
+ * sports/science) to filter one maker's rows. The build now writes each
+ * maker's own rows to pages/maker-<slug>-N.json (main tier + — for
+ * sports/science makers — the archive tier, main-wins on a shared id, exactly
+ * useSoldArchive's merge). This hook loads those, then lays the eager
+ * upcoming lots over them by id (the phase-2 re-attach: live signal, bid
+ * state and close time ride the eager copies).
+ *
+ * `source: 'corpus'` = the data build predates the maker shards; the hook
+ * has asked for the full corpus and the caller keeps its old path.
  */
 export interface MakerRows {
   rows: AuctionLot[] | null;
   loaded: boolean;
   error: boolean;
-  /** the lot API isn't serving yet — `rows` is the eager live book only */
-  unavailable: boolean;
-  retry: () => void;
+  source: 'maker' | 'corpus' | 'pending';
 }
 
 export function useMakerRows(slug: string): MakerRows {
-  const { allLots } = useRayData();
-  const [attempt, setAttempt] = useState(0);
-  // an answer counts only for the request that asked (slug + attempt) — a
-  // new slug or a retry reads as loading until its own answer lands
-  const key = `${slug}#${attempt}`;
-  const [raw, setRaw] = useState<{ key: string; rows: AuctionLot[] | null; error: boolean; unavailable?: boolean }>({ key: '', rows: null, error: false });
+  const { allLots, lastCrawl, loading } = useRayData();
+  const [raw, setRaw] = useState<{ rows: AuctionLot[] | null; source: MakerRows['source']; error: boolean }>(
+    { rows: null, source: 'pending', error: false },
+  );
   useEffect(() => {
+    if (loading) return;                                   // wait for the crawl stamp
     let dead = false;
-    fetchSummary('maker', slug).then(
-      rows => { if (!dead) setRaw({ key, rows, error: false }); },
-      e => {
+    setRaw({ rows: null, source: 'pending', error: false });
+    loadPageStats().then(st => {
+      if (dead) return;
+      const n = st?.makerShards?.[slug];
+      if (!st || !n) { setRaw({ rows: null, source: 'corpus', error: false }); triggerFullLoad(); return; }
+      loadMakerLots(slug, n, lastCrawl).then(rows => {
         if (dead) return;
-        // not serving yet: the page stands on the eager book + stats.json
-        // (the sold table says the archive isn't available yet)
-        if (isApiUnavailable(e)) setRaw({ key, rows: [], error: false, unavailable: true });
-        else setRaw({ key, rows: null, error: true });
-      },
-    );
+        if (!rows) { setRaw({ rows: null, source: 'maker', error: true }); return; }
+        // the file omits `artist` (implied by the slug) — restore it
+        for (const r of rows) (r as { artist: string }).artist = slug;
+        setRaw({ rows, source: 'maker', error: false });
+      });
+    });
     return () => { dead = true; };
-  }, [slug, key]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, loading]);
 
   const rows = useMemo(() => {
-    if (!raw.rows || raw.key !== key) return null;
-    // the summary omits every eager lot by construction — no id collisions
-    return [...raw.rows, ...allLots.filter(l => l.artist === slug)];
-  }, [raw, allLots, slug, key]);
+    if (!raw.rows) return null;
+    const eager = new Map<string, AuctionLot>();
+    for (const l of allLots) if (l.artist === slug) eager.set(l.id, l);
+    const out: AuctionLot[] = [];
+    const seen = new Set<string>();
+    for (const r of raw.rows) {
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      out.push(eager.get(r.id) || r);
+    }
+    eager.forEach((l, id) => { if (!seen.has(id)) out.push(l); });
+    return out;
+  }, [raw.rows, allLots, slug]);
 
-  return { rows, loaded: !!rows, error: raw.key === key && raw.error, unavailable: raw.key === key && !!raw.unavailable, retry: () => setAttempt(a => a + 1) };
+  return { rows, loaded: !!rows, error: raw.error, source: raw.source };
 }

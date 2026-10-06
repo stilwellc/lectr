@@ -84,8 +84,8 @@ export async function generateMetadata(props: { params: Promise<{ a: string; b: 
     title: { absolute: title },
     description,
     alternates: { canonical },
-    openGraph: { title, description, images: ['/opengraph-image'] },
-    twitter: { card: 'summary_large_image', title, description, images: ['/opengraph-image'] },
+    openGraph: { title, description },
+    twitter: { title, description },
   };
 }
 

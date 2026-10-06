@@ -1,5 +1,4 @@
-import { MARKETS, marketArtists, type Market } from '../../../constants';
-import { marketFacts, n, shareMeta } from '../../../lib/og-meta';
+import { MARKETS } from '../../../constants';
 
 /**
  * /makers/m/<market> — the roster with the market pinned in the URL
@@ -22,19 +21,14 @@ export function generateStaticParams() {
 export async function generateMetadata(props: { params: Promise<{ market: string }> }) {
   const params = await props.params;
   const label = MARKETS.find(m => m.key === params.market)?.label || params.market;
-  const f = marketFacts(params.market as Market);
-  const noun = params.market === 'tcg' ? 'TCG' : label.toLowerCase();
-  const roster = marketArtists(params.market as Market).size;
-  return shareMeta({
-    title: segmentTitle(label, 'makers'),
-    absolute: true,
-    description: `${roster} ${noun} ${roster === 1 ? 'name' : 'names'} on the ledger${f.settled ? ` with ${n(f.settled)} settled results between them` : ''} — sale history, records and the live lots, one dossier each.`,
-    canonical: `/makers/m/${params.market}`,
-  });
+  return {
+    title: `${label} makers`,
+    description: `Every maker lectr tracks in the ${params.market === 'tcg' ? 'TCG' : label.toLowerCase()} market — sparklines, record sales, and where the market is heading.`,
+    alternates: { canonical: `/makers/m/${params.market}` },
+  };
 }
 
 import Base from '../../page';
-import { segmentTitle } from '../../../lib/route-titles';
 
 // A prop-less WRAPPER, not a re-export: forwarding the server-injected
 // params/searchParams into the client page component makes Next serialize

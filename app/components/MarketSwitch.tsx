@@ -100,13 +100,12 @@ export default function MarketSwitch({
   };
 
   // THE FLAP LINE (mobile door) — the split-flap destination row for the
-  // active market. Sentence-case mono tokens, one quiet register (no
-  // tracked caps — docs/NORTHSTAR_UI.md §0.2).
+  // active market. Uppercase mono tokens, one quiet register.
   const flap = (() => {
     if (!door) return null;
-    const tokens: string[] = [active.label];
+    const tokens: string[] = [active.label.toUpperCase()];
     const n = reads?.[active.key];
-    if (n != null) tokens.push(`${fmtCount(n)} live ${n === 1 ? 'lot' : 'lots'}`);
+    if (n != null) tokens.push(`${fmtCount(n)} LIVE ${n === 1 ? 'LOT' : 'LOTS'}`);
     return tokens;
   })();
 
@@ -152,9 +151,7 @@ export default function MarketSwitch({
         );
       })}
       {flap && (
-        // visual echo of the selected tab (whose label already carries the
-        // count) — hidden from AT: a tablist may own only tabs
-        <div className="ray-rail-flap" aria-hidden="true">
+        <div className="ray-rail-flap" aria-live="polite">
           {flap.map((tok, i) => (
             <span key={i}>
               {i > 0 && <span className="ray-rail-flap-dot" aria-hidden="true">·</span>}

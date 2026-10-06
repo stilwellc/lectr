@@ -76,7 +76,7 @@ export default function CalibrationCurve({ backtest, bare = false, flagThreshold
             ))}
             <Line type="stepAfter" dataKey="global" stroke={MARKET_COLORS.global} strokeWidth={2} dot={false} isAnimationActive={false}
               label={(p: { index?: number; x?: number; y?: number }) => (p.index === rows.length - 1 && p.x != null && p.y != null ? (
-                <text x={p.x + 8} y={p.y + 3} fontSize={10.5} fontFamily="var(--font-mono), monospace" fontWeight={500} fill="var(--chart-hero, #e8dab6)">global</text>
+                <text x={p.x + 8} y={p.y + 3} fontSize={10.5} fontFamily="var(--font-mono), monospace" fontWeight={600} fill="var(--chart-hero, #e8dab6)">global</text>
               ) : <g />)} />
           </LineChart>
         </ResponsiveContainer>
@@ -105,7 +105,7 @@ export default function CalibrationCurve({ backtest, bare = false, flagThreshold
       <div className="ns-split" style={{ marginBottom: 4 }}>
         <div>
           <span className="ns-kicker">The calibration curve</span>
-          <h2 style={{ margin: 0, fontFamily: 'var(--font-sans), sans-serif', fontSize: 30, fontWeight: 300, letterSpacing: '-0.02em', lineHeight: 1.12, color: 'var(--color-fg)' }}>
+          <h2 style={{ margin: 0, fontFamily: 'var(--font-sans), sans-serif', fontSize: 30, fontWeight: 340, letterSpacing: '-0.02em', lineHeight: 1.12, color: 'var(--color-fg)' }}>
             What a flag <span style={{ fontStyle: 'normal', color: 'var(--color-fg)' }}>is worth</span>
           </h2>
         </div>

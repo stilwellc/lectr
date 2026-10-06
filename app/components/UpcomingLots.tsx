@@ -89,7 +89,7 @@ export default function UpcomingLots({
         .ray-upcoming .ray-sort-pill {
           font-family: var(--font-sans), sans-serif;
           font-size: 12.5px;
-          font-weight: 500;
+          font-weight: 600;
           letter-spacing: -0.01em;
           padding: 6px 16px;
           border-radius: 100px;
@@ -155,7 +155,7 @@ export default function UpcomingLots({
           <h2 style={{
             fontFamily: 'var(--font-sans), sans-serif',
             fontSize: 30,
-            fontWeight: 300,
+            fontWeight: 350,
             letterSpacing: '-0.025em',
             lineHeight: 1.12,
           }}>
