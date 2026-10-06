@@ -47,7 +47,7 @@ import { readCorpus as readCorpusShared } from './corpus-io';
 import type { AuctionLot } from '../app/types';
 import {
   prepare, targetsOf, replayTargets, rehydrateState, assertRecord,
-  summarizeState, summaryLine, ENGINE_VERSION, type BacktestState, type L,
+  summarizeState, summaryLine, ENGINE_VERSION, backfillUnsold, unsoldCapturedCells, type BacktestState, type L,
 } from './backtest-core';
 import { buildBacktest, writeState, readStateFile, STATE_FILE } from './build-backtest';
 
@@ -97,6 +97,11 @@ export function buildBacktestIncremental(dataDir: string, allLots?: AuctionLot[]
   const prep = prepare(lots, console.log, elapsed);
   // legacy field drift → repair in place (never a forced full rebuild)
   rehydrateState(st, prep, console.log);
+  // (Oct 6) a state minted before bought-in rows existed gets them once (the
+  // bought-ins already on record, re-scored point-in-time — no sold replay),
+  // and the unsold-captured cells are re-stamped from tonight's corpus
+  backfillUnsold(prep, st, console.log);
+  st.unsoldCells = unsoldCapturedCells(prep.lots);
   const { soldTargets, biTargets, noEstTargets } = targetsOf(prep);
 
   const scored = new Set(st.scoredIds);

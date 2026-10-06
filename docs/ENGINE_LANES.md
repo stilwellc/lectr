@@ -245,3 +245,26 @@ Remaining superlinear phases at 3×: build-upcoming (runs twice: 152s + 152s), t
 | | live REA (all values) hammer medErr / ±30% / ≤ max bid | 40.3% / 37.9% / 57.9% | 34.8% / 46.2% / 49.7% | |
 
 All-in figures (value error, ±30%, band coverage 72.0% holdout / 72.8% live, the Flags' adjusted edge 24.6pt / 22.3pt) are unchanged by every kept refinement. **The 22.6% "holdout ≤ max bid" of §9.8 was measured against the stale Aug 9 legacy state;** against the full-replay state the nightly now loads it is 28.6% (live 33.6%) — no recalibration was kept. True hammer for scoring = the published hammer, else realized through the dated inverse (validated by the round-increment test above).
+
+## 11 · OCT 6 2026 — THE RECORD'S POPULATION (unsold lots, per-market cells)
+
+**Unsold lots — the decision: RESTRICT, not impute.** Christie's and Sotheby's history before 2026 (and Hake's, and most of RR) was crawled sold-only: a results page lists what sold and a bought-in lot simply vanishes. The record's headline levels (flagged/unflagged/above in backtest.json) therefore measured survivors, and "failed to sell 3.9%" was diluted by ~75k lots that could never fail. Imputing the missing bought-ins at a cohort rate would print lots that were never observed, at a rate borrowed from other houses; restricting the claim to where unsold lots were actually captured prints only what was seen. The headline is now claimed on:
+
+- **Population:** range-estimate lots (et 'b') in a house × calendar quarter whose concluded range-estimate lots include ≥ 3 bought-ins making up ≥ 3% of them (`unsoldCapturedCells`, `UNSOLD_CAPTURE_MIN_N` / `_MIN_SHARE`; real sell-through runs 70–90%, a sold-only crawl reads ~0%). Oct 6 corpus: 292 cells — Bonhams 95 quarters (2003–), Wright 88, Phillips 44 (2013–), LAMA 35, Rago 26, RR 2015 Q3, Christie's 2026 Q2 only, Sotheby's 2026 Q3–Q4 only.
+- **Basis:** CONCLUDED lots. A bought-in is a failed outcome: it ranks below every sold lot in the medians (perf −100%) and never beats the high. `medianSoldPct` / `hammerMedianSoldPct` / `beatHighSoldPct` / `hammerBeatSoldPct` carry the same population without the bought-ins.
+- **Hammer twins:** every range row now carries `hp` (inferred hammer / estimate mid − 1) and `hb` (hammer > estimate top), so the hammer basis can be re-aggregated over any population; legacy rows got them by corpus lookup.
+- **Bought-in rows:** `state.bi` (market, house, day, call, tier) — the rows behind the boughtIn counts. The tier buckets (`flaggedTiers`) now count their bought-ins (they read 0% fail-to-sell by construction). A pre-Oct-6 state is repaired once by `backfillUnsold` (the bought-ins on record re-scored point-in-time; no sold replay) — the nightly incremental does it itself; by hand: `npx tsx scripts/build-backtest.ts --backfill-unsold`.
+- **Kept for continuity:** `soldOnly.{flagged,unflagged,above}` = the pre-Oct-6 buckets (every house × period, sold medians). `recordBasis.headline` says which basis the top-level arms are on ('sold-only' when a state has no bought-in rows yet). `flaggedTiers`, `distribution` and `series` remain on the sold-only all-population basis (calObs carries no tier; the series predates the split).
+
+| headline (flagged · unflagged · above) | sold-only, all houses (before) | unsold-captured, concluded (after) |
+|---|---|---|
+| n sold / bought-in | 31,595 / 1,275 · 45,080 / 1,828 · 19,885 / 1,072 | 9,430 / 1,266 · 8,377 / 1,780 · 3,330 / 1,050 |
+| median vs estimate mid, all-in | +41% · +19% · +14% | +28% · +7% · 0% |
+| median vs estimate mid, hammer | +12% · −6% · −9% | 0% · −14% · −20% |
+| beat the high, all-in | 66% · 49% · 46% | 57% · 39% · 31% |
+| beat the high, hammer | 42% · 27% · 26% | 36% · 20% · 15% |
+| failed to sell | 3.9% · 3.9% · 5.1% | 11.8% · 17.5% · 24% |
+
+The flagged-vs-unflagged ordering and the ~21-point edge survive; the levels do not. Within the captured cells the SOLD-only flagged median is +39% (hammer +10%) — survivors there look like survivors everywhere; the drop is the bought-ins counted.
+
+**Per-market cells (byMarket, /value "The record" for a selected market)** are now the headline's population: range-estimate rows in captured cells, bought-ins in the median (n ≥ 50 concluded to publish), 'unflagged' = at-market calls only (above-market calls were being counted as unflagged), with `above` its own arm. Single-figure estimates ("$500+", RR) are a different yardstick (a floor, not a range) and are reported separately as `singleFigure` (sold-only — no single-figure bought-in is ever a target); `soldOnly` keeps the all-house sold arms. The old culture/science/sports cells were 90–99% single-figure RR rows (culture flagged n 30,288 of which 544 range); sports range-estimate flags run −10.7% sold-only, the +26.8% shown was the RR single-figure rows (+38%). Culture, science and sports have no captured range-estimate population (cells under n 50 → medPct null → /value falls back to the global line).

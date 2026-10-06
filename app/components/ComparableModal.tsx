@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { AuctionLot } from '../types';
-import { ARTIST_LABEL } from '../constants';
+import { ARTIST_LABEL, marketOf } from '../constants';
 import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText } from '../utils';
 import { areComparable, signalWithPool, isSportsScienceObject, soldCompBand, FORM_LABEL, signalMagnitude } from '../lib/comps';
 import { drillRowFor, drillSlugFor } from '../lib/submarkets';
@@ -12,6 +12,7 @@ import { signedPct, dirOf } from './SubMarketDirectory';
 import { loadCompEvidence, evRowsToLots } from '../lib/comp-evidence';
 import { safeHref } from '../lib/safe-href';
 import { medianSorted } from '../lib/stats';
+import { calibratedBand, bandPathOf, type BandCalibration } from '../lib/value-band';
 import type { MarketData, Backtest } from '../hooks/useRayData';
 import { useSoldArchive, retryArchiveLoad, useFullLots } from '../hooks/useRayData';
 // One formatter, one string: the card and the modal must print the same
@@ -52,8 +53,9 @@ function LotValueBlock({ lot, allLots, market, backtest }: { lot: AuctionLot; al
   const confidence = v?.confidence ?? sig?.confidence ?? null;
   const drow = drillRowFor(lot, market);
   const dslug = drillSlugFor(lot);
-  // the band served lots now wear is calibration.valueBand (Sep 2026); band on older data
-  const calBand = confidence ? ((backtest?.calibration as { valueBand?: Record<string, { lo: number; hi: number }> } | undefined)?.valueBand?.[confidence] ?? backtest?.calibration?.band?.[confidence]) : null;
+  // the band served lots now wear is calibration.valueBand[path][tier] (Sep 2026;
+  // keyed .e/.n first — app/lib/value-band.ts); band on older data
+  const calBand = confidence ? calibratedBand(backtest?.calibration as BandCalibration | undefined, confidence, bandPathOf(lot), marketOf(lot.artist)) : null;
   if (!v && !sig && !calBand && !(drow && dslug)) return null;
   return (
     <div className="ray-lv" style={{ margin: '10px 0 2px', padding: '10px 12px', border: '1px solid var(--hairline)', borderRadius: 8, background: 'var(--panel)' }}>

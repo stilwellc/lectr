@@ -67,6 +67,9 @@ export function medianOverEstimatePct(lots: AuctionLot[]): number {
 }
 
 const COLLAPSED_ROWS = 10;
+/** concluded (sold + bought-in) lots a sell-through needs — the same floor as
+ *  scripts/sub-markets.ts */
+const SELL_THROUGH_MIN = 40;
 const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
 const medianOf = (xs: number[]): number => medianOr(xs, 0);
@@ -88,7 +91,9 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
       const artistLots = allLots.filter(l => l.artist === a.slug);
       const concluded = artistLots.filter(l => l.status === 'sold' || l.status === 'bought_in');
       const soldCount = concluded.filter(l => l.status === 'sold').length;
-      const sellThrough = concluded.length >= 5
+      // n-gated like the sub-market rows (SELL_THROUGH_MIN): five concluded
+      // lots printed 100%/80% sell-throughs off a single sale
+      const sellThrough = concluded.length >= SELL_THROUGH_MIN
         ? Math.round((soldCount / concluded.length) * 100)
         : -1;
 
@@ -134,7 +139,8 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
           medianSale: st?.medianPriceLast12Months || 0,
           recordPrice: st?.recordPrice || 0,
           movement: st && st.appreciationRate != null ? st.appreciationRate : -9999,
-          soldLots: st?.totalLotsTracked || 0,
+          // SOLD lots, not every lot tracked (bought-in / upcoming rows are not sales)
+          soldLots: st?.totalSoldTracked || 0,
         };
       });
     }

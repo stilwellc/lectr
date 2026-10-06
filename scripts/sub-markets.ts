@@ -22,7 +22,7 @@ import { medianOr } from '../app/lib/stats';
 import { ARTISTS } from '../app/constants';
 import type { MakerIndexResult } from './hedonic-index';
 import { buildRepeatSaleIndex } from './repeat-sales';
-import { bidCompetitionSeries } from '../app/lib/demand';
+import { bidCompetitionSeries, demandSeries, hasRangeEstimate } from '../app/lib/demand';
 import { subCatLabel } from './lib/sub-cats';
 import { editionIdentityKey as editionKey, isEditionLot } from '../app/lib/identity';
 
@@ -64,6 +64,8 @@ export interface SubMarketRead {
 // the descriptive stats each slug carries (a subset of stats.json / computeStats)
 interface StatsRow {
   totalLotsTracked?: number;
+  /** sales in the trailing 365 days (computeStats) — the typical-price n */
+  sold12m?: number;
   medianPriceLast12Months?: number;
   avgPriceLast12Months?: number;
   recordPrice?: number;
@@ -80,9 +82,9 @@ const HORIZON_PREF = ['5Y', '3Y', '1Y'] as const;
 // across enough of its record AND has enough quarters to draw a curve.
 const MIN_EST_COVERAGE = 0.6;
 const MIN_DEMAND_QUARTERS = 6;
-// per-quarter trailing window floor (matches demand.ts's MIN_WINDOW_SALES)
-const MIN_WINDOW_SALES = 5;
 const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+// trailing-year sales a 'typical price' needs (slug rows + drill rows)
+const MIN_TYPICAL_SALES = 10;
 
 /** trailing quarterly sold counts — 'YYYY Qn' keys, capped at 24 quarters */
 function quarterlyVolume(sold: AuctionLot[]): { period: string; n: number }[] | undefined {
@@ -136,32 +138,13 @@ function median(a: number[]): number {
   return medianOr(a, 0);
 }
 
-/**
- * Hammer-basis % over estimate for a SOLD lot — the SAME premium handling as
- * app/utils.ts `overEstimatePct`: realized prices are premium-inclusive (~1.25x)
- * while estimates are hammer-basis, so we divide the premium out before
- * comparing (hammerUsd when published, else priceUsd/1.25) vs the estimate mid.
- * Alias-safe on the USD money fields (estLowUsd/estHighUsd), falling back to the
- * pre-migration estimateLow/High.
- */
-function overEstPct(l: AuctionLot): number | null {
-  const lo = (l.estLowUsd ?? l.estimateLow) || (l.estHighUsd ?? l.estimateHigh) || 0;
-  const hi = (l.estHighUsd ?? l.estimateHigh) || (l.estLowUsd ?? l.estimateLow) || 0;
-  const mid = (lo + hi) / 2;
-  const price = l.priceUsd || 0;
-  if (!(mid > 0) || !price) return null;
-  const hammer = (l.hammerUsd || 0) > 0 ? l.hammerUsd! : price / 1.25;
-  return (hammer / mid - 1) * 100;
-}
-
-// a SOLD lot with a real estimate (the demand/coverage denominator's num).
-// Single-point estimates count: RR Auction publishes ONE figure, stored in
-// estimateLow with estimateHigh null — overEstPct already midpoints via the
-// same low↔high fallback, so gating on high-only silently disenfranchised the
-// entire RR tape (verified: 3,860/4,225 recent RR lots carry low-only).
-function hasEstimate(l: AuctionLot): boolean {
-  return (((l.estHighUsd ?? l.estimateHigh) || 0) > 0) || (((l.estLowUsd ?? l.estimateLow) || 0) > 0);
-}
+// a SOLD lot the demand read can actually use: a RANGE estimate (both
+// bounds). Single-figure estimates (RR Auction's "$500+", stored low-only)
+// are floors, not midpoints — demand.ts hammerOverEstimatePct drops them, so
+// the coverage that gates a demand read counts only what the read can use
+// (counting them let an RR-dominated drill pass the gate on a curve drawn
+// from a ~10% range-estimate sliver).
+const hasEstimate = hasRangeEstimate;
 
 /** Demand-read eligibility on the RECENT tape, not the all-time pool.
  *  All-time coverage let two failure modes through in both directions:
@@ -182,34 +165,13 @@ function demandEligibility(sold: AuctionLot[]): { estCoverage: number; recentSol
 }
 
 /**
- * Per-slug quarterly demand: median hammer-basis %-over-estimate over a trailing
- * twelve CALENDAR months, evaluated at each quarter. Same trailing-window +
- * quarter-key discipline as app/lib/demand.ts `demandSeries`, but on the HAMMER
- * basis (overEstPct) rather than the all-in basis, so a sub-market demand read
- * is honest about the buyer's premium.
+ * Per-slug quarterly demand — THE shared demand read (app/lib/demand.ts
+ * demandSeries: hammer-basis via premiums.inferHammerUsd, range estimates
+ * only, trailing twelve calendar months ending at today for the quarter in
+ * progress), re-keyed to this module's {period} shape.
  */
 function slugDemandSeries(soldLots: AuctionLot[]): { period: string; value: number; n: number }[] {
-  const sales: { t: number; perf: number }[] = [];
-  const quarterEnd: Record<string, number> = {};
-  for (const l of soldLots) {
-    const perf = overEstPct(l);
-    if (perf == null) continue;
-    const d = new Date(l.saleDate);
-    if (isNaN(d.getTime())) continue;
-    const q = Math.floor(d.getUTCMonth() / 3);
-    const key = `${d.getUTCFullYear()} Q${q + 1}`;
-    sales.push({ t: d.getTime(), perf });
-    quarterEnd[key] = quarterEnd[key] ?? Date.UTC(d.getUTCFullYear(), q * 3 + 3, 1);
-  }
-  const quarters = Object.keys(quarterEnd).sort();
-  const points: { period: string; value: number; n: number }[] = [];
-  for (const qk of quarters) {
-    const end = quarterEnd[qk];
-    const window = sales.filter(s => s.t < end && s.t >= end - YEAR_MS).map(s => s.perf);
-    if (window.length < MIN_WINDOW_SALES) continue;
-    points.push({ period: qk, value: median(window), n: window.length });
-  }
-  return points;
+  return demandSeries(soldLots).map(p => ({ period: p.date, value: p.value, n: p.n }));
 }
 
 /**
@@ -308,6 +270,8 @@ export interface VerticalRepeatSale {
   horizons: Record<string, {
     publishable: boolean; changePct: number | null;
     ciLoPct: number | null; ciHiPct: number | null; reason?: string;
+    /** same lag on neighbouring end periods (repeat-sales.ts) — diagnostic */
+    endSensitivity?: { end: string; changePct: number }[];
   }>;
   series: { period: string; value: number; n: number }[];
 }
@@ -357,7 +321,7 @@ export function buildVerticalRepeatSale(sold: AuctionLot[], vertical: string): V
   let any = false;
   for (const [k, hz] of Object.entries(rs.horizons || {})) {
     if (!hz) continue;
-    horizons[k] = { publishable: !!hz.publishable, changePct: hz.changePct ?? null, ciLoPct: hz.ciLoPct ?? null, ciHiPct: hz.ciHiPct ?? null, ...(hz.reason ? { reason: hz.reason } : {}) };
+    horizons[k] = { publishable: !!hz.publishable, changePct: hz.changePct ?? null, ciLoPct: hz.ciLoPct ?? null, ciHiPct: hz.ciHiPct ?? null, ...(hz.reason ? { reason: hz.reason } : {}), ...(hz.endSensitivity?.length ? { endSensitivity: hz.endSensitivity } : {}) };
     if (hz.publishable) any = true;
   }
   if (!any) return null; // nothing certified — the block earns its place or stays out
@@ -400,7 +364,7 @@ function buildRead(
   // descriptive layer straight from the pool (drills have no stats.json row)
   const now = Date.now();
   const ttm = sold.filter(l => now - new Date(l.saleDate).getTime() < YEAR_MS).map(l => l.priceUsd!);
-  const typicalUsd = ttm.length >= 10 ? Math.round(median(ttm)) : null;
+  const typicalUsd = ttm.length >= MIN_TYPICAL_SALES ? Math.round(median(ttm)) : null;
   let rec: AuctionLot | null = null;
   for (const l of sold) if (!rec || (l.priceUsd || 0) > (rec.priceUsd || 0)) rec = l;
   const record = rec ? { usd: rec.priceUsd!, title: rec.title || '', date: rec.saleDate || null, house: rec.auctionHouse || null } : null;
@@ -537,9 +501,15 @@ export function buildSubMarkets(
     const stats = statsBySlug[slug] || {};
 
     // ── descriptive layer (always available) ──
-    const typicalUsd = (stats.medianPriceLast12Months && stats.medianPriceLast12Months > 0)
-      ? stats.medianPriceLast12Months
-      : (stats.avgPriceLast12Months && stats.avgPriceLast12Months > 0 ? stats.avgPriceLast12Months : null);
+    // n-gated like the drill rows (MIN_TYPICAL_SALES in the trailing year):
+    // computeStats medians whatever the year held — one sale, or (zero sales)
+    // the PREVIOUS run's median carried forward indefinitely — so a thin slug
+    // printed one lot's price as its "typical" (Basquiat: 5 sales).
+    const typicalUsd = (stats.sold12m ?? 0) < MIN_TYPICAL_SALES
+      ? null
+      : (stats.medianPriceLast12Months && stats.medianPriceLast12Months > 0)
+        ? stats.medianPriceLast12Months
+        : (stats.avgPriceLast12Months && stats.avgPriceLast12Months > 0 ? stats.avgPriceLast12Months : null);
     const record = (stats.recordPrice && stats.recordPrice > 0)
       ? {
           usd: stats.recordPrice,

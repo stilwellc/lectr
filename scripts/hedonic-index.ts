@@ -97,8 +97,14 @@ const DENSITY_MIN_N = 120;         // endpoint quarter must have ≥ this many l
 const DENSITY_MIN_MAKERS = 8;      // …and ≥ this many distinct makers
 const PARTIAL_VOL_FRAC = 0.6;      // endpoint volume ≥ 60% of trailing-4Q median
 const CI_MAGNITUDE_MULT = 2.0;     // CI half-width must be < 2× |point estimate|
-const COMP_HI = 0.40;              // a single source/house >40% of one endpoint…
-const COMP_LO = 0.12;              // …while <12% of the other ⇒ composition break
+const MIX_SHIFT = 0.15;            // MARKET index: a single source/house whose share
+                                   // of the two endpoints differs by ≥15pp ⇒ mix-change
+                                   // break (Oct 2026: the >40%-vs-<12% rule let art 1Y
+                                   // publish across Christie's 6%→21% and a Sotheby's
+                                   // 0%→23% re-entry — the house dummy is then mostly
+                                   // identified off the time change it is meant to hold)
+const COMP_HI = 0.40;              // MAKER index (unchanged): a single source/house >40%
+const COMP_LO = 0.12;              //   of one endpoint while <12% of the other ⇒ break
 const MAKER_DOMINANCE = 0.60;      // if one maker-slug is >60% of an endpoint, the
                                    // "like-for-like" control is really that ONE
                                    // heterogeneous bucket — see gate 6e.
@@ -146,6 +152,13 @@ function shiftQuarter(period: string, k: number): string {
 }
 
 // ── feature extraction ───────────────────────────────────────────────────────
+/** The sale a lot was offered in — the unit its price shocks are shared over
+ *  (one room, one night, one catalogue, one estimate-setter). House + sale
+ *  name + day; a lot with no sale name falls back to house + day. */
+export function saleClusterOf(l: AuctionLot): string {
+  const name = String((l as AuctionLot & { saleName?: string | null }).saleName || '').trim().toLowerCase();
+  return `${l.auctionHouse || 'na'}|${name}|${String(l.saleDate || '').slice(0, 10)}`;
+}
 interface FeatureRow {
   y: number;                 // ln(realizedUsd)
   maker: string;             // capped: rare makers folded to 'maker:other'
@@ -161,6 +174,7 @@ interface FeatureRow {
   quarter: string;
   source: string;            // for composition-break check (not a model feature)
   realized: number;          // realizedUsd (for value-weighting composites)
+  sale: string;              // the SALE (house|sale name|day) — the CI cluster
 }
 /** The within-maker quality proxy: a watch reference, else a furniture/model
  *  code, else the form. This is what makes a per-maker index like-for-like —
@@ -180,6 +194,12 @@ function extractRows(lots: AuctionLot[]): FeatureRow[] {
   const staged: (FeatureRow | null)[] = lots.map((l) => {
     const price = l.realizedUsd || 0;
     if (l.status !== 'sold' || price <= 0 || !l.saleDate) return null;
+    // a YEAR-precision (or unknown) date is a placeholder (Sotheby's '-06-01'
+    // stubs): its quarter is invented, so it cannot inform a quarter dummy.
+    // Month precision keeps its true quarter and stays (same rule as
+    // app/lib/indices.ts).
+    const prec = (l as AuctionLot & { datePrecision?: string | null }).datePrecision;
+    if (prec === 'year' || prec === 'unknown') return null;
     const q = quarterOf(l.saleDate);
     if (!q) return null;
     const maker = l.artist || 'maker:na';
@@ -199,6 +219,7 @@ function extractRows(lots: AuctionLot[]): FeatureRow[] {
       quarter: q,
       source: (l as AuctionLot & { source?: string }).source || 'native',
       realized: price,
+      sale: saleClusterOf(l),
     };
   });
   const rows: FeatureRow[] = [];
@@ -292,6 +313,11 @@ interface FitResult {
   p: number;
   /** Huber-weighted residual variance — the "why is the CI wide" diagnostic */
   sigma2: number;
+  /** SALE-CLUSTERED covariance of the quarter coefficients (CR1 sandwich),
+   *  keyed by quarter column; null when it could not be formed */
+  clCov: Map<number, Map<number, number>> | null;
+  /** number of sale clusters behind clCov */
+  clusters: number;
 }
 function solveSPD(A: Matrix, B: Matrix): Matrix {
   // Cholesky for the SPD normal equations; fall back to eigen-pseudo-inverse if
@@ -323,6 +349,8 @@ function fitRobust(rows: FeatureRow[], design: Design): FitResult {
   let ATWAinv: Matrix | null = null;
   let Afinal: Matrix | null = null;
   let sigma2 = 1;
+  let wFinal: Float64Array = weights;
+  let rFinal: Float64Array = new Float64Array(n);
 
   for (let pass = 0; pass < HUBER_PASSES; pass++) {
     // accumulate X'WX (dense p×p) and X'Wy by iterating each row's nonzeros only
@@ -364,6 +392,8 @@ function fitRobust(rows: FeatureRow[], design: Design): FitResult {
     for (let i = 0; i < n; i++) absr.push(Math.abs(resid[i]));
     const mad = median(absr) / 0.6745 || 1e-9;
     const k = HUBER_K * mad;
+    // the final pass's SOLVE weights + residuals feed the clustered sandwich
+    if (pass === HUBER_PASSES - 1) { wFinal = Float64Array.from(weights); rFinal = resid; }
     // Huber weights: 1 inside band, k/|r| outside
     for (let i = 0; i < n; i++) {
       const ar = Math.abs(resid[i]);
@@ -391,6 +421,9 @@ function fitRobust(rows: FeatureRow[], design: Design): FitResult {
   // harness: scripts/oneoff/qa/maker-cov-equiv.ts); a non-PD A also falls back.
   let cov: number[][] = [];
   const qcols = Array.from(design.quarterCols.values());
+  // G = (X'WX+ridge)^-1 restricted to the quarter columns (p×q) — the bread of
+  // the clustered sandwich below; filled by whichever path forms the inverse
+  let G: ((r: number, k: number) => number) | null = null;
   let fast = process.env.RAY_COV_EIGEN !== '1' && qcols.length > 0;
   if (fast) {
     try {
@@ -398,6 +431,7 @@ function fitRobust(rows: FeatureRow[], design: Design): FitResult {
       const E = new Matrix(p, qcols.length);
       qcols.forEach((c, k) => E.set(c, k, 1));
       const X = cho.solve(E);
+      G = (r, k) => X.get(r, k);
       const zero: number[] = new Array(p).fill(0);
       cov = new Array(p);
       for (let r = 0; r < p; r++) cov[r] = zero;
@@ -411,13 +445,57 @@ function fitRobust(rows: FeatureRow[], design: Design): FitResult {
   if (!fast) {
     ATWAinv = pseudoInverse(Afinal!);
     cov = ATWAinv.mul(sigma2).to2DArray();
+    const inv = ATWAinv;
+    G = (r, k) => inv.get(r, qcols[k]);
+  }
+  // ── SALE-CLUSTERED covariance (Oct 2026) ──
+  // σ̂²·(X'WX)^-1 assumes every lot's residual is independent. Lots in one
+  // sale are not: one room, one night, one estimate-setter — their shocks are
+  // shared, so the model-based CI covered ~39% of nominal 95% in a split-half
+  // test on art. The CR1 sandwich clusters the score by sale:
+  //   V = G/(G−1) · B (Σ_g u_g u_gᵀ) B,  u_g = Σ_{i∈g} x_i w_i e_i,  B = (X'WX+λ)^-1
+  // restricted to the quarter columns (u_g's quarter-projection Bu_g is
+  // accumulated directly, O(n·k·q)). Reads take max(model, clustered) per
+  // contrast, so a CI never narrows below the model-based one.
+  let clCov: Map<number, Map<number, number>> | null = null;
+  let clusters = 0;
+  if (G && qcols.length) {
+    const q = qcols.length;
+    const Gm = new Float64Array(p * q);
+    for (let r = 0; r < p; r++) for (let k = 0; k < q; k++) Gm[r * q + k] = G(r, k);
+    const proj = new Map<string, Float64Array>();
+    const tmp = new Float64Array(q);
+    for (let i = 0; i < n; i++) {
+      const s = wFinal[i] * rFinal[i];
+      if (s === 0) continue;
+      tmp.fill(0);
+      const feats = rowFeatures[i];
+      for (let a = 0; a < feats.length; a++) { const off = feats[a] * q; for (let k = 0; k < q; k++) tmp[k] += Gm[off + k]; }
+      let acc = proj.get(rows[i].sale);
+      if (!acc) { acc = new Float64Array(q); proj.set(rows[i].sale, acc); }
+      for (let k = 0; k < q; k++) acc[k] += s * tmp[k];
+    }
+    clusters = proj.size;
+    if (clusters >= 2) {
+      const m = new Float64Array(q * q);
+      for (const u of Array.from(proj.values())) {
+        for (let a = 0; a < q; a++) { const ua = u[a]; if (ua === 0) continue; const base = a * q; for (let b = 0; b < q; b++) m[base + b] += ua * u[b]; }
+      }
+      const corr = clusters / (clusters - 1);
+      clCov = new Map();
+      qcols.forEach((ca, a) => {
+        const row = new Map<number, number>();
+        qcols.forEach((cb, b) => row.set(cb, corr * m[a * q + b]));
+        clCov!.set(ca, row);
+      });
+    }
   }
   // sigma2 escapes with the fit (diagnostics, Aug 6 2026)
-  return { beta, cov, p, sigma2 };
+  return { beta, cov, p, sigma2, clCov, clusters };
 }
 
 // ── the index (quarter coefficients → rebased levels + CIs) ──────────────────
-interface QuarterStat {
+export interface QuarterStat {
   n: number;
   makers: Set<string>;
   forms: Set<string>;              // distinct formKey — within-maker mix control depth
@@ -632,11 +710,19 @@ function runIndex(rows: FeatureRow[], design: Design, mode: 'market' | 'maker', 
   const hasRefControl = withRef / rows.length >= MK_REF_COVERAGE;
   const base = idxQuarters[0];
   const { tau: tauBase, col: baseCol } = tauOf(base, design, fit.beta);
-  const varOfDiff = (colA: number | null, colB: number | null): number => {
-    const vaa = colA !== null ? fit.cov[colA][colA] : 0;
-    const vbb = colB !== null ? fit.cov[colB][colB] : 0;
-    const cab = colA !== null && colB !== null ? fit.cov[colA][colB] : 0;
+  // Var(τa − τb): the larger of the model-based and the SALE-CLUSTERED
+  // variance (fitRobust) — the clustered one is the honest read when lots in
+  // one sale share a shock; the max keeps a few-cluster fit from narrowing
+  const varFrom = (get: (a: number, b: number) => number, colA: number | null, colB: number | null): number => {
+    const vaa = colA !== null ? get(colA, colA) : 0;
+    const vbb = colB !== null ? get(colB, colB) : 0;
+    const cab = colA !== null && colB !== null ? get(colA, colB) : 0;
     return Math.max(vaa + vbb - 2 * cab, 0);
+  };
+  const varOfDiff = (colA: number | null, colB: number | null): number => {
+    const model = varFrom((a, b) => fit.cov[a][b], colA, colB);
+    const cl = fit.clCov;
+    return cl ? Math.max(model, varFrom((a, b) => cl.get(a)!.get(b)!, colA, colB)) : model;
   };
   const series: HedonicSeriesPoint[] = idxQuarters.map((q) => {
     const { tau, col } = tauOf(q, design, fit.beta);
@@ -881,7 +967,7 @@ function computeHorizon(
   }
 
   // ── composition break (source AND house) — applies to BOTH modes ──
-  const comp = compositionBreak(sStat, eStat);
+  const comp = compositionBreak(sStat, eStat, mode);
   if (comp) return notPub(comp, nStart, nEnd);
 
   // ── gate 6c: CI resolves the sign + magnitude isn't pure noise ──
@@ -917,20 +1003,31 @@ function computeHorizon(
   };
 }
 
-/** Composition break: any single source OR house that is >COMP_HI of one
- *  endpoint quarter but <COMP_LO of the other. Catches the Algolia backfill
- *  flood (and any house entering/leaving between the two dates). */
-function compositionBreak(a: QuarterStat, b: QuarterStat): string | null {
+/** Composition break between the two endpoint quarters, over source AND house.
+ *  'market' mode (Oct 2026): any single source/house whose share of one endpoint
+ *  differs from its share of the other by ≥ MIX_SHIFT (15pp) — catches the
+ *  Algolia backfill flood and any house entering/leaving/swelling between the
+ *  two dates: the house dummy cannot hold quality constant when it is
+ *  identified mostly off the same shift the quarter dummy is measuring.
+ *  'maker' mode keeps the long-standing rule: >COMP_HI of one endpoint while
+ *  <COMP_LO of the other. */
+export function compositionBreak(a: QuarterStat, b: QuarterStat, mode: 'market' | 'maker' = 'market'): string | null {
+  const breaks = (sa: number, sb: number): boolean => mode === 'market'
+    ? Math.abs(sa - sb) >= MIX_SHIFT - 1e-12
+    : (sa > COMP_HI && sb < COMP_LO) || (sb > COMP_HI && sa < COMP_LO);
   const check = (label: string, ma: Map<string, number>, mb: Map<string, number>, na: number, nb: number): string | null => {
-    const keys = new Set(Array.from(ma.keys()).concat(Array.from(mb.keys())));
-    for (const k of Array.from(keys)) {
+    const keys = Array.from(new Set(Array.from(ma.keys()).concat(Array.from(mb.keys())))).sort();
+    let worst: { k: string; sa: number; sb: number } | null = null;
+    for (const k of keys) {
       const sa = (ma.get(k) || 0) / na;
       const sb = (mb.get(k) || 0) / nb;
-      if ((sa > COMP_HI && sb < COMP_LO) || (sb > COMP_HI && sa < COMP_LO)) {
-        return `composition break: ${label} '${k}' is ${(Math.max(sa, sb) * 100).toFixed(0)}% of one endpoint but ${(Math.min(sa, sb) * 100).toFixed(0)}% of the other`;
-      }
+      if (breaks(sa, sb) && (!worst || Math.abs(sa - sb) > Math.abs(worst.sa - worst.sb))) worst = { k, sa, sb };
     }
-    return null;
+    // the reason keeps the long-standing template (it is printed verbatim on
+    // /analytics) — only the trigger changed
+    return worst
+      ? `composition break: ${label} '${worst.k}' is ${(Math.max(worst.sa, worst.sb) * 100).toFixed(0)}% of one endpoint but ${(Math.min(worst.sa, worst.sb) * 100).toFixed(0)}% of the other`
+      : null;
   };
   return check('source', a.srcShare, b.srcShare, a.n, b.n)
     || check('house', a.houseShare, b.houseShare, a.n, b.n);
