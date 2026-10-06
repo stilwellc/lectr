@@ -1,7 +1,9 @@
 import type { AuctionLot } from '../../app/types';
-import { subCatOf, sportSlugOf } from './sub-cats';
+import { subCatOf, sportSlugOf, sportOfSale, sportWordOf, cultureTextDomain, curatedDomainOf, watchRefKey, watchFamilyOf, type SubCatMaps } from './sub-cats';
+import { SUBJECT_DOMAINS } from './subject-domains';
+import { athleteIn } from './athlete-roster';
 import { extractReference } from './identity-enrich';
-import { looksLikeCard, playerSlugOf, parseCard } from '../../app/lib/cards';
+import { looksLikeCard, playerSlugOf, parseCard, cardYearKey } from '../../app/lib/cards';
 import { classifyForm, objectClassOf, cleanGoldinTitle, watchKey, isPersonNameRun, personNameOf } from '../../app/lib/comps';
 import { vetReference, readDescriptionReference, splitWatchRef } from '../../app/lib/watch-ref';
 import { titleTokens as titleTokensOf, extractEdition, extractSerials, toUsdDated, fxRateFor } from '../../app/lib/normalize';
@@ -363,33 +365,98 @@ export function stampSubCats(lots: Lot[]): { subCats: number; drills: number; sp
   // before build-market stamps _card): Goldin's sport-stamped cards teach the
   // player → sport map, and the expansion houses' unstamped cards read it
   const CARD_SLUGS_SC = new Set(['sports-cards', 'graded-cards']);
-  const cardPlayerCache = new Map<string, string | null>();
-  const cardPlayer = (r: Record<string, unknown>): string | null => {
-    if (!CARD_SLUGS_SC.has(r.artist as string)) return null;
+  const cardCache = new Map<string, ReturnType<typeof parseCard>>();
+  const cardOf = (r: Record<string, unknown>) => {
     const t = String(r.title || '');
-    let p = cardPlayerCache.get(t);
-    if (p === undefined) { p = parseCard(t).playerSlug; cardPlayerCache.set(t, p); }
-    return p;
+    let c = cardCache.get(t);
+    if (c === undefined) { c = parseCard(t); cardCache.set(t, c); }
+    return c;
   };
+  // (wave 3) a sports OBJECT row's player is the roster athlete its title
+  // leads with ("Joe DiMaggio Signed Photograph") — 8.7k RR / 4.7k H&S
+  // autographs carried no drill because only card rows were read
+  const cardPlayer = (r: Record<string, unknown>): string | null => {
+    if (CARD_SLUGS_SC.has(r.artist as string)) return cardOf(r).playerSlug;
+    if (ARTIST_MARKET[r.artist as keyof typeof ARTIST_MARKET] !== 'sports') return null;
+    const a = athleteIn(String(r.title || ''), 3);
+    return a ? playerSlugOf(a) : null;
+  };
+  // (wave 3) a card's SET keys — the year as keyed + the set name as printed
+  // (sport words kept: "1975 Topps Football" is not "1975 Topps"), and a
+  // coarse year + brand-line key (its first two words: "2020|bowman chrome")
+  const setOf = (r: Record<string, unknown>): string[] => {
+    if (!CARD_SLUGS_SC.has(r.artist as string)) return [];
+    const c = cardOf(r);
+    const yr = cardYearKey(c.year);
+    const words = String(c.setName || '').toLowerCase().replace(/^-?(?:\d{4}|\d{2})\b\s*/, '').replace(/[^a-z0-9 ]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+    if (!yr || !words.length) return [];
+    const keys = [`${yr}|${words.join(' ')}`];
+    if (words.length > 2) keys.push(`${yr}|~${words.slice(0, 2).join(' ')}`);
+    return keys;
+  };
+  // player → sport from the rows whose sport is KNOWN by their own evidence:
+  // Goldin's stamp, and (wave 3) a single-sport sale or the title's sport words
+  const ownSport = (r: Record<string, unknown>): string | null =>
+    sportSlugOf(r.sport) || sportOfSale(r.saleName as string, r.auctionHouse as string) || sportWordOf(String(r.title || ''));
   for (const l of lots) {
     const r = l as unknown as Record<string, unknown>;
-    const sport = sportSlugOf(r.sport);
+    if (ARTIST_MARKET[r.artist as keyof typeof ARTIST_MARKET] !== 'sports') continue;
+    const stamped = sportSlugOf(r.sport);
+    const sport = ownSport(r);
     if (!sport) continue;
-    if (r._pid != null) vote(pidVotes, String(r._pid), sport);
+    if (stamped && r._pid != null) vote(pidVotes, String(r._pid), sport);
     const card = r._card as { playerSlug?: string } | undefined;
     const player = (r.playerSlug as string) || card?.playerSlug || cardPlayer(r);
     if (player) vote(playerVotes, player, sport);
   }
-  const settle = (m: Map<string, Map<string, number>>): Map<string, string> => {
+  const settle = (m: Map<string, Map<string, number>>, minN = 3, purity = 0.8): Map<string, string> => {
     const out = new Map<string, string>();
     m.forEach((inner, k) => {
       let tot = 0, best = '', bestN = 0;
       inner.forEach((n, sp) => { tot += n; if (n > bestN) { best = sp; bestN = n; } });
-      if (tot >= 3 && bestN / tot >= 0.8) out.set(k, best);
+      if (tot >= minN && bestN / tot >= purity) out.set(k, best);
     });
     return out;
   };
-  const maps = { byPid: settle(pidVotes), byPlayer: settle(playerVotes), cardPlayer: (l: Record<string, unknown>) => cardPlayer(l) };
+  const byPid = settle(pidVotes), byPlayer = settle(playerVotes);
+  // (wave 3) set → sport from every card whose sport is known (own evidence or
+  // its player), 90% pure over ≥ 5 cards — "1952 Topps", "1933 Goudey",
+  // "Bowman Chrome Prospects" are one sport; "1948 Bowman" is not and abstains
+  const setVotes = new Map<string, Map<string, number>>();
+  for (const l of lots) {
+    const r = l as unknown as Record<string, unknown>;
+    const ks = setOf(r);
+    if (!ks.length) continue;
+    const pid = r._pid != null ? String(r._pid) : null;
+    const player = cardPlayer(r);
+    const sport = ownSport(r) || (pid && byPid.get(pid)) || (player && byPlayer.get(player)) || null;
+    if (sport) for (const k of ks) vote(setVotes, k, sport);
+  }
+  const bySet = settle(setVotes, 5, 0.9);
+  // (wave 3) culture subject → domain from the rows whose domain their own
+  // words (or the curated subject list) name; watch reference → family from
+  // the rows whose title names the family
+  const subjVotes = new Map<string, Map<string, number>>();
+  const refVotes = new Map<string, Map<string, number>>();
+  for (const l of lots) {
+    const r = l as unknown as Record<string, unknown>;
+    const m = ARTIST_MARKET[r.artist as keyof typeof ARTIST_MARKET];
+    if (m === 'culture') {
+      const subs = r.subjectKeys as string[] | undefined;
+      if (!Array.isArray(subs) || !subs.length) continue;
+      const d = curatedDomainOf(subs) || cultureTextDomain(String(r.title || ''));
+      if (d) for (const s of subs) if (!SUBJECT_DOMAINS[s]) vote(subjVotes, s, d);
+    } else if (m === 'watches' && r.formKey === 'wristwatch') {
+      const k = watchRefKey(r);
+      const fam = k ? watchFamilyOf(r.artist as string, String(r.title || '')) : null;
+      if (k && fam) vote(refVotes, k, fam);
+    }
+  }
+  const maps: SubCatMaps = {
+    byPid, byPlayer, cardPlayer: (l: Record<string, unknown>) => cardPlayer(l),
+    bySet, setOf: (l: Record<string, unknown>) => setOf(l),
+    bySubject: settle(subjVotes, 2, 0.8), byRef: settle(refVotes, 3, 0.8),
+  };
 
   let subCats = 0, drills = 0, sportRecovered = 0;
   for (const l of lots) {
