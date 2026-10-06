@@ -104,6 +104,10 @@ export default function ReceiptsPage() {
 
   const F = backtest?.flagged;
   const U = backtest?.unflagged;
+  // (wave 3) the record leads on the hammer where both buckets carry it
+  const ham = F?.hammerMedianPct != null && U?.hammerMedianPct != null;
+  const fH = (ham ? F!.hammerMedianPct : F?.medianPerfPct) ?? 0;
+  const uH = (ham ? U!.hammerMedianPct : U?.medianPerfPct) ?? 0;
 
   const pending = record && record.card.graded + record.vsbid.graded + (record.gap?.graded || 0) + (record.quiet?.graded || 0) === 0;
 
@@ -138,47 +142,12 @@ export default function ReceiptsPage() {
 
               {record ? (
                 <div className="rcp-tiles">
-                  <div className="rcp-tile">
-                    <span className="kicker">Card-comp reads</span>
-                    <span className="rcp-fig">
-                      {record.card.medRatio != null
-                        ? <>{fmtSignedPct(Math.round((record.card.medRatio - 1) * 100))}</>
-                        : <span className="rcp-dim">{record.card.graded}/{record.card.n}</span>}
-                    </span>
-                    <span className="rcp-sub">
-                      {record.card.medRatio != null
-                        ? <>hammer vs our read, median · {record.card.within30Pct}% within ±30% · {record.card.graded} graded</>
-                        : <>{record.card.n} calls on the tape · {record.card.graded} settled · the median publishes at 20 graded</>}
-                    </span>
-                  </div>
-                  <div className="rcp-tile">
-                    <span className="kicker">Below-market projections</span>
-                    <span className="rcp-fig">
-                      {record.vsbid.belowHit != null
-                        ? <>{record.vsbid.belowHit}%</>
-                        : <span className="rcp-dim">{record.vsbid.graded}/{record.vsbid.n}</span>}
-                    </span>
-                    <span className="rcp-sub">
-                      {record.vsbid.belowHit != null
-                        ? <>of &ldquo;below the floor&rdquo; claims held at the hammer · {record.vsbid.graded} graded</>
-                        : <>{record.vsbid.n} calls on the tape · {record.vsbid.graded} settled · the hit-rate publishes at 20 graded</>}
-                    </span>
-                  </div>
-                  {record.gap && (
-                    <div className="rcp-tile">
-                      <span className="kicker">The Gap · shelf calls</span>
-                      <span className="rcp-fig">
-                        {record.gap.floorHit != null
-                          ? <>{record.gap.floorHit}%</>
-                          : <span className="rcp-dim">{record.gap.graded}/{record.gap.n}</span>}
-                      </span>
-                      <span className="rcp-sub">
-                        {record.gap.floorHit != null
-                          ? <>of claimed floors held at the hammer · {record.gap.graded} graded</>
-                          : <>{record.gap.n} calls on the tape · {record.gap.graded} settled · publishes at 20 graded</>}
-                      </span>
-                    </div>
-                  )}
+                  {/* (wave 3) the card-comp ratio, the below-the-floor
+                      projections and the Gap shelf tiles are retired: each
+                      graded a path the engine no longer serves (player-tier
+                      card reads abstain, the vs-bid read ships only inside
+                      the last day, Gap rows seat only validated cells) —
+                      their calls stay on the tape below */}
                   {record.quiet && (
                     <div className="rcp-tile">
                       <span className="kicker">The Sleepers · fair &amp; quiet</span>
@@ -254,15 +223,16 @@ export default function ReceiptsPage() {
                   <i className="rcp-rule" />
                 </div>
                 <div className="rcp-tiles">
+                  {/* (wave 3) lead with the HAMMER — the basis the Flags are called on */}
                   <div className="rcp-tile">
                     <span className="kicker">Flagged below market</span>
-                    <span className="rcp-fig" style={{ color: 'var(--color-up)' }}>{fmtSignedPct(F.medianPerfPct)}</span>
-                    <span className="rcp-sub">realized vs estimate, median · {F.n.toLocaleString()} settled flags · hammer-only {fmtSignedPct(F.hammerMedianPct ?? 0)}</span>
+                    <span className="rcp-fig" style={{ color: 'var(--color-up)' }}>{fmtSignedPct(fH)}</span>
+                    <span className="rcp-sub">{ham ? 'hammer' : 'realized'} vs estimate, median · {F.n.toLocaleString()} settled flags{ham ? <> · all-in {fmtSignedPct(F.medianPerfPct)}</> : null}</span>
                   </div>
                   <div className="rcp-tile">
                     <span className="kicker">Everything unflagged</span>
-                    <span className="rcp-fig">{fmtSignedPct(U.medianPerfPct)}</span>
-                    <span className="rcp-sub">same basis · the edge: {F.medianPerfPct - U.medianPerfPct} points ·{' '}
+                    <span className="rcp-fig">{fmtSignedPct(uH)}</span>
+                    <span className="rcp-sub">same basis · the edge: {fH - uH} points ·{' '}
                       <Link href="/value" className="rcp-link">the full analysis <Flick size={9} /></Link>
                     </span>
                   </div>
