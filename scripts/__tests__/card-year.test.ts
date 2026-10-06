@@ -39,3 +39,24 @@ test('playerOf: a lot-numbered card-style object title routes to the card parser
   assert.equal(playerOf('2 1991-92 Chicago Bulls Eastern Conference Champions Team-Signed Poster', 'autographs').playerSlug, null);
   assert.equal(playerOf('1986 Michael Jordan Game-Worn Jersey', 'game-used').playerSlug, 'michael-jordan');
 });
+
+test('structured NFL/MLB Auction slot: no "<Name> Signed", no national / MiLB team as the player (Oct 6 re-audit)', () => {
+  const P = (t: string) => playerOf(t, 'game-used').player;
+  assert.equal(P('Crucial Catch - Chargers Quentin Johnston Signed Game Worn Jersey (10/5/2025) Size 40 - Game Photo Match Provided'), 'Quentin Johnston');
+  assert.equal(P('Chargers -  Teair Tart Signed Yellow Game Worn Cleats Size 14 (9/05/2025) Chargers vs. Chiefs in Brazil.'), 'Teair Tart');
+  assert.equal(P('1986 World Series 40th Anniversary Celebration - Francisco Lindor Autographed Game-Used Locker Nameplate - 8/1/26 & 8/2/26'), 'Francisco Lindor');
+  assert.equal(P('STS - Colts Kenny Moore II Signed Game Issued Jersey 2024 Season Size 38 With Captains Patch'), 'Kenny Moore II');
+  // the team slot: the athlete is read from the trailing slot
+  assert.equal(P('MLB Mid Year Auction - 2026 World Baseball Classic - Great Britain Game-Used Jersey - Tristan Beck (3/7/26)'), 'Tristan Beck');
+  assert.equal(P('2026 MiLB in Dyersville, Iowa - St. Paul Saints Game-Used Cap: Kendry Rojas #54'), 'Kendry Rojas');
+  assert.equal(P('MLB Mid Year Auction - 2026 World Baseball Classic - Canada Game-Used Jersey - Tyler O&#39;Neill (3/7/26)'), "Tyler O'Neill");
+  assert.equal(P('MLB Mid Year Auction - 2026 World Baseball Classic - Dominican Republic Game-Used Locker Nameplate (3/6/26)'), null);
+  // a person in the leading slot keeps it (Goldin's trailing segment is a play, not a player)
+  assert.equal(P('Oct. 28, 2013 - World Series Game 5 - David Ortiz Game-Used OWS Selig Baseball - Foul Tip in 8th Inning'), 'David Ortiz');
+  assert.equal(P('Dublin Games - Vikings Chaz Chambliss Game Worn Jersey (9/28/25)'), 'Chaz Chambliss');
+});
+
+test('a sport word ends a leading name run (Oct 6 re-audit)', () => {
+  assert.equal(parseCard('Wayne Gretzky Hockey Card').player, 'Wayne Gretzky');
+  assert.equal(playerOf('MICKEY MANTLE BASEBALL', 'sports-memorabilia').player, 'MICKEY MANTLE');
+});

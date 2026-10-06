@@ -138,7 +138,14 @@ export function playerSlugOf(name: string | null): string | null {
   return s || null;
 }
 
-function trimNameRun(run: string): string | null {
+// (Oct 6 identity re-audit) a LEADING name run (object titles, lot-style card
+// titles) also ends at a sport word or postseason descriptor: "Wayne Gretzky
+// Hockey Card", "Mickey Mantle Baseball", "Matt Moore Playoff Debut". Not
+// after a card number, where "#197 NL Playoffs Game 3" is the subset card's
+// own identity.
+const LEAD_NAME_STOP = /^(?:Baseball|Football|Basketball|Hockey|Soccer|Playoffs?|Postseason)$/i;
+
+function trimNameRun(run: string, lead = false): string | null {
   // a grader glued on by dashes ("Hank Aaron--PSA Gem Mint 10", "Babe Ruth-SGC")
   const words = run.trim().replace(/-+(?=(?:PSA|BGS|SGC|CGC|BVG)\b)/g, ' ').split(/\s+/);
   const kept: string[] = [];
@@ -146,6 +153,7 @@ function trimNameRun(run: string): string | null {
     const w = words[i];
     // stop on descriptors, INCLUDING hyphenated ones ("Game-Used", "Photo-Matched")
     if (NAME_STOP.test(w) || NAME_STOP.test(w.split('-')[0])) break;
+    if (lead && LEAD_NAME_STOP.test(w)) break;
     const w0 = w.split(/[-/]/)[0];
     if (GRADE_NAME_STOP.test(w0) || (kept.length >= 2 && COLOR_NAME_STOP.test(w0))) break;
     if (PAIR_NAME_STOP.test(words.slice(i, i + 2).join(' '))) break;
@@ -269,7 +277,7 @@ export function parseCard(title: string): CardId {
   // (some card titles lead with the player, lot-style)
   const after = noParens.match(AFTER_NO_PLAYER);
   const run = after ? trimNameRun(after[1]) : null;
-  const lead = !run ? (() => { const m = t.match(LEADING_PLAYER); return m ? trimNameRun(m[1]) : null; })() : null;
+  const lead = !run ? (() => { const m = t.match(LEADING_PLAYER); return m ? trimNameRun(m[1], true) : null; })() : null;
   out.player = run || lead;
   out.playerSlug = playerSlugOf(out.player);
 
@@ -296,7 +304,9 @@ export function parseCard(title: string): CardId {
    fixed slot, so the set of players the CARD parser has read ≥ minCount
    times is the roster an object name must belong to. Team / set / checklist
    runs that card titles also produce are excluded by word. */
-const NOT_A_PLAYER_WORD = /\b(team|teams|checklist|leaders?|league|leagues|rookies|stars|all|world|series|highlights?|cards?|set|sets|collection|lot|hall|fame|champions?|championship|giants|yankees|dodgers|cubs|sox|cardinals|tigers|pirates|athletics|senators|browns|braves|reds|phillies|orioles|indians|colts|packers|bears|celtics|lakers|bulls|knicks|canadiens|bruins|rangers|mets|jets|patriots|cowboys|steelers|49ers|raiders|eagles|lions|rams|chiefs|broncos|giants|warriors|heat|nets|spurs|beatles|stones|best|the|of|and|edition|special|in|action|record|breaker|boyhood|photo|future|prospects?|draft|picks?|batting|pitching|home|run|kings?|super|bowl|unopened|box|pack|wax|sports|illustrated|press|pass|panini|topps|upper|deck)\b/i;
+// (Oct 6) + lot-description leads that a card parse now stops at the sport
+// word on ("Assorted Brands Baseball …", "Nineteenth Century Baseball …")
+const NOT_A_PLAYER_WORD = /\b(assorted|brands|vintage|modern|century|nineteenth|various|greats|hofers?|hof|team|teams|checklist|leaders?|league|leagues|rookies|stars|all|world|series|highlights?|cards?|set|sets|collection|lot|hall|fame|champions?|championship|giants|yankees|dodgers|cubs|sox|cardinals|tigers|pirates|athletics|senators|browns|braves|reds|phillies|orioles|indians|colts|packers|bears|celtics|lakers|bulls|knicks|canadiens|bruins|rangers|mets|jets|patriots|cowboys|steelers|49ers|raiders|eagles|lions|rams|chiefs|broncos|giants|warriors|heat|nets|spurs|beatles|stones|best|the|of|and|edition|special|in|action|record|breaker|boyhood|photo|future|prospects?|draft|picks?|batting|pitching|home|run|kings?|super|bowl|unopened|box|pack|wax|sports|illustrated|press|pass|panini|topps|upper|deck)\b/i;
 export function knownPlayerSet(cardPlayers: Iterable<string | null | undefined>, minCount = 3): Set<string> {
   const n = new Map<string, number>();
   for (const name of Array.from(cardPlayers)) {
@@ -330,6 +340,10 @@ export function isMultiCardTitle(title: string): boolean {
   const noParens = t.replace(/\([^)]*\)/g, ' ').replace(/#?\d+\s*\/\s*\d+/g, ' ');
   return (noParens.match(/#\s?[A-Za-z]{0,4}\d/g) || []).length >= 2;
 }
+
+/** (Oct 6 identity re-audit) a structured NFL/MLB-Auction slot that names a
+ *  national or minor-league TEAM (World Baseball Classic, MiLB at Dyersville) */
+const STRUCTURED_TEAM_SLOT = /^(?:Great Britain|Dominican Republic|Puerto Rico|Chinese Taipei|Czech Republic|Czechia|South Africa|Kingdom of the Netherlands|(?:Team )?(?:USA|Japan|Mexico|Korea|Italy|Israel|Canada|Netherlands|Venezuela|Cuba|Australia|Colombia|Panama|Nicaragua|China|Germany|Spain|France|Brazil)|(?:[A-Z][a-z.]+ ){1,2}(?:Saints|Cubs|Bulls|Barons|Indians|Stars|Dragons|Bees|Kernels|Sounds|Isotopes|Aces|Bats|Chihuahuas|Express|Storm Chasers|RiverDogs|Hot Rods))$/;
 
 /** The player behind ANY sports lot: cards parse mid-title; objects (game-used
  *  jerseys, tickets, trophies) lead with the athlete's name. With `known`
@@ -366,12 +380,31 @@ export function playerOf(title: string, slug: string, known?: ReadonlySet<string
     /-\s+((?:[A-Z][\w'’.-]*[\w.]\s+){1,5}?)Game[- ](?:Worn|Used|Issued)/
   );
   if (structured) {
-    const words = structured[1].trim().split(/\s+/);
+    const pre = structured[1].trim();
+    // (Oct 6 identity re-audit) the MLB-Auctions WBC / MiLB form names the
+    // TEAM before the use-class and the athlete after the object: "… - Great
+    // Britain Game-Used Jersey - Tristan Beck (3/7/26)", "St. Paul Saints
+    // Game-Used Jersey: Ben Ross #48" — 'Great Britain', 'Dominican Republic',
+    // 'St. Paul Saints' were stamped as players. Only when the leading slot
+    // is such a team is the trailing slot read (Goldin's "… - David Ortiz
+    // Game-Used OWS Baseball - Foul Tip" keeps its leading athlete).
+    if (STRUCTURED_TEAM_SLOT.test(pre)) {
+      const tail = stripped.slice((structured.index || 0) + structured[0].length).replace(/&#0?39;|&apos;/g, "'")
+        .match(/^\s+[A-Za-z]+(?:\s+[A-Za-z]+){0,3}\s*[:–—-]\s+([A-Z][\w'’.-]*(?:\s+[A-Z][\w'’.-]*){1,3})/);
+      const tailName = tail ? trimNameRun(tail[1]) : null;
+      return tailName ? { player: tailName, playerSlug: playerSlugOf(tailName) } : { player: null, playerSlug: null };
+    }
+    const words = pre.split(/\s+/);
     // drop leading team token(s) — NFL/MLB franchise names are single words
     // here ("Jets", "Dolphins", "49ers", "Yankees"); two-word city forms don't
     // appear in these feeds. Anything left is the athlete.
     const TEAMS = /^(Cardinals|Falcons|Ravens|Bills|Panthers|Bears|Bengals|Browns|Cowboys|Broncos|Lions|Packers|Texans|Colts|Jaguars|Chiefs|Raiders|Chargers|Rams|Dolphins|Vikings|Patriots|Saints|Giants|Jets|Eagles|Steelers|49ers|Seahawks|Buccaneers|Titans|Commanders|Redskins|Football|Yankees|Mets|Dodgers|Cubs|Sox|Astros|Braves|Padres|Phillies|Mariners|Angels|Athletics|Orioles|Royals|Tigers|Twins|Guardians|Indians|Rangers|Blue|Jays|Marlins|Nationals|Pirates|Reds|Rockies|Brewers|Diamondbacks)$/i;
     while (words.length > 1 && TEAMS.test(words[0])) words.shift();
+    // a qualifier the house puts before "Game Worn" ends the name ("Quentin
+    // Johnston Signed Game Worn", "Teair Tart Signed Yellow Game Worn") —
+    // '<Name> Signed' was minted as a player on ~140 NFL Auction lots
+    const stop = words.findIndex((w, i) => i > 0 && (NAME_STOP.test(w) || LEAD_NAME_STOP.test(w)));
+    if (stop > 0) words.splice(stop);
     const cand = words.join(' ');
     if (words.length >= 2 && !NAME_STOP.test(words[0])) {
       // the structured NFL/MLB-Auction slot is reliable on its own — no gate
@@ -380,7 +413,7 @@ export function playerOf(title: string, slug: string, known?: ReadonlySet<string
     return { player: null, playerSlug: null };
   }
   const m = stripped.match(LEADING_PLAYER);
-  const name = m ? trimNameRun(m[1]) : null;
+  const name = m ? trimNameRun(m[1], true) : null;
   // reject non-person leads ("World Series", "Super Bowl", team-ish runs,
   // sale branding — "London Games", "Crucial Catch", "Salute to Service")
   if (name && /\b(World|Series|Super|Bowl|Olympic|Stanley|Final|Champion|League|Team|City|United|Yankees|Lakers|Cowboys|Collection|Games|Catch|Salute|Auction|Lot\b)/i.test(name)) {

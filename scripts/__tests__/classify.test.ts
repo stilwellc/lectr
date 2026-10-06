@@ -242,7 +242,7 @@ test('class 10 · player names on object lots come from the known-player roster'
   // the structured NFL/MLB Auction slot is trusted as-is
   assert.equal(P('Dublin Games - Vikings Chaz Chambliss Game Worn Jersey (9/28', 'game-used'), 'Chaz Chambliss');
   // without a roster the parser behaves as before
-  assert.equal(playerOf('Barry Bonds Baseball', 'sports-memorabilia').player, 'Barry Bonds Baseball');
+  assert.equal(playerOf('Barry Bonds Baseball', 'sports-memorabilia').player, 'Barry Bonds'); // a sport word ends the run (Oct 6 re-audit)
 });
 
 test('class 11 · attribution: after / attributed / appropriation / exhibition posters / namesakes are evicted', () => {
