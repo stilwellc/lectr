@@ -22,9 +22,9 @@ import {
 import { demandSeries, realizedCohortSeries, bidCompetitionSeries } from '../app/lib/demand';
 import { ARTIST_LABEL, marketArtists, marketOf, MARKETS } from '../app/constants';
 import { lotAllInFactor } from '../app/lib/premiums';
-import { appendCalls, type Call } from './lib/calls-ledger';
+import { appendCalls, readCalls, type Call } from './lib/calls-ledger';
 import { hasConditionFlag } from '../app/lib/condition';
-import { gapRead, sleeperRead, valueFloor, closeGrowth, type CloseCurve } from '../app/lib/lanes';
+import { gapRead, sleeperRead, valueFloor, closeGrowth, validateGapCells, gapCellKey, type CloseCurve } from '../app/lib/lanes';
 import { CARD_TIER_CODE } from './lib/calls-ledger';
 import type { AuctionLot as EngineLot } from '../app/types';
 import type { AuctionLot, RealizedPoint, BidCompetitionPoint } from '../app/types';
@@ -85,6 +85,13 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
     if (cc?.buckets?.length) closeCurve = cc;
   } catch { /* no curve yet */ }
   const freshCalls: Call[] = [];
+  // THE GAP'S PUBLISH GATE (Oct 6 2026, lanes.validateGapCells): the cells
+  // whose graded projections land within [0.8, 1.25] of realized at n ≥ 50
+  const gapCells = validateGapCells(readCalls());
+  {
+    const pass = Object.entries(gapCells).filter(([, c]) => c.pass).map(([k, c]) => `${k} (n${c.n} ${c.ratio}×)`);
+    console.log(`[upcoming] gap cells validated: ${pass.length ? pass.join(' · ') : 'none'}`);
+  }
   const todayCall = new Date().toISOString().slice(0, 10);
   // results-pending grace: keep a just-closed lot visible only through the day
   // after its sale while results post; anything older that never resolved (e.g.
@@ -219,7 +226,8 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
             // used to take ANY value.low / ANY card median, so the served
             // floor disagreed with the lane and the close-board that read it.
             const floor = valueFloor(l as { value?: { low?: number; confidence?: string } | null; cardComps?: { med?: number | null; n?: number } | null })?.floor ?? null;
-            emitted.bidProj = { g, allIn: projAllIn, ...(floor ? { floor, below: projAllIn < floor } : {}) };
+            const ok = floor ? gapCells[gapCellKey(String(l.id), daysOut, projAllIn, floor)]?.pass === true : false;
+            emitted.bidProj = { g, allIn: projAllIn, ...(floor ? { floor, below: projAllIn < floor } : {}), ...(ok ? { ok } : {}) };
             if (floor) freshCalls.push({ id: String(l.id), d: todayCall, k: 'vsbid', p: projAllIn, f: floor, m: marketOf(l.artist) });
           }
         }
@@ -431,8 +439,9 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
     const nowMs = Date.now();
     const rows: Array<{ m: string; id: string; depth: number; allIn: number; floor: number; closes: string }> = [];
     for (const e of upcoming) {
-      const bp = (e as { bidProj?: { allIn: number; floor?: number; below?: boolean } }).bidProj;
+      const bp = (e as { bidProj?: { allIn: number; floor?: number; below?: boolean; ok?: boolean } }).bidProj;
       if (!bp?.below || !bp.floor || !(bp.allIn > 0)) continue;
+      if (bp.ok !== true) continue; // (Oct 6) only a validated projection cell
       if (hasConditionFlag((e as { title?: string }).title)) continue; // dirty lot, clean floor — never a board seat
       const sdt = (e as { saleDateTime?: string | null }).saleDateTime || (e as { saleDate?: string }).saleDate;
       const closeMs = sdt ? new Date(String(sdt)).getTime() : NaN;

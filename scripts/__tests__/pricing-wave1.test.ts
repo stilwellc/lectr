@@ -8,6 +8,7 @@ import { floorAtBid, BID_FLOOR_LATE_LIFT, type ValueResult } from '../../app/lib
 import { lotAllInFactor } from '../../app/lib/premiums';
 import { engineFlagOf, computeDeepSignal } from '../../app/lib/comps';
 import type { AuctionLot } from '../../app/types';
+import { gapRead, validateGapCells, gapCellKey, GAP_CELL_GATE } from '../../app/lib/lanes';
 
 const NOW = Date.parse('2026-10-05T13:00:00Z');
 const v = (o: Partial<ValueResult> = {}): ValueResult => ({
@@ -68,4 +69,22 @@ test('engineFlagOf / computeDeepSignal: no engine value → no flag (never a cli
   assert.equal(engineFlagOf(lot({ ...ev, signal: null })), null);
   const a = engineFlagOf(lot({ ...ev, compRatio: 0.6, flagRatio: 0.62, signal: { label: 'above comparable market', strength: 'moderate', beatRatePct: 30 } }))!;
   assert.equal(a.label, 'Above Market'); assert.equal(a.pct, 38);
+});
+
+test('the Gap seats only a validated projection cell; the forming shelf is frozen', () => {
+  const now = Date.parse('2026-10-05T12:00:00Z');
+  const calls: { id: string; d: string; k: string; p: number; f: number; r: number; sd: string }[] = [];
+  for (let i = 0; i < 60; i++) calls.push({ id: `goldin-a${i}`, d: '2026-09-01', k: 'vsbid', p: 100, f: 300, r: i < 40 ? 95 : 110, sd: '2026-09-03' }); // 2 days out, p/f 0.33: realizes ~1×
+  for (let i = 0; i < 60; i++) calls.push({ id: `goldin-b${i}`, d: '2026-09-01', k: 'vsbid', p: 100, f: 300, r: 450, sd: '2026-09-07' }); // 6 days out: 4.5×
+  const cells = validateGapCells(calls);
+  assert.equal(cells['goldin|2-3|<0.5'].pass, true);
+  assert.equal(cells['goldin|4-8|<0.5'].pass, false);
+  assert.equal(cells['goldin|4-8|<0.5'].ratio, 4.5);
+  assert.equal(GAP_CELL_GATE.minN, 50);
+  const lot = (closes: string, ok?: boolean) => ({ id: 'goldin-x', status: 'upcoming', title: 'Card', estimateLow: null, estimateHigh: null, saleDate: closes.slice(0, 10), saleDateTime: closes,
+    value: { low: 1000, confidence: 'medium', compValueUsd: 1500 }, bidProj: { g: 1.5, allIn: 300, floor: 1000, below: true, ...(ok ? { ok } : {}) } }) as unknown as AuctionLot;
+  assert.equal(gapRead(lot('2026-10-07T12:00:00Z'), now), null, 'unvalidated cell never seats');
+  assert.equal(gapRead(lot('2026-10-07T12:00:00Z', true), now)?.shelf, 'wire');
+  assert.equal(gapRead(lot('2026-10-11T12:00:00Z', true), now), null, 'forming frozen');
+  assert.equal(gapCellKey('goldin-x', 2, 300, 1000), 'goldin|2-3|<0.5');
 });
