@@ -28,7 +28,7 @@ import { SERVED_DIR, CORPUS_DIR, streamGzLines } from './corpus-io';
 import { readCalls } from './lib/calls-ledger';
 import { ARTISTS, MARKETS, marketArtists, marketOf } from '../app/constants';
 import {
-  signalWithPool, appraiseLot, soldCompBand, isSportsScienceObject,
+  appraiseLot, soldCompBand, isSportsScienceObject,
   scienceReferenceBand, cultureReferenceBand, classifyForm, formsForMarket,
 } from '../app/lib/comps';
 import { isMisattributed } from '../app/lib/attribution';
@@ -239,11 +239,10 @@ export async function emitPageStats(opts: PageStatsOpts = {}): Promise<void> {
               for (const id of ev.poolIds || []) if (!soldById.has(String(id))) offWire.add(String(id));
             }
           }
-        } else {
-          const pool = sso ? (mainByArtistId.get(`${lot.artist}|${idKey(lot)}`) || []) : (mainByArtist.get(lot.artist) || []);
-          const read = signalWithPool(lot, pool);
-          if (read) pack.c = { n: read.pool.length, med: read.signal.med ?? null, form: String(read.signal.form), kind: read.signal.kind, resolved: read.pool.length, rows: top12(read.pool), ps: pricesOf(read.pool) };
         }
+        // (Oct 6 2026, wave 3) NO FALLBACK READ: a lot the engine declined
+        // carries no comp call (the client signalWithPool read used to fill
+        // pack.c here — a directional read the engine had abstained from)
         // appraisal — only where the certificate falls through to it
         const sigMed = (lot.signal as { med?: number } | null | undefined)?.med;
         if (sigMed == null && (!pack.c || pack.c.med == null)) {

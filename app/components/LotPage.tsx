@@ -13,7 +13,7 @@ import { useSavedLots } from '../hooks/useSavedLots';
 import { useRefs } from '../hooks/useRefs';
 import { safeHref } from '../lib/safe-href';
 import { splitTitle, deglue, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
-import { signalWithPool, appraiseLot, soldCompBand, isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
+import { appraiseLot, soldCompBand, isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
 import { lotAllInFactor, maxHammerFor } from '../lib/premiums';
 import { valueFloor } from '../lib/lanes';
 import { formatEstimate, estimateOnly, lotSignal, confidenceMeter } from './LotCard';
@@ -588,8 +588,10 @@ export default function LotPage({ lotId, initialLot }: {
       // read against the same header (the contradiction Collin caught).
       return { pool, n: ev.n || pool.length, med: ev.compMedianUsd ?? ev.compValueUsd, form: lot.formKey || null, kind: 'form' as const };
     }
-    const read = signalWithPool(lot, poolLots);
-    return read ? { pool: read.pool, n: read.pool.length, med: read.signal.med, form: read.signal.form as string, kind: read.signal.kind } : null;
+    // (Oct 6 2026, wave 3) NO FALLBACK READ: the engine declined (no signal,
+    // abstained, or a ×5 data fault) — the client must not synthesize a
+    // directional read of its own. The 'no read' state renders.
+    return null;
   }, [lot, poolLots, band, hasPack, pack]);
 
   // build-shipped evidence rows for engine calls whose poolIds aren't on-wire
