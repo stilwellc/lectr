@@ -11,7 +11,8 @@ import { detectCurrency, isoCurrencyToInternal, stampMoney, statusWithMoney, FX_
 import { parseChristiesCurrency } from '../lib/houses/christies';
 import { fxRateFor, toUsdDated, FX_BY_YEAR } from '../../app/lib/normalize';
 import { CURRENCIES, isCurrency } from '../../app/types';
-import { restampBruunCurrency } from '../lib/corpus-normalize';
+import { restampBruunCurrency, restampChristiesSaleroomCurrency, restampFx } from '../lib/corpus-normalize';
+import { christiesLocationCurrency } from '../lib/houses/common';
 
 test('detectCurrency: known codes/symbols, bare $ is USD, unknown/ambiguous → null (never USD)', () => {
   assert.equal(detectCurrency('USD 10,000 - 20,000'), 'USD');
@@ -85,4 +86,37 @@ test('restampBruunCurrency: BR rows stamped USD@1 are re-derived as DKK; idempot
   assert.equal(br.realizedUsd, null);
   assert.equal(other.estLowUsd, 40000);
   assert.equal(restampBruunCurrency(lots), 0, 'idempotent');
+});
+
+test("Christie's saleroom currency: a USD-stamped London/HK/Paris row is re-labelled, New York untouched", () => {
+  assert.equal(christiesLocationCurrency('London, South Kensington'), 'GBP');
+  assert.equal(christiesLocationCurrency('Hong Kong'), 'HKD');
+  assert.equal(christiesLocationCurrency('New York'), 'USD');
+  assert.equal(christiesLocationCurrency('Mumbai'), null);
+  const hk = { id: 'christies-6377627', auctionHouse: "Christie's", saleName: 'Hong Kong Sale 19898', status: 'sold', saleDate: '2021-05-13', nativeCurrency: 'USD', currency: 'USD', fxRate: 1, realizedNative: 174950000, premiumNative: 174950000, realizedUsd: 174950000, priceUsd: 174950000 };
+  const ny = { ...hk, id: 'christies-1', saleName: 'New York Sale 1' };
+  const auc = { ...hk, id: 'christies-auc-6301059', saleName: '20th Century Hong Kong To New York Evening Sale' };
+  const lots = [hk, ny, auc] as never[];
+  assert.deepEqual(restampChristiesSaleroomCurrency(lots), { restamped: 1, quarantined: 0 });
+  assert.equal(hk.nativeCurrency, 'HKD');
+  assert.equal(ny.nativeCurrency, 'USD');
+  assert.equal(auc.nativeCurrency, 'USD', 'auction-crawler rows carry their own currency');
+  assert.equal(restampFx(lots), 1);
+  assert.equal(hk.realizedUsd, Math.round(174950000 * FX_BY_YEAR.HKD[2021] * 100) / 100); // ≈ $22.6M, not $175M
+  assert.equal(hk.priceUsd, hk.realizedUsd);
+  assert.equal(hk.fxRate, FX_BY_YEAR.HKD[2021]);
+});
+
+test('restampFx: every non-USD row re-derived from native at today\'s table (stale crawl-time rates, pre-2000); USD rows untouched', () => {
+  const stale = { id: 'a', saleDate: '2025-06-01', nativeCurrency: 'GBP', fxRate: 1.27, realizedNative: 100000, realizedUsd: 127000, priceUsd: 127000, estLowNative: 50000, estLowUsd: 63500, estimateLow: 63500, hammerNative: null, hammerUsd: null };
+  const old = { id: 'b', saleDate: '1994-11-30', nativeCurrency: 'GBP', fxRate: 1.516, realizedNative: 10000, realizedUsd: 15160, priceUsd: 15160 };
+  const usd = { id: 'c', saleDate: '2025-06-01', nativeCurrency: 'USD', fxRate: 1, realizedNative: 100, realizedUsd: 100 };
+  const nonative = { id: 'd', saleDate: '2025-06-01', nativeCurrency: 'EUR', fxRate: 1.08, realizedNative: null, realizedUsd: 999 };
+  const lots = [stale, old, usd, nonative] as never[];
+  assert.equal(restampFx(lots), 2);
+  assert.equal(stale.realizedUsd, 131800); assert.equal(stale.estimateLow, 65900); assert.equal(stale.fxRate, 1.318);
+  assert.equal(old.realizedUsd, 15319); // GBP 1994 G.5A 1.5319, not the 2000 rate
+  assert.equal(usd.realizedUsd, 100);
+  assert.equal(nonative.realizedUsd, 999, 'no native twin → left as is');
+  assert.equal(restampFx(lots), 0, 'idempotent');
 });

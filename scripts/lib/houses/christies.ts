@@ -11,7 +11,7 @@ import { fetchWithRetry } from '../fetch-retry';
 import { buildSkippableSaleNames } from '../skip-set';
 import { parseEstimateRange } from '../estimate-range';
 import type { ArtistConfig } from './artists';
-import { DEEP, type EnrichResult, INCREMENTAL_CRAWL, INCREMENTAL_MODE_REASON, MEDIUM_PATTERNS, UA, balancedObjectAfter, detectCurrency, isSaleDayPast, noteEnrichFail, noteExpected, noteFetched, parseDrop, sleep, stampMoney, statusWithMoney } from './common';
+import { DEEP, type EnrichResult, INCREMENTAL_CRAWL, INCREMENTAL_MODE_REASON, MEDIUM_PATTERNS, UA, balancedObjectAfter, christiesLocationCurrency, detectCurrency, isSaleDayPast, noteEnrichFail, noteExpected, noteFetched, parseDrop, sleep, stampMoney, statusWithMoney } from './common';
 import { routeItem } from './routing';
 
 // ── Christie's Crawler ──
@@ -119,7 +119,8 @@ export function parseChristiesJson(jsonStr: string, artistSlug: string): Auction
       const estimateStr = lot.estimate_txt || '';
       // the estimate names the sale currency; an estimate-on-request lot falls
       // back to the realized string; neither → null (fail-closed, never USD)
-      const currency = detectCurrency(estimateStr) ?? detectCurrency(lot.price_realised_txt || '');
+      const currency = detectCurrency(estimateStr) ?? detectCurrency(lot.price_realised_txt || '')
+        ?? christiesLocationCurrency(lot.sale?.location);
       // RANGE-AWARE estimate parse (lib/estimate-range). The old
       // `([\d,]+)\s*[-–]\s*([\d,]+)` regex could not cross a repeated currency
       // token ("GBP 200,000 - GBP 300,000") or an em dash, silently dropping

@@ -171,6 +171,22 @@ export function detectCurrency(text: string): Currency | null {
   return null;
 }
 
+/** (Oct 6 2026) A Christie's saleroom prices its sales in its own currency —
+ *  the fallback when neither the estimate nor the realized string names one
+ *  (19 trophy lots — a HK$174.95M Picasso, a £42.19M Bacon — were stored as
+ *  USD at fxRate 1 because their estimate was "on request"). null for a
+ *  saleroom whose currency the money layer does not convert (fail-closed). */
+const CHRISTIES_SALEROOM: [RegExp, Currency | null][] = [
+  [/^new york\b/i, 'USD'], [/^london\b/i, 'GBP'], [/^hong kong\b/i, 'HKD'], [/^paris\b/i, 'EUR'],
+  [/^(?:amsterdam|rome|milan)\b/i, 'EUR'], [/^(?:geneva|zurich)\b/i, 'CHF'], [/^shanghai\b/i, 'CNY'],
+  [/^(?:mumbai|dubai)\b/i, null],
+];
+export function christiesLocationCurrency(location: string | null | undefined): Currency | null {
+  const l = String(location || '').trim();
+  for (const [re, c] of CHRISTIES_SALEROOM) if (re.test(l)) return c;
+  return null;
+}
+
 /** A house-supplied ISO code → the money layer's Currency, or null when the
  *  layer cannot convert it (never 'USD' by default — see detectCurrency). */
 export function isoCurrencyToInternal(iso: string | null | undefined): Currency | null {
