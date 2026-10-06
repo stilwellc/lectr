@@ -15,6 +15,7 @@ import { fxRateFor, toUsdDated } from '../../app/lib/normalize';
 import { readSegment, writeSegment } from '../corpus-io';
 import type { PriceBasis, Currency, AuctionLot } from '../../app/types';
 import { leadsWithSetCode } from './set-codes';
+import { NON_SPORT_RE, SPORT_WORD_RE, GAME_USED_RE, isCardTitle } from './classify';
 import { saleCloseFor } from './sale-close-dates';
 
 // Nightly crawls a BOUNDED window; the segment must ACCUMULATE. Read the last-
@@ -331,15 +332,24 @@ export function classifySports(catLabel: string, title: string): SportsCategory 
   // follows — "T206 … with Bat" must not fall into game-used below (Sep 27 audit:
   // ~13k pre-war cards filed as memorabilia/game-used). See set-codes.ts.
   if (leadsWithSetCode(title)) return 'graded-card';
+  // CARD FIRST (Oct 6 2026 audit): a signed card is a card, never an autograph
+  // or game-used lot — the shared routing detector (classify.ts isCardTitle).
+  if (isCardTitle(title)) return 'graded-card';
   if (/\b(ticket|stub|pass|full ticket)\b/.test(both)) return 'ticket';
-  if (/\b(game[- ]?used|game[- ]?worn|match[- ]?worn|player[- ]?worn|jersey|bat|glove|cleats|helmet|worn)\b/.test(both)) return 'game-used';
+  // game-used needs explicit USE language — a jersey/bat/helmet alone is a
+  // retail or signed item (5.5k signed bats/jerseys were filed game-used)
+  if (GAME_USED_RE.test(both)) return 'game-used';
   if (/\b(trophy|award|ring|medal|championship ring|mvp)\b/.test(both)) return 'trophy-award';
   if (/\b(type (1|i|one)|type-1|photograph|original photo|wire photo|press photo)\b/.test(both)) return 'photograph';
   if (/\b(program|yearbook|magazine|publication|pennant|scorecard)\b/.test(both)) return 'program-publication';
   if (/\b(seat|turnstile|base|stadium|signage|display)\b/.test(both)) return 'equipment';
   if (/\b(signed|autograph|auto|cut signature|inscribed)\b/.test(both) && !/\bcard\b/.test(c)) return 'autograph';
   if (/\bcard\b/.test(both) || /\b(psa|sgc|bgs|cgc)\s*(gem|mint|nm|ex|vg|good|fair|poor|pr|\d)/.test(both) || /\b(topps|bowman|leaf|fleer|donruss|upper deck|panini|goudey|cracker jack|t20[0-9]|e9[0-9])\b/.test(both)) return 'graded-card';
-  if (/\b(poster|prop|costume|comic|toy|figure|record|album|guitar|memorabilia)\b/.test(both)) return 'pop-memorabilia';
+  // pop-memorabilia (a CULTURE slug) only when the lot reads NON-sport — at a
+  // sports house a fight poster or a team figure is sports memorabilia (Oct 6
+  // 2026 audit: 79% of 14k pop-memorabilia rows were sports). The same rule
+  // re-runs over the back-catalogue: classify.ts sportsHousePopKind.
+  if (NON_SPORT_RE.test(both) && !SPORT_WORD_RE.test(both)) return 'pop-memorabilia';
   return 'other-memorabilia';
 }
 

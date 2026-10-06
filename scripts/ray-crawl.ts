@@ -22,6 +22,7 @@ import type {
 // never 4xx), the incremental skip-set predicate, and robust estimate-range
 // parsing. All pure/no-side-effect modules — safe as static imports.
 import { RESULT_PENDING_MS } from './lib/skip-set';
+import { artCategoryFix, type ClassifyLot } from './lib/classify';
 import { saleDayOf } from './lib/sale-day';
 
 // v2 foundation — the single, deterministic normalization layer. Every FUTURE
@@ -82,6 +83,13 @@ function classifyLot(lot: AuctionLot): LotCategory {
   // Watches & science lots are objects — before any pattern matching, or a
   // Rolex with a "printed dial" becomes a print.
   if (OBJECT_ARTISTS.has(lot.artist)) return 'object';
+
+  // Shared art-category rule (scripts/lib/classify.ts — corpus-normalize
+  // re-applies it to the back-catalogue): a ceramic/Madoura lot is sculpture
+  // and a unique medium on a support is an original, BEFORE the print patterns
+  // and the edition-default artists below can call either a print.
+  const fixed = artCategoryFix({ ...lot, category: 'unknown' } as ClassifyLot);
+  if (fixed) return fixed as LotCategory;
 
   // Combine all text signals
   const medium = (lot.medium || '').toLowerCase();

@@ -5,6 +5,7 @@
  * Moved verbatim out of scripts/ray-crawl.ts (house split, Sep 2026).
  */
 import { looksLikeCard } from '../../../app/lib/cards';
+import { goldinSportKind, scienceVerdict, DROP } from '../classify';
 
 // Tracked art & design makers → slug. Order: specific before ambiguous.
 // Ambiguous surnames (condo=apartment, saul, sachs) require the full name.
@@ -51,7 +52,22 @@ const ART_MAKER_ROUTES: [RegExp, string][] = [
  * track is skipped — never guessed into a bucket.
  */
 export function routeItem(creators: string | null, title: string, extra = ''): string | null {
+  const slug = routeItemRaw(creators, title, extra);
+  // SCIENCE must be earned by the lot's own words (Oct 6 2026 audit): the
+  // science branches below read creators + title only, and the shared
+  // classify.ts scienceVerdict (re-applied to the corpus nightly) can re-home
+  // a book/letter (science-tech, entertainment-memorabilia) or reject it.
+  if (slug && ['meteorites', 'fossils', 'space-exploration', 'scientific-instruments'].includes(slug)) {
+    const v = scienceVerdict({ artist: slug, title: `${creators || ''} ${title}`.trim() });
+    return v === DROP ? null : (v || slug);
+  }
+  return slug;
+}
+
+function routeItemRaw(creators: string | null, title: string, extra = ''): string | null {
   const t = `${creators || ''} ${title} ${extra}`.toLowerCase();
+  // science branches read the lot's own words only — never the description
+  const ts = `${creators || ''} ${title}`.toLowerCase();
   // NEVER cards — unambiguous trading-card signals gate EVERYTHING, before any
   // science/sports route can claim the lot (mirrors goldinRoute: exclusions
   // first). Deliberately narrower than the sports-route blocklist below: no
@@ -71,12 +87,12 @@ export function routeItem(creators: string | null, title: string, extra = ''): s
   // require the full name). Untracked makers still fall through to null.
   for (const [re, slug] of ART_MAKER_ROUTES) if (re.test(t)) return slug;
   // science collections — positive signals only, no sale-level fallback
-  if (/meteorite|pallasite|tektite|moldavite|chondrite|gibeon|seymchan|impactite|lunar meteorite|martian/.test(t)) return 'meteorites';
-  if (/fossil|dinosaur|trilobite|ammonite|megalodon|mammoth|mosasaur|tyrannosaur|triceratops|pterosaur|ichthyosaur|plesiosaur|neanderthal|paleolithic|petrified|tooth of|amber with|coprolite|stromatolite/.test(t)) return 'fossils';
+  if (/meteorite|pallasite|tektite|moldavite|chondrite|gibeon|seymchan|impactite|lunar meteorite|martian/.test(ts)) return 'meteorites';
+  if (/fossil|dinosaur|trilobite|ammonite|megalodon|mammoth|mosasaur|tyrannosaur|triceratops|pterosaur|ichthyosaur|plesiosaur|neanderthal|paleolithic|petrified|tooth of|amber with|coprolite|stromatolite/.test(ts)) return 'fossils';
   // generic anatomy words are fossils ONLY with paleo context — a
   // "skeletonized" watch dial, skull-logo jersey, or Jaws poster is not a fossil
-  if (/\b(skeletons?|skulls?|tusks?|claws?|jaws?)\b/.test(t) && /\b(prehistoric|cretaceous|jurassic|triassic|permian|eocene|oligocene|miocene|pliocene|pleistocene|ice age|saber[- ]tooth(ed)?|cave (bear|lion)|woolly|dire wolf|raptor|extinct)\b/.test(t)) return 'fossils';
-  if (/apollo|nasa|space[- ]flown|space (exploration|shuttle|suit|program|station)|spacesuit|lunar|astronaut|cosmonaut|sputnik|gemini \d|soyuz|vostok|skylab|\brocket\b|x-15|satellite|mission (control|patch)|flight plan|star chart/.test(t)) return 'space-exploration';
+  if (/\b(skeletons?|skulls?|tusks?|claws?|jaws?)\b/.test(ts) && /\b(prehistoric|cretaceous|jurassic|triassic|permian|eocene|oligocene|miocene|pliocene|pleistocene|ice age|saber[- ]tooth(ed)?|cave (bear|lion)|woolly|dire wolf|raptor|extinct)\b/.test(ts)) return 'fossils';
+  if (/apollo|nasa|space[- ]flown|space (exploration|shuttle|suit|program|station)|spacesuit|lunar|astronaut|cosmonaut|sputnik|gemini \d|soyuz|vostok|skylab|\brocket\b|x-15|satellite|mission (control|patch)|flight plan|star chart/.test(ts)) return 'space-exploration';
   // video games are NOT science (doctrine) — a Nintendo/Atari console prototype
   // must not fall into scientific-instruments via 'prototype'/'computer'
   if (/\b(nintendo|sega|playstation|\bxbox\b|game ?boy|atari (2600|vcs|jaguar|lynx|5200|7800)|super nintendo|sega (genesis|saturn|dreamcast)|\bnes\b|\bsnes\b|game cartridge|arcade (cabinet|machine)|video ?game)\b/.test(t)) return null;
@@ -88,7 +104,7 @@ export function routeItem(creators: string | null, title: string, extra = ''): s
   // named-scientist signal overrides the block.
   if (/\b(washington|thomas jefferson|abraham lincoln|john adams|john quincy adams|alexander hamilton|james madison|james monroe|andrew jackson|ulysses grant|robert e\.? lee|general sherman|jefferson davis|john wilkes booth|confederate|civil war|continental (army|congress)|declaration of independence|revolutionary war|colonial governor|bunker hill|fort (sumter|ticonderoga)|emancipation|hemingway|walt whitman|washington irving|ezra pound|marilyn monroe|bette davis|marlene dietrich|bruce springsteen|jacqueline (bouvier|kennedy)|cotton mather|ecclesiastical history)\b/.test(t)
       && !/telescope|microscope|astrolab|sextant|orrery|armillary|chronometer|patent (model|no|for)|scientific instrument|albert einstein|isaac newton|thomas edison|nikola tesla|charles darwin|\bsmyth\b|orville|atomic|nuclear|manhattan project/.test(t)) return null;
-  if (/telescope|microscope|astrolabe|sextant|octant|orrery|armillary|barometer|theodolite|chronometer\b|slide rule|surveying (instrument|compass|chain|cross)|(terrestrial|library|pocket|table) globe|globe by|celestial|enigma machine|cipher|calculat(or|ing)|typewriter|computer|macintosh|apple[- ](1|ii)|altair|commodore|prototype|patent model|anatomical|medical (instrument|kit)|laboratory|albert einstein|isaac newton|charles darwin|marie curie|nikola tesla|thomas edison|bell labs|bell telephone laborator|transistor|semiconductor|integrated circuit|microprocessor|vacuum tube|punch(ed)? card|mainframe|eniac|univac|\bcray\b|\bibm\b|pdp-\d|\bvax\b|apple lisa|\bnext(cube|step)?\b|xerox (alto|parc|star)|difference engine|analytical engine|babbage|\bturing\b|von neumann|shockley|grace hopper|wozniak|steve jobs|kenbak|imsai|trs-80|\bamiga\b|osborne 1|manuscript.*(scien|math|physic)|first edition.*(scien|math|physic)/.test(t)) return 'scientific-instruments';
+  if (/telescope|microscope|astrolabe|sextant|octant|orrery|armillary|barometer|theodolite|chronometer\b|slide rule|surveying (instrument|compass|chain|cross)|(terrestrial|library|pocket|table) globe|globe by|celestial|enigma machine|cipher|calculat(or|ing)|typewriter|computer|macintosh|apple[- ](1|ii)|altair|commodore|prototype|patent model|anatomical|medical (instrument|kit)|laboratory|albert einstein|isaac newton|charles darwin|marie curie|nikola tesla|thomas edison|bell labs|bell telephone laborator|transistor|semiconductor|integrated circuit|microprocessor|vacuum tube|punch(ed)? card|mainframe|eniac|univac|\bcray\b|\bibm\b|pdp-\d|\bvax\b|apple lisa|\bnext(cube|step)?\b|xerox (alto|parc|star)|difference engine|analytical engine|babbage|\bturing\b|von neumann|shockley|grace hopper|wozniak|steve jobs|kenbak|imsai|trs-80|\bamiga\b|osborne 1|manuscript.*(scien|math|physic)|first edition.*(scien|math|physic)/.test(ts)) return 'scientific-instruments';
   // sports objects — Christie's/Sotheby's sports sales, same doctrine as
   // Goldin: game-used, trophies & awards, tickets & passes. NEVER cards.
   if (/\b(cards?|n172|t20[0-9]|tobacco (card|silk)|psa\b|sgc\b|topps|bowman|panini|goudey|leaf\b|cabinet (photo|card)|carte de visite)\b/.test(t)) return null;
@@ -159,8 +175,16 @@ export function goldinRoute(title: string, sportScoped = false): string | null {
   // so it honours the never-non-sport-cards doctrine. A RAW object (jersey/bat/
   // ball with game-used wording but no card product/number) has looksLikeCard
   // false and keeps the object routing below.
-  if (sportScoped && looksLikeCard(title)) return 'sports-cards';
-  if (sportScoped) return objectSignal || 'sports-cards';
+  // A Sport lot with no object signal is NOT presumed a card (Oct 6 2026 audit:
+  // 69k jerseys/balls/photos/sealed boxes/comics sat in sports-cards). The
+  // shared ladder decides — the same one corpus-normalize re-applies to the
+  // back-catalogue (classify.ts goldinSportKind): card detector → card, else
+  // the object's kind; non-sport TCG / comics → blocked.
+  if (sportScoped) {
+    if (objectSignal && !looksLikeCard(title)) return objectSignal;
+    const k = goldinSportKind(title);
+    return k === DROP ? 'blocked' : k;
+  }
   if (objectSignal) return objectSignal;
   // space first — Apollo/NASA artifacts head the science vertical's space slug
   if (/\b(apollo|nasa|lunar|moon landing|astronaut|spacesuit|space suit|mercury (program|capsule)|gemini (program|capsule)|saturn v|cosmonaut|sputnik|space[- ]?flown)\b/.test(t)) return 'space-exploration';

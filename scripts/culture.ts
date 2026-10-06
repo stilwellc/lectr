@@ -16,7 +16,7 @@
 // mass / graded / reproduced — never in this vertical, even inside a pop-culture
 // sale. NOTE the deliberate `s?` on comic/card nouns: `\bcomic\b` never matches
 // "Comics", so the plural must be spelled out or the whole class leaks.
-const MASS = /\b(comics?|single cards?|trading cards?|rookie cards?|art cards?|pok[eé]mon|yu-?gi-?oh|magic the gathering|\btcg\b|\bcgc\b|\bcbcs\b|\bwata\b|\bvga\b|graded (comics?|cards?|game)|video ?game|nintendo|playstation|\bxbox\b|sega|atari|\bvhs\b|betamax|\bfunko\b|bobblehead|\blego\b|action figure|trading pins?|sealed\s*(cds?|cassette|vinyl|record|dvd|blu-?ray|box|case|pack)|booster (box|pack)|wax pack|vinyl records?|\blp\b record|\b45 rpm\b|\b45 sleeve|cassette|\bcds?\b|reprint|reproduction|replica|movie poster|one[- ]sheet|lobby cards?|\bposters?\b(?!.* signed)|first edition|\bmint\b set|jigsaw|puzzles?\b|coloring book|sheet music|\bmagazine\b|picture puzzle|milk caps?|\bpogs?\b|\bdecals?\b|pennants?|coins? and currency|sticker album)\b/i;
+const MASS = /\b(igs|wegs|afa (?:qualified )?\d{2}|ukg \d{2}|cas \d{2}|factory[- ]sealed|beanie bab(?:y|ies)|comics?|single cards?|trading cards?|rookie cards?|art cards?|pok[eé]mon|yu-?gi-?oh|magic the gathering|\btcg\b|\bcgc\b|\bcbcs\b|\bwata\b|\bvga\b|graded (comics?|cards?|game)|video ?game|nintendo|playstation|\bxbox\b|sega|atari|\bvhs\b|betamax|\bfunko\b|bobblehead|\blego\b|action figure|trading pins?|sealed\s*(cds?|cassette|vinyl|record|dvd|blu-?ray|box|case|pack)|booster (box|pack)|wax pack|vinyl records?|\blp\b record|\b45 rpm\b|\b45 sleeve|cassette|\bcds?\b|reprint|reproduction|replica|movie poster|one[- ]sheet|lobby cards?|\bposters?\b(?!.* signed)|first edition|\bmint\b set|jigsaw|puzzles?\b|coloring book|sheet music|\bmagazine\b|picture puzzle|milk caps?|\bpogs?\b|\bdecals?\b|pennants?|coins? and currency|sticker album)\b/i;
 // trading-card sets & graded slabs — the biggest mass leak inside Goldin's
 // Non-Sport curated sub-cats. Card/comic brands, graded-slab grades (incl.
 // Beckett's numeric scale), and the anime/TCG flood (Weiss Schwarz, Dragon
@@ -42,9 +42,17 @@ const MUSIC = /\b(stage[- ](worn|played|used)|performance[- ]worn|concert[- ]wor
 const NOT_CULTURE_LOT = /\b(fossil|skeleton|oviraptor\w*|dinosaur|tyrannosaur\w*|[a-z]+saurus|triceratops|mammoth|mastodon|meteorite|mineral specimen|ammonite|trilobite|gelatin silver print|chromogenic print|c-print|helmut newton|irving penn|richard avedon)\b/i;
 /** Route a lot KNOWN to be pop-culture (Goldin curated sub-cat, or a pop-
  *  culture sale) → a culture slug, or null to drop it as mass/graded. */
+/** mass / graded / reproduced — the culture vertical's hard exclusion, shared
+ *  with corpus-normalize (classify.ts) so the back-catalogue drops what the
+ *  crawler drops. */
+export function isMassCulture(title: string, description = ''): boolean {
+  const t = `${title} ${description}`.toLowerCase();
+  return MASS.test(t) || CARD.test(t) || isNumberedLot(t);
+}
+
 export function routeCulture(title: string, description = ''): string | null {
   const t = `${title} ${description}`.toLowerCase();
-  if (MASS.test(t) || CARD.test(t) || isNumberedLot(t) || NOT_CULTURE_LOT.test(t)) return null;
+  if (isMassCulture(title, description) || NOT_CULTURE_LOT.test(t)) return null;
   if (MOVIE_TV.test(t)) return 'movie-tv';
   if (MUSIC.test(t)) return 'music-memorabilia';
   return 'entertainment-memorabilia'; // the iconic/historic catch-all

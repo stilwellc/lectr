@@ -130,11 +130,32 @@ const ART_KIND: Record<string, string> = {
 };
 const DESIGN_MATERIALS = ['walnut', 'teak', 'oak', 'rosewood', 'plywood', 'steel', 'aluminum', 'fiberglass', 'bronze', 'glass', 'upholstery'];
 
-function designKind(formKey: string): string {
+// Design MODEL vocabulary (Oct 6 2026 audit): the title of a design lot is
+// often only a model code or a series name ("LCW", "DSR", "RKR-1", "ESU 400",
+// "Guéridon, model no. 401", "PJ-SI-30-A", "Frenchman's Cove II", "Sundra
+// dining suite") — the form ladder in comps.classifyForm reads none of them,
+// and 2.6k lots sat in 'objects'. Read title + the head of the description
+// (Bonhams prints the form there). Nouns carry no trailing \b: Bonhams glues
+// the next field on ("Committee' Chairscirca 1953").
+const DESIGN_KIND_WORDS: [string, RegExp][] = [
+  ['lighting', /\b(?:lamps?|lampe|lighting|light fixture|wall light|ceiling light|floor light|potence|sconces?|applique|lanterns?|chandeliers?)/i],
+  ['case-storage', /\besus?\b|\b(?:eames storage unit|storage units?|cabinets?|chests?|bookcases?|biblioth[eè]que|room divider|wall case|credenza|sideboards?|dressers?|rangement|kornblut|pj-r-|wardrobes?|armoire|shelv(?:es|ing)|bookshel)/i],
+  ['seating', /\b(?:lcw|lcm|dcw|dcm|dsr|dsw|dsx|dss|dar|dax|rar|raw|rkr|pkw|pkc|lar|lax|dkr|dkx|es ?\d{3}|670|671)(?:s|-?\d)?\b|\b(?:pj-si|chairs?|armchairs?|fauteuils?|chaises?|chaise longue|lounge|stools?|tabourets?|bench(?:es)?|settees?|sofas?|canap[ée]|daybeds?|rockers?|rocking|ottomans?|seating|kangaroo|committee)/i],
+  ['tables', /\b(?:etr|ltr|ctw|otw|dtw|etw)(?:s|-?\d)?\b|\b(?:pj-ta|pj-bu|tables?|gu[ée]ridon|compas|desks?|bureau|frenchman'?s cove|minguren|dining suite|sundra|conoid dining)/i],
+];
+function designKind(formKey: string, title = '', desc = ''): string {
   if (formKey.startsWith('seating')) return 'seating';
-  if (formKey === 'table' || formKey === 'desk') return 'tables';
+  if (formKey.startsWith('table') || formKey === 'desk') return 'tables';
   if (formKey === 'case') return 'case-storage';
   if (formKey === 'lighting' || formKey === 'lamp') return 'lighting';
+  // the title decides first; the description only when the title names nothing
+  if (/\b(?:mirrors?|miroir|vases?|bowls?|trays?|screens?|clocks?|sculptures?|rugs?|textiles?|beds?|headboards?)\b/i.test(title)) return 'objects';
+  // the EARLIEST-named form wins ("Dining table and five chairs" is a table lot)
+  for (const src of [title, desc]) {
+    let best: string | null = null, at = Infinity;
+    for (const [kind, re] of DESIGN_KIND_WORDS) { const m = re.exec(src); if (m && m.index < at) { at = m.index; best = kind; } }
+    if (best) return best;
+  }
   return 'objects';
 }
 
@@ -183,7 +204,10 @@ export function subCatOf(l: Lot, sportMaps?: { byPid: Map<string, string>; byPla
   if (vert === 'tcg') {
     // Pokémon's own axis: product form (sealed wax vs singles), era drill by
     // the leading year Goldin titles always carry ("1998 Pokemon Japanese …").
-    const subCat = /\b(booster|sealed|box(es)?|packs?|case|display)\b/i.test(title) ? 'pokemon-sealed' : 'pokemon-cards';
+    // a card NUMBER makes it a single, whatever product it was pulled from
+    // ("Stamp Box Full Art #227 Pikachu", "Card Pack 25th Anniversary #006",
+    // "Collector Chest Holo #SM226") — 1.2k singles were filed sealed
+    const subCat = !/#\s?[A-Za-z0-9]/.test(title) && /\b(booster|sealed|unopened|box(es)?|packs?|case|display|tins?|blister|bundle|elite trainer)\b/i.test(title) ? 'pokemon-sealed' : 'pokemon-cards';
     const y = (title.match(/\b(19|20)\d{2}\b/) || [])[0];
     const yr = y ? parseInt(y, 10) : null;
     const drill = yr ? (yr <= 2002 ? 'vintage' : yr <= 2016 ? 'classic' : 'modern') : null;
@@ -230,7 +254,7 @@ export function subCatOf(l: Lot, sportMaps?: { byPid: Map<string, string>; byPla
     let drill: string | null = null;
     const mats = l.materialTokens as string[] | undefined;
     if (Array.isArray(mats)) for (const m of DESIGN_MATERIALS) if (mats.includes(m)) { drill = m; break; }
-    return { subCat: designKind(formKey), drill, flown: null };
+    return { subCat: designKind(formKey, title, String(l.description || '').slice(0, 300)), drill, flown: null };
   }
 
   return { subCat: null, drill: null, flown: null };

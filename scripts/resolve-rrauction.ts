@@ -389,7 +389,7 @@ async function runArchive(args: string[], maxPages: number) {
           }
           const lines: string[] = [];
           for (const r of raw) {
-            const slug = routeRRLot(r.title);
+            const slug = routeRRLot(r.title, '', saleName);
             if (!slug) continue;
             lines.push(JSON.stringify(toLot(r, slug, saleId, saleName, { saleDate: saleClosed })));
           }
@@ -486,7 +486,7 @@ async function main() {
       const { lots: raw, saleName } = await crawlSale(browser, saleId, maxPages);
       let kept = 0;
       for (const r of raw) {
-        const slug = routeRRLot(r.title);
+        const slug = routeRRLot(r.title, '', saleName);
         if (!slug) { dropped++; continue; }
         lots.push(toLot(r, slug, saleId, saleName));
         dist[slug] = (dist[slug] || 0) + 1;
@@ -502,7 +502,7 @@ async function main() {
         const closedDate = saleClosed || staleDate.get(saleId) || today;
         let kept = 0, sold = 0;
         for (const r of raw) {
-          const slug = routeRRLot(r.title);
+          const slug = routeRRLot(r.title, '', saleName);
           if (!slug) { dropped++; continue; }
           const lot = toLot(r, slug, saleId, saleName, { saleDate: closedDate });
           lots.push(lot);

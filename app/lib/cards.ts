@@ -279,6 +279,39 @@ export function parseCard(title: string): CardId {
   return out;
 }
 
+/* ── KNOWN PLAYERS (Oct 6 2026 categorization audit) — an OBJECT title's
+   leading capitalized run is a player only about half the time ("Baseball
+   Hall", "New York Giants", "BEST OF THE", "The Beatles", "Claire Ruth Cut"
+   were stamped as players on ≥17.9k lots). Card titles name the player in a
+   fixed slot, so the set of players the CARD parser has read ≥ minCount
+   times is the roster an object name must belong to. Team / set / checklist
+   runs that card titles also produce are excluded by word. */
+const NOT_A_PLAYER_WORD = /\b(team|teams|checklist|leaders?|league|leagues|rookies|stars|all|world|series|highlights?|cards?|set|sets|collection|lot|hall|fame|champions?|championship|giants|yankees|dodgers|cubs|sox|cardinals|tigers|pirates|athletics|senators|browns|braves|reds|phillies|orioles|indians|colts|packers|bears|celtics|lakers|bulls|knicks|canadiens|bruins|rangers|mets|jets|patriots|cowboys|steelers|49ers|raiders|eagles|lions|rams|chiefs|broncos|giants|warriors|heat|nets|spurs|beatles|stones|best|the|of|and|edition|special|in|action|record|breaker|boyhood|photo|future|prospects?|draft|picks?|batting|pitching|home|run|kings?|super|bowl|unopened|box|pack|wax|sports|illustrated|press|pass|panini|topps|upper|deck)\b/i;
+export function knownPlayerSet(cardPlayers: Iterable<string | null | undefined>, minCount = 3): Set<string> {
+  const n = new Map<string, number>();
+  for (const name of Array.from(cardPlayers)) {
+    if (!name) continue;
+    const words = name.trim().split(/\s+/);
+    if (words.length < 2 || words.length > 4 || NOT_A_PLAYER_WORD.test(name)) continue;
+    const slug = playerSlugOf(name);
+    if (slug) n.set(slug, (n.get(slug) || 0) + 1);
+  }
+  const out = new Set<string>();
+  n.forEach((c, k) => { if (c >= minCount) out.add(k); });
+  return out;
+}
+/** an object-title name accepted only if it (or its first two words) is a known player */
+function gateKnown(name: string | null, known?: ReadonlySet<string>): { player: string | null; playerSlug: string | null } {
+  const slug = playerSlugOf(name);
+  if (!known) return { player: name, playerSlug: slug };
+  if (!name || !slug) return { player: null, playerSlug: null };
+  if (known.has(slug)) return { player: name, playerSlug: slug };
+  const two = name.trim().split(/\s+/).slice(0, 2).join(' ');
+  const twoSlug = playerSlugOf(two);
+  if (two !== name && twoSlug && known.has(twoSlug)) return { player: two, playerSlug: twoSlug };
+  return { player: null, playerSlug: null };
+}
+
 /** (Oct 6) Several cards in one lot: a set / pair / "Collection (25)" / two
  *  card numbers outside parens (a "#42/49" serial is not a second card). */
 export function isMultiCardTitle(title: string): boolean {
@@ -289,8 +322,10 @@ export function isMultiCardTitle(title: string): boolean {
 }
 
 /** The player behind ANY sports lot: cards parse mid-title; objects (game-used
- *  jerseys, tickets, trophies) lead with the athlete's name. */
-export function playerOf(title: string, slug: string): { player: string | null; playerSlug: string | null } {
+ *  jerseys, tickets, trophies) lead with the athlete's name. With `known`
+ *  (knownPlayerSet over the corpus's card parses), an object-title name is
+ *  kept only when it is a known player. */
+export function playerOf(title: string, slug: string, known?: ReadonlySet<string>): { player: string | null; playerSlug: string | null } {
   if (slug === 'sports-cards') {
     const c = parseCard(title);
     return { player: c.player, playerSlug: c.playerSlug };
@@ -329,6 +364,7 @@ export function playerOf(title: string, slug: string): { player: string | null; 
     while (words.length > 1 && TEAMS.test(words[0])) words.shift();
     const cand = words.join(' ');
     if (words.length >= 2 && !NAME_STOP.test(words[0])) {
+      // the structured NFL/MLB-Auction slot is reliable on its own — no gate
       return { player: cand, playerSlug: playerSlugOf(cand) };
     }
     return { player: null, playerSlug: null };
@@ -340,7 +376,15 @@ export function playerOf(title: string, slug: string): { player: string | null; 
   if (name && /\b(World|Series|Super|Bowl|Olympic|Stanley|Final|Champion|League|Team|City|United|Yankees|Lakers|Cowboys|Collection|Games|Catch|Salute|Auction|Lot\b)/i.test(name)) {
     return { player: null, playerSlug: null };
   }
-  return { player: name, playerSlug: playerSlugOf(name) };
+  const g = gateKnown(name, known);
+  // an unknown name directly followed by USE language ("Andy Barkett Game
+  // Used …") is still the athlete — game-used lots exist for players no card
+  // set carries
+  if (!g.player && name && known && !NOT_A_PLAYER_WORD.test(name)
+    && stripped.startsWith(name) && /^\s+(?:Game|Match|Player|Team)[- ](?:Used|Worn|Issued)/i.test(stripped.slice(name.length))) {
+    return { player: name, playerSlug: playerSlugOf(name) };
+  }
+  return g;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

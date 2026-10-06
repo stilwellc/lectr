@@ -27,18 +27,16 @@ const SPORTS_SALE = /(^|[-/ ])(sports?|memorabilia|baseball|basketball|football|
 // ...and mixed luxury sales: "sneakers?" pulled in a "Fine Watches AND Rare
 // Sneakers" sale, routing the WATCHES (tourbillons, repeaters) into sports-
 // memorabilia — so exclude watch/jewel sales here (they own the watch vertical).
-const NOT_SPORTS_SALE = /sporting[- ](guns?|rifles?|firearms?|art|pictures?)|decorative[- ]sporting|topographi|antique[- ](arms|firearms)|arms[- ](and[- ])?armou?r|shotguns?|\bwine\b|whisk|handbags?|old[- ]masters?|masters[- ]of[- ]design|impressionist|modern[- ]art|paintings?[- ]drawings?|19th[- ]century|works[- ]on[- ]paper|entertainment[- ]memorabilia|film[- ](and|&)[- ]entertainment|rock[- ](and|&|n)[-' ]?pop|music[- ]memorabilia|pop[- ]culture|\bwatch(es)?\b|jewel|horolog/i;
+const NOT_SPORTS_SALE = /sporting[- ](guns?|rifles?|firearms?|art|pictures?)|decorative[- ]sporting|topographi|antique[- ](arms|firearms)|arms[- ](and[- ])?armou?r|shotguns?|\bwine\b|whisk|handbags?|old[- ]masters?|masters[- ]of[- ]design|impressionist|modern[- ]art|paintings?[- ]drawings?|19th[- ]century|works[- ]on[- ]paper|entertainment[- ]memorabilia|film[- ](and|&)[- ]entertainment|rock[- ](and|&|n)[-' ]?pop|music[- ]memorabilia|pop[- ]culture|pop[- ]memorabilia|television|\bfilm\b|movie|posters|guitars?|rock[- ]roll|ocean[- ]?liner|transport|\bwatch(es)?\b|jewel|horolog/i;
 
 export function isSportsSale(slug: string): boolean {
   const s = slug.toLowerCase();
   return SPORTS_SALE.test(s) && !NOT_SPORTS_SALE.test(s);
 }
 
-const CARD_MAKERS = /\b(topps|panini|bowman|upper deck|fleer|donruss|goudey|leaf|o-pee-chee|rookie card|trading card|tobacco (card|silk))\b/i;
+import { isCardTitle, sportsObjectKind } from './lib/classify';
+
 const NON_SPORT_TCG = /\bpok[eé]mon\b|yu-?gi-?oh|magic the gathering|\bmtg\b/i;
-const GAME_USED = /\b(game[- ](used|worn|issued)|match[- ](used|worn)|player[- ]worn|team[- ]issued|tour[- ](used|worn)|worn (jersey|uniform|cleats|boots|gloves|jacket|cap|shirt|kit)|game (bat|ball|jersey|uniform|glove|worn)|match[- ]worn (shirt|jersey|boots)|bat used|ball used)\b/i;
-const TROPHY = /\b(trophy|championship (ring|trophy|belt|pennant)|title belt|winners? medal|olympic (medal|torch)|world series (ring|trophy)|super bowl ring|mvp award|heisman|vince lombardi|stanley cup|green jacket|lombardi trophy|\bmedal\b|championship pennant)\b/i;
-const TICKET = /\b(ticket|stub|full ticket|season pass|press pass|all[- ]access (pass|credential)|programme?|scorecard|score card|score book)\b/i;
 
 /** Route a lot KNOWN to be from a sports sale → a sports vertical slug, or null
  *  to drop (non-sport TCG). Everything sport that isn't a specific object type
@@ -46,9 +44,11 @@ const TICKET = /\b(ticket|stub|full ticket|season pass|press pass|all[- ]access 
 export function routeSportsLot(title: string, description = ''): string | null {
   const t = `${title} ${description}`.toLowerCase();
   if (NON_SPORT_TCG.test(t)) return null;      // a Pokémon lot in a mixed sale
-  if (GAME_USED.test(t)) return 'game-used';
-  if (TROPHY.test(t)) return 'trophies-awards';
-  if (TICKET.test(t)) return 'tickets-passes';
-  if (CARD_MAKERS.test(t)) return 'sports-cards';
-  return 'sports-memorabilia';                 // the catch-all — still a sport item
+  // ONE ladder (Oct 6 2026 audit): the old order sent programmes/scorecards
+  // to tickets and 65% of the catch-all was really autographs, programs,
+  // photos or cards. Card detector first (title only — a description's
+  // "Topps" provenance line is not the object), then the shared sports
+  // object ladder over the title + the head of the description.
+  if (isCardTitle(title)) return 'sports-cards';
+  return sportsObjectKind(`${title} ${description.slice(0, 300)}`, 'sports-memorabilia');
 }
