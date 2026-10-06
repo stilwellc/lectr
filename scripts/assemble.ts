@@ -16,7 +16,8 @@
  * with --single-load the steps that each re-read the corpus run here as
  * phases on the same in-memory rows:
  *   assemble → market (engine + persist) → eager upcoming → engine gate
- *   (validate-engine) → page data (emit-page-stats) → search index
+ *   (validate-engine) → value book (emit-value-book, built here, pushed by
+ *   its own step) → page data (emit-page-stats) → search index
  * Each phase sees exactly the rows its standalone script would have read
  * (scripts/ci/equivalence.ts proves the outputs byte-identical).
  *
@@ -435,6 +436,19 @@ async function runDownstream(corpus: Record<string, unknown>[]): Promise<void> {
     gate = runValidateEngine({ corpus: corpus as unknown as AuctionLot[], sample: Number(process.env.RAY_VALIDATE_SAMPLE || 30000), json: process.env.RAY_VALIDATE_JSON || path.join('data', 'qa', 'validate-engine.json') });
   } catch (e) { console.error('[validate] FAILED:', (e as Error).message); }
   markPhase('engine gate');
+  // 3b · the Starling value book (was: its own step, a second full-corpus load
+  // on a 10GB heap). LAST consumer of the corpus rows: buildValueBook
+  // normalizes them in place exactly as the standalone read did, and nothing
+  // below reads them (page data took copies above). Written locally with a
+  // marker naming the corpus files just persisted; the nightly's push step
+  // (scripts/emit-value-book.ts, which holds the R2 token) ships this file
+  // instead of rebuilding. Advisory — a failure here just means the push step
+  // rebuilds from the corpus as before.
+  try {
+    const vb = await import('./emit-value-book');
+    vb.writeValueBook(vb.buildValueBook(corpus as unknown as AuctionLot[]), vb.corpusSignature());
+  } catch (e) { console.log(`::warning title=value book (in-process) failed::${(e as Error).message} — the push step rebuilds it from the corpus`); }
+  markPhase('value book');
   corpus.length = 0; // the corpus is released: the emitters below read the served book
   // 4 · page data + search index — advisory, as their nightly steps were
   try { await ps.emitPageStats({ corpusRows }); }

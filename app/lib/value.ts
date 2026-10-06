@@ -26,6 +26,7 @@ import { lotAllInFactor } from './premiums';
 import { weightedMedian, quantileSorted } from './stats';
 import { lotShapeOf, shapesCompatible, isCompExcluded } from './comps';
 import type { CardGateCell } from './cards-gate';
+import { numericWatchRef, editionIdentityKey, isEditionLot, WATCH_SLUGS } from './identity';
 
 /** THE signal-label vocabulary — one source (P2, Sep 2 2026). Re-exported from
  *  lanes.ts; UI files that hardcode the strings should import from there
@@ -795,6 +796,82 @@ export function vsBidRead(lot: { auctionHouse?: string | null; buyerPremiumPct?:
   const bidAllIn = bid * lotAllInFactor(lot, bid);
   const pct = Math.round((bidAllIn / compValueUsd - 1) * 100);
   return { label: pct <= -12 ? 'below recent comps' : pct >= 12 ? 'above recent comps' : 'in line', pct };
+}
+
+/* ── THE COMP CANDIDATE INDEX (Oct 5 2026 scale pass) ─────────────────────
+   resolveComps scores every candidate it is handed; the live book handed it
+   the lot's WHOLE maker roster, so valuing the upcoming book cost
+   O(upcoming × maker book) cosines — superlinear in corpus size (161s at 1×,
+   3,476s at a 3× synthetic corpus). The backtest replay has carried an EXACT
+   pre-filter since Sep 2 (backtest-core.candidatePriors); this is the same
+   necessary-condition filter as a shared, order-preserving index:
+     a comp is admitted only with cosine ≥ FALLBACK_GATE.cosFloor (or an exact
+     ref/edition identity), and cosine(a,b) ≤ ‖a restricted to the tokens b
+     shares‖ / ‖a‖ — so a candidate sharing NO token from the lot's
+     heaviest-IDF prefix (the prefix after which the remaining suffix norm
+     fraction drops under the floor) can never be admitted. Exact-identity
+     candidates come from their own posting list.
+   compCandidates returns the surviving roster positions in ASCENDING order, so
+   resolveComps sees the admissible candidates in the roster's own order and
+   returns byte-identically the comps the full scan would (proved on the real
+   corpus by scripts/ci/equivalence.ts; unit-tested in engine-core.test.ts).
+   CONTRACT: the roster and the lot carry `_v`/`_vn` from ONE buildVectors
+   pass (the norms cosine() trusts); the roster is not mutated after the index
+   is built. A lot without a vector gets `null` (caller scans the roster). */
+export interface CompCandidateIndex {
+  roster: readonly AuctionLot[];
+  posting: Map<string, number[]>;
+  idPosting: Map<string, number[]>;
+  mark: Int32Array;
+  gen: number;
+}
+/** The exact-identity key similarity's exactIdentity compares (numeric watch
+ *  reference / art edition) — a superset key: materials are checked later. */
+export function compIdentityKey(l: Pick<AuctionLot, 'artist' | 'reference' | 'title' | 'formKey' | 'medium'>): string | null {
+  if (WATCH_SLUGS.has(l.artist)) return numericWatchRef(l);
+  return isEditionLot(l) ? editionIdentityKey(l) : null;
+}
+export function buildCompCandidateIndex(roster: readonly (AuctionLot & { _v?: Record<string, number> })[]): CompCandidateIndex {
+  const posting = new Map<string, number[]>();
+  const idPosting = new Map<string, number[]>();
+  for (let i = 0; i < roster.length; i++) {
+    const c = roster[i];
+    const toks = c._v ? Object.keys(c._v) : Array.from(new Set(c.titleTokens || []));
+    for (const t of toks) { const p = posting.get(t); if (p) p.push(i); else posting.set(t, [i]); }
+    const k = compIdentityKey(c);
+    if (k) { const p = idPosting.get(k); if (p) p.push(i); else idPosting.set(k, [i]); }
+  }
+  return { roster, posting, idPosting, mark: new Int32Array(roster.length), gen: 0 };
+}
+/** Roster positions (ascending) that can possibly pass resolveComps' admission
+ *  gate for `lot`; null when the lot carries no precomputed vector. */
+export function compCandidates(ix: CompCandidateIndex, lot: AuctionLot & { _v?: Record<string, number>; _vn?: number }): number[] | null {
+  const v = lot._v;
+  const vn = lot._vn;
+  if (!v || typeof vn !== 'number') return null;
+  ix.gen++;
+  if (ix.gen === 0x7fffffff) { ix.mark.fill(0); ix.gen = 1; }
+  const gen = ix.gen, mark = ix.mark;
+  const hits: number[] = [];
+  const visit = (list: number[] | undefined) => {
+    if (!list) return;
+    for (let k = 0; k < list.length; k++) { const i = list[k]; if (mark[i] !== gen) { mark[i] = gen; hits.push(i); } }
+  };
+  if (vn > 0) {
+    // heaviest-IDF first; stop once the remaining suffix can no longer carry
+    // the cosine floor on its own
+    const toks = Object.keys(v).sort((a, b) => v[b] - v[a]);
+    const floor = FALLBACK_GATE.cosFloor - 1e-9;
+    let suffix2 = vn * vn;
+    for (const t of toks) {
+      if (Math.sqrt(Math.max(0, suffix2)) / vn < floor) break;
+      visit(ix.posting.get(t));
+      suffix2 -= v[t] * v[t];
+    }
+  }
+  const idk = compIdentityKey(lot);
+  if (idk) visit(ix.idPosting.get(idk));
+  return hits.sort((a, b) => a - b);
 }
 
 /**

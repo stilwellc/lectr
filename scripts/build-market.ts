@@ -19,7 +19,7 @@ import { ARTISTS } from '../app/constants';
 import { buildIdf, buildVectors } from '../app/lib/similarity';
 import { groupRepeatSales } from './lib/repeat-sale';
 import { buildMakerIndicesParallel } from './lib/maker-pool';
-import { resolveComps, estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, noEstGateOf, buyerFields, vsBidRead, quantile, knownKey, ENGINE_VERSION, ENGINE_FLAGS_CANDIDATE, type ValueResult, type AbstainReason } from '../app/lib/value';
+import { buildCompCandidateIndex, compCandidates, type CompCandidateIndex, resolveComps, estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, noEstGateOf, buyerFields, vsBidRead, quantile, knownKey, ENGINE_VERSION, ENGINE_FLAGS_CANDIDATE, type ValueResult, type AbstainReason } from '../app/lib/value';
 import { fitCardCalibration, cardGate, CARD_GATE, type CardResidual, type CardCalibration } from '../app/lib/cards-gate';
 import { inferHammerUsd } from '../app/lib/premiums';
 import { pokemonKey } from './sub-markets';
@@ -325,6 +325,35 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   }
   const crossPooled = new Set<string>();
 
+  // THE CANDIDATE INDEX over the STABLE pools (Oct 5 scale pass): each maker
+  // roster, and each sports maker × player roster (memoized — the same
+  // filter the loop ran per lot, so the same rows in the same order). Built
+  // lazily on a pool's first lot; never mutated after. Ad-hoc per-lot pools
+  // (game-used axes, cross-player) are scanned as before.
+  const stablePools = new Set<AuctionLot[]>(soldByArtist.values());
+  const compIx = new Map<AuctionLot[], CompCandidateIndex>();
+  const playerPools = new Map<string, AuctionLot[]>();
+  const playerPool = (artist: string, pid: string): AuctionLot[] => {
+    const k = `${artist}\u0000${pid}`;
+    let p = playerPools.get(k);
+    if (!p) { p = (soldByArtist.get(artist) || []).filter(c => playerSlugOf(c) === pid); playerPools.set(k, p); stablePools.add(p); }
+    return p;
+  };
+  const sportPools = new Map<string, AuctionLot[]>();
+  const sportPool = (artist: string, sp: string): AuctionLot[] => {
+    const k = `${artist}\u0000${sp}`;
+    let p = sportPools.get(k);
+    if (!p) { p = (soldByArtist.get(artist) || []).filter(c => sportOfCached(c) === sp); sportPools.set(k, p); stablePools.add(p); }
+    return p;
+  };
+  const admissible = (lot: AuctionLot, pool: AuctionLot[]): AuctionLot[] => {
+    if (pool.length < 32 || !stablePools.has(pool)) return pool;
+    let ix = compIx.get(pool);
+    if (!ix) { ix = buildCompCandidateIndex(pool); compIx.set(pool, ix); }
+    const pos = compCandidates(ix, lot);
+    return pos ? pos.map(i => pool[i]) : pool;
+  };
+
   for (const lot of upcoming) {
     let pool = soldByArtist.get(lot.artist) || [];
     if (SPORTS_SET.has(lot.artist)) {
@@ -335,7 +364,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         // lot simply won't seat enough comps and estimateValue abstains
         // (value=null). Do NOT fall back to same-sport — that reintroduces the
         // cross-player bug.
-        pool = pool.filter(c => playerSlugOf(c) === pid);
+        pool = playerPool(lot.artist, pid);
         if (lot.artist === 'game-used') {
           const use = useOf(lot), team = teamOf(lot), game = gameOf(lot);
           pool = pool.filter(c =>
@@ -375,14 +404,18 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         // the best-available fallback, gated ≥3 as before.
         const sp = sportOfCached(lot);
         if (sp) {
-          const restricted = pool.filter(c => sportOfCached(c) === sp);
+          const restricted = sportPool(lot.artist, sp);
           if (restricted.length >= 3) pool = restricted;
         }
       }
     }
     // priorTo=TODAY: only sales KNOWN before today (month/year-precision
-    // dates count from the end of their period — value.knownKey)
-    const comps = resolveComps(lot as AuctionLot & { _v?: Record<string, number> }, pool as (AuctionLot & { _v?: Record<string, number> })[], tbl, TODAY);
+    // dates count from the end of their period — value.knownKey).
+    // THE CANDIDATE INDEX (Oct 5 scale pass): resolveComps is handed only the
+    // pool members that can pass its admission gate, in pool order — the
+    // comps are identical to the full scan (value.compCandidates), the cost
+    // is O(candidates) instead of O(maker book) per lot.
+    const comps = resolveComps(lot as AuctionLot & { _v?: Record<string, number> }, admissible(lot, pool) as (AuctionLot & { _v?: Record<string, number> })[], tbl, TODAY);
     const ex = estimateValueEx(lot as AuctionLot & { _v?: Record<string, number> }, comps, tbl);
     let v = ex.value;
     let abstain: AbstainReason | string | null = ex.abstain;
@@ -431,6 +464,8 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
       lotW.abstain = abstain || (pool.length ? 'pool<3' : 'no-candidates');
     }
   }
+  // the candidate indices + memoized player/sport rosters are valuation-only
+  compIx.clear(); playerPools.clear(); sportPools.clear(); stablePools.clear();
   console.log(`[market] valued ${valued}/${upcoming.length} upcoming lots (${noEstGated} no-estimate values withheld by the publish gate) · ${((Date.now() - tVal) / 1000).toFixed(0)}s`);
   {
     const reasons: Record<string, number> = {};

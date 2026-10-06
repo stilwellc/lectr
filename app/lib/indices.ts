@@ -133,7 +133,7 @@ export function buildMarketSeries(lots: AuctionLot[], label: string): MarketSeri
     let quartersSeen = 0;
     for (const [q, arr] of Array.from(cm.entries())) {
       if (arr.length < 3) continue;
-      qmed.set(q, median(arr)); all.push(...arr); quartersSeen++;
+      qmed.set(q, median(arr)); for (const x of arr) all.push(x); quartersSeen++; // (loop, not push(...arr): a spread past ~120k args overflows the call stack)
     }
     if (all.length >= 8 && quartersSeen >= 3) { cohortAvg.set(ck, median(all)); cohortQMed.set(ck, qmed); }
   }
@@ -158,7 +158,7 @@ export function buildMarketSeries(lots: AuctionLot[], label: string): MarketSeri
     const win = index.slice(Math.max(0, i - 2), i + 1);
     return { ...p, value: Math.round(win.reduce((s, x) => s + x.value, 0) / win.length) };
   });
-  index.length = 0; index.push(...smoothed);
+  index.length = 0; for (const p of smoothed) index.push(p);
 
   const method = index.length >= 4
     ? 'like-for-like cohort index (maker × form × size, each normalized to its own average), 3-quarter smoothed'
