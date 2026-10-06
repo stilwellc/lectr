@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import {
   houseAllInFactor, lotAllInFactor, maxHammerFor, inferHammerUsd, isRoundIncrement, BID_LADDER_PCT,
   houseAllInFactorAt, DATED_PREMIUMS,
+  DATED_TIERED_PREMIUMS, tieredScheduleAt, allInFromHammer, hammerFromAllIn, houseHammerFromAllInAt,
 } from '../../app/lib/premiums';
 
 test('houseAllInFactor: flat houses, tiered houses by hammer band, 1.25 fallback', () => {
@@ -43,11 +44,61 @@ test('houseAllInFactorAt: REA era schedule by saleDate; other houses / bad dates
   assert.equal(at(null), houseAllInFactor('REA'), 'no date → undated schedule');
   assert.equal(at('?'), houseAllInFactor('REA'));
   assert.equal(houseAllInFactorAt('Goldin', 1000, '2010-01-01'), houseAllInFactor('Goldin'));
-  assert.equal(houseAllInFactorAt("Sotheby's", 2_000_000, '2010-01-01'), houseAllInFactor("Sotheby's", 2_000_000));
+  assert.equal(houseAllInFactorAt("Sotheby's", 2_000_000, null), houseAllInFactor("Sotheby's", 2_000_000), 'no date → undated tiers');
   // schedule hygiene: ascending dates, plausible factors
   for (const [h, eras] of Object.entries(DATED_PREMIUMS)) {
     for (let i = 1; i < eras.length; i++) assert.ok(eras[i][0] > eras[i - 1][0], `${h} eras ascending`);
     for (const [, f] of eras) assert.ok(f > 1 && f < 1.4, `${h} factor ${f}`);
+  }
+});
+
+test('tiered math: marginal bands, exact inverse, continuous at the band edges', () => {
+  const s = { rates: [0.25, 0.20, 0.12], ceilings: [50_000, 1_000_000] };
+  assert.equal(allInFromHammer(40_000, s), 50_000);
+  assert.equal(allInFromHammer(50_000, s), 62_500, 'band edge');
+  assert.equal(allInFromHammer(130_000, s), 158_500, '$50k @25% + $80k @20%');
+  assert.equal(allInFromHammer(2_000_000, s), 62_500 + 950_000 * 1.2 + 1_000_000 * 1.12);
+  for (const h of [1, 999, 50_000, 50_001, 400_000, 1_000_000, 1_000_001, 7_654_321]) {
+    assert.ok(Math.abs(hammerFromAllIn(allInFromHammer(h, s), s) - h) < 1e-6, `round trip ${h}`);
+  }
+  assert.equal(hammerFromAllIn(0, s), 0);
+  assert.equal(hammerFromAllIn(1195, { rates: [0.195, 0.10], ceilings: [100_000] }), 1000);
+});
+
+test("tieredScheduleAt / houseHammerFromAllInAt: Christie's & Sotheby's eras by sale date AND sale currency", () => {
+  // Christie's London 2012: 25% to £25k; Oct 2002 King Street: 19.5% to £70k; Mar 2013: £37,500 (the published band)
+  assert.deepEqual(tieredScheduleAt("Christie's", '2012-06-25', 'GBP'), { rates: [0.25, 0.20, 0.12], ceilings: [25_000, 500_000] });
+  assert.equal(houseHammerFromAllInAt("Christie's", 13_750, '2012-06-25', 'GBP'), 11_000);
+  assert.equal(houseHammerFromAllInAt("Christie's", 3_824, '2002-10-09', 'GBP'), 3_200);
+  assert.equal(houseHammerFromAllInAt("Christie's", 79_875, '2013-06-17', 'GBP'), 65_000, '£37.5k @25% + £27.5k @20%');
+  assert.equal(houseHammerFromAllInAt("Christie's", 3_780, '2023-12-06'), 3_000, 'USD default, 26% era');
+  // Sotheby's: Hong Kong's own 2002 rate (18%), the 2024 20% interlude, the 2026 28%
+  assert.equal(houseHammerFromAllInAt("Sotheby's", 37_760, '2002-10-30', 'HKD'), 32_000);
+  assert.equal(houseHammerFromAllInAt("Sotheby's", 12_000, '2024-11-20'), 10_000);
+  assert.equal(houseHammerFromAllInAt("Sotheby's", 409_600, '2026-04-24', 'HKD'), 320_000);
+  // era boundaries are inclusive of their first day
+  assert.equal(tieredScheduleAt("Sotheby's", '2026-02-12')!.rates[0], 0.27);
+  assert.equal(tieredScheduleAt("Sotheby's", '2026-02-13')!.rates[0], 0.28);
+  // no tiered read → null / undated fallback: unknown currency, pre-table date, bad date, other house
+  assert.equal(tieredScheduleAt("Christie's", '2012-06-25', 'JPY'), null);
+  assert.equal(tieredScheduleAt("Christie's", '1990-01-01'), null);
+  assert.equal(tieredScheduleAt("Christie's", '?'), null);
+  assert.equal(tieredScheduleAt('Goldin', '2012-06-25'), null);
+  assert.equal(houseHammerFromAllInAt("Christie's", 1_260, null), 1_260 / houseAllInFactor("Christie's", 1_260));
+  assert.equal(houseHammerFromAllInAt('REA', 2_962, '2013-04-15'), 2_962 / 1.185, 'REA flat eras unchanged');
+  // blended factor at a hammer
+  assert.equal(houseAllInFactorAt("Christie's", 130_000, '2012-05-09'), 158_500 / 130_000);
+  // schedule hygiene: ascending dates, rates/ceilings shapes agree, ceilings ascending, plausible rates
+  for (const [h, eras] of Object.entries(DATED_TIERED_PREMIUMS)) {
+    for (let i = 1; i < eras.length; i++) assert.ok(eras[i].from > eras[i - 1].from, `${h} eras ascending at ${eras[i].from}`);
+    for (const e of eras) {
+      for (const [cur, c] of Object.entries(e.ceilings)) {
+        const r = e.rateOverride?.[cur] ?? e.rates;
+        assert.equal(r.length, c.length + 1, `${h} ${e.from} ${cur} shape`);
+        for (let i = 1; i < c.length; i++) assert.ok(c[i] > c[i - 1], `${h} ${e.from} ${cur} ceilings ascending`);
+        for (const x of r) assert.ok(x > 0 && x < 0.35, `${h} ${e.from} rate ${x}`);
+      }
+    }
   }
 });
 
