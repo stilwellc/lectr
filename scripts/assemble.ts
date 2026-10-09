@@ -32,6 +32,7 @@ import { staleHouseKeys, STALE_AFTER_H, type Ledger, type HouseStats } from './l
 import { normalizeCorpus } from './lib/corpus-normalize';
 import { markPhase } from './lib/mem-trace';
 import { computeStats } from './compute-stats';
+import { buildCatStats } from './cat-stats';
 import { ARTISTS } from '../app/constants';
 import type { AuctionLot, MarketStats } from '../app/types';
 
@@ -421,6 +422,13 @@ async function main() {
   // read the gz straight back and overwrite every file)
   fs.mkdirSync(SERVED_DIR, { recursive: true });
   fs.writeFileSync(statsPath, JSON.stringify(statsByArtist, null, 2));
+  // per clean category / sub / sport (Oct 9) — the /makers collection rows;
+  // post-normalize, so subCat/drill are stamped (scripts/cat-stats.ts)
+  {
+    const catStats = buildCatStats(allLots as AuctionLot[]);
+    fs.writeFileSync(path.join(SERVED_DIR, 'cat-stats.json'), JSON.stringify({ generatedAt: new Date().toISOString(), rows: catStats }));
+    console.log(`[assemble] cat-stats.json: ${Object.keys(catStats).length} rows`);
+  }
   fs.writeFileSync(metaPath, JSON.stringify({
     lastCrawl: new Date().toISOString(),
     artists: ARTISTS.map(a => ({ slug: a.slug, displayName: a.label })),
