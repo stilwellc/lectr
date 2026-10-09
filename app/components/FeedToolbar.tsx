@@ -5,14 +5,15 @@ import { useDialogFocus } from './useDialogFocus';
 import { sportOfLot } from '../lib/submarkets';
 import { createPortal } from 'react-dom';
 import { AuctionLot } from '../types';
-import { categoryLabels } from '../utils';
 import { ARTIST_LABEL, MARKETS, marketArtists, Market } from '../constants';
 import Flick from './Flick';
 import SaveSearch from './SaveSearch';
+import { taxonOf, SUBS, type CatKey } from '../lib/taxonomy';
+import { WINDOWS, VALUE_FLOORS, TRIAGE_DEFAULTS, isTriageActive, passesTriage, triageToParams, triageFromParams, type TriageFilters } from '../lib/feed-filters';
 
-export type FeedSort = 'soonest' | 'gap-desc' | 'newest' | 'bids-desc' | 'est-desc' | 'est-asc';
+export type FeedSort = 'priority' | 'soonest' | 'gap-desc' | 'newest' | 'bids-desc' | 'est-desc' | 'est-asc';
 
-export interface FeedFilters {
+export interface FeedFilters extends TriageFilters {
   query: string;
   /** on the total market: narrow to one vertical */
   vertical: Market | null;
@@ -25,6 +26,8 @@ export interface FeedFilters {
   sort: FeedSort;
   /** the Hammer Week strip's lens: one hammer day (YYYY-MM-DD) */
   saleDay?: string | null;
+  /** home only: the capped "What matters" shortlist vs every lot */
+  tab?: 'top' | 'all';
 }
 
 export const FEED_DEFAULTS: FeedFilters = {
@@ -34,9 +37,52 @@ export const FEED_DEFAULTS: FeedFilters = {
   sport: null,
   category: null,
   belowOnly: false,
-  sort: 'soonest',
+  // Oct 8: "Matters most" (app/lib/priority) is the default order — size,
+  // measured edge, evidence and closing time — instead of soonest-first
+  sort: 'priority',
   saleDay: null,
+  ...TRIAGE_DEFAULTS,
+  tab: 'top',
 };
+
+const fmtFloor = (n: number) => (n >= 1000 ? `$${n / 1000}K+` : `$${n}+`);
+
+/** URL codec for the whole feed state (short keys; defaults omitted). The
+ *  market itself lives in the path, so it is not encoded here. */
+const SORTS: FeedSort[] = ['priority', 'soonest', 'gap-desc', 'newest', 'bids-desc', 'est-desc', 'est-asc'];
+export function feedToParams(f: FeedFilters, p: URLSearchParams): void {
+  const put = (k: string, v: string | null | undefined) => { if (v) p.set(k, v); else p.delete(k); };
+  put('q', f.query.trim() || null);
+  put('v', f.vertical);
+  put('mk', f.maker);
+  put('sp', f.sport);
+  put('below', f.belowOnly ? '1' : null);
+  put('sort', f.sort !== FEED_DEFAULTS.sort ? f.sort : null);
+  put('day', f.saleDay ?? null);
+  put('tab', f.tab && f.tab !== FEED_DEFAULTS.tab ? f.tab : null);
+  triageToParams(f, p);
+}
+export function feedFromParams(p: URLSearchParams): FeedFilters {
+  const sort = p.get('sort') as FeedSort | null;
+  const v = p.get('v');
+  return {
+    ...FEED_DEFAULTS,
+    query: p.get('q') || '',
+    vertical: v && MARKETS.some(m => m.key === v && m.key !== 'all') ? (v as Market) : null,
+    maker: p.get('mk') || null,
+    sport: p.get('sp') || null,
+    belowOnly: p.get('below') === '1',
+    sort: sort && SORTS.includes(sort) ? sort : FEED_DEFAULTS.sort,
+    saleDay: p.get('day') || null,
+    tab: p.get('tab') === 'all' ? 'all' : 'top',
+    ...triageFromParams(p),
+  };
+}
+
+/** Clear: back to defaults, but the reader's sort and tab survive */
+export function clearedFilters(f: FeedFilters): FeedFilters {
+  return { ...FEED_DEFAULTS, sort: f.sort, tab: f.tab };
+}
 
 /**
  * FeedToolbar — the command bar for the lot book. Search, the below-market
@@ -59,6 +105,7 @@ export default function FeedToolbar({
   onViewChange,
   pageSize = 24,
   showToggle = true,
+  prevVisitDay = null,
 }: {
   lots: AuctionLot[];          // the unfiltered upcoming pool (for counts)
   belowIds: Set<string>;
@@ -74,6 +121,8 @@ export default function FeedToolbar({
   /** false hides the card/table toggle (sub-640px: the table is thumb+name
    *  with unhinted side-scroll — not a real choice on a phone) */
   showToggle?: boolean;
+  /** the reader's previous visit day (feed-filters useLastVisit) — drives "New" */
+  prevVisitDay?: string | null;
 }) {
   // The below-market lens auto-ranks by gap (its smart default) — but it must
   // hand back whatever sort the reader had picked when the lens comes off,
@@ -114,13 +163,45 @@ export default function FeedToolbar({
     return Object.entries(c).sort((a, b) => b[1] - a[1]);
   }, [lots, effectiveMarket]);
 
-  // art → its mediums (the meaningful cut for that market)
-  const categories = useMemo(() => {
-    if (effectiveMarket !== 'art') return [] as [string, number][];
-    const c: Record<string, number> = {};
-    lots.forEach(l => { if (l.category !== 'unknown' && l.category !== 'object') c[l.category] = (c[l.category] || 0) + 1; });
-    return Object.entries(c).sort((a, b) => b[1] - a[1]);
+  // inside a vertical → its CLEAN sub-categories (app/lib/taxonomy), the cut
+  // collectors shop by: format for sports/culture (Game-Used, Autographs…),
+  // medium for art. Replaces the old art-only medium enum, which was
+  // 'unknown'/'object' for ~93% of the book. Keys are "cat:sub".
+  const marketPool = useMemo(() => {
+    if (effectiveMarket === 'all') return lots;
+    const set = marketArtists(effectiveMarket);
+    return lots.filter(l => set.has(l.artist));
   }, [lots, effectiveMarket]);
+  const categories = useMemo(() => {
+    if (effectiveMarket === 'all') return [] as { key: string; cat: CatKey; sub: string; label: string; n: number }[];
+    const c = new Map<string, number>();
+    for (const l of marketPool) { const t = taxonOf(l); const k = `${t.cat}:${t.sub}`; c.set(k, (c.get(k) || 0) + 1); }
+    const cats = new Set(Array.from(c.keys()).map(k => k.split(':')[0]));
+    return Array.from(c.entries()).map(([key, n]) => {
+      const [cat, sub] = key.split(':') as [CatKey, string];
+      const sl = SUBS[cat].find(x => x.key === sub)?.label ?? sub;
+      // two clean categories in one market (sports: cards + memorabilia) →
+      // prefix the cards subs so "Sealed Wax" never reads as memorabilia
+      const label = cats.size > 1 && cat === 'sports-cards' ? `Cards · ${sl}` : sl;
+      return { key, cat, sub, label, n };
+    }).sort((a, b) => b.n - a.n);
+  }, [marketPool, effectiveMarket]);
+  const houses = useMemo(() => {
+    const c = new Map<string, number>();
+    for (const l of marketPool) { const h = String(l.auctionHouse || ''); if (h) c.set(h, (c.get(h) || 0) + 1); }
+    return Array.from(c.entries()).sort((a, b) => b[1] - a[1]);
+  }, [marketPool]);
+  const newCount = useMemo(
+    () => marketPool.filter(l => passesTriage(l, { ...TRIAGE_DEFAULTS, newOnly: true }, { prevVisitDay })).length,
+    [marketPool, prevVisitDay]
+  );
+  const newLabel = prevVisitDay ? 'New since last visit' : 'New today';
+  const subActive = (k: string) => filters.cat != null && `${filters.cat}:${filters.sub}` === k;
+  const toggleSub = (k: string) => {
+    if (subActive(k)) { set({ cat: null, sub: null }); return; }
+    const [cat, sub] = k.split(':') as [CatKey, string];
+    set({ cat, sub });
+  };
 
   const belowCount = useMemo(
     () => lots.filter(l => belowIds.has(l.id)).length,
@@ -241,7 +322,7 @@ export default function FeedToolbar({
           className="ray-toolbar-pill"
           data-active={filters.vertical === v.key}
           style={{ display: 'flex', width: '100%', justifyContent: 'space-between', marginBottom: 2 }}
-          onClick={() => { set({ vertical: filters.vertical === v.key ? null : v.key, maker: null, sport: null, category: null }); setCatOpen(false); }}
+          onClick={() => { set({ vertical: filters.vertical === v.key ? null : v.key, maker: null, sport: null, category: null, cat: null, sub: null }); setCatOpen(false); }}
         >
           {v.label} <i>{v.n}</i>
         </button>
@@ -251,7 +332,7 @@ export default function FeedToolbar({
           role="menuitem"
           className="ray-toolbar-pill"
           style={{ display: 'flex', width: '100%', justifyContent: 'flex-start', marginTop: 2, color: 'var(--color-text-muted)' }}
-          onClick={() => { set({ vertical: null, maker: null, sport: null, category: null }); setCatOpen(false); }}
+          onClick={() => { set({ vertical: null, maker: null, sport: null, category: null, cat: null, sub: null }); setCatOpen(false); }}
         >
           All categories
         </button>
@@ -260,7 +341,7 @@ export default function FeedToolbar({
     document.body
   ) : null;
   const isFiltered =
-    filters.query !== '' || filters.vertical !== null || filters.maker !== null || filters.sport !== null || filters.category !== null || filters.belowOnly || filters.saleDay != null;
+    filters.query !== '' || filters.vertical !== null || filters.maker !== null || filters.sport !== null || filters.category !== null || filters.belowOnly || filters.saleDay != null || isTriageActive(filters);
 
   // Chrome earns its keep: a single-page feed (watches' 21 lots) doesn't
   // need sort pills or a view toggle — search + the below-market lens only.
@@ -279,9 +360,13 @@ export default function FeedToolbar({
     (sortTouched ? 1 : 0) +
     (filters.sport !== null ? 1 : 0) +
     (filters.maker !== null ? 1 : 0) +
-    (filters.category !== null ? 1 : 0);
+    (filters.cat !== null ? 1 : 0) +
+    (filters.win !== null ? 1 : 0) +
+    (filters.house !== null ? 1 : 0) +
+    (filters.minUsd !== null ? 1 : 0) +
+    (filters.newOnly ? 1 : 0);
   const sheetHasContent =
-    showSortChrome ||
+    showSortChrome || houses.length > 1 ||
     sports.length > 0 || makers.length > 0 || categories.length > 0 ||
     (market === 'all' && verticals.length > 0);
 
@@ -308,6 +393,7 @@ export default function FeedToolbar({
               <div className="ray-feedsheet-head">Sort</div>
               <div className="ray-feedsheet-chips" role="radiogroup" aria-label="Sort lots">
                 {([
+                  ['priority', 'Matters most'],
                   ['soonest', 'Soonest'],
                   ['gap-desc', 'Biggest gap'],
                   ...(hasBidState ? ([['bids-desc', 'Most bids']] as [FeedSort, string][]) : []),
@@ -349,7 +435,7 @@ export default function FeedToolbar({
                     aria-pressed={filters.vertical === v.key}
                     // selecting does NOT close the sheet — pick a category,
                     // watch Refine fill in below, keep composing
-                    onClick={() => set({ vertical: filters.vertical === v.key ? null : v.key, maker: null, sport: null, category: null })}
+                    onClick={() => set({ vertical: filters.vertical === v.key ? null : v.key, maker: null, sport: null, category: null, cat: null, sub: null })}
                   >
                     {v.label} <i>{v.n}</i>
                   </button>
@@ -358,7 +444,7 @@ export default function FeedToolbar({
                   <button
                     className="ray-toolbar-pill"
                     style={{ color: 'var(--color-text-muted)' }}
-                    onClick={() => set({ vertical: null, maker: null, sport: null, category: null })}
+                    onClick={() => set({ vertical: null, maker: null, sport: null, category: null, cat: null, sub: null })}
                   >
                     All categories
                   </button>
@@ -393,15 +479,52 @@ export default function FeedToolbar({
                     {ARTIST_LABEL[slug] || slug} <i>{n}</i>
                   </button>
                 ))}
-                {categories.map(([cat, n]) => (
+                {categories.map(c => (
                   <button
-                    key={cat}
+                    key={c.key}
                     className="ray-toolbar-pill"
-                    data-active={filters.category === cat}
-                    aria-pressed={filters.category === cat}
-                    onClick={() => set({ category: filters.category === cat ? null : cat })}
+                    data-active={subActive(c.key)}
+                    aria-pressed={subActive(c.key)}
+                    onClick={() => toggleSub(c.key)}
                   >
-                    {categoryLabels[cat] || cat} <i>{n}</i>
+                    {c.label} <i>{c.n}</i>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          <div className="ray-feedsheet-head">Closing</div>
+          <div className="ray-feedsheet-chips">
+            {WINDOWS.map(w => (
+              <button key={w.key} className="ray-toolbar-pill" data-active={filters.win === w.key} aria-pressed={filters.win === w.key}
+                onClick={() => set({ win: filters.win === w.key ? null : w.key })}>
+                {w.label}
+              </button>
+            ))}
+            {newCount > 0 && (
+              <button className="ray-toolbar-pill" data-active={filters.newOnly} aria-pressed={filters.newOnly}
+                onClick={() => set({ newOnly: !filters.newOnly })}>
+                {newLabel} <i>{newCount}</i>
+              </button>
+            )}
+          </div>
+          <div className="ray-feedsheet-head">Value</div>
+          <div className="ray-feedsheet-chips">
+            {VALUE_FLOORS.map(v => (
+              <button key={v} className="ray-toolbar-pill" data-active={filters.minUsd === v} aria-pressed={filters.minUsd === v}
+                onClick={() => set({ minUsd: filters.minUsd === v ? null : v })}>
+                {fmtFloor(v)}
+              </button>
+            ))}
+          </div>
+          {houses.length > 1 && (
+            <>
+              <div className="ray-feedsheet-head">House</div>
+              <div className="ray-feedsheet-chips">
+                {houses.map(([h, n]) => (
+                  <button key={h} className="ray-toolbar-pill" data-active={filters.house === h} aria-pressed={filters.house === h}
+                    onClick={() => set({ house: filters.house === h ? null : h })}>
+                    {h} <i>{n}</i>
                   </button>
                 ))}
               </div>
@@ -413,7 +536,7 @@ export default function FeedToolbar({
             className="ray-feedsheet-clear"
             // the exact Clear behavior the count line uses: back to defaults,
             // the reader's sort survives
-            onClick={() => onChange({ ...FEED_DEFAULTS, sort: filters.sort })}
+            onClick={() => onChange(clearedFilters(filters))}
           >
             Clear all
           </button>
@@ -493,6 +616,13 @@ export default function FeedToolbar({
           border-radius: 12px; padding: 13px 16px; min-height: 46px;
         }
         .ray-feedsheet-done:active { filter: brightness(0.96); }
+        .ray-toolbar-select {
+          -webkit-appearance: none; appearance: none; cursor: pointer;
+          padding-right: 26px;
+          background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+          background-position: calc(100% - 13px) 52%, calc(100% - 9px) 52%;
+          background-size: 4px 4px, 4px 4px; background-repeat: no-repeat;
+        }
         @media (max-width: 767px) {
           /* the one lead row breathes a little tighter so lens + category +
              sort-and-filter sit on a single line at 390px */
@@ -526,6 +656,7 @@ export default function FeedToolbar({
         {showSortChrome && !isMobile && (
           <div className="ray-toolbar-sorts" role="radiogroup" aria-label="Sort lots">
             {([
+              ['priority', 'Matters most'],
               ['soonest', 'Soonest'],
               ['gap-desc', 'Biggest gap'],
               ...(hasBidState ? ([['bids-desc', 'Most bids']] as [FeedSort, string][]) : []),
@@ -625,7 +756,7 @@ export default function FeedToolbar({
                 aria-haspopup={isMobile ? 'dialog' : undefined}
                 aria-expanded={isMobile ? sheetOpen : undefined}
                 title={isMobile ? 'Change category' : 'Clear category'}
-                onClick={e => { if (isMobile) { e.stopPropagation(); openSheet(e); return; } set({ vertical: null, maker: null, sport: null, category: null }); }}
+                onClick={e => { if (isMobile) { e.stopPropagation(); openSheet(e); return; } set({ vertical: null, maker: null, sport: null, category: null, cat: null, sub: null }); }}
               >
                 {v ? v.label : filters.vertical} {v && <i>{v.n}</i>}
               </button>
@@ -641,6 +772,35 @@ export default function FeedToolbar({
           <button className="ray-toolbar-pill" onClick={onMarketReset}>
             <Flick size={10} style={{ transform: 'scaleX(-1)', marginLeft: 0, marginRight: 5 }} /> Total market
           </button>
+        )}
+        {!isMobile && (
+          <>
+            <span className="ray-toolbar-divider" aria-hidden="true" />
+            {WINDOWS.map(w => (
+              <button key={w.key} className="ray-toolbar-pill" data-active={filters.win === w.key} aria-pressed={filters.win === w.key}
+                onClick={() => set({ win: filters.win === w.key ? null : w.key })}>
+                {w.label}
+              </button>
+            ))}
+            {newCount > 0 && (
+              <button className="ray-toolbar-pill" data-active={filters.newOnly} aria-pressed={filters.newOnly}
+                onClick={() => set({ newOnly: !filters.newOnly })}>
+                {newLabel} <i>{newCount}</i>
+              </button>
+            )}
+            {houses.length > 1 && (
+              <select className="ray-toolbar-pill ray-toolbar-select" aria-label="Auction house" data-active={filters.house != null}
+                value={filters.house ?? ''} onChange={e => set({ house: e.target.value || null })}>
+                <option value="">All houses</option>
+                {houses.map(([h, n]) => <option key={h} value={h}>{h} ({n})</option>)}
+              </select>
+            )}
+            <select className="ray-toolbar-pill ray-toolbar-select" aria-label="Minimum value" data-active={filters.minUsd != null}
+              value={filters.minUsd ?? ''} onChange={e => set({ minUsd: e.target.value ? Number(e.target.value) : null })}>
+              <option value="">Any value</option>
+              {VALUE_FLOORS.map(v => <option key={v} value={v}>{fmtFloor(v)}</option>)}
+            </select>
+          </>
         )}
         {isMobile && sheetHasContent && (
           <button
@@ -685,14 +845,16 @@ export default function FeedToolbar({
           </button>
         ))}
 
-        {categories.map(([cat, n]) => (
+        {categories.length > 0 && (sports.length > 0 || makers.length > 0) && <span className="ray-toolbar-divider" aria-hidden="true" />}
+
+        {categories.map(c => (
           <button
-            key={cat}
+            key={c.key}
             className="ray-toolbar-pill"
-            data-active={filters.category === cat}
-            onClick={() => set({ category: filters.category === cat ? null : cat })}
+            data-active={subActive(c.key)}
+            onClick={() => toggleSub(c.key)}
           >
-            {categoryLabels[cat] || cat} <i>{n}</i>
+            {c.label} <i>{c.n}</i>
           </button>
         ))}
         </div>
@@ -704,7 +866,7 @@ export default function FeedToolbar({
         {isFiltered ? (
           <>
             {shown.toLocaleString()} of {total.toLocaleString()}
-            <button className="ray-toolbar-reset" onClick={() => onChange({ ...FEED_DEFAULTS, sort: filters.sort })}>
+            <button className="ray-toolbar-reset" onClick={() => onChange(clearedFilters(filters))}>
               Clear
             </button>
             <SaveSearch filters={filters} market={effectiveMarket} />

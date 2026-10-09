@@ -26,6 +26,9 @@ import Masthead, { Accent } from '../components/Masthead';
 import { Colophon } from '../components/Terminal';
 import Flick from '../components/Flick';
 import type { AuctionLot, MarketStats } from '../types';
+import TriageBar from '../components/TriageBar';
+import { useUrlState, useLastVisit, passesTriage, TRIAGE_DEFAULTS, triageFromParams, triageToParams, type TriageFilters } from '../lib/feed-filters';
+import { byPriority, priorityOf } from '../lib/priority';
 
 /**
  * Makers — THE DIRECTORY, trading grade (Aug 2026, pass 3). The ledger of
@@ -101,10 +104,16 @@ interface Row {
   /** the record hammered inside the last 12 months */
   recordFresh: string | null;
   liveLots: AuctionLot[];
+  /** the "matters most" score of the maker's best live lot (app/lib/priority) */
+  topScore: number;
 }
 
-type SortKey = 'sold' | 'live' | 'flags' | 'median' | 'delta' | 'name';
+type SortKey = 'matters' | 'sold' | 'live' | 'flags' | 'median' | 'delta' | 'name';
+// Oct 8: "Matters" (the maker's best live lot by app/lib/priority) is the
+// default — the roster opens on who has something important on the block
+const DEFAULT_SORT: SortKey = 'matters';
 const SORTS: { k: SortKey; label: string }[] = [
+  { k: 'matters', label: 'Matters' },
   { k: 'sold', label: 'Sold' },
   { k: 'live', label: 'Live' },
   { k: 'flags', label: 'Flags' },
@@ -485,7 +494,7 @@ const MakerRowItem = React.memo(function MakerRowItem({
             )}
           </div>
 
-          {/* THE LIVE BOOK — the maker's closing-soonest lots, in place */}
+          {/* THE LIVE BOOK — the maker's lots, what matters most first */}
           {r.liveLots.length > 0 && (
             <div className="mkx-live">
               <div className="mkx-live-head kicker">
@@ -587,7 +596,18 @@ export default function MakersPage() {
   const [fVerified, setFVerified] = useState(false);
   const [fFlagged, setFFlagged] = useState(false);
   const [fFollowing, setFFollowing] = useState(false);
-  const [sort, setSort] = useState<SortKey>('sold');
+  const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
+  // the triage row narrows each maker's LIVE book (window, sub-category,
+  // house, value floor, new); the roster's sold history is untouched
+  const [triage, setTriage] = useUrlState<TriageFilters>(TRIAGE_DEFAULTS, triageFromParams, triageToParams);
+  const prevVisitDay = useLastVisit();
+  // sub-categories are market-scoped: drop them on a real market flip (never on mount)
+  const triageMarket = useRef(activeKey);
+  useEffect(() => {
+    if (triageMarket.current === activeKey) return;
+    triageMarket.current = activeKey;
+    setTriage(t => (t.cat || t.sub ? { ...t, cat: null, sub: null } : t));
+  }, [activeKey, setTriage]);
   const [cols, setCols] = useState<ColKey[]>(DEFAULT_COLS);
   const [open, setOpen] = useState<string | null>(null);
   const [compare, setCompare] = useState<string[]>([]);
@@ -618,7 +638,7 @@ export default function MakersPage() {
     if (fVerified) p.set('vi', '1');
     if (fFlagged) p.set('fl', '1');
     if (fFollowing) p.set('fw', '1');
-    if (sort !== 'sold') p.set('sort', sort);
+    if (sort !== DEFAULT_SORT) p.set('sort', sort);
     if (cols.join('.') !== DEFAULT_COLS.join('.')) p.set('cols', cols.join('.'));
     if (open) p.set('open', open);
     const qs = p.toString();
@@ -683,16 +703,22 @@ export default function MakersPage() {
     const today = localToday();
     for (const l of allLots) {
       if (!isLiveUpcoming(l, today)) continue;
+      if (!passesTriage(l, triage, { today, prevVisitDay })) continue;
       let e = m.get(l.artist);
       if (!e) m.set(l.artist, e = { lots: [], flags: 0 });
       e.lots.push(l);
       if (l.signal?.label === 'Below Market') e.flags++;
     }
-    m.forEach(e => {
-      e.lots.sort((a, b) => (a.saleDateTime || `${a.saleDate}T99`).localeCompare(b.saleDateTime || `${b.saleDate}T99`));
-    });
+    // what matters most first (app/lib/priority), not merely closing soonest
+    const cmp = byPriority(Date.now());
+    m.forEach(e => { e.lots.sort(cmp); });
     return m;
-  }, [allLots]);
+  }, [allLots, triage, prevVisitDay]);
+  // every live lot in the active market, for the triage row's counts
+  const marketLive = useMemo(() => {
+    const today = localToday();
+    return allLots.filter(l => mktSet.has(l.artist) && isLiveUpcoming(l, today));
+  }, [allLots, mktSet]);
 
   const rows = useMemo<Row[]>(() => ARTISTS.map(a => {
     const st = statsByArtist[a.slug] || null;
@@ -734,6 +760,7 @@ export default function MakersPage() {
       rising,
       recordFresh,
       liveLots: liveE?.lots || [],
+      topScore: liveE?.lots.length ? (priorityOf(liveE.lots[0])?.score ?? 0) : -1,
     };
   }), [statsByArtist, heroBySlug, liveBySlug, verifiedBySlug]);
 
@@ -741,6 +768,7 @@ export default function MakersPage() {
     const needle = q.trim().toLowerCase();
     const cmp = (a: Row, b: Row): number => {
       switch (sort) {
+        case 'matters': return b.topScore - a.topScore || b.live - a.live || (b.sold ?? 0) - (a.sold ?? 0);
         case 'live': return b.live - a.live || (b.sold ?? 0) - (a.sold ?? 0);
         case 'flags': return b.flags - a.flags || b.live - a.live;
         case 'median': return (b.median ?? -1) - (a.median ?? -1);
@@ -1059,6 +1087,17 @@ export default function MakersPage() {
               })()}
             </div>
           </section>
+
+          {/* ── THE TRIAGE ROW (Oct 8) — narrows every maker's live book ── */}
+          <div className="rail" style={{ marginTop: 10 }}>
+            <TriageBar
+              lots={marketLive}
+              filters={triage}
+              onChange={setTriage}
+              prevVisitDay={prevVisitDay}
+              label="Narrow the live book"
+            />
+          </div>
 
           {/* ── THE FILTER BAR ── */}
           <div className="mk-bar-wrap">
