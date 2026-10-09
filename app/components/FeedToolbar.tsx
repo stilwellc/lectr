@@ -11,7 +11,8 @@ import SaveSearch from './SaveSearch';
 import FollowChip from './FollowChip';
 import { catFollow, houseFollow } from '../lib/follows';
 import { taxonOf, SUBS, type CatKey } from '../lib/taxonomy';
-import { WINDOWS, VALUE_FLOORS, TRIAGE_DEFAULTS, isTriageActive, passesTriage, triageToParams, triageFromParams, type TriageFilters } from '../lib/feed-filters';
+import { WINDOWS, VALUE_FLOORS, TRIAGE_DEFAULTS, isTriageActive, passesTriage, patchTriage, triageToParams, triageFromParams, type TriageFilters } from '../lib/feed-filters';
+import { facetCatOf, facetChips, toggleFacet } from '../lib/facets';
 
 export type FeedSort = 'priority' | 'soonest' | 'gap-desc' | 'newest' | 'bids-desc' | 'est-desc' | 'est-asc';
 
@@ -149,8 +150,11 @@ export default function FeedToolbar({
   // inside a vertical → its full roster of makers (art keeps mediums instead:
   // 17 makers is a wall). Zero-count makers stay visible as disabled pills —
   // coverage honesty: "Rolex 0" tells the truth "vanished Rolex" hides.
+  // (Oct 9) only where the slugs ARE makers — design and watches. In sports,
+  // TCG, science and culture they are old category buckets ("Graded Cards 0",
+  // "Memorabilia 0") that the clean sub-category chips below already cover.
   const makers = useMemo(() => {
-    if (effectiveMarket === 'all' || effectiveMarket === 'art') return [] as [string, number][];
+    if (effectiveMarket !== 'design' && effectiveMarket !== 'watches') return [] as [string, number][];
     const c: Record<string, number> = {};
     lots.forEach(l => { c[l.artist] = (c[l.artist] || 0) + 1; });
     return Array.from(marketArtists(effectiveMarket))
@@ -163,7 +167,8 @@ export default function FeedToolbar({
     if (effectiveMarket !== 'sports') return [] as [string, number][];
     const c: Record<string, number> = {};
     lots.forEach(l => { const s = sportOfLot(l) || 'Other'; c[s] = (c[s] || 0) + 1; });
-    return Object.entries(c).sort((a, b) => b[1] - a[1]);
+    // "Other" is the cut nobody shops by — always last, never the lead chip
+    return Object.entries(c).sort((a, b) => (a[0] === 'Other' ? 1 : 0) - (b[0] === 'Other' ? 1 : 0) || b[1] - a[1]);
   }, [lots, effectiveMarket]);
 
   // inside a vertical → its CLEAN sub-categories (app/lib/taxonomy), the cut
@@ -199,6 +204,25 @@ export default function FeedToolbar({
     [marketPool, prevVisitDay]
   );
   const newLabel = prevVisitDay ? 'New since last visit' : 'New today';
+  // in-category facets (Graded / Rookie / era, Film & TV / Music) — once the
+  // reader stands in one category; counted with every other filter applied
+  const facets = useMemo(() => {
+    const scoped = marketPool.filter(l => (!filters.maker || l.artist === filters.maker)
+      && (!filters.sport || (sportOfLot(l) || 'Other') === filters.sport));
+    const fc = facetCatOf(filters.cat, scoped);
+    if (!fc) return [];
+    const pool = scoped.filter(l => passesTriage(l, { ...filters, fx: [] }, { prevVisitDay }));
+    return facetChips(fc, pool, filters.fx);
+  }, [marketPool, filters, prevVisitDay]);
+  const facetPills = facets.map((c, i) => (
+    <span key={c.key} style={{ display: 'contents' }}>
+      {i > 0 && facets[i - 1].group !== c.group && <span className="ray-toolbar-divider" aria-hidden="true" />}
+      <button className="ray-toolbar-pill" data-active={filters.fx.includes(c.key)} aria-pressed={filters.fx.includes(c.key)}
+        onClick={() => set({ fx: toggleFacet(filters.fx, c.key) })}>
+        {c.label} <i>{c.n}</i>
+      </button>
+    </span>
+  ));
   const subActive = (k: string) => filters.cat != null && `${filters.cat}:${filters.sub}` === k;
   const toggleSub = (k: string) => {
     if (subActive(k)) { set({ cat: null, sub: null }); return; }
@@ -225,7 +249,7 @@ export default function FeedToolbar({
     [lots]
   );
 
-  const set = (patch: Partial<FeedFilters>) => onChange({ ...filters, ...patch });
+  const set = (patch: Partial<FeedFilters>) => onChange(patchTriage(filters, patch));
 
   // MOBILE (<768px): the desktop pill spread is honest work on a wide row and
   // pure noise on a phone. Under 768 the toolbar collapses to search + ONE
@@ -367,7 +391,8 @@ export default function FeedToolbar({
     (filters.win !== null ? 1 : 0) +
     (filters.house !== null ? 1 : 0) +
     (filters.minUsd !== null ? 1 : 0) +
-    (filters.newOnly ? 1 : 0);
+    (filters.newOnly ? 1 : 0) +
+    filters.fx.length;
   const sheetHasContent =
     showSortChrome || houses.length > 1 ||
     sports.length > 0 || makers.length > 0 || categories.length > 0 ||
@@ -494,6 +519,12 @@ export default function FeedToolbar({
                   </button>
                 ))}
               </div>
+            </>
+          )}
+          {facets.length > 0 && (
+            <>
+              <div className="ray-feedsheet-head">Narrow</div>
+              <div className="ray-feedsheet-chips">{facetPills}</div>
             </>
           )}
           <div className="ray-feedsheet-head">Closing</div>
@@ -871,6 +902,12 @@ export default function FeedToolbar({
             {c.label} <i>{c.n}</i>
           </button>
         ))}
+        </div>
+      )}
+
+      {!isMobile && facets.length > 0 && (
+        <div className="ray-toolbar-row ray-toolbar-row-filters ray-markets-fade" aria-label="Narrow">
+          {facetPills}
         </div>
       )}
 

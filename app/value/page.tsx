@@ -913,6 +913,13 @@ export default function ValuePage() {
     (l: AuctionLot) => passesTriage(l, triage, { prevVisitDay }),
     [triage, prevVisitDay]
   );
+  // (Oct 9) the triage chips count the lots ON the lanes — counting the whole
+  // live book offered "Graded 833" over a board that held none of them
+  const laneLots = useMemo(() => {
+    const seen = new Map<string, (typeof deals)[number]['lot']>();
+    for (const x of [...deals, ...gapRows, ...sleeperRows]) if (!seen.has(x.lot.id)) seen.set(x.lot.id, x.lot);
+    return Array.from(seen.values());
+  }, [deals, gapRows, sleeperRows]);
   const dealsView = useMemo(() => deals.filter(d => inTriage(d.lot)), [deals, inTriage]);
   const gapRowsView = useMemo(() => gapRows.filter(r => inTriage(r.lot)), [gapRows, inTriage]);
   const sleeperRowsView = useMemo(() => sleeperRows.filter(r => inTriage(r.lot)), [sleeperRows, inTriage]);
@@ -2007,7 +2014,7 @@ export default function ValuePage() {
 
           <div className="rail ray-enter" style={{ marginTop: 8 }}>
             <TriageBar
-              lots={liveLots}
+              lots={laneLots}
               filters={triage}
               onChange={setTriage}
               prevVisitDay={prevVisitDay}

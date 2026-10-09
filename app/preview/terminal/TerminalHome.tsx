@@ -748,7 +748,7 @@ export default function TerminalHomePage() {
 
   const feedKey = useMemo(() => {
     const f = feedFilters;
-    return `${f.vertical}|${f.maker}|${f.sport}|${f.category}|${f.belowOnly}|${f.sort}|${f.saleDay ?? ''}|${f.win}|${f.cat}|${f.sub}|${f.house}|${f.minUsd}|${f.newOnly}|${f.tab}`;
+    return `${f.vertical}|${f.maker}|${f.sport}|${f.category}|${f.belowOnly}|${f.sort}|${f.saleDay ?? ''}|${f.win}|${f.cat}|${f.sub}|${f.house}|${f.minUsd}|${f.newOnly}|${f.fx.join(",")}|${f.tab}`;
   }, [feedFilters]);
   const handleFilters = (next: FeedFilters) => {
     // the shortlist only exists in Matters-most order: any other sort is "All lots"

@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { taxonOf, subMatches, type CatKey } from './taxonomy';
 import { prioStatic } from './priority';
+import { passesFacets } from './facets';
 import { localToday, trueSaleDay } from '../utils';
 
 export type CloseWindow = 'today' | '48h' | 'week';
@@ -27,9 +28,11 @@ export interface TriageFilters {
   minUsd: number | null;
   /** first seen after the reader's previous visit */
   newOnly: boolean;
+  /** in-category facets (app/lib/facets): Graded, Rookie, era, Film & TV… */
+  fx: string[];
 }
 
-export const TRIAGE_DEFAULTS: TriageFilters = { win: null, cat: null, sub: null, house: null, minUsd: null, newOnly: false };
+export const TRIAGE_DEFAULTS: TriageFilters = { win: null, cat: null, sub: null, house: null, minUsd: null, newOnly: false, fx: [] };
 
 export const WINDOWS: { key: CloseWindow; label: string }[] = [
   { key: 'today', label: 'Today' },
@@ -44,6 +47,7 @@ function addDays(iso: string, n: number): string {
 }
 
 type TriageLot = Parameters<typeof prioStatic>[0] & {
+  title?: string | null;
   auctionHouse?: string | null; firstSeen?: string | null; saleDate?: string | null; saleDateTime?: string | null;
 };
 
@@ -62,6 +66,7 @@ export function passesTriage(l: TriageLot, f: TriageFilters, opts: { today?: str
     if (f.sub && !subMatches(t.cat, f.sub, t.sub)) return false;
   }
   if (f.house && l.auctionHouse !== f.house) return false;
+  if (f.fx.length && !passesFacets(l, f.fx)) return false;
   if (f.minUsd) {
     const p = prioStatic(l);
     if (!p || p.a < f.minUsd) return false;
@@ -78,7 +83,7 @@ export function passesTriage(l: TriageLot, f: TriageFilters, opts: { today?: str
 }
 
 export function isTriageActive(f: TriageFilters): boolean {
-  return f.win != null || f.cat != null || f.sub != null || f.house != null || f.minUsd != null || f.newOnly;
+  return f.win != null || f.cat != null || f.sub != null || f.house != null || f.minUsd != null || f.newOnly || f.fx.length > 0;
 }
 
 // ── URL codec ────────────────────────────────────────────────────────────────
@@ -92,6 +97,7 @@ export function triageToParams(f: TriageFilters, p: URLSearchParams): void {
   put('house', f.house);
   put('min', f.minUsd ? String(f.minUsd) : null);
   put('new', f.newOnly ? '1' : null);
+  put('fx', f.fx.length ? f.fx.join(',') : null);
 }
 
 export function triageFromParams(p: URLSearchParams): TriageFilters {
@@ -104,6 +110,7 @@ export function triageFromParams(p: URLSearchParams): TriageFilters {
     house: p.get('house') || null,
     minUsd: Number.isFinite(min) && min > 0 ? min : null,
     newOnly: p.get('new') === '1',
+    fx: (p.get('fx') || '').split(',').filter(Boolean),
   };
 }
 
@@ -164,4 +171,12 @@ export function useLastVisit(): string | null {
     } catch { /* storage blocked: no "new" lens, everything else works */ }
   }, []);
   return prev;
+}
+
+/** apply a patch; a new category drops facets that belonged to the old one */
+export function patchTriage<T extends TriageFilters>(f: T, patch: Partial<T>): T {
+  const next = { ...f, ...patch };
+  const moved = (k: string) => k in patch && (patch as Record<string, unknown>)[k] !== (f as Record<string, unknown>)[k];
+  if ((moved('cat') || moved('vertical')) && !('fx' in patch)) next.fx = [];
+  return next;
 }
