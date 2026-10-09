@@ -87,13 +87,24 @@ export const MASS_TOY_RE = /\b(funko|action figures?|carded figure|beanie bab(?:
 const NOT_A_CARD_OBJECT_RE = /\b(?:full )?tickets?\b|\bticket stubs?\b|\bstubs?\b|\bline-?up cards?\b|\bwrappers?\b|\bblown[- ]up\b/i;
 
 /** Is this lot a trading CARD? (routing detector — see header) */
+/** an edition serial — "LE (#58/200)", "(#1/1)", "(/250)" — numbers a print
+ *  run, not a card: on a jersey, poster or animation cel it read as a card
+ *  number and filed ~330 live Goldin objects under sports cards (Oct 9) */
+const EDITION_SERIAL_RE = /\(\s?#\s?\d*\s?\/\s?\d+\s?\)/g;
+/** "#48" / "#DAP-SO" — a card number, never the "#15/50" of a serial */
+const CARD_NUMBER_RE = /#\s?[A-Za-z0-9][A-Za-z0-9-]*\b(?!\s?\/)/;
 export function isCardTitle(title: string | null | undefined): boolean {
-  const t = String(title || '');
+  const t = String(title || '').replace(EDITION_SERIAL_RE, ' ');
   if (!t.trim()) return false;
   if (leadsWithSetCode(t) || SHORT_YEAR_SET_CODE_RE.test(t)) return true;
   if (PHOTO_FOR_CARD_RE.test(t)) return false;
   if (NOT_A_CARD_OBJECT_RE.test(t) && !/\bsets?\b|rookie tickets?|contenders|\bstubs?\b.*\bcards?\b/i.test(t)
     && !(/\bblown[- ]up\b/i.test(t) ? false : CARD_WORD_RE.test(t.replace(/\bline-?up cards?\b/gi, ' ')))) return false;
+  // the card stands named: "Signed Card", "Signed Rookie Card"; or a card
+  // brand with a card number and a year/slab ("Panini National Treasures #48
+  // … Jersey Number – SGC 9" — the parallel's name is not a jersey)
+  if (/\b(?:signed|autographed|rookie|relic|patch|auto(?:graph)?) cards?\b(?![- ]used)/i.test(t) && !/\b(?:index|post|greeting|business|playing) cards?\b/i.test(t)) return true;
+  if (CARD_BRAND_RE.test(t) && CARD_NUMBER_RE.test(t) && (YEAR_LEAD_RE.test(t) || SLAB_GRADE_RE.test(t)) && !isPhotoTitle(t)) return true;
   if (NON_TRADING_CARD_RE.test(t) && !CARD_NO_RE.test(t) && !/\btrading cards?\b/i.test(t)) return false;
   // a photo/print/display named without a card word or number is that object
   // (looksLikeCard reads "Signed 16 x 20 Photograph (Upper Deck)" as a card)
@@ -212,6 +223,7 @@ export function sportsObjectKind(title: string | null | undefined, catchAll: 'sp
 // Non-sport TCG (Yu-Gi-Oh / One Piece / Union Arena …) and comics have no home.
 export const NON_SPORT_TCG_RE = /\b(yu-?gi-?oh!?|one piece|union arena|dragon ball|digimon|magic:? the gathering|\bmtg\b|weiss schwarz|lorcana|flesh and blood|jujutsu kaisen|naruto|my hero academia|demon slayer|star wars unlimited|black lotus|mox (?:sapphire|ruby|pearl|jet|emerald))\b/i;
 
+const POP_PIECE_RE = /\b(animation (?:cel|cell)s?|production cel|looney tunes|warner bros|hanna[- ]barbera|disney|mondo|pearl jam|grateful dead|phish|gig poster)\b/i;
 export function goldinSportKind(title: string | null | undefined): string {
   const t = String(title || '');
   if (NON_SPORT_TCG_RE.test(t) || COMIC_RE.test(t)) return DROP;
@@ -220,6 +232,11 @@ export function goldinSportKind(title: string | null | undefined): string {
   // (wave 3) "Roger Clemens Signed Commemorative 300th Win … OML Baseball" read as a card
   if (isSignedRetailObject(t)) return 'autographs';
   if (isCardTitle(t)) return 'sports-cards';
+  // (Oct 9) Goldin's Sport book carries pop pieces (Looney Tunes cels, Pearl
+  // Jam gig posters, Mondo prints) — with no sport evidence they are culture
+  // — only on POSITIVE pop evidence (a sneaker or a bowl watch with no sport
+  // word is still sports)
+  if ((NON_SPORT_RE.test(t) || POP_PIECE_RE.test(t)) && !isSportsEvidence(t) && !SPORT_WORD_RE.test(t)) return cultureHome(t);
   return sportsObjectKind(t, 'sports-memorabilia');
 }
 
