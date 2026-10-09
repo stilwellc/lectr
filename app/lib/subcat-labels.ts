@@ -6,7 +6,7 @@
 /** Human labels for drill/subCat slugs (UI + board rows). */
 export const SUBCAT_LABELS: Record<string, string> = {
   // sports kinds
-  'cards': 'Cards', 'game-used': 'Game-used', 'memorabilia': 'Memorabilia',
+  'cards': 'Cards', 'card-lots': 'Lots & sets', 'game-used': 'Game-used', 'memorabilia': 'Memorabilia',
   'tickets': 'Tickets', 'trophies': 'Trophies & awards',
   // sports
   'basketball': 'Basketball', 'baseball': 'Baseball', 'football': 'Football',
@@ -15,6 +15,7 @@ export const SUBCAT_LABELS: Record<string, string> = {
   'wrestling': 'Wrestling',
   // watches
   'wristwatches': 'Wristwatches', 'pocket-watches': 'Pocket watches', 'clocks': 'Clocks',
+  'watch-accessories': 'Watch accessories',
   'daytona': 'Daytona', 'submariner': 'Submariner', 'gmt-master': 'GMT-Master',
   'day-date': 'Day-Date', 'datejust': 'Datejust', 'explorer': 'Explorer',
   'sea-dweller': 'Sea-Dweller', 'yacht-master': 'Yacht-Master', 'milgauss': 'Milgauss',
@@ -45,8 +46,8 @@ export const SUBCAT_LABELS: Record<string, string> = {
   'era-vintage': 'Vintage cards (pre-1980)', 'era-classic': 'Classic cards (1980–99)', 'era-modern': 'Modern cards (2000+)',
   'pokemon-cards': 'Pokémon singles', 'pokemon-sealed': 'Sealed wax',
   // art
-  'prints': 'Prints & multiples', 'originals': 'Original works', 'sculpture': 'Sculpture & ceramics',
-  'photographs': 'Photographs', 'books': 'Books',
+  'prints': 'Prints & multiples', 'originals': 'Original works', 'sculpture': 'Sculpture',
+  'photographs': 'Photographs', 'books': 'Books', 'ceramics': 'Ceramics',
   // design
   'seating': 'Seating', 'tables': 'Tables & desks', 'case-storage': 'Case & storage',
   'lighting': 'Lighting', 'objects': 'Objects',

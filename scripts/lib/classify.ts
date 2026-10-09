@@ -25,6 +25,7 @@ import { routeCulture, isCultureSale, cultureSlugOf } from '../culture';
 import { routeRRLot, rrSportsPrior, rrAthleteRoute, rrSpaceTitle } from '../rr-auction';
 import { routeSportsLot } from '../sports-sale';
 import { athleteIn } from './athlete-roster';
+import { sportWordOf } from './sub-cats';
 
 export const DROP = 'DROP' as const;
 
@@ -39,6 +40,8 @@ export interface ClassifyLot {
   auctionHouse?: string | null;
   saleName?: string | null;
   priceUsd?: number | null;
+  /** (wave 5) the house's size line — an object's depth / diameter is form evidence */
+  dimensions?: string | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -72,7 +75,7 @@ const PHOTO_FOR_CARD_RE = /\b(?:photo|photograph|image|negative|artwork)\b[^.]{0
 const CARD_WEAK_WORD_RE = /\b(?:psa|sgc|bgs|beckett)[- ]?(?:graded|encapsulated)\b|\bstickers?\b/i;
 const CARD_SET_RE = /\b(?:complete|partial|near[- ]complete|master|team)(?: (?:&|and) partial)? (?:base )?sets?\b|\bset \(\d+/i;
 /** paper publications (graded magazines read like slabs: "… Cover (Newsstand) - CGC 9.4") */
-export const PUBLICATION_RE = /\b(sports illustrated|magazines?|newsstand|yearbooks?|media guides?|press guides?|programs?|programmes?|scorecards?|score cards?|newspapers?|publications?|annuals?|guides?)\b/i;
+export const PUBLICATION_RE = /\b(sports illustrated|magazines?|newsstand|yearbooks?|media guides?|press guides?|programs?|programmes?|scorecards?|score cards?|newspapers?|publications?|annuals?|guides?|sports graphic number|weekly baseball|sport (?:magazine|issue)|baseball digest|the sporting news)\b/i;
 /** comics and mass toys — never a home anywhere (culture doctrine: no mass items) */
 export const COMIC_RE = /\b(comic books?|(?<!bazooka )comics?|marvel comics|dc comics|amazing spider-man|action comics|detective comics|graphic novel)\b|\((?:19|20)\d\d (?:marvel|dc)\)|\bvol\.?\s*\d+\s*#\d+\b/i;
 /** mass-produced toys — no home unless an athlete SIGNED it (then an autograph) */
@@ -117,12 +120,48 @@ export function isCardTitle(title: string | null | undefined): boolean {
 // the REA/H&S/Lelands/SCP/ML/LOTG expansion houses): the object's own words
 // decide, most specific first.
 // ═══════════════════════════════════════════════════════════════════════════
-export const SEALED_RE = /\b(unopened|factory[- ]sealed|sealed (?:box|case|pack)(?:e?s)?|wax (?:pack|box|case)(?:e?s)?|hobby (?:box|case)(?:e?s)?|blaster(?: box(?:es)?)?|cello (?:pack|box)(?:e?s)?|rack (?:pack|box)(?:e?s)?|jumbo (?:pack|box)(?:e?s)?|vending (?:box|case)(?:e?s)?|fat packs?|booster (?:box|pack)(?:e?s)?)\b/i;
+const SEALED_CORE_RE = /\b(unopened|factory[- ]sealed|sealed (?:box|case|pack)(?:e?s)?|wax (?:pack|box|case)(?:e?s)?|hobby (?:box|case)(?:e?s)?|blaster(?: box(?:es)?)?|cello (?:pack|box)(?:e?s)?|rack (?:pack|box)(?:e?s)?|jumbo (?:pack|box)(?:e?s)?|vending (?:box|case)(?:e?s)?|fat packs?|booster (?:box|pack)(?:e?s)?)\b/i;
+/** (Oct 8 sports audit, E8) the PRODUCT a sealed lot is — "Three Dozen Unopened
+ *  Official League Baseballs", "1950 Ted Williams 'Champ' Prophylactics
+ *  Unopened Package", a "Baseball Card Vending Machine" or a "Topps Vending
+ *  Hoard (1,375 cards)" are not wax. A Star Co. "Factory-Sealed" team bag
+ *  names no pack/box word and stays. */
+export const SEALED_PRODUCT_RE = /\b(?:packs?|box(?:es)?|cases?|cellos?|racks?|wax|blasters?|tins?|cartons?|bags?|sets?|bricks?|tubes?|factory[- ]sealed)\b/i;
+export const SEALED_NOT_RE = /\b(?:vending|gum(?:ball)?|arcade|exhibit)(?:[- ]style)?(?: card)? machines?\b|\bmachines?\b/i;
+export const SEALED_RE = { test: (t: string): boolean => SEALED_CORE_RE.test(t) && SEALED_PRODUCT_RE.test(t) && !SEALED_NOT_RE.test(t) };
 /** EXPLICIT use language — a jersey is not game-used because it is a jersey */
 export const GAME_USED_RE = /\b(game[- ]?(?:used|worn|issued)|match[- ]?(?:used|worn|issued)|player[- ]?worn|team[- ]?issued|fight[- ]?worn|tour(?:nament)?[- ]?(?:used|worn)|race[- ]?(?:used|worn)|warm[- ]?up[- ]?worn|practice[- ]?(?:worn|used)|bench[- ]?worn|event[- ]?worn|psa\/dna gu \d+|photo[- ]?match(?:ed)?|gamer|mears|meigray|worn by|used by)\b/i;
 const TROPHY_RE = /\b(trophy|trophies|awards?|awarded|medals?|diplomas?|championship rings?|world series rings?|super bowl rings?|title belt|winners?'? medal|olympic (?:gold |silver |bronze )?medal|mvp award|heisman|plaque award|presentational ring|(?:final four|championship|title|world series|super bowl|pennant|all-star|league) rings?|presented to)\b/i;
 const TICKET_RE = /\b(tickets?|stubs?|full ticket|season pass|press pass(?! (?:cards?|#))|credentials?|all[- ]access pass)\b/i;
 const TYPE1_RE = /\b(type (?:1|i|one)\b|type-1|original (?:news service |wire |press )?photo(?:graph)?|wire photo|press photo|news service photo)\b/i;
+/** (Oct 8 sports audit, E3/E6) ANY photograph — Type I–IV, a wire / press /
+ *  news photo, an RPPC, a negative, a bare "Photo" / "Photograph" ("… Hoists
+ *  Trophy … Type I Photo", "Babe Ruth Type III Composite Photo") — the object
+ *  is the photo, not the trophy it shows or the catch-all */
+const PHOTO_TYPED_RE = /\b(type[- ]?(?:1|i|one|2|ii|two|3|iii|three|4|iv|four)\b(?! (?:auto|card|jersey|patch|relic))|original (?:news service |wire |press )?photo(?:graph)?s?|wire photos?|press photos?|news (?:service )?photos?|rppc|real photo post ?cards?|(?:glass |film |original )?negatives?\b|cabinet photos?|carte de visite)/i;
+/** a bare photo word — not a "Photo Pennant / Pin / Button / Ball / Card" (that object) */
+const PHOTO_WORD_RE = /\b(?:photo(?:graph)?s?|snapshots?)\b(?![- ]match)(?!\s+(?:pennants?|pins?|pinbacks?|buttons?|balls?|bats?|cards?|linen|emblems?|frames?|albums?))/i;
+/** a photo / ticket that only rides along with the lot's object ("Trophy with Photo") */
+const ACCESSORY_PHOTO_RE = /\b(?:with|w\/|plus|including|includes|featuring|features)\s+(?:an?\s+|the\s+|\(\d+\)\s+|\d+\s+)?(?:[\w'.-]+\s+){0,3}(?:photos?|photographs?|negatives?|snapshots?)\b/gi;
+const ACCESSORY_TICKET_RE = /\b(?:with|w\/|plus|including|includes|featuring)\s+(?:an?\s+|the\s+|\(\d+\)\s+|\d+\s+)?(?:[\w'.-]+\s+){0,3}(?:tickets?|stubs?|passes|credentials?)\b/i;
+/** the lot IS a photo: a photo word outside any "with … photo" rider, named
+ *  before any publication word ("Sports Illustrated … Sliding Photo on …
+ *  Cover" and "Yearbook - Featuring … Photographs" are publications) */
+export function isPhotoTitle(t: string): boolean {
+  const own = t.replace(ACCESSORY_PHOTO_RE, ' ');
+  // a TYPED photo ("Type I", "Original Photo", RPPC, negative) is a photo even
+  // when it names the magazine it ran in ("S.I. Cover-Used Type I Original Photo")
+  if (PHOTO_TYPED_RE.test(own)) return true;
+  const m = PHOTO_WORD_RE.exec(own);
+  if (!m) return false;
+  const pub = PUBLICATION_RE.exec(own);
+  return !pub || m.index < pub.index;
+}
+/** (Oct 8 sports audit, E5) the PHOTOGRAPHER signed the print ("Charles Conlon
+ *  Signed Type I Photo", "signed by the photographer") — the photo is the
+ *  object; an athlete's signature on it makes it an autograph */
+export const PHOTOGRAPHER_SIGNED_RE = /\bphotographer(?:'s|’s)?[- ](?:signed|signature|autograph|stamp)|\bsigned by (?:the )?photographer\b|\b(?:neil leifer|walter iooss(?: jr\.?)?|charles (?:m\. )?conlon|george (?:grantham )?bain|carl horner|paul thompson|ozzie sweet|annie leibovitz|richard avedon|harry benson|john g\.? zimmerman|bill eppridge|barton silverman|lou requena|james drake|tony triolo|marvin newman|hy peskin|nat fein|charles hoff|barney stein|ernie sisto)\s+(?:hand[- ])?(?:signed|autographed)\b|\bsigned by (?:neil leifer|walter iooss|nat fein|charles conlon|ozzie sweet|annie leibovitz|harry benson)\b|\bsigned (?:in|on) (?:the )?(?:negative|print|plate|margin by (?:the )?photographer)\b/i;
+export function isPhotographerSigned(t: string): boolean { return PHOTOGRAPHER_SIGNED_RE.test(t); }
 /** an athlete's letter / check / contract is an autograph item */
 const AUTOGRAPH_DOC_RE = /\b(letters?|contracts?|endorsements?)\b/i;
 export const SIGNED_RE = /\b(signed|autograph(?:ed|s)?|signatures?|cut signature|auto\.)\b/i;
@@ -148,15 +187,21 @@ export function sportsObjectKind(title: string | null | undefined, catchAll: 'sp
   const t = String(title || '');
   if (SEALED_RE.test(t)) return 'unopened-wax';
   if (GAME_USED_RE.test(t)) return 'game-used';
-  if (TYPE1_RE.test(t) && !SIGNED_RE.test(t)) return 'type-1-photos';
+  // (Oct 8 sports audit) a PHOTO is a photo before it is a trophy / ticket /
+  // catch-all (E3/E6) — unless an athlete SIGNED it: then an autograph (E5)
+  const signed = SIGNED_RE.test(t);
+  const photo = isPhotoTitle(t);
+  if (photo && (!signed || isPhotographerSigned(t))) return 'type-1-photos';
   // (wave 3) a SIGNED ball / bat / helmet / jersey is an autograph even when
   // it commemorates an award ("Aaron Rodgers Signed '2021 MVP' Football")
   if (isSignedRetailObject(t)) return 'autographs';
-  if (TROPHY_RE.test(stripAwardWinners(t))) return 'trophies-awards';
-  if (TICKET_RE.test(t) && !PUBLICATION_RE.test(t)) return 'tickets-passes';
-  if (PUBLICATION_RE.test(t) && !SIGNED_RE.test(t)) return 'programs-publications';
-  if (TYPE1_RE.test(t) && !SIGNED_RE.test(t)) return 'type-1-photos';
-  if (SIGNED_RE.test(t) || AUTOGRAPH_DOC_RE.test(t)) return 'autographs';
+  if (photo) return 'autographs';
+  // (E2) a ticket before the award it commemorates ("… MVP World Series Game 5 … Ticket")
+  const trophy = TROPHY_RE.test(stripAwardWinners(t));
+  if (TICKET_RE.test(t) && !PUBLICATION_RE.test(t) && !(trophy && ACCESSORY_TICKET_RE.test(t))) return 'tickets-passes';
+  if (trophy) return 'trophies-awards';
+  if (PUBLICATION_RE.test(t) && !signed) return 'programs-publications';
+  if (signed || AUTOGRAPH_DOC_RE.test(t)) return 'autographs';
   if (PUBLICATION_RE.test(t)) return 'programs-publications';
   return catchAll;
 }
@@ -165,7 +210,7 @@ export function sportsObjectKind(title: string | null | undefined, catchAll: 'sp
 // wrong for 69k rows (jerseys, balls, photos, sealed boxes, magazines, comics):
 // the card detector decides card; everything else gets its object kind.
 // Non-sport TCG (Yu-Gi-Oh / One Piece / Union Arena …) and comics have no home.
-export const NON_SPORT_TCG_RE = /\b(yu-?gi-?oh!?|one piece|union arena|dragon ball|digimon|magic:? the gathering|\bmtg\b|weiss schwarz|lorcana|flesh and blood|jujutsu kaisen|naruto|my hero academia|demon slayer|star wars unlimited)\b/i;
+export const NON_SPORT_TCG_RE = /\b(yu-?gi-?oh!?|one piece|union arena|dragon ball|digimon|magic:? the gathering|\bmtg\b|weiss schwarz|lorcana|flesh and blood|jujutsu kaisen|naruto|my hero academia|demon slayer|star wars unlimited|black lotus|mox (?:sapphire|ruby|pearl|jet|emerald))\b/i;
 
 export function goldinSportKind(title: string | null | undefined): string {
   const t = String(title || '');
@@ -186,7 +231,7 @@ export function goldinSportKind(title: string | null | undefined): string {
 // it reads non-sport; Hake's (a pop house) toys and comics have no home.
 // ═══════════════════════════════════════════════════════════════════════════
 export const SPORTS_EXPANSION_HOUSES = new Set(['REA', 'Huggins & Scott', 'Lelands', 'Love of the Game', 'SCP', 'Memory Lane']);
-export const NON_SPORT_RE = /\b(beatles|rolling stones|elvis|presley|beach boys|springsteen|concert|rock (?:and|&|n|'n'?) roll|albums?|vinyl|records?\b(?! book)|movie|film|hollywood|disney|mickey mouse|star wars|star trek|superman|batman|marvel|comics?|cartoons?|hanna[- ]barbera|television|tv show|howdy doody|monkees|kiss|guitar|jazz|sinatra|marilyn monroe|president(?:ial)?|political|campaign|lincoln|kennedy|eisenhower|nixon|roosevelt|truman|civil war|world war|wwii|apollo|nasa|astronaut|circus|wizard of oz|g\.?i\.? joe|barbie|non[- ]sport|three stooges|lone ranger|hopalong|roy rogers|gene autry|chaplin|laurel (?:and|&) hardy)\b/i;
+export const NON_SPORT_RE = /\b(riaa|grammys?|brit (?:certified|awards?)|(?:gold|platinum) (?:records?|albums?)|sales awards?|beatles|rolling stones|elvis|presley|beach boys|springsteen|concert|rock (?:and|&|n|'n'?) roll|albums?|vinyl|records?\b(?! book)|movie|film|hollywood|disney|mickey mouse|star wars|star trek|superman|batman|marvel|comics?|cartoons?|hanna[- ]barbera|television|tv show|howdy doody|monkees|kiss|guitar|jazz|sinatra|marilyn monroe|president(?:ial)?|political|campaign|lincoln|kennedy|eisenhower|nixon|roosevelt|truman|civil war|world war|wwii|apollo|nasa|astronaut|circus|wizard of oz|g\.?i\.? joe|barbie|non[- ]sport|three stooges|lone ranger|hopalong|roy rogers|gene autry|chaplin|laurel (?:and|&) hardy)\b/i;
 export const SPORT_WORD_RE = /\b(baseball|football|basketball|hockey|boxing|boxer|golf|tennis|olympics?|soccer|wrestling|racing|nascar|world series|super bowl|stanley cup|all[- ]star|hall of fame|hof|mlb|nfl|nba|nhl|pcl|nflpa|mlbpa|aba|afl|yankees|dodgers|giants|cubs|red sox|white sox|cardinals|tigers|pirates|athletics|senators|browns|braves|reds|phillies|orioles|indians|colts|packers|bears|celtics|lakers|bulls|knicks|canadiens|maple leafs|bruins|red wings|fight|bout|heavyweight|ali|babe ruth|gehrig|mantle|cobb|wagner|dimaggio|mays|aaron|koufax|robinson|clemente|thorpe|joe louis|dempsey|jordan|gretzky|pel[eé]|bats?|glove|mitt|helmet|jersey|uniform|pennant|scorecard|press pin|stadium|ballpark|team|league|champions?|pitcher|batter|catcher)\b/i;
 /** graded/carded mass toys and comic books as the auction houses print them */
 const TOY_GRADE_RE = /\b(afa (?:qualified |[a-z+-]+ )?\d{2}|ukg \d{2}|loose action|\d{1,2}[- ]back(?:-[a-z])?|vehicle (?:in|afa)|playset)\b/i;
@@ -422,12 +467,34 @@ export function entertainmentHouseFix(l: ClassifyLot): string | null {
 // that reads music / film / TV and carries no sport evidence goes to the
 // culture router (or, mass, nowhere).
 // ═══════════════════════════════════════════════════════════════════════════
-export const GOLDIN_NON_SPORT_RE = /\b(?:vinyl|test pressing|cassette|laserdisc|8-track|production[- ](?:made|used)|screen[- ](?:used|worn|matched)|ursa authentic|movie poster|film poster|concert poster|tour poster|star wars|star trek|marvel|disney|beatles|elvis presley|rolling stones|nirvana|hollywood|actor|actress|filming|baywatch|(?:from|in) (?:the )?(?:film|movie|tv series|series))\b/i;
+/** (Oct 8 sports audit, E4) + RIAA / BRIT certified sales awards, gold /
+ *  platinum records, Grammys, animation cels, backstage / tour passes, studio
+ *  photographs — Goldin's Thematic auctions filed them as trophies / game-used */
+export const GOLDIN_NON_SPORT_RE = /\b(?:vinyl|test pressing|cassette|laserdisc|8-track|production[- ](?:made|used|cels?)|screen[- ](?:used|worn|matched)|ursa authentic|movie poster|film poster|concert poster|tour poster|star wars|star trek|marvel|disney|beatles|elvis presley|rolling stones|nirvana|hollywood|actor|actress|filming|baywatch|(?:from|in) (?:the )?(?:film|movie|tv series|series)|riaa|brit certified|brit awards?|(?:gold|platinum|silver|diamond) (?:records?|albums?|singles?)|(?:multi-|double |triple )?platinum (?:sales )?awards?|(?:record |single |album )?sales awards?|grammys?|grammy awards?|animation cels?|cels?|animation drawings?|backstage pass(?:es)?|tour (?:pass(?:es)?|laminates?)|studio photo(?:graph)?s?)\b/i;
+/** Goldin's non-sport catch-all sale: its lots are sports only on evidence */
+const GOLDIN_NON_SPORT_SALE_RE = /\bthematic\b/i;
+/** explicit athlete-use language (not "worn by" / "used by": an actor's too) */
+const SPORT_USE_RE = /\bwrestlemania\b|\b(?:fight|bout|ringside|boxing) (?:posters?|programs?|programmes?|tickets?|films?|photos?|photographs?)\b|\bplaybooks?\b|\b(?:efl|carabao cup|fa cup|coupe de france|copa (?:america|libertadores|del rey)|serie a|bundesliga|ligue 1|uefa|arsenal|chelsea|tottenham|everton|liverpool fc|leeds united|psg|paris saint-germain|ac milan|inter milan|bayern|ajax|benfica|flamengo|santos fc)\b|\b(?:game|match|fight|race|practice|warm[- ]?up|bench|event|player|team)[- ]?(?:used|worn|issued)\b|\bpro(?:fessional)?[- ]model\b/i;
+/** a pro franchise named WITH its city ("Los Angeles Rams", "Orlando Magic") —
+ *  the bare nickname is often a band or a film */
+const CITY_TEAM_RE = /\b(?:arizona|atlanta|baltimore|boston|brooklyn|buffalo|carolina|charlotte|chicago|cincinnati|cleveland|colorado|dallas|denver|detroit|golden state|green bay|houston|indiana|indianapolis|jacksonville|kansas city|las vegas|los angeles|l\.?a\.?|memphis|miami|milwaukee|minnesota|montreal|nashville|new england|new jersey|new orleans|new york|n\.?y\.?|oakland|oklahoma city|orlando|ottawa|philadelphia|phoenix|pittsburgh|portland|sacramento|san antonio|san diego|san francisco|san jose|seattle|st\.? louis|tampa bay|tennessee|texas|toronto|utah|vancouver|vegas|washington|winnipeg|calgary|edmonton|anaheim|florida|columbus|tampa)\s+(?:rams|chiefs|eagles|giants|jets|patriots|bills|dolphins|ravens|steelers|browns|bengals|texans|colts|jaguars|titans|broncos|raiders|chargers|cowboys|commanders|redskins|bears|lions|packers|vikings|falcons|panthers|saints|buccaneers|cardinals|49ers|seahawks|lakers|clippers|warriors|kings|suns|celtics|nets|knicks|76ers|raptors|bulls|cavaliers|pistons|pacers|bucks|hawks|hornets|heat|magic|wizards|nuggets|timberwolves|thunder|trail blazers|jazz|mavericks|rockets|grizzlies|pelicans|spurs|yankees|mets|red sox|white sox|cubs|dodgers|angels|astros|athletics|mariners|rangers|blue jays|orioles|rays|guardians|indians|tigers|royals|twins|brewers|reds|pirates|phillies|marlins|nationals|braves|padres|rockies|diamondbacks|bruins|sabres|red wings|canadiens|senators|lightning|maple leafs|hurricanes|blue jackets|devils|islanders|flyers|penguins|capitals|blackhawks|avalanche|stars|wild|predators|blues|jets|ducks|flames|oilers|canucks|sharks|kraken|golden knights|coyotes|galaxy|fc|sounders|united|cosmos)\b/i;
+/** (Oct 8 sports audit, E1) the lot's own title says sports: a strong sport
+ *  word / roster athlete (isSportsEvidence), a sport / league / club word
+ *  (sub-cats sportWordOf), athlete-use language, or a city + franchise */
+export function hasSportsTitleEvidence(t: string): boolean {
+  return isSportsEvidence(t) || !!sportWordOf(t) || SPORT_USE_RE.test(t) || CITY_TEAM_RE.test(t);
+}
 const NON_CARD_SPORTS_SLUGS = new Set(['game-used', 'sports-memorabilia', 'tickets-passes', 'trophies-awards', 'type-1-photos', 'autographs', 'programs-publications', 'equipment-artifacts']);
 export function goldinNonSportFix(l: ClassifyLot): string | null {
   if (l.auctionHouse !== 'Goldin' || !NON_CARD_SPORTS_SLUGS.has(l.artist)) return null;
   const t = String(l.title || '');
-  if (!GOLDIN_NON_SPORT_RE.test(t) || isSportsEvidence(t)) return null;
+  if (isSportsEvidence(t)) return null;
+  // (Oct 8 sports audit, E1) a Goldin THEMATIC-auction lot (animation cels,
+  // Madonna backstage passes, RIAA awards, Bob Hope studio photos — 410 live)
+  // is sports only on sports evidence: a strong sport word, a roster athlete,
+  // or a sport / league / club the title names
+  if (GOLDIN_NON_SPORT_SALE_RE.test(String(l.saleName || ''))) return hasSportsTitleEvidence(t) ? null : cultureHome(t);
+  if (!GOLDIN_NON_SPORT_RE.test(t)) return null;
   return cultureHome(t);
 }
 
@@ -693,7 +760,7 @@ const CERAMIC_RE = /madoura|earthenware|fa[iï]ence|ceramic|c[ée]ramique|emprei
 const RAMIE_NO_RE = /\ba\.?\s?r\.?\s*(?:no\.?\s*)?\d{1,3}\b/i;
 const ART_PRINT_WORD_RE = /poster|affiche|lithograph|linocut|linogravure|etching|aquatint|screen ?print|silkscreen|s[ée]rigraph|woodcut|engraving|drypoint|offset|edition of|numbered|artist.s proof|\bprint(?:ed|s)?\b|gicl[ée]e|monotype|multiple|pochoir|photogravure|\bplates?\b/i;
 /** a unique medium on a support: "oil on canvas", "pen and India ink on paper", "acrylic, oilstick and paper collage on canvas" */
-const UNIQUE_MEDIUM_RE = /\b(?:oil|acrylic|tempera|gouache|watercolou?r|pastel|charcoal|crayon|graphite|pencil|ballpoint|pen|ink|felt[- ]tip|marker|oil ?stick|spray ?paint|enamel|synthetic polymer|gunpowder|collage|mixed media)s?\b[^.;]{0,60}?\bon\s+(?:canvas|linen|panel|board|paper|card|masonite|wood|metal|aluminum|cardboard|glass|plexiglas|vellum)(?![a-z])/i;
+const UNIQUE_MEDIUM_RE = /\b(?:oil|acrylic|tempera|gouache|watercolou?r|pastel|charcoal|chalk|crayon|graphite|pencil|ballpoint|pen|ink|felt[- ]tip|marker|oil ?stick|spray ?paint|enamel|synthetic polymer|gunpowder|collage|mixed media)s?\b[^.;]{0,60}?\bon\s+(?:canvas|linen|panel|board|paper|card|masonite|wood|metal|aluminum|cardboard|glass|plexiglas|vellum)(?![a-z])/i;
 /** Warhol's painting medium: silkscreen INK on canvas is a unique painting */
 const SILKSCREEN_CANVAS_RE = /silkscreen inks?\b[^.;]{0,30}\bon (?:canvas|linen)/i;
 const EDITION_MARK_RE = /edition of|numbered|\b\d{1,3}\s*\/\s*\d{1,4}\b/i;
@@ -701,16 +768,25 @@ const EDITION_MARK_RE = /edition of|numbered|\b\d{1,3}\s*\/\s*\d{1,4}\b/i;
 const ESTATE_NO_RE = /\b(?:and )?numbered\s+['‘’"]?[A-Z]{0,4}\d{1,4}\.\d{2,4}[A-Z]?['‘’"]?|\bnum[ée]rot[ée]\s+['‘’"]?[A-Z]{0,4}\d{1,4}\.\d{2,4}['‘’"]?/gi;
 /** (wave 3) the French unique-medium line ("peinture … et encres sérigraphiques sur toile") */
 const FR_UNIQUE_MEDIUM_RE = /\b(?:huile|acrylique|peinture|encres?|gouache|fusain|aquarelle|crayon)\b[^.;]{0,80}?\bsur (?:toile|panneau)\b/i;
+/** (wave 5) a French drawing medium on paper ("Snail, gouache sur papier") — the
+ *  'unknown' pile's French-titled originals (crayon is excluded: "signée au
+ *  crayon … sur papier Arches" is a print's signature line) */
+const FR_PAPER_MEDIUM_RE = /\b(?:gouache|fusain|aquarelle|encre de chine|huile|acrylique)\b[^.;]{0,40}?\bsur papier\b/i;
 
+/** (wave 5) a title naming the suite / series / portfolio the sheet comes from */
+const FROM_SET_TITLE_RE = /,\s*from\s+(?!the\s+(?:collection|estate|property)|a\s+private|an?\s+important)(?:the\s+)?[A-Z'"«“]|\(from (?:the )?[^)]*\b(?:series|portfolio|suite)\)/;
 const artText = (l: ClassifyLot) => `${l.title || ''} | ${l.medium || ''} | ${(l.description || '').slice(0, 600)}`;
 
 /** (wave 2) class 10 · ceramics / sculpture with no medium text: a Picasso
  *  Madoura form noun ("Oiseau au ver ashtray", "Visage No. 202", "Plaque Profil
  *  de Jacqueline", "Service poisson, bol H", "visage brun/bleu (alain ramié 2)"),
  *  a repoussé silver plate, a bronze cast, a KAWS vinyl / chrome figure */
-const PICASSO_CERAMIC_RE = /\b(?:plates?|plat|assiette|pitchers?|pichet|cruchon|vases?|bowls?|bol|coupelle|ashtray|cendrier|plaques?|tiles?|carreaux?|dish|service poisson|tripode|pignate|jug|visage no\.?\s*\d+|alain rami[ée])\b/i;
-const SCULPT_RE = /repouss|\b(?:bronze|patina|foundry|fonderie|cast (?:in|by)|lost[- ]wax|sculpture|marble|painted steel|stainless steel|chrome[- ]coated|resin)\b/i;
-const KAWS_FIGURE_RE = /\b(?:companion|bff|chum|accomplice|dissected|small lie|together|time off|kubrick|be@?rbrick|vinyl|holiday|what party|clean slate|along the way|good intentions|passing through|resting place|gone|seeing|watching|share|take|figures?|plush)\b/i;
+const PICASSO_CERAMIC_RE = /\b(?:plates?|plat|assiette|pitchers?|pichet|cruchon|chope|gobelet|vases?|bowls?|bol|coupelle|ashtray|cendrier|plaques?|tiles?|carreaux?|dish|service poisson|tripode|pignate|jug|visage no\.?\s*\d+|alain rami[ée])\b/i;
+// (wave 5) + Calder's mobiles / stabiles and the sheet / painted metal of
+// Calder's and Haring's standing works ("Sheet metal, wire, and paint",
+// "painted aluminum") — the 'unknown' pile held them
+const SCULPT_RE = /repouss|\b(?:bronze|patina|foundry|fonderie|cast (?:in|by)|lost[- ]wax|sculpture|marble|painted steel|stainless steel|chrome[- ]coated|resin|(?:standing |hanging )?mobile|stabile|sheet metal|painted (?:metal|aluminu?m|aluminium)|welded)\b/i;
+const KAWS_FIGURE_RE = /\d00%|\b(?:companion|bff|chum|accomplice|dissected|small lie|together|time off|kubrick|be@?rbrick|bearbrick|pinocchio|vinyl|holiday|what party|clean slate|along the way|good intentions|passing through|resting place|gone|seeing|watching|share|take|figures?|plush)\b/i;
 /** catalogue / edition evidence that a lot is a print (incl. the catalogue
  *  raisonné citations the Sotheby's text-less records print in the title) */
 const PRINT_EVIDENCE_RE = /poster|affiche|lithograph|linocut|linogravure|etching|aquatint|screen ?print|silkscreen|s[ée]rigraph|woodcut|engraving|drypoint|offset|edition of|numbered|artist.s proof|\bprint(?:ed|s)?\b|gicl[ée]e|monotype|multiple|pochoir|photogravure|\bplates?\b|portfolio|\bfrom\b|\bsuite\b|f\.?\s*(?:&|and)\s*s\.?|feldman|schellmann|\bbloch\b|mourlot|\bbaer\b|cramer|corlett|gemini|ulae|duthuit|\([a-z]{1,3}\.\s*\d+[a-z]?\)|\b\d{1,3}\s*\/\s*\d{1,4}\b|\bhc\b|\bp\.?\s?p\.?\b|\bproof\b|\bimpression\b|\bsheet\b|catalogue|catalog\b|\bbooks?\b/i;
@@ -729,13 +805,61 @@ const PRINTS_SALE_RE = /prints?|multiples|editions?|posters?|photograph|design|s
 const PRINT_CAT_WORD_RE = /\b(?:bloch|baer|mourlot|duthuit|cramer|czwiklitzer|corlett|geiser|feldman)\s*(?:no\.?\s*)?\d+|\bs[ée]rie (?:347|156)\b|\bsuite (?:vollard|347|156)\b|\bf\.?\s*(?:&|and)\s*s\.?\s*[ivx]+/i;
 /** the initials form is case-sensitive: "(B. 152; Ba. 304)", "(Bl. 1561, Ba. 1577)", "(D. 515)", "(C. 127)" — a lone 4-digit "(B. 1977)" is a birth year */
 const PRINT_CAT_INIT_RE = /\((?:[^()]*[;,]\s*)?(?:(?:B|Bl|Ba)\.\s*(?:\d{1,3}\b|\d{4}\s*[;,])|(?:M|D|C|G)\.\s*\d{1,3}\b)/;
-const PRINT_CAT_REF_RE = { test: (x: string): boolean => PRINT_CAT_WORD_RE.test(x) || PRINT_CAT_INIT_RE.test(x) };
+/** (wave 5) a print SUITE's plate reference ("plate 141 from Série 156", "pl.
+ *  12", "from the Série 347") and the spelled-out Feldman & Schellmann cite
+ *  ("(feldman & schellmann ii.251)") — "plate" alone is also a Madoura form
+ *  noun, so without this the Picasso ceramic-noun rule filed the Série 156
+ *  etchings as sculpture and the sculpture branch filed them back as prints on
+ *  their Bloch number, flipping on every normalize run. 1–3 digits: "plate,
+ *  1956" is a dated ceramic plate. */
+const PLATE_REF_RE = /\b(?:plates?|pl\.)\s*(?:no\.?\s*)?(?:\d{1,3}|[ivxlc]{1,6})(?![\w½¼¾⅛⅜⅝⅞⅓⅔/]|[.,]\d|\s*(?:cm|mm|in\b|inch|")|\s+\d+\/\d)|\bfrom (?:the )?s[ée]rie\b|\bfeldman\s*(?:&|and)\s*schellmann\b|\bf\.?\s*&\s*s\.?\s*(?:[ivx]+|\d)/i;
+const PRINT_CAT_REF_RE = { test: (x: string): boolean => PRINT_CAT_WORD_RE.test(x) || PRINT_CAT_INIT_RE.test(x) || PLATE_REF_RE.test(x) };
+/** (wave 5) a photographic process named in the medium / object line */
+const PHOTO_PROCESS_RE = /\b(?:gelatin silver|silver gelatin|polaroid|chromogenic|c-print|dye[- ]transfer|cibachrome|type[- ]c print|platinum print|palladium print)\b/i;
+/** (wave 5) unicode / mixed fractions in a size line → a number */
+function sizeNum(x: string): number {
+  const F: Record<string, number> = { '½': 0.5, '¼': 0.25, '¾': 0.75, '⅛': 0.125, '⅜': 0.375, '⅝': 0.625, '⅞': 0.875, '⅓': 0.333, '⅔': 0.667 };
+  let v = 0;
+  const m = x.match(/(\d+(?:[.,]\d+)?)?(?:\s+(\d+)\/(\d+))?\s*([½¼¾⅛⅜⅝⅞⅓⅔])?/);
+  if (!m) return NaN;
+  if (m[1]) v += parseFloat(m[1].replace(',', '.'));
+  if (m[2]) v += +m[2] / +m[3];
+  if (m[4]) v += F[m[4]];
+  return v || NaN;
+}
+const SZ = String.raw`(\d+(?:[.,]\d+)?(?:\s+\d+\/\d+)?[½¼¾⅛⅜⅝⅞⅓⅔]?|[½¼¾⅛⅜⅝⅞⅓⅔])`;
+const UNIT_CM: Record<string, number> = { cm: 1, mm: 0.1, in: 2.54, '"': 2.54 };
+/** (wave 5) an OBJECT's depth / diameter in cm read off its size line, and
+ *  whether it was labelled ("10 d", "17¼ dia", "diameter 33cm") or only the
+ *  third of three measures ("63.5 x 40 x 36.8cm", "495 by 450 by 345 mm").
+ *  A frame's depth is never an object's: a line naming a frame reads null. */
+export function objectDepthCm(text: string): { cm: number; labelled: boolean } | null {
+  const t = String(text || '');
+  if (!t || /\bfram(?:e|ed|ing)\b|\bencadr/i.test(t)) return null;
+  let best: { cm: number; labelled: boolean } | null = null;
+  const take = (cm: number, labelled: boolean) => { if (cm > 0 && cm < 2000 && (!best || cm > best.cm)) best = { cm, labelled }; };
+  // Wright / Rago: "28½ h × 14 w × 10 d in (72 × 36 × 25 cm)", "4¾ d × 10⅜ dia in"
+  const wr = t.match(new RegExp(String.raw`((?:${SZ}\s*(?:h|w|d|dia|l)\s*[×x]\s*)*${SZ}\s*(?:h|w|d|dia|l))\s*(in|cm)\b`, 'i'));
+  if (wr) {
+    const unit = UNIT_CM[wr[wr.length - 1].toLowerCase()];
+    for (const part of wr[1].split(/\s*[×x]\s*/)) {
+      const pm = part.match(/^(.*?)\s*(h|w|d|dia|l)$/i);
+      if (pm && /^(?:d|dia)$/i.test(pm[2])) take(sizeNum(pm[1]) * unit, true);
+    }
+  }
+  // "diameter 13in (33cm)", "Diam. 30 cm"
+  const dia = t.match(new RegExp(String.raw`\b(?:diameter|diam\.?|dia\.)\s*:?\s*${SZ}\s*(cm|mm|in\b|")`, 'i'));
+  if (dia) take(sizeNum(dia[1]) * UNIT_CM[dia[2].toLowerCase()], true);
+  // three measures: the third is the depth
+  const tri = new RegExp(String.raw`${SZ}\s*(?:x|×|by)\s*${SZ}\s*(?:x|×|by)\s*${SZ}\s*(cm|mm|in\b|")`, 'gi');
+  for (let m: RegExpExecArray | null; (m = tri.exec(t));) take(sizeNum(m[3]) * UNIT_CM[m[4].toLowerCase()], false);
+  return best;
+}
 /** a ceramic OBJECT's own medium line (a "céramique" exhibition poster is a print) */
 const CERAMIC_OBJECT_RE = /madoura|earthenware|fa[iï]ence|terre cuite|terracotta|glazed|engobe|stoneware|porcelain|white clay|\bclay\b|empreinte originale|turned (?:vase|pitcher)/i;
 export function artCategoryFix(l: ClassifyLot): string | null {
   if (!ART_MAKERS.has(l.artist)) return null;
   const cat = l.category || 'unknown';
-  if (cat === 'photograph') return null;
   // (wave 3) an estate / foundation INVENTORY number ("numbered '221.032'", "A117.962") is not an edition
   const s = artText(l).replace(ESTATE_NO_RE, " ");
   const tm = `${l.title || ''} | ${l.medium || ''}`;
@@ -747,6 +871,18 @@ export function artCategoryFix(l: ClassifyLot): string | null {
   // sculpture word ("Sculpteur, Modèle et Sculpture assise, from La Suite
   // Vollard (B. 146; Ba. 297)", "exposition céramique vallauris (bloch 1286)")
   const catRef = PRINT_CAT_REF_RE.test(tm) || PRINT_CAT_REF_RE.test(s);
+  // (wave 5) a photographic process on the medium / object line is a
+  // photograph (Warhol's Polaroids and gelatin silver prints sat in prints);
+  // a Feldman & Schellmann-numbered "photograph" is a screenprint
+  const photoProcess = PHOTO_PROCESS_RE.test(`${tm} | ${(l.description || '').slice(0, 300)}`);
+  if (cat === 'photograph') return catRef && !photoProcess ? 'print' : null;
+  if (photoProcess && cat !== 'sculpture' && !strongPrint && !UNIQUE_MEDIUM_RE.test(s)) return 'photograph';
+  // (wave 5) an object's depth / diameter: a print or drawing has none. 8 cm
+  // clears a deep frame or a stretcher; a Picasso Madoura plate or plaque is
+  // shallow, so his labelled depth / diameter counts from 3 cm (Wright's
+  // "Tête", ¾ h × 12 dia in, sat in prints)
+  const dep = objectDepthCm(`${l.dimensions || ''} | ${l.title || ''} | ${l.medium || ''}`);
+  const deep = !!dep && (dep.cm >= 8 || (l.artist === 'pablo-picasso' && dep.labelled && dep.cm >= 3));
   const ceramicObject = CERAMIC_OBJECT_RE.test(s) || (l.artist === 'pablo-picasso' && (RAMIE_NO_RE.test(tm) || /alain rami[ée]/i.test(tm)));
   if (cat === 'sculpture') {
     // a lithograph / etching filed sculpture off a "Sculpture" / "Figure" title word
@@ -757,23 +893,44 @@ export function artCategoryFix(l: ClassifyLot): string | null {
   if (ceramic && !strongPrint && !(catRef && !ceramicObject)) return 'sculpture';
   // (wave 3) Koons's porcelain / balloon / vase multiples are sculpture ("Puppy (vase)")
   // (wave 4) + polychromed wood / steel / glass / aluminium editions ("Ushering in Banality")
-  if (l.artist === 'jeff-koons' && /\b(?:vase|porcelain|inflatable|stainless|sculpture|figure|polychrom\w*|wood|steel|aluminium|aluminum|glass|plastic|marble|granite|bronze|mirror[- ]polished)\b/i.test(s) && !strongPrint) return 'sculpture';
+  // (wave 5) + the balloon / Puppy / bust / crystal multiples ("Balloon Dog
+  // (Magenta)", "Puppy", "Baccarat Bar Set") — 'unknown' with no medium line
+  if (l.artist === 'jeff-koons' && /\b(?:vase|porcelain|inflatable|balloon|puppy|rabbit|bust|crystal|baccarat|stainless|sculpture|figure|polychrom\w*|wood|steel|aluminium|aluminum|glass|plastic|marble|granite|bronze|mirror[- ]polished)\b/i.test(s) && !strongPrint && !catRef && !/skate ?(?:board|deck)/i.test(s)) return 'sculpture';
   // (wave 2) class 10 · ceramic / sculpture forms with no medium text
+  // (wave 5) every rule here yields to a print catalogue / plate reference —
+  // the sculpture branch above files a catRef lot back to print, so a rule
+  // that ignored it flipped the lot on every run
   if (!strongPrint && !UNIQUE_MEDIUM_RE.test(s)) {
-    const printRef = /\b(?:bloch|baer|cramer|mourlot|geiser|\d+ plates|plates? from|from the|suite)\b/i.test(s);
+    const printRef = catRef || /\b(?:bloch|baer|cramer|mourlot|geiser|\d+ plates|plates? from|from the|suite)\b/i.test(s);
     if (l.artist === 'pablo-picasso' && !printRef && (PICASSO_CERAMIC_RE.test(l.title || '') || (cat === 'design' && !PRINT_EVIDENCE_RE.test(tm)))) return 'sculpture';
-    if (SCULPT_RE.test(s) && !/\bon (?:paper|canvas|linen|board)\b/i.test(s)) return 'sculpture';
-    if (l.artist === 'kaws' && KAWS_FIGURE_RE.test(tm) && !/\bon (?:paper|canvas)\b|portfolio|screenprint|print\b/i.test(s)) return 'sculpture';
+    // (a "Landscape Mobile (Study)" is the study for the mobile, not the mobile)
+    if (!catRef && SCULPT_RE.test(s) && !/\bon (?:paper|canvas|linen|board)\b/i.test(s)
+      && !(/\bstud(?:y|ies)\b/i.test(l.title || '') && !SCULPT_RE.test(s.replace(/\b(?:standing |hanging )?(?:mobile|stabile)s?\b/gi, ' ')))) return 'sculpture';
+    // (wave 5) the fabricator's "printed on the underside" is not a print medium
+    if (l.artist === 'kaws' && !catRef && KAWS_FIGURE_RE.test(tm) && !/\bon (?:paper|canvas)\b|portfolio|screen ?print|silkscreen|lithograph|serigraph/i.test(s)) return 'sculpture';
+    // (wave 5) a measured depth / diameter (KAWS "Bendy", Haring's painted
+    // aluminum, Calder's standing works, Picasso's Madoura plates)
+    // (a boxed "Package Painting" is still a painting)
+    if (deep && !catRef && !/\bon (?:paper|canvas|linen|board|panel)\b|\bsur (?:papier|toile)\b/i.test(s) && !/\bpaintings?\b/i.test(l.title || '')) return 'sculpture';
   }
   if (cat === 'original') return null;
-  if (UNIQUE_MEDIUM_RE.test(s) && !printWord) return 'original';
+  if ((UNIQUE_MEDIUM_RE.test(s) || FR_PAPER_MEDIUM_RE.test(s)) && !printWord) return 'original';
   // (wave 4) a unique medium whose only "print" word is the artist's dated
   // numbering ("signed, dated and numbered 'Picasso 6.1.54. XII' … brush and
   // pen and India ink on paper") is a drawing
   if (UNIQUE_MEDIUM_RE.test(s) && !strongPrint && !catRef && !/edition of|\b\d{1,3}\s*\/\s*\d{1,4}\b|artist.s proof|\bprint(?:ed|s)?\b|gicl[ée]e|monotype|multiple|pochoir|photogravure|portfolio|\bplates?\b/i.test(s)) return 'original';
   // (wave 4) an unknown-category lot with a printmaking medium line ("aquatint
   // in grey, 1992, on wove paper") is a print
-  if (cat === 'unknown' && (strongPrint || catRef) && !UNIQUE_MEDIUM_RE.test(s)) return 'print';
+  // (wave 5) + a design-stamped lot the same way (the last rule sends it to
+  // 'unknown', and the next run would read it again)
+  const unknownish = cat === 'unknown' || cat === 'design';
+  if (unknownish && (strongPrint || catRef) && !UNIQUE_MEDIUM_RE.test(s)) return 'print';
+  // (wave 5) the 'unknown' pile's edition evidence: a sheet "from" a named
+  // suite / series / portfolio ("Nude Reading, from the Nude Series", "Right
+  // panel, from Triptych 1991"), a portfolio, a gallery mailer, a multiple,
+  // and a Phillips EDITIONS sale (department 030 in the sale code)
+  if (unknownish && !UNIQUE_MEDIUM_RE.test(s) && !FR_PAPER_MEDIUM_RE.test(s)
+    && (FROM_SET_TITLE_RE.test(l.title || '') || /\bportfolio\b|\bmailer\b|\bmultiple\b/i.test(s) || /^phillips-[a-z]{2}030/i.test(String(l.id || '')))) return 'print';
   // (wave 3) a work on CANVAS / linen with no edition is a painting —
   // Warhol's "silkscreen ink, acrylic and ballpoint pen on linen", "encres
   // sérigraphiques sur toile", "screenprint ink, and diamond dust on canvas"
@@ -1006,6 +1163,60 @@ export function cultureSubSlugFix(l: ClassifyLot): string | null {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// (Oct 8 2026 sports audit) — the sports KIND, re-applied to the back-catalogue
+//  E2/E3 a TICKET or a PHOTO filed as a trophy ("… MVP World Series Game 5 …
+//        Full Ticket", "… Hoists Trophy … Type I Photo");
+//  E5   a SIGNED photo is an autograph — unless the photographer signed it
+//        (2,199 signed photos sat under Photographs);
+//  E6   the Equipment & Other catch-all (memorabilia / sports-memorabilia /
+//        equipment-artifacts) gets its object's kind: photos (Type II/III,
+//        RPPC, negatives), magazines (Sports Illustrated, Sports Graphic
+//        Number, Weekly Baseball, yearbooks), tickets, trophies, autographs;
+//  E7   NFL Auction "Game Issued" jerseys / balls and coin-toss coins are
+//        game-used (the use language wins there over ticket / autograph);
+//  E8   an 'unopened-wax' lot naming no pack / box / case / set ("Three
+//        Dozen Unopened Official League Baseballs", "Baseball Card Vending
+//        Machine", "1966 Topps Vending Hoard (1,000 Cards)") is not wax.
+// ═══════════════════════════════════════════════════════════════════════════
+const objectCatchAll = (house: string | null | undefined): 'memorabilia' | 'sports-memorabilia' =>
+  SPORTS_EXPANSION_HOUSES.has(house || '') ? 'memorabilia' : 'sports-memorabilia';
+export function trophyIsTicketOrPhoto(l: ClassifyLot): string | null {
+  if (l.artist !== 'trophies-awards') return null;
+  const k = sportsObjectKind(l.title, objectCatchAll(l.auctionHouse));
+  return k === 'tickets-passes' || k === 'type-1-photos' || (k === 'autographs' && isPhotoTitle(String(l.title || ''))) ? k : null;
+}
+export function signedPhotoAutograph(l: ClassifyLot): string | null {
+  if (l.artist !== 'type-1-photos') return null;
+  const t = String(l.title || '');
+  return SIGNED_RE.test(t) && !isPhotographerSigned(t) && !GAME_USED_RE.test(t) ? 'autographs' : null;
+}
+const CATCH_ALL_OBJECT_SLUGS = new Set(['memorabilia', 'sports-memorabilia', 'equipment-artifacts']);
+export function catchAllObjectKind(l: ClassifyLot): string | null {
+  if (!CATCH_ALL_OBJECT_SLUGS.has(l.artist)) return null;
+  const t = String(l.title || '');
+  if (isCardTitle(t)) return null; // the card rules own card titles
+  const k = sportsObjectKind(t, 'memorabilia');
+  // "Turkish Trophies" is a cigarette brand (S81 silks displays)
+  if (k === 'trophies-awards' && /\bturkish trophies\b/i.test(t)) return null;
+  return k === 'memorabilia' ? null : k;
+}
+const COIN_TOSS_RE = /\b(?:coin toss|toss coin|flip coin|coin flip)\b/i;
+export function nflGameUsed(l: ClassifyLot): string | null {
+  if (l.auctionHouse !== 'NFL Auction' || l.artist === 'game-used' || !SPORTS_SLUGS.has(l.artist)) return null;
+  const t = String(l.title || '');
+  return GAME_USED_RE.test(t) || COIN_TOSS_RE.test(t) ? 'game-used' : null;
+}
+export function sealedNotWax(l: ClassifyLot): string | null {
+  if (l.artist !== 'unopened-wax') return null;
+  const t = String(l.title || '');
+  if (SEALED_PRODUCT_RE.test(t) && !SEALED_NOT_RE.test(t)) return null;
+  const exp = SPORTS_EXPANSION_HOUSES.has(l.auctionHouse || '');
+  // a vending machine is the machine, whatever cards it dispensed
+  if (!SEALED_NOT_RE.test(t) && (isCardTitle(t) || (CARD_LOT_RE.test(t) && !CARD_LOT_NOT_RE.test(t)))) return exp ? 'graded-cards' : 'sports-cards';
+  return sportsObjectKind(t, objectCatchAll(l.auctionHouse));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // THE RECLASS LADDER — applied to every corpus row by corpus-normalize. Each
 // entry is one audited error class; `apply` returns the new artist, DROP, or
 // null. Order matters only where noted.
@@ -1065,6 +1276,13 @@ export const RECLASS_RULES: ReclassRule[] = [
   { cls: 'ticket-is-game-used', apply: ticketIsGameUsed },
   { cls: 'signed-object-not-award', apply: signedObjectNotAward },
   { cls: 'non-athlete-autograph', apply: nonAthleteAutograph },
+  // (Oct 8 sports audit) the sports kind (after the non-athlete gate: a TV Guide lot or JFK medals
+  // filed memorabilia leave for culture first) — E7, E8, E2/E3, E5, E6
+  { cls: 'nfl-game-issued-is-game-used', apply: nflGameUsed },
+  { cls: 'sealed-names-no-product', apply: sealedNotWax },
+  { cls: 'trophy-is-ticket-or-photo', apply: trophyIsTicketOrPhoto },
+  { cls: 'signed-photo-is-autograph', apply: signedPhotoAutograph },
+  { cls: 'catch-all-object-kind', apply: catchAllObjectKind },
   // (wave 4) signed displays / postcards / bare signed cards; pennants
   { cls: 'signed-flat-autograph', apply: signedFlatAutograph },
   { cls: 'pennant-not-program', apply: pennantNotProgram },

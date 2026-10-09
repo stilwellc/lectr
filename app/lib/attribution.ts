@@ -44,9 +44,25 @@ const MAKER_SURNAME: Record<string, string> = {
 // the lower-cased title, so no /u flag needed.
 const LIFE_DATES = /([a-zà-ÿ][a-zà-ÿ.\-'’]+)\s*\(\s*1[6-9]\d\d\s*[-–—]\s*(?:1[6-9]\d\d|20\d\d)\s*\)/;
 
-/** Does this (artist, title) attribution plainly not belong to the maker? */
-export function isMisattributed(artist: string, title: string): boolean {
+/** (wave 5) a DIFFERENT person whose name contains the maker's search word —
+ *  the ballplayer Roberto Clemente and the Bologna printer Clemente Ferroni
+ *  under Francesco Clemente, the angler W. L. Calderwood / W. F. Calderon
+ *  under Calder. A lot naming the maker himself as well keeps him. */
+const NAME_COLLISION: Record<string, [RegExp, RegExp]> = {
+  'francesco-clemente': [/\brobert(?:o)? clemente\b|\bclemente ferroni\b/, /\bfrancesco\b/],
+  'alexander-calder': [/\bcalder(?:wood|on)\b/, /\bcalder\b/],
+};
+
+/** Does this (artist, title) attribution plainly not belong to the maker?
+ *  `desc` (optional) is the description head — Bonhams titles the book, not
+ *  its author ("The Life of the Salmon" … "CALDERWOOD (W.L.)"). */
+export function isMisattributed(artist: string, title: string, desc = ''): boolean {
   const t = (title || '').toLowerCase();
+  const coll = NAME_COLLISION[artist];
+  if (coll) {
+    const td = `${t} ${(desc || '').slice(0, 300).toLowerCase()}`;
+    if (coll[0].test(td) && !coll[1].test(td)) return true;
+  }
   const mk = marketOf(artist);
   // a car is never an artwork or a design object
   if ((mk === 'art' || mk === 'design') && VEHICLE_RE.test(t)) return true;

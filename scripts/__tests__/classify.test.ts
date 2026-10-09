@@ -123,7 +123,8 @@ test('class 4 · expansion-house sports kind: card first, game-used needs use la
   assert.equal(X('game-used', '89 Deion Sanders Cincinnati Reds Game Used Baseball Bat', 'Lelands'), 'game-used');
   // not cards: index cards, photos named with a card maker, card-photos
   assert.equal(X('autographs', 'Tris Speaker Signed 3x5 Card PSA/DNA MINT 9'), 'autographs');
-  assert.equal(X('type-1-photos', 'Mickey Mantle Signed 16 x 20 Photograph (Upper Deck)'), 'type-1-photos');
+  // (Oct 8 sports audit, E5) an athlete-signed photo is an autograph (still not a card)
+  assert.equal(X('type-1-photos', 'Mickey Mantle Signed 16 x 20 Photograph (Upper Deck)'), 'autographs');
   assert.equal(X('type-1-photos', 'Circa 1940s Babe Ruth Vintage Brown Brothers Photograph PSA/DNA Type IV - Image Used for 1933 Goudey Cards!'), 'type-1-photos');
   // other houses untouched
   assert.equal(X('game-used', 'Mickey Mantle Signed Bat - JSA', 'NFL Auction'), 'game-used');

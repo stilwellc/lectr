@@ -72,7 +72,8 @@ test('drill 1d · learned maps: player → sport (roster athletes), set → spor
   assert.equal(by('a9'), 'baseball');
   assert.equal(by('s9'), 'baseball');
   assert.equal(by('c9'), 'political');
-  assert.equal(by('w9'), null);
+  // (Oct 8) never LEARNED — but the words "Civil War" now name the domain
+  assert.equal(by('w9'), 'military');
   assert.equal(by('r9'), 'submariner');
 });
 

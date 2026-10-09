@@ -5,7 +5,7 @@
  * Moved verbatim out of scripts/ray-crawl.ts (house split, Sep 2026).
  */
 import { looksLikeCard } from '../../../app/lib/cards';
-import { goldinSportKind, scienceVerdict, DROP } from '../classify';
+import { goldinSportKind, scienceVerdict, sportsObjectKind, isPhotoTitle, DROP } from '../classify';
 
 // Tracked art & design makers → slug. Order: specific before ambiguous.
 // Ambiguous surnames (condo=apartment, saul, sachs) require the full name.
@@ -109,8 +109,12 @@ function routeItemRaw(creators: string | null, title: string, extra = ''): strin
   // Goldin: game-used, trophies & awards, tickets & passes. NEVER cards.
   if (/\b(cards?|n172|t20[0-9]|tobacco (card|silk)|psa\b|sgc\b|topps|bowman|panini|goudey|leaf\b|cabinet (photo|card)|carte de visite)\b/.test(t)) return null;
   if (/\b(game[- ](used|worn|issued)|match[- ](used|worn)|player[- ]worn|team[- ]issued|tour[- ](used|worn)|worn (jersey|uniform|cleats|boots|gloves|jacket|cap|shirt)|game (bat|ball|jersey|uniform|glove|worn)|match[- ]worn (shirt|jersey|boots))\b/.test(t)) return 'game-used';
-  if (/\b(trophy|championship (ring|trophy|belt|pennant)|title belt|winners? medal|olympic (medal|torch)|world series (ring|trophy)|super bowl ring|mvp award|heisman|vince lombardi|stanley cup|green jacket|lombardi trophy)\b/.test(t)) return 'trophies-awards';
+  // (Oct 8 sports audit, E2/E3) a ticket before the award it commemorates; a
+  // photo of a trophy is a photo (no tracked photo route here — skipped); a
+  // trophy needs its OBJECT word ("Stanley Cup" / "Heisman" alone name an event)
   if (/\b(full ticket|ticket stub|game[- ]used ticket|world series ticket|super bowl ticket|world cup (ticket|final ticket)|olympic ticket|season pass|press pass|all[- ]access (pass|credential))\b/.test(t)) return 'tickets-passes';
+  if (isPhotoTitle(`${creators || ''} ${title}`)) return null;
+  if (/\b(trophy|championship (ring|trophy|belt|pennant)|title belt|winners? medal|olympic (medal|torch)|world series (ring|trophy)|super bowl ring|mvp award|heisman (trophy|memorial)|vince lombardi trophy|stanley cup (trophy|replica|ring)|green jacket|lombardi trophy)\b/.test(t)) return 'trophies-awards';
   return null; // nothing we track — never guess
 }
 
@@ -139,7 +143,9 @@ export const GOLDIN_POKEMON = /\bpok[eé]mon\b/i;
 
 const GOLDIN_GAME_USED = /\b(game[- ](used|worn|issued)|match[- ](used|worn)|player[- ]worn|team[- ]issued|fight[- ]worn|tour[- ](used|worn)|warm[- ]?up[- ]worn|practice[- ]worn|game bat|game ball|photo[- ]?match(ed)?|mears\b)\b/i;
 
-const GOLDIN_TROPHY = /\b(trophy|award|championship ring|title belt|winners? medal|olympic medal|plaque|mvp\b|heisman|hall of fame ring|championship pendant)\b/i;
+// (Oct 8 sports audit, E2) an award OBJECT word — a bare "MVP" / "Heisman" is a
+// ticket's or a photo's caption ("… Brooks Robinson MVP World Series … Ticket")
+const GOLDIN_TROPHY = /\b(trophy|award|championship ring|title belt|winners? medal|olympic medal|medal|plaque|statuette|hall of fame ring|championship pendant)\b/i;
 
 const GOLDIN_TICKET = /\b(tickets?\b|stub|full ticket|season pass|press pass|credential|all[- ]access pass)\b/i;
 
@@ -162,9 +168,15 @@ export function goldinRoute(title: string, sportScoped = false): string | null {
   if (!sportScoped && GOLDIN_CARD_MAKERS.test(t)) return 'blocked'; // unscoped: never cards
   // sports objects win over the card default — a game-used jersey in a Sport
   // pass is game-used, not a card (checked before the sportScoped card fallback)
+  // (Oct 8 sports audit, E2/E3) tickets, then PHOTOS, before trophies. A photo
+  // has no object signal of its own: sport-scoped, the shared ladder below
+  // reads it (photo / signed-photo autograph); unscoped, it only stops a
+  // trophy word from claiming it ("… Hoists Trophy … Type I Photo")
+  const photo = isPhotoTitle(title);
   const objectSignal = GOLDIN_GAME_USED.test(t) ? 'game-used'
-    : GOLDIN_TROPHY.test(t) ? 'trophies-awards'
     : GOLDIN_TICKET.test(t) ? 'tickets-passes'
+    : photo ? (!sportScoped && GOLDIN_TROPHY.test(t) ? sportsObjectKind(title) : null)
+    : GOLDIN_TROPHY.test(t) ? 'trophies-awards'
     : null;
   // RELIC-CARD GATE (sport-scoped only): a "Game-Used Relic CARD" / "Autograph
   // Patch #DAP-SO" fires the game-used OBJECT signal above, but it IS a trading

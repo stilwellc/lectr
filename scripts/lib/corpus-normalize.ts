@@ -1,5 +1,5 @@
 import type { AuctionLot } from '../../app/types';
-import { subCatOf, sportSlugOf, sportOfSale, sportWordOf, cultureTextDomain, curatedDomainOf, watchRefKey, watchFamilyOf, type SubCatMaps } from './sub-cats';
+import { subCatOf, sportSlugOf, sportOfSale, sportWordOf, cultureTextDomain, curatedDomainOf, watchRefKey, watchFamilyOf, nameKey, JUNK_PLAYER_SLUG_RE, NOT_PERSON_NAME_RE, type SubCatMaps } from './sub-cats';
 import { SUBJECT_DOMAINS } from './subject-domains';
 import { athleteIn, ATHLETES } from './athlete-roster';
 import { extractReference } from './identity-enrich';
@@ -431,6 +431,7 @@ export function localizeSaleDates(lots: Lot[]): { total: number; byHouse: Record
 export function stampSubCats(lots: Lot[]): { subCats: number; drills: number; sportRecovered: number } {
   const pidVotes = new Map<string, Map<string, number>>();
   const playerVotes = new Map<string, Map<string, number>>();
+  const slugName = new Map<string, string>();
   const vote = (m: Map<string, Map<string, number>>, k: string, sport: string) => {
     const inner = m.get(k) || m.set(k, new Map()).get(k)!;
     inner.set(sport, (inner.get(sport) || 0) + 1);
@@ -481,7 +482,14 @@ export function stampSubCats(lots: Lot[]): { subCats: number; drills: number; sp
     if (stamped && r._pid != null) vote(pidVotes, String(r._pid), sport);
     const card = r._card as { playerSlug?: string } | undefined;
     const player = (r.playerSlug as string) || card?.playerSlug || cardPlayer(r);
-    if (player) vote(playerVotes, player, sport);
+    if (player) {
+      vote(playerVotes, player, sport);
+      // (Oct 8 sports audit) the printed name behind the slug, for byName
+      if (!slugName.has(player)) {
+        const nm = (r.playerName as string) || (CARD_SLUGS_SC.has(r.artist as string) ? cardOf(r).player : athleteIn(String(r.title || ''), 3)) || null;
+        if (nm) slugName.set(player, nm);
+      }
+    }
   }
   const settle = (m: Map<string, Map<string, number>>, minN = 3, purity = 0.8): Map<string, string> => {
     const out = new Map<string, string>();
@@ -493,6 +501,20 @@ export function stampSubCats(lots: Lot[]): { subCats: number; drills: number; sp
     return out;
   };
   const byPid = settle(pidVotes), byPlayer = settle(playerVotes);
+  // (Oct 8 sports audit, sport facet) a FREQUENT multi-word player name → sport
+  // (≥10 sport-known rows, the byPlayer purity): read off a title whose slug
+  // was never parsed. Single words and lot-opening slugs never join.
+  const byName = new Map<string, string>();
+  byPlayer.forEach((sp, slug) => {
+    let n = 0; playerVotes.get(slug)?.forEach(c => { n += c; });
+    const nm = slugName.get(slug);
+    if (n < 10 || !nm || JUNK_PLAYER_SLUG_RE.test(slug)) return;
+    const k = nameKey(nm);
+    if (k.split(' ').length < 2 || k.length < 6 || NOT_PERSON_NAME_RE.test(k)) return;
+    const prev = byName.get(k);
+    if (prev && prev !== sp) byName.set(k, ''); else if (prev !== '') byName.set(k, sp);
+  });
+  byName.forEach((sp, k) => { if (!sp) byName.delete(k); });
   // (wave 3) set → sport from every card whose sport is known (own evidence or
   // its player), 90% pure over ≥ 5 cards — "1952 Topps", "1933 Goudey",
   // "Bowman Chrome Prospects" are one sport; "1948 Bowman" is not and abstains
@@ -529,6 +551,7 @@ export function stampSubCats(lots: Lot[]): { subCats: number; drills: number; sp
   const maps: SubCatMaps = {
     byPid, byPlayer, cardPlayer: (l: Record<string, unknown>) => cardPlayer(l),
     bySet, setOf: (l: Record<string, unknown>) => setOf(l),
+    byName,
     bySubject: settle(subjVotes, 2, 0.8), byRef: settle(refVotes, 3, 0.8),
   };
 
@@ -539,7 +562,7 @@ export function stampSubCats(lots: Lot[]): { subCats: number; drills: number; sp
     const t = l as Lot & { subCat?: string; drill?: string; flown?: boolean };
     if (st.subCat) { t.subCat = st.subCat; subCats++; } else if ('subCat' in t) delete t.subCat;
     if (st.drill) {
-      if (!sportSlugOf(r.sport) && st.subCat && ['cards', 'game-used', 'memorabilia', 'tickets', 'trophies'].includes(st.subCat)) sportRecovered++;
+      if (!sportSlugOf(r.sport) && st.subCat && ['cards', 'card-lots', 'game-used', 'memorabilia', 'tickets', 'trophies'].includes(st.subCat)) sportRecovered++;
       t.drill = st.drill; drills++;
     } else if ('drill' in t) delete t.drill;
     if (st.flown === true) t.flown = true; else if ('flown' in t) delete t.flown;
@@ -627,7 +650,7 @@ export function dedupeWrightFamilyMirrors(lots: Lot[]): number {
 function dropMisattributed(lots: Lot[]): number {
   const drop = new Set<number>();
   for (let i = 0; i < lots.length; i++) {
-    if (isMisattributed(String(lots[i].artist || ''), String(lots[i].title || ''))) drop.add(i);
+    if (isMisattributed(String(lots[i].artist || ''), String(lots[i].title || ''), String(lots[i].description || ''))) drop.add(i);
   }
   if (!drop.size) return 0;
   let w = 0;
@@ -1950,7 +1973,10 @@ const CULT_KIND_RULES: [RegExp, string][] = [
   // Linen-Backed", "U.S. insert -- 36x14in.")
   [/\b(?:posters?|lobby cards?|one[- ]sheets?|handbills?|locandina|affiche|window cards?|half[- ]sheets?|three[- ]sheets?|six[- ]sheets?|(?:british |u\.?k\.? |australian )?quads?|daybills?|scene cards?|(?:linen|paper)[- ]backed|insert\s*(?:[-–]+|,)\s*\d)\b/i, 'poster'],
   [/\((?:A|B|C)[+-]\)|\((?:A|B|C)\)\s*,?\s*(?:unfolded|folded|linen|paper)/, 'poster'],
-  [/\b(?:guitars?|bass|telecaster|stratocaster|les paul|drums?|drumhead|piano|saxophone|violin|microphone|amplifier|keyboard|ukulele|banjo|trumpet|cymbals?)\b/i, 'instrument'],
+  // (Oct 8) + the guitar makers a title names alone ("Gibson J-200", "Prince's
+  // Rickenbacker", "Fender Bandmaster") and the effects pedalboard — not the
+  // people who share the name (Mel Gibson, Freddy Fender, Eddie Rickenbacker)
+  [/\b(?:guitars?|bass|telecaster|stratocaster|les paul|drums?|drumhead|piano|saxophone|violin|microphone|amplifier|keyboard|ukulele|banjo|trumpet|cymbals?|(?<!\b(?:mel|hoot|dana|althea|guy|ed|bob|josh|debbie|william|mike|kirk|tyrese|henry) )gibson|(?<!\b(?:freddy|leo) )fender|(?<!\bfred )gretsch|epiphone|(?<!\b(?:eddie|edward|captain|capt\.?) )rickenbacker|flying v|pedal ?boards?)\b/i, 'instrument'],
   [/\b(?:gold record|platinum record|gold disc|platinum disc|riaa|grammy|oscar|academy award|emmy|golden globe|disc award|sales award|presentation award|awards?|medals?|trophy|trophies|key to the city)\b/i, 'award'],
   [/\b(?:prop|props|hero prop|production[- ]made|screen[- ]used|maquette)\b/i, 'prop'],
   // (wave 4) + the garment nouns Julien's titles carry ("JANET JACKSON GLOVES",

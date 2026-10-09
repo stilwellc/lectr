@@ -15,6 +15,8 @@
  */
 import { ARTIST_MARKET } from '../../app/constants';
 import { SUBJECT_DOMAINS } from './subject-domains';
+import { NON_SPORT_TCG_RE } from './classify';
+import { isCardLotTitle } from '../../app/lib/cards';
 
 type Lot = Record<string, unknown>;
 
@@ -56,16 +58,18 @@ export const sportSlugOf = (raw: unknown): string | null =>
 const SPORT_WORDS: [string, RegExp][] = [
   ['boxing-mma', /\b(?:boxing|boxers?|heavyweight|middleweight|welterweight|lightweight|ufc|mma|prize ?fight(?:ers?|s)?|fight[- ]worn|title fight|bout|abe attell|jack dempsey|gene tunney|joe louis|rocky marciano|jack johnson|john l\.? sullivan|jim corbett|bob fitzsimmons|jim jeffries|stanley ketchel|sam langford|joe gans|max schmeling|max baer|jersey joe walcott|ezzard charles|sugar ray robinson|muhammad ali|cassius clay|joe frazier|george foreman|sonny liston|floyd patterson|sugar ray leonard|marvin hagler|mike tyson|jack sharkey|primo carnera|battling nelson|terry mcgovern)\b/i],
   // (wave 3) the old club names a golf lot is titled by ("A JEAN GASSIAT PUTTER")
-  ['golf', /\b(?:golf|golfer|pga|masters tournament|ryder cup|british open|putters?|niblicks?|mashies?|cleeks?|featherie|feathery|gutty|gutta[- ]percha ball)\b/i],
+  ['golf', /\b(?:golf|golfer|pga|masters tournament|ryder cup|british open|putters?|niblicks?|mashies?|cleeks?|featherie|feathery|gutty|gutta[- ]percha ball|long-nosed (?:long )?(?:spoon|driver|putter|play ?club)|play ?clubs?|baffing spoon|driving iron|(?:rut|rake|track|smooth-faced|lofting) iron|bramble-pattern ball|caddie)\b/i],
   ['tennis', /\b(?:tennis|wimbledon|us open tennis)\b/i],
   ['racing', /\b(?:nascar|formula (?:1|one)|f1|indy ?500|racing|daytona 500)\b/i],
-  ['wrestling', /\b(?:wrestling|wrestler|wwe|wwf|wcw)\b/i],
+  ['wrestling', /\b(?:wrestling|wrestler|wrestlemania|wwe|wwf|wcw)\b/i],
   ['olympics', /\b(?:olympics?|olympic games)\b/i],
   ['hockey', /\b(?:hockey|nhl|stanley cup|puck|maple leafs|canadiens|red wings|blackhawks|bruins)\b/i],
   // (wave 3) WNBA and the Hoops card brand ("SkyBox Hoops", "NBA Hoops")
   ['basketball', /\b(?:basketballs?|nba|wnba|aba|final four|lakers|celtics|knicks|76ers|pistons|warriors|harlem globetrotters|hoops)\b/i],
+  // (Oct 8 sports audit, E9) association football before American football: a
+  // "1994 World Cup … Rose Bowl" / "FIFA … Football Federation" lot is soccer
+  ['soccer', /\b(?:soccer|fifa|(?<!dubai |rugby |cricket |hockey |golf |ski )world cup(?! of hockey)|premier league|la liga|champions league|fc barcelona|real madrid|manchester united|boca juniors|international (?:[a-z-]+ )?(?:shirt|cap)|match programmes?|f\.?a\.? ?cup|west ham|tottenham|hotspur|arsenal|chelsea|everton|hibernian|aston villa|newcastle united|leeds united|sheffield (?:united|wednesday)|manchester city|celtic)\b/i],
   ['football', /\b(?:footballs?|nfl|afl|super bowl|heisman|rose bowl|packers|steelers|cowboys|49ers|redskins|buccaneers|seahawks|bengals)\b/i],
-  ['soccer', /\b(?:soccer|fifa|world cup|premier league|la liga|champions league|fc barcelona|real madrid|manchester united|boca juniors)\b/i],
   ['baseball', /\b(?:baseballs?|base ball|b\.b\.c\.|mlb|world series|home runs?|perfect game|no-hitter|lineup cards?|line-up cards?|louisville slugger|national league|american league|federal league|negro leagues?|pcl|yankees|red sox|white sox|dodgers|cubs|mets|phillies|orioles|pirates|tigers|indians|athletics|brewers|astros|padres|mariners|expos|twins|royals|braves|reds|senators|browns|doves|red stockings|highlanders|superbas|beaneaters|naps)\b/i],
 ];
 /** pre-war set codes and vintage issues that are baseball (T206, E90, N172, D304, M116, W551, R319, Goudey, Old Judge …) */
@@ -172,6 +176,9 @@ const CULT_KIND: Record<string, string> = {
   'costume': 'worn-personal',
   'instrument': 'instruments', 'award': 'awards', 'prop': 'props',
   'poster': 'posters', 'record': 'records', 'ticket': 'tickets',
+  // (Oct 8) animation cels / production drawings were stamped itemClass
+  // 'cel-art' but rolled up to 'other'
+  'cel-art': 'cel-art',
 };
 // (wave 3) the domain a culture lot's OWN words name, when no curated subject
 // does — 97k culture lots carried no drill (RR's "<Name> Signed Photograph /
@@ -182,13 +189,22 @@ const CULT_KIND: Record<string, string> = {
 // Victoria", "King Louis XIII"): Queen the band is music.
 const CULT_TEXT_DOMAIN: [RegExp, string][] = [
   [/\b(?:astronauts?|cosmonauts?|nasa|apollo \d+|space shuttle|mercury seven|moonwalkers?)\b/i, 'space-science'],
-  [/\b(?:presidents?|presidential|vice[- ]president|first lady|white house|senat(?:e|ors?)|congress(?:man|woman|ional)?|impeachment|(?:presidential|political) campaign|campaign (?:buttons?|posters?|pins?|banners?|ribbons?|badges?)|inaugura(?:l|tion)|jugate|supreme court|chief justice|governor|secretary of state|prime minister|parliament|mayor|ambassador|electoral|confederate president|political)\b/i, 'political'],
+  [/\b(?:signers? of the declaration|declaration (?:of independence )?signers?|presidents?|presidential|vice[- ]president|first lady|white house|senat(?:e|ors?)|congress(?:man|woman|ional)?|impeachment|(?:presidential|political) campaign|campaign (?:buttons?|posters?|pins?|banners?|ribbons?|badges?)|inaugura(?:l|tion)|jugate|supreme court|chief justice|governor|secretary of state|prime minister|parliament|mayor|ambassador|electoral|confederate president|political)\b/i, 'political'],
   [/\b(?:concerts?|tour (?:posters?|programs?|books?|jackets?|shirts?|pass(?:es)?)|(?<!(?:photo|photograph|autograph|stamp|scrap|sticker|card|cabinet card) )albums?(?!\s+pages?)|rock band|the band|band[- ](?:signed|members?)|guitars?|singers?|songs?|songwriter|lyrics?|rock (?:and|&|n'?) roll|vinyl|gold record|platinum record|grammy|drum ?sticks?|drumheads?|setlist|set list|stage[- ](?:worn|played|used)|backstage|recording|motown|woodstock|orchestra|opera|symphony|composer|musical quot\w*|musical score|ballroom)\b/i, 'music'],
-  [/\b(?:films?|movies?|motion picture|screen[- ](?:used|worn|matched)|production[- ](?:made|used|drawing|cels?|art)|film studios?|actors?|actress(?:es)?|one[- ]sheets?|lobby cards?|animation|animated|cels?|walt disney|disney|television|tv series|tv show|sitcom|episode|ursa|oscars?|academy awards?|emmys?|hollywood|filmmakers?|screenplay|shooting script|movie poster)\b/i, 'hollywood'],
-  [/\b(?:wwii|ww2|wwi|world war|army|navy|naval|admiral|soldiers?|battle(?:ship|field)?|regiment(?:al)?|air aces?|luftwaffe|military|marine corps|usmc|usaf|pearl harbor|d-day|nazi|third reich|medal of honor|fighter pilot)\b/i, 'military'],
+  [/\b(?:films?|movies?|motion picture|screen[- ](?:used|worn|matched)|production[- ](?:made|used|drawing|cels?|art)|film studios?|actors?|actress(?:es)?|one[- ]sheets?|lobby cards?|animation|animated|cels?|walt disney|disney|television|tv series|tv show|sitcom|episode|ursa|oscars?|academy awards?|emmys?|hollywood|filmmakers?|screenplay|shooting script|movie poster|dicaprio|winslet)\b/i, 'hollywood'],
+  [/\b(?:wwii|ww2|wwi|world war|army|navy|naval|admiral|soldiers?|battle(?:ship|field)?|regiment(?:al)?|air aces?|luftwaffe|military|marine corps|usmc|usaf|pearl harbor|d-day|nazi|third reich|medal of honor|fighter pilot|(?:civil|revolutionary) war(?![- ](?:dated|date))|war of 1812|continental army|confederate|union army)\b/i, 'military'],
+  // (Oct 8) ~28k historical culture lots fell to Entertainment for want of a
+  // cue: the notorious (crime), the aviators and polar explorers (aviation —
+  // filed military before), and the event / document / church words
+  [/\b(?:gangsters?|mobsters?|mafia|mug ?shots?|outlaws?|bootlegg(?:er|ers|ing)|wanted poster|alcatraz|bank robber|serial killer|al capone|john dillinger|bonnie (?:and|&) clyde|clyde barrow|bonnie parker|baby face nelson|pretty boy floyd|machine gun kelly|billy the kid|jesse james|bugsy siegel|lucky luciano|dutch schultz|charles manson|lee harvey oswald|jack ruby|john wilkes booth|lizzie borden)\b/i, 'crime'],
+  [/\b(?:aviation|aviators?|aviatrix|aeronaut\w*|airplanes?|aeroplanes?|airships?|zeppelin|hindenburg|lindbergh|spirit of st\.? louis|wright brothers|orville wright|wilbur wright|kitty hawk|amelia earhart|earhart|wiley post|bl[eé]riot|north pole|south pole|antarctic\w*|arctic expedition|polar expedition|peary|shackleton|amundsen|nansen|richard e\.? byrd|admiral byrd)\b/i, 'aviation'],
+  // the Titanic of the 1997 film (a screen-used prop, a DiCaprio still) is film
+  [/\b(?:titanic\b(?!.*\b(?:screen[- ](?:used|worn|matched)|production[- ](?:used|made)|dicaprio|winslet|james cameron|props?|1953|1997|20th century[- ]fox)\b)|lusitania|newspapers?|colonial (?:currency|notes?|bills?)|continental currency)\b/i, 'historic'],
+  // case-sensitive church titles: John Pope the Union general is not a pope
+  [/\b(?:Pope|POPE) (?:John|JOHN|Paul|PAUL|Pius|PIUS|Benedict|BENEDICT|Francis|FRANCIS|Leo|LEO|Gregory|Clement|Urban|Innocent|Sixtus|Julius)\b|\b(?:[Pp]apal|PAPAL|[Vv]atican|VATICAN|[Aa]rchbishop|ARCHBISHOP)\b|\b(?:[Cc]ardinal|CARDINAL) [A-Z]|\b(?:[Ss]aint|SAINT) (?:Teresa|Mother Teresa|John Paul|Padre Pio|Bernadette|Junipero|Elizabeth Ann Seton|Katharine Drexel)\b/, 'historic'],
   // case-sensitive: a royal title + a capitalised name ("King Louis XIII",
   // "QUEEN VICTORIA"); Prince the musician is not royalty
-  [/\b(?:[Kk]ing|KING) (?:George|GEORGE|Louis|LOUIS|Henry|HENRY|Edward|EDWARD|Charles|CHARLES|William|WILLIAM|James|JAMES|Richard|RICHARD|Philip|PHILIP|Ferdinand|Frederick|Gustav|Haakon|Leopold|Alfonso|Carlos|Juan|Umberto|Victor|Farouk|Hussein|Faisal|Kalakaua|Kamehameha)\b|\b(?:[Qq]ueen|QUEEN) (?:[Vv]ictoria|VICTORIA|[Ee]lizabeth|ELIZABETH|[Mm]ary|MARY|[Aa]nne|ANNE|[Mm]other|MOTHER|[Aa]lexandra|[Cc]harlotte|[Mm]arie)|\b(?:[Pp]rince|PRINCE)(?:ss|SS)? (?:of|OF) [A-Z]|\b(?:[Pp]rincess|PRINCESS) (?:Diana|DIANA|Grace|GRACE|Margaret|MARGARET|Anne|ANNE|Alexandra)\b|\b(?:[Pp]rince|PRINCE) (?:Albert|Charles|Philip|William|Harry|Edward|Andrew|Rainier|Henry|Frederick|Louis)\b|\b(?:[Ee]mperor|EMPEROR|[Ee]mpress|EMPRESS|[Cc]zar|CZAR|[Tt]sar|TSAR)\b|\b(?:[Rr]oyal [Ff]amily|[Dd]uke of|[Dd]uchess of|DUKE OF|DUCHESS OF)/, 'royalty'],
+  [/\b(?:[Kk]ing|KING) (?:George|GEORGE|Louis|LOUIS|Henry|HENRY|Edward|EDWARD|Charles|CHARLES|William|WILLIAM|James|JAMES|Richard|RICHARD|Philip|PHILIP|Ferdinand|Francis|FRANCIS|Frederick|Gustav|Henri|Wilhelm|Christian|Olav|Alexander|Peter|Khalid|Fahd|Saud|Haakon|Leopold|Alfonso|Carlos|Juan|Umberto|Victor|Farouk|Hussein|Faisal|Kalakaua|Kamehameha)\b|\b(?:[Qq]ueen|QUEEN) (?:[Vv]ictoria|VICTORIA|[Ee]lizabeth|ELIZABETH|[Mm]ary|MARY|[Aa]nne|ANNE|[Mm]other|MOTHER|[Aa]lexandra|[Cc]harlotte|[Mm]arie)|\b(?:[Pp]rince|PRINCE)(?:ss|SS)? (?:of|OF) [A-Z]|\b(?:[Pp]rincess|PRINCESS) (?:Diana|DIANA|Grace|GRACE|Margaret|MARGARET|Anne|ANNE|Alexandra)\b|\b(?:[Pp]rince|PRINCE) (?:Albert|Charles|Philip|William|Harry|Edward|Andrew|Rainier|Henry|Frederick|Louis)\b|\b(?:[Ee]mperor|EMPEROR|[Ee]mpress|EMPRESS|[Cc]zar|CZAR|[Tt]sar|TSAR)\b|\b(?:[Rr]oyal [Ff]amily|[Dd]uke of|[Dd]uchess of|DUKE OF|DUCHESS OF)|\b(?:[Gg]rand [Dd]uke|[Gg]rand [Dd]uchess|GRAND DUKE|GRAND DUCHESS|[Aa]rchduke|ARCHDUKE|[Kk]aiser|KAISER)\b|\bFranz Joseph\b/, 'royalty'],
   [/\b(?:novels?|novelist|poets?|poems?|poetry|authors?|playwright|first edition)\b/i, 'literary'],
 ];
 /** The curated domain of a lot's subjects. (wave 3) A subject read as a longer
@@ -220,8 +236,24 @@ export function cultureTextDomain(s: string): string | null {
   return best;
 }
 
+/** (Oct 8) the couture houses whose garments sell as fashion, not costume */
+const COUTURE_RE = /\b(?:christian dior|dior|issey miyake|chanel|balenciaga|givenchy|yves saint laurent|saint laurent|alexander mcqueen|vivienne westwood|jean paul gaultier|versace|schiaparelli|yohji yamamoto|comme des gar[cç]ons)\b/i;
+/** ...worn or owned by a named person ("Elton John's Personally-Owned Versace Shirt") */
+const CELEB_WORN_RE = /\b(?:stage|screen|film|tour|personally|concert)[- ](?:worn|owned|used)\b|\b(?:worn|owned) by\b|^[^,]{3,80}['’]s\b/i;
+
+/** (Oct 8) a film / music sale */
+const SHOWBIZ_SALE_RE = /hollywood|movie|film|entertainment|music|rock n'? ?roll|pop culture/i;
+
 // sale-name fallback when no subject maps to a domain
 const CULT_SALE_DOMAIN: [RegExp, string][] = [
+  // (Oct 8) RR's single-theme sales ("Titanic II", "Gangsters, Outlaw &
+  // Lawmen", "Science and Technology") — anchored: a "Fine Autographs …
+  // Featuring Civil War / Royalty" sale, the "Civil War Auction" and the
+  // "Rare Manuscript, Document & Autograph" sale are general autograph sales
+  // (43–62% of their drilled lots are music / film / political)
+  [/^titanic\b/i, 'historic'],
+  [/^(?:old west, )?(?:gangsters|outlaws)\b/i, 'crime'],
+  [/^science (?:&|and) tech/i, 'science'],
   [/marvels of modern music|rock n'? ?roll|music/i, 'music'],
   [/hollywood|movie|film|entertainment/i, 'hollywood'],
   [/president|political|white house/i, 'political'],
@@ -240,14 +272,36 @@ const SPACE_PROGRAM: [string, RegExp][] = [
   // (wave 2) Skylab flew Apollo hardware (the Apollo Applications Program) —
   // read after an explicit shuttle-era mention ("Skylab and Shuttle-Era Suits")
   ['apollo', /skylab/i],
-  ['soviet', /soyuz|sputnik|cosmonaut|vostok|voskhod|\bmir\b|lunokhod|\bsoviet\b|\bussr\b|\bn1-l3\b|gagarin|korolev/i],
+  ['soviet', /soyuz|sputnik|cosmonaut|vostok|voskhod|\bmir\b|lunokhod|\bsoviet\b|\bussr\b|\bn1-l3\b|gagarin|korolev|tereshkova|leonov|titov|komarov/i],
   // (wave 2) RR's space catalogue titles a lot by the astronaut alone ("Neil
   // Armstrong Signed Photograph", "Gus Grissom Check"): the program of the
   // astronaut's era — Apollo crews and moon words first, then the Mercury /
   // Gemini-only names (a Schirra + Cunningham photo is Apollo 7)
   ['apollo', /\b(?:neil armstrong|buzz aldrin|michael collins|alan bean|edgar mitchell|(?:jim|james) irwin|(?:charlie|charles) duke|(?:gene|eugene) cernan|harrison schmitt|(?:al|alfred) worden|fred haise|jack swigert|stuart roosa|(?:ron|ronald) evans|walt(?:er)? cunningham|donn eisele|(?:bill|william) anders|(?:dave|david) scott|(?:pete|charles) conrad|rusty schweickart|moonwalkers?|moon ?walk|first man on the moon|lunar|saturn v|command module)\b/i],
-  ['mercury-gemini', /\b(?:john glenn|gus grissom|virgil grissom|scott carpenter|wally schirra|walter schirra|deke slayton|gordon cooper|liberty bell 7|friendship 7|freedom 7|ham the chimp|mercury (?:7|seven)|original seven)\b/i],
+  // (Oct 8) the Mercury names with a middle initial or alone ("Alan B.
+  // Shepard", "John H. Glenn", "Grissom")
+  ['mercury-gemini', /\b(?:john (?:h\.? )?glenn|(?:gus|virgil) (?:i\.? )?grissom|grissom|scott carpenter|(?:wally|walter) (?:m\.? )?schirra|schirra|deke slayton|(?:gordon|l\.? gordon) (?:l\.? )?cooper|(?:alan (?:b\.? )?)?shepard|liberty bell 7|friendship 7|freedom 7|ham the chimp|mercury (?:7|seven)|original seven)\b/i],
+  // (Oct 8) the Apollo-era names that flew Gemini too (Lovell, Borman,
+  // Stafford, Young, White), read after the Mercury / Gemini names (a Schirra +
+  // Borman photo is the Gemini 6A / 7 rendezvous), and the F-1 engine
+  ['apollo', /\b(?:(?:ed|edward) (?:h\.? )?white(?: ii)?|(?:roger )?chaffee|(?:jim|james) (?:a\.? )?lovell|lovell|(?:frank )?borman|(?:tom|thomas) (?:p\.? )?stafford|john (?:w\.? )?young|(?:rocketdyne )?f-?1 (?:rocket )?engines?)\b/i],
+  // (Oct 8) the shuttle-era names, read after the Apollo crews (Apollo 11's
+  // command module was also "Columbia")
+  ['shuttle-iss', /\b(?:challenger|columbia|(?:christa )?mcauliffe|sally ride)\b/i],
 ];
+/** (Oct 8) the scientists a culture 'space-science' lot names → 'science' */
+const SCIENTIST_RE = /\b(?:einstein|newton|curie|tesla|edison|darwin|hawking|galileo|faraday|bohr|oppenheimer|feynman|freud|pasteur|salk|sabin|schweitzer|morse|graham bell|marconi|fleming|lister|pauling|planck|jung|heisenberg|fermi|teller|watson|crick|carver|nightingale|goodall|tombaugh|hubble|sagan|scientists?|physicists?|chemists?|inventors?|nobel|dna|apple computer|steve jobs|wozniak|computer)\b/i;
+/** (Oct 8) aviation pioneers / polar explorers inside a 'space-science' lot */
+const AVIATION_RE = /\b(?:aviation|aviators?|aviatrix|airplanes?|aeroplanes?|airships?|zeppelin|hindenburg|lindbergh|wright brothers|orville wright|wilbur wright|earhart|wiley post|bl[eé]riot|sikorsky|whittle|chuck yeager|yeager|peary|shackleton|amundsen|byrd|explorers?)\b/i;
+/** (Oct 8) a culture lot whose domain reads 'space-science' → the space
+ *  program it names, a scientist ('science') or an aviator ('aviation'),
+ *  else stays 'space-science' */
+export function spaceScienceDrillOf(text: string): string {
+  for (const [k, re] of SPACE_PROGRAM) if (re.test(text)) return k;
+  if (AVIATION_RE.test(text)) return 'aviation';
+  if (SCIENTIST_RE.test(text)) return 'science';
+  return 'space-science';
+}
 const FLOWN_RE = /\bflown\b|carried aboard|lunar surface|surface[- ]carried/i;
 const TECH_DRILL: [string, RegExp][] = [
   ['computing', /apple|steve jobs|macintosh|wozniak|computer|ibm\b|commodore|altair|enigma|microsoft|\bnext\b|calculator/i],
@@ -276,12 +330,47 @@ const ART_KIND: Record<string, string> = {
 const ARTIST_BOOK_RE = /\b(?:livres? d'artistes?|artists?'? books?|illustrated books?|zines?|vols?\.\s*[ivx\d]|volumes?|edited by|published by|skira|t[ée]riade|letterpress|black sparrow|po[eè]mes|poems|first edition|dummy cop(?:y|ies)|twentysix gasoline stations|every building on the sunset strip|real estate opportun\w*|various small fires|royal road test|nine swimming pools|some los angeles apartments|thirtyfour parking lots|a few palm trees|colored people|babycakes|dutch details|crackers|holy cats|a gold book|floril[eè]ge des amours|lettres portugaises|pasipha[ée]|po[ée]sies|vingt po[eè]mes|le chant des morts|toreros|1 cent life)\b/i;
 const ART_PRINT_OBJECT_RE = /\b(?:posters?|woodcut|screenprint|silkscreen|lithograph|etching|offset)\b/i;
 const ART_CAT_KIND: Record<string, string> = { print: 'prints', original: 'originals', sculpture: 'sculpture', photograph: 'photographs' };
+/** (wave 5) a printmaking process named outright — a Bonhams title carries its
+ *  medium AND its colophon ("Electric Chair Screenprint in colours, 1971 …
+ *  published by Bruno Bischofberger"), so "published by" / "edited by" alone
+ *  is no book evidence next to one */
+const STRONG_PRINT_WORD_RE = /\b(?:lithograph\w*|screen ?print\w*|silkscreen\w*|s[ée]rigraph\w*|etching\w*|aquatint\w*|woodcut\w*|linocut\w*|engraving\w*|drypoint\w*|pochoir\w*)\b/i;
+/** (wave 5) CERAMICS — Picasso's Madoura editions and the other fired-clay
+ *  works — split from sculpture: a glazed pitcher and a bronze do not comp.
+ *  Porcelain / bone china only as a VESSEL or table service (Koons's porcelain
+ *  Balloon Dog multiples stay sculpture); Rashid Johnson's "ceramic tiles"
+ *  panels are not ceramics. */
+const CERAMIC_WORK_RE = /madoura|fa[iï]ence|earthenware|terre cuite|terracotta|engobe|empreinte originale|\bc[ée]ramique\b|\bceramics?\b(?!\s+tiles?)|\ba\.?\s?r\.?\s*(?:no\.?\s*)?\d{1,3}\b|alain rami[ée]/i;
+const PORCELAIN_RE = /\b(?:porcelain|stoneware|bone china)\b/i;
+const VESSEL_RE = /\b(?:vases?|bowls?|plates?|pitchers?|jugs?|dish(?:es)?|platters?|cups?|teapots?|vessels?|pots?|(?:tea|coffee|dinner|breakfast) (?:service|set)|place settings?)\b/i;
+/** "glazed" is a ceramic word on the medium line — a FRAME is glazed too
+ *  ("Framed and glazed"), and a title's "Maple Glazed Donut" is a subject */
+const GLAZED_RE = /(?<!framed and )\bglazed\b(?!\s+(?:and )?fram)/i;
+/** a cast / carved / fabricated material — never a ceramic */
+const NON_CERAMIC_MATERIAL_RE = /\b(?:bronze|silver|argent|gold|repouss\w*|steel|aluminu?m|aluminium|iron|metal|wood|marble|stone|plaster|resin|vinyl|plastic|fiberglass|glass|lead|tin)\b/i;
+function isCeramicWork(l: Lot, title: string, medium: string): boolean {
+  const md = `${medium} | ${descHeadOf(l, 400)}`;
+  const head = `${title} | ${md}`;
+  // a bronze cast after a clay model ("bronze … the terracotta model") is a bronze
+  if (/\bbronze\b/i.test(md) && !/madoura/i.test(head)) return false;
+  if (CERAMIC_WORK_RE.test(head)) return true;
+  if (PORCELAIN_RE.test(head)) return VESSEL_RE.test(head);
+  if (GLAZED_RE.test(md) && !/\bframed\b/i.test(head)) return true;
+  // a Picasso sculpture lot with no material line is a Madoura edition (his
+  // cast works always name the bronze / sheet metal); Wright's bare "Tête"
+  return l.artist === 'pablo-picasso' && !NON_CERAMIC_MATERIAL_RE.test(head);
+}
 function artKind(formKey: string, category: string, title: string, medium: string): string {
   const tm = `${title} ${medium}`;
   let k = ART_KIND[formKey] ?? null;
   if (formKey === 'object-edition') k = category === 'sculpture' ? 'sculpture' : 'prints';
+  // (wave 5) a gallery mailer / invitation / ticket or a felt banner is filed
+  // by its category ("Crying Girl" offset mailer → prints, "Les deux hiboux"
+  // crayon-drawn announcement → originals) — 'other' held them
+  if (formKey === 'ephemera' || formKey === 'textile') k = ART_CAT_KIND[category] ?? null;
+  const bookText = STRONG_PRINT_WORD_RE.test(tm) ? tm.replace(/\b(?:published|edited) by\b/gi, ' ') : tm;
   if (k === 'books' && (/\bposters?\b/i.test(tm) || (ART_PRINT_OBJECT_RE.test(tm) && !/\bbooks?\b|\bvolumes?\b|\bvols?\./i.test(title)))) k = 'prints';
-  else if (k !== 'books' && ARTIST_BOOK_RE.test(tm) && !/\bplates?\b|\bfrom\b|\bportfolio\b/i.test(title)) k = 'books';
+  else if (k !== 'books' && ARTIST_BOOK_RE.test(bookText) && !/\bplates?\b|\bfrom\b|\bportfolio\b/i.test(title)) k = 'books';
   return k ?? ((formKey === 'unknown' || formKey === 'design') ? ART_CAT_KIND[category] : null) ?? 'other';
 }
 
@@ -295,15 +384,18 @@ const DESIGN_MATERIALS = ['walnut', 'teak', 'oak', 'rosewood', 'plywood', 'steel
 // (Bonhams prints the form there). Nouns carry no trailing \b: Bonhams glues
 // the next field on ("Committee' Chairscirca 1953").
 const DESIGN_KIND_WORDS: [string, RegExp][] = [
-  ['lighting', /\b(?:lamps?|lampe|lighting|light fixture|wall light|ceiling light|floor light|potence|sconces?|applique|lanterns?|chandeliers?)/i],
+  ['lighting', /\b(?:lamps?|lampe|lighting|light fixture|wall[- ]light|ceiling light|floor light|potence|sconces?|applique|lanterns?|chandeliers?)/i],
   // (wave 4) + a wall unit, a bahut, a buffet / commode / vitrine / étagère
   ['case-storage', /\besus?\b|\b(?:eames storage unit|storage units?|wall units?|cabinets?|chests?|bookcases?|biblioth[eè]que|room divider|wall case|credenza|sideboards?|bahuts?|buffets?|commodes?|vitrines?|[ée]tag[eè]res?|dressers?|rangement|kornblut|pj-r-|wardrobes?|armoire|shelv(?:es|ing)|bookshel)/i],
   // (wave 4) + a banquette
-  ['seating', /\bbanquettes?\b|\b(?:lcw|lcm|dcw|dcm|dsr|dsw|dsx|dss|dar|dax|rar|raw|rkr|pkw|pkc|lar|lax|dkr|dkx|es ?\d{3}|670|671)(?:s|-?\d)?\b|\b(?:pj-si|chairs?|armchairs?|fauteuils?|chaises?|chaise longue|lounge|stools?|tabourets?|bench(?:es)?|settees?|sofas?|canap[ée]|daybeds?|rockers?|rocking|ottomans?|seating|kangaroo|committee)/i],
+  ['seating', /\bbanquettes?\b|\b(?:lcw|lcm|dcw|dcm|dsr|dsw|dsx|dss|dar|dax|daw|rar|raw|rkr|pkw|pkc|lar|lax|lkr|lkx|dkr|dkx|dkw|es ?\d{3}|670|671)(?:s|-?\d)?\b|\b(?:pj-si|chairs?|armchairs?|fauteuils?|chaises?|chaise longue|lounge|stools?|tabourets?|bench(?:es)?|settees?|sofas?|canap[ée]|daybeds?|rockers?|rocking|ottomans?|seating|kangaroo|committee)/i],
   // (wave 4) + Jeanneret's IT-1 table code
-  ['tables', /\bit-?1\b|\b(?:etr|ltr|ctw|otw|dtw|etw)(?:s|-?\d)?\b|\b(?:pj-ta|pj-bu|tables?|gu[ée]ridon|compas|desks?|bureau|frenchman'?s cove|minguren|dining suite|sundra|conoid dining)/i],
+  ['tables', /\bit-?1\b|\b(?:etr|ltr|ctw|otw|dtw|etw|ctm)(?:s|-?\d)?\b|\b(?:pj-ta|pj-bu|tables?|gu[ée]ridon|compas|desks?|bureau|frenchman'?s cove|minguren|dining suite|sundra|conoid dining)/i],
 ];
 function designKind(formKey: string, title = '', desc = ''): string {
+  // (wave 5) a "table lamp" / "desk lamp" is lighting, whatever the form key
+  // read first ("Table Lamp1966walnut" — Bonhams glues the date on)
+  if (/\b(?:table|desk|floor|standard|wall|reading)[- ]?lamps?/i.test(title)) return 'lighting';
   if (formKey.startsWith('seating')) return 'seating';
   if (formKey.startsWith('table') || formKey === 'desk') return 'tables';
   if (formKey === 'case') return 'case-storage';
@@ -318,6 +410,27 @@ function designKind(formKey: string, title = '', desc = ''): string {
   }
   return 'objects';
 }
+
+// ── watches ─────────────────────────────────────────────────────────────────
+/** (wave 5) a clock in a watch maker's sale ("desk clock", "Pendulette",
+ *  "SILVER TRAVEL TIMEPIECE") — never the "crown at 4 o'clock" of a watch */
+const WATCH_CLOCK_RE = /(?<!o['’])\bclocks?\b|\bpendulettes?\b|\bpendules?\b|\b(?:desk|table|travel|carriage|mantel|boudoir|alarm|car|dashboard)[- ]timepieces?\b/i;
+/** a watch named anywhere in the title (a watch box is not a watch) */
+const WATCH_NOUN_RE = /wrist ?watch|\bwatch(?:es)?\b(?!\s*(?:box(?:es)?|winders?|winding|stands?|straps?|cases\b|rolls?|pouch|display|holders?))|\bmontres?\b|\bchronograph|\btimepieces?\b|\bpocket\b/i;
+/** an accessory noun in the lot's lead phrase */
+const WATCH_ACCESSORY_RE = /\b(?:winders?|winding (?:box|case)|watch (?:box(?:es)?|stands?|cases\b|rolls?|pouch|display|holders?)|presentation box(?:es)?|boxes|straps?|buckles?|deployant|ashtrays?|statues?|statuettes?|figurines?|display(?: stand)?s?|dealer(?:'s)? signs?|accessor(?:y|ies))\b/i;
+
+// ── pokémon ─────────────────────────────────────────────────────────────────
+/** a slab grade: grader + number ("PSA GEM MT 10", "BGS PRISTINE 10", "CGC 9.5") */
+const POKE_SLAB_RE = /\b(?:psa|bgs|cgc|sgc)\s+(?:[a-z]+[-+/ ]*){0,4}?\d{1,2}(?:\.5)?\b/i;
+const POKE_PACK_WORD_RE = /\b(?:packs?|sealed|unopened|booster|box(?:es)?)\b/i;
+/** non-card pieces: never cards whatever they include */
+const POKE_MEMORABILIA_RE = /\b(?:shikishi|film reels?|film cels?|skateboards?|skate decks?|plush(?:ies)?|plushes)\b/i;
+/** ...and the ones a card can be named after ("#1 Trophy Pikachu", "Trophy Card") */
+const POKE_MEMORABILIA_LOOSE_RE = /\b(?:troph(?:y|ies)(?! cards?)|figurines?|statues?|figures?(?! collection| box))\b/i;
+/** multi-card lots and sets — a set NAME ("Legendary Collection") is not one */
+const POKE_LOTS_RE = /\blots? of\b|\b(?:near[- ])?complete (?:master )?sets?\b|\b(?:card|graded|slabs?) collection\b|-graded (?:card )?collection\b|\bcollection \((?!\d+ (?:packs?|boxes|cases?|tins?|blisters?)\b)\d|\(\d+ (?:different|cards?)\)/i;
+const POKE_ECARD_RE = /\b(?:aquapolis|skyridge|expedition|e-?card)\b/i;
 
 // ── the stamps ──────────────────────────────────────────────────────────────
 export interface SubCatStamp { subCat: string | null; drill: string | null; flown: boolean | null }
@@ -338,6 +451,9 @@ export interface SubCatMaps {
   cardPlayer?: (l: Lot) => string | null;
   /** (wave 3) sports: card SET (year|set) → sport */
   bySet?: Map<string, string>;
+  /** (Oct 8 sports audit) sports: a frequent MULTI-WORD player name (normalized,
+   *  see nameKey) → sport — read off the title when no slug was parsed */
+  byName?: Map<string, string>;
   /** the set keys of a card row, most specific first */
   setOf?: (l: Lot) => string[];
   /** (wave 3) culture: subject (person / franchise) → domain */
@@ -366,14 +482,64 @@ export function watchFamilyOf(artist: string, hay: string): string | null {
   return null;
 }
 
+/** (Oct 8 sports audit) the player-name join key: lower case, letters / digits
+ *  / apostrophes only, single-spaced */
+export const nameKey = (s: string): string => s.toLowerCase().replace(/[’]/g, "'").replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim();
+/** a frequent multi-word player name the title spells out ("… Shohei Ohtani …"):
+ *  every 2- and 3-word run of the title, looked up whole — never a single
+ *  word, never a substring */
+export function sportByName(title: string, byName: Map<string, string>): string | null {
+  const w = nameKey(title).split(' ').filter(Boolean);
+  for (let i = 0; i < w.length; i++) {
+    for (const n of [3, 2]) {
+      if (i + n > w.length) continue;
+      const sp = byName.get(w.slice(i, i + n).join(' '));
+      if (sp) return sp;
+    }
+  }
+  return null;
+}
+/** a "player" slug that is a lot's opening words, not a person ("a-pair-of" —
+ *  Christie's "A Pair of Staffordshire Figures" read tennis off it) */
+export const JUNK_PLAYER_SLUG_RE = /^an?-(?![a-z]-)|^(?:pair|lot|set|group|collection|large|small|two|three|four|five|six|seven|eight|nine|ten|\d+)-|-(?:of|and|pair|lot|set|collection|group|figures?)(?:-|$)/;
+/** a learned "player" name that is a team, a place, a lot phrase or a band
+ *  ("Los Angeles", "Baseball Hall", "New York Giants", "The Beatles", "Babe Ruth
+ *  Original") — never a byName key */
+export const NOT_PERSON_NAME_RE = /\b(?:the|of|a|an|and|los|las|angeles|new|york|san|st|saint|louis|francisco|diego|chicago|boston|brooklyn|detroit|philadelphia|pittsburgh|cleveland|cincinnati|washington|baltimore|kansas|city|england|green|bay|hall|fame|all|star|stars|original|vintage|multi|signed|team|baseball|football|basketball|hockey|boxing|golf|soccer|club|cup|set|group|pair|lot|collection|best|home|run|nfl|nba|mlb|nhl|nl|al|pro|modern|great|greats|company|award|awards|banquet|wars|decals|type|national|american|league|series|world|olympic|olympics|summer|winter|games|game|rookie|card|cards|giants|yankees|dodgers|cubs|cardinals|sox|red|white|braves|mets|rangers|celtics|bulls|lakers|knicks|bears|jets|rams|patriots|padres|angels|browns|highlanders|beaneaters)\b/i;
+/** Goldin stamps 'Golf' on any "Masters" — a He-Man "Masters of the Universe"
+ *  cel or a SkyBox "Gem Masters" Barry Bonds card is not golf */
+const GOLF_FALSE_STAMP_RE = /\bmasters of the universe\b|\bgem masters\b|\bold masters?\b|\bgrand ?masters?\b|\bmetal universe\b/i;
+/** (Oct 8 sports audit) the card brands that print one sport when the title
+ *  names none: modern Bowman (1989+; Bowman University / Football / Basketball
+ *  / Hockey say so), Topps Now / Heritage / Update, NPB / KBO */
+const BRAND_BASEBALL_RE = /\bbowman\b(?!.*\b(?:football|basketball|hockey|university|college|draft picks? (?:football|basketball)|nfl|nba|nhl|wnba)\b)|\btopps (?:now|heritage|update|series [12]|chrome update)\b(?!.*\b(?:basketball|football|soccer|f1|formula|ufc|wnba|ucl|uefa|mls|wwe|nba|nfl|nhl|premier|bundesliga|la liga)\b)|\bnpb\b|\bkbo\b/i;
+function brandDefaultSport(title: string): string | null {
+  if (!BRAND_BASEBALL_RE.test(title) || !/\bcards?\b|#|\bpsa\b|\bbgs\b|\bsgc\b|\bbox(?:es)?\b|\bpacks?\b|\brookie\b|\bauto(?:graph)?s?\b|\brefractor\b/i.test(title)) return null;
+  // vintage Bowman (1948-55) printed baseball AND football / basketball
+  const y4 = title.match(/\b(19[3-9]\d|20[0-3]\d)\b/);
+  const y2 = title.match(/^\s*(\d\d)\s/); // Goldin's two-digit years ("97 Bowman's Best …")
+  const yr = y4 ? +y4[1] : y2 ? (+y2[1] < 40 ? 2000 + +y2[1] : 1900 + +y2[1]) : null;
+  if (/\bbowman\b/i.test(title) && !/\btopps\b/i.test(title) && (yr == null || yr < 1989)) return null;
+  return 'baseball';
+}
+
 export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
   const vert = ARTIST_MARKET[l.artist as keyof typeof ARTIST_MARKET];
   const title = (l.title as string) || '';
   const formKey = (l.formKey as string) || 'unknown';
 
   if (vert === 'sports') {
-    const subCat = SPORTS_KIND[l.artist as string] ?? null;
+    const kind = SPORTS_KIND[l.artist as string] ?? null;
+    // (Oct 8) a Yu-Gi-Oh! / One Piece / Lorcana / Magic card or box filed as a
+    // sports card keeps its slug but is no sports card: it carries no sport
+    // and the card comp paths skip it (build-market, emit-value-book)
+    if ((kind === 'cards' || kind === 'wax') && NON_SPORT_TCG_RE.test(title)) return { subCat: 'tcg-other', drill: null, flown: null };
+    // (Oct 8 sports audit, Lots & Sets) a multi-card bulk lot ("Lot of (25)",
+    // "(400) … Cards", "Shoebox Collection", "Complete Set") is its own kind —
+    // the same detector parseCard's `multi` reads, so it never comps as a card
+    const subCat = kind === 'cards' && isCardLotTitle(title) ? 'card-lots' : kind;
     let drill = sportSlugOf(l.sport);
+    if (drill === 'golf' && GOLF_FALSE_STAMP_RE.test(title) && !/\bgolf/i.test(title)) drill = null;
     // (wave 3) a cricket / rugby / polo lot has no drill of ours
     if (!drill && NO_SPORT_DRILL_RE.test(title.replace(/\bpolo grounds\b/gi, ' '))) return { subCat, drill: null, flown: null };
     // (wave 3) a single-sport sale names the sport of every lot in it
@@ -382,14 +548,15 @@ export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
     // player vote: a name two athletes share ("1933 Goudey #214 John Kerr" —
     // the 1920s infielder, not the 1960s NBA center) must not take the other
     // one's sport (Goudey's multi-sport Sport Kings excepted)
-    if (!drill && subCat === 'cards') {
+    if (!drill && kind === 'cards') {
       const y = title.match(/^\s*(?:\d{1,4}\s+)?(?:(?:signed|autographed)\s+)?(18[6-9]\d|19[0-3]\d|194[01])\b/i);
       if (y && (BASEBALL_CODE_ANY_RE.test(title) || PREWAR_BASEBALL_ISSUE_RE.test(title)) && !NON_BASEBALL_ISSUE_RE.test(title) && !/sport kings|\bR338\b/i.test(title) && !sportWordOf(title)) drill = 'baseball';
     }
     if (!drill && sportMaps) {
       const pid = l._pid != null ? String(l._pid) : null;
       const card = l._card as { playerSlug?: string } | undefined;
-      const player = (l.playerSlug as string) || card?.playerSlug || (sportMaps.cardPlayer ? sportMaps.cardPlayer(l) : null) || null;
+      const raw = (l.playerSlug as string) || card?.playerSlug || (sportMaps.cardPlayer ? sportMaps.cardPlayer(l) : null) || null;
+      const player = raw && !JUNK_PLAYER_SLUG_RE.test(raw) ? raw : null;
       drill = (pid && sportMaps.byPid.get(pid)) || (player && sportMaps.byPlayer.get(player)) || null;
     }
     if (!drill) drill = sportFromText(title);
@@ -402,15 +569,29 @@ export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
     // ("1957 Topps Football", "1935 National Chicle Football"): a pre-1981
     // card there that names no sport, no known player and no learned set is
     // baseball (DEV: 25 of 29 such labelled lots)
-    if (!drill && subCat === 'cards' && VINTAGE_CARD_HOUSES.has(String(l.auctionHouse || ''))) {
+    if (!drill && kind === 'cards' && VINTAGE_CARD_HOUSES.has(String(l.auctionHouse || ''))) {
       const y = title.match(/\b(18[6-9]\d|19\d\d)\b/);
       if (y && +y[1] <= 1980 && !NON_BASEBALL_ISSUE_RE.test(title)) drill = 'baseball';
     }
+    // (Oct 8 sports audit, sport facet) a frequent multi-word player NAME the
+    // title spells out, then the one-sport card brands
+    if (!drill && sportMaps?.byName && !NO_SPORT_DRILL_RE.test(title)) drill = sportByName(title, sportMaps.byName);
+    if (!drill && (kind === 'cards' || kind === 'wax')) drill = brandDefaultSport(title);
     return { subCat, drill, flown: null };
   }
 
   if (vert === 'watches') {
-    const subCat = formKey === 'wristwatch' ? 'wristwatches'
+    // (wave 5) the non-watches the taxonomy filed under wristwatches: a desk /
+    // travel / table timepiece is a clock, and a lot that NAMES no watch but
+    // leads with a winder / box / strap / ashtray / statue is an accessory
+    // (Cartier's movement maker "European Watch & Clock Co." and a striking
+    // pocket "clock watch" are watches)
+    const clockText = title.replace(/\b(?:watch\s*(?:&|and)\s*clock|clock\s*(?:&|and)\s*watch)\b/gi, ' ');
+    const isClock = WATCH_CLOCK_RE.test(clockText) && !/wrist ?watch|bracelet watch|pocket ?watch|clock[- ]?watch/i.test(clockText);
+    const isAccessory = !WATCH_NOUN_RE.test(title) && WATCH_ACCESSORY_RE.test(title.split(/\s+(?:with|on|and|for)\s+|[,;(]/i)[0]);
+    const subCat = isClock ? 'clocks'
+      : isAccessory && formKey !== 'pocket-watch' ? 'watch-accessories'
+      : formKey === 'wristwatch' ? 'wristwatches'
       : formKey === 'pocket-watch' ? 'pocket-watches'
       : formKey === 'clock' ? 'clocks'
       : formKey === 'jewelry' ? 'jewelry' : null;
@@ -434,10 +615,24 @@ export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
     // a card NUMBER makes it a single, whatever product it was pulled from
     // ("Stamp Box Full Art #227 Pikachu", "Card Pack 25th Anniversary #006",
     // "Collector Chest Holo #SM226") — 1.2k singles were filed sealed
-    const subCat = !/#\s?[A-Za-z0-9]/.test(title) && /\b(booster|sealed|unopened|box(es)?|packs?|case|display|tins?|blister|bundle|elite trainer)\b/i.test(title) ? 'pokemon-sealed' : 'pokemon-cards';
+    // (Oct 8) a slab grade with no pack / box word is a graded single ("Tag
+    // Team Tins Sm168 … PSA MINT 9"); the non-card pieces (a shikishi board, a
+    // skateboard deck, a trophy) and the multi-card lots / sets are their own
+    // kinds
+    const numbered = /#\s?[A-Za-z0-9]/.test(title);
+    const slabSingle = POKE_SLAB_RE.test(title) && !POKE_PACK_WORD_RE.test(title);
+    const sealedWord = /\b(booster|sealed|unopened|box(es)?|packs?|case|display|tins?|blister|bundle|elite trainer)\b/i.test(title);
+    const subCat = (POKE_MEMORABILIA_RE.test(title) || (!numbered && !POKE_SLAB_RE.test(title) && POKE_MEMORABILIA_LOOSE_RE.test(title))) ? 'pokemon-memorabilia'
+      // a lot of sealed packs / boxes is still sealed product
+      : POKE_LOTS_RE.test(title) && !sealedWord ? 'pokemon-lots'
+      : !numbered && !slabSingle && sealedWord ? 'pokemon-sealed' : 'pokemon-cards';
+    // the year: four digits, else Goldin's two-digit lead ("99 Pokemon Japanese
+    // Promo …"); the e-Card series (Expedition, Aquapolis, Skyridge — 2003 in
+    // English) closes the WotC vintage era
     const y = (title.match(/\b(19|20)\d{2}\b/) || [])[0];
-    const yr = y ? parseInt(y, 10) : null;
-    const drill = yr ? (yr <= 2002 ? 'vintage' : yr <= 2016 ? 'classic' : 'modern') : null;
+    const y2 = y ? null : title.match(/^\s*'?(\d{2})\s+(?:\S+\s+){0,2}?pok[eé]mon\b/i);
+    const yr = y ? parseInt(y, 10) : y2 ? (+y2[1] >= 90 ? 1900 : 2000) + +y2[1] : null;
+    const drill = POKE_ECARD_RE.test(title) ? 'vintage' : yr ? (yr <= 2002 ? 'vintage' : yr <= 2016 ? 'classic' : 'modern') : null;
     return { subCat, drill, flown: null };
   }
 
@@ -448,17 +643,28 @@ export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
     // (wave 3) the lot's own words, then the subject's domain learned from its
     // worded siblings (a bare "Schuyler Colfax" lot inherits "Schuyler Colfax
     // Signed Document as Vice President"), then the description's head
-    if (!drill) drill = cultureTextDomain(title);
+    // (Oct 8) the new historical cues (a Titanic, an outlaw, an airship) name
+    // a FILM in a film / music sale ("THE OUTLAW" one-sheet, "Titanic, 1997")
+    const sale = (l.saleName as string) || '';
+    const textDomain = (s: string): string | null => {
+      const d = cultureTextDomain(s);
+      return d && SHOWBIZ_SALE_RE.test(sale) && (d === 'historic' || d === 'crime' || d === 'aviation') ? null : d;
+    };
+    if (!drill) drill = textDomain(title);
     if (!drill && sportMaps?.bySubject && Array.isArray(subjects)) {
       // a subject the curated list files 'other' (Civil War, Titanic, WWII)
       // spans domains — it is never learned
       for (const s of subjects) { const d = SUBJECT_DOMAINS[s] ? null : sportMaps.bySubject.get(s); if (d) { drill = d; break; } }
     }
-    if (!drill) drill = cultureTextDomain(descHeadOf(l, 260));
+    if (!drill) drill = textDomain(descHeadOf(l, 260));
     if (!drill) {
-      const sale = (l.saleName as string) || '';
       for (const [re, d] of CULT_SALE_DOMAIN) if (re.test(sale)) { drill = d; break; }
     }
+    // (Oct 8) a 'space-science' figure is a space program, a scientist or an aviator
+    if (drill === 'space-science') drill = spaceScienceDrillOf(`${title} ${(subjects || []).join(' ')}`);
+    // (Oct 8) a couture piece (a Dior gown from a sale, a McQueen jacket) is
+    // not a costume or prop — unless a named person wore / owned it
+    if ((subCat === 'worn-personal' || subCat === 'props') && COUTURE_RE.test(title) && !CELEB_WORN_RE.test(title)) return { subCat: 'other', drill, flown: null };
     return { subCat, drill, flown: null };
   }
 
@@ -478,7 +684,8 @@ export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
   }
 
   if (vert === 'art') {
-    return { subCat: artKind(formKey, (l.category as string) || '', title, String(l.medium || '')), drill: null, flown: null };
+    const kind = artKind(formKey, (l.category as string) || '', title, String(l.medium || ''));
+    return { subCat: kind === 'sculpture' && isCeramicWork(l, title, String(l.medium || '')) ? 'ceramics' : kind, drill: null, flown: null };
   }
 
   if (vert === 'design') {

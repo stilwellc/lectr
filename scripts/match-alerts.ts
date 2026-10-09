@@ -21,7 +21,7 @@ import fs from 'fs';
 import path from 'path';
 import { readCorpus, SERVED_DIR } from './corpus-io';
 import { marketOf } from '../app/constants';
-import { taxonOf } from '../app/lib/taxonomy';
+import { taxonOf, subMatches } from '../app/lib/taxonomy';
 import { priorityOf } from '../app/lib/priority';
 
 const url = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '');
@@ -58,7 +58,7 @@ export function followHits(q: Query, fresh: any[], now: number): any[] {
     if (q.follow === 'house' && l.auctionHouse !== q.house) continue;
     if (q.follow === 'cat') {
       const t = taxonOf(l);
-      if (t.cat !== q.cat || (q.sub && t.sub !== q.sub)) continue;
+      if (t.cat !== q.cat || (q.sub && !subMatches(t.cat, q.sub, t.sub))) continue;
     }
     const p = priorityOf(l, now);
     if (!p || p.a < 2500 || (p.ev <= 0 && p.src !== 'est')) continue;

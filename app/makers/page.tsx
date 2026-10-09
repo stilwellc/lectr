@@ -29,6 +29,9 @@ import type { AuctionLot, MarketStats } from '../types';
 import TriageBar from '../components/TriageBar';
 import { useUrlState, useLastVisit, passesTriage, TRIAGE_DEFAULTS, triageFromParams, triageToParams, type TriageFilters } from '../lib/feed-filters';
 import { byPriority, priorityOf } from '../lib/priority';
+import { taxonOf, SUBS, CAT_LABEL, SPORTS, type CatKey } from '../lib/taxonomy';
+import { useFollows, catFollow } from '../lib/follows';
+import type { CatStat } from '../../scripts/cat-stats';
 
 /**
  * Makers — THE DIRECTORY, trading grade (Aug 2026, pass 3). The ledger of
@@ -106,7 +109,24 @@ interface Row {
   liveLots: AuctionLot[];
   /** the "matters most" score of the maker's best live lot (app/lib/priority) */
   topScore: number;
+  /** where "Open the dossier" / "+N more" lead — sub-category rows (Oct 9) go
+   *  to the feed filtered to that sub; maker rows to /makers/<slug> */
+  href?: string;
 }
+
+/* ── COLLECTION MARKETS (Oct 9) — where the "maker" is really a category,
+   the roster lists CLEAN sub-categories (app/lib/taxonomy + cat-stats.json)
+   instead of one pseudo-maker row (TCG used to be a single "Pokémon" row). ── */
+const COLLECTION_CATS: { cat: CatKey; market: Market; prefix: string }[] = [
+  { cat: 'sports-cards', market: 'sports', prefix: 'Cards' },
+  { cat: 'sports-memorabilia', market: 'sports', prefix: 'Memorabilia' },
+  { cat: 'tcg', market: 'tcg', prefix: '' },
+  { cat: 'space-science', market: 'science', prefix: '' },
+  { cat: 'entertainment', market: 'culture', prefix: 'Entertainment' },
+  { cat: 'historical', market: 'culture', prefix: 'Historical' },
+];
+const COLLECTION_MARKETS = new Set<Market>(COLLECTION_CATS.map(c => c.market));
+const SUBROW = 'c:';
 
 type SortKey = 'matters' | 'sold' | 'live' | 'flags' | 'median' | 'delta' | 'name';
 // Oct 8: "Matters" (the maker's best live lot by app/lib/priority) is the
@@ -530,7 +550,7 @@ const MakerRowItem = React.memo(function MakerRowItem({
                 );
               })}
               {r.live > 3 && (
-                <Link href={`/makers/${r.slug}`} className="mkx-live-more">
+                <Link href={r.href ?? `/makers/${r.slug}`} className="mkx-live-more">
                   +{(r.live - 3).toLocaleString()} more on the block <Flick size={9} style={{ marginLeft: 4 }} />
                 </Link>
               )}
@@ -538,8 +558,8 @@ const MakerRowItem = React.memo(function MakerRowItem({
           )}
 
           <div className="mkx-actions">
-            <Link href={`/makers/${r.slug}`} className="ray-call-btn ray-call-btn-primary">
-              Open the dossier
+            <Link href={r.href ?? `/makers/${r.slug}`} className="ray-call-btn ray-call-btn-primary">
+              {r.href ? 'See every lot' : 'Open the dossier'}
             </Link>
             <button type="button" className="mk-chip" data-on={isSel || undefined} onClick={() => onToggleCompare(r.slug)}>
               {isSel ? 'In compare' : 'Add to compare'}
@@ -581,14 +601,17 @@ export default function MakersPage() {
   // follows ride the saved-search plumbing (FollowButton's exact semantics)
   const { authEnabled, user, openLogin } = useAuth();
   const { searches, save: saveSearch, remove: removeSearch } = useSavedSearches();
+  const { follows: allFollows, toggle: toggleCatFollow } = useFollows();
   const followedSet = useMemo(() => {
     const s = new Set<string>();
     for (const sr of searches) {
       const p = (sr.query as { player?: string }).player;
       if (p) s.add(p);
     }
+    // sub-category rows (c:<cat>:<sub>) — category follows, signed in or not
+    for (const f of allFollows) if (f.kind === 'cat' && f.key.includes(':')) s.add(`${SUBROW}${f.key}`);
     return s;
-  }, [searches]);
+  }, [searches, allFollows]);
 
   // ── controls — restored from the URL, written back (owned keys only) ──
   const [q, setQ] = useState('');
@@ -597,6 +620,8 @@ export default function MakersPage() {
   const [fFlagged, setFFlagged] = useState(false);
   const [fFollowing, setFFollowing] = useState(false);
   const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
+  // sports collection rows: one sport at a time (cat-stats "cat:sub:sport")
+  const [sportPick, setSportPick] = useState<string | null>(null);
   // the triage row narrows each maker's LIVE book (window, sub-category,
   // house, value floor, new); the roster's sold history is untouched
   const [triage, setTriage] = useUrlState<TriageFilters>(TRIAGE_DEFAULTS, triageFromParams, triageToParams);
@@ -622,6 +647,8 @@ export default function MakersPage() {
     if (p.get('fw') === '1') setFFollowing(true);
     const s = p.get('sort') as SortKey | null;
     if (s && SORTS.some(x => x.k === s)) setSort(s);
+    const sp = p.get('spk');
+    if (sp && SPORTS.some(x => x.key === sp)) setSportPick(sp);
     const c = p.get('cols');
     if (c) {
       const parsed = c.split('.').filter((k): k is ColKey => COLS.some(x => x.k === k));
@@ -632,7 +659,8 @@ export default function MakersPage() {
   }, []);
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
-    ['q', 'on', 'vi', 'fl', 'fw', 'sort', 'cols', 'open'].forEach(k => p.delete(k));
+    ['q', 'on', 'vi', 'fl', 'fw', 'sort', 'cols', 'open', 'spk'].forEach(k => p.delete(k));
+    if (sportPick) p.set('spk', sportPick);
     if (q.trim()) p.set('q', q.trim());
     if (fLive) p.set('on', '1');
     if (fVerified) p.set('vi', '1');
@@ -645,7 +673,7 @@ export default function MakersPage() {
     try {
       window.history.replaceState(window.history.state, '', `${qs ? `?${qs}` : window.location.pathname}${window.location.hash}`);
     } catch { /* ignore */ }
-  }, [q, fLive, fVerified, fFlagged, fFollowing, sort, cols, open]);
+  }, [q, fLive, fVerified, fFlagged, fFollowing, sort, cols, open, sportPick]);
 
   const searchRef = useRef<HTMLInputElement | null>(null);
 
@@ -720,7 +748,16 @@ export default function MakersPage() {
     return allLots.filter(l => mktSet.has(l.artist) && isLiveUpcoming(l, today));
   }, [allLots, mktSet]);
 
-  const rows = useMemo<Row[]>(() => ARTISTS.map(a => {
+  // sold stats per clean category / sub / sport (scripts/cat-stats, nightly)
+  const [catStats, setCatStats] = useState<Record<string, CatStat> | null>(null);
+  useEffect(() => {
+    let on = true;
+    fetch('/data/ray/cat-stats.json').then(r => (r.ok ? r.json() : null))
+      .then(j => { if (on && j?.rows) setCatStats(j.rows); }).catch(() => {});
+    return () => { on = false; };
+  }, []);
+
+  const makerRows = useMemo<Row[]>(() => ARTISTS.map(a => {
     const st = statsByArtist[a.slug] || null;
     const hist = st?.priceHistory || [];
     const sparkVals = hist.slice(-12).map(p => p.medianPrice || p.avgPrice).filter(v => v > 0);
@@ -764,6 +801,86 @@ export default function MakersPage() {
     };
   }), [statsByArtist, heroBySlug, liveBySlug, verifiedBySlug]);
 
+  // live lots per clean sub (same triage as the maker rows), best first
+  const liveBySub = useMemo(() => {
+    const m = new Map<string, AuctionLot[]>();
+    const today = localToday();
+    for (const l of allLots) {
+      if (!isLiveUpcoming(l, today)) continue;
+      if (!passesTriage(l, triage, { today, prevVisitDay })) continue;
+      const t = taxonOf(l);
+      if (sportPick && (t.cat === 'sports-cards' || t.cat === 'sports-memorabilia') && t.sport !== sportPick) continue;
+      const k = `${t.cat}:${t.sub}`;
+      const arr = m.get(k); if (arr) arr.push(l); else m.set(k, [l]);
+    }
+    const cmp = byPriority(Date.now());
+    m.forEach(a => a.sort(cmp));
+    return m;
+  }, [allLots, triage, prevVisitDay, sportPick]);
+
+  const subRows = useMemo<Row[]>(() => {
+    if (!catStats) return [];
+    const out: Row[] = [];
+    for (const c of COLLECTION_CATS) {
+      for (const sub of SUBS[c.cat]) {
+        const key = `${c.cat}:${sub.key}`;
+        const sportsCat = c.cat === 'sports-cards' || c.cat === 'sports-memorabilia';
+        const st = catStats[sportsCat && sportPick ? `${key}:${sportPick}` : key] || null;
+        const lots = liveBySub.get(key) || [];
+        if (!st && !lots.length) continue;
+        const hist = (st?.q || []).map(([date, med, n]) => ({ date, medianPrice: med, avgPrice: med, totalSales: n, highPrice: 0 }));
+        const meds = hist.map(h => h.medianPrice).filter(v => v > 0);
+        let rising = 0;
+        for (let i = meds.length - 1; i > 0 && meds[i] > meds[i - 1]; i--) rising++;
+        const recDate = st?.record?.date ? Date.parse(st.record.date) : NaN;
+        const stats = st ? ({
+          totalSoldTracked: st.sold, sold12m: st.sold12m, medianPriceLast12Months: st.median12m,
+          totalAuctionRevenue: st.revenue, priceHistory: hist, houseDistribution: [],
+          recordPrice: st.record?.price ?? 0, recordTitle: st.record?.title ?? '', recordDate: st.record?.date ?? '',
+          recordHouse: st.record?.house ?? '',
+        } as unknown as MarketStats) : null;
+        const params = new URLSearchParams({ cat: c.cat, sub: sub.key, tab: 'all' });
+        out.push({
+          slug: `${SUBROW}${key}`,
+          label: c.prefix ? `${c.prefix} · ${sub.label}` : sub.label,
+          market: c.market,
+          discipline: sportsCat && sportPick ? (SPORTS.find(x => x.key === sportPick)?.label ?? null) : CAT_LABEL[c.cat],
+          stats,
+          hero: lots.find(l => l.imageUrl)?.imageUrl || null,
+          spark: meds.length >= 4 ? meds : null,
+          live: lots.length,
+          flags: lots.filter(l => l.signal?.label === 'Below Market').length,
+          sold: st?.sold ?? null,
+          median: st?.median12m || null,
+          revenue: st?.revenue ?? 0,
+          velocity: st?.sold12m ?? 0,
+          velocitySince: null,
+          record: st?.record?.price ?? null,
+          verified: null,
+          thin: !!st && st.sold < 50,
+          rising,
+          recordFresh: !isNaN(recDate) && Date.now() - recDate < 365 * 86400e3 ? String(st!.record!.date).slice(0, 4) : null,
+          liveLots: lots,
+          topScore: lots.length ? (priorityOf(lots[0])?.score ?? 0) : -1,
+          href: `/?${params.toString()}`,
+        });
+      }
+    }
+    return out;
+  }, [catStats, liveBySub, sportPick]);
+
+  // collection markets swap their pseudo-maker rows for the sub rows once
+  // cat-stats has loaded; art/design/watches keep their real makers
+  const rows = useMemo<Row[]>(
+    () => (subRows.length
+      ? [...makerRows.filter(r => !COLLECTION_MARKETS.has(r.market)), ...subRows]
+      : makerRows),
+    [makerRows, subRows]
+  );
+  const inMarket = useCallback((r: Row) => activeKey === 'all' || r.market === activeKey, [activeKey]);
+  // the roster as shown — collection markets count their sub rows, not slugs
+  const rosterTotal = useMemo(() => rows.filter(inMarket).length, [rows, inMarket]);
+
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const cmp = (a: Row, b: Row): number => {
@@ -778,14 +895,14 @@ export default function MakersPage() {
       }
     };
     return rows
-      .filter(r => mktSet.has(r.slug))
+      .filter(inMarket)
       .filter(r => !needle || r.label.toLowerCase().includes(needle) || (r.discipline ?? '').toLowerCase().includes(needle))
       .filter(r => !fLive || r.live > 0)
       .filter(r => !fVerified || !!r.verified)
       .filter(r => !fFlagged || r.flags > 0)
       .filter(r => !fFollowing || followedSet.has(r.slug))
       .sort(cmp);
-  }, [rows, mktSet, q, fLive, fVerified, fFlagged, fFollowing, followedSet, sort]);
+  }, [rows, inMarket, q, fLive, fVerified, fFlagged, fFollowing, followedSet, sort]);
 
   const groups = useMemo(() =>
     MARKETS
@@ -819,9 +936,9 @@ export default function MakersPage() {
       }),
     [rows, activeKey, demand]);
 
-  const totalLive = useMemo(() => rows.filter(r => mktSet.has(r.slug)).reduce((s, r) => s + r.live, 0), [rows, mktSet]);
-  const totalFlags = useMemo(() => rows.filter(r => mktSet.has(r.slug)).reduce((s, r) => s + r.flags, 0), [rows, mktSet]);
-  const verifiedCount = useMemo(() => rows.filter(r => mktSet.has(r.slug) && r.verified).length, [rows, mktSet]);
+  const totalLive = useMemo(() => rows.filter(inMarket).reduce((s, r) => s + r.live, 0), [rows, inMarket]);
+  const totalFlags = useMemo(() => rows.filter(inMarket).reduce((s, r) => s + r.flags, 0), [rows, inMarket]);
+  const verifiedCount = useMemo(() => rows.filter(r => inMarket(r) && r.verified).length, [rows, inMarket]);
 
   // ── THE VERIFIED READ — the strongest CI-verified maker move currently
   // published on the active book: largest |Δ| among the same verifiedMovers
@@ -830,12 +947,14 @@ export default function MakersPage() {
   // (unpublishable by construction, guarded anyway) falls to ink. ──
   const topVerified = useMemo(() => {
     let best: Row | null = null;
-    for (const r of rows) {
+    // makerRows, not rows: the verified indices live on the roster slugs
+    // (e.g. sports-cards), which collection markets now show as sub rows
+    for (const r of makerRows) {
       if (!mktSet.has(r.slug) || !r.verified) continue;
       if (!best || Math.abs(r.verified.changePct) > Math.abs(best.verified!.changePct)) best = r;
     }
     return best;
-  }, [rows, mktSet]);
+  }, [makerRows, mktSet]);
 
   // ── stable callbacks for the memoized rows ──
   // opening a dossier is the explicit ask for the maker's own photograph —
@@ -848,11 +967,16 @@ export default function MakersPage() {
     setCompare(c => c.includes(slug) ? c.filter(s => s !== slug) : c.length >= 4 ? c : [...c, slug]);
   }, []);
   const onToggleFollow = useCallback((slug: string, label: string) => {
+    if (slug.startsWith(SUBROW)) {
+      const [cat, sub] = slug.slice(SUBROW.length).split(':') as [CatKey, string];
+      void toggleCatFollow(catFollow(cat, sub));
+      return;
+    }
     if (!user) { openLogin(); return; }
     const existing = searches.find(s => (s.query as { player?: string }).player === slug);
     if (existing) void removeSearch(existing.id);
     else void saveSearch(`Following ${label}`, { player: slug, playerName: label });
-  }, [user, openLogin, searches, removeSearch, saveSearch]);
+  }, [user, openLogin, searches, removeSearch, saveSearch, toggleCatFollow]);
 
   /* PRE-WARM on the first sign of engagement — one shot, passive listeners,
      removed the moment it fires. First paint stays free of the corpus; a
@@ -1004,7 +1128,7 @@ export default function MakersPage() {
                 // the full roster is 32 named makers + 22 category pseudo-
                 // artists — "54 tracked names" counted categories as names
                 ? `${ROSTER.makers} makers · ${ROSTER.categories} categories`
-                : <CountUp to={rosterCount} format={n => `${Math.round(n)} ${noun}`} duration={900} animate={!fromCache} />}
+                : <CountUp to={rosterTotal} format={n => `${Math.round(n)} ${noun}`} duration={900} animate={!fromCache} />}
               title={<>Every maker, one <Accent>ledger</Accent>.</>}
               sub={
                 <>
@@ -1067,7 +1191,7 @@ export default function MakersPage() {
                     k: 'The verified read', stat: '—', note: 'abstaining',
                     body: `No CI-verified index on the ${activeLabel} book yet — a maker publishes a move only when its 95% interval resolves the sign.`,
                   },
-                  { k: 'The roster', stat: activeKey === 'all' ? ROSTER.makers.toLocaleString() : rosterCount.toLocaleString(), note: activeKey === 'all' ? `makers · ${ROSTER.categories} categories` : noun, body: `Every name lectr tracks on the ${activeLabel} book — sold history, live lots and the engine's flags in one ledger.` },
+                  { k: 'The roster', stat: activeKey === 'all' ? ROSTER.makers.toLocaleString() : rosterTotal.toLocaleString(), note: activeKey === 'all' ? `makers · ${ROSTER.categories} categories` : noun, body: `Every name lectr tracks on the ${activeLabel} book — sold history, live lots and the engine's flags in one ledger.` },
                   { k: 'Verified indexes', stat: verifiedCount.toLocaleString(), note: 'CI-verified indexes', body: 'Repeat-sales reads whose 95% interval resolves the sign — the only price moves the engine will stand behind.' },
                   { k: 'On the block', stat: totalFlags.toLocaleString(), note: 'flagged by the engine', body: totalFlags > 0
                     ? `${totalLive.toLocaleString()} live ${totalLive === 1 ? 'lot' : 'lots'} on the book tonight — ${totalFlags.toLocaleString()} priced under ${totalFlags === 1 ? 'its' : 'their'} comparables.`
@@ -1097,6 +1221,17 @@ export default function MakersPage() {
               prevVisitDay={prevVisitDay}
               label="Narrow the live book"
             />
+            {activeKey === 'sports' && subRows.length > 0 && (
+              <div className="ray-triagebar-row" role="group" aria-label="Sport" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '-4px 0 12px' }}>
+                <button type="button" className="ray-toolbar-pill" data-active={sportPick == null} aria-pressed={sportPick == null} onClick={() => setSportPick(null)}>All sports</button>
+                {SPORTS.map(sp => (
+                  <button key={sp.key} type="button" className="ray-toolbar-pill" data-active={sportPick === sp.key} aria-pressed={sportPick === sp.key}
+                    onClick={() => setSportPick(sportPick === sp.key ? null : sp.key)}>
+                    {sp.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* ── THE FILTER BAR ── */}
@@ -1133,7 +1268,7 @@ export default function MakersPage() {
                 </button>
               )}
               <span className="mk-bar-rule" aria-hidden />
-              <span className="mk-count">{visible.length} of {rosterCount}</span>
+              <span className="mk-count">{visible.length} of {rosterTotal}</span>
               <div className="mk-display">
                 <button type="button" className="mk-chip" data-on={showDisplay || undefined} onClick={() => setShowDisplay(v => !v)} aria-expanded={showDisplay}>
                   Display
