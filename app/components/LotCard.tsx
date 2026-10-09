@@ -147,6 +147,7 @@ function LotCard({
   saved = false,
   onToggleSave,
   lastCrawl,
+  note,
 }: {
   lot: AuctionLot;
   showArtist?: boolean;
@@ -155,6 +156,8 @@ function LotCard({
   onToggleSave?: (lotId: string, lot?: AuctionLot) => void;
   /** the last crawl's ISO date — lets the card mark lots first seen today */
   lastCrawl?: string;
+  /** optional one-line "why it's here" (the shortlist's reasonOf) */
+  note?: string | null;
 }) {
   useLotCardStyles();
   const [modalOpen, setModalOpen] = useState(false);
@@ -569,6 +572,11 @@ function LotCard({
             ? ` · bought in`
             : <> · {isUpcoming ? 'hammers ' : ''}{formatDate(lot.saleDate)}{isUpcoming && lot.saleDateTime && <> · <CloseClock iso={lot.saleDateTime} windowHours={24} /></>}{isUpcoming && lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}</>}
         </div>
+        {note && (
+          <div style={{ fontSize: 12.5, color: 'var(--color-text-secondary)', letterSpacing: '-0.01em', marginTop: -4, marginBottom: 10 }}>
+            {note}
+          </div>
+        )}
         <div style={{ marginTop: 'auto' }}>
           {/* The intelligence leads — the number IS the card's rank. */}
           {buySignal && (

@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { taxonOf, SUBS } from '../taxonomy';
-import { prioStatic, priorityOf, shortlist, urgencyOf } from '../priority';
+import { prioStatic, priorityOf, shortlist, urgencyOf, reasonOf } from '../priority';
 
 const NOW = Date.parse('2026-10-08T12:00:00Z');
 const inHours = (h: number) => new Date(NOW + h * 3_600_000).toISOString();
@@ -80,4 +80,18 @@ test('shortlist: floor, window and caps', () => {
   const out = shortlist(lots, NOW, 20);
   assert.equal(out.length, 2, 'one maker in one sale: ≤2 per maker wins over ≤3 per sale');
   assert.ok(!out.some(l => l.id === 'cheap' || l.id === 'far'));
+});
+
+test('shortlist: the same object listed twice takes one seat', () => {
+  const twin = (id: string) => ({ id, artist: 'jean-prouve', auctionHouse: 'Wright', saleDate: '2026-10-08', saleName: 'Design',
+    title: 'Bench from the Électricité de France, Marcoule', saleDateTime: inHours(6), estimateLow: 20000, estimateHigh: 20000 });
+  const out = shortlist([twin('a'), twin('b')], NOW, 20);
+  assert.deepEqual(out.map(l => l.id), ['a']);
+});
+
+test('reasonOf: close time, value basis, edge', () => {
+  const r = reasonOf({ artist: 'jean-prouve', saleDateTime: inHours(4), estimateLow: 30000, estimateHigh: 30000,
+    signal: { label: 'Below Market' }, value: { signal: { beatRatePct: 52 } } }, NOW);
+  assert.equal(r, 'Closes in 4h · Below market');
+  assert.equal(reasonOf({ artist: 'sports-cards', saleDateTime: inHours(30), value: { expectedHammerUsd: 220000 } }, NOW), 'Closes tomorrow · $220K engine value');
 });

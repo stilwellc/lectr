@@ -7,14 +7,15 @@ import { useRouter } from 'next/navigation';
 import { ARTISTS, ARTIST_LABEL, MARKETS } from '../constants';
 import { useMarket, MARKET_PATH } from '../lib/market';
 import { useRayData } from '../hooks/useRayData';
-import { craftTitle } from '../utils';
+import { craftTitle, formatPrice, formatDate, refLabel } from '../utils';
+import { loadRefList, matchRefs, refHref, searchSold, type RefRow, type SoldHit } from '../lib/search-index';
 import ArtistAvatar from './ArtistAvatar';
 
 interface Item {
   label: string;
   hint: string;
   path: string;
-  kind: 'section' | 'market' | 'maker' | 'sub' | 'lot';
+  kind: 'section' | 'market' | 'maker' | 'sub' | 'lot' | 'ref' | 'sold';
 }
 
 /** Any surface can open the palette by dispatching this window event —
@@ -47,6 +48,21 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
   const homePath = MARKET_PATH[market] || '/';
   const { allLots, market: marketData } = useRayData();
   const upcomingLots = useMemo(() => allLots.filter(l => l.status === 'upcoming' && l.title), [allLots]);
+
+  // THE ARCHIVE (Oct 8): the static search index (scripts/emit-search-index)
+  // was built but never wired — the palette only searched live lots while
+  // promising the corpus. Refs load when the palette opens; sold hits are
+  // fetched per keystroke (debounced; shards are module-cached).
+  const [refs, setRefs] = useState<RefRow[]>([]);
+  const [sold, setSold] = useState<SoldHit[]>([]);
+  useEffect(() => { if (open && !refs.length) loadRefList().then(setRefs).catch(() => {}); }, [open, refs.length]);
+  useEffect(() => {
+    const needle = q.trim();
+    if (!open || needle.length < 3) { setSold([]); return; }
+    let live = true;
+    const t = setTimeout(() => { searchSold(q, 6).then(h => { if (live) setSold(h); }).catch(() => {}); }, 180);
+    return () => { live = false; clearTimeout(t); };
+  }, [q, open]);
 
   const items = useMemo<Item[]>(() => {
     // "On the block" is scoped to the current lander — the count says only
@@ -143,8 +159,22 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
         path: `/lot?id=${encodeURIComponent(l.id)}`,
         kind: 'lot' as const,
       }));
-    return [...itemMatches, ...lotMatches];
-  }, [items, browseItems, q, upcomingLots]);
+    const refMatches: Item[] = refs.length
+      ? matchRefs(q, refs, refLabel, 4).map(h => ({
+        label: `${ARTIST_LABEL[h.row.maker] || h.row.maker} ${refLabel(h.row.ref)}`,
+        hint: `reference · ${h.row.n.toLocaleString()} sold · median ${formatPrice(h.row.med)}`,
+        path: refHref(h.row),
+        kind: 'ref' as const,
+      }))
+      : [];
+    const soldMatches: Item[] = sold.map(h => ({
+      label: craftTitle(h.title),
+      hint: `${ARTIST_LABEL[h.maker] || h.maker} · sold ${formatPrice(h.price)} · ${h.house} · ${formatDate(h.date)}`,
+      path: `/lot?id=${encodeURIComponent(h.id)}`,
+      kind: 'sold' as const,
+    }));
+    return [...itemMatches, ...refMatches, ...lotMatches, ...soldMatches];
+  }, [items, browseItems, q, upcomingLots, refs, sold]);
   // While searching, only the first 12 are rendered — keyboard nav + Enter
   // must index into the SAME list, or the highlight vanishes and Enter fires
   // an unseen item. The empty-query browse renders the whole grouped roster
@@ -214,7 +244,7 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
           className="ray-ck-input"
           value={q}
           onChange={e => setQ(e.target.value)}
-          placeholder="Search a maker, a market, or a live lot…"
+          placeholder="Search a maker, a reference, a live lot, or the sold archive…"
           aria-label="Search"
           role="combobox"
           aria-expanded="true"
