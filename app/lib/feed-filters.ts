@@ -9,7 +9,7 @@
  * via history.replaceState — filtering never adds a Back-button entry.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { taxonOf, type CatKey } from './taxonomy';
+import { taxonOf, subMatches, type CatKey } from './taxonomy';
 import { prioStatic } from './priority';
 import { localToday, trueSaleDay } from '../utils';
 
@@ -59,7 +59,7 @@ export function passesTriage(l: TriageLot, f: TriageFilters, opts: { today?: str
   if (f.cat || f.sub) {
     const t = taxonOf(l);
     if (f.cat && t.cat !== f.cat) return false;
-    if (f.sub && t.sub !== f.sub) return false;
+    if (f.sub && !subMatches(t.cat, f.sub, t.sub)) return false;
   }
   if (f.house && l.auctionHouse !== f.house) return false;
   if (f.minUsd) {

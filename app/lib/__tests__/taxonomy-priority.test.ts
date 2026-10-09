@@ -6,7 +6,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { taxonOf, SUBS } from '../taxonomy';
+import { taxonOf, SUBS, subMatches } from '../taxonomy';
 import { prioStatic, priorityOf, shortlist, urgencyOf, reasonOf } from '../priority';
 
 const NOW = Date.parse('2026-10-08T12:00:00Z');
@@ -18,7 +18,7 @@ test('taxonomy: pseudo-artists, culture split, makers', () => {
   assert.deepEqual(taxonOf({ artist: 'game-used', subCat: 'game-used' }), { cat: 'sports-memorabilia', sub: 'game-used', sport: undefined });
   assert.deepEqual(taxonOf({ artist: 'pokemon', subCat: 'pokemon-sealed', drill: 'vintage' }), { cat: 'tcg', sub: 'sealed' });
   assert.deepEqual(taxonOf({ artist: 'entertainment-memorabilia', subCat: 'documents', drill: 'political' }), { cat: 'historical', sub: 'political' });
-  assert.deepEqual(taxonOf({ artist: 'entertainment-memorabilia', subCat: 'props', drill: 'hollywood' }), { cat: 'entertainment', sub: 'props-costumes' });
+  assert.deepEqual(taxonOf({ artist: 'entertainment-memorabilia', subCat: 'props', drill: 'hollywood' }), { cat: 'entertainment', sub: 'props-costumes', domain: 'film-tv' });
   assert.deepEqual(taxonOf({ artist: 'space-exploration', subCat: 'space', drill: 'apollo' }), { cat: 'space-science', sub: 'apollo' });
   assert.deepEqual(taxonOf({ artist: 'patek-philippe', subCat: 'pocket-watches' }), { cat: 'watches', sub: 'pocket' });
   assert.deepEqual(taxonOf({ artist: 'jean-prouve', subCat: 'seating' }), { cat: 'design', sub: 'seating' });
@@ -94,4 +94,26 @@ test('reasonOf: close time, value basis, edge', () => {
     signal: { label: 'Below Market' }, value: { signal: { beatRatePct: 52 } } }, NOW);
   assert.equal(r, 'Closes in 4h · Below market');
   assert.equal(reasonOf({ artist: 'sports-cards', saleDateTime: inHours(30), value: { expectedHammerUsd: 220000 } }, NOW), 'Closes tomorrow · $220K engine value');
+});
+
+test('taxonomy v2: new subs, culture routing, aliases', () => {
+  assert.deepEqual(taxonOf({ artist: 'pablo-picasso', subCat: 'ceramics' }), { cat: 'fine-art', sub: 'ceramics' });
+  assert.deepEqual(taxonOf({ artist: 'charles-eames', subCat: 'case-storage' }), { cat: 'design', sub: 'storage' });
+  assert.deepEqual(taxonOf({ artist: 'rolex', subCat: 'clocks' }), { cat: 'watches', sub: 'clocks' });
+  assert.deepEqual(taxonOf({ artist: 'cartier', subCat: 'watch-accessories' }), { cat: 'watches', sub: 'clocks' });
+  assert.deepEqual(taxonOf({ artist: 'sports-cards', subCat: 'card-lots', drill: 'baseball' }), { cat: 'sports-cards', sub: 'lots', sport: 'baseball' });
+  assert.deepEqual(taxonOf({ artist: 'sports-cards', subCat: 'tcg-other' }), { cat: 'tcg', sub: 'other-tcg' });
+  assert.deepEqual(taxonOf({ artist: 'pokemon', subCat: 'pokemon-memorabilia' }), { cat: 'tcg', sub: 'memorabilia' });
+  assert.deepEqual(taxonOf({ artist: 'tickets-passes', subCat: 'tickets' }).sub, 'tickets');
+  assert.deepEqual(taxonOf({ artist: 'programs-publications', subCat: 'programs' }).sub, 'programs');
+  assert.deepEqual(taxonOf({ artist: 'entertainment-memorabilia', subCat: 'cel-art' }), { cat: 'entertainment', sub: 'animation' });
+  assert.deepEqual(taxonOf({ artist: 'entertainment-memorabilia', subCat: 'props', drill: 'hollywood' }), { cat: 'entertainment', sub: 'props-costumes', domain: 'film-tv' });
+  assert.deepEqual(taxonOf({ artist: 'entertainment-memorabilia', subCat: 'documents', drill: 'aviation' }), { cat: 'historical', sub: 'aviation' });
+  assert.deepEqual(taxonOf({ artist: 'entertainment-memorabilia', subCat: 'documents', drill: 'crime' }), { cat: 'historical', sub: 'crime' });
+  assert.deepEqual(taxonOf({ artist: 'entertainment-memorabilia', subCat: 'autographs', drill: 'sports' }), { cat: 'sports-memorabilia', sub: 'autographs' });
+  assert.deepEqual(taxonOf({ artist: 'entertainment-memorabilia', drill: 'apollo' }), { cat: 'space-science', sub: 'apollo' });
+  assert.ok(subMatches('sports-memorabilia', 'tickets-programs', 'tickets'));
+  assert.ok(subMatches('sports-memorabilia', 'tickets-programs', 'programs'));
+  assert.ok(!subMatches('sports-memorabilia', 'tickets-programs', 'autographs'));
+  for (const [cat, subs] of Object.entries(SUBS)) assert.equal(new Set(subs.map(x => x.key)).size, subs.length, `${cat} has duplicate keys`);
 });

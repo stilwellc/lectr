@@ -34,37 +34,48 @@ export const CAT_LABEL: Record<CatKey, string> = Object.fromEntries(CATS.map(c =
 
 /** sub key → label, per category (display order = array order) */
 export const SUBS: Record<CatKey, { key: string; label: string }[]> = {
+  // Oct 9 (subcategory audit): keys are never renamed — follows and shared
+  // links store them — so new cuts are ADDED keys and old ones keep working
+  // (see SUB_ALIASES). Labels are display copy and may change freely.
   'sports-cards': [
-    { key: 'singles', label: 'Graded & Raw Singles' },
-    { key: 'sealed-wax', label: 'Sealed Wax' },
+    { key: 'singles', label: 'Singles' },
+    { key: 'lots', label: 'Lots & Sets' },
+    { key: 'sealed-wax', label: 'Sealed Packs & Boxes' },
   ],
   'sports-memorabilia': [
     { key: 'game-used', label: 'Game-Used & Worn' },
     { key: 'autographs', label: 'Autographs' },
-    { key: 'tickets-programs', label: 'Tickets & Programs' },
     { key: 'photographs', label: 'Photographs' },
-    { key: 'equipment', label: 'Equipment & Other' },
-    { key: 'trophies', label: 'Trophies & Awards' },
+    { key: 'tickets', label: 'Tickets & Passes' },
+    { key: 'programs', label: 'Programs & Publications' },
+    { key: 'trophies', label: 'Trophies, Rings & Awards' },
+    { key: 'equipment', label: 'Vintage Collectibles & Equipment' },
   ],
   tcg: [
-    { key: 'vintage', label: 'Vintage Singles' },
-    { key: 'classic', label: 'Classic Singles' },
-    { key: 'modern', label: 'Modern Singles' },
+    { key: 'vintage', label: 'Vintage (WotC era)' },
+    { key: 'classic', label: 'Mid-era (2003–2016)' },
+    { key: 'modern', label: 'Modern (2017+)' },
     { key: 'sealed', label: 'Sealed Product' },
+    { key: 'lots', label: 'Lots & Sets' },
+    { key: 'memorabilia', label: 'Art & Memorabilia' },
+    { key: 'other-tcg', label: 'Other TCGs' },
   ],
   entertainment: [
-    { key: 'props-costumes', label: 'Props & Costumes' },
+    { key: 'props-costumes', label: 'Props & Wardrobe' },
     { key: 'instruments-records', label: 'Instruments, Records & Awards' },
     { key: 'autographs-documents', label: 'Autographs & Documents' },
     { key: 'photos-posters', label: 'Photos & Posters' },
+    { key: 'animation', label: 'Animation & Production Art' },
     { key: 'other', label: 'Other' },
   ],
   historical: [
-    { key: 'political', label: 'Political' },
-    { key: 'royalty', label: 'Royalty' },
-    { key: 'military', label: 'Military' },
-    { key: 'literary', label: 'Literary' },
-    { key: 'historic', label: 'Historic' },
+    { key: 'political', label: 'Presidential & Political' },
+    { key: 'royalty', label: 'Royalty & World Leaders' },
+    { key: 'military', label: 'Military & Wartime' },
+    { key: 'aviation', label: 'Aviation & Exploration' },
+    { key: 'crime', label: 'Crime & Notorious' },
+    { key: 'literary', label: 'Arts & Letters' },
+    { key: 'historic', label: 'Historic Americana & Events' },
   ],
   'space-science': [
     { key: 'apollo', label: 'Apollo' },
@@ -77,22 +88,42 @@ export const SUBS: Record<CatKey, { key: string; label: string }[]> = {
   'fine-art': [
     { key: 'prints', label: 'Prints & Multiples' },
     { key: 'unique', label: 'Paintings & Works on Paper' },
-    { key: 'sculpture', label: 'Sculpture & Ceramics' },
+    { key: 'ceramics', label: 'Ceramics' },
+    { key: 'sculpture', label: 'Sculpture' },
     { key: 'photographs', label: 'Photographs' },
     { key: 'books', label: 'Books & Ephemera' },
     { key: 'other', label: 'Other' },
   ],
   watches: [
     { key: 'wristwatches', label: 'Wristwatches' },
-    { key: 'pocket', label: 'Pocket Watches' },
+    { key: 'pocket', label: 'Pocket & Pendant' },
+    { key: 'clocks', label: 'Clocks & Accessories' },
   ],
   design: [
     { key: 'seating', label: 'Seating' },
     { key: 'tables', label: 'Tables' },
+    { key: 'storage', label: 'Storage' },
     { key: 'lighting', label: 'Lighting' },
     { key: 'objects', label: 'Objects & Other' },
   ],
 };
+
+/** A retired sub key → the keys it now spans. Old follows / links stay valid. */
+export const SUB_ALIASES: Record<string, string[]> = {
+  'sports-memorabilia:tickets-programs': ['tickets', 'programs'],
+};
+
+/** Does a lot's sub satisfy a wanted (possibly legacy) sub key? */
+export function subMatches(cat: string, wanted: string, actual: string): boolean {
+  if (wanted === actual) return true;
+  return SUB_ALIASES[`${cat}:${wanted}`]?.includes(actual) ?? false;
+}
+
+/** the separate entertainment DOMAIN facet (how Hollywood vs music buyers shop) */
+export const DOMAINS: { key: string; label: string }[] = [
+  { key: 'film-tv', label: 'Film & TV' },
+  { key: 'music', label: 'Music' },
+];
 
 /** the separate sport facet (sports cards + sports memorabilia only) */
 export const SPORTS: { key: string; label: string }[] = [
@@ -111,14 +142,22 @@ const MINOR_SPORTS = new Set(['olympics', 'tennis', 'wrestling']);
 
 const SPORTS_MEM: Record<string, string> = {
   'game-used': 'game-used', 'equipment-artifacts': 'equipment', 'sports-memorabilia': 'equipment',
-  memorabilia: 'equipment', 'trophies-awards': 'trophies', 'tickets-passes': 'tickets-programs',
-  'programs-publications': 'tickets-programs', autographs: 'autographs', 'type-1-photos': 'photographs',
+  memorabilia: 'equipment', 'trophies-awards': 'trophies', 'tickets-passes': 'tickets',
+  'programs-publications': 'programs', autographs: 'autographs', 'type-1-photos': 'photographs',
+};
+/** a sports lot's raw subCat, when it names the object more precisely than its slug */
+const SPORTS_MEM_SUBCAT: Record<string, string> = {
+  tickets: 'tickets', programs: 'programs', publications: 'programs', photos: 'photographs',
+  autographs: 'autographs', trophies: 'trophies', 'game-used': 'game-used',
 };
 const CULTURE = new Set(['entertainment-memorabilia', 'movie-tv', 'music-memorabilia', 'pop-memorabilia']);
 const HIST_DRILL: Record<string, string> = {
   political: 'political', royalty: 'royalty', military: 'military', literary: 'literary', historic: 'historic',
+  aviation: 'aviation', crime: 'crime',
 };
+const ENT_DOMAIN: Record<string, string> = { hollywood: 'film-tv', 'film-tv': 'film-tv', music: 'music' };
 const ENT_SUB: Record<string, string> = {
+  'cel-art': 'animation', animation: 'animation',
   props: 'props-costumes', 'worn-personal': 'props-costumes',
   instruments: 'instruments-records', records: 'instruments-records', awards: 'instruments-records',
   autographs: 'autographs-documents', documents: 'autographs-documents',
@@ -128,11 +167,12 @@ const SPACE_DRILL: Record<string, string> = {
   apollo: 'apollo', 'shuttle-iss': 'shuttle-iss', 'mercury-gemini': 'mercury-gemini', soviet: 'soviet',
 };
 const ART_SUB: Record<string, string> = {
-  prints: 'prints', originals: 'unique', sculpture: 'sculpture', photographs: 'photographs', books: 'books',
+  prints: 'prints', originals: 'unique', sculpture: 'sculpture', ceramics: 'ceramics', photographs: 'photographs', books: 'books',
 };
-const DESIGN_SUB: Record<string, string> = { seating: 'seating', tables: 'tables', lighting: 'lighting' };
+const DESIGN_SUB: Record<string, string> = { seating: 'seating', tables: 'tables', lighting: 'lighting', 'case-storage': 'storage' };
+const POKEMON_SUB: Record<string, string> = { 'pokemon-sealed': 'sealed', 'pokemon-lots': 'lots', 'pokemon-memorabilia': 'memorabilia' };
 
-export interface Taxon { cat: CatKey; sub: string; sport?: string }
+export interface Taxon { cat: CatKey; sub: string; sport?: string; domain?: string }
 
 type LotLike = { artist?: string | null; subCat?: string | null; drill?: string | null };
 
@@ -149,11 +189,18 @@ export function taxonOf(l: LotLike): Taxon {
   const s = l.subCat || '';
   const d = l.drill || '';
 
-  if (a === 'sports-cards' || a === 'graded-cards') return { cat: 'sports-cards', sub: 'singles', sport: sportOf(d) };
+  // non-Pokémon TCG (Yu-Gi-Oh!, One Piece, Magic…) keeps its slug for comps
+  // isolation but belongs to the TCG category
+  if (s === 'tcg-other') return { cat: 'tcg', sub: 'other-tcg' };
+  if (a === 'sports-cards' || a === 'graded-cards') {
+    return { cat: 'sports-cards', sub: s === 'card-lots' ? 'lots' : 'singles', sport: sportOf(d) };
+  }
   if (a === 'unopened-wax') return { cat: 'sports-cards', sub: 'sealed-wax', sport: sportOf(d) };
-  if (a in SPORTS_MEM) return { cat: 'sports-memorabilia', sub: SPORTS_MEM[a], sport: sportOf(d) };
+  if (a in SPORTS_MEM) {
+    return { cat: 'sports-memorabilia', sub: SPORTS_MEM_SUBCAT[s] || SPORTS_MEM[a], sport: sportOf(d) };
+  }
   if (a === 'pokemon') {
-    if (s === 'pokemon-sealed') return { cat: 'tcg', sub: 'sealed' };
+    if (POKEMON_SUB[s]) return { cat: 'tcg', sub: POKEMON_SUB[s] };
     return { cat: 'tcg', sub: d === 'vintage' || d === 'classic' || d === 'modern' ? d : 'modern' };
   }
   if (a === 'space-exploration') return { cat: 'space-science', sub: SPACE_DRILL[d] || 'space-other' };
@@ -162,11 +209,21 @@ export function taxonOf(l: LotLike): Taxon {
   }
   if (CULTURE.has(a)) {
     if (d in HIST_DRILL) return { cat: 'historical', sub: HIST_DRILL[d] };
+    if (d in SPACE_DRILL) return { cat: 'space-science', sub: SPACE_DRILL[d] };
     if (d === 'space-science') return { cat: 'space-science', sub: 'space-other' };
-    return { cat: 'entertainment', sub: ENT_SUB[s] || 'other' };
+    if (d === 'science') return { cat: 'space-science', sub: 'science' };
+    // culture-house lots about athletes belong with the sports memorabilia
+    if (d === 'sports') return { cat: 'sports-memorabilia', sub: SPORTS_MEM_SUBCAT[s] || 'equipment' };
+    const domain = ENT_DOMAIN[d] || (a === 'movie-tv' ? 'film-tv' : a === 'music-memorabilia' ? 'music' : undefined);
+    const t: Taxon = { cat: 'entertainment', sub: ENT_SUB[s] || 'other' };
+    if (domain) t.domain = domain;
+    return t;
   }
   const m = marketOf(a);
-  if (m === 'watches') return { cat: 'watches', sub: s === 'pocket-watches' ? 'pocket' : 'wristwatches' };
+  if (m === 'watches') {
+    if (s === 'clocks' || s === 'watch-accessories') return { cat: 'watches', sub: 'clocks' };
+    return { cat: 'watches', sub: s === 'pocket-watches' ? 'pocket' : 'wristwatches' };
+  }
   if (m === 'design') return { cat: 'design', sub: DESIGN_SUB[s] || 'objects' };
   return { cat: 'fine-art', sub: ART_SUB[s] || 'other' };
 }

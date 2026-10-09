@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from './account';
 import { useSavedSearches, type SavedQuery } from './alerts';
-import { taxonOf, CAT_LABEL, subLabel, type CatKey } from './taxonomy';
+import { taxonOf, subMatches, CAT_LABEL, subLabel, type CatKey } from './taxonomy';
 
 export type FollowKind = 'maker' | 'cat' | 'house';
 export interface Follow {
@@ -116,7 +116,7 @@ export function affinityOf(
     if (f.kind === 'maker' && (l.artist === f.key || l.playerSlug === f.key)) a = Math.max(a, 1);
     else if (f.kind === 'cat') {
       const [cat, sub] = f.key.split(':');
-      if (t.cat === cat && (!sub || t.sub === sub)) a = Math.max(a, sub ? 0.8 : 0.6);
+      if (t.cat === cat && (!sub || subMatches(cat, sub, t.sub))) a = Math.max(a, sub ? 0.8 : 0.6);
     } else if (f.kind === 'house' && l.auctionHouse === f.key) a = Math.max(a, 0.4);
   }
   return a;
