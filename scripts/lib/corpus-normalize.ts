@@ -1,7 +1,8 @@
 import type { AuctionLot } from '../../app/types';
-import { subCatOf, sportSlugOf, sportOfSale, sportWordOf, cultureTextDomain, curatedDomainOf, watchRefKey, watchFamilyOf, nameKey, JUNK_PLAYER_SLUG_RE, NOT_PERSON_NAME_RE, type SubCatMaps } from './sub-cats';
+import { subCatOf, spaceScienceDrillOf, sportSlugOf, sportOfSale, sportWordOf, cultureTextDomain, curatedDomainOf, watchRefKey, watchFamilyOf, nameKey, JUNK_PLAYER_SLUG_RE, NOT_PERSON_NAME_RE, type SubCatMaps } from './sub-cats';
 import { SUBJECT_DOMAINS } from './subject-domains';
 import { subjectNameOf, personVoteKeys, settleNameDomains } from './subject-name';
+import { neighbourDomains, lotNumberOf, type NeighbourEntry } from './neighbour-domain';
 import { athleteIn, ATHLETES } from './athlete-roster';
 import { extractReference } from './identity-enrich';
 import { looksLikeCard, playerSlugOf, parseCard, cardYearKey, knownPlayerSet } from '../../app/lib/cards';
@@ -429,7 +430,7 @@ export function localizeSaleDates(lots: Lot[]): { total: number; byHouse: Record
 //    final formKey). Two-phase: learn player→sport from Goldin's own sport
 //    stamps (majority vote, n≥3, ≥80% purity), then stamp deterministically —
 //    pure function of existing fields, so re-runs converge (idempotent).
-export function stampSubCats(lots: Lot[]): { subCats: number; drills: number; sportRecovered: number; personDomains: number } {
+export function stampSubCats(lots: Lot[]): { subCats: number; drills: number; sportRecovered: number; personDomains: number; neighbourDomains: number } {
   const pidVotes = new Map<string, Map<string, number>>();
   const playerVotes = new Map<string, Map<string, number>>();
   const slugName = new Map<string, string>();
@@ -562,6 +563,10 @@ export function stampSubCats(lots: Lot[]): { subCats: number; drills: number; sp
   // person's lots the RULES domained (never a learned stamp, so re-runs converge)
   const personVotes = new Map<string, Map<string, number>>();
   const bare: Lot[] = [];
+  // (Oct 9) the catalogue-neighbour fill reads every culture lot: the rule
+  // domain votes, the lot still undomained after the name map is a target
+  const cult: Lot[] = [];
+  const nb: NeighbourEntry[] = [];
   for (const l of lots) {
     const r = l as unknown as Record<string, unknown>;
     const st = subCatOf(r, maps);
@@ -575,6 +580,8 @@ export function stampSubCats(lots: Lot[]): { subCats: number; drills: number; sp
     if (ARTIST_MARKET[r.artist as keyof typeof ARTIST_MARKET] === 'culture') {
       if (!st.drill) bare.push(l);
       else { const k = subjectNameOf(r.title as string); if (k) for (const v of personVoteKeys(k)) vote(personVotes, v, st.drill); }
+      cult.push(l);
+      nb.push({ sale: `${r.auctionHouse || ''}|${r.saleName || ''}|${r.saleDate || ''}`, lot: lotNumberOf(r.lotNumber), vote: st.drill, target: false });
     }
   }
   let personDomains = 0;
@@ -585,7 +592,22 @@ export function stampSubCats(lots: Lot[]): { subCats: number; drills: number; sp
       if (st.drill) { (l as Lot & { drill?: string }).drill = st.drill; drills++; personDomains++; }
     }
   }
-  return { subCats, drills, sportRecovered, personDomains };
+  // (Oct 9) the LAST fallback: a culture lot still undomained takes the domain
+  // its catalogue section carries (RR runs its presidents, its music, its
+  // Hollywood as numbered runs). Film / music artist lots already carry their
+  // domain in the taxonomy and are never re-filed by a neighbour.
+  let neighbourFilled = 0;
+  cult.forEach((l, i) => {
+    const a = (l as unknown as Record<string, unknown>).artist;
+    nb[i].target = !(l as Lot & { drill?: string }).drill && a !== 'movie-tv' && a !== 'music-memorabilia';
+  });
+  neighbourDomains(nb).forEach((fam, i) => {
+    const l = cult[i] as Lot & { drill?: string };
+    const r = l as unknown as Record<string, unknown>;
+    l.drill = fam === 'space-science' ? spaceScienceDrillOf(`${r.title || ''} ${((r.subjectKeys as string[]) || []).join(' ')}`) : fam;
+    drills++; neighbourFilled++;
+  });
+  return { subCats, drills, sportRecovered, personDomains, neighbourDomains: neighbourFilled };
 }
 
 // ── ★0b · dedupeWrightFamilyMirrors — LAMA/Rago/Wright are ONE company on ONE
@@ -1492,7 +1514,7 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
     `culture axes stamped=${cultureStamped} · ` +
     `saleDate←saleDateTime reconciled=${datesFixed} · ` +
     `formKey restamped=${restamped} · ` +
-    `subCats stamped=${sub.subCats} drills=${sub.drills} (sport recovered=${sub.sportRecovered}, culture person→domain=${sub.personDomains}) · ` +
+    `subCats stamped=${sub.subCats} drills=${sub.drills} (sport recovered=${sub.sportRecovered}, culture person→domain=${sub.personDomains}, culture neighbour→domain=${sub.neighbourDomains}) · ` +
     `heal: tokens=${healed.tokens} titles=${healed.titles} images=${healed.images} dates=${healed.dates} pkmn-grades=${healed.grades} dims=${healed.dims} · culture→science=${techMoved}`
   );
   // BUILD CANARY (spec §3.4): game-used identity is a maintained-list parser —
