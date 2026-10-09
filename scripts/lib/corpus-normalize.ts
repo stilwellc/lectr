@@ -627,7 +627,7 @@ export function dedupeWrightFamilyMirrors(lots: Lot[]): number {
 function dropMisattributed(lots: Lot[]): number {
   const drop = new Set<number>();
   for (let i = 0; i < lots.length; i++) {
-    if (isMisattributed(String(lots[i].artist || ''), String(lots[i].title || ''))) drop.add(i);
+    if (isMisattributed(String(lots[i].artist || ''), String(lots[i].title || ''), String(lots[i].description || ''))) drop.add(i);
   }
   if (!drop.size) return 0;
   let w = 0;

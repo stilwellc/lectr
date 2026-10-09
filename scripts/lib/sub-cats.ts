@@ -276,12 +276,47 @@ const ART_KIND: Record<string, string> = {
 const ARTIST_BOOK_RE = /\b(?:livres? d'artistes?|artists?'? books?|illustrated books?|zines?|vols?\.\s*[ivx\d]|volumes?|edited by|published by|skira|t[ée]riade|letterpress|black sparrow|po[eè]mes|poems|first edition|dummy cop(?:y|ies)|twentysix gasoline stations|every building on the sunset strip|real estate opportun\w*|various small fires|royal road test|nine swimming pools|some los angeles apartments|thirtyfour parking lots|a few palm trees|colored people|babycakes|dutch details|crackers|holy cats|a gold book|floril[eè]ge des amours|lettres portugaises|pasipha[ée]|po[ée]sies|vingt po[eè]mes|le chant des morts|toreros|1 cent life)\b/i;
 const ART_PRINT_OBJECT_RE = /\b(?:posters?|woodcut|screenprint|silkscreen|lithograph|etching|offset)\b/i;
 const ART_CAT_KIND: Record<string, string> = { print: 'prints', original: 'originals', sculpture: 'sculpture', photograph: 'photographs' };
+/** (wave 5) a printmaking process named outright — a Bonhams title carries its
+ *  medium AND its colophon ("Electric Chair Screenprint in colours, 1971 …
+ *  published by Bruno Bischofberger"), so "published by" / "edited by" alone
+ *  is no book evidence next to one */
+const STRONG_PRINT_WORD_RE = /\b(?:lithograph\w*|screen ?print\w*|silkscreen\w*|s[ée]rigraph\w*|etching\w*|aquatint\w*|woodcut\w*|linocut\w*|engraving\w*|drypoint\w*|pochoir\w*)\b/i;
+/** (wave 5) CERAMICS — Picasso's Madoura editions and the other fired-clay
+ *  works — split from sculpture: a glazed pitcher and a bronze do not comp.
+ *  Porcelain / bone china only as a VESSEL or table service (Koons's porcelain
+ *  Balloon Dog multiples stay sculpture); Rashid Johnson's "ceramic tiles"
+ *  panels are not ceramics. */
+const CERAMIC_WORK_RE = /madoura|fa[iï]ence|earthenware|terre cuite|terracotta|engobe|empreinte originale|\bc[ée]ramique\b|\bceramics?\b(?!\s+tiles?)|\ba\.?\s?r\.?\s*(?:no\.?\s*)?\d{1,3}\b|alain rami[ée]/i;
+const PORCELAIN_RE = /\b(?:porcelain|stoneware|bone china)\b/i;
+const VESSEL_RE = /\b(?:vases?|bowls?|plates?|pitchers?|jugs?|dish(?:es)?|platters?|cups?|teapots?|vessels?|pots?|(?:tea|coffee|dinner|breakfast) (?:service|set)|place settings?)\b/i;
+/** "glazed" is a ceramic word on the medium line — a FRAME is glazed too
+ *  ("Framed and glazed"), and a title's "Maple Glazed Donut" is a subject */
+const GLAZED_RE = /(?<!framed and )\bglazed\b(?!\s+(?:and )?fram)/i;
+/** a cast / carved / fabricated material — never a ceramic */
+const NON_CERAMIC_MATERIAL_RE = /\b(?:bronze|silver|argent|gold|repouss\w*|steel|aluminu?m|aluminium|iron|metal|wood|marble|stone|plaster|resin|vinyl|plastic|fiberglass|glass|lead|tin)\b/i;
+function isCeramicWork(l: Lot, title: string, medium: string): boolean {
+  const md = `${medium} | ${descHeadOf(l, 400)}`;
+  const head = `${title} | ${md}`;
+  // a bronze cast after a clay model ("bronze … the terracotta model") is a bronze
+  if (/\bbronze\b/i.test(md) && !/madoura/i.test(head)) return false;
+  if (CERAMIC_WORK_RE.test(head)) return true;
+  if (PORCELAIN_RE.test(head)) return VESSEL_RE.test(head);
+  if (GLAZED_RE.test(md) && !/\bframed\b/i.test(head)) return true;
+  // a Picasso sculpture lot with no material line is a Madoura edition (his
+  // cast works always name the bronze / sheet metal); Wright's bare "Tête"
+  return l.artist === 'pablo-picasso' && !NON_CERAMIC_MATERIAL_RE.test(head);
+}
 function artKind(formKey: string, category: string, title: string, medium: string): string {
   const tm = `${title} ${medium}`;
   let k = ART_KIND[formKey] ?? null;
   if (formKey === 'object-edition') k = category === 'sculpture' ? 'sculpture' : 'prints';
+  // (wave 5) a gallery mailer / invitation / ticket or a felt banner is filed
+  // by its category ("Crying Girl" offset mailer → prints, "Les deux hiboux"
+  // crayon-drawn announcement → originals) — 'other' held them
+  if (formKey === 'ephemera' || formKey === 'textile') k = ART_CAT_KIND[category] ?? null;
+  const bookText = STRONG_PRINT_WORD_RE.test(tm) ? tm.replace(/\b(?:published|edited) by\b/gi, ' ') : tm;
   if (k === 'books' && (/\bposters?\b/i.test(tm) || (ART_PRINT_OBJECT_RE.test(tm) && !/\bbooks?\b|\bvolumes?\b|\bvols?\./i.test(title)))) k = 'prints';
-  else if (k !== 'books' && ARTIST_BOOK_RE.test(tm) && !/\bplates?\b|\bfrom\b|\bportfolio\b/i.test(title)) k = 'books';
+  else if (k !== 'books' && ARTIST_BOOK_RE.test(bookText) && !/\bplates?\b|\bfrom\b|\bportfolio\b/i.test(title)) k = 'books';
   return k ?? ((formKey === 'unknown' || formKey === 'design') ? ART_CAT_KIND[category] : null) ?? 'other';
 }
 
@@ -295,15 +330,18 @@ const DESIGN_MATERIALS = ['walnut', 'teak', 'oak', 'rosewood', 'plywood', 'steel
 // (Bonhams prints the form there). Nouns carry no trailing \b: Bonhams glues
 // the next field on ("Committee' Chairscirca 1953").
 const DESIGN_KIND_WORDS: [string, RegExp][] = [
-  ['lighting', /\b(?:lamps?|lampe|lighting|light fixture|wall light|ceiling light|floor light|potence|sconces?|applique|lanterns?|chandeliers?)/i],
+  ['lighting', /\b(?:lamps?|lampe|lighting|light fixture|wall[- ]light|ceiling light|floor light|potence|sconces?|applique|lanterns?|chandeliers?)/i],
   // (wave 4) + a wall unit, a bahut, a buffet / commode / vitrine / étagère
   ['case-storage', /\besus?\b|\b(?:eames storage unit|storage units?|wall units?|cabinets?|chests?|bookcases?|biblioth[eè]que|room divider|wall case|credenza|sideboards?|bahuts?|buffets?|commodes?|vitrines?|[ée]tag[eè]res?|dressers?|rangement|kornblut|pj-r-|wardrobes?|armoire|shelv(?:es|ing)|bookshel)/i],
   // (wave 4) + a banquette
-  ['seating', /\bbanquettes?\b|\b(?:lcw|lcm|dcw|dcm|dsr|dsw|dsx|dss|dar|dax|rar|raw|rkr|pkw|pkc|lar|lax|dkr|dkx|es ?\d{3}|670|671)(?:s|-?\d)?\b|\b(?:pj-si|chairs?|armchairs?|fauteuils?|chaises?|chaise longue|lounge|stools?|tabourets?|bench(?:es)?|settees?|sofas?|canap[ée]|daybeds?|rockers?|rocking|ottomans?|seating|kangaroo|committee)/i],
+  ['seating', /\bbanquettes?\b|\b(?:lcw|lcm|dcw|dcm|dsr|dsw|dsx|dss|dar|dax|daw|rar|raw|rkr|pkw|pkc|lar|lax|lkr|lkx|dkr|dkx|dkw|es ?\d{3}|670|671)(?:s|-?\d)?\b|\b(?:pj-si|chairs?|armchairs?|fauteuils?|chaises?|chaise longue|lounge|stools?|tabourets?|bench(?:es)?|settees?|sofas?|canap[ée]|daybeds?|rockers?|rocking|ottomans?|seating|kangaroo|committee)/i],
   // (wave 4) + Jeanneret's IT-1 table code
-  ['tables', /\bit-?1\b|\b(?:etr|ltr|ctw|otw|dtw|etw)(?:s|-?\d)?\b|\b(?:pj-ta|pj-bu|tables?|gu[ée]ridon|compas|desks?|bureau|frenchman'?s cove|minguren|dining suite|sundra|conoid dining)/i],
+  ['tables', /\bit-?1\b|\b(?:etr|ltr|ctw|otw|dtw|etw|ctm)(?:s|-?\d)?\b|\b(?:pj-ta|pj-bu|tables?|gu[ée]ridon|compas|desks?|bureau|frenchman'?s cove|minguren|dining suite|sundra|conoid dining)/i],
 ];
 function designKind(formKey: string, title = '', desc = ''): string {
+  // (wave 5) a "table lamp" / "desk lamp" is lighting, whatever the form key
+  // read first ("Table Lamp1966walnut" — Bonhams glues the date on)
+  if (/\b(?:table|desk|floor|standard|wall|reading)[- ]?lamps?/i.test(title)) return 'lighting';
   if (formKey.startsWith('seating')) return 'seating';
   if (formKey.startsWith('table') || formKey === 'desk') return 'tables';
   if (formKey === 'case') return 'case-storage';
@@ -318,6 +356,15 @@ function designKind(formKey: string, title = '', desc = ''): string {
   }
   return 'objects';
 }
+
+// ── watches ─────────────────────────────────────────────────────────────────
+/** (wave 5) a clock in a watch maker's sale ("desk clock", "Pendulette",
+ *  "SILVER TRAVEL TIMEPIECE") — never the "crown at 4 o'clock" of a watch */
+const WATCH_CLOCK_RE = /(?<!o['’])\bclocks?\b|\bpendulettes?\b|\bpendules?\b|\b(?:desk|table|travel|carriage|mantel|boudoir|alarm|car|dashboard)[- ]timepieces?\b/i;
+/** a watch named anywhere in the title (a watch box is not a watch) */
+const WATCH_NOUN_RE = /wrist ?watch|\bwatch(?:es)?\b(?!\s*(?:box(?:es)?|winders?|winding|stands?|straps?|cases\b|rolls?|pouch|display|holders?))|\bmontres?\b|\bchronograph|\btimepieces?\b|\bpocket\b/i;
+/** an accessory noun in the lot's lead phrase */
+const WATCH_ACCESSORY_RE = /\b(?:winders?|winding (?:box|case)|watch (?:box(?:es)?|stands?|cases\b|rolls?|pouch|display|holders?)|presentation box(?:es)?|boxes|straps?|buckles?|deployant|ashtrays?|statues?|statuettes?|figurines?|display(?: stand)?s?|dealer(?:'s)? signs?|accessor(?:y|ies))\b/i;
 
 // ── the stamps ──────────────────────────────────────────────────────────────
 export interface SubCatStamp { subCat: string | null; drill: string | null; flown: boolean | null }
@@ -410,7 +457,17 @@ export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
   }
 
   if (vert === 'watches') {
-    const subCat = formKey === 'wristwatch' ? 'wristwatches'
+    // (wave 5) the non-watches the taxonomy filed under wristwatches: a desk /
+    // travel / table timepiece is a clock, and a lot that NAMES no watch but
+    // leads with a winder / box / strap / ashtray / statue is an accessory
+    // (Cartier's movement maker "European Watch & Clock Co." and a striking
+    // pocket "clock watch" are watches)
+    const clockText = title.replace(/\b(?:watch\s*(?:&|and)\s*clock|clock\s*(?:&|and)\s*watch)\b/gi, ' ');
+    const isClock = WATCH_CLOCK_RE.test(clockText) && !/wrist ?watch|bracelet watch|pocket ?watch|clock[- ]?watch/i.test(clockText);
+    const isAccessory = !WATCH_NOUN_RE.test(title) && WATCH_ACCESSORY_RE.test(title.split(/\s+(?:with|on|and|for)\s+|[,;(]/i)[0]);
+    const subCat = isClock ? 'clocks'
+      : isAccessory && formKey !== 'pocket-watch' ? 'watch-accessories'
+      : formKey === 'wristwatch' ? 'wristwatches'
       : formKey === 'pocket-watch' ? 'pocket-watches'
       : formKey === 'clock' ? 'clocks'
       : formKey === 'jewelry' ? 'jewelry' : null;
@@ -478,7 +535,8 @@ export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
   }
 
   if (vert === 'art') {
-    return { subCat: artKind(formKey, (l.category as string) || '', title, String(l.medium || '')), drill: null, flown: null };
+    const kind = artKind(formKey, (l.category as string) || '', title, String(l.medium || ''));
+    return { subCat: kind === 'sculpture' && isCeramicWork(l, title, String(l.medium || '')) ? 'ceramics' : kind, drill: null, flown: null };
   }
 
   if (vert === 'design') {

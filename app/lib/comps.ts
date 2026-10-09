@@ -62,6 +62,9 @@ export const FORM_LABEL: Record<Form, string> = {
   unknown: 'lots',
 };
 
+/** (wave 5) a print or painting MEDIUM on the medium line (the book-word guard) */
+const ART_MEDIUM_RE = /\b(lithograph|screenprint|screen print|silkscreen|serigraph|etching|aquatint|woodcut|linocut|engraving|drypoint|pochoir|oil|acrylic|magna|gouache|watercolou?r|pastel|charcoal|crayon|graphite|pencil|ink|marker|tempera|enamel)\b/;
+
 /** Classify a lot into its form. Order matters: the most specific cues win.
     Cached per lot object (WeakMap) — the ~40 regex tests run once per lot per
     session, not once per comp-gate evaluation; lots are immutable after JSON
@@ -81,12 +84,26 @@ function classifyFormUncached(lot: Pick<AuctionLot, 'title' | 'medium' | 'catego
   const tm = t + m;
 
   // paper/publishing forms hiding across categories
-  if (/\b(book|catalogue|catalog|magazine|monograph)\b/.test(tm)) return 'book';
+  // (wave 5) …but "book" is also a subject and a support: a painting of a book
+  // ("Still Life with Oysters, Fish in a Bowl and Book, oil and magna on
+  // canvas"), a drawing on one ("oil pastel on the frontispiece of a book"), a
+  // lithograph "from the Book Covers series" — a print / painting medium or a
+  // "from … series" title is the lot's form, not the book
+  const bookWordOnly = /\bbook\b/.test(tm) && !/\b(catalogue|catalog|magazine|monograph)\b/.test(tm);
+  // (a medium line that IS a book — "book with 20 pochoir plates", "offset
+  // lithograph in bound book" — stays one; a book as the support — "acrylic on
+  // book cover", "drawing on the half title page of Warhol's book" — does not)
+  const bookObjectMedium = /\bbook\b/.test(m) && !/\b(?:on|inside)\b[^.;,]{0,30}\bbook\b|\bof (?:a|the|his|her|warhol's)\b[^.;,]{0,20}\bbook\b/.test(m);
+  const notABook = bookWordOnly && !bookObjectMedium && (ART_MEDIUM_RE.test(m) || /\bfrom\b[^.;]{0,60}\bseries\b/.test(t));
+  if (!notABook && /\b(book|catalogue|catalog|magazine|monograph)\b/.test(tm)) return 'book';
   if (/\b(invitation|announcement|flyer|ticket|postcard|greeting card|record sleeve|album cover|vinyl record|mailer)\b/.test(tm)) return 'ephemera';
   if (/\b(poster|affiche)\b/.test(tm)) return 'poster';
 
   // photographs (their own category, plus photographic mediums elsewhere)
-  if (lot.category === 'photograph' || /\b(gelatin silver|c-print|chromogenic|polaroid|cibachrome|photograph)\b/.test(m)) return 'photograph';
+  // (wave 5) a Feldman & Schellmann number is a screenprint's citation, never a
+  // photograph's (Sotheby's filed Warhol's "Shoes (F. & S. II.251)" there)
+  const fsRef = /\bf\.?\s*&\s*s\.?\s*(?:[ivx]+|\d)|\bfeldman\s*(?:&|and)\s*schellmann\b/.test(tm);
+  if ((lot.category === 'photograph' && !fsRef) || /\b(gelatin silver|c-print|chromogenic|polaroid|cibachrome|photograph)\b/.test(m)) return 'photograph';
 
   if (/\b(rug|tapestry|carpet|textile|blanket|scarf)\b/.test(tm)) return 'textile';
 
@@ -107,7 +124,9 @@ function classifyFormUncached(lot: Pick<AuctionLot, 'title' | 'medium' | 'catego
     // pocket watch carries (open face, keyless, hunter, verge, fusee …) when
     // nothing says wrist. No trailing \b — Sotheby's glues the next field on
     // ("openface keyless watchref 866").
-    if (/\bpocket ?watch/.test(tm) || (!/wrist/.test(tm) && /\b(?:open[- ]?face|keyless|hunt(?:er|ing)[- ]?cased?|half[- ]hunter|demi[- ]hunter|savonnette|l[ée]pine|key[- ]wound|verge|fus[ée]e|pair[- ]cased|pendant watch)/.test(tm))) return 'pocket-watch';
+    // (wave 5) + the lapel / purse / fob / pendant watches and a watch "with
+    // chain" (Cartier's "lapel-watch", "pendant-watch" sat in wristwatches)
+    if (/\bpocket ?watch/.test(tm) || (!/wrist/.test(tm) && /\b(?:open[- ]?face|keyless|hunt(?:er|ing)[- ]?cased?|half[- ]hunter|demi[- ]hunter|savonnette|l[ée]pine|key[- ]wound|verge|fus[ée]e|pair[- ]cased|(?:pendant|lapel|purse|fob)[- ]watch|watch(?:es)?,? with (?:its |a |an |the |original |associated )?(?:\w+ )?(?:gold |silver |platinum )?chain)/.test(tm))) return 'pocket-watch';
     // Explicit jewelry nouns first (a Panthère brooch is jewelry even though
     // Panthère is also a watch line). SINGULAR forms — unchanged from before.
     // …unless the lot is a watch set in it ("bangle watch", "ring clip watch",
@@ -165,6 +184,10 @@ function classifyFormUncached(lot: Pick<AuctionLot, 'title' | 'medium' | 'catego
     if (/\b(dining table|conference table|trestle table)\b/.test(t)) return 'table-dining';
     if (/\b(coffee table|low table|cocktail table)\b/.test(t)) return 'table-low';
     if (/\b(side table|end table|occasional table|nesting table|nightstand|night stand)\b/.test(t)) return 'table-side';
+    // (wave 5) a "table lamp" / "desk lamp" is lighting: the light test runs
+    // before the table / desk ones (no trailing \b — Bonhams glues the date
+    // on: "Table Lamp1966walnut"); a "lamp table" stays a table
+    if (/\b(lamps?|sconces?|chandeliers?|lighting|light fixture|lanterns?)(?![a-z])(?!\s*tables?\b)/.test(t)) return 'lighting';
     if (/\btable\b/.test(t)) return 'table';
     if (/\b(cabinet|chest|dresser|sideboard|credenza|wardrobe|bookcase|bookshelf|shelves|shelf|case piece|etagere|étagère|highboard|commode)\b/.test(t)) return 'case';
     if (/\b(desk|workbench|vanity)\b/.test(t)) return 'desk';
