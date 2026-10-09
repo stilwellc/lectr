@@ -39,6 +39,8 @@ export interface ClassifyLot {
   auctionHouse?: string | null;
   saleName?: string | null;
   priceUsd?: number | null;
+  /** (wave 5) the house's size line — an object's depth / diameter is form evidence */
+  dimensions?: string | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -693,7 +695,7 @@ const CERAMIC_RE = /madoura|earthenware|fa[iï]ence|ceramic|c[ée]ramique|emprei
 const RAMIE_NO_RE = /\ba\.?\s?r\.?\s*(?:no\.?\s*)?\d{1,3}\b/i;
 const ART_PRINT_WORD_RE = /poster|affiche|lithograph|linocut|linogravure|etching|aquatint|screen ?print|silkscreen|s[ée]rigraph|woodcut|engraving|drypoint|offset|edition of|numbered|artist.s proof|\bprint(?:ed|s)?\b|gicl[ée]e|monotype|multiple|pochoir|photogravure|\bplates?\b/i;
 /** a unique medium on a support: "oil on canvas", "pen and India ink on paper", "acrylic, oilstick and paper collage on canvas" */
-const UNIQUE_MEDIUM_RE = /\b(?:oil|acrylic|tempera|gouache|watercolou?r|pastel|charcoal|crayon|graphite|pencil|ballpoint|pen|ink|felt[- ]tip|marker|oil ?stick|spray ?paint|enamel|synthetic polymer|gunpowder|collage|mixed media)s?\b[^.;]{0,60}?\bon\s+(?:canvas|linen|panel|board|paper|card|masonite|wood|metal|aluminum|cardboard|glass|plexiglas|vellum)(?![a-z])/i;
+const UNIQUE_MEDIUM_RE = /\b(?:oil|acrylic|tempera|gouache|watercolou?r|pastel|charcoal|chalk|crayon|graphite|pencil|ballpoint|pen|ink|felt[- ]tip|marker|oil ?stick|spray ?paint|enamel|synthetic polymer|gunpowder|collage|mixed media)s?\b[^.;]{0,60}?\bon\s+(?:canvas|linen|panel|board|paper|card|masonite|wood|metal|aluminum|cardboard|glass|plexiglas|vellum)(?![a-z])/i;
 /** Warhol's painting medium: silkscreen INK on canvas is a unique painting */
 const SILKSCREEN_CANVAS_RE = /silkscreen inks?\b[^.;]{0,30}\bon (?:canvas|linen)/i;
 const EDITION_MARK_RE = /edition of|numbered|\b\d{1,3}\s*\/\s*\d{1,4}\b/i;
@@ -701,16 +703,25 @@ const EDITION_MARK_RE = /edition of|numbered|\b\d{1,3}\s*\/\s*\d{1,4}\b/i;
 const ESTATE_NO_RE = /\b(?:and )?numbered\s+['‘’"]?[A-Z]{0,4}\d{1,4}\.\d{2,4}[A-Z]?['‘’"]?|\bnum[ée]rot[ée]\s+['‘’"]?[A-Z]{0,4}\d{1,4}\.\d{2,4}['‘’"]?/gi;
 /** (wave 3) the French unique-medium line ("peinture … et encres sérigraphiques sur toile") */
 const FR_UNIQUE_MEDIUM_RE = /\b(?:huile|acrylique|peinture|encres?|gouache|fusain|aquarelle|crayon)\b[^.;]{0,80}?\bsur (?:toile|panneau)\b/i;
+/** (wave 5) a French drawing medium on paper ("Snail, gouache sur papier") — the
+ *  'unknown' pile's French-titled originals (crayon is excluded: "signée au
+ *  crayon … sur papier Arches" is a print's signature line) */
+const FR_PAPER_MEDIUM_RE = /\b(?:gouache|fusain|aquarelle|encre de chine|huile|acrylique)\b[^.;]{0,40}?\bsur papier\b/i;
 
+/** (wave 5) a title naming the suite / series / portfolio the sheet comes from */
+const FROM_SET_TITLE_RE = /,\s*from\s+(?!the\s+(?:collection|estate|property)|a\s+private|an?\s+important)(?:the\s+)?[A-Z'"«“]|\(from (?:the )?[^)]*\b(?:series|portfolio|suite)\)/;
 const artText = (l: ClassifyLot) => `${l.title || ''} | ${l.medium || ''} | ${(l.description || '').slice(0, 600)}`;
 
 /** (wave 2) class 10 · ceramics / sculpture with no medium text: a Picasso
  *  Madoura form noun ("Oiseau au ver ashtray", "Visage No. 202", "Plaque Profil
  *  de Jacqueline", "Service poisson, bol H", "visage brun/bleu (alain ramié 2)"),
  *  a repoussé silver plate, a bronze cast, a KAWS vinyl / chrome figure */
-const PICASSO_CERAMIC_RE = /\b(?:plates?|plat|assiette|pitchers?|pichet|cruchon|vases?|bowls?|bol|coupelle|ashtray|cendrier|plaques?|tiles?|carreaux?|dish|service poisson|tripode|pignate|jug|visage no\.?\s*\d+|alain rami[ée])\b/i;
-const SCULPT_RE = /repouss|\b(?:bronze|patina|foundry|fonderie|cast (?:in|by)|lost[- ]wax|sculpture|marble|painted steel|stainless steel|chrome[- ]coated|resin)\b/i;
-const KAWS_FIGURE_RE = /\b(?:companion|bff|chum|accomplice|dissected|small lie|together|time off|kubrick|be@?rbrick|vinyl|holiday|what party|clean slate|along the way|good intentions|passing through|resting place|gone|seeing|watching|share|take|figures?|plush)\b/i;
+const PICASSO_CERAMIC_RE = /\b(?:plates?|plat|assiette|pitchers?|pichet|cruchon|chope|gobelet|vases?|bowls?|bol|coupelle|ashtray|cendrier|plaques?|tiles?|carreaux?|dish|service poisson|tripode|pignate|jug|visage no\.?\s*\d+|alain rami[ée])\b/i;
+// (wave 5) + Calder's mobiles / stabiles and the sheet / painted metal of
+// Calder's and Haring's standing works ("Sheet metal, wire, and paint",
+// "painted aluminum") — the 'unknown' pile held them
+const SCULPT_RE = /repouss|\b(?:bronze|patina|foundry|fonderie|cast (?:in|by)|lost[- ]wax|sculpture|marble|painted steel|stainless steel|chrome[- ]coated|resin|(?:standing |hanging )?mobile|stabile|sheet metal|painted (?:metal|aluminu?m|aluminium)|welded)\b/i;
+const KAWS_FIGURE_RE = /\d00%|\b(?:companion|bff|chum|accomplice|dissected|small lie|together|time off|kubrick|be@?rbrick|bearbrick|pinocchio|vinyl|holiday|what party|clean slate|along the way|good intentions|passing through|resting place|gone|seeing|watching|share|take|figures?|plush)\b/i;
 /** catalogue / edition evidence that a lot is a print (incl. the catalogue
  *  raisonné citations the Sotheby's text-less records print in the title) */
 const PRINT_EVIDENCE_RE = /poster|affiche|lithograph|linocut|linogravure|etching|aquatint|screen ?print|silkscreen|s[ée]rigraph|woodcut|engraving|drypoint|offset|edition of|numbered|artist.s proof|\bprint(?:ed|s)?\b|gicl[ée]e|monotype|multiple|pochoir|photogravure|\bplates?\b|portfolio|\bfrom\b|\bsuite\b|f\.?\s*(?:&|and)\s*s\.?|feldman|schellmann|\bbloch\b|mourlot|\bbaer\b|cramer|corlett|gemini|ulae|duthuit|\([a-z]{1,3}\.\s*\d+[a-z]?\)|\b\d{1,3}\s*\/\s*\d{1,4}\b|\bhc\b|\bp\.?\s?p\.?\b|\bproof\b|\bimpression\b|\bsheet\b|catalogue|catalog\b|\bbooks?\b/i;
@@ -729,13 +740,61 @@ const PRINTS_SALE_RE = /prints?|multiples|editions?|posters?|photograph|design|s
 const PRINT_CAT_WORD_RE = /\b(?:bloch|baer|mourlot|duthuit|cramer|czwiklitzer|corlett|geiser|feldman)\s*(?:no\.?\s*)?\d+|\bs[ée]rie (?:347|156)\b|\bsuite (?:vollard|347|156)\b|\bf\.?\s*(?:&|and)\s*s\.?\s*[ivx]+/i;
 /** the initials form is case-sensitive: "(B. 152; Ba. 304)", "(Bl. 1561, Ba. 1577)", "(D. 515)", "(C. 127)" — a lone 4-digit "(B. 1977)" is a birth year */
 const PRINT_CAT_INIT_RE = /\((?:[^()]*[;,]\s*)?(?:(?:B|Bl|Ba)\.\s*(?:\d{1,3}\b|\d{4}\s*[;,])|(?:M|D|C|G)\.\s*\d{1,3}\b)/;
-const PRINT_CAT_REF_RE = { test: (x: string): boolean => PRINT_CAT_WORD_RE.test(x) || PRINT_CAT_INIT_RE.test(x) };
+/** (wave 5) a print SUITE's plate reference ("plate 141 from Série 156", "pl.
+ *  12", "from the Série 347") and the spelled-out Feldman & Schellmann cite
+ *  ("(feldman & schellmann ii.251)") — "plate" alone is also a Madoura form
+ *  noun, so without this the Picasso ceramic-noun rule filed the Série 156
+ *  etchings as sculpture and the sculpture branch filed them back as prints on
+ *  their Bloch number, flipping on every normalize run. 1–3 digits: "plate,
+ *  1956" is a dated ceramic plate. */
+const PLATE_REF_RE = /\b(?:plates?|pl\.)\s*(?:no\.?\s*)?(?:\d{1,3}|[ivxlc]{1,6})(?![\w½¼¾⅛⅜⅝⅞⅓⅔/]|[.,]\d|\s*(?:cm|mm|in\b|inch|")|\s+\d+\/\d)|\bfrom (?:the )?s[ée]rie\b|\bfeldman\s*(?:&|and)\s*schellmann\b|\bf\.?\s*&\s*s\.?\s*(?:[ivx]+|\d)/i;
+const PRINT_CAT_REF_RE = { test: (x: string): boolean => PRINT_CAT_WORD_RE.test(x) || PRINT_CAT_INIT_RE.test(x) || PLATE_REF_RE.test(x) };
+/** (wave 5) a photographic process named in the medium / object line */
+const PHOTO_PROCESS_RE = /\b(?:gelatin silver|silver gelatin|polaroid|chromogenic|c-print|dye[- ]transfer|cibachrome|type[- ]c print|platinum print|palladium print)\b/i;
+/** (wave 5) unicode / mixed fractions in a size line → a number */
+function sizeNum(x: string): number {
+  const F: Record<string, number> = { '½': 0.5, '¼': 0.25, '¾': 0.75, '⅛': 0.125, '⅜': 0.375, '⅝': 0.625, '⅞': 0.875, '⅓': 0.333, '⅔': 0.667 };
+  let v = 0;
+  const m = x.match(/(\d+(?:[.,]\d+)?)?(?:\s+(\d+)\/(\d+))?\s*([½¼¾⅛⅜⅝⅞⅓⅔])?/);
+  if (!m) return NaN;
+  if (m[1]) v += parseFloat(m[1].replace(',', '.'));
+  if (m[2]) v += +m[2] / +m[3];
+  if (m[4]) v += F[m[4]];
+  return v || NaN;
+}
+const SZ = String.raw`(\d+(?:[.,]\d+)?(?:\s+\d+\/\d+)?[½¼¾⅛⅜⅝⅞⅓⅔]?|[½¼¾⅛⅜⅝⅞⅓⅔])`;
+const UNIT_CM: Record<string, number> = { cm: 1, mm: 0.1, in: 2.54, '"': 2.54 };
+/** (wave 5) an OBJECT's depth / diameter in cm read off its size line, and
+ *  whether it was labelled ("10 d", "17¼ dia", "diameter 33cm") or only the
+ *  third of three measures ("63.5 x 40 x 36.8cm", "495 by 450 by 345 mm").
+ *  A frame's depth is never an object's: a line naming a frame reads null. */
+export function objectDepthCm(text: string): { cm: number; labelled: boolean } | null {
+  const t = String(text || '');
+  if (!t || /\bfram(?:e|ed|ing)\b|\bencadr/i.test(t)) return null;
+  let best: { cm: number; labelled: boolean } | null = null;
+  const take = (cm: number, labelled: boolean) => { if (cm > 0 && cm < 2000 && (!best || cm > best.cm)) best = { cm, labelled }; };
+  // Wright / Rago: "28½ h × 14 w × 10 d in (72 × 36 × 25 cm)", "4¾ d × 10⅜ dia in"
+  const wr = t.match(new RegExp(String.raw`((?:${SZ}\s*(?:h|w|d|dia|l)\s*[×x]\s*)*${SZ}\s*(?:h|w|d|dia|l))\s*(in|cm)\b`, 'i'));
+  if (wr) {
+    const unit = UNIT_CM[wr[wr.length - 1].toLowerCase()];
+    for (const part of wr[1].split(/\s*[×x]\s*/)) {
+      const pm = part.match(/^(.*?)\s*(h|w|d|dia|l)$/i);
+      if (pm && /^(?:d|dia)$/i.test(pm[2])) take(sizeNum(pm[1]) * unit, true);
+    }
+  }
+  // "diameter 13in (33cm)", "Diam. 30 cm"
+  const dia = t.match(new RegExp(String.raw`\b(?:diameter|diam\.?|dia\.)\s*:?\s*${SZ}\s*(cm|mm|in\b|")`, 'i'));
+  if (dia) take(sizeNum(dia[1]) * UNIT_CM[dia[2].toLowerCase()], true);
+  // three measures: the third is the depth
+  const tri = new RegExp(String.raw`${SZ}\s*(?:x|×|by)\s*${SZ}\s*(?:x|×|by)\s*${SZ}\s*(cm|mm|in\b|")`, 'gi');
+  for (let m: RegExpExecArray | null; (m = tri.exec(t));) take(sizeNum(m[3]) * UNIT_CM[m[4].toLowerCase()], false);
+  return best;
+}
 /** a ceramic OBJECT's own medium line (a "céramique" exhibition poster is a print) */
 const CERAMIC_OBJECT_RE = /madoura|earthenware|fa[iï]ence|terre cuite|terracotta|glazed|engobe|stoneware|porcelain|white clay|\bclay\b|empreinte originale|turned (?:vase|pitcher)/i;
 export function artCategoryFix(l: ClassifyLot): string | null {
   if (!ART_MAKERS.has(l.artist)) return null;
   const cat = l.category || 'unknown';
-  if (cat === 'photograph') return null;
   // (wave 3) an estate / foundation INVENTORY number ("numbered '221.032'", "A117.962") is not an edition
   const s = artText(l).replace(ESTATE_NO_RE, " ");
   const tm = `${l.title || ''} | ${l.medium || ''}`;
@@ -747,6 +806,18 @@ export function artCategoryFix(l: ClassifyLot): string | null {
   // sculpture word ("Sculpteur, Modèle et Sculpture assise, from La Suite
   // Vollard (B. 146; Ba. 297)", "exposition céramique vallauris (bloch 1286)")
   const catRef = PRINT_CAT_REF_RE.test(tm) || PRINT_CAT_REF_RE.test(s);
+  // (wave 5) a photographic process on the medium / object line is a
+  // photograph (Warhol's Polaroids and gelatin silver prints sat in prints);
+  // a Feldman & Schellmann-numbered "photograph" is a screenprint
+  const photoProcess = PHOTO_PROCESS_RE.test(`${tm} | ${(l.description || '').slice(0, 300)}`);
+  if (cat === 'photograph') return catRef && !photoProcess ? 'print' : null;
+  if (photoProcess && cat !== 'sculpture' && !strongPrint && !UNIQUE_MEDIUM_RE.test(s)) return 'photograph';
+  // (wave 5) an object's depth / diameter: a print or drawing has none. 8 cm
+  // clears a deep frame or a stretcher; a Picasso Madoura plate or plaque is
+  // shallow, so his labelled depth / diameter counts from 3 cm (Wright's
+  // "Tête", ¾ h × 12 dia in, sat in prints)
+  const dep = objectDepthCm(`${l.dimensions || ''} | ${l.title || ''} | ${l.medium || ''}`);
+  const deep = !!dep && (dep.cm >= 8 || (l.artist === 'pablo-picasso' && dep.labelled && dep.cm >= 3));
   const ceramicObject = CERAMIC_OBJECT_RE.test(s) || (l.artist === 'pablo-picasso' && (RAMIE_NO_RE.test(tm) || /alain rami[ée]/i.test(tm)));
   if (cat === 'sculpture') {
     // a lithograph / etching filed sculpture off a "Sculpture" / "Figure" title word
@@ -757,23 +828,44 @@ export function artCategoryFix(l: ClassifyLot): string | null {
   if (ceramic && !strongPrint && !(catRef && !ceramicObject)) return 'sculpture';
   // (wave 3) Koons's porcelain / balloon / vase multiples are sculpture ("Puppy (vase)")
   // (wave 4) + polychromed wood / steel / glass / aluminium editions ("Ushering in Banality")
-  if (l.artist === 'jeff-koons' && /\b(?:vase|porcelain|inflatable|stainless|sculpture|figure|polychrom\w*|wood|steel|aluminium|aluminum|glass|plastic|marble|granite|bronze|mirror[- ]polished)\b/i.test(s) && !strongPrint) return 'sculpture';
+  // (wave 5) + the balloon / Puppy / bust / crystal multiples ("Balloon Dog
+  // (Magenta)", "Puppy", "Baccarat Bar Set") — 'unknown' with no medium line
+  if (l.artist === 'jeff-koons' && /\b(?:vase|porcelain|inflatable|balloon|puppy|rabbit|bust|crystal|baccarat|stainless|sculpture|figure|polychrom\w*|wood|steel|aluminium|aluminum|glass|plastic|marble|granite|bronze|mirror[- ]polished)\b/i.test(s) && !strongPrint && !catRef && !/skate ?(?:board|deck)/i.test(s)) return 'sculpture';
   // (wave 2) class 10 · ceramic / sculpture forms with no medium text
+  // (wave 5) every rule here yields to a print catalogue / plate reference —
+  // the sculpture branch above files a catRef lot back to print, so a rule
+  // that ignored it flipped the lot on every run
   if (!strongPrint && !UNIQUE_MEDIUM_RE.test(s)) {
-    const printRef = /\b(?:bloch|baer|cramer|mourlot|geiser|\d+ plates|plates? from|from the|suite)\b/i.test(s);
+    const printRef = catRef || /\b(?:bloch|baer|cramer|mourlot|geiser|\d+ plates|plates? from|from the|suite)\b/i.test(s);
     if (l.artist === 'pablo-picasso' && !printRef && (PICASSO_CERAMIC_RE.test(l.title || '') || (cat === 'design' && !PRINT_EVIDENCE_RE.test(tm)))) return 'sculpture';
-    if (SCULPT_RE.test(s) && !/\bon (?:paper|canvas|linen|board)\b/i.test(s)) return 'sculpture';
-    if (l.artist === 'kaws' && KAWS_FIGURE_RE.test(tm) && !/\bon (?:paper|canvas)\b|portfolio|screenprint|print\b/i.test(s)) return 'sculpture';
+    // (a "Landscape Mobile (Study)" is the study for the mobile, not the mobile)
+    if (!catRef && SCULPT_RE.test(s) && !/\bon (?:paper|canvas|linen|board)\b/i.test(s)
+      && !(/\bstud(?:y|ies)\b/i.test(l.title || '') && !SCULPT_RE.test(s.replace(/\b(?:standing |hanging )?(?:mobile|stabile)s?\b/gi, ' ')))) return 'sculpture';
+    // (wave 5) the fabricator's "printed on the underside" is not a print medium
+    if (l.artist === 'kaws' && !catRef && KAWS_FIGURE_RE.test(tm) && !/\bon (?:paper|canvas)\b|portfolio|screen ?print|silkscreen|lithograph|serigraph/i.test(s)) return 'sculpture';
+    // (wave 5) a measured depth / diameter (KAWS "Bendy", Haring's painted
+    // aluminum, Calder's standing works, Picasso's Madoura plates)
+    // (a boxed "Package Painting" is still a painting)
+    if (deep && !catRef && !/\bon (?:paper|canvas|linen|board|panel)\b|\bsur (?:papier|toile)\b/i.test(s) && !/\bpaintings?\b/i.test(l.title || '')) return 'sculpture';
   }
   if (cat === 'original') return null;
-  if (UNIQUE_MEDIUM_RE.test(s) && !printWord) return 'original';
+  if ((UNIQUE_MEDIUM_RE.test(s) || FR_PAPER_MEDIUM_RE.test(s)) && !printWord) return 'original';
   // (wave 4) a unique medium whose only "print" word is the artist's dated
   // numbering ("signed, dated and numbered 'Picasso 6.1.54. XII' … brush and
   // pen and India ink on paper") is a drawing
   if (UNIQUE_MEDIUM_RE.test(s) && !strongPrint && !catRef && !/edition of|\b\d{1,3}\s*\/\s*\d{1,4}\b|artist.s proof|\bprint(?:ed|s)?\b|gicl[ée]e|monotype|multiple|pochoir|photogravure|portfolio|\bplates?\b/i.test(s)) return 'original';
   // (wave 4) an unknown-category lot with a printmaking medium line ("aquatint
   // in grey, 1992, on wove paper") is a print
-  if (cat === 'unknown' && (strongPrint || catRef) && !UNIQUE_MEDIUM_RE.test(s)) return 'print';
+  // (wave 5) + a design-stamped lot the same way (the last rule sends it to
+  // 'unknown', and the next run would read it again)
+  const unknownish = cat === 'unknown' || cat === 'design';
+  if (unknownish && (strongPrint || catRef) && !UNIQUE_MEDIUM_RE.test(s)) return 'print';
+  // (wave 5) the 'unknown' pile's edition evidence: a sheet "from" a named
+  // suite / series / portfolio ("Nude Reading, from the Nude Series", "Right
+  // panel, from Triptych 1991"), a portfolio, a gallery mailer, a multiple,
+  // and a Phillips EDITIONS sale (department 030 in the sale code)
+  if (unknownish && !UNIQUE_MEDIUM_RE.test(s) && !FR_PAPER_MEDIUM_RE.test(s)
+    && (FROM_SET_TITLE_RE.test(l.title || '') || /\bportfolio\b|\bmailer\b|\bmultiple\b/i.test(s) || /^phillips-[a-z]{2}030/i.test(String(l.id || '')))) return 'print';
   // (wave 3) a work on CANVAS / linen with no edition is a painting —
   // Warhol's "silkscreen ink, acrylic and ballpoint pen on linen", "encres
   // sérigraphiques sur toile", "screenprint ink, and diamond dust on canvas"

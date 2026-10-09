@@ -15,6 +15,7 @@ export const SUBCAT_LABELS: Record<string, string> = {
   'wrestling': 'Wrestling',
   // watches
   'wristwatches': 'Wristwatches', 'pocket-watches': 'Pocket watches', 'clocks': 'Clocks',
+  'watch-accessories': 'Watch accessories',
   'daytona': 'Daytona', 'submariner': 'Submariner', 'gmt-master': 'GMT-Master',
   'day-date': 'Day-Date', 'datejust': 'Datejust', 'explorer': 'Explorer',
   'sea-dweller': 'Sea-Dweller', 'yacht-master': 'Yacht-Master', 'milgauss': 'Milgauss',
@@ -46,7 +47,7 @@ export const SUBCAT_LABELS: Record<string, string> = {
   'pokemon-cards': 'Pokémon singles', 'pokemon-sealed': 'Sealed wax',
   // art
   'prints': 'Prints & multiples', 'originals': 'Original works', 'sculpture': 'Sculpture & ceramics',
-  'photographs': 'Photographs', 'books': 'Books',
+  'photographs': 'Photographs', 'books': 'Books', 'ceramics': 'Ceramics',
   // design
   'seating': 'Seating', 'tables': 'Tables & desks', 'case-storage': 'Case & storage',
   'lighting': 'Lighting', 'objects': 'Objects',
