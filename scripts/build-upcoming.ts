@@ -26,6 +26,8 @@ import { appendCalls, readCalls, type Call } from './lib/calls-ledger';
 import { hasConditionFlag } from '../app/lib/condition';
 import { gapRead, sleeperRead, valueFloor, closeGrowth, validateGapCells, gapCellKey, type CloseCurve } from '../app/lib/lanes';
 import { CARD_TIER_CODE } from './lib/calls-ledger';
+import { taxonOf } from '../app/lib/taxonomy';
+import { prioStatic } from '../app/lib/priority';
 import type { AuctionLot as EngineLot } from '../app/types';
 import type { AuctionLot, RealizedPoint, BidCompetitionPoint } from '../app/types';
 
@@ -266,6 +268,21 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
       }
       return emitted;
     });
+  // CLEAN TAXONOMY + PRIORITY health line (Oct 8). Both are pure functions of
+  // fields every served lot already carries (artist/subCat/drill, estimates,
+  // value, signal, bidProj), so the client computes them — stamping them would
+  // add ~0.9MB to the eager payload for nothing. Logged nightly so a classifier
+  // or anchor regression shows up in the run log.
+  {
+    const byCat = new Map<string, number>();
+    let prio = 0;
+    for (const e of upcoming) {
+      const c = taxonOf(e as { artist?: string; subCat?: string; drill?: string }).cat;
+      byCat.set(c, (byCat.get(c) ?? 0) + 1);
+      if (prioStatic(e as Parameters<typeof prioStatic>[0])) prio++;
+    }
+    console.log(`[upcoming] taxonomy: ${Array.from(byCat.entries()).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k}:${n}`).join(' ')} · prio anchored ${prio}/${upcoming.length}`);
+  }
 
   if (freshCalls.length) {
     const led = appendCalls(freshCalls);
