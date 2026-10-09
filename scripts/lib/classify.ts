@@ -167,7 +167,7 @@ export function sportsObjectKind(title: string | null | undefined, catchAll: 'sp
 // wrong for 69k rows (jerseys, balls, photos, sealed boxes, magazines, comics):
 // the card detector decides card; everything else gets its object kind.
 // Non-sport TCG (Yu-Gi-Oh / One Piece / Union Arena …) and comics have no home.
-export const NON_SPORT_TCG_RE = /\b(yu-?gi-?oh!?|one piece|union arena|dragon ball|digimon|magic:? the gathering|\bmtg\b|weiss schwarz|lorcana|flesh and blood|jujutsu kaisen|naruto|my hero academia|demon slayer|star wars unlimited)\b/i;
+export const NON_SPORT_TCG_RE = /\b(yu-?gi-?oh!?|one piece|union arena|dragon ball|digimon|magic:? the gathering|\bmtg\b|weiss schwarz|lorcana|flesh and blood|jujutsu kaisen|naruto|my hero academia|demon slayer|star wars unlimited|black lotus|mox (?:sapphire|ruby|pearl|jet|emerald))\b/i;
 
 export function goldinSportKind(title: string | null | undefined): string {
   const t = String(title || '');

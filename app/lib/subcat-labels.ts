@@ -46,7 +46,7 @@ export const SUBCAT_LABELS: Record<string, string> = {
   'era-vintage': 'Vintage cards (pre-1980)', 'era-classic': 'Classic cards (1980–99)', 'era-modern': 'Modern cards (2000+)',
   'pokemon-cards': 'Pokémon singles', 'pokemon-sealed': 'Sealed wax',
   // art
-  'prints': 'Prints & multiples', 'originals': 'Original works', 'sculpture': 'Sculpture & ceramics',
+  'prints': 'Prints & multiples', 'originals': 'Original works', 'sculpture': 'Sculpture',
   'photographs': 'Photographs', 'books': 'Books', 'ceramics': 'Ceramics',
   // design
   'seating': 'Seating', 'tables': 'Tables & desks', 'case-storage': 'Case & storage',

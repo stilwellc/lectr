@@ -127,7 +127,7 @@ export interface CardBookId {
  *  so qualifiers / Authentic / unparsed graders are seen the same way the
  *  engine sees them. */
 export function cardBookId(l: AuctionLot): CardBookId | SkipReason | null {
-  if (!CARD_SLUGS.has(l.artist)) return null;
+  if (!CARD_SLUGS.has(l.artist) || l.subCat === 'tcg-other') return null;
   const title = l.title || '';
   if (hasConditionFlag(title) || llmConditionFlag(l)) return 'condition';
   const c = mergeCardExtract(parseCard(title), l);

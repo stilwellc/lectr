@@ -15,6 +15,7 @@
  */
 import { ARTIST_MARKET } from '../../app/constants';
 import { SUBJECT_DOMAINS } from './subject-domains';
+import { NON_SPORT_TCG_RE } from './classify';
 
 type Lot = Record<string, unknown>;
 
@@ -172,6 +173,9 @@ const CULT_KIND: Record<string, string> = {
   'costume': 'worn-personal',
   'instrument': 'instruments', 'award': 'awards', 'prop': 'props',
   'poster': 'posters', 'record': 'records', 'ticket': 'tickets',
+  // (Oct 8) animation cels / production drawings were stamped itemClass
+  // 'cel-art' but rolled up to 'other'
+  'cel-art': 'cel-art',
 };
 // (wave 3) the domain a culture lot's OWN words name, when no curated subject
 // does — 97k culture lots carried no drill (RR's "<Name> Signed Photograph /
@@ -182,13 +186,22 @@ const CULT_KIND: Record<string, string> = {
 // Victoria", "King Louis XIII"): Queen the band is music.
 const CULT_TEXT_DOMAIN: [RegExp, string][] = [
   [/\b(?:astronauts?|cosmonauts?|nasa|apollo \d+|space shuttle|mercury seven|moonwalkers?)\b/i, 'space-science'],
-  [/\b(?:presidents?|presidential|vice[- ]president|first lady|white house|senat(?:e|ors?)|congress(?:man|woman|ional)?|impeachment|(?:presidential|political) campaign|campaign (?:buttons?|posters?|pins?|banners?|ribbons?|badges?)|inaugura(?:l|tion)|jugate|supreme court|chief justice|governor|secretary of state|prime minister|parliament|mayor|ambassador|electoral|confederate president|political)\b/i, 'political'],
+  [/\b(?:signers? of the declaration|declaration (?:of independence )?signers?|presidents?|presidential|vice[- ]president|first lady|white house|senat(?:e|ors?)|congress(?:man|woman|ional)?|impeachment|(?:presidential|political) campaign|campaign (?:buttons?|posters?|pins?|banners?|ribbons?|badges?)|inaugura(?:l|tion)|jugate|supreme court|chief justice|governor|secretary of state|prime minister|parliament|mayor|ambassador|electoral|confederate president|political)\b/i, 'political'],
   [/\b(?:concerts?|tour (?:posters?|programs?|books?|jackets?|shirts?|pass(?:es)?)|(?<!(?:photo|photograph|autograph|stamp|scrap|sticker|card|cabinet card) )albums?(?!\s+pages?)|rock band|the band|band[- ](?:signed|members?)|guitars?|singers?|songs?|songwriter|lyrics?|rock (?:and|&|n'?) roll|vinyl|gold record|platinum record|grammy|drum ?sticks?|drumheads?|setlist|set list|stage[- ](?:worn|played|used)|backstage|recording|motown|woodstock|orchestra|opera|symphony|composer|musical quot\w*|musical score|ballroom)\b/i, 'music'],
-  [/\b(?:films?|movies?|motion picture|screen[- ](?:used|worn|matched)|production[- ](?:made|used|drawing|cels?|art)|film studios?|actors?|actress(?:es)?|one[- ]sheets?|lobby cards?|animation|animated|cels?|walt disney|disney|television|tv series|tv show|sitcom|episode|ursa|oscars?|academy awards?|emmys?|hollywood|filmmakers?|screenplay|shooting script|movie poster)\b/i, 'hollywood'],
-  [/\b(?:wwii|ww2|wwi|world war|army|navy|naval|admiral|soldiers?|battle(?:ship|field)?|regiment(?:al)?|air aces?|luftwaffe|military|marine corps|usmc|usaf|pearl harbor|d-day|nazi|third reich|medal of honor|fighter pilot)\b/i, 'military'],
+  [/\b(?:films?|movies?|motion picture|screen[- ](?:used|worn|matched)|production[- ](?:made|used|drawing|cels?|art)|film studios?|actors?|actress(?:es)?|one[- ]sheets?|lobby cards?|animation|animated|cels?|walt disney|disney|television|tv series|tv show|sitcom|episode|ursa|oscars?|academy awards?|emmys?|hollywood|filmmakers?|screenplay|shooting script|movie poster|dicaprio|winslet)\b/i, 'hollywood'],
+  [/\b(?:wwii|ww2|wwi|world war|army|navy|naval|admiral|soldiers?|battle(?:ship|field)?|regiment(?:al)?|air aces?|luftwaffe|military|marine corps|usmc|usaf|pearl harbor|d-day|nazi|third reich|medal of honor|fighter pilot|(?:civil|revolutionary) war(?![- ](?:dated|date))|war of 1812|continental army|confederate|union army)\b/i, 'military'],
+  // (Oct 8) ~28k historical culture lots fell to Entertainment for want of a
+  // cue: the notorious (crime), the aviators and polar explorers (aviation —
+  // filed military before), and the event / document / church words
+  [/\b(?:gangsters?|mobsters?|mafia|mug ?shots?|outlaws?|bootlegg(?:er|ers|ing)|wanted poster|alcatraz|bank robber|serial killer|al capone|john dillinger|bonnie (?:and|&) clyde|clyde barrow|bonnie parker|baby face nelson|pretty boy floyd|machine gun kelly|billy the kid|jesse james|bugsy siegel|lucky luciano|dutch schultz|charles manson|lee harvey oswald|jack ruby|john wilkes booth|lizzie borden)\b/i, 'crime'],
+  [/\b(?:aviation|aviators?|aviatrix|aeronaut\w*|airplanes?|aeroplanes?|airships?|zeppelin|hindenburg|lindbergh|spirit of st\.? louis|wright brothers|orville wright|wilbur wright|kitty hawk|amelia earhart|earhart|wiley post|bl[eé]riot|north pole|south pole|antarctic\w*|arctic expedition|polar expedition|peary|shackleton|amundsen|nansen|richard e\.? byrd|admiral byrd)\b/i, 'aviation'],
+  // the Titanic of the 1997 film (a screen-used prop, a DiCaprio still) is film
+  [/\b(?:titanic\b(?!.*\b(?:screen[- ](?:used|worn|matched)|production[- ](?:used|made)|dicaprio|winslet|james cameron|props?|1953|1997|20th century[- ]fox)\b)|lusitania|newspapers?|colonial (?:currency|notes?|bills?)|continental currency)\b/i, 'historic'],
+  // case-sensitive church titles: John Pope the Union general is not a pope
+  [/\b(?:Pope|POPE) (?:John|JOHN|Paul|PAUL|Pius|PIUS|Benedict|BENEDICT|Francis|FRANCIS|Leo|LEO|Gregory|Clement|Urban|Innocent|Sixtus|Julius)\b|\b(?:[Pp]apal|PAPAL|[Vv]atican|VATICAN|[Aa]rchbishop|ARCHBISHOP)\b|\b(?:[Cc]ardinal|CARDINAL) [A-Z]|\b(?:[Ss]aint|SAINT) (?:Teresa|Mother Teresa|John Paul|Padre Pio|Bernadette|Junipero|Elizabeth Ann Seton|Katharine Drexel)\b/, 'historic'],
   // case-sensitive: a royal title + a capitalised name ("King Louis XIII",
   // "QUEEN VICTORIA"); Prince the musician is not royalty
-  [/\b(?:[Kk]ing|KING) (?:George|GEORGE|Louis|LOUIS|Henry|HENRY|Edward|EDWARD|Charles|CHARLES|William|WILLIAM|James|JAMES|Richard|RICHARD|Philip|PHILIP|Ferdinand|Frederick|Gustav|Haakon|Leopold|Alfonso|Carlos|Juan|Umberto|Victor|Farouk|Hussein|Faisal|Kalakaua|Kamehameha)\b|\b(?:[Qq]ueen|QUEEN) (?:[Vv]ictoria|VICTORIA|[Ee]lizabeth|ELIZABETH|[Mm]ary|MARY|[Aa]nne|ANNE|[Mm]other|MOTHER|[Aa]lexandra|[Cc]harlotte|[Mm]arie)|\b(?:[Pp]rince|PRINCE)(?:ss|SS)? (?:of|OF) [A-Z]|\b(?:[Pp]rincess|PRINCESS) (?:Diana|DIANA|Grace|GRACE|Margaret|MARGARET|Anne|ANNE|Alexandra)\b|\b(?:[Pp]rince|PRINCE) (?:Albert|Charles|Philip|William|Harry|Edward|Andrew|Rainier|Henry|Frederick|Louis)\b|\b(?:[Ee]mperor|EMPEROR|[Ee]mpress|EMPRESS|[Cc]zar|CZAR|[Tt]sar|TSAR)\b|\b(?:[Rr]oyal [Ff]amily|[Dd]uke of|[Dd]uchess of|DUKE OF|DUCHESS OF)/, 'royalty'],
+  [/\b(?:[Kk]ing|KING) (?:George|GEORGE|Louis|LOUIS|Henry|HENRY|Edward|EDWARD|Charles|CHARLES|William|WILLIAM|James|JAMES|Richard|RICHARD|Philip|PHILIP|Ferdinand|Francis|FRANCIS|Frederick|Gustav|Henri|Wilhelm|Christian|Olav|Alexander|Peter|Khalid|Fahd|Saud|Haakon|Leopold|Alfonso|Carlos|Juan|Umberto|Victor|Farouk|Hussein|Faisal|Kalakaua|Kamehameha)\b|\b(?:[Qq]ueen|QUEEN) (?:[Vv]ictoria|VICTORIA|[Ee]lizabeth|ELIZABETH|[Mm]ary|MARY|[Aa]nne|ANNE|[Mm]other|MOTHER|[Aa]lexandra|[Cc]harlotte|[Mm]arie)|\b(?:[Pp]rince|PRINCE)(?:ss|SS)? (?:of|OF) [A-Z]|\b(?:[Pp]rincess|PRINCESS) (?:Diana|DIANA|Grace|GRACE|Margaret|MARGARET|Anne|ANNE|Alexandra)\b|\b(?:[Pp]rince|PRINCE) (?:Albert|Charles|Philip|William|Harry|Edward|Andrew|Rainier|Henry|Frederick|Louis)\b|\b(?:[Ee]mperor|EMPEROR|[Ee]mpress|EMPRESS|[Cc]zar|CZAR|[Tt]sar|TSAR)\b|\b(?:[Rr]oyal [Ff]amily|[Dd]uke of|[Dd]uchess of|DUKE OF|DUCHESS OF)|\b(?:[Gg]rand [Dd]uke|[Gg]rand [Dd]uchess|GRAND DUKE|GRAND DUCHESS|[Aa]rchduke|ARCHDUKE|[Kk]aiser|KAISER)\b|\bFranz Joseph\b/, 'royalty'],
   [/\b(?:novels?|novelist|poets?|poems?|poetry|authors?|playwright|first edition)\b/i, 'literary'],
 ];
 /** The curated domain of a lot's subjects. (wave 3) A subject read as a longer
@@ -220,8 +233,24 @@ export function cultureTextDomain(s: string): string | null {
   return best;
 }
 
+/** (Oct 8) the couture houses whose garments sell as fashion, not costume */
+const COUTURE_RE = /\b(?:christian dior|dior|issey miyake|chanel|balenciaga|givenchy|yves saint laurent|saint laurent|alexander mcqueen|vivienne westwood|jean paul gaultier|versace|schiaparelli|yohji yamamoto|comme des gar[cç]ons)\b/i;
+/** ...worn or owned by a named person ("Elton John's Personally-Owned Versace Shirt") */
+const CELEB_WORN_RE = /\b(?:stage|screen|film|tour|personally|concert)[- ](?:worn|owned|used)\b|\b(?:worn|owned) by\b|^[^,]{3,80}['’]s\b/i;
+
+/** (Oct 8) a film / music sale */
+const SHOWBIZ_SALE_RE = /hollywood|movie|film|entertainment|music|rock n'? ?roll|pop culture/i;
+
 // sale-name fallback when no subject maps to a domain
 const CULT_SALE_DOMAIN: [RegExp, string][] = [
+  // (Oct 8) RR's single-theme sales ("Titanic II", "Gangsters, Outlaw &
+  // Lawmen", "Science and Technology") — anchored: a "Fine Autographs …
+  // Featuring Civil War / Royalty" sale, the "Civil War Auction" and the
+  // "Rare Manuscript, Document & Autograph" sale are general autograph sales
+  // (43–62% of their drilled lots are music / film / political)
+  [/^titanic\b/i, 'historic'],
+  [/^(?:old west, )?(?:gangsters|outlaws)\b/i, 'crime'],
+  [/^science (?:&|and) tech/i, 'science'],
   [/marvels of modern music|rock n'? ?roll|music/i, 'music'],
   [/hollywood|movie|film|entertainment/i, 'hollywood'],
   [/president|political|white house/i, 'political'],
@@ -240,14 +269,36 @@ const SPACE_PROGRAM: [string, RegExp][] = [
   // (wave 2) Skylab flew Apollo hardware (the Apollo Applications Program) —
   // read after an explicit shuttle-era mention ("Skylab and Shuttle-Era Suits")
   ['apollo', /skylab/i],
-  ['soviet', /soyuz|sputnik|cosmonaut|vostok|voskhod|\bmir\b|lunokhod|\bsoviet\b|\bussr\b|\bn1-l3\b|gagarin|korolev/i],
+  ['soviet', /soyuz|sputnik|cosmonaut|vostok|voskhod|\bmir\b|lunokhod|\bsoviet\b|\bussr\b|\bn1-l3\b|gagarin|korolev|tereshkova|leonov|titov|komarov/i],
   // (wave 2) RR's space catalogue titles a lot by the astronaut alone ("Neil
   // Armstrong Signed Photograph", "Gus Grissom Check"): the program of the
   // astronaut's era — Apollo crews and moon words first, then the Mercury /
   // Gemini-only names (a Schirra + Cunningham photo is Apollo 7)
   ['apollo', /\b(?:neil armstrong|buzz aldrin|michael collins|alan bean|edgar mitchell|(?:jim|james) irwin|(?:charlie|charles) duke|(?:gene|eugene) cernan|harrison schmitt|(?:al|alfred) worden|fred haise|jack swigert|stuart roosa|(?:ron|ronald) evans|walt(?:er)? cunningham|donn eisele|(?:bill|william) anders|(?:dave|david) scott|(?:pete|charles) conrad|rusty schweickart|moonwalkers?|moon ?walk|first man on the moon|lunar|saturn v|command module)\b/i],
-  ['mercury-gemini', /\b(?:john glenn|gus grissom|virgil grissom|scott carpenter|wally schirra|walter schirra|deke slayton|gordon cooper|liberty bell 7|friendship 7|freedom 7|ham the chimp|mercury (?:7|seven)|original seven)\b/i],
+  // (Oct 8) the Mercury names with a middle initial or alone ("Alan B.
+  // Shepard", "John H. Glenn", "Grissom")
+  ['mercury-gemini', /\b(?:john (?:h\.? )?glenn|(?:gus|virgil) (?:i\.? )?grissom|grissom|scott carpenter|(?:wally|walter) (?:m\.? )?schirra|schirra|deke slayton|(?:gordon|l\.? gordon) (?:l\.? )?cooper|(?:alan (?:b\.? )?)?shepard|liberty bell 7|friendship 7|freedom 7|ham the chimp|mercury (?:7|seven)|original seven)\b/i],
+  // (Oct 8) the Apollo-era names that flew Gemini too (Lovell, Borman,
+  // Stafford, Young, White), read after the Mercury / Gemini names (a Schirra +
+  // Borman photo is the Gemini 6A / 7 rendezvous), and the F-1 engine
+  ['apollo', /\b(?:(?:ed|edward) (?:h\.? )?white(?: ii)?|(?:roger )?chaffee|(?:jim|james) (?:a\.? )?lovell|lovell|(?:frank )?borman|(?:tom|thomas) (?:p\.? )?stafford|john (?:w\.? )?young|(?:rocketdyne )?f-?1 (?:rocket )?engines?)\b/i],
+  // (Oct 8) the shuttle-era names, read after the Apollo crews (Apollo 11's
+  // command module was also "Columbia")
+  ['shuttle-iss', /\b(?:challenger|columbia|(?:christa )?mcauliffe|sally ride)\b/i],
 ];
+/** (Oct 8) the scientists a culture 'space-science' lot names → 'science' */
+const SCIENTIST_RE = /\b(?:einstein|newton|curie|tesla|edison|darwin|hawking|galileo|faraday|bohr|oppenheimer|feynman|freud|pasteur|salk|sabin|schweitzer|morse|graham bell|marconi|fleming|lister|pauling|planck|jung|heisenberg|fermi|teller|watson|crick|carver|nightingale|goodall|tombaugh|hubble|sagan|scientists?|physicists?|chemists?|inventors?|nobel|dna|apple computer|steve jobs|wozniak|computer)\b/i;
+/** (Oct 8) aviation pioneers / polar explorers inside a 'space-science' lot */
+const AVIATION_RE = /\b(?:aviation|aviators?|aviatrix|airplanes?|aeroplanes?|airships?|zeppelin|hindenburg|lindbergh|wright brothers|orville wright|wilbur wright|earhart|wiley post|bl[eé]riot|sikorsky|whittle|chuck yeager|yeager|peary|shackleton|amundsen|byrd|explorers?)\b/i;
+/** (Oct 8) a culture lot whose domain reads 'space-science' → the space
+ *  program it names, a scientist ('science') or an aviator ('aviation'),
+ *  else stays 'space-science' */
+export function spaceScienceDrillOf(text: string): string {
+  for (const [k, re] of SPACE_PROGRAM) if (re.test(text)) return k;
+  if (AVIATION_RE.test(text)) return 'aviation';
+  if (SCIENTIST_RE.test(text)) return 'science';
+  return 'space-science';
+}
 const FLOWN_RE = /\bflown\b|carried aboard|lunar surface|surface[- ]carried/i;
 const TECH_DRILL: [string, RegExp][] = [
   ['computing', /apple|steve jobs|macintosh|wozniak|computer|ibm\b|commodore|altair|enigma|microsoft|\bnext\b|calculator/i],
@@ -366,6 +417,18 @@ const WATCH_NOUN_RE = /wrist ?watch|\bwatch(?:es)?\b(?!\s*(?:box(?:es)?|winders?
 /** an accessory noun in the lot's lead phrase */
 const WATCH_ACCESSORY_RE = /\b(?:winders?|winding (?:box|case)|watch (?:box(?:es)?|stands?|cases\b|rolls?|pouch|display|holders?)|presentation box(?:es)?|boxes|straps?|buckles?|deployant|ashtrays?|statues?|statuettes?|figurines?|display(?: stand)?s?|dealer(?:'s)? signs?|accessor(?:y|ies))\b/i;
 
+// ── pokémon ─────────────────────────────────────────────────────────────────
+/** a slab grade: grader + number ("PSA GEM MT 10", "BGS PRISTINE 10", "CGC 9.5") */
+const POKE_SLAB_RE = /\b(?:psa|bgs|cgc|sgc)\s+(?:[a-z]+[-+/ ]*){0,4}?\d{1,2}(?:\.5)?\b/i;
+const POKE_PACK_WORD_RE = /\b(?:packs?|sealed|unopened|booster|box(?:es)?)\b/i;
+/** non-card pieces: never cards whatever they include */
+const POKE_MEMORABILIA_RE = /\b(?:shikishi|film reels?|film cels?|skateboards?|skate decks?|plush(?:ies)?|plushes)\b/i;
+/** ...and the ones a card can be named after ("#1 Trophy Pikachu", "Trophy Card") */
+const POKE_MEMORABILIA_LOOSE_RE = /\b(?:troph(?:y|ies)(?! cards?)|figurines?|statues?|figures?(?! collection| box))\b/i;
+/** multi-card lots and sets — a set NAME ("Legendary Collection") is not one */
+const POKE_LOTS_RE = /\blots? of\b|\b(?:near[- ])?complete (?:master )?sets?\b|\b(?:card|graded|slabs?) collection\b|-graded (?:card )?collection\b|\bcollection \((?!\d+ (?:packs?|boxes|cases?|tins?|blisters?)\b)\d|\(\d+ (?:different|cards?)\)/i;
+const POKE_ECARD_RE = /\b(?:aquapolis|skyridge|expedition|e-?card)\b/i;
+
 // ── the stamps ──────────────────────────────────────────────────────────────
 export interface SubCatStamp { subCat: string | null; drill: string | null; flown: boolean | null }
 
@@ -420,6 +483,10 @@ export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
 
   if (vert === 'sports') {
     const subCat = SPORTS_KIND[l.artist as string] ?? null;
+    // (Oct 8) a Yu-Gi-Oh! / One Piece / Lorcana / Magic card or box filed as a
+    // sports card keeps its slug but is no sports card: it carries no sport
+    // and the card comp paths skip it (build-market, emit-value-book)
+    if ((subCat === 'cards' || subCat === 'wax') && NON_SPORT_TCG_RE.test(title)) return { subCat: 'tcg-other', drill: null, flown: null };
     let drill = sportSlugOf(l.sport);
     // (wave 3) a cricket / rugby / polo lot has no drill of ours
     if (!drill && NO_SPORT_DRILL_RE.test(title.replace(/\bpolo grounds\b/gi, ' '))) return { subCat, drill: null, flown: null };
@@ -491,10 +558,24 @@ export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
     // a card NUMBER makes it a single, whatever product it was pulled from
     // ("Stamp Box Full Art #227 Pikachu", "Card Pack 25th Anniversary #006",
     // "Collector Chest Holo #SM226") — 1.2k singles were filed sealed
-    const subCat = !/#\s?[A-Za-z0-9]/.test(title) && /\b(booster|sealed|unopened|box(es)?|packs?|case|display|tins?|blister|bundle|elite trainer)\b/i.test(title) ? 'pokemon-sealed' : 'pokemon-cards';
+    // (Oct 8) a slab grade with no pack / box word is a graded single ("Tag
+    // Team Tins Sm168 … PSA MINT 9"); the non-card pieces (a shikishi board, a
+    // skateboard deck, a trophy) and the multi-card lots / sets are their own
+    // kinds
+    const numbered = /#\s?[A-Za-z0-9]/.test(title);
+    const slabSingle = POKE_SLAB_RE.test(title) && !POKE_PACK_WORD_RE.test(title);
+    const sealedWord = /\b(booster|sealed|unopened|box(es)?|packs?|case|display|tins?|blister|bundle|elite trainer)\b/i.test(title);
+    const subCat = (POKE_MEMORABILIA_RE.test(title) || (!numbered && !POKE_SLAB_RE.test(title) && POKE_MEMORABILIA_LOOSE_RE.test(title))) ? 'pokemon-memorabilia'
+      // a lot of sealed packs / boxes is still sealed product
+      : POKE_LOTS_RE.test(title) && !sealedWord ? 'pokemon-lots'
+      : !numbered && !slabSingle && sealedWord ? 'pokemon-sealed' : 'pokemon-cards';
+    // the year: four digits, else Goldin's two-digit lead ("99 Pokemon Japanese
+    // Promo …"); the e-Card series (Expedition, Aquapolis, Skyridge — 2003 in
+    // English) closes the WotC vintage era
     const y = (title.match(/\b(19|20)\d{2}\b/) || [])[0];
-    const yr = y ? parseInt(y, 10) : null;
-    const drill = yr ? (yr <= 2002 ? 'vintage' : yr <= 2016 ? 'classic' : 'modern') : null;
+    const y2 = y ? null : title.match(/^\s*'?(\d{2})\s+(?:\S+\s+){0,2}?pok[eé]mon\b/i);
+    const yr = y ? parseInt(y, 10) : y2 ? (+y2[1] >= 90 ? 1900 : 2000) + +y2[1] : null;
+    const drill = POKE_ECARD_RE.test(title) ? 'vintage' : yr ? (yr <= 2002 ? 'vintage' : yr <= 2016 ? 'classic' : 'modern') : null;
     return { subCat, drill, flown: null };
   }
 
@@ -505,17 +586,28 @@ export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
     // (wave 3) the lot's own words, then the subject's domain learned from its
     // worded siblings (a bare "Schuyler Colfax" lot inherits "Schuyler Colfax
     // Signed Document as Vice President"), then the description's head
-    if (!drill) drill = cultureTextDomain(title);
+    // (Oct 8) the new historical cues (a Titanic, an outlaw, an airship) name
+    // a FILM in a film / music sale ("THE OUTLAW" one-sheet, "Titanic, 1997")
+    const sale = (l.saleName as string) || '';
+    const textDomain = (s: string): string | null => {
+      const d = cultureTextDomain(s);
+      return d && SHOWBIZ_SALE_RE.test(sale) && (d === 'historic' || d === 'crime' || d === 'aviation') ? null : d;
+    };
+    if (!drill) drill = textDomain(title);
     if (!drill && sportMaps?.bySubject && Array.isArray(subjects)) {
       // a subject the curated list files 'other' (Civil War, Titanic, WWII)
       // spans domains — it is never learned
       for (const s of subjects) { const d = SUBJECT_DOMAINS[s] ? null : sportMaps.bySubject.get(s); if (d) { drill = d; break; } }
     }
-    if (!drill) drill = cultureTextDomain(descHeadOf(l, 260));
+    if (!drill) drill = textDomain(descHeadOf(l, 260));
     if (!drill) {
-      const sale = (l.saleName as string) || '';
       for (const [re, d] of CULT_SALE_DOMAIN) if (re.test(sale)) { drill = d; break; }
     }
+    // (Oct 8) a 'space-science' figure is a space program, a scientist or an aviator
+    if (drill === 'space-science') drill = spaceScienceDrillOf(`${title} ${(subjects || []).join(' ')}`);
+    // (Oct 8) a couture piece (a Dior gown from a sale, a McQueen jacket) is
+    // not a costume or prop — unless a named person wore / owned it
+    if ((subCat === 'worn-personal' || subCat === 'props') && COUTURE_RE.test(title) && !CELEB_WORN_RE.test(title)) return { subCat: 'other', drill, flown: null };
     return { subCat, drill, flown: null };
   }
 
