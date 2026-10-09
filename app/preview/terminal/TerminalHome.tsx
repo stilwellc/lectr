@@ -39,7 +39,8 @@ import { subCatLabel } from '../../lib/subcat-labels';
 import MarketSwitch from '../../components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS, feedFromParams, feedToParams } from '../../components/FeedToolbar';
 import { useUrlState, useLastVisit, passesTriage } from '../../lib/feed-filters';
-import { byPriority, shortlist, reasonOf } from '../../lib/priority';
+import { byPriority, shortlist, reasonOf, forYou } from '../../lib/priority';
+import { useFollows, affinityOf } from '../../lib/follows';
 import { Colophon, daysWord, pickCall } from '../../components/Terminal';
 import Flick from '../../components/Flick';
 import Greeting from '../../components/Greeting';
@@ -387,6 +388,7 @@ export default function TerminalHomePage() {
   // Oct 8: the feed state lives in the URL (reload / share reopens the view)
   const [feedFilters, setFeedFilters] = useUrlState<FeedFilters>(FEED_DEFAULTS, feedFromParams, feedToParams);
   const prevVisitDay = useLastVisit();
+  const { follows } = useFollows();
   const [tableLot, setTableLotRaw] = useState<AuctionLot | null>(null);
   // THE MODAL JOINS HISTORY (audit-navbugs defect 1): opening a lot pushes a
   // history entry, so the browser Back (and the mobile back-gesture) CLOSES
@@ -732,10 +734,15 @@ export default function TerminalHomePage() {
   // The feed the reader sees. "What matters" (the default tab, Matters-most
   // order only) is the capped shortlist of whatever is filtered: ≥$2.5K,
   // closes ≤7d, has evidence; ≤5/category, ≤3/sale, ≤2/maker.
-  const topTab = feedFilters.sort === 'priority' && (feedFilters.tab ?? 'top') === 'top';
+  // "For you" (Oct 8): only once the reader follows something (maker,
+  // player, category, house) — signed in or not (app/lib/follows)
+  const youTab = follows.length > 0 && feedFilters.tab === 'you';
+  const topTab = !youTab && feedFilters.sort === 'priority' && (feedFilters.tab ?? 'top') !== 'all';
   const feed = useMemo(
-    () => (topTab ? shortlist(feedAll, Date.now(), 20) : feedAll),
-    [feedAll, topTab]
+    () => (youTab
+      ? forYou(feedAll, l => affinityOf(l, follows), Date.now(), 20)
+      : topTab ? shortlist(feedAll, Date.now(), 20) : feedAll),
+    [feedAll, topTab, youTab, follows]
   );
 
 
@@ -745,7 +752,7 @@ export default function TerminalHomePage() {
   }, [feedFilters]);
   const handleFilters = (next: FeedFilters) => {
     // the shortlist only exists in Matters-most order: any other sort is "All lots"
-    if (next.sort !== 'priority' && next.tab !== 'all') next = { ...next, tab: 'all' };
+    if (next.sort !== 'priority' && next.tab === 'top') next = { ...next, tab: 'all' };
     setFeedFilters(next);
     setVisibleUpcoming(pageSize);
   };
@@ -967,11 +974,23 @@ export default function TerminalHomePage() {
                   >
                     What matters {topTab && <i>{feed.length}</i>}
                   </button>
+                  {follows.length > 0 && (
+                    <button
+                      role="tab"
+                      aria-selected={youTab}
+                      className="ray-toolbar-pill"
+                      data-active={youTab}
+                      onClick={() => handleFilters({ ...feedFilters, sort: 'priority', tab: 'you' })}
+                      title={`Ranked for what you follow: ${follows.map(f => f.label).join(', ')}`}
+                    >
+                      For you {youTab && <i>{feed.length}</i>}
+                    </button>
+                  )}
                   <button
                     role="tab"
-                    aria-selected={!topTab}
+                    aria-selected={!topTab && !youTab}
                     className="ray-toolbar-pill"
-                    data-active={!topTab}
+                    data-active={!topTab && !youTab}
                     onClick={() => handleFilters({ ...feedFilters, tab: 'all' })}
                   >
                     All lots <i>{feedAll.length.toLocaleString()}</i>
@@ -1120,7 +1139,14 @@ export default function TerminalHomePage() {
                   {feed.length === 0 ? (
                     <div className="ray-feed-empty">
                       <Flick size={28} draw style={{ color: 'var(--color-text-faint)' }} />
-                      {topTab && feedAll.length > 0 ? (
+                      {youTab ? (
+                        <>
+                          <p>Nothing you follow closes this week{follows.length ? ` (${follows.map(f => f.label).slice(0, 3).join(', ')}${follows.length > 3 ? '…' : ''})` : ''}.</p>
+                          <button className="ray-toolbar-reset" onClick={() => handleFilters({ ...feedFilters, tab: 'top' })}>
+                            See what matters across the board
+                          </button>
+                        </>
+                      ) : topTab && feedAll.length > 0 ? (
                         <>
                           <p>Nothing here clears the shortlist bar ($2.5K+, closing this week, with an estimate or engine value).</p>
                           <button className="ray-toolbar-reset" onClick={() => handleFilters({ ...feedFilters, tab: 'all' })}>
@@ -1154,7 +1180,7 @@ export default function TerminalHomePage() {
                             lot={lot}
                             onOpen={() => setTableLot(lot)}
                             tone={feedTone(lot, belowIds, belowSignal.hasSig)}
-                            note={topTab ? reasonOf(lot) : null}
+                            note={topTab || youTab ? reasonOf(lot) : null}
                           />
                         </div>
                       ) : (
@@ -1170,7 +1196,7 @@ export default function TerminalHomePage() {
                             saved={isSaved(lot.id)}
                             onToggleSave={toggle}
                             lastCrawl={lastCrawl || undefined}
-                            note={topTab ? reasonOf(lot) : null}
+                            note={topTab || youTab ? reasonOf(lot) : null}
                           />
                         </div>
                       )

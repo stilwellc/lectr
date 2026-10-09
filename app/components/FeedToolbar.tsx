@@ -8,6 +8,8 @@ import { AuctionLot } from '../types';
 import { ARTIST_LABEL, MARKETS, marketArtists, Market } from '../constants';
 import Flick from './Flick';
 import SaveSearch from './SaveSearch';
+import FollowChip from './FollowChip';
+import { catFollow, houseFollow } from '../lib/follows';
 import { taxonOf, SUBS, type CatKey } from '../lib/taxonomy';
 import { WINDOWS, VALUE_FLOORS, TRIAGE_DEFAULTS, isTriageActive, passesTriage, triageToParams, triageFromParams, type TriageFilters } from '../lib/feed-filters';
 
@@ -26,8 +28,9 @@ export interface FeedFilters extends TriageFilters {
   sort: FeedSort;
   /** the Hammer Week strip's lens: one hammer day (YYYY-MM-DD) */
   saleDay?: string | null;
-  /** home only: the capped "What matters" shortlist vs every lot */
-  tab?: 'top' | 'all';
+  /** home only: the capped "What matters" shortlist, the reader's "For you"
+   *  shortlist (anything followed), or every lot */
+  tab?: 'top' | 'you' | 'all';
 }
 
 export const FEED_DEFAULTS: FeedFilters = {
@@ -74,7 +77,7 @@ export function feedFromParams(p: URLSearchParams): FeedFilters {
     belowOnly: p.get('below') === '1',
     sort: sort && SORTS.includes(sort) ? sort : FEED_DEFAULTS.sort,
     saleDay: p.get('day') || null,
-    tab: p.get('tab') === 'all' ? 'all' : 'top',
+    tab: p.get('tab') === 'all' ? 'all' : p.get('tab') === 'you' ? 'you' : 'top',
     ...triageFromParams(p),
   };
 }
@@ -517,6 +520,15 @@ export default function FeedToolbar({
               </button>
             ))}
           </div>
+          {(filters.cat || filters.house) && (
+            <>
+              <div className="ray-feedsheet-head">Follow</div>
+              <div className="ray-feedsheet-chips">
+                {filters.cat && <FollowChip follow={catFollow(filters.cat, filters.sub)} />}
+                {filters.house && <FollowChip follow={houseFollow(filters.house)} />}
+              </div>
+            </>
+          )}
           {houses.length > 1 && (
             <>
               <div className="ray-feedsheet-head">House</div>
@@ -800,6 +812,8 @@ export default function FeedToolbar({
               <option value="">Any value</option>
               {VALUE_FLOORS.map(v => <option key={v} value={v}>{fmtFloor(v)}</option>)}
             </select>
+            {filters.cat && <FollowChip follow={catFollow(filters.cat, filters.sub)} />}
+            {filters.house && <FollowChip follow={houseFollow(filters.house)} />}
           </>
         )}
         {isMobile && sheetHasContent && (

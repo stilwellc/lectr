@@ -9,6 +9,8 @@
  */
 import { useMemo } from 'react';
 import { taxonOf, SUBS, CAT_LABEL, type CatKey } from '../lib/taxonomy';
+import FollowChip from './FollowChip';
+import { catFollow, houseFollow } from '../lib/follows';
 import {
   WINDOWS, VALUE_FLOORS, TRIAGE_DEFAULTS, isTriageActive, passesTriage, type TriageFilters,
 } from '../lib/feed-filters';
@@ -117,6 +119,8 @@ export default function TriageBar({
           <option value="">Any value</option>
           {VALUE_FLOORS.map(v => <option key={v} value={v}>{fmtFloor(v)}</option>)}
         </select>
+        {filters.cat && <FollowChip follow={catFollow(filters.cat, filters.sub)} />}
+        {filters.house && <FollowChip follow={houseFollow(filters.house)} />}
         {isTriageActive(filters) && (
           <button type="button" className="ray-toolbar-reset" onClick={() => onChange(TRIAGE_DEFAULTS)}>Clear</button>
         )}
