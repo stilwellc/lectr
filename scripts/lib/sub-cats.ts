@@ -15,6 +15,7 @@
  */
 import { ARTIST_MARKET } from '../../app/constants';
 import { SUBJECT_DOMAINS } from './subject-domains';
+import { subjectNameOf } from './subject-name';
 import { NON_SPORT_TCG_RE } from './classify';
 import { isCardLotTitle } from '../../app/lib/cards';
 
@@ -460,6 +461,10 @@ export interface SubCatMaps {
   bySubject?: Map<string, string>;
   /** (wave 3) watches: maker|reference → model family */
   byRef?: Map<string, string>;
+  /** (Oct 9) culture: the person a bare-name title leads with (subjectNameOf
+   *  key) → domain, learned from that person's domained lots — read only when
+   *  every rule left the lot without a domain */
+  byPerson?: Map<string, string>;
 }
 
 /** (wave 3) the head of a lot's description (the object line most houses
@@ -659,6 +664,12 @@ export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
     if (!drill) drill = textDomain(descHeadOf(l, 260));
     if (!drill) {
       for (const [re, d] of CULT_SALE_DOMAIN) if (re.test(sale)) { drill = d; break; }
+    }
+    // (Oct 9) the last resort: the person a bare-name title leads with ("Paul
+    // Newman", "Huey Long Signature") takes the domain their worded lots carry
+    if (!drill && sportMaps?.byPerson) {
+      const k = subjectNameOf(title);
+      if (k) drill = sportMaps.byPerson.get(k) || null;
     }
     // (Oct 8) a 'space-science' figure is a space program, a scientist or an aviator
     if (drill === 'space-science') drill = spaceScienceDrillOf(`${title} ${(subjects || []).join(' ')}`);
