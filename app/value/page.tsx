@@ -53,6 +53,9 @@ import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSi
 import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
 import { medianOr } from '../lib/stats';
 import { gapRead, sleeperRead, type GapRead, type SleeperRead } from '../lib/lanes';
+import TriageBar from '../components/TriageBar';
+import { useUrlState, useLastVisit, passesTriage, TRIAGE_DEFAULTS, triageFromParams, triageToParams, type TriageFilters } from '../lib/feed-filters';
+import { byPriority } from '../lib/priority';
 
 const ROWS_PAGE = 12;
 
@@ -695,8 +698,14 @@ export default function ValuePage() {
     return () => window.removeEventListener('popstate', onPop);
   }, []);
   const [shown, setShown] = useState(ROWS_PAGE);
-  // the board's two orderings: the engine's odds (default) or hammer time
-  const [sortMode, setSortMode] = useState<'odds' | 'closing'>('odds');
+  // the board's orderings (Oct 8): "Matters most" (app/lib/priority — size,
+  // measured edge, evidence, closing time) is the default; the engine's odds
+  // (nearly flat on live flags, 47–54%) and hammer time remain one tap away
+  const [sortMode, setSortMode] = useState<'priority' | 'odds' | 'closing'>('priority');
+  // the triage row (closing window, sub-category, house, value floor, new)
+  // narrows all three lanes; it lives in the URL so a reload keeps the view
+  const [triage, setTriage] = useUrlState<TriageFilters>(TRIAGE_DEFAULTS, triageFromParams, triageToParams);
+  const prevVisitDay = useLastVisit();
 
   // ── INPUT CRAFT — j/k walks every board row on the page, enter opens
   // (native on the flags <button>, handled on the lane rows), s saves.
@@ -889,13 +898,35 @@ export default function ValuePage() {
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
   // A market flip starts the rows over at the first page.
-  useEffect(() => { setShown(ROWS_PAGE); setSortMode('odds'); }, [activeKey]);
+  // only on a real market FLIP — never on mount, or a shared ?cat= link
+  // would be wiped the instant the URL state hydrates
+  const flipKey0 = useRef(activeKey);
+  useEffect(() => {
+    if (flipKey0.current === activeKey) return;
+    flipKey0.current = activeKey;
+    setShown(ROWS_PAGE);
+    setSortMode('priority');
+    // sub-categories are market-scoped; window/house/value/new travel
+    setTriage(t => (t.cat || t.sub ? { ...t, cat: null, sub: null } : t));
+  }, [activeKey, setTriage]);
+  const inTriage = useCallback(
+    (l: AuctionLot) => passesTriage(l, triage, { prevVisitDay }),
+    [triage, prevVisitDay]
+  );
+  const dealsView = useMemo(() => deals.filter(d => inTriage(d.lot)), [deals, inTriage]);
+  const gapRowsView = useMemo(() => gapRows.filter(r => inTriage(r.lot)), [gapRows, inTriage]);
+  const sleeperRowsView = useMemo(() => sleeperRows.filter(r => inTriage(r.lot)), [sleeperRows, inTriage]);
+  useEffect(() => { setShown(ROWS_PAGE); }, [triage]);
 
   // Today's call: the strongest deal Ray can STAND BEHIND — highest
   // confidence tier first, never low (one thin comp is not a headline).
   const call = useMemo(() => pickCall(marketLots, marketLots, activeKey), [marketLots, activeKey]);
   const gridDeals = useMemo(() => {
-    const base = call ? deals.filter(d => d.lot.id !== call.lot.id) : deals;
+    const base = call ? dealsView.filter(d => d.lot.id !== call.lot.id) : dealsView;
+    if (sortMode === 'priority') {
+      const cmp = byPriority(Date.now());
+      return [...base].sort((a, b) => cmp(a.lot, b.lot));
+    }
     if (sortMode !== 'closing') return base;
     // hammer time: exact close first, day-only after, ties by odds order
     return [...base].sort((a, b) => {
@@ -903,7 +934,7 @@ export default function ValuePage() {
       const kb = b.lot.saleDateTime || `${trueSaleDay(b.lot)}T99`;
       return ka.localeCompare(kb);
     });
-  }, [deals, call, sortMode]);
+  }, [dealsView, call, sortMode]);
   // ONE LOT, ONE NUMBER: the band prefers the BUILD ENGINE's stamp
   // (value.compValueUsd + poolIds — the same numbers the plate sentence and
   // the modal print); the client signalWithPool runs only for unstamped
@@ -1974,14 +2005,26 @@ export default function ValuePage() {
             </section>
           )}
 
+          <div className="rail ray-enter" style={{ marginTop: 8 }}>
+            <TriageBar
+              lots={liveLots}
+              filters={triage}
+              onChange={setTriage}
+              prevVisitDay={prevVisitDay}
+              shown={dealsView.length + gapRowsView.length + sleeperRowsView.length}
+              total={deals.length + gapRows.length + sleeperRows.length}
+              label="Narrow the lanes"
+            />
+          </div>
+
           <section id="flags" className="ray-value-section rail vd-room ns-plate">
             <div className="ray-enter">
               <LaneHead
                 mark={<FlagsMark />}
                 name="The Flags"
-                count={deals.length}
+                count={dealsView.length}
                 play={!fromCache}
-                tag={sortMode === 'odds' ? 'comps vs estimate · calibrated odds first, the deepest gap breaks ties' : 'comps vs estimate · soonest hammer first'}
+                tag={sortMode === 'priority' ? 'comps vs estimate · what matters most first: size, measured edge, evidence, closing time' : sortMode === 'odds' ? 'comps vs estimate · calibrated odds first, the deepest gap breaks ties' : 'comps vs estimate · soonest hammer first'}
                 help={
                   <>Each row is a live lot whose <Term k="comps">comps median</Term> clears its
                   estimate by at least 1.3×. <Term k="odds">Odds</Term> rank the board — the share of
@@ -1990,6 +2033,7 @@ export default function ValuePage() {
                 }
                 right={
                   <span className="vd-sort" role="tablist" aria-label="Board order">
+                    <button type="button" role="tab" aria-selected={sortMode === 'priority'} data-on={sortMode === 'priority' || undefined} onClick={() => setSortMode('priority')}>Matters most</button>
                     <button type="button" role="tab" aria-selected={sortMode === 'odds'} data-on={sortMode === 'odds' || undefined} onClick={() => setSortMode('odds')}>Odds</button>
                     <button type="button" role="tab" aria-selected={sortMode === 'closing'} data-on={sortMode === 'closing' || undefined} onClick={() => setSortMode('closing')}>Closing next</button>
                   </span>
@@ -2170,10 +2214,10 @@ export default function ValuePage() {
           </section>
 
           {/* ── ROOM 2c · THE GAP ── */}
-          <GapAnnex rows={gapRows} receipts={receipts} activeKey={activeKey} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />
+          <GapAnnex rows={gapRowsView} receipts={receipts} activeKey={activeKey} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />
 
           {/* ── ROOM 2d · THE SLEEPERS ── */}
-          <SleepersAnnex rows={sleeperRows} queued={sleeperQueue} receipts={receipts} activeLabel={activeLabel} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />
+          <SleepersAnnex rows={sleeperRowsView} queued={sleeperQueue} receipts={receipts} activeLabel={activeLabel} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />
 
           {/* ════ ROOM 3 · THE RECORD (paper certificate) ════ */}
           {backtest && backtest.flagged.n >= 100 && (

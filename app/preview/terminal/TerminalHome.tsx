@@ -37,7 +37,9 @@ import SettlementSlip from '../../components/SettlementSlip';
 import { sportOfLot } from '../../lib/submarkets';
 import { subCatLabel } from '../../lib/subcat-labels';
 import MarketSwitch from '../../components/MarketSwitch';
-import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from '../../components/FeedToolbar';
+import FeedToolbar, { FeedFilters, FEED_DEFAULTS, feedFromParams, feedToParams } from '../../components/FeedToolbar';
+import { useUrlState, useLastVisit, passesTriage } from '../../lib/feed-filters';
+import { byPriority, shortlist } from '../../lib/priority';
 import { Colophon, daysWord, pickCall } from '../../components/Terminal';
 import Flick from '../../components/Flick';
 import Greeting from '../../components/Greeting';
@@ -381,7 +383,9 @@ export default function TerminalHomePage() {
     return () => mq.removeEventListener('change', apply);
   }, []);
 
-  const [feedFilters, setFeedFilters] = useState<FeedFilters>(FEED_DEFAULTS);
+  // Oct 8: the feed state lives in the URL (reload / share reopens the view)
+  const [feedFilters, setFeedFilters] = useUrlState<FeedFilters>(FEED_DEFAULTS, feedFromParams, feedToParams);
+  const prevVisitDay = useLastVisit();
   const [tableLot, setTableLotRaw] = useState<AuctionLot | null>(null);
   // THE MODAL JOINS HISTORY (audit-navbugs defect 1): opening a lot pushes a
   // history entry, so the browser Back (and the mobile back-gesture) CLOSES
@@ -492,13 +496,18 @@ export default function TerminalHomePage() {
 
   // Lenses are scoped to the market they were picked in — market switches drop
   // the scoped lenses; query, sort and the below-market lens travel with the reader.
+  // (only on a real market FLIP — never on mount, or a shared link's
+  // ?v=/?cat= lens would be wiped the instant the URL state hydrates)
+  const lensMarket = useRef(activeKey);
   useEffect(() => {
+    if (lensMarket.current === activeKey) return;
+    lensMarket.current = activeKey;
     setFeedFilters(f =>
-      f.vertical === null && f.maker === null && f.sport === null && f.category === null && f.saleDay == null
+      f.vertical === null && f.maker === null && f.sport === null && f.category === null && f.saleDay == null && f.cat == null && f.sub == null
         ? f
-        : { ...f, vertical: null, maker: null, sport: null, category: null, saleDay: null }
+        : { ...f, vertical: null, maker: null, sport: null, category: null, saleDay: null, cat: null, sub: null }
     );
-  }, [activeKey]);
+  }, [activeKey, setFeedFilters]);
 
   const upcoming = useMemo(() => {
     // the READER's calendar day — a UTC "today" runs a day ahead every US
@@ -655,8 +664,8 @@ export default function TerminalHomePage() {
   }, [upcoming, belowIds, allLots, wallItems]);
 
 
-  // The feed the reader actually sees — search + lenses + sort applied.
-  const feed = useMemo(() => {
+  // Every lot passing search + lenses + triage, in the chosen order.
+  const feedAll = useMemo(() => {
     const f = feedFilters;
     const q = f.query.trim().toLowerCase();
     let arr = upcoming;
@@ -669,6 +678,8 @@ export default function TerminalHomePage() {
     if (f.category) arr = arr.filter(l => l.category === f.category);
     if (f.saleDay) arr = arr.filter(l => l.saleDate?.slice(0, 10) === f.saleDay);
     if (f.belowOnly) arr = arr.filter(l => belowIds.has(l.id));
+    // triage: closing window, clean category/sub, house, value floor, new
+    arr = arr.filter(l => passesTriage(l, f, { prevVisitDay }));
     if (q) {
       arr = arr.filter(l =>
         `${ARTIST_LABEL[l.artist] || l.artist} ${l.title} ${l.auctionHouse} ${l.saleName} ${l.medium || ''}`
@@ -677,7 +688,14 @@ export default function TerminalHomePage() {
       );
     }
     const est = (l: typeof arr[number]) => l.estimateHigh || l.estimateLow || l.currentBid || 0;
-    if (f.sort === 'est-desc') arr = [...arr].sort((a, b) => est(b) - est(a));
+    const past = (l: AuctionLot) => !!l.resultsPending && trueSaleDay(l) !== '' && trueSaleDay(l) < crawlDay;
+    if (f.sort === 'priority') {
+      // "Matters most" (app/lib/priority): size, measured edge, evidence,
+      // closing time — results-pending lots still sink to the end
+      const now = Date.now();
+      const live = arr.filter(l => !past(l)).sort(byPriority(now));
+      arr = [...live, ...arr.filter(past)];
+    } else if (f.sort === 'est-desc') arr = [...arr].sort((a, b) => est(b) - est(a));
     else if (f.sort === 'est-asc') arr = [...arr].sort((a, b) => est(a) - est(b));
     else if (f.sort === 'gap-desc') {
       const pct = belowSignal.pct;
@@ -702,21 +720,31 @@ export default function TerminalHomePage() {
         (known(b) - known(a)) || (count(b) - count(a)) || (delta(b) - delta(a))
       );
     } else {
-      const past = (l: AuctionLot) => !!l.resultsPending && trueSaleDay(l) !== '' && trueSaleDay(l) < crawlDay;
       arr = [...arr.filter(l => !past(l)), ...arr.filter(past)];
       if (!q && !f.vertical && !f.maker && !f.sport && !f.category && !f.belowOnly && !f.saleDay) {
         arr = diversifyFeed(arr, pageSize);
       }
     }
     return arr;
-  }, [upcoming, feedFilters, belowSignal, belowIds, pageSize, crawlDay]);
+  }, [upcoming, feedFilters, belowSignal, belowIds, pageSize, crawlDay, prevVisitDay]);
+
+  // The feed the reader sees. "What matters" (the default tab, Matters-most
+  // order only) is the capped shortlist of whatever is filtered: ≥$2.5K,
+  // closes ≤7d, has evidence; ≤5/category, ≤3/sale, ≤2/maker.
+  const topTab = feedFilters.sort === 'priority' && (feedFilters.tab ?? 'top') === 'top';
+  const feed = useMemo(
+    () => (topTab ? shortlist(feedAll, Date.now(), 20) : feedAll),
+    [feedAll, topTab]
+  );
 
 
   const feedKey = useMemo(() => {
     const f = feedFilters;
-    return `${f.vertical}|${f.maker}|${f.sport}|${f.category}|${f.belowOnly}|${f.sort}|${f.saleDay ?? ''}`;
+    return `${f.vertical}|${f.maker}|${f.sport}|${f.category}|${f.belowOnly}|${f.sort}|${f.saleDay ?? ''}|${f.win}|${f.cat}|${f.sub}|${f.house}|${f.minUsd}|${f.newOnly}|${f.tab}`;
   }, [feedFilters]);
   const handleFilters = (next: FeedFilters) => {
+    // the shortlist only exists in Matters-most order: any other sort is "All lots"
+    if (next.sort !== 'priority' && next.tab !== 'all') next = { ...next, tab: 'all' };
     setFeedFilters(next);
     setVisibleUpcoming(pageSize);
   };
@@ -1068,6 +1096,27 @@ export default function TerminalHomePage() {
                   )}
                 </div>
 
+                <div className="ray-toolbar-row" role="tablist" aria-label="Feed view" style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                  <button
+                    role="tab"
+                    aria-selected={topTab}
+                    className="ray-toolbar-pill"
+                    data-active={topTab}
+                    onClick={() => handleFilters({ ...feedFilters, sort: 'priority', tab: 'top' })}
+                  >
+                    What matters {topTab && <i>{feed.length}</i>}
+                  </button>
+                  <button
+                    role="tab"
+                    aria-selected={!topTab}
+                    className="ray-toolbar-pill"
+                    data-active={!topTab}
+                    onClick={() => handleFilters({ ...feedFilters, tab: 'all' })}
+                  >
+                    All lots <i>{feedAll.length.toLocaleString()}</i>
+                  </button>
+                </div>
+
                 <FeedToolbar
                   lots={upcoming}
                   belowIds={belowIds}
@@ -1081,6 +1130,7 @@ export default function TerminalHomePage() {
                   onViewChange={handleView}
                   pageSize={pageSize}
                   showToggle={!narrowView}
+                  prevVisitDay={prevVisitDay}
                 />
 
                 {effectiveView === 'table' && feed.length > 0 ? (
@@ -1209,10 +1259,21 @@ export default function TerminalHomePage() {
                   {feed.length === 0 ? (
                     <div className="ray-feed-empty">
                       <Flick size={28} draw style={{ color: 'var(--color-text-faint)' }} />
-                      <p>Nothing on the block matches that.</p>
-                      <button className="ray-toolbar-reset" onClick={() => handleFilters(FEED_DEFAULTS)}>
-                        Clear the lenses
-                      </button>
+                      {topTab && feedAll.length > 0 ? (
+                        <>
+                          <p>Nothing here clears the shortlist bar ($2.5K+, closing this week, with an estimate or engine value).</p>
+                          <button className="ray-toolbar-reset" onClick={() => handleFilters({ ...feedFilters, tab: 'all' })}>
+                            See all {feedAll.length.toLocaleString()} lots
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <p>Nothing on the block matches that.</p>
+                          <button className="ray-toolbar-reset" onClick={() => handleFilters(FEED_DEFAULTS)}>
+                            Clear the lenses
+                          </button>
+                        </>
+                      )}
                     </div>
                   ) : (
                     feed.slice(0, visibleUpcoming).map((lot, i) =>
