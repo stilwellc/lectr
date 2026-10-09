@@ -53,6 +53,10 @@ export const rrSpaceTitle = (title: string): boolean => SPACE.test(title.toLower
  *  ("Barry Bonds Baseball", "Joe Frazier Boxing Glove") is a signed piece —
  *  Olympic insignia/pins/medals/torches excepted. */
 export function rrSportsPrior(slug: string, text: string): string {
+  // (Oct 8 sports audit) RR is an autograph house: its athlete "photo" ("Mel
+  // Ott: Gorgeous photo of Ott's terrific swing") is a signed photo — an
+  // autograph — unless it reads as an unsigned original / press print
+  if (slug === 'type-1-photos' && !/\bunsigned\b|\btype[- ]?(?:1|i|one)\b|\boriginal (?:wire|press|news)|\bwire photo|\bpress photo/i.test(text)) return 'autographs';
   return slug === 'sports-memorabilia' && !/\b(olympics?|pins?|badges?|insignia|medals?|torch|pennants?|tickets?)\b/i.test(text) ? 'autographs' : slug;
 }
 

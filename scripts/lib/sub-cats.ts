@@ -15,6 +15,7 @@
  */
 import { ARTIST_MARKET } from '../../app/constants';
 import { SUBJECT_DOMAINS } from './subject-domains';
+import { isCardLotTitle } from '../../app/lib/cards';
 
 type Lot = Record<string, unknown>;
 
@@ -56,16 +57,18 @@ export const sportSlugOf = (raw: unknown): string | null =>
 const SPORT_WORDS: [string, RegExp][] = [
   ['boxing-mma', /\b(?:boxing|boxers?|heavyweight|middleweight|welterweight|lightweight|ufc|mma|prize ?fight(?:ers?|s)?|fight[- ]worn|title fight|bout|abe attell|jack dempsey|gene tunney|joe louis|rocky marciano|jack johnson|john l\.? sullivan|jim corbett|bob fitzsimmons|jim jeffries|stanley ketchel|sam langford|joe gans|max schmeling|max baer|jersey joe walcott|ezzard charles|sugar ray robinson|muhammad ali|cassius clay|joe frazier|george foreman|sonny liston|floyd patterson|sugar ray leonard|marvin hagler|mike tyson|jack sharkey|primo carnera|battling nelson|terry mcgovern)\b/i],
   // (wave 3) the old club names a golf lot is titled by ("A JEAN GASSIAT PUTTER")
-  ['golf', /\b(?:golf|golfer|pga|masters tournament|ryder cup|british open|putters?|niblicks?|mashies?|cleeks?|featherie|feathery|gutty|gutta[- ]percha ball)\b/i],
+  ['golf', /\b(?:golf|golfer|pga|masters tournament|ryder cup|british open|putters?|niblicks?|mashies?|cleeks?|featherie|feathery|gutty|gutta[- ]percha ball|long-nosed (?:long )?(?:spoon|driver|putter|play ?club)|play ?clubs?|baffing spoon|driving iron|(?:rut|rake|track|smooth-faced|lofting) iron|bramble-pattern ball|caddie)\b/i],
   ['tennis', /\b(?:tennis|wimbledon|us open tennis)\b/i],
   ['racing', /\b(?:nascar|formula (?:1|one)|f1|indy ?500|racing|daytona 500)\b/i],
-  ['wrestling', /\b(?:wrestling|wrestler|wwe|wwf|wcw)\b/i],
+  ['wrestling', /\b(?:wrestling|wrestler|wrestlemania|wwe|wwf|wcw)\b/i],
   ['olympics', /\b(?:olympics?|olympic games)\b/i],
   ['hockey', /\b(?:hockey|nhl|stanley cup|puck|maple leafs|canadiens|red wings|blackhawks|bruins)\b/i],
   // (wave 3) WNBA and the Hoops card brand ("SkyBox Hoops", "NBA Hoops")
   ['basketball', /\b(?:basketballs?|nba|wnba|aba|final four|lakers|celtics|knicks|76ers|pistons|warriors|harlem globetrotters|hoops)\b/i],
+  // (Oct 8 sports audit, E9) association football before American football: a
+  // "1994 World Cup … Rose Bowl" / "FIFA … Football Federation" lot is soccer
+  ['soccer', /\b(?:soccer|fifa|(?<!dubai |rugby |cricket |hockey |golf |ski )world cup(?! of hockey)|premier league|la liga|champions league|fc barcelona|real madrid|manchester united|boca juniors|international (?:[a-z-]+ )?(?:shirt|cap)|match programmes?|f\.?a\.? ?cup|west ham|tottenham|hotspur|arsenal|chelsea|everton|hibernian|aston villa|newcastle united|leeds united|sheffield (?:united|wednesday)|manchester city|celtic)\b/i],
   ['football', /\b(?:footballs?|nfl|afl|super bowl|heisman|rose bowl|packers|steelers|cowboys|49ers|redskins|buccaneers|seahawks|bengals)\b/i],
-  ['soccer', /\b(?:soccer|fifa|world cup|premier league|la liga|champions league|fc barcelona|real madrid|manchester united|boca juniors)\b/i],
   ['baseball', /\b(?:baseballs?|base ball|b\.b\.c\.|mlb|world series|home runs?|perfect game|no-hitter|lineup cards?|line-up cards?|louisville slugger|national league|american league|federal league|negro leagues?|pcl|yankees|red sox|white sox|dodgers|cubs|mets|phillies|orioles|pirates|tigers|indians|athletics|brewers|astros|padres|mariners|expos|twins|royals|braves|reds|senators|browns|doves|red stockings|highlanders|superbas|beaneaters|naps)\b/i],
 ];
 /** pre-war set codes and vintage issues that are baseball (T206, E90, N172, D304, M116, W551, R319, Goudey, Old Judge …) */
@@ -338,6 +341,9 @@ export interface SubCatMaps {
   cardPlayer?: (l: Lot) => string | null;
   /** (wave 3) sports: card SET (year|set) → sport */
   bySet?: Map<string, string>;
+  /** (Oct 8 sports audit) sports: a frequent MULTI-WORD player name (normalized,
+   *  see nameKey) → sport — read off the title when no slug was parsed */
+  byName?: Map<string, string>;
   /** the set keys of a card row, most specific first */
   setOf?: (l: Lot) => string[];
   /** (wave 3) culture: subject (person / franchise) → domain */
@@ -366,14 +372,60 @@ export function watchFamilyOf(artist: string, hay: string): string | null {
   return null;
 }
 
+/** (Oct 8 sports audit) the player-name join key: lower case, letters / digits
+ *  / apostrophes only, single-spaced */
+export const nameKey = (s: string): string => s.toLowerCase().replace(/[’]/g, "'").replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim();
+/** a frequent multi-word player name the title spells out ("… Shohei Ohtani …"):
+ *  every 2- and 3-word run of the title, looked up whole — never a single
+ *  word, never a substring */
+export function sportByName(title: string, byName: Map<string, string>): string | null {
+  const w = nameKey(title).split(' ').filter(Boolean);
+  for (let i = 0; i < w.length; i++) {
+    for (const n of [3, 2]) {
+      if (i + n > w.length) continue;
+      const sp = byName.get(w.slice(i, i + n).join(' '));
+      if (sp) return sp;
+    }
+  }
+  return null;
+}
+/** a "player" slug that is a lot's opening words, not a person ("a-pair-of" —
+ *  Christie's "A Pair of Staffordshire Figures" read tennis off it) */
+export const JUNK_PLAYER_SLUG_RE = /^an?-(?![a-z]-)|^(?:pair|lot|set|group|collection|large|small|two|three|four|five|six|seven|eight|nine|ten|\d+)-|-(?:of|and|pair|lot|set|collection|group|figures?)(?:-|$)/;
+/** a learned "player" name that is a team, a place, a lot phrase or a band
+ *  ("Los Angeles", "Baseball Hall", "New York Giants", "The Beatles", "Babe Ruth
+ *  Original") — never a byName key */
+export const NOT_PERSON_NAME_RE = /\b(?:the|of|a|an|and|los|las|angeles|new|york|san|st|saint|louis|francisco|diego|chicago|boston|brooklyn|detroit|philadelphia|pittsburgh|cleveland|cincinnati|washington|baltimore|kansas|city|england|green|bay|hall|fame|all|star|stars|original|vintage|multi|signed|team|baseball|football|basketball|hockey|boxing|golf|soccer|club|cup|set|group|pair|lot|collection|best|home|run|nfl|nba|mlb|nhl|nl|al|pro|modern|great|greats|company|award|awards|banquet|wars|decals|type|national|american|league|series|world|olympic|olympics|summer|winter|games|game|rookie|card|cards|giants|yankees|dodgers|cubs|cardinals|sox|red|white|braves|mets|rangers|celtics|bulls|lakers|knicks|bears|jets|rams|patriots|padres|angels|browns|highlanders|beaneaters)\b/i;
+/** Goldin stamps 'Golf' on any "Masters" — a He-Man "Masters of the Universe"
+ *  cel or a SkyBox "Gem Masters" Barry Bonds card is not golf */
+const GOLF_FALSE_STAMP_RE = /\bmasters of the universe\b|\bgem masters\b|\bold masters?\b|\bgrand ?masters?\b|\bmetal universe\b/i;
+/** (Oct 8 sports audit) the card brands that print one sport when the title
+ *  names none: modern Bowman (1989+; Bowman University / Football / Basketball
+ *  / Hockey say so), Topps Now / Heritage / Update, NPB / KBO */
+const BRAND_BASEBALL_RE = /\bbowman\b(?!.*\b(?:football|basketball|hockey|university|college|draft picks? (?:football|basketball)|nfl|nba|nhl|wnba)\b)|\btopps (?:now|heritage|update|series [12]|chrome update)\b(?!.*\b(?:basketball|football|soccer|f1|formula|ufc|wnba|ucl|uefa|mls|wwe|nba|nfl|nhl|premier|bundesliga|la liga)\b)|\bnpb\b|\bkbo\b/i;
+function brandDefaultSport(title: string): string | null {
+  if (!BRAND_BASEBALL_RE.test(title) || !/\bcards?\b|#|\bpsa\b|\bbgs\b|\bsgc\b|\bbox(?:es)?\b|\bpacks?\b|\brookie\b|\bauto(?:graph)?s?\b|\brefractor\b/i.test(title)) return null;
+  // vintage Bowman (1948-55) printed baseball AND football / basketball
+  const y4 = title.match(/\b(19[3-9]\d|20[0-3]\d)\b/);
+  const y2 = title.match(/^\s*(\d\d)\s/); // Goldin's two-digit years ("97 Bowman's Best …")
+  const yr = y4 ? +y4[1] : y2 ? (+y2[1] < 40 ? 2000 + +y2[1] : 1900 + +y2[1]) : null;
+  if (/\bbowman\b/i.test(title) && !/\btopps\b/i.test(title) && (yr == null || yr < 1989)) return null;
+  return 'baseball';
+}
+
 export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
   const vert = ARTIST_MARKET[l.artist as keyof typeof ARTIST_MARKET];
   const title = (l.title as string) || '';
   const formKey = (l.formKey as string) || 'unknown';
 
   if (vert === 'sports') {
-    const subCat = SPORTS_KIND[l.artist as string] ?? null;
+    const kind = SPORTS_KIND[l.artist as string] ?? null;
+    // (Oct 8 sports audit, Lots & Sets) a multi-card bulk lot ("Lot of (25)",
+    // "(400) … Cards", "Shoebox Collection", "Complete Set") is its own kind —
+    // the same detector parseCard's `multi` reads, so it never comps as a card
+    const subCat = kind === 'cards' && isCardLotTitle(title) ? 'card-lots' : kind;
     let drill = sportSlugOf(l.sport);
+    if (drill === 'golf' && GOLF_FALSE_STAMP_RE.test(title) && !/\bgolf/i.test(title)) drill = null;
     // (wave 3) a cricket / rugby / polo lot has no drill of ours
     if (!drill && NO_SPORT_DRILL_RE.test(title.replace(/\bpolo grounds\b/gi, ' '))) return { subCat, drill: null, flown: null };
     // (wave 3) a single-sport sale names the sport of every lot in it
@@ -382,14 +434,15 @@ export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
     // player vote: a name two athletes share ("1933 Goudey #214 John Kerr" —
     // the 1920s infielder, not the 1960s NBA center) must not take the other
     // one's sport (Goudey's multi-sport Sport Kings excepted)
-    if (!drill && subCat === 'cards') {
+    if (!drill && kind === 'cards') {
       const y = title.match(/^\s*(?:\d{1,4}\s+)?(?:(?:signed|autographed)\s+)?(18[6-9]\d|19[0-3]\d|194[01])\b/i);
       if (y && (BASEBALL_CODE_ANY_RE.test(title) || PREWAR_BASEBALL_ISSUE_RE.test(title)) && !NON_BASEBALL_ISSUE_RE.test(title) && !/sport kings|\bR338\b/i.test(title) && !sportWordOf(title)) drill = 'baseball';
     }
     if (!drill && sportMaps) {
       const pid = l._pid != null ? String(l._pid) : null;
       const card = l._card as { playerSlug?: string } | undefined;
-      const player = (l.playerSlug as string) || card?.playerSlug || (sportMaps.cardPlayer ? sportMaps.cardPlayer(l) : null) || null;
+      const raw = (l.playerSlug as string) || card?.playerSlug || (sportMaps.cardPlayer ? sportMaps.cardPlayer(l) : null) || null;
+      const player = raw && !JUNK_PLAYER_SLUG_RE.test(raw) ? raw : null;
       drill = (pid && sportMaps.byPid.get(pid)) || (player && sportMaps.byPlayer.get(player)) || null;
     }
     if (!drill) drill = sportFromText(title);
@@ -402,10 +455,14 @@ export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
     // ("1957 Topps Football", "1935 National Chicle Football"): a pre-1981
     // card there that names no sport, no known player and no learned set is
     // baseball (DEV: 25 of 29 such labelled lots)
-    if (!drill && subCat === 'cards' && VINTAGE_CARD_HOUSES.has(String(l.auctionHouse || ''))) {
+    if (!drill && kind === 'cards' && VINTAGE_CARD_HOUSES.has(String(l.auctionHouse || ''))) {
       const y = title.match(/\b(18[6-9]\d|19\d\d)\b/);
       if (y && +y[1] <= 1980 && !NON_BASEBALL_ISSUE_RE.test(title)) drill = 'baseball';
     }
+    // (Oct 8 sports audit, sport facet) a frequent multi-word player NAME the
+    // title spells out, then the one-sport card brands
+    if (!drill && sportMaps?.byName && !NO_SPORT_DRILL_RE.test(title)) drill = sportByName(title, sportMaps.byName);
+    if (!drill && (kind === 'cards' || kind === 'wax')) drill = brandDefaultSport(title);
     return { subCat, drill, flown: null };
   }
 

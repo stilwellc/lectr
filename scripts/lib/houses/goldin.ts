@@ -6,7 +6,7 @@
  */
 import type { AuctionLot } from '../../../app/types';
 import { routeCulture } from '../../culture';
-import { goldinNonSportFix, DROP } from '../classify';
+import { goldinNonSportFix, trophyIsTicketOrPhoto, hasSportsTitleEvidence, DROP } from '../classify';
 import { fetchWithRetry } from '../fetch-retry';
 import { DEEP, UA, noteExpected, noteFetched, parseDrop, sleep, stampMoney } from './common';
 import { saleDayOf } from '../sale-day';
@@ -40,10 +40,14 @@ const GOLDIN_FACET_PASSES: { itemType: string; fallback: string | null }[] = [
 // with no music / film / TV reading (classify.ts goldinNonSportFix — the same
 // rule corpus-normalize re-applies): a sealed Beatles LP in the Game-Used
 // facet is not game-used. Returns the culture slug, or null to drop.
-function facetArtist(artist: string | null, title: string): string | null {
+// (Oct 8 sports audit) + the sale name (a Thematic-auction lot is sports only
+// on sports evidence) and the trophy-facet photo / ticket fix (E2/E3).
+function facetArtist(artist: string | null, title: string, saleName = ''): string | null {
   if (!artist) return null;
-  const to = goldinNonSportFix({ artist, title, auctionHouse: 'Goldin' });
-  return to === DROP ? null : to ?? artist;
+  const to = goldinNonSportFix({ artist, title, auctionHouse: 'Goldin', saleName });
+  if (to === DROP) return null;
+  if (to) return to;
+  return trophyIsTicketOrPhoto({ artist, title, auctionHouse: 'Goldin' }) ?? artist;
 }
 
 const GOLDIN_SCIENCE_QUERIES = ['apple computer', 'macintosh', 'steve jobs', 'fossil', 'meteorite', 'dinosaur', 'amber'];
@@ -197,7 +201,7 @@ export async function crawlGoldin(): Promise<AuctionLot[]> {
     // facet fallback must never resurrect it, or graded cards ride the
     // Tickets/Game-Used facets straight into the sports vertical.
     if (routed === 'blocked') { dropped++; return; }
-    const artist = facetArtist(routed || fallback, lot.title);
+    const artist = facetArtist(routed || fallback, lot.title, lot.auction_type ? `Goldin ${lot.auction_type} Auction` : '');
     if (!artist) { dropped++; return; }
     const rawEnd = lot.end_timestamp || lot.start_timestamp;
     if (!rawEnd) return;
@@ -269,7 +273,7 @@ export async function crawlGoldin(): Promise<AuctionLot[]> {
     if (GOLDIN_EXCLUDE_GAMES.test(t) || GOLDIN_EXCLUDE_MISC.test(t) || (!sportScoped && GOLDIN_CARD_MAKERS.test(t) && !GOLDIN_POKEMON.test(t))) { dropped++; return false; }
     const routed = goldinRoute(lot.title, sportScoped);
     if (routed === 'blocked') { dropped++; return false; }
-    const artist = facetArtist(routed || fallback, lot.title);
+    const artist = facetArtist(routed || fallback, lot.title, lot.auction_type ? `Goldin ${lot.auction_type} Auction` : '');
     if (!artist) { dropped++; return false; }
     const bid = lot.current_price || 0;
     if (bid <= 0) return false;
@@ -451,7 +455,14 @@ export async function crawlGoldin(): Promise<AuctionLot[]> {
             const { lots, total: t } = await goldinQuery({ auction_id: [a.auction_id], size: 100, from });
             total = t;
             if (!lots.length) break;
-            lots.forEach((l: any) => ingest(l, 'game-used'));
+            // (Oct 8 sports audit, E1) an auction NAMED "memorabilia" is not a
+            // sports auction: Goldin's Thematic auctions (animation cels,
+            // Madonna backstage passes, RIAA awards, Bob Hope studio photos —
+            // ~410 live) fell back to game-used here. Sports only on sports
+            // evidence; everything else takes the culture route.
+            lots.forEach((l: any) => (hasSportsTitleEvidence(String(l.title || ''))
+              ? ingest(l, 'game-used')
+              : ingest(l, null, false, true)));
             from += 100;
             await sleep(400);
           }

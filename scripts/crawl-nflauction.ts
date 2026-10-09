@@ -35,7 +35,7 @@ import {
   getHtml, decodeHtml, classifySports, pseudoArtist, readAuth,
   stampRealizedUsd, stampUpcomingUsd, writeMergedSegment,
   writeMergedSegmentWithLive, settledOnly, liveOnly, installCrashGuard,
-  REAL_UA, mapPool,
+  REAL_UA, mapPool, type SportsCategory,
 } from './lib/sports-crawl';
 import { readSegment } from './corpus-io';
 import { reportLegHealth, reportAndExit } from './lib/leg-health';
@@ -136,7 +136,10 @@ function toLot(it: ApiItem, ident: { title: string; desc: string }, kind: 'sold'
   // the ET calendar day of the GMT close (a 9:59 PM ET close is 01:59Z the
   // next day — lib/sale-day.ts); the instant itself rides on every row
   const saleDate = saleDayOf('NFL Auction', iso) || iso.slice(0, 10);
-  const cat = classifySports('', ident.title);
+  // (Oct 8 sports audit, E7) NFL Auction's use language wins: a "Signed Game
+  // Issued" jersey or a coin-toss coin is game-used, never an autograph /
+  // ticket ("… Notable Play: … TD Pass" read as a pass)
+  const cat: SportsCategory = GAME_USED_RE.test(ident.title) || /\b(?:coin toss|toss coin|flip coin|coin flip)\b/i.test(ident.title) ? 'game-used' : classifySports('', ident.title);
   const auth = readAuth(cat, ident.title, ident.desc);
   const bid = money(it.currentBid);
   const reserve = money(it.reserveAmt) ?? 0;

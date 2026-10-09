@@ -15,7 +15,7 @@ import { fxRateFor, toUsdDated } from '../../app/lib/normalize';
 import { readSegment, writeSegment } from '../corpus-io';
 import type { PriceBasis, Currency, AuctionLot } from '../../app/types';
 import { leadsWithSetCode } from './set-codes';
-import { NON_SPORT_RE, SPORT_WORD_RE, GAME_USED_RE, isCardTitle } from './classify';
+import { NON_SPORT_RE, SPORT_WORD_RE, GAME_USED_RE, PUBLICATION_RE, SEALED_PRODUCT_RE, SEALED_NOT_RE, isCardTitle, isPhotoTitle, isPhotographerSigned } from './classify';
 import { saleCloseFor, labelStub } from './sale-close-dates';
 
 // Nightly crawls a BOUNDED window; the segment must ACCUMULATE. Read the last-
@@ -327,7 +327,10 @@ export function classifySports(catLabel: string, title: string): SportsCategory 
   const c = (catLabel || '').toLowerCase();
   const t = (title || '').toLowerCase();
   const both = c + ' ' + t;
-  if (/\b(unopened|sealed|wax box|wax pack|cello|rack pack|vending)\b/.test(both)) return 'unopened-wax';
+  // (Oct 8 sports audit, E8) the TITLE must name the sealed product (pack /
+  // box / case / set …): "Unopened Official League Baseballs", a "Card Vending
+  // Machine" and a "Vending Hoard (1,000 Cards)" are not wax
+  if (/\b(unopened|sealed|wax box|wax pack|cello|rack pack|vending)\b/.test(both) && SEALED_PRODUCT_RE.test(title) && !SEALED_NOT_RE.test(title)) return 'unopened-wax';
   // a leading vintage set code (T206, E224, N172, R319 …) is a CARD whatever
   // follows — "T206 … with Bat" must not fall into game-used below (Sep 27 audit:
   // ~13k pre-war cards filed as memorabilia/game-used). See set-codes.ts.
@@ -339,9 +342,14 @@ export function classifySports(catLabel: string, title: string): SportsCategory 
   // game-used needs explicit USE language — a jersey/bat/helmet alone is a
   // retail or signed item (5.5k signed bats/jerseys were filed game-used)
   if (GAME_USED_RE.test(both)) return 'game-used';
-  if (/\b(trophy|award|ring|medal|championship ring|mvp)\b/.test(both)) return 'trophy-award';
-  if (/\b(type (1|i|one)|type-1|photograph|original photo|wire photo|press photo)\b/.test(both)) return 'photograph';
-  if (/\b(program|yearbook|magazine|publication|pennant|scorecard)\b/.test(both)) return 'program-publication';
+  // (Oct 8 sports audit) a PHOTO before the trophy it shows (E3) — any photo
+  // (Type I–IV, RPPC, negative); an athlete-SIGNED photo is an autograph
+  // unless the photographer signed it (E5) — classify.ts sportsObjectKind
+  const photo = isPhotoTitle(title) || /\b(type (1|i|one)|type-1|photograph|original photo|wire photo|press photo)\b/.test(c);
+  if (photo) return /\b(signed|autograph(?:ed)?|inscribed)\b/.test(t) && !isPhotographerSigned(title) ? 'autograph' : 'photograph';
+  // (E2) an award OBJECT word — a bare "MVP" names no trophy
+  if (/\b(trophy|trophies|award|ring|medal|plaque|statuette|championship ring|championship belt)\b/.test(both)) return 'trophy-award';
+  if (/\b(program|yearbook|magazine|publication|pennant|scorecard)\b/.test(both) || PUBLICATION_RE.test(title)) return 'program-publication';
   if (/\b(seat|turnstile|base|stadium|signage|display)\b/.test(both)) return 'equipment';
   if (/\b(signed|autograph|auto|cut signature|inscribed)\b/.test(both) && !/\bcard\b/.test(c)) return 'autograph';
   if (/\bcard\b/.test(both) || /\b(psa|sgc|bgs|cgc)\s*(gem|mint|nm|ex|vg|good|fair|poor|pr|\d)/.test(both) || /\b(topps|bowman|leaf|fleer|donruss|upper deck|panini|goudey|cracker jack|t20[0-9]|e9[0-9])\b/.test(both)) return 'graded-card';

@@ -25,6 +25,7 @@ import { routeCulture, isCultureSale, cultureSlugOf } from '../culture';
 import { routeRRLot, rrSportsPrior, rrAthleteRoute, rrSpaceTitle } from '../rr-auction';
 import { routeSportsLot } from '../sports-sale';
 import { athleteIn } from './athlete-roster';
+import { sportWordOf } from './sub-cats';
 
 export const DROP = 'DROP' as const;
 
@@ -72,7 +73,7 @@ const PHOTO_FOR_CARD_RE = /\b(?:photo|photograph|image|negative|artwork)\b[^.]{0
 const CARD_WEAK_WORD_RE = /\b(?:psa|sgc|bgs|beckett)[- ]?(?:graded|encapsulated)\b|\bstickers?\b/i;
 const CARD_SET_RE = /\b(?:complete|partial|near[- ]complete|master|team)(?: (?:&|and) partial)? (?:base )?sets?\b|\bset \(\d+/i;
 /** paper publications (graded magazines read like slabs: "… Cover (Newsstand) - CGC 9.4") */
-export const PUBLICATION_RE = /\b(sports illustrated|magazines?|newsstand|yearbooks?|media guides?|press guides?|programs?|programmes?|scorecards?|score cards?|newspapers?|publications?|annuals?|guides?)\b/i;
+export const PUBLICATION_RE = /\b(sports illustrated|magazines?|newsstand|yearbooks?|media guides?|press guides?|programs?|programmes?|scorecards?|score cards?|newspapers?|publications?|annuals?|guides?|sports graphic number|weekly baseball|sport (?:magazine|issue)|baseball digest|the sporting news)\b/i;
 /** comics and mass toys — never a home anywhere (culture doctrine: no mass items) */
 export const COMIC_RE = /\b(comic books?|(?<!bazooka )comics?|marvel comics|dc comics|amazing spider-man|action comics|detective comics|graphic novel)\b|\((?:19|20)\d\d (?:marvel|dc)\)|\bvol\.?\s*\d+\s*#\d+\b/i;
 /** mass-produced toys — no home unless an athlete SIGNED it (then an autograph) */
@@ -117,12 +118,48 @@ export function isCardTitle(title: string | null | undefined): boolean {
 // the REA/H&S/Lelands/SCP/ML/LOTG expansion houses): the object's own words
 // decide, most specific first.
 // ═══════════════════════════════════════════════════════════════════════════
-export const SEALED_RE = /\b(unopened|factory[- ]sealed|sealed (?:box|case|pack)(?:e?s)?|wax (?:pack|box|case)(?:e?s)?|hobby (?:box|case)(?:e?s)?|blaster(?: box(?:es)?)?|cello (?:pack|box)(?:e?s)?|rack (?:pack|box)(?:e?s)?|jumbo (?:pack|box)(?:e?s)?|vending (?:box|case)(?:e?s)?|fat packs?|booster (?:box|pack)(?:e?s)?)\b/i;
+const SEALED_CORE_RE = /\b(unopened|factory[- ]sealed|sealed (?:box|case|pack)(?:e?s)?|wax (?:pack|box|case)(?:e?s)?|hobby (?:box|case)(?:e?s)?|blaster(?: box(?:es)?)?|cello (?:pack|box)(?:e?s)?|rack (?:pack|box)(?:e?s)?|jumbo (?:pack|box)(?:e?s)?|vending (?:box|case)(?:e?s)?|fat packs?|booster (?:box|pack)(?:e?s)?)\b/i;
+/** (Oct 8 sports audit, E8) the PRODUCT a sealed lot is — "Three Dozen Unopened
+ *  Official League Baseballs", "1950 Ted Williams 'Champ' Prophylactics
+ *  Unopened Package", a "Baseball Card Vending Machine" or a "Topps Vending
+ *  Hoard (1,375 cards)" are not wax. A Star Co. "Factory-Sealed" team bag
+ *  names no pack/box word and stays. */
+export const SEALED_PRODUCT_RE = /\b(?:packs?|box(?:es)?|cases?|cellos?|racks?|wax|blasters?|tins?|cartons?|bags?|sets?|bricks?|tubes?|factory[- ]sealed)\b/i;
+export const SEALED_NOT_RE = /\b(?:vending|gum(?:ball)?|arcade|exhibit)(?:[- ]style)?(?: card)? machines?\b|\bmachines?\b/i;
+export const SEALED_RE = { test: (t: string): boolean => SEALED_CORE_RE.test(t) && SEALED_PRODUCT_RE.test(t) && !SEALED_NOT_RE.test(t) };
 /** EXPLICIT use language — a jersey is not game-used because it is a jersey */
 export const GAME_USED_RE = /\b(game[- ]?(?:used|worn|issued)|match[- ]?(?:used|worn|issued)|player[- ]?worn|team[- ]?issued|fight[- ]?worn|tour(?:nament)?[- ]?(?:used|worn)|race[- ]?(?:used|worn)|warm[- ]?up[- ]?worn|practice[- ]?(?:worn|used)|bench[- ]?worn|event[- ]?worn|psa\/dna gu \d+|photo[- ]?match(?:ed)?|gamer|mears|meigray|worn by|used by)\b/i;
 const TROPHY_RE = /\b(trophy|trophies|awards?|awarded|medals?|diplomas?|championship rings?|world series rings?|super bowl rings?|title belt|winners?'? medal|olympic (?:gold |silver |bronze )?medal|mvp award|heisman|plaque award|presentational ring|(?:final four|championship|title|world series|super bowl|pennant|all-star|league) rings?|presented to)\b/i;
 const TICKET_RE = /\b(tickets?|stubs?|full ticket|season pass|press pass(?! (?:cards?|#))|credentials?|all[- ]access pass)\b/i;
 const TYPE1_RE = /\b(type (?:1|i|one)\b|type-1|original (?:news service |wire |press )?photo(?:graph)?|wire photo|press photo|news service photo)\b/i;
+/** (Oct 8 sports audit, E3/E6) ANY photograph — Type I–IV, a wire / press /
+ *  news photo, an RPPC, a negative, a bare "Photo" / "Photograph" ("… Hoists
+ *  Trophy … Type I Photo", "Babe Ruth Type III Composite Photo") — the object
+ *  is the photo, not the trophy it shows or the catch-all */
+const PHOTO_TYPED_RE = /\b(type[- ]?(?:1|i|one|2|ii|two|3|iii|three|4|iv|four)\b(?! (?:auto|card|jersey|patch|relic))|original (?:news service |wire |press )?photo(?:graph)?s?|wire photos?|press photos?|news (?:service )?photos?|rppc|real photo post ?cards?|(?:glass |film |original )?negatives?\b|cabinet photos?|carte de visite)/i;
+/** a bare photo word — not a "Photo Pennant / Pin / Button / Ball / Card" (that object) */
+const PHOTO_WORD_RE = /\b(?:photo(?:graph)?s?|snapshots?)\b(?![- ]match)(?!\s+(?:pennants?|pins?|pinbacks?|buttons?|balls?|bats?|cards?|linen|emblems?|frames?|albums?))/i;
+/** a photo / ticket that only rides along with the lot's object ("Trophy with Photo") */
+const ACCESSORY_PHOTO_RE = /\b(?:with|w\/|plus|including|includes|featuring|features)\s+(?:an?\s+|the\s+|\(\d+\)\s+|\d+\s+)?(?:[\w'.-]+\s+){0,3}(?:photos?|photographs?|negatives?|snapshots?)\b/gi;
+const ACCESSORY_TICKET_RE = /\b(?:with|w\/|plus|including|includes|featuring)\s+(?:an?\s+|the\s+|\(\d+\)\s+|\d+\s+)?(?:[\w'.-]+\s+){0,3}(?:tickets?|stubs?|passes|credentials?)\b/i;
+/** the lot IS a photo: a photo word outside any "with … photo" rider, named
+ *  before any publication word ("Sports Illustrated … Sliding Photo on …
+ *  Cover" and "Yearbook - Featuring … Photographs" are publications) */
+export function isPhotoTitle(t: string): boolean {
+  const own = t.replace(ACCESSORY_PHOTO_RE, ' ');
+  // a TYPED photo ("Type I", "Original Photo", RPPC, negative) is a photo even
+  // when it names the magazine it ran in ("S.I. Cover-Used Type I Original Photo")
+  if (PHOTO_TYPED_RE.test(own)) return true;
+  const m = PHOTO_WORD_RE.exec(own);
+  if (!m) return false;
+  const pub = PUBLICATION_RE.exec(own);
+  return !pub || m.index < pub.index;
+}
+/** (Oct 8 sports audit, E5) the PHOTOGRAPHER signed the print ("Charles Conlon
+ *  Signed Type I Photo", "signed by the photographer") — the photo is the
+ *  object; an athlete's signature on it makes it an autograph */
+export const PHOTOGRAPHER_SIGNED_RE = /\bphotographer(?:'s|’s)?[- ](?:signed|signature|autograph|stamp)|\bsigned by (?:the )?photographer\b|\b(?:neil leifer|walter iooss(?: jr\.?)?|charles (?:m\. )?conlon|george (?:grantham )?bain|carl horner|paul thompson|ozzie sweet|annie leibovitz|richard avedon|harry benson|john g\.? zimmerman|bill eppridge|barton silverman|lou requena|james drake|tony triolo|marvin newman|hy peskin|nat fein|charles hoff|barney stein|ernie sisto)\s+(?:hand[- ])?(?:signed|autographed)\b|\bsigned by (?:neil leifer|walter iooss|nat fein|charles conlon|ozzie sweet|annie leibovitz|harry benson)\b|\bsigned (?:in|on) (?:the )?(?:negative|print|plate|margin by (?:the )?photographer)\b/i;
+export function isPhotographerSigned(t: string): boolean { return PHOTOGRAPHER_SIGNED_RE.test(t); }
 /** an athlete's letter / check / contract is an autograph item */
 const AUTOGRAPH_DOC_RE = /\b(letters?|contracts?|endorsements?)\b/i;
 export const SIGNED_RE = /\b(signed|autograph(?:ed|s)?|signatures?|cut signature|auto\.)\b/i;
@@ -148,15 +185,21 @@ export function sportsObjectKind(title: string | null | undefined, catchAll: 'sp
   const t = String(title || '');
   if (SEALED_RE.test(t)) return 'unopened-wax';
   if (GAME_USED_RE.test(t)) return 'game-used';
-  if (TYPE1_RE.test(t) && !SIGNED_RE.test(t)) return 'type-1-photos';
+  // (Oct 8 sports audit) a PHOTO is a photo before it is a trophy / ticket /
+  // catch-all (E3/E6) — unless an athlete SIGNED it: then an autograph (E5)
+  const signed = SIGNED_RE.test(t);
+  const photo = isPhotoTitle(t);
+  if (photo && (!signed || isPhotographerSigned(t))) return 'type-1-photos';
   // (wave 3) a SIGNED ball / bat / helmet / jersey is an autograph even when
   // it commemorates an award ("Aaron Rodgers Signed '2021 MVP' Football")
   if (isSignedRetailObject(t)) return 'autographs';
-  if (TROPHY_RE.test(stripAwardWinners(t))) return 'trophies-awards';
-  if (TICKET_RE.test(t) && !PUBLICATION_RE.test(t)) return 'tickets-passes';
-  if (PUBLICATION_RE.test(t) && !SIGNED_RE.test(t)) return 'programs-publications';
-  if (TYPE1_RE.test(t) && !SIGNED_RE.test(t)) return 'type-1-photos';
-  if (SIGNED_RE.test(t) || AUTOGRAPH_DOC_RE.test(t)) return 'autographs';
+  if (photo) return 'autographs';
+  // (E2) a ticket before the award it commemorates ("… MVP World Series Game 5 … Ticket")
+  const trophy = TROPHY_RE.test(stripAwardWinners(t));
+  if (TICKET_RE.test(t) && !PUBLICATION_RE.test(t) && !(trophy && ACCESSORY_TICKET_RE.test(t))) return 'tickets-passes';
+  if (trophy) return 'trophies-awards';
+  if (PUBLICATION_RE.test(t) && !signed) return 'programs-publications';
+  if (signed || AUTOGRAPH_DOC_RE.test(t)) return 'autographs';
   if (PUBLICATION_RE.test(t)) return 'programs-publications';
   return catchAll;
 }
@@ -186,7 +229,7 @@ export function goldinSportKind(title: string | null | undefined): string {
 // it reads non-sport; Hake's (a pop house) toys and comics have no home.
 // ═══════════════════════════════════════════════════════════════════════════
 export const SPORTS_EXPANSION_HOUSES = new Set(['REA', 'Huggins & Scott', 'Lelands', 'Love of the Game', 'SCP', 'Memory Lane']);
-export const NON_SPORT_RE = /\b(beatles|rolling stones|elvis|presley|beach boys|springsteen|concert|rock (?:and|&|n|'n'?) roll|albums?|vinyl|records?\b(?! book)|movie|film|hollywood|disney|mickey mouse|star wars|star trek|superman|batman|marvel|comics?|cartoons?|hanna[- ]barbera|television|tv show|howdy doody|monkees|kiss|guitar|jazz|sinatra|marilyn monroe|president(?:ial)?|political|campaign|lincoln|kennedy|eisenhower|nixon|roosevelt|truman|civil war|world war|wwii|apollo|nasa|astronaut|circus|wizard of oz|g\.?i\.? joe|barbie|non[- ]sport|three stooges|lone ranger|hopalong|roy rogers|gene autry|chaplin|laurel (?:and|&) hardy)\b/i;
+export const NON_SPORT_RE = /\b(riaa|grammys?|brit (?:certified|awards?)|(?:gold|platinum) (?:records?|albums?)|sales awards?|beatles|rolling stones|elvis|presley|beach boys|springsteen|concert|rock (?:and|&|n|'n'?) roll|albums?|vinyl|records?\b(?! book)|movie|film|hollywood|disney|mickey mouse|star wars|star trek|superman|batman|marvel|comics?|cartoons?|hanna[- ]barbera|television|tv show|howdy doody|monkees|kiss|guitar|jazz|sinatra|marilyn monroe|president(?:ial)?|political|campaign|lincoln|kennedy|eisenhower|nixon|roosevelt|truman|civil war|world war|wwii|apollo|nasa|astronaut|circus|wizard of oz|g\.?i\.? joe|barbie|non[- ]sport|three stooges|lone ranger|hopalong|roy rogers|gene autry|chaplin|laurel (?:and|&) hardy)\b/i;
 export const SPORT_WORD_RE = /\b(baseball|football|basketball|hockey|boxing|boxer|golf|tennis|olympics?|soccer|wrestling|racing|nascar|world series|super bowl|stanley cup|all[- ]star|hall of fame|hof|mlb|nfl|nba|nhl|pcl|nflpa|mlbpa|aba|afl|yankees|dodgers|giants|cubs|red sox|white sox|cardinals|tigers|pirates|athletics|senators|browns|braves|reds|phillies|orioles|indians|colts|packers|bears|celtics|lakers|bulls|knicks|canadiens|maple leafs|bruins|red wings|fight|bout|heavyweight|ali|babe ruth|gehrig|mantle|cobb|wagner|dimaggio|mays|aaron|koufax|robinson|clemente|thorpe|joe louis|dempsey|jordan|gretzky|pel[eé]|bats?|glove|mitt|helmet|jersey|uniform|pennant|scorecard|press pin|stadium|ballpark|team|league|champions?|pitcher|batter|catcher)\b/i;
 /** graded/carded mass toys and comic books as the auction houses print them */
 const TOY_GRADE_RE = /\b(afa (?:qualified |[a-z+-]+ )?\d{2}|ukg \d{2}|loose action|\d{1,2}[- ]back(?:-[a-z])?|vehicle (?:in|afa)|playset)\b/i;
@@ -422,12 +465,34 @@ export function entertainmentHouseFix(l: ClassifyLot): string | null {
 // that reads music / film / TV and carries no sport evidence goes to the
 // culture router (or, mass, nowhere).
 // ═══════════════════════════════════════════════════════════════════════════
-export const GOLDIN_NON_SPORT_RE = /\b(?:vinyl|test pressing|cassette|laserdisc|8-track|production[- ](?:made|used)|screen[- ](?:used|worn|matched)|ursa authentic|movie poster|film poster|concert poster|tour poster|star wars|star trek|marvel|disney|beatles|elvis presley|rolling stones|nirvana|hollywood|actor|actress|filming|baywatch|(?:from|in) (?:the )?(?:film|movie|tv series|series))\b/i;
+/** (Oct 8 sports audit, E4) + RIAA / BRIT certified sales awards, gold /
+ *  platinum records, Grammys, animation cels, backstage / tour passes, studio
+ *  photographs — Goldin's Thematic auctions filed them as trophies / game-used */
+export const GOLDIN_NON_SPORT_RE = /\b(?:vinyl|test pressing|cassette|laserdisc|8-track|production[- ](?:made|used|cels?)|screen[- ](?:used|worn|matched)|ursa authentic|movie poster|film poster|concert poster|tour poster|star wars|star trek|marvel|disney|beatles|elvis presley|rolling stones|nirvana|hollywood|actor|actress|filming|baywatch|(?:from|in) (?:the )?(?:film|movie|tv series|series)|riaa|brit certified|brit awards?|(?:gold|platinum|silver|diamond) (?:records?|albums?|singles?)|(?:multi-|double |triple )?platinum (?:sales )?awards?|(?:record |single |album )?sales awards?|grammys?|grammy awards?|animation cels?|cels?|animation drawings?|backstage pass(?:es)?|tour (?:pass(?:es)?|laminates?)|studio photo(?:graph)?s?)\b/i;
+/** Goldin's non-sport catch-all sale: its lots are sports only on evidence */
+const GOLDIN_NON_SPORT_SALE_RE = /\bthematic\b/i;
+/** explicit athlete-use language (not "worn by" / "used by": an actor's too) */
+const SPORT_USE_RE = /\bwrestlemania\b|\b(?:fight|bout|ringside|boxing) (?:posters?|programs?|programmes?|tickets?|films?|photos?|photographs?)\b|\bplaybooks?\b|\b(?:efl|carabao cup|fa cup|coupe de france|copa (?:america|libertadores|del rey)|serie a|bundesliga|ligue 1|uefa|arsenal|chelsea|tottenham|everton|liverpool fc|leeds united|psg|paris saint-germain|ac milan|inter milan|bayern|ajax|benfica|flamengo|santos fc)\b|\b(?:game|match|fight|race|practice|warm[- ]?up|bench|event|player|team)[- ]?(?:used|worn|issued)\b|\bpro(?:fessional)?[- ]model\b/i;
+/** a pro franchise named WITH its city ("Los Angeles Rams", "Orlando Magic") —
+ *  the bare nickname is often a band or a film */
+const CITY_TEAM_RE = /\b(?:arizona|atlanta|baltimore|boston|brooklyn|buffalo|carolina|charlotte|chicago|cincinnati|cleveland|colorado|dallas|denver|detroit|golden state|green bay|houston|indiana|indianapolis|jacksonville|kansas city|las vegas|los angeles|l\.?a\.?|memphis|miami|milwaukee|minnesota|montreal|nashville|new england|new jersey|new orleans|new york|n\.?y\.?|oakland|oklahoma city|orlando|ottawa|philadelphia|phoenix|pittsburgh|portland|sacramento|san antonio|san diego|san francisco|san jose|seattle|st\.? louis|tampa bay|tennessee|texas|toronto|utah|vancouver|vegas|washington|winnipeg|calgary|edmonton|anaheim|florida|columbus|tampa)\s+(?:rams|chiefs|eagles|giants|jets|patriots|bills|dolphins|ravens|steelers|browns|bengals|texans|colts|jaguars|titans|broncos|raiders|chargers|cowboys|commanders|redskins|bears|lions|packers|vikings|falcons|panthers|saints|buccaneers|cardinals|49ers|seahawks|lakers|clippers|warriors|kings|suns|celtics|nets|knicks|76ers|raptors|bulls|cavaliers|pistons|pacers|bucks|hawks|hornets|heat|magic|wizards|nuggets|timberwolves|thunder|trail blazers|jazz|mavericks|rockets|grizzlies|pelicans|spurs|yankees|mets|red sox|white sox|cubs|dodgers|angels|astros|athletics|mariners|rangers|blue jays|orioles|rays|guardians|indians|tigers|royals|twins|brewers|reds|pirates|phillies|marlins|nationals|braves|padres|rockies|diamondbacks|bruins|sabres|red wings|canadiens|senators|lightning|maple leafs|hurricanes|blue jackets|devils|islanders|flyers|penguins|capitals|blackhawks|avalanche|stars|wild|predators|blues|jets|ducks|flames|oilers|canucks|sharks|kraken|golden knights|coyotes|galaxy|fc|sounders|united|cosmos)\b/i;
+/** (Oct 8 sports audit, E1) the lot's own title says sports: a strong sport
+ *  word / roster athlete (isSportsEvidence), a sport / league / club word
+ *  (sub-cats sportWordOf), athlete-use language, or a city + franchise */
+export function hasSportsTitleEvidence(t: string): boolean {
+  return isSportsEvidence(t) || !!sportWordOf(t) || SPORT_USE_RE.test(t) || CITY_TEAM_RE.test(t);
+}
 const NON_CARD_SPORTS_SLUGS = new Set(['game-used', 'sports-memorabilia', 'tickets-passes', 'trophies-awards', 'type-1-photos', 'autographs', 'programs-publications', 'equipment-artifacts']);
 export function goldinNonSportFix(l: ClassifyLot): string | null {
   if (l.auctionHouse !== 'Goldin' || !NON_CARD_SPORTS_SLUGS.has(l.artist)) return null;
   const t = String(l.title || '');
-  if (!GOLDIN_NON_SPORT_RE.test(t) || isSportsEvidence(t)) return null;
+  if (isSportsEvidence(t)) return null;
+  // (Oct 8 sports audit, E1) a Goldin THEMATIC-auction lot (animation cels,
+  // Madonna backstage passes, RIAA awards, Bob Hope studio photos — 410 live)
+  // is sports only on sports evidence: a strong sport word, a roster athlete,
+  // or a sport / league / club the title names
+  if (GOLDIN_NON_SPORT_SALE_RE.test(String(l.saleName || ''))) return hasSportsTitleEvidence(t) ? null : cultureHome(t);
+  if (!GOLDIN_NON_SPORT_RE.test(t)) return null;
   return cultureHome(t);
 }
 
@@ -1006,6 +1071,60 @@ export function cultureSubSlugFix(l: ClassifyLot): string | null {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// (Oct 8 2026 sports audit) — the sports KIND, re-applied to the back-catalogue
+//  E2/E3 a TICKET or a PHOTO filed as a trophy ("… MVP World Series Game 5 …
+//        Full Ticket", "… Hoists Trophy … Type I Photo");
+//  E5   a SIGNED photo is an autograph — unless the photographer signed it
+//        (2,199 signed photos sat under Photographs);
+//  E6   the Equipment & Other catch-all (memorabilia / sports-memorabilia /
+//        equipment-artifacts) gets its object's kind: photos (Type II/III,
+//        RPPC, negatives), magazines (Sports Illustrated, Sports Graphic
+//        Number, Weekly Baseball, yearbooks), tickets, trophies, autographs;
+//  E7   NFL Auction "Game Issued" jerseys / balls and coin-toss coins are
+//        game-used (the use language wins there over ticket / autograph);
+//  E8   an 'unopened-wax' lot naming no pack / box / case / set ("Three
+//        Dozen Unopened Official League Baseballs", "Baseball Card Vending
+//        Machine", "1966 Topps Vending Hoard (1,000 Cards)") is not wax.
+// ═══════════════════════════════════════════════════════════════════════════
+const objectCatchAll = (house: string | null | undefined): 'memorabilia' | 'sports-memorabilia' =>
+  SPORTS_EXPANSION_HOUSES.has(house || '') ? 'memorabilia' : 'sports-memorabilia';
+export function trophyIsTicketOrPhoto(l: ClassifyLot): string | null {
+  if (l.artist !== 'trophies-awards') return null;
+  const k = sportsObjectKind(l.title, objectCatchAll(l.auctionHouse));
+  return k === 'tickets-passes' || k === 'type-1-photos' || (k === 'autographs' && isPhotoTitle(String(l.title || ''))) ? k : null;
+}
+export function signedPhotoAutograph(l: ClassifyLot): string | null {
+  if (l.artist !== 'type-1-photos') return null;
+  const t = String(l.title || '');
+  return SIGNED_RE.test(t) && !isPhotographerSigned(t) && !GAME_USED_RE.test(t) ? 'autographs' : null;
+}
+const CATCH_ALL_OBJECT_SLUGS = new Set(['memorabilia', 'sports-memorabilia', 'equipment-artifacts']);
+export function catchAllObjectKind(l: ClassifyLot): string | null {
+  if (!CATCH_ALL_OBJECT_SLUGS.has(l.artist)) return null;
+  const t = String(l.title || '');
+  if (isCardTitle(t)) return null; // the card rules own card titles
+  const k = sportsObjectKind(t, 'memorabilia');
+  // "Turkish Trophies" is a cigarette brand (S81 silks displays)
+  if (k === 'trophies-awards' && /\bturkish trophies\b/i.test(t)) return null;
+  return k === 'memorabilia' ? null : k;
+}
+const COIN_TOSS_RE = /\b(?:coin toss|toss coin|flip coin|coin flip)\b/i;
+export function nflGameUsed(l: ClassifyLot): string | null {
+  if (l.auctionHouse !== 'NFL Auction' || l.artist === 'game-used' || !SPORTS_SLUGS.has(l.artist)) return null;
+  const t = String(l.title || '');
+  return GAME_USED_RE.test(t) || COIN_TOSS_RE.test(t) ? 'game-used' : null;
+}
+export function sealedNotWax(l: ClassifyLot): string | null {
+  if (l.artist !== 'unopened-wax') return null;
+  const t = String(l.title || '');
+  if (SEALED_PRODUCT_RE.test(t) && !SEALED_NOT_RE.test(t)) return null;
+  const exp = SPORTS_EXPANSION_HOUSES.has(l.auctionHouse || '');
+  // a vending machine is the machine, whatever cards it dispensed
+  if (!SEALED_NOT_RE.test(t) && (isCardTitle(t) || (CARD_LOT_RE.test(t) && !CARD_LOT_NOT_RE.test(t)))) return exp ? 'graded-cards' : 'sports-cards';
+  return sportsObjectKind(t, objectCatchAll(l.auctionHouse));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // THE RECLASS LADDER — applied to every corpus row by corpus-normalize. Each
 // entry is one audited error class; `apply` returns the new artist, DROP, or
 // null. Order matters only where noted.
@@ -1065,6 +1184,13 @@ export const RECLASS_RULES: ReclassRule[] = [
   { cls: 'ticket-is-game-used', apply: ticketIsGameUsed },
   { cls: 'signed-object-not-award', apply: signedObjectNotAward },
   { cls: 'non-athlete-autograph', apply: nonAthleteAutograph },
+  // (Oct 8 sports audit) the sports kind (after the non-athlete gate: a TV Guide lot or JFK medals
+  // filed memorabilia leave for culture first) — E7, E8, E2/E3, E5, E6
+  { cls: 'nfl-game-issued-is-game-used', apply: nflGameUsed },
+  { cls: 'sealed-names-no-product', apply: sealedNotWax },
+  { cls: 'trophy-is-ticket-or-photo', apply: trophyIsTicketOrPhoto },
+  { cls: 'signed-photo-is-autograph', apply: signedPhotoAutograph },
+  { cls: 'catch-all-object-kind', apply: catchAllObjectKind },
   // (wave 4) signed displays / postcards / bare signed cards; pennants
   { cls: 'signed-flat-autograph', apply: signedFlatAutograph },
   { cls: 'pennant-not-program', apply: pennantNotProgram },

@@ -6,7 +6,7 @@
 /** Human labels for drill/subCat slugs (UI + board rows). */
 export const SUBCAT_LABELS: Record<string, string> = {
   // sports kinds
-  'cards': 'Cards', 'game-used': 'Game-used', 'memorabilia': 'Memorabilia',
+  'cards': 'Cards', 'card-lots': 'Lots & sets', 'game-used': 'Game-used', 'memorabilia': 'Memorabilia',
   'tickets': 'Tickets', 'trophies': 'Trophies & awards',
   // sports
   'basketball': 'Basketball', 'baseball': 'Baseball', 'football': 'Football',
