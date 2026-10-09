@@ -818,7 +818,10 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     const CARD_SLUGS = new Set(['sports-cards', 'graded-cards']);
     // compExclude-stamped sales (junk prices, duplicate listings) never enter
     // a card pool; the eval seam's clock bounds the pool to sales before it
+    // (Oct 8) a non-Pokémon TCG card filed under a sports slug (subCat
+    // 'tcg-other': Yu-Gi-Oh!, One Piece, Lorcana …) never comps a sports card
     const sportsSold = all.filter(l => SPORT_SET.has(l.artist) && l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate
+      && l.subCat !== 'tcg-other'
       && !isCompExcluded(l) && knownKey(l as AuctionLot & { datePrecision?: string | null }) <= TODAY);
 
     // one parse pass over every sold sports lot
@@ -1261,7 +1264,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     // in a pre-pass so every card's stamp can cite its siblings.
     const liveByCardKey = new Map<string, { id: string; house: string; bid: number }[]>();
     for (const l of all) {
-      if (l.status !== 'upcoming' || !CARD_SLUGS.has(l.artist)) continue;
+      if (l.status !== 'upcoming' || !CARD_SLUGS.has(l.artist) || l.subCat === 'tcg-other') continue;
       const ck = cardKey(cardIdOf(l));
       if (!ck) continue;
       const arr = liveByCardKey.get(ck) || [];
@@ -1294,6 +1297,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
       if (l.status !== 'upcoming') continue;
       const lw = l as AuctionLot & { playerSlug?: string | null; playerName?: string | null; cardComps?: unknown };
       if (CARD_SLUGS.has(l.artist)) {
+        if (l.subCat === 'tcg-other') continue;
         const c = cardIdOf(l);
         lw.playerSlug = c.playerSlug; lw.playerName = c.player;
         // a condition-flagged lot must not wear a clean-comp floor: no

@@ -1950,7 +1950,10 @@ const CULT_KIND_RULES: [RegExp, string][] = [
   // Linen-Backed", "U.S. insert -- 36x14in.")
   [/\b(?:posters?|lobby cards?|one[- ]sheets?|handbills?|locandina|affiche|window cards?|half[- ]sheets?|three[- ]sheets?|six[- ]sheets?|(?:british |u\.?k\.? |australian )?quads?|daybills?|scene cards?|(?:linen|paper)[- ]backed|insert\s*(?:[-–]+|,)\s*\d)\b/i, 'poster'],
   [/\((?:A|B|C)[+-]\)|\((?:A|B|C)\)\s*,?\s*(?:unfolded|folded|linen|paper)/, 'poster'],
-  [/\b(?:guitars?|bass|telecaster|stratocaster|les paul|drums?|drumhead|piano|saxophone|violin|microphone|amplifier|keyboard|ukulele|banjo|trumpet|cymbals?)\b/i, 'instrument'],
+  // (Oct 8) + the guitar makers a title names alone ("Gibson J-200", "Prince's
+  // Rickenbacker", "Fender Bandmaster") and the effects pedalboard — not the
+  // people who share the name (Mel Gibson, Freddy Fender, Eddie Rickenbacker)
+  [/\b(?:guitars?|bass|telecaster|stratocaster|les paul|drums?|drumhead|piano|saxophone|violin|microphone|amplifier|keyboard|ukulele|banjo|trumpet|cymbals?|(?<!\b(?:mel|hoot|dana|althea|guy|ed|bob|josh|debbie|william|mike|kirk|tyrese|henry) )gibson|(?<!\b(?:freddy|leo) )fender|(?<!\bfred )gretsch|epiphone|(?<!\b(?:eddie|edward|captain|capt\.?) )rickenbacker|flying v|pedal ?boards?)\b/i, 'instrument'],
   [/\b(?:gold record|platinum record|gold disc|platinum disc|riaa|grammy|oscar|academy award|emmy|golden globe|disc award|sales award|presentation award|awards?|medals?|trophy|trophies|key to the city)\b/i, 'award'],
   [/\b(?:prop|props|hero prop|production[- ]made|screen[- ]used|maquette)\b/i, 'prop'],
   // (wave 4) + the garment nouns Julien's titles carry ("JANET JACKSON GLOVES",
