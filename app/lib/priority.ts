@@ -201,3 +201,40 @@ export function reasonOf(l: ScoreLot, nowMs: number = Date.now()): string | null
   if (p.edge > 0) parts.push('Below market');
   return parts.length ? parts.join(' · ') : null;
 }
+
+/**
+ * The signed-in / following reader's shortlist ("For you"): only lots touching
+ * something they follow, closing within 7 days, ranked
+ *   35·Affinity + 20·Size + 20·Edge⁺ − 10·Edge⁻ + 15·Evidence + 10·Urgency
+ * with caps (≤3 per maker, ≤4 per sale). `affinity` is follows.affinityOf.
+ */
+export function forYou<T extends ShortlistLot>(lots: T[], affinity: (l: T) => number, nowMs: number = Date.now(), n = 20): T[] {
+  const rows: { l: T; s: number; close: number; a: number }[] = [];
+  for (const l of lots) {
+    const aff = affinity(l);
+    if (aff <= 0) continue;
+    const p = priorityOf(l, nowMs);
+    const close = closeMsOf(l);
+    if (!p || close == null) continue;
+    const h = (close - nowMs) / 3_600_000;
+    if (h <= 0 || h > 168) continue;
+    const s = 35 * aff + 20 * p.size + 20 * Math.max(p.edge, 0) - 10 * Math.max(-p.edge, 0) + 15 * p.ev + 10 * p.urg;
+    rows.push({ l, s, close, a: p.a });
+  }
+  rows.sort((x, y) => (y.s - x.s) || (x.close - y.close) || (y.a - x.a));
+  const perSale = new Map<string, number>(), perMaker = new Map<string, number>();
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const { l, a } of rows) {
+    const dup = `${l.auctionHouse}|${l.saleDate}|${String(l.title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()}|${a}`;
+    if (seen.has(dup)) continue;
+    const sale = `${l.auctionHouse}|${l.saleDate}|${l.saleName ?? ''}`;
+    const maker = l.artist && !GENERIC_MAKERS.has(l.artist) ? l.artist : `id:${l.id}`;
+    if ((perSale.get(sale) ?? 0) >= 4 || (perMaker.get(maker) ?? 0) >= 3) continue;
+    out.push(l); seen.add(dup);
+    perSale.set(sale, (perSale.get(sale) ?? 0) + 1);
+    perMaker.set(maker, (perMaker.get(maker) ?? 0) + 1);
+    if (out.length >= n) break;
+  }
+  return out;
+}

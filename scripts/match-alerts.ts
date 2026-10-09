@@ -21,6 +21,8 @@ import fs from 'fs';
 import path from 'path';
 import { readCorpus, SERVED_DIR } from './corpus-io';
 import { marketOf } from '../app/constants';
+import { taxonOf } from '../app/lib/taxonomy';
+import { priorityOf } from '../app/lib/priority';
 
 const url = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '');
 const key = process.env.SUPABASE_SERVICE_KEY || '';
@@ -38,6 +40,31 @@ interface Query {
   text?: string | null;
   belowOnly?: boolean;
   player?: string | null;
+  follow?: 'cat' | 'house';
+  cat?: string | null;
+  sub?: string | null;
+  house?: string | null;
+}
+
+/** Category / house follows (Oct 8) cover hundreds of new lots a day, so they
+ *  alert ONLY on lots that clear the anonymous shortlist bar (≥$2.5K anchor
+ *  with evidence), best-first by the priority score, at most FOLLOW_CAP a night.
+ *  Without this branch `matches` ignores the unknown fields and a category
+ *  follow would match EVERY fresh lot. */
+const FOLLOW_CAP = 10;
+export function followHits(q: Query, fresh: any[], now: number): any[] {
+  const scored: { l: any; s: number }[] = [];
+  for (const l of fresh) {
+    if (q.follow === 'house' && l.auctionHouse !== q.house) continue;
+    if (q.follow === 'cat') {
+      const t = taxonOf(l);
+      if (t.cat !== q.cat || (q.sub && t.sub !== q.sub)) continue;
+    }
+    const p = priorityOf(l, now);
+    if (!p || p.a < 2500 || (p.ev <= 0 && p.src !== 'est')) continue;
+    scored.push({ l, s: p.score });
+  }
+  return scored.sort((a, b) => b.s - a.s).slice(0, FOLLOW_CAP).map(x => x.l);
 }
 
 function matches(q: Query, lot: any): boolean {
@@ -135,7 +162,10 @@ async function main() {
   let written = 0;
   for (const s of searches) {
     if (s.query?._signal) continue; // synthetic signal searches belong to match-signal-alerts
-    const hits = fresh.filter(l => matches(s.query || {}, l)).slice(0, MAX_PER_SEARCH);
+    const q: Query = s.query || {};
+    const hits = q.follow
+      ? (q.follow === 'cat' || q.follow === 'house' ? followHits(q, fresh, now) : [])
+      : fresh.filter(l => matches(q, l)).slice(0, MAX_PER_SEARCH);
     if (!hits.length) continue;
     const rows = hits.map(l => ({ user_id: s.user_id, search_id: s.id, lot_id: String(l.id) }));
     await rest('alerts?on_conflict=search_id,lot_id', {

@@ -29,6 +29,12 @@ export interface SavedQuery {
    *  set the search is a "follow" — new lots for that person alert nightly. */
   player?: string | null;
   playerName?: string | null;
+  /** Oct 8: a category / house FOLLOW (app/lib/follows) — clean taxonomy keys */
+  follow?: 'cat' | 'house';
+  cat?: string | null;
+  sub?: string | null;
+  house?: string | null;
+  label?: string | null;
 }
 
 export interface SavedSearch {
@@ -50,6 +56,7 @@ export interface AlertRow {
 export function describeQuery(q: SavedQuery, labels: { maker?: string; category?: string; market?: string }): string {
   // a follow reads as the person's name — "Following Michael Jordan"
   if (q.player) return `Following ${q.playerName || q.player}`;
+  if (q.follow) return `Following ${q.label || q.house || q.cat}`;
   const parts: string[] = [];
   if (labels.maker) parts.push(labels.maker);
   else if (q.sport) parts.push(q.sport);
