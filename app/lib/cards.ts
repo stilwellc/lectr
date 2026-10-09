@@ -562,13 +562,32 @@ function gateKnown(name: string | null, known?: ReadonlySet<string>): { player: 
   return { player: null, playerSlug: null };
 }
 
+/** (Oct 8 sports audit, Lots & Sets) the bulk-lot words MULTI_CARD_RE missed:
+ *  "Collection of (27) Cards", "(400) … Cards", "Shoebox Collection (1,100+)",
+ *  "PSA-Graded Collection (8 Different)", "Vending Hoard", a bare "Complete
+ *  Set", a leading "(400) 1970 Topps …" count. A product line named "Collection" ("Immaculate Collection", "Upper
+ *  Deck Ultimate Collection") is not one: only a lot-ish word before it counts. */
+const CARD_LOT_RE = /^\s*(?:\d{1,4}\s+)?\(\d[\d,]*\+?\)\s|\blots? of\b|\(\d[\d,]*\+?\)\s*(?:different\s+)?(?:cards?|singles|stars|rookies|commons)\b|\bcards?\s*\(\d[\d,]*\+?\)|\b(?:cards?|singles|shoebox|graded|(?:psa|sgc|bgs|beckett)[- ]graded|starter|rookie|rookies|stars|hall of famers?|hofers?|vintage|autograph|signed cards?) collection\b|\bcollection (?:of\b|\(\d)|\bset of\b|\b(?:complete|near[- ]complete|partial|master|starter|factory|base) sets?\b|\bgroup of\b|\bhoards?\b|\bgrouping\b|\(\d+\+? different\)/i;
+
 /** (Oct 6) Several cards in one lot: a set / pair / "Collection (25)" / two
- *  card numbers outside parens (a "#42/49" serial is not a second card). */
+ *  card numbers outside parens (a "#42/49" serial is not a second card).
+ *  (Oct 8) + the bulk-lot words — unless the title is one numbered card with
+ *  no count ("Topps Complete Set Chrome … #5 (#05/25)"). Drives parseCard's
+ *  `multi` (so cardKey / cardLadderKey abstain: a lot never enters a single-
+ *  card comp pool) and the sports 'card-lots' subCat (sub-cats.ts). */
 export function isMultiCardTitle(title: string): boolean {
   const t = title || '';
   if (MULTI_CARD_RE.test(t)) return true;
   const noParens = t.replace(/\([^)]*\)/g, ' ').replace(/#?\d+\s*\/\s*\d+/g, ' ');
-  return (noParens.match(/#\s?[A-Za-z]{0,4}\d/g) || []).length >= 2;
+  const nums = (noParens.match(/#\s?[A-Za-z]{0,4}\d/g) || []).length;
+  if (nums >= 2) return true;
+  if (!CARD_LOT_RE.test(t)) return false;
+  return nums === 0 || /\(\d[\d,]*\+?\)|\blots? of\b|\bcollection of\b|\bset of\b|\bgroup of\b/i.test(t);
+}
+/** (Oct 8) parseCard's own `multi` read (the E98 "Set of 30" issue name masked)
+ *  — the sports 'card-lots' subCat stamps exactly the lots the card keys abstain on */
+export function isCardLotTitle(title: string): boolean {
+  return isMultiCardTitle(maskE98(title || '', ' '));
 }
 
 /** (Oct 6 identity re-audit) a structured NFL/MLB-Auction slot that names a

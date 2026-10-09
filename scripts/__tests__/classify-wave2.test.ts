@@ -130,7 +130,8 @@ test('class 8 · Julien\'s / Propstore lots are sports only with sport evidence'
   // sports evidence keeps it: a sports sale, a roster athlete, fight/match-worn language
   assert.equal(J('BOB GIBSON 1961 TOPPS TRADING CARD #211 - PSA MINT 9', 'graded-cards', 'Sports Legends'), 'graded-cards');
   assert.equal(J('DIEGO MARADONA 1995 MATCH WORN BOCA JUNIORS SHIRT', 'game-used', 'Icons & Idols: Sports'), 'game-used');
-  assert.equal(J('ALI AND FRAZIER SIGNED NEIL LEIFER PHOTOGRAPH', 'type-1-photos', 'Sports Legends and Music Icons'), 'type-1-photos');
+  // (Oct 8 sports audit, E5) the athletes signed the Leifer print: an autograph
+  assert.equal(J('ALI AND FRAZIER SIGNED NEIL LEIFER PHOTOGRAPH', 'type-1-photos', 'Sports Legends and Music Icons'), 'autographs');
   assert.equal(J('MICHAEL JACKSON SIGNED BAD DISPLAY', 'equipment-artifacts', 'Sports Legends and Music Icons'), 'entertainment-memorabilia');
 });
 
