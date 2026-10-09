@@ -39,7 +39,7 @@ import { subCatLabel } from '../../lib/subcat-labels';
 import MarketSwitch from '../../components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS, feedFromParams, feedToParams } from '../../components/FeedToolbar';
 import { useUrlState, useLastVisit, passesTriage } from '../../lib/feed-filters';
-import { byPriority, shortlist } from '../../lib/priority';
+import { byPriority, shortlist, reasonOf } from '../../lib/priority';
 import { Colophon, daysWord, pickCall } from '../../components/Terminal';
 import Flick from '../../components/Flick';
 import Greeting from '../../components/Greeting';
@@ -246,7 +246,7 @@ function BidVelChip({ lot }: { lot: AuctionLot }) {
   );
 }
 
-function FeedRow({ lot, onOpen, tone }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down' }) {
+function FeedRow({ lot, onOpen, tone, note }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down'; note?: string | null }) {
   const est =
     lot.estimateLow || lot.estimateHigh
       ? (lot.estimateLow && lot.estimateHigh && formatPrice(lot.estimateLow) !== formatPrice(lot.estimateHigh)
@@ -277,6 +277,7 @@ function FeedRow({ lot, onOpen, tone }: { lot: AuctionLot; onOpen: () => void; t
       <span className="ray-feedrow-main">
         <span className="ray-feedrow-maker">{ARTIST_LABEL[lot.artist] || lot.artist}</span>
         <span className="ray-feedrow-title">{craftTitle(lot.title)}</span>
+        {note && <span className="ray-feedrow-title" style={{ color: 'var(--color-text-secondary)', fontSize: '0.86em' }}>{note}</span>}
       </span>
       <span className="ray-feedrow-right">
         <b>{est}</b>
@@ -938,149 +939,9 @@ export default function TerminalHomePage() {
               closingNext={closingNext}
             />
 
-            {/* ══ TONIGHT'S WALL — the photographed front row (kept). The
-                section opens on a registration plate (north-star frame). ══ */}
-            {wallEl && <div className={`${styles.wallSeparator} ns-plate`}>{wallEl}</div>}
-
-            {/* ══ ROOM · THE VERIFIED BOARD — every certified read, on paper.
-                The movers ARE the board's top rows (one table, no duplicate
-                strip); the record sentence prints ONCE as the room's footer.
-                NORTH STAR: the engine's intro head lives OUT HERE on the page
-                ground in the split grammar; the vault below stays the one
-                dark room. ══ */}
-            {marketData?.subMarkets && (
-              <div className="ns-plate">
-                <div className={`ns-split ${styles.engineIntro}`}>
-                  <div>
-                    <span className="ns-kicker">The value engine</span>
-                    <h2 className={styles.engineIntroHead}>We find what the room misprices.</h2>
-                  </div>
-                  <p>
-                    Live lots flagged under their comparables, the market indices behind
-                    them, and the replayed record that keeps us honest.
-                  </p>
-                </div>
-              <section className={styles.roomPaper}>
-                <div className={styles.roomInner}>
-                  <SubMarketBoard
-                    market={marketData}
-                    activeKey={activeKey}
-                    variant={mounted && isMobile ? 'mobile' : 'desktop'}
-                    paper
-                    receipts={backtest ? {
-                      flaggedPct: backtest.flagged.medianPerfPct,
-                      unflaggedPct: backtest.unflagged.medianPerfPct,
-                      flaggedHammerPct: backtest.flagged.hammerMedianPct ?? null,
-                      unflaggedHammerPct: backtest.unflagged.hammerMedianPct ?? null,
-                      n: backtest.flagged.n,
-                      asOf: marketData?.generatedAt?.slice(0, 10) ?? null,
-                    } : null}
-                    hero={engineHero}
-                    onOpenLot={setTableLot}
-                  />
-                </div>
-              </section>
-              </div>
-            )}
-
-            {/* ══ ROOM · THE INSTRUMENT SET — the platform cells, taken
-                directly from the elevenlabs.io feature-cell grammar: four
-                quiet cream wells for the desk's four surfaces, and ONE
-                forced-color cell carrying today's call. LAMP LAW: the color
-                cell's dir is the call's real signal direction — 'up' because
-                a Below Market flag means comps sell ABOVE this ask (the same
-                tone the wall's ring wears) — or 'ink' when no call exists.
-                Its multiple prints through gapMultiple, the wall's own
-                formatter. Never invented, never decorative. ══ */}
-            <section className={`${styles.cellsSection} ns-plate`}>
-              <div className={`ns-split ${styles.cellsHead}`}>
-                <div>
-                  <span className="ns-kicker">The instrument set</span>
-                  <h2 className={styles.engineIntroHead}>One desk, four instruments.</h2>
-                </div>
-                <p>
-                  Every number on this page is made in one of these rooms — the
-                  engine that prices the book, the record that keeps it honest,
-                  the makers it tracks, and the desk you keep.
-                </p>
-              </div>
-              <CellGrid min={300} className={styles.cellsGrid}>
-                {todaysCall ? (
-                  <ColorCell
-                    dir="up"
-                    span={2}
-                    stat={gapMultiple(todaysCall.pct)}
-                    label="Today's call"
-                    body={`${ARTIST_LABEL[todaysCall.lot.artist] || todaysCall.lot.artist} · ${craftTitle(todaysCall.lot.title)}`}
-                    href={`/lot/${todaysCall.lot.id}`}
-                  />
-                ) : (
-                  <ColorCell
-                    dir="ink"
-                    span={2}
-                    stat={belowMktCount > 0 ? belowMktCount.toLocaleString() : upcoming.length > 0 ? upcoming.length.toLocaleString() : undefined}
-                    label="Today's call"
-                    body={
-                      belowMktCount > 0
-                        ? `No single call tonight — ${belowMktCount.toLocaleString()} ${belowMktCount === 1 ? 'lot' : 'lots'} flagged under their comparables on the live book.`
-                        : upcoming.length > 0
-                          ? `No flags on this book tonight — ${upcoming.length.toLocaleString()} ${upcoming.length === 1 ? 'lot' : 'lots'} on the block, priced in line with their comps.`
-                          : 'The book is quiet — the crawl refreshes daily.'
-                    }
-                    href="#on-the-block"
-                  />
-                )}
-                {/* THE POP (Collin: "nothing POPs, dead space"): every cell
-                    leads with its big mono numeral — numbers are the desk's
-                    product art — and carries its patent figure as a top-right
-                    watermark. Stats are the same live values the bodies
-                    already printed; nothing invented. */}
-                <Cell
-                  stat={belowMktCount > 0 ? belowMktCount.toLocaleString() : '1.3×'}
-                  statNote={belowMktCount > 0 ? 'flagged on the book tonight' : 'where a flag becomes legal'}
-                  mark={<FigGate size={96} />}
-                  label="The value engine"
-                  body={belowMktCount > 0
-                    ? 'Live asks priced against where their comparables actually sold.'
-                    : 'Live asks priced against where their comparables actually sold — every flag on this page starts here.'}
-                  href="/value"
-                />
-                <Cell
-                  stat={backtest?.flagged?.n ? backtest.flagged.n.toLocaleString() : undefined}
-                  statNote={backtest?.flagged?.n ? 'settled calls replayed' : undefined}
-                  icon={<IcoRecord />}
-                  mark={<FigCorpus size={96} />}
-                  label="The record"
-                  body={backtest?.flagged?.n
-                    ? 'Every flagged call replayed against the hammer that followed — the desk grades its own work.'
-                    : 'Every flagged call replayed against the hammer that followed — the desk grades its own work.'}
-                  href="/analytics"
-                />
-                <Cell
-                  stat={ROSTER.makers.toLocaleString()}
-                  statNote={`makers · ${ROSTER.categories} categories across ${VERTICAL_COUNT} verticals`}
-                  mark={<FigPools size={96} />}
-                  label="The makers ledger"
-                  body="Sale history, live coverage and market reads, one dossier per name."
-                  href="/makers"
-                />
-                <Cell
-                  stat={savedIds.length > 0 ? savedIds.length.toLocaleString() : undefined}
-                  statNote={savedIds.length > 0 ? (savedIds.length === 1 ? 'lot on your desk' : 'lots on your desk') : undefined}
-                  icon={<IcoDesk />}
-                  mark={<FigTape size={96} />}
-                  label="Your desk"
-                  body={savedIds.length > 0
-                    ? 'What moved since you saved it, the next hammers, and your own record.'
-                    : 'Save any lot on the block and it reports here — what moved since you saved it, and when it hammers.'}
-                  href="/profile"
-                />
-              </CellGrid>
-            </section>
-
-            {/* the watchlist strip — the reader's saved lots (small, personal) */}
-            {watchStripEl}
-
+            {/* Oct 8: the feed opens right under the hero — the shortlist
+                ("What matters") is the first thing a reader triages, not
+                ~4,200px down beneath the wall, the board and the cells. */}
             {/* ══ THE FEED — On the block (full parity) ══ */}
             {upcoming.length > 0 && (
               <section id="on-the-block" className={`${styles.feedSection} ns-plate`}>
@@ -1293,6 +1154,7 @@ export default function TerminalHomePage() {
                             lot={lot}
                             onOpen={() => setTableLot(lot)}
                             tone={feedTone(lot, belowIds, belowSignal.hasSig)}
+                            note={topTab ? reasonOf(lot) : null}
                           />
                         </div>
                       ) : (
@@ -1308,6 +1170,7 @@ export default function TerminalHomePage() {
                             saved={isSaved(lot.id)}
                             onToggleSave={toggle}
                             lastCrawl={lastCrawl || undefined}
+                            note={topTab ? reasonOf(lot) : null}
                           />
                         </div>
                       )
@@ -1329,6 +1192,150 @@ export default function TerminalHomePage() {
                 )}
               </section>
             )}
+
+
+            {/* ══ TONIGHT'S WALL — the photographed front row (kept). The
+                section opens on a registration plate (north-star frame). ══ */}
+            {wallEl && <div className={`${styles.wallSeparator} ns-plate`}>{wallEl}</div>}
+
+            {/* ══ ROOM · THE VERIFIED BOARD — every certified read, on paper.
+                The movers ARE the board's top rows (one table, no duplicate
+                strip); the record sentence prints ONCE as the room's footer.
+                NORTH STAR: the engine's intro head lives OUT HERE on the page
+                ground in the split grammar; the vault below stays the one
+                dark room. ══ */}
+            {marketData?.subMarkets && (
+              <div className="ns-plate">
+                <div className={`ns-split ${styles.engineIntro}`}>
+                  <div>
+                    <span className="ns-kicker">The value engine</span>
+                    <h2 className={styles.engineIntroHead}>We find what the room misprices.</h2>
+                  </div>
+                  <p>
+                    Live lots flagged under their comparables, the market indices behind
+                    them, and the replayed record that keeps us honest.
+                  </p>
+                </div>
+              <section className={styles.roomPaper}>
+                <div className={styles.roomInner}>
+                  <SubMarketBoard
+                    market={marketData}
+                    activeKey={activeKey}
+                    variant={mounted && isMobile ? 'mobile' : 'desktop'}
+                    paper
+                    receipts={backtest ? {
+                      flaggedPct: backtest.flagged.medianPerfPct,
+                      unflaggedPct: backtest.unflagged.medianPerfPct,
+                      flaggedHammerPct: backtest.flagged.hammerMedianPct ?? null,
+                      unflaggedHammerPct: backtest.unflagged.hammerMedianPct ?? null,
+                      n: backtest.flagged.n,
+                      asOf: marketData?.generatedAt?.slice(0, 10) ?? null,
+                    } : null}
+                    hero={engineHero}
+                    onOpenLot={setTableLot}
+                  />
+                </div>
+              </section>
+              </div>
+            )}
+
+            {/* ══ ROOM · THE INSTRUMENT SET — the platform cells, taken
+                directly from the elevenlabs.io feature-cell grammar: four
+                quiet cream wells for the desk's four surfaces, and ONE
+                forced-color cell carrying today's call. LAMP LAW: the color
+                cell's dir is the call's real signal direction — 'up' because
+                a Below Market flag means comps sell ABOVE this ask (the same
+                tone the wall's ring wears) — or 'ink' when no call exists.
+                Its multiple prints through gapMultiple, the wall's own
+                formatter. Never invented, never decorative. ══ */}
+            <section className={`${styles.cellsSection} ns-plate`}>
+              <div className={`ns-split ${styles.cellsHead}`}>
+                <div>
+                  <span className="ns-kicker">The instrument set</span>
+                  <h2 className={styles.engineIntroHead}>One desk, four instruments.</h2>
+                </div>
+                <p>
+                  Every number on this page is made in one of these rooms — the
+                  engine that prices the book, the record that keeps it honest,
+                  the makers it tracks, and the desk you keep.
+                </p>
+              </div>
+              <CellGrid min={300} className={styles.cellsGrid}>
+                {todaysCall ? (
+                  <ColorCell
+                    dir="up"
+                    span={2}
+                    stat={gapMultiple(todaysCall.pct)}
+                    label="Today's call"
+                    body={`${ARTIST_LABEL[todaysCall.lot.artist] || todaysCall.lot.artist} · ${craftTitle(todaysCall.lot.title)}`}
+                    href={`/lot/${todaysCall.lot.id}`}
+                  />
+                ) : (
+                  <ColorCell
+                    dir="ink"
+                    span={2}
+                    stat={belowMktCount > 0 ? belowMktCount.toLocaleString() : upcoming.length > 0 ? upcoming.length.toLocaleString() : undefined}
+                    label="Today's call"
+                    body={
+                      belowMktCount > 0
+                        ? `No single call tonight — ${belowMktCount.toLocaleString()} ${belowMktCount === 1 ? 'lot' : 'lots'} flagged under their comparables on the live book.`
+                        : upcoming.length > 0
+                          ? `No flags on this book tonight — ${upcoming.length.toLocaleString()} ${upcoming.length === 1 ? 'lot' : 'lots'} on the block, priced in line with their comps.`
+                          : 'The book is quiet — the crawl refreshes daily.'
+                    }
+                    href="#on-the-block"
+                  />
+                )}
+                {/* THE POP (Collin: "nothing POPs, dead space"): every cell
+                    leads with its big mono numeral — numbers are the desk's
+                    product art — and carries its patent figure as a top-right
+                    watermark. Stats are the same live values the bodies
+                    already printed; nothing invented. */}
+                <Cell
+                  stat={belowMktCount > 0 ? belowMktCount.toLocaleString() : '1.3×'}
+                  statNote={belowMktCount > 0 ? 'flagged on the book tonight' : 'where a flag becomes legal'}
+                  mark={<FigGate size={96} />}
+                  label="The value engine"
+                  body={belowMktCount > 0
+                    ? 'Live asks priced against where their comparables actually sold.'
+                    : 'Live asks priced against where their comparables actually sold — every flag on this page starts here.'}
+                  href="/value"
+                />
+                <Cell
+                  stat={backtest?.flagged?.n ? backtest.flagged.n.toLocaleString() : undefined}
+                  statNote={backtest?.flagged?.n ? 'settled calls replayed' : undefined}
+                  icon={<IcoRecord />}
+                  mark={<FigCorpus size={96} />}
+                  label="The record"
+                  body={backtest?.flagged?.n
+                    ? 'Every flagged call replayed against the hammer that followed — the desk grades its own work.'
+                    : 'Every flagged call replayed against the hammer that followed — the desk grades its own work.'}
+                  href="/analytics"
+                />
+                <Cell
+                  stat={ROSTER.makers.toLocaleString()}
+                  statNote={`makers · ${ROSTER.categories} categories across ${VERTICAL_COUNT} verticals`}
+                  mark={<FigPools size={96} />}
+                  label="The makers ledger"
+                  body="Sale history, live coverage and market reads, one dossier per name."
+                  href="/makers"
+                />
+                <Cell
+                  stat={savedIds.length > 0 ? savedIds.length.toLocaleString() : undefined}
+                  statNote={savedIds.length > 0 ? (savedIds.length === 1 ? 'lot on your desk' : 'lots on your desk') : undefined}
+                  icon={<IcoDesk />}
+                  mark={<FigTape size={96} />}
+                  label="Your desk"
+                  body={savedIds.length > 0
+                    ? 'What moved since you saved it, the next hammers, and your own record.'
+                    : 'Save any lot on the block and it reports here — what moved since you saved it, and when it hammers.'}
+                  href="/profile"
+                />
+              </CellGrid>
+            </section>
+
+            {/* the watchlist strip — the reader's saved lots (small, personal) */}
+            {watchStripEl}
 
             {/* ══ MARKET-LEVEL EMPTY STATE — a thin vertical (e.g. watches)
                 can gate off the wall, the board AND the feed at once, leaving

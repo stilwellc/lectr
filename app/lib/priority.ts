@@ -130,7 +130,7 @@ const GENERIC_MAKERS = new Set([
   'science-tech', 'meteorites', 'fossils', 'scientific-instruments',
 ]);
 
-type ShortlistLot = ScoreLot & { id?: string; auctionHouse?: string; saleName?: string | null };
+type ShortlistLot = ScoreLot & { id?: string; auctionHouse?: string; saleName?: string | null; title?: string | null };
 
 /**
  * The anonymous "What matters today" shortlist: ≥$2.5K anchor, closes within 7
@@ -151,17 +151,53 @@ export function shortlist<T extends ShortlistLot>(lots: T[], nowMs: number = Dat
   }
   rows.sort((x, y) => (y.p.score - x.p.score) || (x.close - y.close) || (y.p.a - x.p.a));
   const perCat = new Map<string, number>(), perSale = new Map<string, number>(), perMaker = new Map<string, number>();
+  const seen = new Set<string>();
   const out: T[] = [];
-  for (const { l } of rows) {
+  for (const { l, p } of rows) {
+    // the same object listed twice (houses re-list, crawls double-index): one seat
+    const dup = `${l.auctionHouse}|${l.saleDate}|${String(l.title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()}|${p.a}`;
+    if (seen.has(dup)) continue;
     const cat = taxonOf(l).cat;
     const sale = `${l.auctionHouse}|${l.saleDate}|${l.saleName ?? ''}`;
     const maker = l.artist && !GENERIC_MAKERS.has(l.artist) ? l.artist : `id:${l.id}`;
     if ((perCat.get(cat) ?? 0) >= 5 || (perSale.get(sale) ?? 0) >= 3 || (perMaker.get(maker) ?? 0) >= 2) continue;
     out.push(l);
+    seen.add(dup);
     perCat.set(cat, (perCat.get(cat) ?? 0) + 1);
     perSale.set(sale, (perSale.get(sale) ?? 0) + 1);
     perMaker.set(maker, (perMaker.get(maker) ?? 0) + 1);
     if (out.length >= n) break;
   }
   return out;
+}
+
+const fmtUsd = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${Math.round(n)}`);
+
+/**
+ * The one-line "why it's here" for a shortlisted lot — the same inputs the
+ * score used, in words: when it closes, what it's worth and on what basis,
+ * and the measured edge when there is one — never repeating the house estimate
+ * the card already prints. e.g. "Closes in 4h · Below market",
+ * "Closes tomorrow · $220K engine value".
+ */
+export function reasonOf(l: ScoreLot, nowMs: number = Date.now()): string | null {
+  const p = priorityOf(l, nowMs);
+  if (!p) return null;
+  const parts: string[] = [];
+  const close = closeMsOf(l);
+  if (close != null) {
+    const h = (close - nowMs) / 3_600_000;
+    if (h > 0 && h < 1) parts.push('Closes within the hour');
+    else if (h > 0 && h < 24) parts.push(`Closes in ${Math.round(h)}h`);
+    else if (h > 0 && h < 48) parts.push('Closes tomorrow');
+    else if (h > 0 && h < 168) parts.push(`Closes in ${Math.round(h / 24)} days`);
+  }
+  // the card already prints the house estimate — only name the value when
+  // it came from somewhere else (engine comps, a projection, the live bid)
+  if (p.src !== 'est') {
+    const basis = p.src === 'engine' ? 'engine value' : p.src === 'proj' ? 'projected close' : 'current bid';
+    parts.push(`${fmtUsd(p.a)} ${basis}`);
+  }
+  if (p.edge > 0) parts.push('Below market');
+  return parts.length ? parts.join(' · ') : null;
 }
