@@ -772,6 +772,10 @@ export default function LotPage({ lotId, initialLot }: {
   // this" (and an uncalibrated read carries 0) — suppressed, never reworded
   const beatRate = lot.value?.signal?.label?.startsWith('below') && (lot.value.signal.beatRatePct || 0) > 0
     ? lot.value.signal.beatRatePct : null;
+  // (wave 3, wording) an ABOVE read prints its bucket's odds as what they are:
+  // how often lots priced like this beat their estimate
+  const aboveBeatRate = lot.value?.signal?.label?.startsWith('above') && (lot.value.signal.beatRatePct || 0) > 0
+    ? lot.value.signal.beatRatePct : null;
   const caption = `${lot.lotNumber != null ? `Lot ${lot.lotNumber} · ` : ''}${lot.auctionHouse}${lot.saleName ? ` · ${cleanText(lot.saleName)}` : ''}`;
   // poolPartial (above): an engine pool that resolved only PART of its stamped
   // ids is the same fault as a client read — the rows under an honest
@@ -989,7 +993,9 @@ export default function LotPage({ lotId, initialLot }: {
                 <span className="ns-cell-body">
                   {beatRate != null
                     ? `${beatRate}% of flags like this beat their estimate`
-                    : sig.label === 'Below Market' ? 'comps over ask' : 'comps under ask'}
+                    : aboveBeatRate != null && sig.label === 'Above Market'
+                      ? `only ${aboveBeatRate}% of lots priced like this beat their estimate`
+                      : sig.label === 'Below Market' ? 'comps over ask' : 'comps under ask'}
                   {' · '}{confidenceMeter(sig.confidence).word} confidence
                 </span>
                 {/* the engine's buyer fields (hammer basis, same as the
@@ -1043,7 +1049,7 @@ export default function LotPage({ lotId, initialLot }: {
                   <LeaderRow
                     k="Max bid"
                     v={`≤ ${formatPrice(mb.hammer)} hammer`}
-                    sub={`walk-away at the value floor · ${formatPrice(mb.allIn)} all-in`}
+                    sub={`walk-away price · ${formatPrice(mb.allIn)} all-in`}
                   />
                 );
               })()}

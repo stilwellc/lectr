@@ -1263,12 +1263,18 @@ export default function ValuePage() {
           tone: toneOf(scoped.medPct) === 'up' ? 'up' : undefined,
           sub: <>{activeLabel} flags realized vs estimate, all-in · n&nbsp;{scoped.n.toLocaleString()}</>,
         });
-      } else out.push(backtest.flagged.n >= 100 ? {
+      } else out.push(backtest.flagged.n >= 100 ? (backtest.flagged.hammerMedianPct != null ? {
+        // (wave 3) lead with the HAMMER — the basis the Flags are called on
+        k: 'The record',
+        v: fmtSignedPct(backtest.flagged.hammerMedianPct),
+        tone: toneOf(backtest.flagged.hammerMedianPct) === 'up' ? 'up' : undefined,
+        sub: <>hammer vs estimate · all-in {fmtSignedPct(backtest.flagged.medianPerfPct)} · n&nbsp;{backtest.flagged.n.toLocaleString()}</>,
+      } : {
         k: 'The record',
         v: fmtSignedPct(backtest.flagged.medianPerfPct),
         tone: toneOf(backtest.flagged.medianPerfPct) === 'up' ? 'up' : undefined,
-        sub: <>realized vs estimate, all-in{backtest.flagged.hammerMedianPct != null ? <> · hammer {fmtSignedPct(backtest.flagged.hammerMedianPct)}</> : null} · n&nbsp;{backtest.flagged.n.toLocaleString()}</>,
-      } : {
+        sub: <>realized vs estimate, all-in · n&nbsp;{backtest.flagged.n.toLocaleString()}</>,
+      }) : {
         k: 'The record',
         v: '—',
         sub: <>n {backtest.flagged.n.toLocaleString()} · publishes at 100</>,
@@ -2422,18 +2428,30 @@ export default function ValuePage() {
                   serial={(lastCrawl || '').slice(0, 10).replace(/-/g, '') || undefined}
                   footer="each figure names its basis · refit nightly from the full replay"
                   cells={[
-                    {
-                      k: 'Flagged calls',
-                      v: fmtSignedPct(backtest.flagged.medianPerfPct),
-                      signed: backtest.flagged.medianPerfPct,
-                      sub: `realized vs estimate, all-in${backtest.flagged.hammerMedianPct != null ? ` · hammer ${fmtSignedPct(backtest.flagged.hammerMedianPct)}` : ''} · n ${backtest.flagged.n.toLocaleString()}`,
-                    },
-                    {
-                      k: 'The edge',
-                      v: `${backtest.flagged.medianPerfPct - backtest.unflagged.medianPerfPct >= 0 ? '+' : '−'}${Math.abs(backtest.flagged.medianPerfPct - backtest.unflagged.medianPerfPct)} pts`,
-                      signed: backtest.flagged.medianPerfPct - backtest.unflagged.medianPerfPct,
-                      sub: <>over {backtest.unflagged.n.toLocaleString()} unflagged ({fmtSignedPct(backtest.unflagged.medianPerfPct)} all-in)</>,
-                    },
+                    // (wave 3) lead with the HAMMER — the basis the Flags are
+                    // called on; all-in rides the sub line
+                    ...(() => {
+                      const F = backtest.flagged, U = backtest.unflagged;
+                      const ham = F.hammerMedianPct != null && U.hammerMedianPct != null;
+                      const f = ham ? F.hammerMedianPct! : F.medianPerfPct;
+                      const u = ham ? U.hammerMedianPct! : U.medianPerfPct;
+                      return [
+                        {
+                          k: 'Flagged calls',
+                          v: fmtSignedPct(f),
+                          signed: f,
+                          sub: ham
+                            ? `hammer vs estimate · all-in ${fmtSignedPct(F.medianPerfPct)} · n ${F.n.toLocaleString()}`
+                            : `realized vs estimate, all-in · n ${F.n.toLocaleString()}`,
+                        },
+                        {
+                          k: 'The edge',
+                          v: `${f - u >= 0 ? '+' : '−'}${Math.abs(f - u)} pts`,
+                          signed: f - u,
+                          sub: <>over {U.n.toLocaleString()} unflagged ({fmtSignedPct(u)} {ham ? 'hammer' : 'all-in'})</>,
+                        },
+                      ];
+                    })(),
                     {
                       k: 'Beat the high',
                       v: `${Math.round(backtest.flagged.hammerBeatPct ?? backtest.flagged.beatHighPct)}%`,
