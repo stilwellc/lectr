@@ -214,9 +214,11 @@ export default function FeedToolbar({
     const pool = scoped.filter(l => passesTriage(l, { ...filters, fx: [] }, { prevVisitDay }));
     return facetChips(fc, pool, filters.fx);
   }, [marketPool, filters, prevVisitDay]);
-  const facetPills = facets.map((c, i) => (
+  // the phone sheet WRAPS its chips, so a group divider would dangle at a
+  // line's edge — the sheet gets the same chips without them
+  const facetPillsOf = (dividers: boolean) => facets.map((c, i) => (
     <span key={c.key} style={{ display: 'contents' }}>
-      {i > 0 && facets[i - 1].group !== c.group && <span className="ray-toolbar-divider" aria-hidden="true" />}
+      {dividers && i > 0 && facets[i - 1].group !== c.group && <span className="ray-toolbar-divider" aria-hidden="true" />}
       <button className="ray-toolbar-pill" data-active={filters.fx.includes(c.key)} aria-pressed={filters.fx.includes(c.key)}
         onClick={() => set({ fx: toggleFacet(filters.fx, c.key) })}>
         {c.label} <i>{c.n}</i>
@@ -524,7 +526,7 @@ export default function FeedToolbar({
           {facets.length > 0 && (
             <>
               <div className="ray-feedsheet-head">Narrow</div>
-              <div className="ray-feedsheet-chips">{facetPills}</div>
+              <div className="ray-feedsheet-chips">{facetPillsOf(false)}</div>
             </>
           )}
           <div className="ray-feedsheet-head">Closing</div>
@@ -907,7 +909,7 @@ export default function FeedToolbar({
 
       {!isMobile && facets.length > 0 && (
         <div className="ray-toolbar-row ray-toolbar-row-filters ray-markets-fade" aria-label="Narrow">
-          {facetPills}
+          {facetPillsOf(true)}
         </div>
       )}
 
