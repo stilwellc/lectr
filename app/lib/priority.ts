@@ -12,10 +12,19 @@
  *
  * Weighted mostly on plain facts, because live the house estimate beats the
  * engine (Sep served record: engine medErr 71% vs house 32%):
- *  - Size: log scale of the hammer anchor, $2.5K → 0 … $1M → 1. Anchor order:
- *    house estimate midpoint (estimates on the served book are ALREADY USD —
- *    never re-convert by `currency`), then engine expected hammer, then a
- *    validated bid projection, then the live bid (a floor, not a value).
+ *  - Size: log scale of the hammer anchor, on the market's own scale. Anchor
+ *    order (Oct 9 anchor study, graded against the hammer on lots that sold
+ *    after sitting in the served book):
+ *      · estimate houses (art, design, watches; RR): the house estimate
+ *        midpoint (estimates on the served book are ALREADY USD — never
+ *        re-convert by `currency`). Art 27% median error vs engine 104%.
+ *      · bid rooms (Goldin, REA, Memory Lane, NFL, Hake's): the live bid
+ *        PROJECTED to its close (CLOSE_K: bid × the room's measured multiple
+ *        by days out × bid size), blended with a sound engine read. Cards
+ *        40% median error vs 67% under the old est → engine → bid order,
+ *        whose engine read ran 198% and whose raw bid ran 46% low.
+ *      · then estimate, engine expected hammer, a validated bid projection,
+ *        the live bid (a floor, not a value).
  *  - Edge: the certified "Below Market" flag, ONLY in the categories where the
  *    backtest measured a real edge (art, design, culture, science: ~+21pt
  *    all-in margin). Sports/watches flags are held by the engine and TCG/cards
@@ -68,30 +77,103 @@ export interface PrioStatic {
 }
 
 type ScoreLot = {
-  artist?: string | null; subCat?: string | null; drill?: string | null;
+  artist?: string | null; subCat?: string | null; drill?: string | null; title?: string | null;
+  auctionHouse?: string | null; saleName?: string | null;
   estimateLow?: number | null; estimateHigh?: number | null;
   estLowUsd?: number | null; estHighUsd?: number | null;
   currentBid?: number | null; bidCount?: number | null; currency?: string | null;
   saleDate?: string | null; saleDateTime?: string | null;
-  value?: { expectedHammerUsd?: number | null; confidence?: string | null; signal?: { beatRatePct?: number | null } | null } | null;
+  value?: { expectedHammerUsd?: number | null; confidence?: string | null; abstain?: string | null; signal?: { beatRatePct?: number | null } | null } | null;
   signal?: { label?: string | null } | null;
   bidProj?: { ok?: boolean; allIn?: number } | null;
 };
 
-function anchorOf(l: ScoreLot): { a: number; src: AnchorSrc; over?: boolean } | null {
-  const base = baseAnchor(l);
+/**
+ * THE BID ROOMS (Oct 9 anchor study). A live bid days out is a floor, not a
+ * price: measured on 8,003 lots that sold after appearing in the served book
+ * (Sep 20–Oct 8 snapshots) plus 75K Goldin bidHistory snapshots on sold corpus
+ * lots, hammer ÷ live bid runs from ~1.1× (NFL, close night) to 12× (Goldin
+ * Weekly, sub-$100 bid, 5 days out) — and falls as the bid grows ($100K+
+ * Elite bids close at ~1.3–1.4×). Each room's median multiple, by days out
+ * [<1, 1–3, 3–7, 7–14, 14+] × live bid [<$100, $100–1K, $1–10K, $10–100K,
+ * $100K+], ≥25 sales per measured cell. Empty cells borrow Goldin Elite's
+ * shape (the one room measured at every bid size and horizon): the nearest
+ * measured bid band × Elite's ratio between the two bands, then the room's
+ * last measured day × Elite's day ratio (REA is measured only on close night,
+ * RR only inside 7 days, $100K+ bids almost only at Elite). Never below 1,
+ * never shrinking with time to close.
+ */
+const CLOSE_K: Record<string, number[][]> = {
+  'goldin-weekly': [[3.1, 2.05, 1.78, 1.29, 1.04], [5.2, 2.68, 2.02, 1.53, 1.24], [12.2, 4.17, 2.85, 2.02, 1.62], [37.5, 10.5, 4, 2.54, 1.88], [37.5, 10.5, 4, 2.54, 1.88]],
+  'goldin-weekly-tcg': [[2.4, 1.54, 1.61, 1.78, 1.43], [3.2, 1.91, 2.07, 1.92, 1.55], [8.12, 3.34, 3.45, 2.46, 1.98], [23.84, 10.43, 6.39, 4.05, 3], [23.84, 10.43, 7.7, 4.54, 3]],
+  'goldin-elite': [[1.89, 1.89, 2, 1.62, 1.3], [2.3, 2.3, 2.27, 1.73, 1.41], [2.57, 2.57, 2.61, 1.75, 1.41], [3.77, 3.77, 3.73, 2.36, 1.75], [3.77, 5.23, 5.09, 3, 1.75]],
+  'goldin-thematic': [[2.33, 2.33, 2.24, 1.85, 1.49], [3.1, 2.86, 2.62, 1.96, 1.59], [4.11, 3, 2.62, 1.96, 1.59], [4.11, 3.13, 2.73, 1.96, 1.59], [4.11, 4.34, 3.73, 2.2, 1.59]],
+  hakes: [[1.57, 1.62, 1.71, 1.38, 1.11], [1.83, 1.62, 1.71, 1.38, 1.11], [1.92, 1.69, 1.71, 1.38, 1.11], [3.25, 1.98, 1.96, 1.38, 1.11], [4, 1.98, 1.96, 1.38, 1.11]],
+  'memory-lane': [[1.21, 1.21, 1.33, 1.28, 1.02], [1.33, 1.33, 1.46, 1.34, 1.08], [1.61, 1.61, 1.77, 1.47, 1.18], [2.36, 2.36, 2.53, 1.98, 1.47], [2.36, 3.28, 3.46, 2.52, 1.47]],
+  nfl: [[1.08, 1.08, 1.14, 1, 1], [1.49, 1.19, 1.14, 1, 1], [2.13, 1.45, 1.14, 1, 1], [3.73, 1.64, 1.62, 1.03, 1], [3.73, 2.27, 2.21, 1.31, 1]],
+  rea: [[1.39, 1.32, 1.26, 1.02, 1], [1.68, 1.61, 1.43, 1.09, 1], [1.88, 1.8, 1.64, 1.1, 1], [2.75, 2.63, 2.35, 1.49, 1.1], [2.75, 3.66, 3.21, 1.89, 1.1]],
+  rr: [[1.27, 1.27, 1.34, 1.21, 1], [1.8, 1.8, 1.77, 1.21, 1], [2.21, 2.21, 2.25, 1.33, 1.07], [3.24, 3.24, 3.21, 1.8, 1.33], [3.24, 4.51, 4.38, 2.28, 1.33]],
+};
+/** bid rooms whose house estimate beat the bid projection, paired on the same
+ *  lots (RR: estimate 21% median error vs 36%). Hake's estimates ran +42%
+ *  high, so Hake's bids lead. */
+const EST_ROOMS: ReadonlySet<string> = new Set(['rr']);
+
+function roomOf(l: ScoreLot, cat: CatKey): string | null {
+  switch (l.auctionHouse) {
+    case 'Goldin': {
+      const s = l.saleName || '';
+      if (/weekly/i.test(s)) return cat === 'tcg' ? 'goldin-weekly-tcg' : 'goldin-weekly';
+      return /thematic/i.test(s) ? 'goldin-thematic' : 'goldin-elite';
+    }
+    case "Hake's": return 'hakes';
+    case 'Memory Lane': return 'memory-lane';
+    case 'NFL Auction': return 'nfl';
+    case 'REA': return 'rea';
+    case 'RR Auction': return 'rr';
+    default: return null;
+  }
+}
+
+/** The live bid projected to its close: bid × the room's measured multiple for
+ *  this many days out at this bid size. null outside a measured room. */
+function bidProjection(l: ScoreLot, cat: CatKey, nowMs: number): { a: number; room: string; days: number } | null {
+  const bid = (!l.currency || l.currency === 'USD') ? (l.currentBid || 0) : 0;
+  if (!(bid > 0)) return null;
+  const room = roomOf(l, cat);
+  const close = closeMsOf(l);
+  if (!room || close == null || close <= nowMs) return null;
+  const days = (close - nowMs) / 864e5;
+  const row = CLOSE_K[room][days < 1 ? 0 : days < 3 ? 1 : days < 7 ? 2 : days < 14 ? 3 : 4];
+  const k = row[bid < 100 ? 0 : bid < 1_000 ? 1 : bid < 10_000 ? 2 : bid < 100_000 ? 3 : 4];
+  return { a: bid * Math.max(1, k), room, days };
+}
+
+function anchorOf(l: ScoreLot, nowMs: number): { a: number; src: AnchorSrc; over?: boolean } | null {
+  const base = baseAnchor(l, nowMs);
   // bids are USD on every house that streams them; a bid past the anchor IS the price now
   const bid = (!l.currency || l.currency === 'USD') ? (l.currentBid || 0) : 0;
   if (base && base.src !== 'bid' && bid > base.a * 1.15) return { a: bid, src: base.src, over: true };
   return base;
 }
 
-function baseAnchor(l: ScoreLot): { a: number; src: AnchorSrc } | null {
+function baseAnchor(l: ScoreLot, nowMs: number): { a: number; src: AnchorSrc } | null {
   let lo = (l.estLowUsd ?? l.estimateLow) || 0;
   let hi = (l.estHighUsd ?? l.estimateHigh) || 0;
   lo = lo || hi; hi = hi || lo;
-  if (lo > 0) return { a: (lo + hi) / 2, src: 'est' };
+  const cat = taxonOf(l).cat;
+  const pj = bidProjection(l, cat, nowMs);
+  if (lo > 0 && (!pj || EST_ROOMS.has(pj.room))) return { a: (lo + hi) / 2, src: 'est' };
   const eh = l.value?.expectedHammerUsd;
+  if (pj) {
+    // a sound engine read narrows the projection (geometric mean): a week+ out
+    // the bid says little (cards 7–14d: 158% → 117% median error), and a
+    // high-confidence comp helps even inside the week (3–7d: 51% → 39%)
+    const sound = l.value?.confidence === 'high' && !l.value?.abstain;
+    if (eh && eh > 0 && (pj.days >= 7 || sound)) return { a: Math.sqrt(pj.a * eh), src: 'proj' };
+    return { a: pj.a, src: 'proj' };
+  }
+  if (lo > 0) return { a: (lo + hi) / 2, src: 'est' };
   if (eh && eh > 0) return { a: eh, src: 'engine' };
   // validated projection only; allIn carries the buyer's premium (~1.22×) — back it out to hammer
   if (l.bidProj?.ok === true && (l.bidProj.allIn || 0) > 0) return { a: (l.bidProj.allIn as number) / 1.22, src: 'proj' };
@@ -99,9 +181,10 @@ function baseAnchor(l: ScoreLot): { a: number; src: AnchorSrc } | null {
   return null;
 }
 
-/** Time-independent parts. null = no price anchor at all (can't be ranked by size). */
-export function prioStatic(l: ScoreLot): PrioStatic | null {
-  const an = anchorOf(l);
+/** The slow-moving parts (the anchor reads days-to-close for bid rooms).
+ *  null = no price anchor at all (can't be ranked by size). */
+export function prioStatic(l: ScoreLot, nowMs: number = Date.now()): PrioStatic | null {
+  const an = anchorOf(l, nowMs);
   if (!an) return null;
   const { cat } = taxonOf(l);
   const [lo, hi] = SCALE[cat];
@@ -146,7 +229,7 @@ export interface Priority extends PrioStatic { urg: number; score: number }
 
 /** Full score at a given moment. */
 export function priorityOf(l: ScoreLot, nowMs: number = Date.now()): Priority | null {
-  const st = prioStatic(l);
+  const st = prioStatic(l, nowMs);
   if (!st) return null;
   const urg = urgencyOf(closeMsOf(l), nowMs);
   const score = 40 * st.size + 25 * st.edge + 20 * st.ev + 15 * urg;
@@ -204,14 +287,14 @@ interface Caps { cat: number; sale: number; who: number }
 
 /** greedy seat fill under caps; one seat per object (relists, crawl doubles)
  *  and per card identity. Rows arrive best-first. */
-function fill<T extends ShortlistLot>(rows: { l: T; s: number }[], n: number, caps: Caps, out: T[] = []): T[] {
+function fill<T extends ShortlistLot>(rows: { l: T; s: number }[], n: number, caps: Caps, out: T[] = [], nowMs: number = Date.now()): T[] {
   const perCat = new Map<string, number>(), perSale = new Map<string, number>(), perWho = new Map<string, number>();
   const seen = new Set<string>();
   const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
   const keysOf = (l: T) => {
     const { thing, who } = identityOf(l);
     return { cat: taxonOf(l).cat as string, sale: saleKeyOf(l), who, thing,
-      dup: `${l.auctionHouse}|${normTitle(l.title)}|${prioStatic(l)?.a ?? 0}` };
+      dup: `${l.auctionHouse}|${normTitle(l.title)}|${prioStatic(l, nowMs)?.a ?? 0}` };
   };
   for (const l of out) {
     const k = keysOf(l);
@@ -252,11 +335,11 @@ export function shortlist<T extends ShortlistLot>(lots: T[], nowMs: number = Dat
     rows.push({ l, s: p.score, close, a: p.a });
   }
   rows.sort((x, y) => (y.s - x.s) || (x.close - y.close) || (y.a - x.a));
-  const out = fill(rows, n, { cat: 5, sale: 3, who: 2 });
-  if (out.length < n) fill(rows, n, { cat: 8, sale: 3, who: 2 }, out);
+  const out = fill(rows, n, { cat: 5, sale: 3, who: 2 }, [], nowMs);
+  if (out.length < n) fill(rows, n, { cat: 8, sale: 3, who: 2 }, out, nowMs);
   // a reader narrowed to one market (PSA cards: ~all Goldin) asked for that
   // room — once every other sale is spent, its best lots may take more seats
-  if (out.length < n) fill(rows, n, { cat: Infinity, sale: 8, who: 2 }, out);
+  if (out.length < n) fill(rows, n, { cat: Infinity, sale: 8, who: 2 }, out, nowMs);
   return out;
 }
 
@@ -350,5 +433,5 @@ export function forYou<T extends ShortlistLot>(lots: T[], affinity: (l: T) => nu
     rows.push({ l, s, close, a: p.a });
   }
   rows.sort((x, y) => (y.s - x.s) || (x.close - y.close) || (y.a - x.a));
-  return fill(rows, n, { cat: Infinity, sale: 4, who: 3 });
+  return fill(rows, n, { cat: Infinity, sale: 4, who: 3 }, [], nowMs);
 }
