@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { feedPass, liveBookHref } from '../lot-browser';
 import { FEED_DEFAULTS } from '../../components/FeedToolbar';
-import { passesTriage, triageFromParams, triageToParams, TRIAGE_DEFAULTS, houseBaselines } from '../feed-filters';
+import { passesTriage, triageFromParams, triageToParams, TRIAGE_DEFAULTS, houseBaselines, valueOptionOf, valuePatchOf } from '../feed-filters';
 import { savedQueryOf, matchesSavedQuery, unmatchableReason } from '../saved-query';
 import { shortlist } from '../priority';
 import type { AuctionLot } from '../../types';
@@ -68,6 +68,11 @@ test('value ceiling: URL round-trip, triage and saved searches honor it', () => 
   assert.equal(unmatchableReason(q as unknown as Record<string, unknown>), null);
   assert.ok(matchesSavedQuery(q, cheap, '2026-10-09'));
   assert.ok(!matchesSavedQuery(q, dear, '2026-10-09'));
+  // the one value select: an option per side, picking one clears the other
+  assert.equal(valueOptionOf({ minUsd: null, maxUsd: 5000 }), 'max:5000');
+  assert.deepEqual(valuePatchOf('max:5000'), { minUsd: null, maxUsd: 5000 });
+  assert.deepEqual(valuePatchOf('min:1000'), { minUsd: 1000, maxUsd: null });
+  assert.deepEqual(valuePatchOf(''), { minUsd: null, maxUsd: null });
 });
 
 test('feedPass scoped: the vertical / maker lenses do not apply, no maker diversity', () => {

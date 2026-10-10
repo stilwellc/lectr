@@ -45,6 +45,18 @@ export const VALUE_FLOORS = [1000, 5000, 25000, 100000];
 /** the ceilings ("Under $X") — the same rungs, read from the other side */
 export const VALUE_CEILINGS = [1000, 5000, 25000, 100000];
 export const fmtCeiling = (n: number) => (n >= 1000 ? `Under $${n / 1000}K` : `Under $${n}`);
+/** the toolbar's ONE value select (floors, then ceilings): its current option
+ *  ('min:5000' / 'max:5000' / '') and the patch an option applies — picking
+ *  one side clears the other (a range rides the URL or the phone sheet) */
+export function valueOptionOf(f: Pick<TriageFilters, 'minUsd' | 'maxUsd'>): string {
+  return f.minUsd ? `min:${f.minUsd}` : f.maxUsd ? `max:${f.maxUsd}` : '';
+}
+export function valuePatchOf(v: string): Pick<TriageFilters, 'minUsd' | 'maxUsd'> {
+  const [side, n] = v.split(':');
+  const usd = Number(n);
+  if (!Number.isFinite(usd) || usd <= 0) return { minUsd: null, maxUsd: null };
+  return side === 'max' ? { minUsd: null, maxUsd: usd } : { minUsd: usd, maxUsd: null };
+}
 
 function addDays(iso: string, n: number): string {
   const t = Date.parse(`${iso}T00:00:00Z`) + n * 864e5;

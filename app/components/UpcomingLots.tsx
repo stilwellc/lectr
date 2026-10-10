@@ -60,7 +60,14 @@ export default function UpcomingLots({
   // the browser's own fragment scroll gave up — land it once we exist
   useEffect(() => {
     if (window.location.hash !== '#upcoming') return;
-    const go = () => document.getElementById('upcoming')?.scrollIntoView({ block: 'start' });
+    // clear the sticky nav (its own height, measured) so the heading shows
+    const go = () => {
+      const el = document.getElementById('upcoming');
+      if (!el) return;
+      const nav = document.querySelector('nav, header');
+      const pad = Math.min(120, (nav?.getBoundingClientRect().bottom ?? 64)) + 8;
+      window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - pad) });
+    };
     const raf = requestAnimationFrame(go);
     const t = window.setTimeout(go, 450); // after the chart wells settle
     return () => { cancelAnimationFrame(raf); window.clearTimeout(t); };

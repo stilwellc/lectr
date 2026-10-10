@@ -13,7 +13,7 @@ import FollowChip from './FollowChip';
 import { catFollow, houseFollow } from '../lib/follows';
 import { facetCatOf, facetChips, toggleFacet } from '../lib/facets';
 import {
-  WINDOWS, VALUE_FLOORS, VALUE_CEILINGS, fmtCeiling, TRIAGE_DEFAULTS, isTriageActive, passesTriage, patchTriage, type TriageFilters, type HouseBaselines,
+  WINDOWS, VALUE_FLOORS, VALUE_CEILINGS, fmtCeiling, valueOptionOf, valuePatchOf, TRIAGE_DEFAULTS, isTriageActive, passesTriage, patchTriage, type TriageFilters, type HouseBaselines,
 } from '../lib/feed-filters';
 
 type TriageLot = Parameters<typeof passesTriage>[0];
@@ -126,15 +126,11 @@ export default function TriageBar({
             {houses.map(([h, n]) => <option key={h} value={h}>{h} ({n})</option>)}
           </select>
         )}
-        <select className="ray-toolbar-pill ray-toolbar-select" aria-label="Minimum value" data-active={filters.minUsd != null}
-          value={filters.minUsd ?? ''} onChange={e => set({ minUsd: e.target.value ? Number(e.target.value) : null })}>
+        <select className="ray-toolbar-pill ray-toolbar-select" aria-label="Value" data-active={filters.minUsd != null || filters.maxUsd != null}
+          value={valueOptionOf(filters)} onChange={e => set(valuePatchOf(e.target.value))}>
           <option value="">Any value</option>
-          {VALUE_FLOORS.map(v => <option key={v} value={v}>{fmtFloor(v)}</option>)}
-        </select>
-        <select className="ray-toolbar-pill ray-toolbar-select" aria-label="Maximum value" data-active={filters.maxUsd != null}
-          value={filters.maxUsd ?? ''} onChange={e => set({ maxUsd: e.target.value ? Number(e.target.value) : null })}>
-          <option value="">Any max</option>
-          {VALUE_CEILINGS.map(v => <option key={v} value={v}>{fmtCeiling(v)}</option>)}
+          {VALUE_FLOORS.map(v => <option key={`min:${v}`} value={`min:${v}`}>{fmtFloor(v)}</option>)}
+          {VALUE_CEILINGS.map(v => <option key={`max:${v}`} value={`max:${v}`}>{fmtCeiling(v)}</option>)}
         </select>
         {filters.cat && <FollowChip follow={catFollow(filters.cat, filters.sub)} />}
         {filters.house && <FollowChip follow={houseFollow(filters.house)} />}

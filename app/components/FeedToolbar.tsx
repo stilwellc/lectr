@@ -11,7 +11,7 @@ import SaveSearch from './SaveSearch';
 import FollowChip from './FollowChip';
 import { catFollow, houseFollow } from '../lib/follows';
 import { taxonOf, SUBS, type CatKey } from '../lib/taxonomy';
-import { WINDOWS, VALUE_FLOORS, VALUE_CEILINGS, fmtCeiling, TRIAGE_DEFAULTS, isTriageActive, passesTriage, patchTriage, triageToParams, triageFromParams, houseBaselines, type TriageFilters, type HouseBaselines } from '../lib/feed-filters';
+import { WINDOWS, VALUE_FLOORS, VALUE_CEILINGS, fmtCeiling, valueOptionOf, valuePatchOf, TRIAGE_DEFAULTS, isTriageActive, passesTriage, patchTriage, triageToParams, triageFromParams, houseBaselines, type TriageFilters, type HouseBaselines } from '../lib/feed-filters';
 import { facetCatOf, facetChips, toggleFacet } from '../lib/facets';
 
 export type FeedSort = 'priority' | 'soonest' | 'gap-desc' | 'newest' | 'bids-desc' | 'est-desc' | 'est-asc';
@@ -846,7 +846,9 @@ export default function FeedToolbar({
         )}
         {!isMobile && (
           <>
-            <span className="ray-toolbar-divider" aria-hidden="true" />
+            {/* a scoped book (a maker page) has no category / market pill
+                here: the lens's own divider already separates the windows */}
+            {(market === 'all' || onMarketReset) && <span className="ray-toolbar-divider" aria-hidden="true" />}
             {WINDOWS.map(w => (
               <button key={w.key} className="ray-toolbar-pill" data-active={filters.win === w.key} aria-pressed={filters.win === w.key}
                 onClick={() => set({ win: filters.win === w.key ? null : w.key })}>
@@ -866,15 +868,11 @@ export default function FeedToolbar({
                 {houses.map(([h, n]) => <option key={h} value={h}>{h} ({n})</option>)}
               </select>
             )}
-            <select className="ray-toolbar-pill ray-toolbar-select" aria-label="Minimum value" data-active={filters.minUsd != null}
-              value={filters.minUsd ?? ''} onChange={e => set({ minUsd: e.target.value ? Number(e.target.value) : null })}>
+            <select className="ray-toolbar-pill ray-toolbar-select" aria-label="Value" data-active={filters.minUsd != null || filters.maxUsd != null}
+              value={valueOptionOf(filters)} onChange={e => set(valuePatchOf(e.target.value))}>
               <option value="">Any value</option>
-              {VALUE_FLOORS.map(v => <option key={v} value={v}>{fmtFloor(v)}</option>)}
-            </select>
-            <select className="ray-toolbar-pill ray-toolbar-select" aria-label="Maximum value" data-active={filters.maxUsd != null}
-              value={filters.maxUsd ?? ''} onChange={e => set({ maxUsd: e.target.value ? Number(e.target.value) : null })}>
-              <option value="">Any max</option>
-              {VALUE_CEILINGS.map(v => <option key={v} value={v}>{fmtCeiling(v)}</option>)}
+              {VALUE_FLOORS.map(v => <option key={`min:${v}`} value={`min:${v}`}>{fmtFloor(v)}</option>)}
+              {VALUE_CEILINGS.map(v => <option key={`max:${v}`} value={`max:${v}`}>{fmtCeiling(v)}</option>)}
             </select>
             {filters.cat && <FollowChip follow={catFollow(filters.cat, filters.sub)} />}
             {filters.house && <FollowChip follow={houseFollow(filters.house)} />}
