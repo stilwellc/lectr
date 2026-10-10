@@ -28,7 +28,7 @@ import { ARTIST_LABEL } from '../../constants';
 import { subLabel, CAT_LABEL, type CatKey } from '../taxonomy';
 import { parseEntityId, entityPageOf, subEntityLabel } from './key';
 import { THIN_SOLD12M, type Labels } from './stats';
-import type { EntitySummary, EntitiesFile } from './model';
+import type { EntitySummary, EntitiesFile, EntityYoy } from './model';
 
 /** sold-only entities need this much history to get a summary at all */
 export const MIN_SOLD = 10;
@@ -95,8 +95,10 @@ export interface EntitiesWire {
     r: ([number, string] | 0)[];
     sp: ((number | null)[] | 0)[];
     spn: (number[] | 0)[];
-    /** yoy [pct, n] (basis median), [pct, n, 1] (basis index) or [pct, n, 2] (basis matched); 0 = none */
-    y: ([number, number] | [number, number, 1 | 2] | 0)[];
+    /** yoy [pct, n] (basis median), [pct, n, 1] (basis index) or [pct, n, 2]
+     *  (basis matched); since R7 [pct, n, 0|1|2, lo, hi] with its 90% interval;
+     *  0 = none */
+    y: ([number, number] | [number, number, 0 | 1 | 2] | [number, number, 0 | 1 | 2, number, number] | 0)[];
   };
   /** verified movers by id (makers only, sparse) */
   vf: Record<string, unknown>;
@@ -110,6 +112,20 @@ export interface WireOpts {
   tailN: number;
   /** an entity whose summary face the wire keeps (else the face is dropped) */
   keepFace: (s: EntitySummary) => boolean;
+}
+
+const YOY_BASIS: EntityYoy['basis'][] = ['median', 'index', 'matched'];
+/** one yoy → its wire cell (the interval rides when the read carries one) */
+export function yoyCell(y: EntityYoy): EntitiesWire['c']['y'][number] {
+  const b = YOY_BASIS.indexOf(y.basis) as 0 | 1 | 2;
+  if (y.lo != null && y.hi != null) return [y.pct, y.n, b, y.lo, y.hi];
+  return b ? [y.pct, y.n, b] : [y.pct, y.n];
+}
+/** a wire cell → the yoy (older cells: no interval) */
+export function yoyOfCell(y: Exclude<EntitiesWire['c']['y'][number], 0>): EntityYoy {
+  const out: EntityYoy = { pct: y[0], n: y[1], basis: YOY_BASIS[y[2] ?? 0] ?? 'median' };
+  if (y.length >= 5) { out.lo = y[3]; out.hi = y[4]; }
+  return out;
 }
 
 /** summaries → the v2 wire */
@@ -137,7 +153,7 @@ export function encodeEntities(list: readonly EntitySummary[], o: WireOpts): Ent
     c.r.push(e.record ? [Math.round(e.record.p), e.record.d] : 0);
     c.sp.push(e.spark ? e.spark.map(v => (v == null ? null : Math.round(v))) : 0);
     c.spn.push(e.sparkN ?? 0);
-    c.y.push(e.yoy ? (e.yoy.basis === 'index' ? [e.yoy.pct, e.yoy.n, 1] : e.yoy.basis === 'matched' ? [e.yoy.pct, e.yoy.n, 2] : [e.yoy.pct, e.yoy.n]) : 0);
+    c.y.push(e.yoy ? yoyCell(e.yoy) : 0);
     if (e.verified != null) vf[e.id] = e.verified;
   }
   return { v: WIRE_V, tier: o.tier, generatedAt: o.generatedAt, lastCrawl: o.lastCrawl, sparkQ: o.sparkQ, tailN: o.tailN, ds, ml, c, vf };
@@ -175,7 +191,7 @@ export function decodeEntities(w: EntitiesWire): EntitiesFile & { tier: 'main' |
       record: r ? { p: r[0], d: r[1] } : null,
       spark,
       sparkN: c.spn[i] || null,
-      yoy: y ? { pct: y[0], n: y[1], basis: y[2] === 1 ? 'index' : y[2] === 2 ? 'matched' : 'median' } : null,
+      yoy: y ? yoyOfCell(y) : null,
       verified: w.vf[id] ?? null,
       thin: c.s12[i] < THIN_SOLD12M,
       caps: { compare: !!spark, follow: p.kind === 'maker' || p.kind === 'player' ? p.slug : null, dossier: sold >= MIN_SOLD },

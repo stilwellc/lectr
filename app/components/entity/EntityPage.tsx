@@ -8,7 +8,8 @@
  *   1. header   kicker (market · kind) → h1 → Follow → ONE labeled facts
  *               ledger: live lots, typical sale (median, n, scope), the
  *               record once (its photo or none), houses; momentum only as a
- *               labeled read (a CI'd index, or a median-on-median yoy)
+ *               labeled read (a CI'd index, or a yoy with its basis and
+ *               90% interval)
  *   2. live     the shared LotBrowser over the entity's live lots — the exact
  *               pool its /makers row counts (entity key `ek`, one function)
  *   3. kind     the decision unit: medium / form / families → references /
@@ -49,6 +50,7 @@ import { taxonOf, SPORTS, type CatKey } from '../../lib/taxonomy';
 import { ARTIST_LABEL, ARTIST_MARKET, MARKETS, type Market } from '../../constants';
 import { closeCut, formatDate, formatPrice, getUpcomingCounts, httpsImg, sizedImg, trueSaleDay } from '../../utils';
 import { signedPct } from '../SubMarketDirectory';
+import { yoyIntervalText } from '../../lib/entity/ledger';
 import type { AuctionLot } from '../../types';
 import type { VerifiedMover } from '../../preview/terminal/verified';
 import { KindModule, YearlyLine, Results, Context } from './modules';
@@ -272,9 +274,9 @@ export default function EntityPage({ id }: { id: string }) {
               <div className="k">Year on year</div>
               <div className="v"><span className="mono">{signedPct(summary.yoy.pct)}</span></div>
               {summary.yoy.basis === 'matched' ? (
-                <div className="s" title="Like for like: each item (the same card at the same grade, the same reference, the same edition) that sold in both years gives its price ratio; this is the median ratio, the last four complete quarters against the four before">{summary.medScope ? `${summary.medScope.toLowerCase()}, ` : ''}same items · 4 qtrs vs 4 · {summary.yoy.n.toLocaleString()} matched</div>
+                <div className="s" title="Like for like: each item (the same card at the same grade, the same reference, the same edition) that sold in both years gives its price ratio; this is the median ratio, the last four complete quarters against the four before. The 90% interval is on that median (order statistics, no shape assumed); a read prints only when the interval is within about ±30% or clear of no change">{summary.medScope ? `${summary.medScope.toLowerCase()}, ` : ''}same items · 4 qtrs vs 4 · {summary.yoy.n.toLocaleString()} matched{yoyIntervalText(summary.yoy) ? ` · ${yoyIntervalText(summary.yoy)}` : ''}</div>
               ) : (
-                <div className="s" title="The median of the last four complete quarters against the four before, printed only when both years sold a similar number of lots — a level the mix of what sold moves too, not an appreciation rate">{summary.medScope ? `${summary.medScope.toLowerCase()} median` : 'median'} · 4 qtrs vs 4 · n={summary.yoy.n.toLocaleString()}</div>
+                <div className="s" title="The median of the last four complete quarters against the four before, printed only when both years sold a similar number of lots — a level the mix of what sold moves too, not an appreciation rate. The 90% interval covers sampling noise only, never a change in what sold">{summary.medScope ? `${summary.medScope.toLowerCase()} median` : 'median'} · 4 qtrs vs 4 · n={summary.yoy.n.toLocaleString()}{yoyIntervalText(summary.yoy) ? ` · ${yoyIntervalText(summary.yoy)}` : ''}</div>
               )}
             </div>
           ) : null}

@@ -14,7 +14,7 @@ import React, { useState } from 'react';
 import { formatPrice, httpsImg, sizedImg } from '../../utils';
 import Flick from '../Flick';
 import type { ColKey, LiveSort, SortKey } from '../../lib/entity/view-state';
-import { fmtPct, fmtUsd, type Row } from '../../lib/entity/ledger';
+import { fmtPct, fmtUsd, yoyDir, yoyTitle, type Row } from '../../lib/entity/ledger';
 import EntityPanel from './EntityPanel';
 
 /* ── THE COLUMNS — the Display menu toggles them; a sortable head sorts ── */
@@ -24,7 +24,7 @@ export const COLS: ColSpec[] = [
   { k: 'median', label: 'Median · 12 mo', width: '128px', note: 'Median sale over the trailing 12 months, with its n (hover a cell for the scope it covers)', sort: 'median' },
   { k: 'sold12', label: 'Sold · 12 mo', width: '92px', note: 'Sales tracked in the last 12 months', sort: 'sold12' },
   { k: 'curve', label: 'Trend · 12 q', width: '96px', note: 'Quarterly median sale, the last 12 complete quarters — a gap is a quarter with under 3 sales' },
-  { k: 'yoy', label: 'YoY', width: '64px', note: 'Year over year, like for like: the median price ratio of the same items sold in both years (20+ matched), else the median sale when both years sold a similar number (n ≥ 10 each side)', sort: 'movers' },
+  { k: 'yoy', label: 'YoY', width: '64px', note: 'Year over year, like for like: the median price ratio of the same items sold in both years, else the median sale when both years sold a similar number (n ≥ 10 each side). Printed only with a 90% interval within about ±30%, or one clear of no change; colored only for a clear move. Movers ranks by the move the interval guarantees', sort: 'movers' },
   { k: 'flags', label: 'Flags', width: '56px', note: 'Live lots the engine prices below their comparables', sort: 'flags' },
   { k: 'sold', label: 'Sold · all', width: '88px', note: 'Sales tracked, all time' },
   { k: 'record', label: 'Record', width: '84px', note: 'Highest price tracked' },
@@ -125,8 +125,7 @@ const EntityRow = React.memo(function EntityRow({
       );
       case 'curve': return <span key={k} className="mk-cell mk-spark" aria-hidden>{r.spark ? <Spark values={r.spark} /> : <span className="mk-sparkgap" />}</span>;
       case 'yoy': return (
-        <span key={k} className="mk-cell mk-delta" data-dir={r.yoy ? (r.yoy.pct >= 0 ? 'up' : 'down') : undefined}
-          title={r.yoy ? `Year over year · ${r.yoy.basis === 'index' ? `repeat-sales index · n ${r.yoy.n.toLocaleString()}` : r.yoy.basis === 'matched' ? `same items, both years · ${r.yoy.n.toLocaleString()} matched` : `median sale · n ${r.yoy.n.toLocaleString()}`}` : 'No year-over-year read: too few of the same items sold in both years, and the two years\' volumes differ too much for a median to compare'}>
+        <span key={k} className="mk-cell mk-delta" data-dir={yoyDir(r.yoy)} title={yoyTitle(r.yoy)}>
           {r.yoy ? fmtPct(r.yoy.pct) : '—'}
         </span>
       );

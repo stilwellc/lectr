@@ -69,7 +69,7 @@ const SORTS: { k: SortKey; label: string; note: string }[] = [
   { k: 'matters', label: 'Matters', note: 'What matters most: the summed priority of each row\'s three most important live lots — size, measured edge, bids, closing time' },
   { k: 'live', label: 'Live', note: 'Live lots passing the filters' },
   { k: 'flags', label: 'Flags', note: 'Live lots priced below their comparables' },
-  { k: 'movers', label: 'Movers', note: 'The biggest year-over-year moves, either way — only rows whose two years both clear the sample gate' },
+  { k: 'movers', label: 'Movers', note: 'The clearest year-over-year moves, either way: ranked by the move the 90% interval guarantees (its bound nearest no change), then reads flat within their band' },
   { k: 'median', label: 'Median', note: 'Median sale, trailing 12 months (thin rows last)' },
   { k: 'sold12', label: 'Sold 12 mo', note: 'Sales tracked in the last 12 months' },
   { k: 'name', label: 'A–Z', note: 'Alphabetical' },

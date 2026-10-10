@@ -6,7 +6,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildRow, tagOf, searchRow, sortRows, compareRows, needleOf, lotMatches, nameMatches, gradePlusOf, fold, fmtPct, lastQuarterOf, type Row } from '../entity/ledger';
+import { buildRow, tagOf, searchRow, sortRows, compareRows, needleOf, lotMatches, nameMatches, gradePlusOf, fold, fmtPct, lastQuarterOf, guaranteedMove, type Row } from '../entity/ledger';
 import { mattersOf } from '../entity/live';
 import { decodeView, viewSearch, VIEW_DEFAULTS, DEFAULT_COLS } from '../entity/view-state';
 import type { EntitySummary } from '../entity/model';
@@ -131,6 +131,20 @@ test('order: thin rows sink; Movers ranks gated moves by size, either way', () =
   const matched = mk('pl:f', { label: 'F', yoy: { pct: 45, n: 40, basis: 'matched' } });
   const fewPairs = mk('pl:g', { label: 'G', yoy: { pct: 90, n: 22, basis: 'matched' } });
   assert.deepEqual(sortRows([...rows, matched, fewPairs, small], 'movers').map(r => r.label), ['F', 'B', 'D', 'E', 'G', 'C', 'A']);
+  // (R7) reads with an interval: a clear like-for-like move (interval
+  // excludes 0) leads, ranked by the move its interval GUARANTEES — never by
+  // the point read — in log terms (−26% guaranteed outranks +30%); then a
+  // clear pooled-median move (blind to a change in what sold); then reads
+  // bounded around flat
+  const noisy = mk('pl:h', { label: 'H', yoy: { pct: 200, n: 6, basis: 'matched', lo: 5, hi: 400 } });
+  const solid = mk('pl:i', { label: 'I', yoy: { pct: 40, n: 80, basis: 'matched', lo: 30, hi: 52 } });
+  const down = mk('pl:j', { label: 'J', yoy: { pct: -45, n: 50, basis: 'matched', lo: -55, hi: -26 } });
+  const flat = mk('pl:k', { label: 'K', yoy: { pct: 18, n: 30, basis: 'median', lo: -4, hi: 45 } });
+  const medMove = mk('st:sports|s:x', { label: 'M', yoy: { pct: -77, n: 26, basis: 'median', lo: -82, hi: -68 } });
+  assert.deepEqual(sortRows([flat, noisy, medMove, solid, down, mk('pl:c', { label: 'C', yoy: null })], 'movers').map(r => r.label), ['J', 'I', 'H', 'M', 'K', 'C']);
+  assert.equal(guaranteedMove(down.yoy), -26);
+  assert.equal(guaranteedMove(flat.yoy), 0);
+  assert.equal(guaranteedMove(matched.yoy), null);
   assert.deepEqual(sortRows([...rows], 'name').map(r => r.label), ['A', 'B', 'C', 'D']);
   // Matters / Live: thin only breaks a tie
   const t = [mk('pl:x', { label: 'X', live: 5, topScore: 3, thin: true }), mk('pl:y', { label: 'Y', live: 5, topScore: 3, thin: false }), mk('pl:z', { label: 'Z', live: 9, topScore: 9, thin: true })];

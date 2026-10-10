@@ -23,7 +23,9 @@
  *                (yoyOf): the median per-identity price ratio over the
  *                identities sold in both years (basis 'matched', n = pairs);
  *                else pooled medians only when both sides hold ≥ MIN_YOY_N
- *                sales on a stable intake (basis 'median'); else none
+ *                sales on a stable intake (basis 'median'); else none. Every
+ *                read carries its 90% interval [lo, hi] and prints only when
+ *                that interval excludes 0 or is at most ±YOY_CI_HALF wide
  */
 import { medianSorted } from '../stats';
 
@@ -123,8 +125,10 @@ function yearlyOf(rows: readonly SoldPoint[], thisYear: number): { y: number; me
     .map(([y, ps]) => (y === thisYear ? { y, med: gated(ps, MIN_MED_N), n: ps.length, partial: true as const } : { y, med: gated(ps, MIN_MED_N), n: ps.length }));
 }
 
-/** a matched yoy needs this many identities sold in BOTH years */
-export const MIN_YOY_PAIRS = 20;
+/** a matched yoy needs at least this many identities sold in BOTH years —
+ *  the fewest a distribution-free 90% interval on their median exists for
+ *  (R7: the read is gated on its precision, not on a fixed count) */
+export const MIN_YOY_PAIRS = 5;
 /** a plain-median yoy only when the two years' sale counts sit within this
  *  ratio of each other — past it the median reads what the crawl added (a
  *  4× card / Pokémon intake in 2026), not what prices did */
@@ -132,46 +136,98 @@ export const YOY_COVERAGE_MAX = 1.5;
 /** a lens where at least this share of the two years' sales carry an
  *  identity reads matched or not at all (never the pooled median) */
 export const YOY_KEYED_SHARE = 0.5;
+/** the yoy interval's confidence (two-sided) — the one every read prints */
+export const YOY_CI_LEVEL = 0.9;
+/** (R7) a read prints when its 90% interval is at most this wide either side
+ *  of the read, in log points (≈ −26% … +35% around flat): a flat or modest
+ *  move, bounded. A wider interval prints only when it EXCLUDES no change —
+ *  a move whose size is uncertain but whose direction is not: at 90% for a
+ *  matched read, at YOY_MEDIAN_MOVE_LEVEL for a pooled median (its interval
+ *  sees sampling noise only, never a shift in what sold, so a wide median
+ *  move needs the stronger evidence). Anything else is noise — none. */
+export const YOY_CI_HALF = 0.3;
+export const YOY_MEDIAN_MOVE_LEVEL = 0.98;
+
+/** the 1-indexed rank l such that [x(l), x(n−l+1)] of n sorted draws is a
+ *  distribution-free `level` interval for their median: the largest l with
+ *  P(Binomial(n, ½) ≤ l−1) ≤ (1 − level)/2 (exact to n = 60, normal beyond).
+ *  0 = n too small for any such interval (n < 5 at 90%). */
+export function medianRankLo(n: number, level = YOY_CI_LEVEL): number {
+  const half = (1 - level) / 2;
+  if (n > 60) return Math.max(0, Math.floor(n / 2 - (zOf(half) * Math.sqrt(n)) / 2));
+  let pmf = Math.pow(0.5, n), cdf = 0, l = 0;
+  for (let j = 0; j <= n; j++) {
+    cdf += pmf;
+    if (cdf > half) break;
+    l = j + 1;
+    pmf = (pmf * (n - j)) / (j + 1);
+  }
+  return l;
+}
+/** the upper-tail normal quantile for the two levels yoy uses */
+const zOf = (tail: number) => (tail >= 0.05 - 1e-9 ? 1.6448536269514722 : 2.3263478740408408);
+
+/** a sorted sample's median with its distribution-free interval (null when n is too small) */
+function medianCi(sorted: readonly number[], level = YOY_CI_LEVEL): { m: number; lo: number; hi: number } | null {
+  const l = medianRankLo(sorted.length, level);
+  if (l < 1) return null;
+  return { m: medianSorted(sorted), lo: sorted[l - 1], hi: sorted[sorted.length - l] };
+}
 
 /**
  * yoy — the lens's last 4 complete quarters against the 4 before, like with
- * like (P3, Oct 10). Two honest bases, in order:
+ * like (P3, Oct 10), each read with its 90% interval (R7). Two honest bases,
+ * in order:
  *   matched  every identity (SoldPoint.k) that sold in BOTH years gives one
- *            ratio, its this-year median over its last-year median; the read
- *            is the median of those ratios, n = the identities paired. Same
- *            card at the same grade, same reference, same edition — the
- *            crawl adding more cheap (or dear) things cannot move it.
+ *            log ratio, its this-year median over its last-year median; the
+ *            read is the median of those ratios, n = the identities paired,
+ *            the interval the distribution-free one on that median (order
+ *            statistics — no shape assumed, exact at small n). Same card at
+ *            the same grade, same reference, same edition — the crawl adding
+ *            more cheap (or dear) things cannot move it.
  *   median   the pooled median against the pooled median — only for a lens
  *            whose sales mostly carry NO identity (unique works, most
  *            memorabilia), when both years clear MIN_YOY_N AND their counts
- *            are within YOY_COVERAGE_MAX of each other (a stable intake).
- * Neither → null (no read beats a coverage artefact).
+ *            are within YOY_COVERAGE_MAX of each other (a stable intake). Its
+ *            interval combines each year's median interval (root sum of
+ *            squares in log space — conservative against a bootstrap).
+ * Either prints only when it means something (YOY_CI_HALF): bounded, or a
+ * clear move. The interval travels with the read ([lo, hi], in percent).
+ * Measured Oct 10 2026 on the full sold corpus (scratchpad r7yoy): placebo
+ * reads (each identity's sales shuffled between the years, true change 0)
+ * print a move — an interval excluding 0 — under 10% of the time; coarser
+ * identity tiers (same card any grade, grade-adjusted on the market's ladder)
+ * and a mix-reweighted median disagreed with precise matched reads by 18–26
+ * log points (sign right ~70% of the time) and are not used.
  */
-export type Yoy = { pct: number; n: number; basis: 'matched' | 'median' };
+export type Yoy = { pct: number; n: number; basis: 'matched' | 'median'; lo: number; hi: number };
 export function yoyOf(scoped: readonly SoldPoint[], today: string): Yoy | null {
   const q8 = completeQuarters(today, 8);
   const prevQ = new Set(q8.slice(0, 4)), curQ = new Set(q8.slice(4));
   const prev: number[] = [], cur: number[] = [];
   const pk = new Map<string, number[]>(), ck = new Map<string, number[]>();
   for (const r of scoped) {
+    if (!(r.p > 0)) continue;
     const q = quarterOf(r.d);
     const side = prevQ.has(q) ? 0 : curQ.has(q) ? 1 : -1;
     if (side < 0) continue;
     (side ? cur : prev).push(r.p);
     if (r.k) { const m = side ? ck : pk; (m.get(r.k) || m.set(r.k, []).get(r.k)!).push(r.p); }
   }
-  const ratios: number[] = [];
-  const raw = (ps: number[]) => medianSorted(ps.slice().sort((a, b) => a - b));
+  const sorted = (ps: number[]) => ps.slice().sort((a, b) => a - b);
+  const pct = (logR: number) => Math.round((Math.exp(logR) - 1) * 1000) / 10;
+  const tight = (lo: number, hi: number) => (hi - lo) / 2 <= YOY_CI_HALF;
+  const move = (lo: number, hi: number) => lo > 0 || hi < 0;
+  const yoy = (m: number, lo: number, hi: number, n: number, basis: Yoy['basis']): Yoy => ({ pct: pct(m), n, basis, lo: pct(lo), hi: pct(hi) });
+  const logs: number[] = [];
   pk.forEach((ps, k) => {
     const cs = ck.get(k);
     if (!cs) return;
-    const b = raw(ps);
-    if (b > 0) ratios.push(raw(cs) / b);
+    logs.push(Math.log(medianSorted(sorted(cs)) / medianSorted(sorted(ps))));
   });
-  const pct = (x: number) => Math.round((x - 1) * 1000) / 10;
-  if (ratios.length >= MIN_YOY_PAIRS) {
-    ratios.sort((a, b) => a - b);
-    return { pct: pct(medianSorted(ratios)), n: ratios.length, basis: 'matched' };
+  if (logs.length >= MIN_YOY_PAIRS) {
+    const ci = medianCi(logs.sort((a, b) => a - b))!;
+    return tight(ci.lo, ci.hi) || move(ci.lo, ci.hi) ? yoy(ci.m, ci.lo, ci.hi, logs.length, 'matched') : null;
   }
   // an identity-keyed lens (cards, Pokémon, references, editions) that cannot
   // pair: its pooled median is a different basket each year (a rookie's
@@ -180,13 +236,20 @@ export function yoyOf(scoped: readonly SoldPoint[], today: string): Yoy | null {
   pk.forEach(ps => { keyed += ps.length; });
   ck.forEach(ps => { keyed += ps.length; });
   if (keyed >= YOY_KEYED_SHARE * (prev.length + cur.length)) return null;
-  if (prev.length >= MIN_YOY_N && cur.length >= MIN_YOY_N) {
-    const hi = Math.max(prev.length, cur.length), lo = Math.min(prev.length, cur.length);
-    if (hi / lo > YOY_COVERAGE_MAX) return null;
-    const a = med(cur), b = med(prev);
-    if (b > 0) return { pct: pct(a / b), n: lo, basis: 'median' };
-  }
-  return null;
+  if (prev.length < MIN_YOY_N || cur.length < MIN_YOY_N) return null;
+  const hi = Math.max(prev.length, cur.length), lo = Math.min(prev.length, cur.length);
+  if (hi / lo > YOY_COVERAGE_MAX) return null;
+  const lp = sorted(prev).map(Math.log), lc = sorted(cur).map(Math.log);
+  // the difference of the two medians: each year's interval, combined
+  const diff = (level: number) => {
+    const a = medianCi(lp, level)!, c = medianCi(lc, level)!;
+    const d = c.m - a.m;
+    return { d, lo: d - Math.hypot(c.m - c.lo, a.hi - a.m), hi: d + Math.hypot(c.hi - c.m, a.m - a.lo) };
+  };
+  const r = diff(YOY_CI_LEVEL);
+  if (tight(r.lo, r.hi)) return yoy(r.d, r.lo, r.hi, lo, 'median');
+  const strong = diff(YOY_MEDIAN_MOVE_LEVEL);
+  return move(strong.lo, strong.hi) ? yoy(r.d, r.lo, r.hi, lo, 'median') : null;
 }
 
 export const TITLE_MAX = 120;

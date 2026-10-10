@@ -23,7 +23,7 @@ import { isFlagged } from '../flags';
 import { searchTextOf } from '../lot-labels';
 import { mattersOf, type LiveEntry } from './live';
 import { completeQuarters, type EntityBundle } from '../../hooks/useEntities';
-import type { EntityDetail, EntityRecord, EntitySummary } from './model';
+import type { EntityDetail, EntityRecord, EntitySummary, EntityYoy } from './model';
 import { entityPageOf } from './key';
 import { makerHref } from './retired';
 import { bestLotImage, imageHostTier } from '../img-host';
@@ -64,7 +64,7 @@ export interface Row {
   record: EntityRecord | null;
   verified: VerifiedMover | null;
   /** year-over-year, only when both sides clear the n gate (the build's rule) */
-  yoy: { pct: number; n: number; basis: 'matched' | 'median' | 'index' } | null;
+  yoy: EntityYoy | null;
   thin: boolean;
   liveLots: AuctionLot[];
   /** "Matters": the summed priority of the row's three most important live lots */
@@ -315,11 +315,30 @@ export const MOVERS_MIN_N = 60;
 /** …or, for a like-for-like read (basis 'matched'), on this many identities
  *  sold in both years (its n counts pairs, not sales) */
 export const MOVERS_MIN_PAIRS = 30;
-// like-for-like reads lead (the same items in both years), then pooled
-// medians on a well-supported sample, then thinner gated reads, then none
-const moverTier = (r: Row) => (!r.yoy ? 3
-  : r.yoy.basis === 'matched' ? (r.yoy.n >= MOVERS_MIN_PAIRS ? 0 : 2)
-    : r.yoy.n >= MOVERS_MIN_N ? 1 : 2);
+/** (R7) the move a read's 90% interval GUARANTEES, signed percent: the
+ *  bound nearest zero when the interval excludes no change, else 0. null = a
+ *  read without an interval (an older payload, the index basis) */
+export function guaranteedMove(y: EntityYoy | null): number | null {
+  if (!y || y.lo == null || y.hi == null) return null;
+  return y.lo > 0 ? y.lo : y.hi < 0 ? y.hi : 0;
+}
+/** the size of that guaranteed move, as a log ratio (a halving ranks with a
+ *  doubling) */
+const moveSize = (y: EntityYoy | null) => Math.abs(Math.log1p((guaranteedMove(y) ?? 0) / 100));
+// a clear like-for-like move leads — its interval excludes no change —
+// ranked by the size the interval guarantees, never by the point read (a
+// noisy +200% on 6 pairs with an interval down to +5% ranks as +5%); then a
+// clear pooled-median move (its interval sees sampling noise, never a change
+// in what sold — a sealed set's packs one year and cases the next); then
+// reads bounded around flat; then (older payloads, no interval) pooled
+// medians on a well-supported sample and like-for-like reads by count; then
+// thinner; then none
+const moverTier = (r: Row) => {
+  if (!r.yoy) return 4;
+  const g = guaranteedMove(r.yoy);
+  if (g != null) return g === 0 ? 2 : r.yoy.basis === 'median' ? 1 : 0;
+  return r.yoy.basis === 'matched' ? (r.yoy.n >= MOVERS_MIN_PAIRS ? 2 : 3) : r.yoy.n >= MOVERS_MIN_N ? 2 : 3;
+};
 
 /** the ledger's comparator; `thin` sinks under supported rows (always for
  *  the sold-history reads, as the tie-break otherwise) */
@@ -331,10 +350,11 @@ export function compareRows(sort: SortKey): (a: Row, b: Row) => number {
     case 'live': return (a, b) => by(a.live, b.live) || by(a.flags, b.flags) || thinLast(a, b) || soldTie(a, b);
     case 'flags': return (a, b) => by(a.flags, b.flags) || by(a.live, b.live) || thinLast(a, b) || soldTie(a, b);
     case 'movers': return (a, b) => thinLast(a, b)
-      // rows with a well-supported read first (n ≥ MOVERS_MIN_N across the
-      // two years — a 16-sale +4,204% is a mix artefact, not a mover), by
-      // the size of the move (either way); thinner gated reads after
+      // clear moves first, by the move their interval guarantees (either
+      // way); bounded reads next; older interval-less reads by support (a
+      // 16-sale +4,204% is a mix artefact, not a mover); none last
       || moverTier(a) - moverTier(b)
+      || by(moveSize(a.yoy), moveSize(b.yoy))
       || by(Math.abs(a.yoy?.pct ?? 0), Math.abs(b.yoy?.pct ?? 0))
       || soldTie(a, b);
     case 'median': return (a, b) => thinLast(a, b) || by(a.median ?? -1, b.median ?? -1) || soldTie(a, b);
@@ -370,6 +390,31 @@ export const fmtUsd = (n: number) =>
 
 /** a signed percent (true minus) */
 export const fmtPct = (p: number) => `${p >= 0 ? '+' : '−'}${Math.abs(Math.round(p))}%`;
+
+/* ── the yoy read, said one way everywhere (row, panel, compare, page) ── */
+
+/** the read's basis in words, with its n */
+export function yoyBasisText(y: EntityYoy): string {
+  return y.basis === 'index' ? `repeat-sales index · n ${y.n.toLocaleString()}`
+    : y.basis === 'matched' ? `same items, both years · ${y.n.toLocaleString()} matched`
+      : `median sale · n ${y.n.toLocaleString()}`;
+}
+/** its 90% interval in words ('' when the read carries none) */
+export const yoyIntervalText = (y: EntityYoy): string => (y.lo != null && y.hi != null ? `90% interval ${fmtPct(y.lo)} to ${fmtPct(y.hi)}` : '');
+/** a direction only for a clear move: an interval that straddles no change
+ *  prints neutral (the read is "flat within its band", not a rise or fall) */
+export function yoyDir(y: EntityYoy | null): 'up' | 'down' | undefined {
+  if (!y) return undefined;
+  if (y.lo != null && y.hi != null && y.lo <= 0 && y.hi >= 0) return undefined;
+  return y.pct >= 0 ? 'up' : 'down';
+}
+/** the row cell's title: basis, n, interval, and what the interval says */
+export function yoyTitle(y: EntityYoy | null): string {
+  if (!y) return 'No year-over-year read: too few of the same items sold in both years, or the read is too uncertain to call (its 90% interval wide and either side of no change)';
+  const ci = yoyIntervalText(y);
+  const verdict = !ci ? '' : yoyDir(y) ? ` — a clear ${y.pct >= 0 ? 'rise' : 'fall'}` : ' — no clear move';
+  return `Year over year · ${yoyBasisText(y)}${ci ? ` · ${ci}` : ''}${verdict}`;
+}
 
 /** the live photo when it sits on a better host than the flagship, else the flagship */
 function pickRenderable(live: string | null, face: string | null): string | null {
