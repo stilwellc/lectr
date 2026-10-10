@@ -11,7 +11,7 @@
  * byline ledger → the category medians as dotted spec rows → the yearly
  * line in a framed chart → sections as registration plates.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { sportDrillOf, SPORTS_SLUG_KIND } from '../lib/submarkets';
 import Link from 'next/link';
 import ArtistNav from './ArtistNav';
@@ -23,7 +23,11 @@ import { closeCut, formatPrice, formatDate, getUpcomingCounts } from '../utils';
 import FollowButton from './FollowButton';
 import HeroChart, { type HeroLine } from '../preview/terminal/HeroChart';
 import type { AuctionLot } from '../types';
-import { labelLineOf } from '../lib/lot-labels';
+import LotBrowser from './LotBrowser';
+import { FEED_DEFAULTS, feedFromParams, feedToParams, type FeedFilters } from './FeedToolbar';
+import { useUrlState, useLastVisit, houseBaselines } from '../lib/feed-filters';
+import { useBackScroll } from '../lib/use-back-scroll';
+import { subjectLivePool } from '../lib/maker-pool';
 import { signedPct } from './SubMarketDirectory';
 import '../northstar-pages.css';
 
@@ -120,12 +124,12 @@ function TrendLine({ yearly, name }: { yearly: PlayerEntry['yearly']; name: stri
 }
 
 export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
-  const { allLots, lastCrawl, totalLots, sources, market: marketData } = useRayData();
+  const { allLots, lastCrawl, totalLots, sources, market: marketData, fromCache } = useRayData();
   // house count is the meta.json source list — not a hardcoded 7 that silently
   // rots when a house is added. Fall back to the lots' own houses if meta is
   // still landing.
   const houseCount = sources.length || new Set(allLots.map(l => l.auctionHouse)).size;
-  const { savedIds } = useSavedLots();
+  const { savedIds, toggle } = useSavedLots();
   const { players, failed: loadFailed } = usePlayers();
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
   const entry = useMemo(() => players?.find(p => p.slug === playerSlug) || null, [players, playerSlug]);
@@ -140,11 +144,18 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
     return () => { document.title = prev; };
   }, [name]);
 
-  // live lots for this player — the build stamps playerSlug on upcoming sports lots
-  const live = useMemo(
-    () => allLots.filter(l => l.status === 'upcoming' && (l as AuctionLot & { playerSlug?: string | null }).playerSlug === playerSlug),
-    [allLots, playerSlug],
-  );
+  // live lots for this player — the /makers sports row's exact pool (the
+  // subject reader that files a card, a bat and a ticket under one athlete),
+  // in hammer order; the lot browser applies the reader's filters
+  const live = useMemo(() => subjectLivePool(allLots, 'sports', `p:${playerSlug}`), [allLots, playerSlug]);
+  // the browser's view lives in the URL beside ?id= (replaceState): a
+  // filtered dossier is a shareable link, and Back reopens it as left
+  const [filters, setFilters] = useUrlState<FeedFilters>(FEED_DEFAULTS, feedFromParams, feedToParams);
+  const prevVisitDay = useLastVisit();
+  const baselines = useMemo(() => houseBaselines(allLots), [allLots]);
+  const scope = useMemo(() => ({ subj: `p:${playerSlug}`, named: true }), [playerSlug]);
+  const toggleSave = useCallback((id: string, lot?: AuctionLot) => { toggle(id, lot); }, [toggle]);
+  useBackScroll(!!entry && live.length > 0);
 
   const nav = <ArtistNav activeSlug="" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />;
 
@@ -236,6 +247,42 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
           )}
         </div>
 
+        {/* THE LIVE BOOK — the player's lots on the block, in the home feed's
+            own lot browser (What matters / All lots, search, sort, triage,
+            facets, table · cards · phone rows, folds, Show more). Oct 9: up
+            here, right under the byline — the dossier's actionable part, as
+            on a maker page — not eight fixed rows under the yearly line. The
+            pool is the /makers player row's own (app/lib/maker-pool
+            subjectLivePool), so "+N more on the block" lands on exactly the
+            lots that row counted; the filters ride the URL. */}
+        {live.length > 0 && (
+          <section id="on-the-block" className="nsp-section ns-plate" aria-label="On the block now">
+            <div className="nsp-shead" style={{ marginBottom: 14 }}>
+              <div>
+                <span className="ns-kicker">Live</span>
+                <h2 className="nsp-h2">On the block now, {live.length.toLocaleString()}</h2>
+              </div>
+              <span className="nsp-shctx">{(() => { const h = new Set(live.map(l => l.auctionHouse)).size; return `${h} ${h === 1 ? "house" : "houses"} · every category`; })()}</span>
+            </div>
+            <LotBrowser
+              lots={live}
+              compLots={allLots}
+              filters={filters}
+              onFiltersChange={next => setFilters(next)}
+              market="sports"
+              scope={scope}
+              savedIds={savedIds}
+              onToggleSave={toggleSave}
+              lastCrawl={lastCrawl}
+              fromCache={fromCache}
+              prevVisitDay={prevVisitDay}
+              baselines={baselines}
+              anchorId="on-the-block"
+              persistKey={`/player/${playerSlug}`}
+            />
+          </section>
+        )}
+
         {/* the wider market, one spec row per category */}
         {catKeys.length > 0 && (
           <section className="nsp-section ns-plate" aria-label="The wider market">
@@ -282,35 +329,6 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
         )}
 
         <TrendLine yearly={entry.yearly} name={name} />
-
-        {live.length > 0 && (
-          <section className="nsp-section ns-plate" aria-label="On the block now">
-            <div className="nsp-shead">
-              <div>
-                <span className="ns-kicker">Live</span>
-                <h2 className="nsp-h2">On the block now, {live.length}</h2>
-              </div>
-              <span className="nsp-shctx">printed bids only</span>
-            </div>
-            <div className="nsp-rows">
-              {live.slice(0, 8).map(l => (
-                <Link key={l.id} href={`/lot?id=${encodeURIComponent(l.id)}`} className="lectr-lot-comp">
-                  <span className="lectr-lot-comp-t">
-                    <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{l.title}</span>
-                    <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
-                      {labelLineOf(l)} · hammers {formatDate(l.saleDate)}
-                    </span>
-                  </span>
-                  <span className="lectr-lot-comp-p">
-                    {(l as AuctionLot & { currentBid?: number }).currentBid
-                      ? `${formatPrice((l as AuctionLot & { currentBid?: number }).currentBid!)} bid`
-                      : 'on the block'}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
 
         {entry.objects.length > 0 && (
           <section className="nsp-section ns-plate" aria-label="Top object results">

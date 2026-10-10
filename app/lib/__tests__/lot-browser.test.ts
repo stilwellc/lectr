@@ -7,7 +7,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { feedPass, liveBookHref } from '../lot-browser';
-import { FEED_DEFAULTS } from '../../components/FeedToolbar';
+import { FEED_DEFAULTS, feedFromParams, feedToParams } from '../../components/FeedToolbar';
+import { livePool, subjectLivePool } from '../maker-pool';
+import { groupBySubject } from '../maker-subjects';
+import { marketOf } from '../../constants';
 import { passesTriage, triageFromParams, triageToParams, TRIAGE_DEFAULTS, houseBaselines, valueOptionOf, valuePatchOf } from '../feed-filters';
 import { savedQueryOf, matchesSavedQuery, unmatchableReason } from '../saved-query';
 import { shortlist } from '../priority';
@@ -113,4 +116,58 @@ test('performance: the whole live book through feedPass stays well under a frame
   }
   const ms = (performance.now() - t0) / 3;
   assert.ok(ms < 400, `feedPass over ${book.length} lots took ${ms.toFixed(0)}ms`);
+});
+
+// ── r5: player dossier, subject scope, compare tray ──────────────────────────
+test('liveBookHref: a player dossier opens on All lots at its live book; the dossier button at the top', () => {
+  const land = new URL(liveBookHref('/player?id=shohei-ohtani', '?win=48h&spk=baseball&q=oht'), 'https://x');
+  assert.equal(land.pathname, '/player');
+  assert.equal(land.searchParams.get('id'), 'shohei-ohtani');
+  assert.equal(land.searchParams.get('win'), '48h');
+  assert.equal(land.searchParams.get('sp'), 'Baseball');
+  assert.equal(land.searchParams.get('tab'), 'all');
+  assert.equal(land.searchParams.get('q'), null);
+  assert.equal(land.hash, '#on-the-block');
+  const top = new URL(liveBookHref('/player?id=shohei-ohtani', '?win=48h', { land: false }), 'https://x');
+  assert.equal(top.searchParams.get('win'), '48h');
+  assert.equal(top.searchParams.get('tab'), null);
+  assert.equal(top.hash, '');
+  // a subject's feed link keeps its own scope + tab and lands on the feed
+  const subj = new URL(liveBookHref('/tcg?subj=k%3Acharizard&tab=all', '?house=Goldin'), 'https://x');
+  assert.equal(subj.searchParams.get('subj'), 'k:charizard');
+  assert.equal(subj.searchParams.get('house'), 'Goldin');
+  assert.equal(subj.hash, '#on-the-block');
+});
+
+test('feed params: subj round-trips; a comma-joined maker scopes to several makers', () => {
+  const p = new URLSearchParams();
+  feedToParams({ ...FEED_DEFAULTS, subj: 'p:shohei-ohtani', maker: 'andy-warhol,francis-bacon' }, p);
+  const back = feedFromParams(p);
+  assert.equal(back.subj, 'p:shohei-ohtani');
+  assert.equal(back.maker, 'andy-warhol,francis-bacon');
+  const lots = [art(), art({ artist: 'francis-bacon' }), art({ artist: 'pablo-picasso' })];
+  const out = feedPass(lots, { ...FEED_DEFAULTS, maker: 'andy-warhol,francis-bacon', tab: 'all' }, OPTS);
+  assert.deepEqual(out.map(l => l.artist).sort(), ['andy-warhol', 'francis-bacon']);
+});
+
+test('subject scope: the feed (?subj=), the dossier pool and the /makers row count the same lots', () => {
+  let book: AuctionLot[] = [];
+  try {
+    book = (JSON.parse(readFileSync('public/data/ray/upcoming.json', 'utf8')) as { lots: AuctionLot[] }).lots;
+  } catch { return; }
+  const today = '2026-10-09';
+  const live = livePool(book, today);
+  const groups = groupBySubject(live);
+  let checked = 0;
+  for (const [market, key] of [['sports', 'p:shohei-ohtani'], ['tcg', 'k:charizard'], ['culture', 'fr:fr-starwars'], ['science', '~']] as const) {
+    const row = groups.get(`${market}|${key}`);
+    if (!row) continue;
+    checked++;
+    const pool = subjectLivePool(book, market, key, today);
+    assert.equal(pool.length, row.lots.length, `${market}|${key} dossier pool`);
+    const mkt = live.filter(l => marketOf(l.artist) === market);
+    const feed = feedPass(mkt, { ...FEED_DEFAULTS, subj: key, tab: 'all', sort: 'soonest' }, { ...OPTS, baselines: houseBaselines(mkt) });
+    assert.equal(feed.length, row.lots.length, `${market}|${key} feed`);
+  }
+  assert.ok(checked > 0);
 });

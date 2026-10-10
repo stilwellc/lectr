@@ -2106,6 +2106,16 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-feedtable .t-artist { display: block; color: var(--color-fg); font-weight: 600; text-decoration: none; }
 .ray-feedtable a.t-artist:hover { text-decoration: underline; text-underline-offset: 2px; }
 .ray-feedtable .t-title { color: var(--color-text-muted); max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+/* desktop: the ten columns FIT the rail (Oct 9 — at 1440 they ran 132px past
+   it and clipped the Signal + save columns). The maker / work column takes
+   what the data columns leave and ellipsizes inside it; the category label
+   wraps to two lines instead of setting its column at its longest sub
+   ("PAINTINGS & WORKS ON PAPER"). Under 900 the scroll band stands. */
+@media (min-width: 900px) {
+  .ray-feedtable td.t-work { width: 100%; max-width: 0; }
+  .ray-feedtable td.t-work .t-artist { overflow: hidden; text-overflow: ellipsis; }
+  .ray-feedtable .t-cat { white-space: normal; width: 150px; min-width: 150px; line-height: 1.4; }
+}
 /* the data cells speak mono — dates, days, bids, estimates, signals */
 .ray-feedtable .t-date, .ray-feedtable .t-days, .ray-feedtable .t-bids,
 .ray-feedtable .t-est, .ray-feedtable .t-sig-up, .ray-feedtable .t-sig-down {

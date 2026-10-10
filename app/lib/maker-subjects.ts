@@ -118,6 +118,22 @@ export function subjectRowKeyOf(l: SubjectLot): string | null {
 }
 export const OTHER = '~';
 
+/** the subject key alone (`p:<slug>`, `k:<pokémon>`, … or `~`) — the feed's
+ *  exact `subj=` scope; null off the collection markets */
+export function subjectKeyOf(l: SubjectLot): string | null {
+  const id = subjectRowKeyOf(l);
+  return id ? id.slice(id.indexOf('|') + 1) : null;
+}
+
+/** the home feed path for one subject row, exactly: its market's feed scoped
+ *  by `subj=` to every live lot the row counts ("All lots") */
+export function subjectFeedHref(market: Market, key: string): string {
+  const p = new URLSearchParams();
+  p.set('subj', key);
+  p.set('tab', 'all');
+  return `/${market}?${p.toString()}`;
+}
+
 export interface SubjectGroup<L> {
   /** `<market>|<key>` */
   id: string;

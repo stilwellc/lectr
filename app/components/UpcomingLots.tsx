@@ -8,7 +8,7 @@
  * filtered maker view is shareable and Back restores it. The section keeps the
  * dossier's own heading (ghost ordinal + "Upcoming lots").
  */
-import React, { useEffect, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { AuctionLot, MarketStats } from '../types';
 import { marketOf, MAKER_MARKETS, type Market } from '../constants';
 import SectionMark from './SectionMark';
@@ -55,23 +55,7 @@ export default function UpcomingLots({
   // Back from a lot lands where the reader left the book (the filters ride
   // the URL; the rows paged in ride LotBrowser's persistKey)
   useBackScroll(true);
-  // a deep link to the live book (/makers' "+N more on the block" lands on
-  // #upcoming): the section mounts after the maker's rows load, long after
-  // the browser's own fragment scroll gave up — land it once we exist
-  useEffect(() => {
-    if (window.location.hash !== '#upcoming') return;
-    // clear the sticky nav (its own height, measured) so the heading shows
-    const go = () => {
-      const el = document.getElementById('upcoming');
-      if (!el) return;
-      const nav = document.querySelector('nav, header');
-      const pad = Math.min(120, (nav?.getBoundingClientRect().bottom ?? 64)) + 8;
-      window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - pad) });
-    };
-    const raf = requestAnimationFrame(go);
-    const t = window.setTimeout(go, 450); // after the chart wells settle
-    return () => { cancelAnimationFrame(raf); window.clearTimeout(t); };
-  }, []);
+  // a deep link to the live book (#upcoming) is landed by LotBrowser itself
 
   return (
     <section className="ray-upcoming rail">

@@ -16,7 +16,8 @@
  *                houseBaselines + last-visit day.
  *   order        byPriority — what matters most first (app/lib/priority).
  */
-import { isLiveUpcoming, localToday } from '../utils';
+import { isLiveUpcoming, localToday, trueSaleDay } from '../utils';
+import { subjectRowKeyOf } from './maker-subjects';
 import { type Market } from '../constants';
 import { searchTextOf } from './lot-labels';
 import { passesTriage, triageToParams, TRIAGE_DEFAULTS, type TriageFilters, type NewLensOpts } from './feed-filters';
@@ -39,6 +40,20 @@ export function makerLiveLots<L extends PoolLot>(
     .filter(l => l.artist === slug && isLiveUpcoming(l, today) && passesTriage(l, f, { ...opts, today }))
     .sort(byPriority(Date.now()));
 }
+
+/** one /makers SUBJECT row's live lots (a player, a Pokémon, a film …): the
+ *  same pool + attribution the row counts with — every live lot whose subject
+ *  row (app/lib/maker-subjects subjectRowKeyOf) is `<market>|<key>`. Unfiltered
+ *  and in hammer order: the caller's lot browser applies the triage. */
+export function subjectLivePool<L extends PoolLot & SubjectPoolLot>(
+  lots: readonly L[], market: Market, key: string, today: string = localToday(),
+): L[] {
+  const id = `${market}|${key}`;
+  return lots
+    .filter(l => isLiveUpcoming(l, today) && subjectRowKeyOf(l) === id)
+    .sort((a, b) => (trueSaleDay(a) < trueSaleDay(b) ? -1 : trueSaleDay(a) > trueSaleDay(b) ? 1 : 0));
+}
+type SubjectPoolLot = Parameters<typeof subjectRowKeyOf>[0] & Parameters<typeof trueSaleDay>[0];
 
 type FeedLot = Parameters<typeof searchTextOf>[0];
 
