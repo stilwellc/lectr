@@ -26,6 +26,7 @@ import { routeRRLot, rrSportsPrior, rrAthleteRoute, rrSpaceTitle } from '../rr-a
 import { routeSportsLot } from '../sports-sale';
 import { athleteIn } from './athlete-roster';
 import { sportWordOf } from './sub-cats';
+import { scienceCultureSlugOf, isFilmProductionTitle, memIsCard } from '../../app/lib/taxonomy';
 
 export const DROP = 'DROP' as const;
 
@@ -423,6 +424,19 @@ export function scienceVerdict(l: ClassifyLot): string | null {
     return DROP;
   }
   return DROP; // fossils with no fossil noun
+}
+
+/** (Oct 9 labels audit) the non-space science slugs a music / film title
+ *  leaves (taxonomy.ts scienceCultureSlugOf — the view-time read of the same
+ *  rule); a real instrument (a phonograph, a telescope) stays */
+const SCIENCE_NON_SPACE = new Set(['scientific-instruments', 'fossils', 'meteorites', 'science-tech']);
+export function scienceMusicFilmFix(l: ClassifyLot): string | null {
+  if (!SCIENCE_NON_SPACE.has(l.artist)) return null;
+  const t = String(l.title || '');
+  const to = scienceCultureSlugOf(t);
+  // (Enigma the record label is no cipher machine)
+  if (!to || (to === 'music-memorabilia' && INSTRUMENT_RE.test(t.replace(/\benigma(?=\s*\/|\s+records)/gi, ' ')))) return null;
+  return to;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1139,7 +1153,8 @@ const ATHLETE_OBJECT_RE = /\b(?:baseballs?|footballs?|basketballs?|hockey pucks?
 export function cultureAthleteToSports(l: ClassifyLot): string | null {
   if (!CULTURE_SLUGS.has(l.artist) || ENTERTAINMENT_HOUSES.has(l.auctionHouse || '')) return null;
   const t = String(l.title || '');
-  if (SPACE_FICTION_RE.test(t) || /\b(?:film|movie|tv series|television|screen[- ]used|stage[- ]worn|costume)\b/i.test(t)) return null;
+  // (Oct 9) + a film production piece ("Production-Worn … - Ursa Authentic") — the sports-slug-film-production rule's lots stay put
+  if (SPACE_FICTION_RE.test(t) || /\b(?:film|movie|tv series|television|screen[- ]used|stage[- ]worn|costume)\b/i.test(t) || isFilmProductionTitle(t)) return null;
   const athlete = !!athleteIn(t);
   // a president's / celebrity's piece stays culture (a JFK-signed ball)
   if (!athlete && NON_ATHLETE_PERSON_RE.test(t)) return null;
@@ -1238,6 +1253,7 @@ export function sealedNotWax(l: ClassifyLot): string | null {
 // entry is one audited error class; `apply` returns the new artist, DROP, or
 // null. Order matters only where noted.
 // ═══════════════════════════════════════════════════════════════════════════
+const MEM_DRAWER_SLUGS = new Set(['memorabilia', 'sports-memorabilia', 'equipment-artifacts']);
 export interface ReclassRule {
   cls: string;
   apply: (l: ClassifyLot) => string | null;
@@ -1278,6 +1294,11 @@ export const RECLASS_RULES: ReclassRule[] = [
     cls: 'science-title-object-noun',
     apply: l => (GENERALIST_HOUSES.has(l.auctionHouse || '') ? scienceVerdict(l) : null),
   },
+  // (Oct 9 labels audit, Pattern 13) a record / cassette / gig flyer / iPod or
+  // a Star Trek shooting model under a science slug (Goldin's AC/DC single
+  // read as an instrument, a "Dinosaur Jr." flyer as a fossil) is culture —
+  // the culture mass gates below still drop the mass-produced ones
+  { cls: 'science-slug-music-film', apply: scienceMusicFilmFix },
   { cls: 'sale-name-gates', apply: saleGateFix },
   {
     cls: 'rr-athlete-autographs',
@@ -1290,6 +1311,23 @@ export const RECLASS_RULES: ReclassRule[] = [
   // (wave 4) any house: a branded, numbered, graded / serial card is a card
   { cls: 'branded-numbered-card', apply: brandedNumberedCard },
   { cls: 'goldin-facet-non-sport', apply: goldinNonSportFix },
+  // (Oct 9 labels audit, Pattern 6) a graded pre-war / vintage-issue card (or
+  // a lot of them) in the memorabilia junk drawer ("1888 E223 … SGC 4", an
+  // Exhibits "Stat Backs" collection) — taxonomy.ts memIsCard, the view-time
+  // read; pins, pennants, postcards, boxes, wrappers and signed pieces stay
+  { cls: 'memorabilia-is-card', apply: l => (MEM_DRAWER_SLUGS.has(l.artist) && memIsCard(l.title) ? (SPORTS_EXPANSION_HOUSES.has(l.auctionHouse || '') ? 'graded-cards' : 'sports-cards') : null) },
+  // (Oct 9 labels audit, Pattern 12) after the facet fix (its culture home
+  // stands): a film production piece still under a sports slug ("Production-
+  // Made Boxing Trunks from Rocky Balboa (2006) - Ursa Authentic", a Goofy
+  // "How to Play Baseball" production drawing, Larry Bird's Space Jam suit)
+  { cls: 'sports-slug-film-production', apply: l => {
+    const t = String(l.title || '');
+    if (!SPORTS_SLUGS.has(l.artist) || !isFilmProductionTitle(t) || looksLikeCard(t)) return null;
+    // RR titles a signed piece by its signer ("Mickey Mantle Animation Cel"):
+    // an autograph unless it names a studio production piece
+    if (l.auctionHouse === 'RR Auction' && l.artist === 'autographs' && !/\bproduction\b/i.test(t)) return null;
+    return 'movie-tv';
+  } },
   { cls: 'ticket-is-game-used', apply: ticketIsGameUsed },
   { cls: 'signed-object-not-award', apply: signedObjectNotAward },
   { cls: 'non-athlete-autograph', apply: nonAthleteAutograph },
