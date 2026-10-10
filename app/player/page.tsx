@@ -2,18 +2,19 @@
 
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import PlayerPage from '../components/PlayerPage';
+import EntityPage from '../components/entity/EntityPage';
 import BookIndex from '../components/BookIndex';
 
 /**
  * The player-dossier permalink — /player?id=<slug> (e.g. /player?id=
- * michael-jordan). Pure client page over players.json, same pattern as /ref.
+ * michael-jordan). Since the makers overhaul (P2, Oct 10 2026) it is the one
+ * entity page (components/entity/EntityPage) for the athlete's id `pl:<slug>`.
  */
 function PlayerFromQuery() {
   const params = useSearchParams();
   const id = (params.get('id') || '').trim().toLowerCase();
   if (!id) return <BookIndex kind="player" />;
-  return <PlayerPage key={id} playerSlug={id} />;
+  return <EntityPage key={id} id={`pl:${id}`} />;
 }
 
 export default function PlayerQueryPage() {

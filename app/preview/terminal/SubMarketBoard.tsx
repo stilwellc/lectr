@@ -17,6 +17,7 @@ import { confidenceMeter } from '../../components/LotCard';
 import MarketIcon from '../../components/MarketIcon';
 import { CIBeam } from './CIBeam';
 import styles from './style.module.css';
+import { makerHref } from '../../lib/entity/retired';
 
 /* ============================================================
    ROOM A — "THE VALUE ENGINE" · the platform's sell, in three
@@ -97,7 +98,7 @@ const FEATURED: string[] = [
  *  segment slug and live at /makers/<slug>. Routing them all to /sub/ would
  *  404 every maker row, since /sub/[a]/[b] needs two segments. */
 function rowHref(r: SubMarketRead): string {
-  return r.slug.includes(':') ? `/sub/${r.slug.replace(':', '/')}` : `/makers/${r.slug}`;
+  return r.slug.includes(':') ? `/sub/${r.slug.replace(':', '/')}` : makerHref(r.slug);
 }
 
 function resolveRows(market: MarketData | null, activeKey: Market): SubMarketRead[] {

@@ -144,7 +144,8 @@ const SPORT_LABEL: Record<string, string> = {
  * the page at its top;
  * a collection row's home-feed link keeps its own cat/sub and gains the
  * window / house / floor / new / facets; a player dossier (`/player?id=`)
- * opens on "All lots" at its live book (#on-the-block), like a maker page.
+ * opens on "All lots" at its live book (#on-the-block), like a maker page —
+ * and so does an entity page (/entity?id=).
  */
 export function liveBookHref(base: string, search: string, opts: { land?: boolean } = {}): string {
   const land = opts.land ?? true;
@@ -165,7 +166,7 @@ export function liveBookHref(base: string, search: string, opts: { land?: boolea
   const isMaker = path.startsWith('/makers/');
   // a player dossier's live book is a lot browser too — the reader came for
   // the rest of the book, so it opens on "All lots" like a maker page's
-  const isBook = isMaker || path === '/player';
+  const isBook = isMaker || path === '/player' || path === '/entity';
   if (isBook && land && !own.has('tab')) out.set('tab', 'all');
   const q = out.toString();
   const hash = !land ? '' : isMaker ? '#upcoming' : '#on-the-block';

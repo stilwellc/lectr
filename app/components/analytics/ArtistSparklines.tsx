@@ -12,6 +12,7 @@ import { demandSeries, formatDemand } from '../../lib/demand';
 import type { MarketData } from '../../hooks/useRayData';
 import { verifiedMovers } from '../../preview/terminal/verified';
 import Flick from '../Flick';
+import { makerHref } from '../../lib/entity/retired';
 
 interface Props {
   statsByArtist: Record<string, MarketStats>;
@@ -114,7 +115,7 @@ function ArtistCard({ artist, compare, sharedDomain }: { artist: ArtistCardData;
 
   return (
     <Link
-      href={`/makers/${artist.slug}`}
+      href={makerHref(artist.slug)}
       className="ray-spark-card ray-cert glass glass-quiet"
       style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}
     >

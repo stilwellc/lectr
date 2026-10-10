@@ -1,9 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import type { MetadataRoute } from 'next';
-import { ARTISTS, MARKETS } from './constants';
+import { MARKETS } from './constants';
 import { flaggedLots } from './lot/flagged';
 import { encodeRefPath } from './ref/ref-path';
+import { PAGE_MAKERS } from './lib/entity/retired';
 
 /** dossier slugs from the served build data (same fs pattern as flagged.ts) */
 function drillPaths(): string[] {
@@ -55,7 +56,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date().toISOString().slice(0, 10);
   return [
     ...staticRoutes.map(r => ({ url: `${BASE}${r}`, lastModified: now, changeFrequency: 'daily' as const, priority: r === '' ? 1 : 0.7 })),
-    ...ARTISTS.map(a => ({ url: `${BASE}/makers/${a.slug}`, lastModified: now, changeFrequency: 'daily' as const, priority: 0.6 })),
+    ...PAGE_MAKERS.map(slug => ({ url: `${BASE}/makers/${slug}`, lastModified: now, changeFrequency: 'daily' as const, priority: 0.6 })),
     ...drillPaths().map(u => ({ url: `${BASE}${u}`, lastModified: now, changeFrequency: 'weekly' as const, priority: 0.5 })),
     ...refPaths().map(u => ({ url: `${BASE}${u}`, lastModified: now, changeFrequency: 'weekly' as const, priority: 0.4 })),
     ...flaggedLots().map(l => ({ url: `${BASE}/lot/${encodeURIComponent(l.id)}`, lastModified: now, changeFrequency: 'daily' as const, priority: 0.5 })),

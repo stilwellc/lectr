@@ -103,6 +103,9 @@ export interface EntityDetail {
   recent: EntityResultRow[];
   /** (>1 coarse lens only) unique vs editions, cards vs memorabilia — n all-time, n12 / med the trailing year */
   lensSplit?: { key: string; label: string; n: number; n12: number; med: number | null; yearly: { y: number; med: number | null; n: number; partial?: true }[]; top: EntityResultRow[] }[];
+  /** (Pokémon / sets: grade + language; missions: flown / signed) the live
+   *  chips' cuts over the sold history — app/lib/entity/facets */
+  facets?: { key: 'grade' | 'lang' | 'object'; label: string; scope?: string; rows: { key: string; label: string; n: number; n12: number; med12m: number | null }[] }[];
 }
 
 /** a decoded entities file (app/lib/entity/wire decodes the v2 wire into this) */

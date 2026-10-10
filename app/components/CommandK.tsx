@@ -11,6 +11,7 @@ import { useRayData } from '../hooks/useRayData';
 import { craftTitle, formatPrice, formatDate, refLabel } from '../utils';
 import { loadRefList, matchRefs, refHref, searchSold, type RefRow, type SoldHit } from '../lib/search-index';
 import ArtistAvatar from './ArtistAvatar';
+import { makerHref } from '../lib/entity/retired';
 
 interface Item {
   label: string;
@@ -97,7 +98,7 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
         hint: upcomingCounts[a.slug]
           ? `${a.market} · ${upcomingCounts[a.slug]} live ${upcomingCounts[a.slug] === 1 ? 'lot' : 'lots'}`
           : `${a.market} maker`,
-        path: `/makers/${a.slug}`,
+        path: makerHref(a.slug),
         kind: 'maker' as const,
       })),
       // Sub-market dossiers — search-only (browseItems never includes 'sub',
@@ -122,7 +123,7 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
     for (const m of MARKETS.filter(m => m.live && m.key !== 'all')) {
       const makers = ARTISTS
         .filter(a => a.market === m.key)
-        .map(a => items.find(i => i.kind === 'maker' && i.path === `/makers/${a.slug}`))
+        .map(a => items.find(i => i.kind === 'maker' && i.path === makerHref(a.slug)))
         .filter(Boolean) as Item[];
       if (!makers.length) continue;
       const marketItem = items.find(i => i.kind === 'market' && i.path === MARKET_PATH[m.key]);
