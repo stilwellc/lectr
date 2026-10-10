@@ -29,6 +29,7 @@ import { marketOf } from '../../constants';
 import { MARKET_COLOR } from '../../lib/heroLayers';
 import { medianUpperSorted } from '../../lib/stats';
 import FigCap from '../FigCap';
+import { calibratedBands, type BandCalibration } from '../../lib/value-band';
 import { GapMark, OddsMark, DepthMark, SalesMark } from '../marks';
 
 const CSS = `
@@ -125,9 +126,9 @@ export function CloseCurveFigure({ marketData }: { marketData: MarketData | null
 
 /* ═══ 2 · THE COVERAGE FUNNEL ═══ */
 export function CoverageFunnel({ backtest }: { backtest: Backtest | null }) {
-  // valueBand = the band served lots now wear (Sep 2026 engine); band on older data
-  const band = ((backtest?.calibration as { valueBand?: Record<string, { lo: number; hi: number }> } | undefined)?.valueBand
-    ?? backtest?.calibration?.band) as Record<string, { lo: number; hi: number }> | undefined;
+  // valueBand.e = the band served estimate lots now wear (Sep 2026 engine,
+  // keyed path → tier — app/lib/value-band.ts); band on older data
+  const band = calibratedBands(backtest?.calibration as BandCalibration | undefined, 'e');
   // COVERAGE BASIS: bandCoverage is in-sample by construction (the bands
   // are fit on the same replay). The engine emits bandCoverageOOS — held-out
   // coverage per tier — where it can; render that with its basis named, and

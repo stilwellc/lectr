@@ -995,7 +995,7 @@ export default function AboutPage() {
         </section>
       </div>
 
-      <Colophon record={F.n > 500 ? { n: F.n, medianPerfPct: F.medianPerfPct } : null} />
+      <Colophon record={F.n > 500 ? { n: F.n, medianPerfPct: F.medianPerfPct, hammerMedianPct: F.hammerMedianPct ?? null } : null} />
     </div>
   );
 }
@@ -1217,7 +1217,7 @@ const DECK_CSS = `
   }
   .dk-chip { display: inline-flex; align-items: baseline; white-space: nowrap; font-size: var(--d-cap); }
   .dk-chip i { font-style: normal; color: var(--color-text-faint); }
-  .dk-chip em { font-style: normal; color: var(--color-text-faint); opacity: .7; margin-left: 8px; }
+  .dk-chip em { font-style: normal; color: var(--color-text-faint); margin-left: 8px; }
   .dk-chip b { color: var(--color-fg); font-weight: 600; margin-left: 8px; font-variant-numeric: tabular-nums; }
 
   /* ── slides ─────────────────────────────────────────────────────── */

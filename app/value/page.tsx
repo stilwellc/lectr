@@ -51,7 +51,7 @@ import {
 import { CellGrid, FigureCell, FigGate, FigReplay, FigPools } from '../components/cells';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isLiveUpcoming, trueSaleDay, toneOf } from '../utils';
 import { closeMs as closeAt } from '../lib/house-tz';
-import { signalWithPool, dealScore, signalMagnitude, estUsdBand } from '../lib/comps';
+import { dealScore, signalMagnitude, estUsdBand } from '../lib/comps';
 import { medianOr } from '../lib/stats';
 import { gapRead, sleeperRead, valueFloor, type GapRead, type SleeperRead } from '../lib/lanes';
 import TriageBar from '../components/TriageBar';
@@ -1061,6 +1061,21 @@ export default function ValuePage() {
     return w.join(' · ');
   }, [triage]);
 
+  // ODDS ONCE: when every printed flag row carries the same calibrated odds,
+  // the figure prints once in the column header instead of on each row
+  const uniformOdds = useMemo(() => {
+    const rows = gridDeals.slice(0, shown);
+    if (rows.length < 2) return null;
+    let v: number | null = null;
+    for (const d of rows) {
+      const b = d.lot.value?.signal?.beatRatePct;
+      if (b == null) return null;
+      const r = Math.round(b);
+      if (v == null) v = r;
+      else if (v !== r) return null;
+    }
+    return v;
+  }, [gridDeals, shown]);
   // ONE LOT, ONE NUMBER: the band prefers the BUILD ENGINE's stamp
   // (value.compValueUsd + poolIds — the same numbers the plate sentence and
   // the modal print); the client signalWithPool runs only for unstamped
@@ -1122,11 +1137,9 @@ export default function ValuePage() {
     if (sigMed && rows && rows.length >= 3) {
       return { prices: rows.map(r => r.p).sort((a, b) => a - b), median: sigMed };
     }
-    // 4) last resort: the client engine over the corpus
-    if (!fullLoaded) return null;
-    const pool = signalWithPool(call.lot, marketLots);
-    if (!pool || pool.signal.med == null) return null;
-    return { prices: pool.pool.map(l => l.priceUsd!).sort((a: number, b: number) => a - b), median: pool.signal.med };
+    // (Oct 6 2026, wave 4) no client-engine last resort: a call without the
+    // engine's own pool or evidence rows prints no comp strip
+    return null;
   }, [call, callStamp, callPack, evidence, marketLots, fullLoaded]);
 
   const hasFlags = deals.length > 0;
@@ -1248,14 +1261,20 @@ export default function ValuePage() {
           k: 'The record',
           v: fmtSignedPct(scoped.medPct),
           tone: toneOf(scoped.medPct) === 'up' ? 'up' : undefined,
-          sub: <>{activeLabel} flags realized vs estimate, all-in · n&nbsp;{scoped.n.toLocaleString()}</>,
+          sub: <>{activeLabel} flags realized vs estimate, all-in, bought-ins counted · n&nbsp;{scoped.n.toLocaleString()}</>,
         });
-      } else out.push(backtest.flagged.n >= 100 ? {
+      } else out.push(backtest.flagged.n >= 100 ? (backtest.flagged.hammerMedianPct != null ? {
+        // (wave 3) lead with the HAMMER — the basis the Flags are called on
+        k: 'The record',
+        v: fmtSignedPct(backtest.flagged.hammerMedianPct),
+        tone: toneOf(backtest.flagged.hammerMedianPct) === 'up' ? 'up' : undefined,
+        sub: <>hammer vs estimate · all-in {fmtSignedPct(backtest.flagged.medianPerfPct)} · n&nbsp;{backtest.flagged.n.toLocaleString()}</>,
+      } : {
         k: 'The record',
         v: fmtSignedPct(backtest.flagged.medianPerfPct),
         tone: toneOf(backtest.flagged.medianPerfPct) === 'up' ? 'up' : undefined,
-        sub: <>realized vs estimate, all-in{backtest.flagged.hammerMedianPct != null ? <> · hammer {fmtSignedPct(backtest.flagged.hammerMedianPct)}</> : null} · n&nbsp;{backtest.flagged.n.toLocaleString()}</>,
-      } : {
+        sub: <>realized vs estimate, all-in, bought-ins counted · n&nbsp;{backtest.flagged.n.toLocaleString()}</>,
+      }) : {
         k: 'The record',
         v: '—',
         sub: <>n {backtest.flagged.n.toLocaleString()} · publishes at 100</>,
@@ -2147,7 +2166,7 @@ export default function ValuePage() {
                 <span className="kicker">Hammers</span>
                 <span className="kicker" style={{ textAlign: 'right' }}>Estimate</span>
                 <span className="kicker" style={{ textAlign: 'right' }}>Comps med</span>
-                <span className="kicker" style={{ textAlign: 'right' }}>Odds</span>
+                <span className="kicker" style={{ textAlign: 'right' }}>Odds{uniformOdds != null && <><br />{uniformOdds}%</>}</span>
                 <span className="kicker" style={{ textAlign: 'right' }}>Gap</span>
               </div>
               {!hasFlags ? (
@@ -2275,7 +2294,9 @@ export default function ValuePage() {
                       {rowMed ? formatPrice(rowMed) : '—'}
                     </span>
                     <span className="ray-value-cell ray-value-cell-num ray-value-cell-odds">
-                      {d.lot.value?.signal?.beatRatePct != null
+                      {uniformOdds != null
+                        ? null
+                        : d.lot.value?.signal?.beatRatePct != null
                         ? `${Math.round(d.lot.value.signal.beatRatePct)}%`
                         : conf
                           ? <span className="ray-value-conf" aria-label={`${confidenceMeter(conf).word} confidence`}>{confidenceMeter(conf).dots}</span>
@@ -2407,18 +2428,30 @@ export default function ValuePage() {
                   serial={(lastCrawl || '').slice(0, 10).replace(/-/g, '') || undefined}
                   footer="each figure names its basis · refit nightly from the full replay"
                   cells={[
-                    {
-                      k: 'Flagged calls',
-                      v: fmtSignedPct(backtest.flagged.medianPerfPct),
-                      signed: backtest.flagged.medianPerfPct,
-                      sub: `realized vs estimate, all-in${backtest.flagged.hammerMedianPct != null ? ` · hammer ${fmtSignedPct(backtest.flagged.hammerMedianPct)}` : ''} · n ${backtest.flagged.n.toLocaleString()}`,
-                    },
-                    {
-                      k: 'The edge',
-                      v: `${backtest.flagged.medianPerfPct - backtest.unflagged.medianPerfPct >= 0 ? '+' : '−'}${Math.abs(backtest.flagged.medianPerfPct - backtest.unflagged.medianPerfPct)} pts`,
-                      signed: backtest.flagged.medianPerfPct - backtest.unflagged.medianPerfPct,
-                      sub: <>over {backtest.unflagged.n.toLocaleString()} unflagged ({fmtSignedPct(backtest.unflagged.medianPerfPct)} all-in)</>,
-                    },
+                    // (wave 3) lead with the HAMMER — the basis the Flags are
+                    // called on; all-in rides the sub line
+                    ...(() => {
+                      const F = backtest.flagged, U = backtest.unflagged;
+                      const ham = F.hammerMedianPct != null && U.hammerMedianPct != null;
+                      const f = ham ? F.hammerMedianPct! : F.medianPerfPct;
+                      const u = ham ? U.hammerMedianPct! : U.medianPerfPct;
+                      return [
+                        {
+                          k: 'Flagged calls',
+                          v: fmtSignedPct(f),
+                          signed: f,
+                          sub: ham
+                            ? `hammer vs estimate · all-in ${fmtSignedPct(F.medianPerfPct)} · n ${F.n.toLocaleString()}`
+                            : `realized vs estimate, all-in · n ${F.n.toLocaleString()}`,
+                        },
+                        {
+                          k: 'The edge',
+                          v: `${f - u >= 0 ? '+' : '−'}${Math.abs(f - u)} pts`,
+                          signed: f - u,
+                          sub: <>over {U.n.toLocaleString()} unflagged ({fmtSignedPct(u)} {ham ? 'hammer' : 'all-in'})</>,
+                        },
+                      ];
+                    })(),
                     {
                       k: 'Beat the high',
                       v: `${Math.round(backtest.flagged.hammerBeatPct ?? backtest.flagged.beatHighPct)}%`,

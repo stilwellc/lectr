@@ -93,7 +93,9 @@ export function compsFor(src: CompSource, lot: AuctionLot): CompsAnswer {
     // (Oct 6 2026, wave 3) NO FALLBACK READ: a lot the engine declined gets
     // no comp call and no signal (was the client signalWithPool read)
   }
-  const ap = appraiseLot(lot, pool);
+  // (Oct 6 2026, wave 4) an appraisal only on a lot the ENGINE valued — a
+  // lot it declined carries no client-side number in its pack
+  const ap = lot.value ? appraiseLot(lot, pool) : null;
   pack.ap = ap ? { value: ap.value, n: ap.n, kind: ap.kind, confidence: String(ap.confidence) } : null;
   pack.a = ap?.value ?? null;
   if (mkt === 'science') pack.r = scienceReferenceBand(lot, many(parts.science));

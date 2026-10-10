@@ -15,7 +15,7 @@ import { useSavedLots } from '../hooks/useSavedLots';
 import { useRefs } from '../hooks/useRefs';
 import { safeHref } from '../lib/safe-href';
 import { splitTitle, deglue, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
-import { appraiseLot, soldCompBand, isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
+import { isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
 import { lotAllInFactor } from '../lib/premiums';
 import { lotFloor, lotMaxBid, lotProjectedClose } from '../lib/verdict';
 import { formatEstimate, estimateOnly, lotSignal, confidenceMeter } from './LotCard';
@@ -560,8 +560,9 @@ export default function LotPage({ lotId, initialLot }: {
   const band = useMemo(() => {
     if (!lot || !isSportsScienceObject(lot)) return null;
     if (hasPack) return pack!.b ? { ...pack!.b, pool: packRowsToLots(pack!.b.rows) } : null;
-    return soldCompBand(lot, bandPoolLots);
-  }, [lot, bandPoolLots, hasPack, pack]);
+    // (Oct 6 2026, wave 4) no client-computed band: only the build's pack
+    return null;
+  }, [lot, hasPack, pack]);
   const called = useMemo(() => {
     if (!lot || band) return null;
     if (hasPack) {
@@ -663,10 +664,11 @@ export default function LotPage({ lotId, initialLot }: {
     if (sigMed != null) return sigMed;
     if (calledIsHonest && called?.med != null) return called.med;
     if (band) return band.median;
-    if (fullLoaded || makerPool) return appraiseLot(lot, poolLots)?.value ?? null;
-    if (hasPack) return pack!.a ?? null;
+    // (Oct 6 2026, wave 4) no client appraisal: the build's appraisal only,
+    // and only on a lot the engine valued
+    if (hasPack && lot.value) return pack!.a ?? null;
     return null;
-  }, [lot, sig, called, calledIsHonest, band, fullLoaded, makerPool, poolLots, hasPack, pack]);
+  }, [lot, sig, called, calledIsHonest, band, hasPack, pack]);
   const compsN = sig?.basis ?? (band ? band.n : (calledIsHonest ? called?.n : null)) ?? null;
 
   // ── reference comps: a low-confidence measured RANGE, never a flag ──
@@ -676,8 +678,11 @@ export default function LotPage({ lotId, initialLot }: {
   const refBand = useMemo(() => {
     if (!lot) return null;
     const mkt = ARTIST_MARKET[lot.artist];
+    if (hasPack && !fullLoaded) return pack!.r ?? null;
+    // (Oct 6 2026, wave 4) a client-computed reference range only on a lot
+    // the engine valued
+    if (!lot.value) return hasPack ? pack!.r ?? null : null;
     if (!fullLoaded) {
-      if (hasPack) return pack!.r ?? null;
       // science pools same-artist → the maker shard answers it exactly
       if (makerPool && mkt === 'science') return scienceReferenceBand(lot, makerPool);
       return null;
@@ -766,6 +771,10 @@ export default function LotPage({ lotId, initialLot }: {
   // an above / at read the bucket's beat rate is not a rate "of flags like
   // this" (and an uncalibrated read carries 0) — suppressed, never reworded
   const beatRate = lot.value?.signal?.label?.startsWith('below') && (lot.value.signal.beatRatePct || 0) > 0
+    ? lot.value.signal.beatRatePct : null;
+  // (wave 3, wording) an ABOVE read prints its bucket's odds as what they are:
+  // how often lots priced like this beat their estimate
+  const aboveBeatRate = lot.value?.signal?.label?.startsWith('above') && (lot.value.signal.beatRatePct || 0) > 0
     ? lot.value.signal.beatRatePct : null;
   const caption = `${lot.lotNumber != null ? `Lot ${lot.lotNumber} · ` : ''}${lot.auctionHouse}${lot.saleName ? ` · ${cleanText(lot.saleName)}` : ''}`;
   // poolPartial (above): an engine pool that resolved only PART of its stamped
@@ -984,9 +993,29 @@ export default function LotPage({ lotId, initialLot }: {
                 <span className="ns-cell-body">
                   {beatRate != null
                     ? `${beatRate}% of flags like this beat their estimate`
-                    : sig.label === 'Below Market' ? 'comps over ask' : 'comps under ask'}
+                    : aboveBeatRate != null && sig.label === 'Above Market'
+                      ? `only ${aboveBeatRate}% of lots priced like this beat their estimate`
+                      : sig.label === 'Below Market' ? 'comps over ask' : 'comps under ask'}
                   {' · '}{confidenceMeter(sig.confidence).word} confidence
                 </span>
+                {/* the engine's buyer fields (hammer basis, same as the
+                    estimate) — one secondary line, only the fields served */}
+                {(() => {
+                  const ev = lot.value as { expectedHammerUsd?: number; bandLowUsd?: number; bandHighUsd?: number; maxBidUsd?: number } | null | undefined;
+                  const pos = (n?: number) => (typeof n === 'number' && n > 0 ? n : null);
+                  const xh = pos(ev?.expectedHammerUsd), lo = pos(ev?.bandLowUsd), hi = pos(ev?.bandHighUsd), mb = pos(ev?.maxBidUsd);
+                  const parts = [
+                    xh ? `expected hammer ${formatPrice(xh)}` : null,
+                    lo && hi ? `likely ${formatPrice(lo)}–${formatPrice(hi)}` : null,
+                    mb ? `max bid ${formatPrice(mb)}` : null,
+                  ].filter((x): x is string => !!x);
+                  // each figure keeps its words together — a wrap lands on a separator
+                  return parts.length ? (
+                    <span className="ns-cell-body">
+                      {parts.map((t, i) => <span key={t}>{i > 0 && ' · '}<span style={{ whiteSpace: 'nowrap' }}>{t}</span></span>)}
+                    </span>
+                  ) : null;
+                })()}
               </div>
             )}
 
@@ -1020,7 +1049,7 @@ export default function LotPage({ lotId, initialLot }: {
                   <LeaderRow
                     k="Max bid"
                     v={`≤ ${formatPrice(mb.hammer)} hammer`}
-                    sub={`walk-away at the value floor · ${formatPrice(mb.allIn)} all-in`}
+                    sub={`walk-away price · ${formatPrice(mb.allIn)} all-in`}
                   />
                 );
               })()}

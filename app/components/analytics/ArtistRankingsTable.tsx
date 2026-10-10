@@ -661,7 +661,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
         </p>
       ) : (
         <p style={{ marginTop: 10, fontSize: 11.5, color: 'var(--color-text-faint)' }}>
-          % over est. is the all-in price vs. estimate — the published sold price (buyer&rsquo;s premium included where the house reports it) against the estimate mid, the demand index&rsquo;s own basis; median across each maker&rsquo;s sold lots with estimates.
+          % over est. is the all-in price vs. estimate — the published sold price (buyer&rsquo;s premium included where the house reports it) against the estimate mid (the demand index reads hammer vs the same mid); median across each maker&rsquo;s sold lots with estimates.
         </p>
       )}
     </section>
