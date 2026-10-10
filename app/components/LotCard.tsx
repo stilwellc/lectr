@@ -149,6 +149,7 @@ function LotCard({
   onToggleSave,
   lastCrawl,
   note,
+  onNote,
 }: {
   lot: AuctionLot;
   showArtist?: boolean;
@@ -159,6 +160,9 @@ function LotCard({
   lastCrawl?: string;
   /** optional one-line "why it's here" (the shortlist's reasonOf) */
   note?: string | null;
+  /** makes the note line itself pressable (the feed's folded grades: it
+   *  searches the feed for the whole group) — same type, no new chrome */
+  onNote?: () => void;
 }) {
   useLotCardStyles();
   const [modalOpen, setModalOpen] = useState(false);
@@ -364,7 +368,17 @@ function LotCard({
             ? ` · hammered ${formatDate(lot.saleDate)} · results pending`
             : isNoSale
             ? ` · bought in`
-            : <> · {isUpcoming ? 'hammers ' : ''}{formatDate(lot.saleDate)}{isUpcoming && lot.saleDateTime && <> · <CloseClock iso={lot.saleDateTime} windowHours={24} /></>}{isUpcoming && lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}</>}
+            : <> · {isUpcoming ? 'hammers ' : ''}{formatDate(lot.saleDate)}{isUpcoming && lot.saleDateTime && <CloseClock iso={lot.saleDateTime} windowHours={24} prefix=" · " />}{isUpcoming && lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}</>}
+          {/* the compact face carries the note on its meta line */}
+          {note && <> · {onNote ? (
+            <button
+              type="button"
+              onClick={e => { e.preventDefault(); e.stopPropagation(); onNote(); }}
+              style={{ position: 'relative', zIndex: 2, background: 'none', border: 0, padding: 0, font: 'inherit', color: 'inherit', letterSpacing: 'inherit', cursor: 'pointer' }}
+            >
+              {note}
+            </button>
+          ) : note}</>}
         </div>
       </div>
       <div style={{ flexShrink: 0, textAlign: 'right', zIndex: 'auto' }}>
@@ -573,11 +587,19 @@ function LotCard({
             ? ` · hammered ${formatDate(lot.saleDate)} · results pending`
             : isNoSale
             ? ` · bought in`
-            : <> · {isUpcoming ? 'hammers ' : ''}{formatDate(lot.saleDate)}{isUpcoming && lot.saleDateTime && <> · <CloseClock iso={lot.saleDateTime} windowHours={24} /></>}{isUpcoming && lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}</>}
+            : <> · {isUpcoming ? 'hammers ' : ''}{formatDate(lot.saleDate)}{isUpcoming && lot.saleDateTime && <CloseClock iso={lot.saleDateTime} windowHours={24} prefix=" · " />}{isUpcoming && lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}</>}
         </div>
         {note && (
-          <div style={{ fontSize: 12.5, color: 'var(--color-text-secondary)', letterSpacing: '-0.01em', marginTop: -4, marginBottom: 10 }}>
-            {note}
+          <div style={{ fontSize: 12.5, color: 'var(--color-text-secondary)', letterSpacing: '-0.01em', marginTop: -4, marginBottom: 10, ...(onNote ? { position: 'relative' as const, zIndex: 2 } : null) }}>
+            {onNote ? (
+              <button
+                type="button"
+                onClick={e => { e.preventDefault(); e.stopPropagation(); onNote(); }}
+                style={{ background: 'none', border: 0, padding: 0, font: 'inherit', color: 'inherit', letterSpacing: 'inherit', textAlign: 'left', cursor: 'pointer' }}
+              >
+                {note}
+              </button>
+            ) : note}
           </div>
         )}
         <div style={{ marginTop: 'auto' }}>
