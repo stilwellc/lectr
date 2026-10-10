@@ -261,6 +261,10 @@ export interface LotBrowserProps {
   /** the rows only: no view tabs, no toolbar — the caller owns every filter
    *  (the /makers lots body: its search, lenses and triage drive `filters`) */
   bare?: boolean;
+  /** rows per page (first page and each Show more) at every width; absent →
+   *  24 on desktop, 12 under 900px (home). An entity page passes 12 so its
+   *  live book scans in a screen and the sections below stay in reach */
+  pageSize?: number;
 }
 
 export default function LotBrowser({
@@ -285,6 +289,7 @@ export default function LotBrowser({
   anchorId,
   persistKey,
   bare = false,
+  pageSize: pageSizeProp,
 }: LotBrowserProps) {
   const crawlDay = (lastCrawl || new Date().toISOString()).slice(0, 10);
   const savedSet = useMemo(() => new Set(savedIds ?? []), [savedIds]);
@@ -298,12 +303,15 @@ export default function LotBrowser({
   const [ownLot, setOwnLot] = useLotModal<AuctionLot>();
   const setTableLot = onOpenLot ?? setOwnLot;
 
-  // 24-card pages on desktop, 12 under 900px — matchMedia, SSR-safe default.
+  // 24-card pages on desktop, 12 under 900px (or the caller's `pageSize` at
+  // every width) — matchMedia, SSR-safe default.
   // The visible count belongs to one filter state: any filter change starts
   // the reader back on one page (keyed, so no effect round-trip).
   const filterSig = useMemo(() => JSON.stringify(feedFilters), [feedFilters]);
-  const [pageSize, setPageSize] = useState(24);
-  const [vis, setVis] = useState<{ sig: string; n: number }>({ sig: '', n: 24 });
+  const widePage = pageSizeProp ?? 24;
+  const narrowPage = Math.min(12, widePage);
+  const [pageSize, setPageSize] = useState(widePage);
+  const [vis, setVis] = useState<{ sig: string; n: number }>({ sig: '', n: widePage });
   const visibleUpcoming = vis.sig === filterSig ? vis.n : pageSize;
   const visKey = persistKey ? `lectr-lb-vis:${persistKey}` : null;
   useEffect(() => {
@@ -321,14 +329,14 @@ export default function LotBrowser({
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 899px)');
     const apply = () => {
-      const size = mq.matches ? 12 : 24;
+      const size = mq.matches ? narrowPage : widePage;
       setPageSize(size);
-      setVis(v => (v.n === 12 || v.n === 24 ? { ...v, n: size } : v));
+      setVis(v => (v.n === narrowPage || v.n === widePage ? { ...v, n: size } : v));
     };
     apply();
     mq.addEventListener('change', apply);
     return () => mq.removeEventListener('change', apply);
-  }, []);
+  }, [narrowPage, widePage]);
 
   // The layout choice persists — read after mount (SSR renders the default).
   // A stored preference always wins; with none, desktop (≥900px) earns the
