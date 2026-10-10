@@ -143,20 +143,22 @@ function useCountUp(target: number, animate: boolean): number {
   return shown;
 }
 
-/** 'YYYY-MM-DD' → the room's shorthand: tonight / tmrw / Fri / Aug 16. */
-function relDay(iso: string): string {
+/** 'YYYY-MM-DD' → the room's shorthand: tonight / today / tmrw / Fri / Aug 16.
+ *  "tonight" only when the house's own close time is this evening — a
+ *  date-only sale (Phillips, Christie's, Wright…) says the day, never an hour. */
+function relDay(iso: string, tonight = false): string {
   const d = new Date(`${iso}T12:00:00`);
   if (isNaN(d.getTime())) return iso;
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const days = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() - today.getTime()) / 86400000);
-  if (days <= 0) return 'tonight';
+  if (days <= 0) return tonight ? 'tonight' : 'today';
   if (days === 1) return 'tmrw';
   if (days < 7) return d.toLocaleDateString('en-US', { weekday: 'short' });
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-export interface ClosingHouse { house: string; when: string; n: number }
+export interface ClosingHouse { house: string; when: string; n: number; /** the house's first close that day is a real evening time */ tonight?: boolean }
 
 // the hero series' point shape (period/value/n)
 type IndexPoint = HeroPoint;
@@ -397,8 +399,8 @@ export default function IndexHero({
       </div>
       <span className={styles.pulseTickerChips}>
         {closes.map((c) => (
-          <span key={c.house} className={styles.pulseChip} data-tonight={relDay(c.when) === 'tonight' ? 'true' : undefined}>
-            {c.house}<em>{relDay(c.when)}</em>
+          <span key={c.house} className={styles.pulseChip} data-tonight={['tonight', 'today'].includes(relDay(c.when, c.tonight)) ? 'true' : undefined}>
+            {c.house}<em>{relDay(c.when, c.tonight)}</em>
           </span>
         ))}
       </span>

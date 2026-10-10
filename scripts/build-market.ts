@@ -1331,12 +1331,19 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         }
         // cross-house: this exact card (key incl. grade) live elsewhere NOW
         {
-          const sibs = (ck ? liveByCardKey.get(ck) : undefined)?.filter(x => x.id !== String(l.id)) || [];
+          // ANOTHER house only (Oct 9 2026): the stamp used to match the
+          // lot's own house too — 182 of 202 entries on the Oct 9 book were
+          // Goldin→Goldin / REA→REA copies, which LotPage printed as "Also
+          // live at Goldin" on a Goldin lot. Same-house copies are the fold's.
+          const sibs = (ck ? liveByCardKey.get(ck) : undefined)?.filter(x => x.id !== String(l.id) && x.house !== String(l.auctionHouse)) || [];
           if (sibs.length) {
             (lw as AuctionLot & { crossLive?: unknown }).crossLive = sibs
               .sort((a, b) => a.bid - b.bid).slice(0, 3)
               .map(x => ({ id: x.id, house: x.house, bid: x.bid }));
             crossLiveStamped++;
+          } else {
+            // a stamp from an earlier night (or the old same-house match) never lingers
+            delete (lw as AuctionLot & { crossLive?: unknown }).crossLive;
           }
           stamped++;
           if (gradeLadder.length > 1) laddered++;

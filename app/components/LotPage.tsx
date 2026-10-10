@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from 'react';
 import { encodeRefPath } from '../ref/ref-path';
 import { drillRowFor, drillSlugFor } from '../lib/submarkets';
+import { makerLineOf, catSubLineOf, drillLabelOf } from '../lib/lot-labels';
+import { cardBadgesOf } from '../lib/facets';
 import { loadCompEvidence, evRowsToLots } from '../lib/comp-evidence';
 import { loadLotPack, loadLotFromShard, loadPageStats, loadMakerLots, packRowsToLots, type LotPack } from '../lib/page-data';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
-import { ARTIST_LABEL, ARTIST_MARKET, MARKETS } from '../constants';
+import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
 import { useFullLotsOnDemand, useVisibilityTrigger, useSoldArchive, retryFullLoad, retryArchiveLoad } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { useRefs } from '../hooks/useRefs';
@@ -22,6 +24,7 @@ import ArtistNav from './ArtistNav';
 import Flick from './Flick';
 // hotlinked photo that unmounts on failure so the monogram plate under it shows
 import PlateImg from './PlateImg';
+import { crossSibs } from '../lib/fold';
 
 /**
  * LotPage — one lot as a CATALOGUE PAGE in the north-star grammar: the
@@ -527,7 +530,7 @@ export default function LotPage({ lotId, initialLot }: {
 
   // set the tab title on the query route (the static set gets real metadata)
   useEffect(() => {
-    if (lot) document.title = `${splitTitle(lot.title).short} — lectr`;
+    if (lot) document.title = `${splitTitle(lot.title, lot.auctionHouse).short} — lectr`;
   }, [lot]);
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
@@ -745,11 +748,16 @@ export default function LotPage({ lotId, initialLot }: {
   }
 
   // ── the catalogue page ────────────────────────────────────────────────
-  const makerName = ARTIST_LABEL[lot.artist] || lot.artist;
-  const titleParts = splitTitle(lot.title);
+  // the name the lot is filed under + its label, in the home feed's words
+  // (app/lib/lot-labels): the card's player / the Pokémon, "Category · Sub",
+  // the facet badges ("PSA 8 · Japanese")
+  const maker = makerLineOf(lot);
+  const makerName = maker.name;
+  const catSubLine = catSubLineOf(lot);
+  const badgeLine = cardBadgesOf(lot).join(' · ');
+  const titleParts = splitTitle(lot.title, lot.auctionHouse);
   const marketKey = ARTIST_MARKET[lot.artist];
-  const marketLabel = MARKETS.find(m => m.key === marketKey)?.label || null;
-  const monogram = (makerName.trim().charAt(0) || craftTitle(lot.title).charAt(0) || '?').toUpperCase();
+  const monogram = (makerName.trim().charAt(0) || craftTitle(lot.title, lot.auctionHouse).charAt(0) || '?').toUpperCase();
   const imgOk = !!lot.imageUrl && !imgFailed;
   const saved = isSaved(lot.id);
   const isSold = lot.status === 'sold' || lot.status === 'bought_in';
@@ -804,7 +812,7 @@ export default function LotPage({ lotId, initialLot }: {
               <div className="ray-plate-img">
                 <img
                   src={httpsImg(lot.imageUrl)}
-                  alt={craftTitle(lot.title)}
+                  alt={craftTitle(lot.title, lot.auctionHouse)}
                   referrerPolicy="no-referrer"
                   onError={() => setImgFailed(true)}
                   // cache hits never fire onError — complete with zero
@@ -900,7 +908,7 @@ export default function LotPage({ lotId, initialLot }: {
                 {/* the market rides the byline's Category column now —
                     printing it here too would say it twice */}
                 {lot.artist in ARTIST_LABEL
-                  ? <Link href={`/makers/${lot.artist}`} style={{ color: 'inherit', textDecoration: 'none' }}>{makerName}</Link>
+                  ? <Link href={maker.href} style={{ color: 'inherit', textDecoration: 'none' }}>{makerName}</Link>
                   : makerName}
               </span>
               <span className="no">no. {lot.id}</span>
@@ -953,12 +961,11 @@ export default function LotPage({ lotId, initialLot }: {
                   <div className="s">{estimateOnly(lot)} est.</div>
                 )}
               </div>
-              {marketLabel && (
-                <div>
-                  <div className="k">Category</div>
-                  <div className="v">{marketLabel}</div>
-                </div>
-              )}
+              <div>
+                <div className="k">Category</div>
+                <div className="v">{catSubLine}</div>
+                {badgeLine && <div className="s">{badgeLine}</div>}
+              </div>
             </div>
 
             {/* THE READ AS COLOR — the engine's face in ns-cell-color
@@ -1037,17 +1044,19 @@ export default function LotPage({ lotId, initialLot }: {
                   />
                 );
               })()}
-              {isUpcoming && lot.crossLive?.length ? (() => {
+              {isUpcoming && crossSibs(lot).length ? (() => {
                 // the build caps crossLive at 3 siblings — the array's
                 // length is a cap, not a count. A stamped total (crossLiveN)
-                // prints; otherwise no number at all.
+                // prints; otherwise no number at all. Same-house entries
+                // (copies at this house) are never "also live at" (fold.crossSibs).
+                const sibs = crossSibs(lot);
                 const n = (lot as AuctionLot & { crossLiveN?: number }).crossLiveN;
                 const others = typeof n === 'number' && n > 0 ? n : null;
                 return (
                   <LeaderRow
                     k="Also live at"
-                    v={`${lot.crossLive![0].house} · ${lot.crossLive![0].bid > 0 ? formatPrice(lot.crossLive![0].bid) + ' bid' : 'open'}`}
-                    sub={lot.crossLive!.length > 1
+                    v={`${sibs[0].house} · ${sibs[0].bid > 0 ? formatPrice(sibs[0].bid) + ' bid' : 'open'}`}
+                    sub={sibs.length > 1
                       ? (others ? `same card at ${others} other venues` : 'same card at other venues')
                       : 'the same card, head to head'}
                   />
@@ -1091,13 +1100,13 @@ export default function LotPage({ lotId, initialLot }: {
                   return (
                     <LeaderRow k="Sub-market" sub={sub} tone={tone}>
                       <Link href={`/sub/${ref.slug.replace(':', '/')}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                        {dr.label} <Flick size={10} style={{ marginLeft: 2 }} />
+                        {drillLabelOf(dr.slug, dr.label)} <Flick size={10} style={{ marginLeft: 2 }} />
                       </Link>
                     </LeaderRow>
                   );
                 }
                 return (
-                  <LeaderRow k="Sub-market" v={dr.label} sub={sub} tone={tone} />
+                  <LeaderRow k="Sub-market" v={drillLabelOf(dr.slug, dr.label)} sub={sub} tone={tone} />
                 );
               })()}
 

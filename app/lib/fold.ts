@@ -16,8 +16,13 @@
  *
  * The group's representative is its highest-priority lot (app/lib/priority);
  * representatives keep their own place in the input order, so whatever sort
- * the reader chose still reads true. A different house is a different buying
- * option: the same card live elsewhere (`crossLive`) is never folded.
+ * the reader chose still reads true.
+ *
+ * Cross-house (Oct 9 r3): a card the build matched LIVE at another house
+ * (`crossLive` — the same card, same grade) is ONE thing on the board, not two:
+ * the pair folds into one group (best-priority copy shows) and the reason line
+ * names the other venue — "Also live at REA · $220 bid" (crossNote). A same-
+ * title lot at another house WITHOUT that match still stands alone.
  *
  * Pure; memoize at the call site (parseCard ~13µs × 10K lots).
  */
@@ -32,7 +37,33 @@ type FoldLot = {
   subCat?: string | null;
   drill?: string | null;
   auctionHouse?: string | null;
+  crossLive?: { id: string; house: string; bid: number }[] | null;
 } & Parameters<typeof priorityOf>[0];
+
+/** A lot's crossLive siblings at OTHER houses. The build's pre-Oct 9 stamp
+ *  matched same-house copies too (182 of 202 entries were Goldin→Goldin or
+ *  REA→REA) — those are grades/copies the fold already groups, never "also
+ *  live at" another venue. */
+export function crossSibs(l: { auctionHouse?: string | null; crossLive?: { id: string; house: string; bid: number }[] | null }): { id: string; house: string; bid: number }[] {
+  return (l.crossLive || []).filter(x => x && x.id && x.house && x.house !== l.auctionHouse);
+}
+
+const fmtBid = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(n >= 1e4 ? 0 : 1).replace(/\.0$/, '')}K` : `$${Math.round(n)}`);
+
+/** The reason-line text for the same card live at another house:
+ *  "Also live at REA · $220 bid" · "Also live at REA · no bids yet" ·
+ *  two venues → "Also live at REA, Goldin". `others` are the live lots
+ *  themselves when the caller has them (fresher bids than the build stamp). */
+export function crossNote(l: FoldLot, others?: readonly { auctionHouse?: string | null; currentBid?: number | null }[]): string | null {
+  const rows = others && others.length
+    ? others.filter(o => o.auctionHouse && o.auctionHouse !== l.auctionHouse).map(o => ({ house: o.auctionHouse as string, bid: o.currentBid || 0 }))
+    : crossSibs(l);
+  if (!rows.length) return null;
+  const houses = Array.from(new Set(rows.map(r => r.house)));
+  if (houses.length > 1) return `Also live at ${houses.join(', ')}`;
+  const best = rows.reduce((a, b) => (b.bid > a.bid ? b : a));
+  return `Also live at ${houses[0]} · ${best.bid > 0 ? `${fmtBid(best.bid)} bid` : 'no bids yet'}`;
+}
 
 export interface Fold<T> {
   /** one lot per group, in input order */
@@ -94,6 +125,37 @@ export function foldVariants<T extends FoldLot>(lots: readonly T[], nowMs: numbe
     if (!g) groups.set(fk.key, (g = { kind: fk.kind, members: [] }));
     g.members.push({ l, i, s: 0 });
   });
+  // cross-house pairs (crossSibs) join one group: union the two lots' groups
+  // (a lot with no fold key of its own gets a singleton group to join)
+  const idAt = new Map<string, number>();
+  lots.forEach((l, i) => idAt.set(l.id, i));
+  const parent = new Map<string, string>();
+  const find = (k: string): string => { let r = k; while (parent.has(r) && parent.get(r) !== r) r = parent.get(r)!; parent.set(k, r); return r; };
+  lots.forEach((l, i) => {
+    for (const s of crossSibs(l)) {
+      const j = idAt.get(s.id);
+      if (j === undefined) continue;
+      for (const x of [i, j]) {
+        if (keyAt[x] !== null) continue;
+        const k = `x|${lots[x].id}`;
+        keyAt[x] = k;
+        groups.set(k, { kind: 'card', members: [{ l: lots[x], i: x, s: 0 }] });
+      }
+      const a = find(keyAt[i]!), b = find(keyAt[j]!);
+      if (a !== b) parent.set(b, a);
+    }
+  });
+  if (parent.size) {
+    for (const k of Array.from(groups.keys())) {
+      const r = find(k);
+      if (r === k) continue;
+      const into = groups.get(r)!, from = groups.get(k)!;
+      into.members.push(...from.members);
+      if (from.kind === 'card') into.kind = 'card';
+      groups.delete(k);
+    }
+    for (let i = 0; i < keyAt.length; i++) if (keyAt[i] !== null) keyAt[i] = find(keyAt[i]!);
+  }
   const repIdx = new Set<number>();
   const siblings = new Map<string, T[]>();
   const kind = new Map<string, 'card' | 'title'>();

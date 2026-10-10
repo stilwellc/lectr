@@ -19,7 +19,7 @@
 
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { ARTIST_LABEL, MARKETS, ROSTER, marketArtists, type Market } from '../../constants';
+import { MARKETS, ROSTER, marketArtists, type Market } from '../../constants';
 import { useMarket } from '../../lib/market';
 import { useRayData, useSoldArchive, retryArchiveLoad, triggerFullLoad, retryFullLoad } from '../../hooks/useRayData';
 import { loadPageStats, type PageStats } from '../../lib/page-data';
@@ -39,8 +39,10 @@ import MarketSwitch from '../../components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS, FEED_PARAM_KEYS, feedFromParams, feedToParams } from '../../components/FeedToolbar';
 import { useUrlState, useLastVisit, passesTriage, houseBaselines, memoryOf, restoreParams, readFeedMemory, writeFeedMemory } from '../../lib/feed-filters';
 import { byPriority, shortlist, reasonOf, forYou, spread } from '../../lib/priority';
-import { makerLineOf, subColumnOf } from '../../lib/lot-labels';
-import { foldVariants, foldNote, foldQuery } from '../../lib/fold';
+import { closeIsTimed } from '../../lib/house-tz';
+import { makerLineOf, labelTagOf, subColumnOf, searchTextOf } from '../../lib/lot-labels';
+import { usePlayerDossiers } from '../../lib/use-player-dossiers';
+import { foldVariants, foldNote, foldQuery, crossSibs, crossNote } from '../../lib/fold';
 import { useFollows, affinityOf } from '../../lib/follows';
 import { Colophon, daysWord, pickCall } from '../../components/Terminal';
 import Flick from '../../components/Flick';
@@ -248,8 +250,11 @@ function FeedRow({ lot, onOpen, tone, note, onNote }: { lot: AuctionLot; onOpen:
       : lot.currentBid
         ? `bid ${formatPrice(lot.currentBid)}`
         : '—';
+  // the label's lead word (its lead badge, else the sub) — the full line
+  // ellipsized the maker away at 390px
+  const label = labelTagOf(lot);
   return (
-    <button type="button" className="ray-feedrow" onClick={onOpen} aria-label={`Comps for ${craftTitle(lot.title)}`}>
+    <button type="button" className="ray-feedrow" onClick={onOpen} aria-label={`Comps for ${craftTitle(lot.title, lot.auctionHouse)}`}>
       <span className="ray-feedrow-thumb" data-tone={tone} aria-hidden>
         {(lot.title || '?').charAt(0)}
         {lot.imageUrl && (
@@ -268,8 +273,13 @@ function FeedRow({ lot, onOpen, tone, note, onNote }: { lot: AuctionLot; onOpen:
         )}
       </span>
       <span className="ray-feedrow-main">
-        <span className="ray-feedrow-maker">{makerLineOf(lot).name}</span>
-        <span className="ray-feedrow-title">{craftTitle(lot.title)}</span>
+        <span className="ray-feedrow-maker">
+          {makerLineOf(lot).name}
+          {/* the label rides the maker line's spare width in the title tier's
+              ink (the words LotCard prints) — never a new line */}
+          {label && <span style={{ fontWeight: 400, fontSize: '12.5px', color: 'var(--color-text-muted)' }}> · {label}</span>}
+        </span>
+        <span className="ray-feedrow-title">{craftTitle(lot.title, lot.auctionHouse)}</span>
         {note && (onNote ? (
           // the row is itself a button: the folded note presses as a link
           // inside it (same type as the plain note — no new chrome)
@@ -327,6 +337,7 @@ const VERTICAL_COUNT = MARKETS.length - 1;
 
 export default function TerminalHomePage() {
   const ray = useRayData();
+  usePlayerDossiers(); // athlete names on memorabilia rows link to /player once the dossier index lands
   const { allLots, statsByArtist, demand, realized, bidComp, recentSold, backtest, market: marketData, lastCrawl, loading, error, fromCache } = ray;
   const { market, setMarket } = useMarket();
   const marketMeta = MARKETS.find(m => m.key === market)!;
@@ -585,7 +596,10 @@ export default function TerminalHomePage() {
   // The pulse board's "closing next" line: each house's NEAREST close in the
   // scoped live book, soonest first. n = lots that settle that day.
   const closingNext = useMemo(() => {
-    const byHouse = new Map<string, { house: string; when: string; n: number }>();
+    // "tonight" is earned by a real close time this evening (house-tz
+    // closeIsTimed) — a date-only house closing today reads "today"
+    const byHouse = new Map<string, { house: string; when: string; n: number; tonight?: boolean }>();
+    const evening = (l: AuctionLot) => closeIsTimed(l) && new Date(l.saleDateTime as string).getHours() >= 17;
     for (const l of upcoming) {
       if (l.resultsPending) continue;
       const h = l.auctionHouse;
@@ -593,8 +607,8 @@ export default function TerminalHomePage() {
       const when = trueSaleDay(l);
       if (!when) continue;
       const cur = byHouse.get(h);
-      if (!cur || when < cur.when) byHouse.set(h, { house: h, when, n: 1 });
-      else if (when === cur.when) cur.n++;
+      if (!cur || when < cur.when) byHouse.set(h, { house: h, when, n: 1, tonight: evening(l) });
+      else if (when === cur.when) { cur.n++; if (evening(l)) cur.tonight = true; }
     }
     return Array.from(byHouse.values()).sort((a, b) => (a.when < b.when ? -1 : 1)).slice(0, 3);
   }, [upcoming]);
@@ -713,11 +727,10 @@ export default function TerminalHomePage() {
     // triage: closing window, clean category/sub, house, value floor, new
     arr = arr.filter(l => passesTriage(l, f, { prevVisitDay, baselines }));
     if (q) {
-      arr = arr.filter(l =>
-        `${ARTIST_LABEL[l.artist] || l.artist} ${l.title} ${l.auctionHouse} ${l.saleName} ${l.medium || ''}`
-          .toLowerCase()
-          .includes(q)
-      );
+      // the haystack carries the printed label vocabulary — the player, "PSA
+      // 10", "Signed", "Rookie", "Apollo" (app/lib/lot-labels searchTextOf,
+      // memoised per lot: 10K lots a keystroke)
+      arr = arr.filter(l => searchTextOf(l).includes(q));
     }
     const est = (l: typeof arr[number]) => l.estimateHigh || l.estimateLow || l.currentBid || 0;
     const past = (l: AuctionLot) => !!l.resultsPending && trueSaleDay(l) !== '' && trueSaleDay(l) < crawlDay;
@@ -784,9 +797,19 @@ export default function TerminalHomePage() {
     [feedAll, topTab, youTab, follows, fold]
   );
   // the reason line: the shortlist's "why it's here", then the folded copies
+  // at this house ("Also PSA 8, PSA 6"), then the same card live at another
+  // house ("Also live at REA · $220 bid" — the live lot's own bid)
+  const liveById = useMemo(() => new Map(upcoming.map(l => [l.id, l])), [upcoming]);
   const alsoOf = (lot: AuctionLot): string | null => {
     const g = fold?.group.get(lot.id);
-    return g ? foldNote(lot, g.members.filter(m => m.id !== lot.id), g.kind) : null;
+    const sameHouse = g ? g.members.filter(m => m.id !== lot.id && m.auctionHouse === lot.auctionHouse) : [];
+    const elsewhere = new Map<string, AuctionLot>();
+    if (g) for (const m of g.members) if (m.auctionHouse !== lot.auctionHouse) elsewhere.set(m.id, m);
+    for (const s of crossSibs(lot)) { const o = liveById.get(s.id); if (o) elsewhere.set(o.id, o); }
+    return [
+      g && sameHouse.length ? foldNote(lot, sameHouse, g.kind) : null,
+      elsewhere.size ? crossNote(lot, Array.from(elsewhere.values())) : null,
+    ].filter(Boolean).join(' · ') || null;
   };
   const noteOf = (lot: AuctionLot): string | null =>
     [topTab || youTab ? reasonOf(lot) : null, alsoOf(lot)].filter(Boolean).join(' · ') || null;
@@ -1170,10 +1193,10 @@ export default function TerminalHomePage() {
                                   type="button"
                                   className="t-title"
                                   onClick={e => { e.stopPropagation(); setTableLot(lot); }}
-                                  aria-label={`Comps for ${craftTitle(lot.title)}`}
+                                  aria-label={`Comps for ${craftTitle(lot.title, lot.auctionHouse)}`}
                                   style={{ display: 'block', width: '100%', background: 'none', border: 0, padding: 0, font: 'inherit', textAlign: 'left', cursor: 'pointer' }}
                                 >
-                                  {craftTitle(lot.title)}
+                                  {craftTitle(lot.title, lot.auctionHouse)}
                                 </button>
                                 {(() => {
                                   // folded copies — the Signal column's own sub-line type
@@ -1394,7 +1417,7 @@ export default function TerminalHomePage() {
                     span={2}
                     stat={gapMultiple(todaysCall.pct)}
                     label="Today's call"
-                    body={`${ARTIST_LABEL[todaysCall.lot.artist] || todaysCall.lot.artist} · ${craftTitle(todaysCall.lot.title)}`}
+                    body={`${makerLineOf(todaysCall.lot).name} · ${craftTitle(todaysCall.lot.title, todaysCall.lot.auctionHouse)}`}
                     href={`/lot/${todaysCall.lot.id}`}
                   />
                 ) : (

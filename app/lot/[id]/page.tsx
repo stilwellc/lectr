@@ -3,7 +3,7 @@ import { flaggedLots } from '../flagged';
 import LotPage from '../../components/LotPage';
 import { splitTitle, formatDate, httpsImg, formatPrice } from '../../utils';
 import { signalMagnitude } from '../../lib/comps';
-import { ARTIST_LABEL } from '../../constants';
+import { makerLineOf } from '../../lib/lot-labels';
 
 /**
  * The STATIC flagged set — /lot/<id> prerendered for every lot the crawl
@@ -26,8 +26,8 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
   const lot = flaggedLots().find(l => l.id === params.id);
   if (!lot) return { title: 'Lot' };
 
-  const maker = ARTIST_LABEL[lot.artist] || lot.artist;
-  const title = splitTitle(lot.title).short;
+  const maker = makerLineOf(lot).name;
+  const title = splitTitle(lot.title, lot.auctionHouse).short;
   const sig = lot.signal;
   const est = lot.estimateLow && lot.estimateHigh
     ? `${formatPrice(lot.estimateLow)}–${formatPrice(lot.estimateHigh)} est.`

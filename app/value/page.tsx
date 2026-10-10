@@ -50,12 +50,22 @@ import {
 // forced-color cell classes re-plate the call. Never redefined here.
 import { CellGrid, FigureCell, FigGate, FigReplay, FigPools } from '../components/cells';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isLiveUpcoming, trueSaleDay, toneOf } from '../utils';
+import { closeMs as closeAt } from '../lib/house-tz';
 import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
 import { medianOr } from '../lib/stats';
 import { gapRead, sleeperRead, type GapRead, type SleeperRead } from '../lib/lanes';
 import TriageBar from '../components/TriageBar';
 import { useUrlState, useLastVisit, passesTriage, isTriageActive, houseBaselines, TRIAGE_DEFAULTS, triageFromParams, triageToParams, type TriageFilters } from '../lib/feed-filters';
 import { byPriority, spread } from '../lib/priority';
+import { makerLineOf, labelLineOf } from '../lib/lot-labels';
+
+/** the row's label line (app/lib/lot-labels — the home feed's words), riding
+ *  the maker line as its muted inline tail: the row's own .ray-value-row-maker
+ *  span tier, held inline so it never adds a line (desktop only — see .vd-label-tail) */
+function LabelSuffix({ lot }: { lot: AuctionLot }) {
+  const label = labelLineOf(lot);
+  return label ? <span className="vd-label-tail" style={{ display: 'inline' }}> · {label}</span> : null;
+}
 
 const ROWS_PAGE = 12;
 
@@ -307,7 +317,7 @@ function GapAnnex({ rows, receipts, activeKey, play, isSaved, onToggleSave }: {
           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(o => (o === lot.id ? null : lot.id)); } }}
         >
           <span className="ray-value-row-thumb" aria-hidden style={{ position: 'relative' }}>
-            <span className="vd-thumb-letter">{(ARTIST_LABEL[lot.artist] || lot.artist).charAt(0)}</span>
+            <span className="vd-thumb-letter">{makerLineOf(lot).name.charAt(0)}</span>
             {lot.imageUrl && (
               <img src={httpsImg(lot.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
@@ -316,10 +326,11 @@ function GapAnnex({ rows, receipts, activeKey, play, isSaved, onToggleSave }: {
           </span>
           <span style={{ minWidth: 0 }}>
             <span className="ray-value-row-maker" style={{ display: 'block' }}>
-              {ARTIST_LABEL[lot.artist] || lot.artist}
+              {makerLineOf(lot).name}
               {g.shelf === 'forming' && <span className="vd-lane-tag">early</span>}
+              <LabelSuffix lot={lot} />
             </span>
-            <span className="ray-value-row-title" style={{ display: 'block' }}>{craftTitle(lot.title)}</span>
+            <span className="ray-value-row-title" style={{ display: 'block' }}>{craftTitle(lot.title, lot.auctionHouse)}</span>
           </span>
           <span className="vd-cell vd-cell-strong">
             −{Math.round(g.depth * 100)}%
@@ -499,7 +510,7 @@ function SleepersAnnex({ rows, queued, receipts, activeLabel, play, isSaved, onT
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(o => (o === lot.id ? null : lot.id)); } }}
                 >
                   <span className="ray-value-row-thumb" aria-hidden style={{ position: 'relative' }}>
-                    <span className="vd-thumb-letter">{(ARTIST_LABEL[lot.artist] || lot.artist).charAt(0)}</span>
+                    <span className="vd-thumb-letter">{makerLineOf(lot).name.charAt(0)}</span>
                     {lot.imageUrl && (
                       <img src={httpsImg(lot.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
                         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
@@ -507,8 +518,8 @@ function SleepersAnnex({ rows, queued, receipts, activeLabel, play, isSaved, onT
                     )}
                   </span>
                   <span style={{ minWidth: 0 }}>
-                    <span className="ray-value-row-maker" style={{ display: 'block' }}>{ARTIST_LABEL[lot.artist] || lot.artist}</span>
-                    <span className="ray-value-row-title" style={{ display: 'block' }}>{craftTitle(lot.title)}</span>
+                    <span className="ray-value-row-maker" style={{ display: 'block' }}>{makerLineOf(lot).name}<LabelSuffix lot={lot} /></span>
+                    <span className="ray-value-row-title" style={{ display: 'block' }}>{craftTitle(lot.title, lot.auctionHouse)}</span>
                   </span>
                   <span className="vd-cell">{q.estMid ? formatPrice(q.estMid) : '—'}</span>
                   <span className="vd-cell vd-cell-strong">
@@ -831,10 +842,9 @@ export default function ValuePage() {
       if (typeof l.bidCount !== 'number' || l.bidCount !== 0) return false;
       const cvu = l.value?.compValueUsd;
       if (!cvu || cvu <= 0) return false;
-      const iso = l.saleDateTime || (l.saleDate ? `${l.saleDate}T23:59:59Z` : null);
-      if (!iso) return false;
-      const ms = Date.parse(iso);
-      return !isNaN(ms) && (ms - now) / 86400000 > 7;
+      // the ONE close clock (house-tz): date-only = the sale day's end where it is sold
+      const ms = closeAt(l);
+      return ms != null && (ms - now) / 86400000 > 7;
     }).length;
   }, [liveLots]);
 
@@ -1318,6 +1328,10 @@ export default function ValuePage() {
           .ray-value-row .ray-value-row-title { order: -1; font-size: 13.5px; font-weight: 600; color: var(--color-fg); }
           .ray-value-row .ray-value-row-maker { font-size: 12px; font-weight: 400; color: var(--color-text-muted); }
         }
+        /* the label tail rides the maker line where the line has room; the
+           phone's maker line is already the muted second tier and would only
+           ellipsize the maker away */
+        @media (max-width: 768px) { .vd-label-tail { display: none !important; } }
         /* desktop ledger (≥900px): thumb · maker/work · house · hammers ·
            estimate · comps median · odds · gap — mono cells, right numerics */
         .ray-value-head { display: none; }
@@ -2136,13 +2150,13 @@ export default function ValuePage() {
                     className="ray-value-row"
                     data-nav-row
                     onClick={() => setModalLot(d.lot)}
-                    aria-label={`${ARTIST_LABEL[d.lot.artist] || d.lot.artist} — see the comps`}
+                    aria-label={`${makerLineOf(d.lot).name} — see the comps`}
                   >
                     {/* Thumbnail — monogram plate always behind, photo overlays;
                         on a hotlink-block the plate shows through, never a gap */}
                     <span className="ray-value-row-thumb" aria-hidden="true" style={{ position: 'relative' }}>
                       <span className="vd-thumb-letter">
-                        {(ARTIST_LABEL[d.lot.artist] || d.lot.artist).charAt(0)}
+                        {makerLineOf(d.lot).name.charAt(0)}
                       </span>
                       {d.lot.imageUrl && (
                         <img src={httpsImg(d.lot.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
@@ -2152,10 +2166,11 @@ export default function ValuePage() {
                     </span>
                     <span style={{ minWidth: 0 }}>
                       <span className="ray-value-row-maker" style={{ display: 'block' }}>
-                        {ARTIST_LABEL[d.lot.artist] || d.lot.artist}
+                        {makerLineOf(d.lot).name}
+                        <LabelSuffix lot={d.lot} />
                       </span>
                       <span className="ray-value-row-title" style={{ display: 'block' }}>
-                        {craftTitle(d.lot.title)}
+                        {craftTitle(d.lot.title, d.lot.auctionHouse)}
                       </span>
                       {/* its own line: inside the nowrap/ellipsis title the date was the first thing cut */}
                       <span className="ray-value-mobdate">

@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useBookTotals } from '../lib/book';
 import Link from 'next/link';
 import { AuctionLot } from '../types';
-import { ARTIST_LABEL, Market } from '../constants';
+import { Market } from '../constants';
+import { makerLineOf } from '../lib/lot-labels';
 import { craftTitle, formatDate, formatPrice, httpsImg, localToday, fmtSignedPct, isLiveUpcoming, trueSaleDay } from '../utils';
 import { lotSignal, confidenceMeter, formatEstimate } from './LotCard';
 import { dealScore, lotFitsMarket, signalMagnitude } from '../lib/comps';
@@ -205,7 +206,7 @@ export function CallPlate({
   const meter = confidenceMeter(signal!.confidence);
   const saved = isSaved ? isSaved(lot.id) : false;
   const imgOk = !!lot.imageUrl && failedImgId !== lot.id;
-  const makerName = ARTIST_LABEL[lot.artist] || lot.artist;
+  const makerName = makerLineOf(lot).name;
   const monogram = makerName.trim().charAt(0).toUpperCase();
   const saleDay = trueSaleDay(lot) || lot.saleDate;
   // CLOSING-TIME SALIENCE — a call that closes today/tonight names the urgency
@@ -259,7 +260,7 @@ export function CallPlate({
         <div className={`lectr-cpc-grid${imgOk ? '' : ' lectr-cpc-noimg'}`}>
           <div className="lectr-cpc-main">
             <div className="ray-call-artist">{makerName}</div>
-            <div className="ray-call-title">{craftTitle(lot.title)}</div>
+            <div className="ray-call-title">{craftTitle(lot.title, lot.auctionHouse)}</div>
             {band && <div className="lectr-cp-band">{band}</div>}
             <div className="lectr-cp-leaders">
               <LeaderRow k="Ask" v={formatEstimate(lot)} />
@@ -372,7 +373,7 @@ export function CallPlate({
         {/* the certificate */}
         <div className="lectr-cp-cert">
           <div className="ray-deckcall-maker">{makerName}</div>
-          <div className="ray-deckcall-title">{craftTitle(lot.title)}</div>
+          <div className="ray-deckcall-title">{craftTitle(lot.title, lot.auctionHouse)}</div>
 
           {/* wide plate: the call as dotted-leader rows */}
           <div className="lectr-cp-leaders">

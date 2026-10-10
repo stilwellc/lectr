@@ -23,6 +23,7 @@ import type { AuctionLot } from '../types';
 import { estUsdBand } from './comps';
 import { hasConditionFlag } from './condition';
 import { lotAllInFactor } from './premiums';
+import { closeMs as closeAt } from './house-tz';
 export { SIGNAL_LABEL, type SignalLabel, basisNote } from './value';
 
 /* ── THE FLOOR (one-source law, P1-4, Sep 2 2026) ───────────────────────── */
@@ -153,7 +154,8 @@ export function gapRead(lot: AuctionLot, now: number): GapRead | null {
   const floorSrc: GapRead['floorSrc'] = vf.src;
   const iso = lot.saleDateTime || lot.saleDate;
   if (!iso) return null;
-  const closeMs = Date.parse(lot.saleDateTime || `${lot.saleDate}T23:59:59Z`);
+  // the ONE close clock (house-tz): a date-only sale ends with its day where it is sold
+  const closeMs = closeAt(lot) ?? NaN;
   if (isNaN(closeMs) || closeMs <= now) return null;
   const daysOut = (closeMs - now) / 86400000;
   if (daysOut > 8) return null; // beyond the curve's last fitted edge
@@ -208,9 +210,9 @@ export function sleeperRead(lot: AuctionLot, now: number): SleeperRead | null {
   }
   const entry = (lot.currentBid || 0) > 0 ? lot.currentBid! : null;
   if (entry != null && entry > cvu) return null; // opening ask already exceeds the appraisal
-  const iso = lot.saleDateTime || (lot.saleDate ? `${lot.saleDate}T23:59:59Z` : null);
+  const iso = lot.saleDateTime || lot.saleDate || null;
   if (!iso) return null;
-  const closeMs = Date.parse(iso);
+  const closeMs = closeAt(lot) ?? NaN;
   if (isNaN(closeMs) || closeMs <= now) return null;
   if ((closeMs - now) / 86400000 > 7) return null; // attention only means something near hammer
   return { anchor, cvu, estMid: estMid ?? null, entry, closes: lot.saleDate || iso.slice(0, 10) };

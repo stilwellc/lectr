@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { AuctionLot, MarketStats, RealizedPoint, BidCompetitionPoint } from '../types';
+import { normalizeCloseStamp } from '../lib/house-tz';
 
 // Stable empty-array identity for pre-load fallbacks — a fresh `[]` each render
 // would defeat downstream memoization (e.g. useSoldArchive's allLotsWithArchive).
@@ -363,6 +364,11 @@ function loadRayData(): Promise<RayPayload> {
           lots?: AuctionLot[];
         })
       : null;
+    // CLOSE STAMPS (Oct 9, app/lib/house-tz) — the same normalization the
+    // build applies, so a payload built before it ships reads honestly too: a
+    // Christie's local-midnight DAY stamp is dropped (no "12:00 AM" countdown),
+    // an RR lot carries its published 7:00 PM ET close. Idempotent.
+    if (up?.lots) for (const l of up.lots) normalizeCloseStamp(l);
 
     // ── CLOSE-BOARD OVERLAY — intraday bid refresh for lots closing <24h.
     // Newer-generatedAt only; overrides currentBid/bidCount/bidProj and the

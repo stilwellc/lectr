@@ -11,6 +11,7 @@ import Masthead, { Accent } from '../components/Masthead';
 import Flick from '../components/Flick';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, overEstimatePct } from '../utils';
 import { ARTIST_LABEL } from '../constants';
+import { makerLineOf } from '../lib/lot-labels';
 import type { AuctionLot } from '../types';
 
 /* ============================================================
@@ -354,7 +355,7 @@ export default function ReceiptsPage() {
                     {settledFlags.map(({ l, sig, vsEst }) => (
                       <Link key={l.id} href={`/lot?id=${encodeURIComponent(l.id)}`} className="rcp-cols rcp-row">
                         <span className="rcp-date">{formatDate(l.saleDate)}</span>
-                        <span className="rcp-work"><b>{ARTIST_LABEL[l.artist] || l.artist}</b> {craftTitle(l.title)}</span>
+                        <span className="rcp-work"><b>{makerLineOf(l).name}</b> {craftTitle(l.title, l.auctionHouse)}</span>
                         <span className="rcp-num" style={{ color: 'var(--color-up)' }}>+{Math.abs(Math.round(sig.pct))}%<span className="rcp-kind">vs comps</span></span>
                         <span className="rcp-num" style={{ fontWeight: 600 }}>{formatPrice(l.priceUsd!)}</span>
                         <span className="rcp-num" style={vsEst != null ? { color: vsEst > 0 ? 'var(--color-up)' : vsEst < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 600 } : { color: 'var(--color-text-faint)' }}>

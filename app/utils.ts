@@ -1,4 +1,6 @@
 import { medianOr } from './lib/stats';
+import { isDayStamp, dayOfDayStamp, liveUntilMs } from './lib/house-tz';
+import { leadYearOf } from './lib/lead-year';
 
 // Neutral ivory ramp: houses are distinguished by LIGHTNESS, not hue — hue is
 // reserved for meaning (wine = emphasis, gold = site primary). Each step mixes
@@ -67,7 +69,30 @@ export function cleanText(raw?: string | null): string {
   t = t.replace(/&[a-z#0-9]+;/gi, m => ENTITY[m.toLowerCase()] ?? ' ');
   return t.replace(/\s+/g, ' ').trim();
 }
-export function craftTitle(raw: string): string {
+/**
+ * expandLeadYear — Goldin leads a title with a 2-digit year ("94 Mario Lemieux
+ * Game-Used…", "87 Fleer #57…", "08 Upper Deck…"); bare, it reads like a typo.
+ * Widened to four digits only when the century is certain — by the ONE rule
+ * the card parser keys on (lib/lead-year.ts leadCentury, so a card is shown
+ * under the year it is keyed under): a pre-war catalog code ("11 T206" → 1911,
+ * "16 M101-2" → 1916), a card brand (00–26 → 20xx, 27–99 → 19xx), and on
+ * Goldin only, its year-led convention (27–99 before a capitalised word →
+ * 19xx; a 19th-century format named — "92 John H. Ryder Studio Cabinet" →
+ * 1892). 00–26 before anything else ("26 Babe Ruth Sliding…" is 1926; "14
+ * Fernando Torres…" is 2014) and a lot number ("29 Topps 1981 Cello…") stay
+ * as printed. Only the LEADING token is touched — "Cards (24)", "#57",
+ * "09-11" mid-title never change; ranges keep their tail ("09-11 T206" →
+ * "1909-11 T206").
+ */
+export function expandLeadYear(t: string, house?: string | null): string {
+  const m = t.match(/^(\d{2})(?:-\d{2})? (?=\S)/);
+  if (!m) return t;
+  const ly = leadYearOf(t, { yearLed: house === 'Goldin' });
+  if (!ly) return t;
+  return `${ly.year} ${t.slice(m[0].length)}`;
+}
+
+export function craftTitle(raw: string, house?: string | null): string {
   let t = cleanText(raw);
   t = t.replace(/^[·•]\s*/, '');                  // a leading catalogue bullet  '· Femme nue'
   t = t.replace(/^\[(.+?)\]$/, '$1').trim();          // unwrap a fully-bracketed title  [Apollo 14] → Apollo 14
@@ -84,6 +109,7 @@ export function craftTitle(raw: string): string {
     }
   }
   t = t.replace(/\s*[.,;]+\s*$/, '');
+  t = expandLeadYear(t, house);
   return t ? t.charAt(0).toUpperCase() + t.slice(1) : '';
 }
 
@@ -118,8 +144,8 @@ export function deglue(raw: string): string {
  *   4. past 140 chars, a word-boundary cut at 120 WITH an ellipsis (never mid-word,
  *      never silent) — the full text rides in `rest`.
  *  Short titles pass through untouched. */
-export function splitTitle(raw: string): { short: string; rest: string | null } {
-  const t = deglue(craftTitle(raw));
+export function splitTitle(raw: string, house?: string | null): { short: string; rest: string | null } {
+  const t = deglue(craftTitle(raw, house));
   if (t.length <= 64) return { short: t, rest: null };
   const tidy = (s: string) => s.replace(/^[\s,;:.—–-]+/, '').trim();
   const y = t.slice(0, 60).match(/^(.{6,}?)[\s,]+((?:1[5-9]|20)\d{2}(?:[–-]\d{2,4})?)(?=[\s,.;]+\S)/);
@@ -429,8 +455,10 @@ export function makeAuctionIcs(lot: {
  *  block today". `saleDateTime`, when set, is the genuinely-parsed timestamp
  *  and always wins. Every liveness comparison runs on this, never on the raw
  *  (possibly crawl-day) saleDate. */
-export function trueSaleDay(l: { saleDate?: string | null; saleDateTime?: string | null }): string {
+export function trueSaleDay(l: { saleDate?: string | null; saleDateTime?: string | null; auctionHouse?: string | null }): string {
   const dt = l.saleDateTime;
+  // a Christie's local-midnight DAY stamp marks the sale-local day, not a moment
+  if (dt && isDayStamp(l)) return dayOfDayStamp(dt);
   // A zoned instant (Z / ±hh:mm) is a moment, not a calendar day: read it on
   // the reader's calendar. Slicing the ISO took the UTC date, so every Goldin
   // close (10pm ET = 02:00Z) landed on the NEXT day and "48 hours" showed 1
@@ -446,25 +474,36 @@ export function trueSaleDay(l: { saleDate?: string | null; saleDateTime?: string
 
 /** THE upcoming-visibility predicate — ONE definition of "live" for every
  *  surface (feed, /value, /[artist], nav counts), mirroring build-upcoming's
- *  semantics: a lot is live while its true sale day is still ahead, OR — when
- *  it closed but the house hasn't posted results (`resultsPending`) — through
- *  a short grace window (default 1 day) while results post. The old inline
- *  predicates wrote `saleDate >= today || (resultsPending && saleDate >= today)`
- *  whose second disjunct was subsumed and never admitted anything, so those
- *  surfaces hid results-pending lots a day earlier than the lander's payload
- *  intended. Pass the reader's localToday() client-side. */
+ *  semantics.
+ *
+ *  Un-resulted lots (Oct 9): live until the sale is over WHERE IT IS HELD
+ *  (app/lib/house-tz liveUntilMs) — a timed close plus the extended-bidding /
+ *  live-session slack, or, for a date-only sale, the end of the sale day in
+ *  the house's zone. The reader's calendar used to decide: a Phillips online
+ *  sale that closed at 10 AM ET stayed "live" all evening, and a Hong Kong
+ *  reader lost a New York sale on its own afternoon.
+ *
+ *  Results-pending lots (it closed; the house hasn't posted) keep the short
+ *  grace window (default 1 day) on the reader's calendar, as before, and wear
+ *  the existing results-pending state. Pass the reader's localToday()
+ *  client-side; `nowMs` defaults to the reader's clock. */
 export function isLiveUpcoming(
-  l: { status: string; saleDate?: string | null; saleDateTime?: string | null; resultsPending?: boolean },
+  l: { status: string; saleDate?: string | null; saleDateTime?: string | null; resultsPending?: boolean; auctionHouse?: string | null; saleName?: string | null; currency?: string | null; id?: string | null; closeKind?: 'online' | 'session' | null },
   todayIso: string = localToday(),
   graceDays = 1,
+  nowMs: number = Date.now(),
 ): boolean {
   if (l.status !== 'upcoming') return false;
   const day = trueSaleDay(l);
   if (!day) return false;
-  if (day >= todayIso) return true;
-  if (!l.resultsPending) return false;
-  const graceCut = new Date(Date.parse(`${todayIso}T00:00:00Z`) - graceDays * 864e5).toISOString().slice(0, 10);
-  return day >= graceCut;
+  if (l.resultsPending) {
+    if (day >= todayIso) return true;
+    const graceCut = new Date(Date.parse(`${todayIso}T00:00:00Z`) - graceDays * 864e5).toISOString().slice(0, 10);
+    return day >= graceCut;
+  }
+  const until = liveUntilMs(l);
+  if (until != null) return nowMs <= until;
+  return day >= todayIso;
 }
 
 export function getUpcomingCounts(lots: Array<{ status: string; saleDate: string | null; saleDateTime?: string | null; artist: string; resultsPending?: boolean }>): Record<string, number> {

@@ -164,3 +164,48 @@ test('reasonOf (Oct 9): date-only sales name the day, not an hour', () => {
   assert.equal(reasonOf({ artist: 'jean-prouve', saleDate: iso(0), estimateLow: 30000, estimateHigh: 30000 }, NOW), 'Sells today');
   assert.equal(reasonOf({ artist: 'jean-prouve', saleDate: iso(3), estimateLow: 30000, estimateHigh: 30000 }, NOW), 'Sells in 3 days');
 });
+
+test('priority (Oct 9 anchors): a bid room projects the live bid to its close', () => {
+  // Goldin Weekly, $810 bid, ~6 days out: measured hammer ÷ bid at $100–1K, 3–7d = 4.17
+  const wk = { artist: 'sports-cards', auctionHouse: 'Goldin', saleName: 'Goldin Weekly Auction', currentBid: 810, bidCount: 13, saleDateTime: inHours(150) };
+  const p = prioStatic(wk, NOW)!;
+  assert.equal(p.src, 'proj');
+  assert.equal(p.a, Math.round(810 * 4.17));
+  // the same bid on close night carries far less growth
+  assert.equal(prioStatic({ ...wk, saleDateTime: inHours(6) }, NOW)!.a, Math.round(810 * 2.05));
+  // bigger bids grow less: a $250K Elite bid on close night ≈ 1.3×
+  assert.equal(prioStatic({ ...wk, saleName: 'Goldin Elite Auction', currentBid: 250_000, saleDateTime: inHours(6) }, NOW)!.a, Math.round(250_000 * 1.3));
+  // Pokémon in the Weekly is its own room
+  assert.equal(prioStatic({ ...wk, artist: 'pokemon', subCat: 'pokemon-cards' }, NOW)!.a, Math.round(810 * 3.34));
+  // a closed lot / unknown house: no projection (the old order holds)
+  assert.equal(prioStatic({ ...wk, saleDateTime: inHours(-1) }, NOW)!.src, 'bid');
+  assert.equal(prioStatic({ ...wk, auctionHouse: 'Somewhere' }, NOW)!.src, 'bid');
+  assert.equal(reasonOf(wk, NOW), 'Closes in 6 days · $3K projected close');
+});
+
+test('priority (Oct 9 anchors): the engine narrows a projection only when it earned it', () => {
+  const wk = { artist: 'sports-cards', auctionHouse: 'Goldin', saleName: 'Goldin Weekly Auction', currentBid: 810, bidCount: 13, saleDateTime: inHours(150) };
+  const proj = 810 * 4.17;
+  // a low-confidence engine value inside the week is ignored (cards: 225% median error vs 41%)
+  assert.equal(prioStatic({ ...wk, value: { expectedHammerUsd: 7523, confidence: 'low' } }, NOW)!.a, Math.round(proj));
+  // a high-confidence one blends (geometric mean)
+  const hi = prioStatic({ ...wk, value: { expectedHammerUsd: 7523, confidence: 'high' } }, NOW)!;
+  assert.equal(hi.src, 'proj');
+  assert.equal(hi.a, Math.round(Math.sqrt(proj * 7523)));
+  // …unless the engine abstained
+  assert.equal(prioStatic({ ...wk, value: { expectedHammerUsd: 7523, confidence: 'high', abstain: 'pool<3' } }, NOW)!.a, Math.round(proj));
+  // a week+ out the bid says little: any engine read blends
+  const far = { ...wk, saleDateTime: inHours(200), value: { expectedHammerUsd: 9000, confidence: 'low' } };
+  assert.equal(prioStatic(far, NOW)!.a, Math.round(Math.sqrt(810 * 10.5 * 9000)));
+});
+
+test('priority (Oct 9 anchors): RR keeps its estimate, Hake\'s bids lead', () => {
+  const rr = { artist: 'entertainment-memorabilia', subCat: 'documents', drill: 'political', auctionHouse: 'RR Auction',
+    estimateLow: 8000, estimateHigh: 12000, currentBid: 4505, bidCount: 16, currency: 'USD', saleDateTime: inHours(120) };
+  assert.deepEqual([prioStatic(rr, NOW)!.src, prioStatic(rr, NOW)!.a], ['est', 10000]);
+  // the bid-past-estimate rule still holds in an estimate room
+  assert.equal(prioStatic({ ...rr, currentBid: 12_500 }, NOW)!.over, true);
+  // Hake's estimates ran +42% high on the same lots: the projected bid leads
+  const hk = { ...rr, auctionHouse: "Hake's", currentBid: 400 };
+  assert.deepEqual([prioStatic(hk, NOW)!.src, prioStatic(hk, NOW)!.a], ['proj', Math.round(400 * 1.69)]);
+});
