@@ -170,6 +170,30 @@ export function needleOf(q: string): string[] {
   return out;
 }
 
+/** A grade search is EXACT ("psa 7" = PSA 7 only); its "and up" form is
+ *  "psa 7+". For a query naming one grader grade, the words with that grade
+ *  widened (`plus`) and the label to offer ("PSA 7+"); else null. */
+const GRADER = /^(psa|bgs|sgc|cgc|beckett|hga|csg|tag|gma|ksa|isa|psa\/dna) (\d{1,2}(?:\.\d)?)$/;
+export function gradePlusOf(words: readonly string[]): { plus: string[]; label: string; q: (q: string) => string } | null {
+  const i = words.findIndex(w => GRADER.test(w));
+  if (i < 0) return null;
+  const m = GRADER.exec(words[i])!;
+  if (parseFloat(m[2]) >= 10) return null; // nothing above a 10 to widen to
+  const plus = words.slice();
+  plus[i] = `${words[i]}+`;
+  return { plus, label: `${m[1].toUpperCase()} ${m[2]}+`, q: (q: string) => widenGrade(q, words[i]) };
+}
+/** the reader's own text with that one grade widened ("Mantle PSA 7" →
+ *  "Mantle PSA 7+"), their spelling and case kept */
+function widenGrade(q: string, word: string): string {
+  let done = false;
+  return q.replace(/([a-z/]+)(\s+)(\d{1,2}(?:\.\d)?)(?![\d.+])/gi, (m, a: string, sp: string, n: string) => {
+    if (done || `${fold(a)} ${n}` !== word) return m;
+    done = true;
+    return `${a}${sp}${n}+`;
+  });
+}
+
 const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const atLeast = new Map<string, { re: RegExp; min: number } | null>();
 /** `w` in `h`, where a number never matches inside a longer number

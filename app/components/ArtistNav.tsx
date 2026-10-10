@@ -157,13 +157,17 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
     router.push(path);
   }
 
+  // Makers opens where the reader left it: bare /makers is the all-market
+  // roster (its links get shared), so the nav carries the market in the path.
+  const makersPath = market === 'all' ? '/makers' : `/makers/m/${market}`;
+
   // The primary sections — the same rooms the desktop top bar links to. On
   // mobile they lead the full-screen menu so it is a real nav, not just a
   // maker finder.
   const sections = [
     { label: 'Overview', path: homePath, active: activeSlug === null, icon: NAV_ICONS.overview },
     { label: 'Value', path: '/value', active: activeSlug === 'value', icon: NAV_ICONS.value },
-    { label: 'Makers', path: '/makers', active: activeSlug === 'artists', icon: NAV_ICONS.makers },
+    { label: 'Makers', path: makersPath, active: activeSlug === 'artists', icon: NAV_ICONS.makers },
     { label: 'Analytics', path: '/analytics', active: activeSlug === 'analytics', icon: NAV_ICONS.analytics },
     { label: 'Blog', path: '/blog', active: activeSlug === 'blog', icon: NAV_ICONS.blog },
     // ONE identity entry, LAST — same order as the desktop bar: signed in (or
@@ -564,7 +568,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         <nav className="ray-nav-links" aria-label="Sections">
           <button className="ray-nav-link" data-active={activeSlug === null} onClick={() => navigate(homePath)}>{NAV_ICONS.overview}Overview</button>
           <button className="ray-nav-link ray-nav-link-value" data-active={activeSlug === 'value'} onClick={() => navigate('/value')}>{NAV_ICONS.value}Value</button>
-          <button className="ray-nav-link" data-active={activeSlug === 'artists'} onClick={() => navigate('/makers')}>{NAV_ICONS.makers}Makers</button>
+          <button className="ray-nav-link" data-active={activeSlug === 'artists'} onClick={() => navigate(makersPath)}>{NAV_ICONS.makers}Makers</button>
           <button className="ray-nav-link" data-active={activeSlug === 'analytics'} onClick={() => navigate('/analytics')}>{NAV_ICONS.analytics}Analytics</button>
           <button className="ray-nav-link" data-active={activeSlug === 'blog'} onClick={() => navigate('/blog')}>{NAV_ICONS.blog}Blog</button>
           {(!authEnabled || user) ? (

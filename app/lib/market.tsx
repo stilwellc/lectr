@@ -9,8 +9,9 @@ import { Market, MARKETS } from '../constants';
  * (/, /art, /design, /watches, /science, /sports); the lander at that path
  * IS that market. The analysis surfaces (/analytics, /value, /makers) carry
  * the market as a path segment too — /analytics/watches, /value/art,
- * /makers/m/design — while their bare routes fall back to the last choice,
- * persisted so Ray opens where you left it. On everything else (a maker
+ * /makers/m/design — while the bare /analytics and /value fall back to the
+ * last choice, persisted so Ray opens where you left it (bare /makers is the
+ * all-market roster: its links get shared). On everything else (a maker
  * page, a lot) the stored choice governs. The watchlist deliberately
  * ignores it: your lots are your lots.
  */
@@ -103,8 +104,12 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
   const segPage = SEGMENT_PAGES.find(
     p => normPath === p.bare || (segMarket !== undefined && normPath.startsWith(p.base + '/'))
   );
-  // defined wherever the URL governs the market: a lander or a market segment
-  const urlMarket = onLander ? PATH_MARKET[normPath] : segMarket;
+  // defined wherever the URL governs the market: a lander or a market segment.
+  // Bare /makers is the all-market roster IN THE URL (a market switch to
+  // 'all' writes exactly that path), so a shared /makers?q=Prouve renders
+  // what was shared, never the visitor's last market (QA D1, Oct 10). The
+  // nav carries the stored market to /makers/m/<m> instead (ArtistNav).
+  const urlMarket = onLander ? PATH_MARKET[normPath] : segMarket ?? (normPath === '/makers' ? 'all' : undefined);
 
   const [stored, setStored] = useState<Market>('all');
 
@@ -140,11 +145,11 @@ export function MarketProvider({ children }: { children: React.ReactNode }) {
     // /collectibles is the all-market lander under its own name — keep its
     // metadata title rather than the generic home title
     if (onLander) document.title = typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/collectibles' ? 'Collectibles — lectr' : MARKET_TITLE[urlMarket!];
-    else if (segPage && urlMarket) {
-      const label = MARKETS.find(mk => mk.key === urlMarket)!.label;
+    else if (segPage && segMarket) {
+      const label = MARKETS.find(mk => mk.key === segMarket)!.label;
       document.title = `${label} ${segPage.noun} — lectr`;
     }
-  }, [onLander, urlMarket, segPage]);
+  }, [onLander, urlMarket, segMarket, segPage]);
 
   // SCROLL LEDGER (audit-navbugs defect 2): the lander's market switch moves
   // the URL under the mounted board via raw pushState, and the browser's own

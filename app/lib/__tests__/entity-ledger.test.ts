@@ -6,7 +6,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildRow, tagOf, searchRow, sortRows, compareRows, needleOf, lotMatches, nameMatches, fold, fmtPct, lastQuarterOf, type Row } from '../entity/ledger';
+import { buildRow, tagOf, searchRow, sortRows, compareRows, needleOf, lotMatches, nameMatches, gradePlusOf, fold, fmtPct, lastQuarterOf, type Row } from '../entity/ledger';
 import { mattersOf } from '../entity/live';
 import { decodeView, viewSearch, VIEW_DEFAULTS, DEFAULT_COLS } from '../entity/view-state';
 import type { EntitySummary } from '../entity/model';
@@ -154,4 +154,18 @@ test('view-state P2: body, lots scope and lot order round-trip; legacy sorts/col
   assert.equal(decodeView(new URLSearchParams('sort=delta')).sort, 'movers');
   assert.deepEqual(decodeView(new URLSearchParams('cols=velocity.curve.median')).cols, ['median', 'sold12', 'curve']);
   assert.equal(decodeView(new URLSearchParams('vw=bogus')).vw, 'names');
+});
+
+test('grade search: an exact grade offers its "and up" form, in the reader\'s own words', () => {
+  const g = gradePlusOf(needleOf('Mantle PSA 7'))!;
+  assert.deepEqual(g.plus, ['mantle', 'psa 7+']);
+  assert.equal(g.label, 'PSA 7+');
+  assert.equal(g.q('Mantle PSA 7'), 'Mantle PSA 7+');
+  assert.equal(g.q('apollo 11 Mantle psa  7'), 'apollo 11 Mantle psa  7+');
+  // already widened, a 10, a mission number, a year: nothing to offer
+  assert.equal(gradePlusOf(needleOf('Mantle PSA 7+')), null);
+  assert.equal(gradePlusOf(needleOf('Charizard PSA 10')), null);
+  assert.equal(gradePlusOf(needleOf('Apollo 11')), null);
+  assert.equal(gradePlusOf(needleOf('1952 Topps')), null);
+  assert.equal(gradePlusOf(needleOf('BGS 9.5'))!.label, 'BGS 9.5+');
 });

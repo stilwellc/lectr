@@ -11,14 +11,52 @@ import { useRayData } from '../hooks/useRayData';
 import { craftTitle, formatPrice, formatDate, refLabel } from '../utils';
 import { loadRefList, matchRefs, refHref, searchSold, type RefRow, type SoldHit } from '../lib/search-index';
 import ArtistAvatar from './ArtistAvatar';
-import { makerHref } from '../lib/entity/retired';
+import { makerHref, retiredTarget } from '../lib/entity/retired';
+import { loadEntities } from '../hooks/useEntities';
+import { entityIdOf } from '../lib/entity/live';
+import { pageHrefOf } from '../lib/entity/kinds';
+import { isOnBlock, localToday } from '../utils';
 
 interface Item {
   label: string;
   hint: string;
   path: string;
-  kind: 'section' | 'market' | 'maker' | 'sub' | 'lot' | 'ref' | 'sold';
+  kind: 'section' | 'market' | 'maker' | 'entity' | 'sub' | 'lot' | 'ref' | 'sold';
+  /** name rank inside the merged maker + entity results (sold, all time) */
+  weight?: number;
 }
+
+/** the roster makers — every ARTISTS slug that is a real maker page (the
+ *  retired pseudo-makers live on as /sub slices and feeds, never as names) */
+const MAKERS = ARTISTS.filter(a => !retiredTarget(a.slug));
+
+/** case- and accent-blind text ("Prouve" finds Prouvé) */
+export function fold(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+/** a name's match tier for a folded query (lower is better; null = no hit):
+ *  0 exact · 1 the name (or one of its words) starts with each word ·
+ *  2 every word inside the name · 3 only the hint carries the words */
+export function nameTier(label: string, hint: string, needle: string): number | null {
+  const l = fold(label);
+  if (l === needle) return 0;
+  const words = needle.split(/\s+/).filter(Boolean);
+  if (!words.length) return null;
+  const lw = l.split(/[^a-z0-9]+/).filter(Boolean);
+  if (words.every(w => lw.some(x => x.startsWith(w)))) return 1;
+  if (words.every(w => l.includes(w))) return 2;
+  const h = `${l} ${fold(hint)}`;
+  return words.every(w => h.includes(w)) ? 3 : null;
+}
+
+/** the entity kinds the palette names (makers come from ARTISTS; clean
+ *  sub-categories from the drills) */
+const SUBKIND_NOUN: Record<string, string> = {
+  player: 'player', pokemon: 'Pokémon', film: 'film', mission: 'mission', person: 'person',
+  team: 'team', brand: 'brand', franchise: 'franchise', band: 'band', set: 'set',
+};
+interface EntityHit { id: string; label: string; fl: string; hint: string; path: string; sold: number }
 
 /** Any surface can open the palette by dispatching this window event —
  *  the nav's Find-a-maker pill and the Terminal's search affordance use it. */
@@ -58,6 +96,45 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
   const [refs, setRefs] = useState<RefRow[]>([]);
   const [sold, setSold] = useState<SoldHit[]>([]);
   useEffect(() => { if (open && !refs.length) loadRefList().then(setRefs).catch(() => {}); }, [open, refs.length]);
+  // THE NAMES (Oct 10): players, Pokémon, films, missions, sets — the entity
+  // summaries (pages/entities-all.json, module-cached by useEntities). Loaded
+  // when the palette first opens; a build without the file just has none.
+  const [ents, setEnts] = useState<EntityHit[] | null>(null);
+  useEffect(() => {
+    if (!open || ents) return;
+    let on = true;
+    loadEntities('all').then(f => {
+      if (!on) return;
+      const out: EntityHit[] = [];
+      for (const e of f?.entities || []) {
+        if (e.kind !== 'player' && e.kind !== 'subject' && e.kind !== 'set') continue;
+        const noun = SUBKIND_NOUN[e.subKind || e.kind] || e.kind;
+        const mk = MARKETS.find(m => m.key === e.market)?.short;
+        out.push({
+          id: e.id, label: e.label, fl: fold(e.label),
+          // a player's sport; everyone else their market (a Pokémon's
+          // "discipline" is its median's era, not the name's)
+          hint: [noun, e.kind === 'player' && e.discipline ? e.discipline : mk].filter(Boolean).join(' · '),
+          path: e.page || pageHrefOf(e.id),
+          sold: e.sold || 0,
+        });
+      }
+      setEnts(out);
+    }).catch(() => { if (on) setEnts([]); });
+    return () => { on = false; };
+  }, [open, ents]);
+  // live lots per entity (the build's ek stamp), counted only while open
+  const liveByEntity = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!open || !ents?.length) return m;
+    const today = localToday();
+    for (const l of allLots) {
+      if (!isOnBlock(l, today)) continue;
+      const id = entityIdOf(l);
+      if (id) m.set(id, (m.get(id) || 0) + 1);
+    }
+    return m;
+  }, [open, ents, allLots]);
   useEffect(() => {
     const needle = q.trim();
     if (!open || needle.length < 3) { setSold([]); return; }
@@ -93,7 +170,7 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
         path: MARKET_PATH[m.key],
         kind: 'market' as const,
       })),
-      ...ARTISTS.map(a => ({
+      ...MAKERS.map(a => ({
         label: a.label,
         hint: upcomingCounts[a.slug]
           ? `${a.market} · ${upcomingCounts[a.slug]} live ${upcomingCounts[a.slug] === 1 ? 'lot' : 'lots'}`
@@ -121,11 +198,10 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
     const sections = items.filter(i => i.kind === 'section');
     const grouped: Item[] = [];
     for (const m of MARKETS.filter(m => m.live && m.key !== 'all')) {
-      const makers = ARTISTS
+      const makers = MAKERS
         .filter(a => a.market === m.key)
         .map(a => items.find(i => i.kind === 'maker' && i.path === makerHref(a.slug)))
         .filter(Boolean) as Item[];
-      if (!makers.length) continue;
       const marketItem = items.find(i => i.kind === 'market' && i.path === MARKET_PATH[m.key]);
       if (marketItem) grouped.push(marketItem);
       grouped.push(...makers);
@@ -139,15 +215,42 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
   // there is no DB search tier to maintain.
 
   const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase();
+    const needle = fold(q.trim());
     if (!needle) return browseItems;
     // Tokenized AND-match, not contiguous substring: collectors type
     // "rolex daytona" / "nakashima table" — words that never sit adjacent in
     // a label or title — and a substring match dead-ends them at "Nothing
     // matches" while each word alone works.
     const words = needle.split(/\s+/);
-    const hits = (hay: string) => { const h = hay.toLowerCase(); return words.every(w => h.includes(w)); };
-    const itemMatches = items.filter(i => hits(`${i.label} ${i.hint}`));
+    const hits = (hay: string) => { const h = fold(hay); return words.every(w => h.includes(w)); };
+    // NAMES — the roster makers and the entities (players, Pokémon, films,
+    // missions, sets) in one ranking: how well the name matches first, then
+    // how much of it has sold (a curated maker outranks any entity at a tie)
+    const named: { it: Item; t: number }[] = [];
+    for (const i of items) {
+      if (i.kind !== 'maker') continue;
+      const t = nameTier(i.label, i.hint, needle);
+      if (t != null) named.push({ it: { ...i, weight: Infinity }, t });
+    }
+    for (const e of ents || []) {
+      if (!words.every(w => e.fl.includes(w) || e.hint.toLowerCase().includes(w))) continue;
+      const t = nameTier(e.label, e.hint, needle);
+      if (t == null) continue;
+      const live = liveByEntity.get(e.id) || 0;
+      named.push({
+        it: {
+          label: e.label,
+          hint: [e.hint, live ? `${live} live` : e.sold ? `${e.sold.toLocaleString()} sold` : null].filter(Boolean).join(' · '),
+          path: e.path, kind: 'entity', weight: e.sold + live,
+        },
+        t,
+      });
+    }
+    named.sort((a, b) => a.t - b.t || (b.it.weight! - a.it.weight!));
+    const nameMatches = named.slice(0, 8).map(x => x.it);
+    const itemMatches = items.filter(i => i.kind !== 'maker' && hits(`${i.label} ${i.hint}`));
+    const rooms = itemMatches.filter(i => i.kind === 'section' || i.kind === 'market');
+    const subs = itemMatches.filter(i => i.kind === 'sub');
     // Search the live lots too — a collector arrives with a work in mind.
     const lotMatches: Item[] = upcomingLots
       // the label vocabulary is searchable too ("psa 10", "rookie", "apollo",
@@ -181,8 +284,8 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
       path: `/lot?id=${encodeURIComponent(h.id)}`,
       kind: 'sold' as const,
     }));
-    return [...itemMatches, ...refMatches, ...lotMatches, ...soldMatches];
-  }, [items, browseItems, q, upcomingLots, refs, sold]);
+    return [...rooms, ...nameMatches, ...subs, ...refMatches, ...lotMatches, ...soldMatches];
+  }, [items, browseItems, q, upcomingLots, refs, sold, ents, liveByEntity]);
   // While searching, only the first 12 are rendered — keyboard nav + Enter
   // must index into the SAME list, or the highlight vanishes and Enter fires
   // an unseen item. The empty-query browse renders the whole grouped roster
@@ -252,7 +355,7 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
           className="ray-ck-input"
           value={q}
           onChange={e => setQ(e.target.value)}
-          placeholder="Search a maker, a reference, a live lot, or the sold archive…"
+          placeholder="Search a maker, a player, a reference, a live lot, or the sold archive…"
           aria-label="Search"
           role="combobox"
           aria-expanded="true"
@@ -286,7 +389,7 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
                   style={isHeader ? { marginTop: 6 } : undefined}
                 >
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
-                    {item.kind === 'maker' && <ArtistAvatar label={item.label} size={20} />}
+                    {(item.kind === 'maker' || item.kind === 'entity') && <ArtistAvatar label={item.label} size={20} />}
                     {item.label}
                   </span>
                   <span className="ray-ck-hint">{item.hint}</span>
