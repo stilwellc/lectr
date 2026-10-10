@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, type CSSProperties } from 'react';
-import { ResponsiveContainer, AreaChart, Area, YAxis, Tooltip, ReferenceLine } from 'recharts';
+import dynamic from 'next/dynamic';
 import { AuctionLot, MarketStats } from '../types';
 import { formatPrice } from '../utils';
 import { demandSeries, formatDemand } from '../lib/demand';
@@ -15,8 +15,15 @@ import MethodologyNote from './MethodologyNote';
 import ArtistAvatar from './ArtistAvatar';
 import DeskNote from './analytics/DeskNote';
 import type { Market } from '../constants';
+import { completeQuarters, headlineRead, type QuarterPoint } from '../lib/maker-hero';
+
+// recharts rides its own chunk (Oct 10): the hero's well (.ray-hero2-chart,
+// fixed height) is laid out before the module lands, so nothing shifts.
+const ArtistHeroChart = dynamic(() => import('./ArtistHeroChart'), { ssr: false, loading: () => null });
 
 type Range = '1Y' | '5Y' | 'MAX';
+
+const fmtN = (n: number) => Math.round(n).toLocaleString('en-US');
 
 /* the terminal numeral register for the maker hero — Inter for the level
    numeral (the homepage rule: Inter on levels, mono only on %-deltas) */
@@ -69,7 +76,7 @@ export default function ArtistHero({
   serial?: string;
 }) {
   const [range, setRange] = useState<Range>('MAX');
-  const [hover, setHover] = useState<{ date: string; value: number } | null>(null);
+  const [hover, setHover] = useState<QuarterPoint | null>(null);
   const drawRef = useChartDraw();
   const [lens, setLens] = useState<'all' | 'original' | 'print'>('all');
 
@@ -89,17 +96,19 @@ export default function ArtistHero({
 
   // The headline series: Demand Index (vs estimate) for estimate markets;
   // quarterly MEDIAN REALIZED for bid markets (no estimates exist to divide by).
-  const series = useMemo<{ date: string; value: number }[]>(() => {
-    if (!bidMarket) return demandSeries(lensLots);
+  // COMPLETE quarters only (app/lib/maker-hero): the quarter in progress is
+  // never drawn or read — "$397 heating" was nine days of Q4.
+  const series = useMemo<QuarterPoint[]>(() => {
+    if (!bidMarket) return completeQuarters(demandSeries(lensLots));
     // Bid markets (cards, sports objects, culture): prefer the authoritative
     // full-corpus quarterly median from stats.json. The loaded `lensLots` is a
     // slim sample for these corpus-only/archive verticals, so computing the
     // series from it is sparse/empty — the artist-page chart went blank. Only
     // the whole-slug view (no category lens) maps to the stat.
     if (stats?.priceHistory?.length && (lens === 'all' || !showLens)) {
-      return stats.priceHistory
+      return completeQuarters(stats.priceHistory
         .filter(p => p.medianPrice > 0)
-        .map(p => ({ date: p.date.replace('-', ' '), value: p.medianPrice }));
+        .map(p => ({ date: p.date.replace('-', ' '), value: p.medianPrice, n: p.totalSales || 0 })));
     }
     const byQ = new Map<string, { end: number; prices: number[] }>();
     for (const l of lensLots) {
@@ -112,14 +121,14 @@ export default function ArtistHero({
       cur.prices.push(l.priceUsd);
       byQ.set(key, cur);
     }
-    return Array.from(byQ.entries())
+    return completeQuarters(Array.from(byQ.entries())
       .filter(([, v]) => v.prices.length >= 5)
       .sort((a, b) => a[1].end - b[1].end)
       .map(([date, v]) => {
         const s = v.prices.sort((a, b) => a - b);
         const m = Math.floor(s.length / 2);
-        return { date, value: s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2 };
-      });
+        return { date, value: s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2, n: s.length };
+      }));
   }, [lensLots, bidMarket, stats, lens, showLens]);
 
   // STALE GATE: a series whose newest quarter is >13 months old must never
@@ -139,30 +148,38 @@ export default function ArtistHero({
     return series;
   }, [series, range]);
 
-  const now = series.length ? series[series.length - 1].value : 0;
-  const yearAgo = series.length >= 5 ? series[series.length - 5].value : null;
-  const delta = yearAgo === null ? null : now - yearAgo;
+  // the headline: the latest complete quarter, n-gated; "a year ago" is the
+  // same quarter one calendar year back; a direction word only when both
+  // sides are deep and the move clears the noise floor (app/lib/maker-hero)
+  const read = useMemo(() => (fresh ? headlineRead(series, bidMarket ? 'price' : 'demand') : null), [series, fresh, bidMarket]);
   // Color says direction, never level: the chart line and ambient tone follow
   // the visible period's trend; the level numeral stays foreground-white.
   const dir = visible.length >= 2 ? visible[visible.length - 1].value - visible[0].value : 0;
   const lineColor = dir >= 0 ? 'var(--color-up)' : 'var(--color-down)';
 
-  // Price context: median sale of the trailing 12 months (per lens).
-  const typicalSale = useMemo(() => {
-    // authoritative trailing-12mo median from stats.json for the whole slug
-    // (loaded sample is sparse for cards/culture); else compute from the lens.
-    if (bidMarket && stats?.medianPriceLast12Months && (lens === 'all' || !showLens)) {
-      return stats.medianPriceLast12Months;
-    }
+  // Price context: median sale of the trailing 12 months (per lens), with
+  // the n behind it. stats.json's figure is the whole slug over a TRUE
+  // 365-day window (sold12mWindow) — the loaded sample is sparse for
+  // cards/culture, and empty on a shard that carries no sold rows (Pokémon).
+  const s12 = stats as (MarketStats & { sold12m?: number; sold12mWindow?: { from: string; to: string; days: number } }) | null;
+  const statsTrueWindow = !!s12 && typeof s12.sold12m === 'number' && s12.sold12mWindow?.days === 365;
+  const typical = useMemo<{ value: number; n: number } | null>(() => {
+    const wholeSlug = lens === 'all' || !showLens;
+    const fromStats = wholeSlug && s12?.medianPriceLast12Months && statsTrueWindow && s12.sold12m! >= 3
+      ? { value: s12.medianPriceLast12Months, n: s12.sold12m! }
+      : null;
+    // whole-slug view: stats.json, so the median and the "Sales, past 12 mo"
+    // cell below print the SAME n from the same build; a lens computes its own
+    if (fromStats) return fromStats;
     const cutoff = Date.now() - 365 * 86_400_000;
     const prices = lensLots
       .filter(l => l.status === 'sold' && l.priceUsd && new Date(l.saleDate).getTime() >= cutoff)
       .map(l => l.priceUsd!)
       .sort((a, b) => a - b);
-    if (prices.length < 3) return null;
+    if (prices.length < 3) return fromStats;
     const m = Math.floor(prices.length / 2);
-    return prices.length % 2 === 0 ? (prices[m - 1] + prices[m]) / 2 : prices[m];
-  }, [lensLots, bidMarket, stats, lens, showLens]);
+    return { value: prices.length % 2 === 0 ? (prices[m - 1] + prices[m]) / 2 : prices[m], n: prices.length };
+  }, [lensLots, s12, lens, showLens, statsTrueWindow]);
 
   const facts = useMemo(() => {
     const concluded = lots.filter(l => l.status === 'sold' || l.status === 'bought_in');
@@ -184,26 +201,30 @@ export default function ArtistHero({
     // (sold12mWindow.days === 365). The old read — priceHistory.slice(-4),
     // the last four NON-EMPTY quarters — spans years on a thin maker, so
     // it may only ever print as "last N sales · since <year>", never "12 mo".
-    const s12 = stats as (MarketStats & { sold12m?: number; sold12mWindow?: { from: string; to: string; days: number } }) | null;
-    const trueWindow = !!s12 && typeof s12.sold12m === 'number' && s12.sold12mWindow?.days === 365;
+    const trueWindow = statsTrueWindow;
     const tail = stats?.priceHistory?.slice(-4) || [];
     const tailCount = tail.reduce((s, p) => s + (p.totalSales || 0), 0);
     const tailSince = tail.length ? String(tail[0].date).slice(0, 4) : null;
-    const sold12mo = bidMarket
-      ? (trueWindow ? s12!.sold12m! : tailCount)
-      : lots.filter(l =>
-          l.status === 'sold' && l.priceUsd && new Date(l.saleDate).getTime() >= cutoff
-        ).length;
+    // one source for the year's count: stats.json's true 365-day window
+    // whenever it exists (the same n the typical sale prints with)
+    const sold12mo = trueWindow
+      ? s12!.sold12m!
+      : bidMarket
+        ? tailCount
+        : lots.filter(l =>
+            l.status === 'sold' && l.priceUsd && new Date(l.saleDate).getTime() >= cutoff
+          ).length;
     return { sellThrough, houses, total, sold12mo, sold12mTrue: !bidMarket || trueWindow, tailSince };
-  }, [lots, stats, bidMarket]);
+  }, [lots, stats, bidMarket, statsTrueWindow, s12]);
 
   // The live-lot count comes from the page (date-filtered, the same list the
   // Upcoming section renders) — never a stale status count. The internal
   // fallback survives only for callers that pass no count.
   const liveCount = upcomingCount ?? lots.filter(l => l.status === 'upcoming').length;
 
-  const recordYear = stats?.recordDate ? new Date(stats.recordDate).getUTCFullYear() : null;
   const lensWord = lens === 'original' ? 'unique work' : lens === 'print' ? 'edition' : 'sale';
+  /** the lens as a prefix on "hammer" — empty on the whole-book view */
+  const lensNoun = lens === 'original' ? 'unique-work ' : lens === 'print' ? 'edition ' : '';
 
   // M8 — the record sale as a framed plate in the hero's right quadrant.
   // The photograph hangs only when the loaded lots actually carry the record
@@ -290,42 +311,52 @@ export default function ArtistHero({
               mono 500 tabular (scoped here: .ray-hero2-value is shared with
               /profile and the board, which keep their own faces). The NAME is
               the page's h1 now; the numeral is display, not heading. */}
-          {hover ? (
-            <div className="ray-hero2-value" style={heroNumStyle}>{bidMarket ? formatPrice(hover.value) : formatDemand(hover.value)}</div>
-          ) : (
+          {/* the numeral NEVER prints unlabeled (Oct 10): the caption under it
+              names the quantity, its window and the n behind it. The record is
+              never the numeral — it lives once, on the record plate. */}
+          {(hover || read || typical) && (
             <div className="ray-hero2-value" style={heroNumStyle}>
-              {/* Distinct keys per QUANTITY: the three branches sit at the same
-                  tree position, so without keys React reuses one CountUp
-                  instance across a branch switch — and CountUp eases from the
-                  value on screen. When phase-2 flips the hero from the record
-                  price to the demand %, that eased $31M → +28% as a fabricated
-                  "+31,186,000%" sweep. A key change remounts, so a quantity
-                  switch sweeps honestly from 0 (reduced motion still paints
-                  the final figure directly). */}
-              {series.length && fresh
-                ? <CountUp key={bidMarket ? 'hero-median' : 'hero-demand'} animate={anim} to={now} format={bidMarket ? formatPrice : formatDemand} duration={1000} />
-                : typicalSale !== null
-                  ? <CountUp key="hero-typical" animate={anim} to={typicalSale} format={formatPrice} duration={1000} />
-                  : stats?.recordPrice
-                    ? <CountUp key="hero-record" animate={anim} to={stats.recordPrice} format={formatPrice} duration={1000} />
-                    : '—'}
+              {/* Distinct keys per QUANTITY: the branches sit at the same tree
+                  position, so without keys React reuses one CountUp instance
+                  across a branch switch — and CountUp eases from the value on
+                  screen ($31M → +28% read as a fabricated "+31,186,000%"
+                  sweep). A key change remounts, so a quantity switch sweeps
+                  honestly from 0 (reduced motion paints the final figure). */}
+              {hover
+                ? (bidMarket ? formatPrice(hover.value) : formatDemand(hover.value))
+                : read
+                  ? <CountUp key={bidMarket ? 'hero-median' : 'hero-demand'} animate={anim} to={read.head.value} format={bidMarket ? formatPrice : formatDemand} duration={1000} />
+                  : <CountUp key="hero-typical" animate={anim} to={typical!.value} format={formatPrice} duration={1000} />}
             </div>
           )}
+          {(hover || read || typical) && (
+            <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+              {hover
+                ? bidMarket
+                  ? `Median sale price, ${hover.date} · ${fmtN(hover.n)} ${hover.n === 1 ? 'sale' : 'sales'}`
+                  : `Median ${lensNoun}hammer vs its estimate, 12 months to the end of ${hover.date} · ${fmtN(hover.n)} sales`
+                : read
+                  ? bidMarket
+                    ? `Median sale price, ${read.head.date} (last complete quarter) · ${fmtN(read.head.n)} sales`
+                    : `Median ${lensNoun}hammer vs its estimate, 12 months to the end of ${read.head.date} · ${fmtN(read.head.n)} sales`
+                  : `Median ${lensWord} price, past 12 months · ${fmtN(typical!.n)} ${typical!.n === 1 ? 'sale' : 'sales'}`}
+            </p>
+          )}
           <p className="ray-hero2-delta">
-        {fresh && delta !== null && Math.round(delta) !== 0 && yearAgo !== null && (
-          <span className={delta > 0 ? 'up' : 'down'} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-            <Flick size={10} style={{ transform: delta > 0 ? undefined : 'scaleY(-1)' }} />
-            {delta > 0 ? 'heating' : 'cooling'} · was {bidMarket ? formatPrice(yearAgo) : formatDemand(yearAgo)} a year ago
+        {read && read.dir && read.yearAgo && (
+          <span className={read.dir === 'up' ? 'up' : 'down'} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <Flick size={10} style={{ transform: read.dir === 'up' ? undefined : 'scaleY(-1)' }} />
+            {read.dir === 'up' ? 'heating' : 'cooling'} · was {bidMarket ? formatPrice(read.yearAgo.value) : formatDemand(read.yearAgo.value)} in {read.yearAgo.date}
           </span>
         )}
         {/* price context stays ONE token: the typical sale. The record lives
-            on THE MAKER'S RECORD card just below — never printed twice. */}
+            on the record plate — never printed twice. */}
         <span className="ctx">
           {(() => {
             // suppressed when the big numeral IS the typical sale already
-            const typicalToken = !fresh && !series.length && typicalSale !== null
+            const typicalToken = !read && typical !== null
               ? null
-              : typicalSale !== null ? `typical ${lensWord} ${formatPrice(typicalSale)}` : null;
+              : typical !== null ? `median ${lensWord} ${formatPrice(typical.value)}, past 12 months` : null;
             return (
               <>
                 {typicalToken}
@@ -366,37 +397,7 @@ export default function ArtistHero({
       {visible.length >= 2 && (
         <>
           <div key={`${range}-${lens}`} ref={drawRef} className="ray-hero2-chart ray-chartfade ray-chart-draw" style={{ height: 230 }} onMouseLeave={() => setHover(null)}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={visible}
-                margin={{ top: 8, right: 0, left: 0, bottom: 0 }}
-                onMouseMove={(s: { activePayload?: Array<{ payload: { date: string; value: number } }> }) => {
-                  const p = s?.activePayload?.[0]?.payload;
-                  if (p) setHover({ date: p.date, value: p.value });
-                }}
-                onMouseLeave={() => setHover(null)}
-              >
-                <defs>
-                  <linearGradient id="artistHeroGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={lineColor} stopOpacity={0.13} />
-                    <stop offset="100%" stopColor={lineColor} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <YAxis hide domain={bidMarket ? [(min: number) => min * 0.85, (max: number) => max * 1.05] : [(min: number) => Math.min(0, min), (max: number) => Math.max(0, max)]} />
-                {!bidMarket && <ReferenceLine y={0} stroke="var(--color-border-mid)" strokeDasharray="4 4" />}
-                <Tooltip content={() => null} cursor={{ stroke: 'var(--color-border-mid)', strokeWidth: 1 }} />
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  stroke={lineColor}
-                  strokeWidth={2.25}
-                  fill="url(#artistHeroGrad)"
-                  dot={false}
-                  activeDot={{ r: 4, fill: lineColor, stroke: 'var(--color-bg)', strokeWidth: 2 }}
-                  isAnimationActive={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            <ArtistHeroChart data={visible} bidMarket={bidMarket} lineColor={lineColor} onHover={setHover} />
           </div>
           <div className="ray-hero2-span" aria-hidden="true">
             <span>{visible[0].date}</span>
@@ -451,39 +452,36 @@ export default function ArtistHero({
           context={label}
           footer="read nightly from the tape"
           cells={[
-            {
-              k: 'Record sale',
-              v: stats?.recordPrice ? <CountUp animate={anim} to={stats.recordPrice} format={formatPrice} duration={1200} /> : '—',
-              sub: stats?.recordTitle
-                ? `${stats.recordTitle.length > 34 ? stats.recordTitle.slice(0, 32) + '…' : stats.recordTitle}${recordYear ? `, ${recordYear}` : ''}`
-                : 'no concluded sales yet',
-            },
+            // (Oct 10) no "Record sale" cell: the record prints ONCE per page,
+            // on the record plate above
             // no-reserve bid markets conclude every lot 'sold' — a constant
-            // "Sell-through 100%" cell says nothing, so count the year instead
-            bidMarket
-              ? facts.sold12mTrue
-                ? {
-                    k: 'Sales, past 12 mo',
-                    v: <CountUp animate={anim} to={facts.sold12mo} format={n => Math.round(n).toLocaleString()} duration={1200} />,
-                    sub: 'sold, trailing 12 months',
-                  }
-                : {
-                    // not a 12-month window (last four ACTIVE quarters) — say what it is
-                    k: 'Recent sales',
-                    v: <CountUp animate={anim} to={facts.sold12mo} format={n => Math.round(n).toLocaleString()} duration={1200} />,
-                    sub: `last ${facts.sold12mo.toLocaleString()} sales${facts.tailSince ? ` · since ${facts.tailSince}` : ''}`,
-                  }
+            // "Sell-through 100%" cell says nothing, so they count the year only
+            // (and no empty "—" cell when the loaded rows carry no concluded lots)
+            ...(bidMarket || facts.sellThrough === null ? [] : [{
+              k: 'Sell-through',
+              v: <CountUp animate={anim} to={facts.sellThrough} format={n => `${Math.round(n)}%`} duration={1200} />,
+              sub: 'of concluded lots found buyers',
+            }]),
+            facts.sold12mTrue
+              ? {
+                  k: 'Sales, past 12 mo',
+                  v: <CountUp animate={anim} to={facts.sold12mo} format={n => Math.round(n).toLocaleString()} duration={1200} />,
+                  sub: 'sold, trailing 12 months',
+                }
               : {
-                  k: 'Sell-through',
-                  v: facts.sellThrough !== null ? <CountUp animate={anim} to={facts.sellThrough} format={n => `${Math.round(n)}%`} duration={1200} /> : '—',
-                  sub: 'of concluded lots found buyers',
+                  // not a 12-month window (last four ACTIVE quarters) — say what it is
+                  k: 'Recent sales',
+                  v: <CountUp animate={anim} to={facts.sold12mo} format={n => Math.round(n).toLocaleString()} duration={1200} />,
+                  sub: `last ${facts.sold12mo.toLocaleString()} sales${facts.tailSince ? ` · since ${facts.tailSince}` : ''}`,
                 },
             {
+              // THE page's one lots-tracked figure (stats.json, the same
+              // build the /makers row reads): every sold + live lot on file
               k: 'Lots tracked',
               v: <CountUp animate={anim} to={facts.total} format={n => Math.round(n).toLocaleString()} duration={1200} />,
               sub: liveCount > 0
-                ? <a href="#upcoming" style={{ color: 'inherit', textUnderlineOffset: 3 }}>{liveCount} live right now</a>
-                : `${liveCount} live right now`,
+                ? <>sold + live · <a href="#upcoming" style={{ color: 'inherit', textUnderlineOffset: 3 }}>{liveCount} live now</a></>
+                : 'sold + live, every house',
             },
             {
               k: 'Auction houses',

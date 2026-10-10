@@ -259,22 +259,24 @@ function ValueEnginePresence({ upcoming }: { upcoming: AuctionLot[] }) {
     let flagged = 0;
     let total = 0;
     for (const l of upcoming) {
-      // only lots the engine actually appraised count toward the denominator
-      if (!l.value || l.value.signal === undefined) continue;
+      // only lots the engine actually CALLED count toward the denominator —
+      // an abstention (value read, signal null) is not "appraised" (Warhol
+      // printed "11 of 68" over 51 calls + 17 abstentions)
+      if (!l.value || !l.value.signal) continue;
       total += 1;
-      if (l.value.signal && l.value.signal.label === 'below comparable market') flagged += 1;
+      if (l.value.signal.label === 'below comparable market') flagged += 1;
     }
     return { flagged, total };
   }, [upcoming]);
 
   if (total === 0 || flagged === 0) return null;
 
+  // one phrasing with /value and the lot browser's chip: "Below market"
   return (
     <div className="rail" style={{ marginTop: 4 }}>
       <div className="mkr-flag ns-well" style={{ display: 'inline-block', padding: '12px 18px' }}>
-        The engine flags{' '}
-        <a href="#upcoming"><strong>{flagged}</strong> of {total} appraised live {total === 1 ? 'lot' : 'lots'}</a>{' '}
-        below comparable market.{' '}
+        <a href="#upcoming"><strong>{flagged}</strong> of {total} live {total === 1 ? 'lot' : 'lots'} the engine priced</a>{' '}
+        {flagged === 1 ? 'reads' : 'read'} Below market.{' '}
         <Link href="/value" style={{ color: 'inherit' }}>See the value desk &rsaquo;</Link>
       </div>
     </div>
@@ -455,10 +457,10 @@ function MakerSections({
       )}
       {sold.length > 0 && (
         <div className="ray-enter" style={{ '--enter-delay': '270ms' } as React.CSSProperties}>
+          {/* the results list filters with its own taxonomy pills (the live
+              chips' words) — no longer the price table's medium enum */}
           <PastResults
             lots={sold}
-            categoryFilter={categoryFilter}
-            onCategoryChange={onCategoryChange}
             savedIds={savedIds}
             onToggleSave={onToggleSave}
             ownedIds={ownedIds}
@@ -567,7 +569,7 @@ export default function ArtistDetailPage() {
               sold rows once phase 3 arrives (ArchiveMakerBody re-renders it). */}
           {!isArchiveMaker && (
             <RayEntrance animate={!fromCache}>
-              <div className="rail ray-enter" style={{ paddingTop: 'var(--space-4)' }}>
+              <div className="rail ray-enter mkr-switch-top" style={{ paddingTop: 'var(--space-4)' }}>
                 <MarketSwitch compact />
               </div>
               <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
@@ -581,6 +583,9 @@ export default function ArtistDetailPage() {
                 <MovingNowSummary upcoming={upcoming} />
               </div>
               <LiveBook slug={slug} upcoming={upcoming} compLots={allLots} savedIds={savedIds} onToggleSave={toggleWithLot} lastCrawl={lastCrawl} fromCache={fromCache} />
+              <div className="rail mkr-switch-foot" style={{ paddingTop: 'var(--space-4)' }}>
+                <MarketSwitch compact />
+              </div>
               {/* watch makers: the model-family ledger — pre-aggregated drill
                   rows scoped to this maker (Daytona vs Cellini, honest reads) */}
               {market === 'watches' && (
@@ -738,7 +743,7 @@ function ArchiveMakerBody({
     <>
       {legacy.probe}
       <RayEntrance animate={!fromCache}>
-        <div className="rail ray-enter" style={{ paddingTop: 'var(--space-4)' }}>
+        <div className="rail ray-enter mkr-switch-top" style={{ paddingTop: 'var(--space-4)' }}>
           <MarketSwitch compact />
         </div>
         <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
@@ -751,6 +756,9 @@ function ArchiveMakerBody({
           <MovingNowSummary upcoming={upcoming} />
         </div>
         <LiveBook slug={slug} upcoming={upcoming} compLots={makerLots} savedIds={savedIds} onToggleSave={onToggleSave} lastCrawl={lastCrawl} fromCache={fromCache} />
+        <div className="rail mkr-switch-foot" style={{ paddingTop: 'var(--space-4)' }}>
+          <MarketSwitch compact />
+        </div>
         {/* #26 — sports player strip + #32 decade band ride the deep merged
             set, so they wait for the archive */}
         {marketOf(slug) === 'sports' && archiveLoaded && (

@@ -144,7 +144,6 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
   if (!hasChart && !hasCategories) return null;
 
   const filterLabel = categoryFilter !== 'all' ? ` — ${categoryLabels[categoryFilter]}` : '';
-  const totalLots = (allLots || lots).length;
 
   return (
     <section className="ray-market rail">
@@ -172,7 +171,6 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
         @media (max-width: 768px) {
           .ray-market { padding-block: var(--sect-t) var(--sect-b); }
           .ray-chart-container { height: 200px; }
-          .ray-cat-record-col { display: none; }
           .ray-cat-td { padding: 10px 16px; font-size: 12.5px; }
           .ray-cat-divider { margin: 0 16px; }
         }
@@ -223,7 +221,7 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                   peak reads as repeated record sales */}
               {yMax !== undefined && record && (
                 <span style={{ marginLeft: 'auto', fontSize: 11.5, color: 'var(--color-text-faint)' }}>
-                  peaks clipped above {formatPrice(yMax)} · record {formatPrice(record.highPrice)}
+                  peaks clipped above {formatPrice(yMax)}
                 </span>
               )}
             </div>
@@ -298,31 +296,18 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                       stroke="var(--color-bg)"
                       strokeWidth={2}
                       isFront
-                      label={({ viewBox }: { viewBox: { x: number; y: number } }) => (
-                        <g>
-                          <text
-                            x={viewBox.x}
-                            y={viewBox.y - 10}
-                            textAnchor="middle"
-                            fill="var(--color-accent-gold-text)"
-                            fontFamily="var(--font-mono), monospace"
-                            fontSize={10.5}
-                            letterSpacing="0.08em"
-                          >
-                            {/* same formatPrice precision as the hero's record numeral —
-                                one fact, one rendering */}
-                            {`RECORD ${formatPrice(record.highPrice)}`}
-                          </text>
-                        </g>
-                      )}
+                      // (Oct 10) no "RECORD $X" label: the record prints once
+                      // per page, on the hero's record plate — and this
+                      // series disagreed with it (shard vs stats.json)
                     />
                   )}
                 </AreaChart>
               </ResponsiveContainer>
             </div>
             <FigCap>
-              Quarterly median and record hammer, sold lots only — {data.length} quarters plotted. The axis caps near
-              the 92nd percentile so one record sale can&apos;t flatten the movement; the record itself stays annotated.
+              Quarterly average and highest sale, realized with buyer&apos;s premium, sold lots only — {data.length} quarters
+              plotted. The axis caps near the 92nd percentile so one outsized sale can&apos;t flatten the movement; the
+              highest quarter keeps its dot.
             </FigCap>
           </div>
         )}
@@ -373,22 +358,14 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                   }}>
                     Avg
                   </th>
-                  <th className="ray-cat-record-col" style={{
-                    fontSize: 12.5,
-                    letterSpacing: '-0.01em',
-                    textTransform: 'none',
-                    color: 'var(--color-text-faint)',
-                    fontWeight: 600,
-                    padding: '12px 20px 8px',
-                    textAlign: 'right',
-                  }}>
-                    Record
-                  </th>
+                  {/* (Oct 10) the per-medium "Record" column is gone: the
+                      record prints once per page (the hero's plate), and
+                      this column re-printed it off a misfiled medium */}
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td colSpan={4} style={{ padding: 0 }}>
+                  <td colSpan={3} style={{ padding: 0 }}>
                     <div className="ray-cat-divider" />
                   </td>
                 </tr>
@@ -420,12 +397,12 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                     </span>
                   </td>
                   <td className="ray-cat-td ray-cat-td-right" style={{ color: 'var(--color-text-muted)' }}>
-                    {totalLots}
-                  </td>
-                  <td className="ray-cat-td ray-cat-td-right" style={{ fontWeight: 500, color: 'var(--color-fg)' }}>
+                    {/* (Oct 10) no total here: the page's one lots-tracked
+                        figure is the hero's (stats.json) — a second count
+                        off the maker shard disagreed with it */}
                     —
                   </td>
-                  <td className="ray-cat-td ray-cat-td-right ray-cat-record-col" style={{ fontWeight: 500 }}>
+                  <td className="ray-cat-td ray-cat-td-right" style={{ fontWeight: 500, color: 'var(--color-fg)' }}>
                     —
                   </td>
                 </tr>
@@ -466,9 +443,6 @@ export default function PriceChart({ lots, allLots, categoryFilter = 'all', onCa
                       </td>
                       <td className="ray-cat-td ray-cat-td-right" style={{ fontWeight: 500, color: 'var(--color-fg)' }}>
                         {cat.avgPrice > 0 ? formatPrice(cat.avgPrice) : '—'}
-                      </td>
-                      <td className="ray-cat-td ray-cat-td-right ray-cat-record-col" style={{ fontWeight: 500 }}>
-                        {cat.recordPrice > 0 ? formatPrice(cat.recordPrice) : '—'}
                       </td>
                     </tr>
                   );
