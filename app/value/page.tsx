@@ -51,11 +51,12 @@ import {
 import { CellGrid, FigureCell, FigGate, FigReplay, FigPools } from '../components/cells';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isLiveUpcoming, trueSaleDay, toneOf } from '../utils';
 import { closeMs as closeAt } from '../lib/house-tz';
-import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
+import { signalWithPool, dealScore, signalMagnitude, estUsdBand } from '../lib/comps';
 import { medianOr } from '../lib/stats';
-import { gapRead, sleeperRead, type GapRead, type SleeperRead } from '../lib/lanes';
+import { gapRead, sleeperRead, valueFloor, type GapRead, type SleeperRead } from '../lib/lanes';
 import TriageBar from '../components/TriageBar';
-import { useUrlState, useLastVisit, passesTriage, isTriageActive, houseBaselines, TRIAGE_DEFAULTS, triageFromParams, triageToParams, type TriageFilters } from '../lib/feed-filters';
+import { useUrlState, useLastVisit, passesTriage, isTriageActive, houseBaselines, TRIAGE_DEFAULTS, triageFromParams, triageToParams, WINDOWS, fmtCeiling, relaxTriage, type TriageFilters, type RelaxKey } from '../lib/feed-filters';
+import { CAT_LABEL, SUBS, MARKET_CATS } from '../lib/taxonomy';
 import { byPriority, spread } from '../lib/priority';
 import { makerLineOf, labelLineOf } from '../lib/lot-labels';
 
@@ -284,8 +285,14 @@ function WitnessTrack({ at }: { at: number }) {
    WIRE (≤3.5d, depth ≥25%) and FORMING (3.5–8d, ≥40%). A PROJECTION product:
    neutral ink, every entry logs to the forward tape, publishes at 20 graded.
    Same ledger grammar as the Flags board — sibling boards, one language. ── */
-function GapAnnex({ rows, receipts, activeKey, play, isSaved, onToggleSave }: {
+function GapAnnex({ rows, total, measured, receipts, activeKey, play, isSaved, onToggleSave }: {
   rows: { lot: AuctionLot; g: GapRead }[];
+  /** the lane before the reader's filters (an empty view must say WHICH
+   *  empty it is: filtered out, or no lot clears the bar tonight) */
+  total: number;
+  /** no-estimate live lots in scope whose projection is validated on the
+   *  graded tape and carries a floor — the lane's measurable inventory */
+  measured: number;
   receipts: { record: { gap?: { n: number; graded: number } } } | null;
   activeKey: string;
   play: boolean;
@@ -303,7 +310,10 @@ function GapAnnex({ rows, receipts, activeKey, play, isSaved, onToggleSave }: {
   // and the lane badge (wire + forming) always agree (was: badge 8, "show 6")
   const forming = formingAll;
   const wireCut = wireAll.length - wire.length;
-  if (!wire.length && !forming.length) return null;
+  // EMPTY-STATE LAW (F32): vanish only on zero measurable inventory — an
+  // empty board with a measured pool prints its abstention sentence
+  const empty = !wire.length && !forming.length;
+  if (empty && !total && !measured) return null;
   const gapRec = receipts?.record?.gap;
   const row = ({ lot, g }: { lot: AuctionLot; g: GapRead }) => {
     const isOpen = open === lot.id;
@@ -422,6 +432,15 @@ function GapAnnex({ rows, receipts, activeKey, play, isSaved, onToggleSave }: {
           the hammer. Click a row for its whole case.</>
         }
       />
+      {empty ? (
+        <div className="glass glass-quiet vd-lane-panel">
+          <p className="vd-lane-empty">
+            {total > 0
+              ? <>No Gap row passes these filters — {total.toLocaleString()} {total === 1 ? 'is' : 'are'} on the lane.</>
+              : <>0 at the wire tonight · {measured.toLocaleString()} no-estimate {measured === 1 ? 'lot carries' : 'lots carry'} a tape-validated projection; none clears the bar of 25% under its floor inside 3.5 days.</>}
+          </p>
+        </div>
+      ) : (
       <div className="glass glass-quiet vd-lane-panel">
         <div className="vd-lane-cols vd-gap-grid" aria-hidden>
           <span />
@@ -446,6 +465,7 @@ function GapAnnex({ rows, receipts, activeKey, play, isSaved, onToggleSave }: {
           </>
         )}
       </div>
+      )}
       <div className="vd-annex-meter">
         {gapRec
           ? <>forward tape: {gapRec.n.toLocaleString()} logged · {gapRec.graded} <Term k="graded">graded</Term> · publishes at 20 graded</>
@@ -459,8 +479,10 @@ function GapAnnex({ rows, receipts, activeKey, play, isSaved, onToggleSave }: {
 /* ── ROOM 2d · THE SLEEPERS — "the price is right and nobody's looking":
    verified-fair lots with a dead room, closing ≤7 days. Bursty by
    construction — when empty it prints its calendar, never vanishes. ── */
-function SleepersAnnex({ rows, queued, receipts, activeLabel, play, isSaved, onToggleSave }: {
+function SleepersAnnex({ rows, total, queued, receipts, activeLabel, play, isSaved, onToggleSave }: {
   rows: { lot: AuctionLot; q: SleeperRead }[];
+  /** the lane before the reader's filters */
+  total: number;
   queued: number;
   receipts: { record: { quiet?: { n: number; graded: number } } } | null;
   activeLabel: string;
@@ -469,7 +491,7 @@ function SleepersAnnex({ rows, queued, receipts, activeLabel, play, isSaved, onT
   onToggleSave: (id: string, lot?: AuctionLot) => void;
 }) {
   const [open, setOpen] = useState<string | null>(null);
-  if (!rows.length && !queued) return null;
+  if (!rows.length && !total && !queued) return null;
   const rec = receipts?.record?.quiet;
   return (
     <section id="sleepers" className="rail ray-enter vd-annex vd-room ns-plate" style={{ '--enter-delay': '100ms' } as React.CSSProperties}>
@@ -587,7 +609,9 @@ function SleepersAnnex({ rows, queued, receipts, activeLabel, play, isSaved, onT
       ) : (
         <div className="glass glass-quiet vd-lane-panel">
           <p className="vd-lane-empty">
-            0 in the 7-day window · {queued.toLocaleString()} dead-room {activeLabel} lots queued further out — the lane fills as their final week opens.
+            {total > 0
+              ? <>No sleeper passes these filters — {total.toLocaleString()} {total === 1 ? 'is' : 'are'} in the 7-day window.</>
+              : <>0 in the 7-day window · {queued.toLocaleString()} dead-room {activeLabel} lots queued further out — the lane fills as their final week opens.</>}
           </p>
         </div>
       )}
@@ -848,6 +872,17 @@ export default function ValuePage() {
     }).length;
   }, [liveLots]);
 
+  // the Gap's measurable inventory in scope: no-estimate live lots whose
+  // projection passed the graded-tape cell check (bidProj.ok) and carry a
+  // floor by THE floor rule (lanes.valueFloor) — the empty lane's honest
+  // denominator, never a statistic of its own
+  const gapPool = useMemo(() => liveLots.filter(l => {
+    if (l.bidProj?.ok !== true || !(l.bidProj.allIn > 0)) return false;
+    const est = estUsdBand(l);
+    if (est.low != null || est.high != null) return false;
+    return valueFloor(l) != null;
+  }), [liveLots]);
+
   // NEXT HAMMER — book-wide (survives a zero-flag scope): the soonest close
   // still strictly ahead (the results-pending grace window must never print
   // yesterday as "next").
@@ -900,6 +935,13 @@ export default function ValuePage() {
       .slice(0, 6);
   }, [pageStats, activeKey, receipts, mktSet]);
 
+  // the tape grouped by lot, first-seen order (each call keeps its own line)
+  const settledByLot = useMemo(() => {
+    const by = new Map<string, SettledCallRow[]>();
+    for (const r of settled || []) { const a = by.get(r.id); if (a) a.push(r); else by.set(r.id, [r]); }
+    return Array.from(by, ([id, calls]) => ({ id, calls }));
+  }, [settled]);
+
   // HONESTY-FLEX — name our WORST cohort year openly. Only years with an
   // adequate flagged sample (≥30) are eligible; among those, the lowest
   // flaggedMedianPct. Naming the low is the strongest trust signal.
@@ -946,13 +988,23 @@ export default function ValuePage() {
   const dealsView = useMemo(() => deals.filter(d => inTriage(d.lot)), [deals, inTriage]);
   const gapRowsView = useMemo(() => gapRows.filter(r => inTriage(r.lot)), [gapRows, inTriage]);
   const sleeperRowsView = useMemo(() => sleeperRows.filter(r => inTriage(r.lot)), [sleeperRows, inTriage]);
+  // the Gap's measurable inventory under the reader's filters (fine art has
+  // none — the lane steps aside instead of quoting the sports book's count)
+  const gapMeasured = useMemo(() => gapPool.filter(inTriage).length, [gapPool, inTriage]);
   useEffect(() => { setShown(ROWS_PAGE); }, [triage]);
 
   // Today's call: the strongest deal Ray can STAND BEHIND — highest
   // confidence tier first, never low (one thin comp is not a headline).
   const call = useMemo(() => pickCall(marketLots, marketLots, activeKey), [marketLots, activeKey]);
+  // (Oct 9 r6) the triage row sits above the plate and narrows it too: a call
+  // that fails the reader's filters stands aside (it is the market's call,
+  // not an answer to "48 hours, under $25K"), and the board takes its seat
+  const callShown = useMemo(
+    () => (call && (!isTriageActive(triage) || inTriage(call.lot)) ? call : null),
+    [call, triage, inTriage]
+  );
   const gridDeals = useMemo(() => {
-    const base = call ? dealsView.filter(d => d.lot.id !== call.lot.id) : dealsView;
+    const base = callShown ? dealsView.filter(d => d.lot.id !== callShown.lot.id) : dealsView;
     if (sortMode === 'priority') {
       const cmp = byPriority(Date.now());
       const sorted = [...base].sort((a, b) => cmp(a.lot, b.lot));
@@ -967,7 +1019,48 @@ export default function ValuePage() {
       const kb = b.lot.saleDateTime || `${trueSaleDay(b.lot)}T99`;
       return ka.localeCompare(kb);
     });
-  }, [dealsView, call, sortMode]);
+  }, [dealsView, callShown, sortMode]);
+  // THE WAY BACK (Oct 9 r6): when the reader's filters cut every flag, each
+  // active filter offers itself as a one-tap undo, with the count of flags
+  // that undo would bring back — counted over the same lane, the same rule
+  // (passesTriage) the board itself runs. Only undos that bring flags back.
+  const relaxations = useMemo(() => {
+    if (!isTriageActive(triage) || dealsView.length > 0) return [];
+    const words: Record<RelaxKey, string> = {
+      win: 'Any closing day',
+      sub: triage.cat ? `All ${CAT_LABEL[triage.cat]}` : 'All categories',
+      cat: 'All categories', house: 'All houses', value: 'Any value',
+      new: 'New or not', fx: 'Without the refinements',
+    };
+    return relaxTriage(deals.map(d => d.lot), triage, { prevVisitDay, baselines })
+      .map(r => ({ ...r, label: words[r.k] }));
+  }, [triage, dealsView.length, deals, prevVisitDay, baselines]);
+  // the closing-window cut's honest context: when the soonest flag (under
+  // every OTHER filter) hammers
+  const soonestOutsideWindow = useMemo(() => {
+    if (!triage.win || dealsView.length > 0) return null;
+    const opts = { prevVisitDay, baselines };
+    const today = localToday();
+    const days = deals
+      .filter(d => passesTriage(d.lot, { ...triage, win: null }, opts))
+      .map(d => trueSaleDay(d.lot))
+      .filter(d => !!d && d >= today)
+      .sort();
+    return days[0] || null;
+  }, [triage, dealsView.length, deals, prevVisitDay, baselines]);
+  // the filter row in words, for the empty states ("48 hours · under $25K")
+  const filterWords = useMemo(() => {
+    const w: string[] = [];
+    if (triage.win) w.push((WINDOWS.find(x => x.key === triage.win)?.label || '').toLowerCase());
+    if (triage.cat) w.push(triage.sub ? (SUBS[triage.cat].find(x => x.key === triage.sub)?.label ?? triage.sub) : CAT_LABEL[triage.cat]);
+    if (triage.house) w.push(triage.house);
+    if (triage.minUsd) w.push(`$${triage.minUsd >= 1000 ? `${triage.minUsd / 1000}K` : triage.minUsd}+`);
+    if (triage.maxUsd) w.push(fmtCeiling(triage.maxUsd).replace(/^Under/, 'under'));
+    if (triage.newOnly) w.push('new');
+    if (triage.fx.length) w.push(`${triage.fx.length} refinement${triage.fx.length === 1 ? '' : 's'}`);
+    return w.join(' · ');
+  }, [triage]);
+
   // ONE LOT, ONE NUMBER: the band prefers the BUILD ENGINE's stamp
   // (value.compValueUsd + poolIds — the same numbers the plate sentence and
   // the modal print); the client signalWithPool runs only for unstamped
@@ -1262,6 +1355,13 @@ export default function ValuePage() {
           .vd-dial-s { grid-area: s; font-size: 11px; }
           .vd-dial-v { grid-area: v; font-size: 20px; justify-content: flex-end; min-height: 0; min-width: 76px; }
           .vd-pulse { margin-top: 14px; }
+        }
+        /* phones (Oct 9 r6, the /makers precedent): the cockpit's index panel
+           and dial tiles stand down — the masthead line already carries the
+           flag count and the median gap, and the triage row + call move up to
+           the first screen. The record keeps its own room further down. */
+        @media (max-width: 640px) {
+          .vd-cockpit-pulse, .vd-dials-wrap { display: none; }
         }
 
         /* ── section heads (quiet ns-kicker beside a rule) ── */
@@ -1937,7 +2037,7 @@ export default function ValuePage() {
                         · {formatPrice(summary.totalEst)} at estimate · {summary.artists} makers
                         {summary.soonest && <> · <span style={{ whiteSpace: 'nowrap' }}>first hammer {formatDate(trueSaleDay(summary.soonest.lot))}</span></>}
                       </>
-                    : <>The engine abstains rather than force a thin call · {appraisedCount.toLocaleString()} live lots read in scope{nextHammer && <> · next hammer {formatDate(trueSaleDay(nextHammer))}</>}</>}
+                    : <>The engine abstains rather than force a thin call · {appraisedCount > 0 ? <>{appraisedCount.toLocaleString()} live lots read in scope</> : <>{liveLots.length.toLocaleString()} live lots in scope, none read yet</>}{nextHammer && <> · next hammer {formatDate(trueSaleDay(nextHammer))}</>}</>}
                 />
               </div>
               <div className="vd-cockpit-pulse">
@@ -1947,50 +2047,6 @@ export default function ValuePage() {
                 <DialStrip dials={dials} />
               </div>
             </div>
-          </section>
-
-          {/* ════ ROOM 1e · HOW THE DESK READS — the cell grammar: split
-              head (quiet kicker, light headline) over three patent-figure
-              cells, one per lane. Copy states each lane's real gates
-              (pickCall/comps ladder, lanes.ts) in the lanes' own words; the
-              bid-history count reads live from the served closeCurve. No
-              thresholds invented, no new signal labels. ════ */}
-          <section id="reads" className="rail ray-enter vd-room ns-plate vd-reads" style={{ '--enter-delay': '20ms', paddingTop: 'calc(var(--space-4) + var(--space-2))' } as React.CSSProperties}>
-            <div className="ns-split">
-              <div>
-                <span className="ns-kicker">Three lanes, one question each</span>
-                <h2 className="ray-h2" style={{ margin: 0 }}>How the desk reads</h2>
-              </div>
-              <p>
-                Every claim on this desk belongs to one lane. Each lane asks one question,
-                prints one statistic, and keeps its own record — the Flags on the certified
-                replay, the Gap and the Sleepers accruing theirs on the forward tape. When
-                the data runs thin, a lane abstains out loud.
-              </p>
-            </div>
-            <CellGrid min={250} className="vd-reads-grid">
-              <FigureCell
-                figure={<FigGate />}
-                label="The Flags"
-                body={<>Live lots whose comps median clears the estimate by at least 1.3&times; —
-                  ranked by calibrated odds, confidence-gated, and the engine abstains rather
-                  than print a thin call.</>}
-              />
-              <FigureCell
-                figure={<FigReplay />}
-                label="The Gap"
-                body={<>No-estimate lots where the projected close sits at least 25% under the
-                  value floor — the close-day growth curve fitted
-                  from {curveSnaps != null ? `${compactCount(curveSnaps)} ` : ''}Goldin bid histories.</>}
-              />
-              <FigureCell
-                figure={<FigPools />}
-                label="The Sleepers"
-                body={<>Verified-fair lots with no printed bid yet, closing inside seven days —
-                  fairness measured against the engine&rsquo;s own appraisal, never inferred
-                  from a missing signal.</>}
-              />
-            </CellGrid>
           </section>
 
           {/* ════ ROOM 2 · THE BOARD ════ */}
@@ -2004,8 +2060,25 @@ export default function ValuePage() {
             </div>
           )}
 
-          {call && (
-            <section id="call" className="rail ray-enter vd-room ns-plate" style={{ '--enter-delay': '40ms', paddingTop: 'calc(var(--space-4) + var(--space-2))' } as React.CSSProperties}>
+          {/* the triage row leads the lanes (Oct 9 r6): it narrows the call,
+              the Flags, the Gap and the Sleepers — so it sits above all four,
+              on the phone's first screen instead of four screens down */}
+          <div id="narrow" className="rail ray-enter vd-room" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))' }}>
+            <TriageBar
+              lots={laneLots}
+              cats={activeKey === 'all' ? undefined : MARKET_CATS[activeKey]}
+              filters={triage}
+              onChange={setTriage}
+              prevVisitDay={prevVisitDay}
+              baselines={baselines}
+              shown={dealsView.length + gapRowsView.length + sleeperRowsView.length}
+              total={deals.length + gapRows.length + sleeperRows.length}
+              label="Narrow the lanes"
+            />
+          </div>
+
+          {callShown && call && (
+            <section id="call" className="rail ray-enter vd-room ns-plate" style={{ '--enter-delay': '40ms', paddingTop: 'var(--space-2)' } as React.CSSProperties}>
               {/* THE CALL AS COLOR — the ONE forced-color cell on the desk:
                   the plate's face rides the ns-cell-color grammar (grained
                   signal gradient, text goes paper) while its DOM, data and
@@ -2042,18 +2115,6 @@ export default function ValuePage() {
             </section>
           )}
 
-          <div className="rail ray-enter" style={{ marginTop: 8 }}>
-            <TriageBar
-              lots={laneLots}
-              filters={triage}
-              onChange={setTriage}
-              prevVisitDay={prevVisitDay}
-              baselines={baselines}
-              shown={dealsView.length + gapRowsView.length + sleeperRowsView.length}
-              total={deals.length + gapRows.length + sleeperRows.length}
-              label="Narrow the lanes"
-            />
-          </div>
 
           <section id="flags" className="ray-value-section rail vd-room ns-plate">
             <div className="ray-enter">
@@ -2094,8 +2155,9 @@ export default function ValuePage() {
                    stated, the doors stay open, no apology, no coral */
                 <div className="vd-empty ray-enter">
                   <p>
-                    The engine abstains in the {activeLabel} market tonight — {appraisedCount.toLocaleString()} live
-                    lots read, none clears the 1.3× flag bar. A blank beats a wrong number.
+                    The engine abstains in the {activeLabel} market tonight — {appraisedCount > 0
+                      ? <>{appraisedCount.toLocaleString()} live lots read, none clears the 1.3× flag bar</>
+                      : <>none of its {liveLots.length.toLocaleString()} live lots carries a comps read yet</>}. A blank beats a wrong number.
                   </p>
                   <div className="vd-empty-links">
                     {activeKey !== 'all' && (
@@ -2113,17 +2175,24 @@ export default function ValuePage() {
                   </div>
                 </div>
               ) : gridDeals.length === 0 ? (
-                /* flags exist, the triage row cut them all: say so in the same
-                   frame, and give the one door back */
+                /* flags exist, the triage row cut them all: say which filters,
+                   when the nearest flag hammers, and offer each filter back */
                 <div className="vd-empty ray-enter">
                   <p>
                     {!isTriageActive(triage)
                       ? <>Today&rsquo;s call above is the only flag live in the {activeLabel} market.</>
                       : dealsView.length > 0
-                        ? <>Only today&rsquo;s call above passes these filters — {deals.length.toLocaleString()} {deals.length === 1 ? 'flag is' : 'flags are'} live in the {activeLabel} market.</>
-                        : <>No flag passes these filters — {deals.length.toLocaleString()} {deals.length === 1 ? 'is' : 'are'} live in the {activeLabel} market.</>}
+                        ? <>Only today&rsquo;s call above passes these filters ({filterWords}) — {deals.length.toLocaleString()} {deals.length === 1 ? 'flag is' : 'flags are'} live in the {activeLabel} market.</>
+                        : <>No flag passes these filters ({filterWords}) — {deals.length.toLocaleString()} {deals.length === 1 ? 'is' : 'are'} live in the {activeLabel} market{soonestOutsideWindow ? <>; the soonest one that fits the other filters hammers {formatDate(soonestOutsideWindow)}</> : null}.</>}
                   </p>
                   <div className="vd-empty-links">
+                    {relaxations.map(r => (
+                      <button key={r.k} type="button" className="link-action"
+                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--color-fg)' }}
+                        onClick={() => setTriage(r.next)}>
+                        {r.label} · {r.n} {r.n === 1 ? 'flag' : 'flags'} <span className="arrow"><Flick size={10} style={{ marginLeft: 5 }} /></span>
+                      </button>
+                    ))}
                     {isTriageActive(triage) && (
                       <button type="button" className="link-action"
                         style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--color-fg)' }}
@@ -2274,10 +2343,55 @@ export default function ValuePage() {
           </section>
 
           {/* ── ROOM 2c · THE GAP ── */}
-          <GapAnnex rows={gapRowsView} receipts={receipts} activeKey={activeKey} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />
+          <GapAnnex rows={gapRowsView} total={gapRows.length} measured={gapMeasured} receipts={receipts} activeKey={activeKey} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />
 
           {/* ── ROOM 2d · THE SLEEPERS ── */}
-          <SleepersAnnex rows={sleeperRowsView} queued={sleeperQueue} receipts={receipts} activeLabel={activeLabel} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />
+          <SleepersAnnex rows={sleeperRowsView} total={sleeperRows.length} queued={sleeperQueue} receipts={receipts} activeLabel={activeLabel} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />
+
+          {/* ════ HOW THE DESK READS (Oct 9 r6: after the lanes — the explainer
+              no longer stands between a reader and the board) — the cell grammar: split
+              head (quiet kicker, light headline) over three patent-figure
+              cells, one per lane. Copy states each lane's real gates
+              (pickCall/comps ladder, lanes.ts) in the lanes' own words; the
+              bid-history count reads live from the served closeCurve. No
+              thresholds invented, no new signal labels. ════ */}
+          <section id="reads" className="rail ray-enter vd-room ns-plate vd-reads" style={{ '--enter-delay': '20ms', paddingTop: 'calc(var(--space-4) + var(--space-2))' } as React.CSSProperties}>
+            <div className="ns-split">
+              <div>
+                <span className="ns-kicker">Three lanes, one question each</span>
+                <h2 className="ray-h2" style={{ margin: 0 }}>How the desk reads</h2>
+              </div>
+              <p>
+                Every claim on this desk belongs to one lane. Each lane asks one question,
+                prints one statistic, and keeps its own record — the Flags on the certified
+                replay, the Gap and the Sleepers accruing theirs on the forward tape. When
+                the data runs thin, a lane abstains out loud.
+              </p>
+            </div>
+            <CellGrid min={250} className="vd-reads-grid">
+              <FigureCell
+                figure={<FigGate />}
+                label="The Flags"
+                body={<>Live lots whose comps median clears the estimate by at least 1.3&times; —
+                  ranked by calibrated odds, confidence-gated, and the engine abstains rather
+                  than print a thin call.</>}
+              />
+              <FigureCell
+                figure={<FigReplay />}
+                label="The Gap"
+                body={<>No-estimate lots where the projected close sits at least 25% under the
+                  value floor — the close-day growth curve fitted
+                  from {curveSnaps != null ? `${compactCount(curveSnaps)} ` : ''}Goldin bid histories.</>}
+              />
+              <FigureCell
+                figure={<FigPools />}
+                label="The Sleepers"
+                body={<>Verified-fair lots with no printed bid yet, closing inside seven days —
+                  fairness measured against the engine&rsquo;s own appraisal, never inferred
+                  from a missing signal.</>}
+              />
+            </CellGrid>
+          </section>
 
           {/* ════ ROOM 3 · THE RECORD (paper certificate) ════ */}
           {backtest && backtest.flagged.n >= 100 && (
@@ -2374,28 +2488,36 @@ export default function ValuePage() {
                 <span className="vd-sect-mark" aria-hidden><TapeMark size={16} /></span>
                 <span className="ns-kicker">Settled calls</span>
                 <span className="vd-pulse-rule" aria-hidden />
-                <span className="vd-sect-cap">logged before the hammer, graded at it — <Link href="/receipts" style={{ color: 'inherit' }}>the full record</Link></span>
+                <span className="vd-sect-cap">comps and projection calls, logged before the hammer, graded at it · the Flags grade on the replayed record above — <Link href="/receipts" style={{ color: 'inherit' }}>the full record</Link></span>
               </div>
               {settled === null ? (
                 <div aria-hidden>
                   {Array.from({ length: 3 }, (_, i) => <div key={i} className="vd-tape-ghost" />)}
                 </div>
               ) : settled.length > 0 ? (
-                settled.map(s => {
-                  const delta = s.p > 0 ? Math.round((s.r / s.p - 1) * 100) : null;
-                  const kind = ({ card: 'comps', vsbid: 'proj', gap: 'gap', quiet: 'quiet' } as Record<string, string>)[s.k] || s.k;
+                /* one row per LOT (Oct 9 r6): a lot the tape called twice (its
+                   comps read and its bid projection) printed twice, back to
+                   back — every call stays, stacked under the one realized price */
+                settledByLot.map(({ id, calls }) => {
+                  const s0 = calls[0];
                   return (
-                    <Link key={`${s.id}|${s.k}`} href={`/lot/${encodeURIComponent(s.id)}`} className="vd-tape-row">
+                    <Link key={id} href={`/lot/${encodeURIComponent(id)}`} className="vd-tape-row">
                       <span style={{ minWidth: 0 }}>
-                        <span className="vd-tape-title" style={{ display: 'block', color: 'var(--color-fg)', fontWeight: 600 }}>{s.t ? craftTitle(s.t) : s.id}</span>
-                        <span className="vd-tape-maker" style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>{s.a ? (ARTIST_LABEL[s.a] || s.a) : ''}{s.h ? ` · ${s.h}` : ''}</span>
+                        <span className="vd-tape-title" style={{ display: 'block', color: 'var(--color-fg)', fontWeight: 600 }}>{s0.t ? craftTitle(s0.t) : id}</span>
+                        <span className="vd-tape-maker" style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>{s0.a ? (ARTIST_LABEL[s0.a] || s0.a) : ''}{s0.h ? ` · ${s0.h}` : ''}</span>
                       </span>
                       <span className="vd-tape-cells">
-                        <span className="vd-tape-real">realized {formatPrice(s.r)} all-in{s.sd ? ` · ${formatDate(s.sd)}` : ''}</span>
-                        <span className="vd-tape-vs">
-                          called {formatPrice(s.p)} <span style={{ textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.06em' }}>{kind}</span>
-                          {delta != null && <> · <span data-tone={toneOf(delta)}>{fmtSignedPct(delta)}</span> vs the call</>}
-                        </span>
+                        <span className="vd-tape-real">realized {formatPrice(s0.r)} all-in{s0.sd ? ` · ${formatDate(s0.sd)}` : ''}</span>
+                        {calls.map(s => {
+                          const delta = s.p > 0 ? Math.round((s.r / s.p - 1) * 100) : null;
+                          const kind = ({ card: 'comps', vsbid: 'proj', gap: 'gap', quiet: 'quiet' } as Record<string, string>)[s.k] || s.k;
+                          return (
+                            <span key={s.k} className="vd-tape-vs">
+                              called {formatPrice(s.p)} <span style={{ textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.06em' }}>{kind}</span>
+                              {delta != null && <> · <span data-tone={toneOf(delta)}>{fmtSignedPct(delta)}</span> vs the call</>}
+                            </span>
+                          );
+                        })}
                       </span>
                     </Link>
                   );

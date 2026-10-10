@@ -10,12 +10,17 @@ import Flick from './Flick';
 import SaveSearch from './SaveSearch';
 import FollowChip from './FollowChip';
 import { catFollow, houseFollow } from '../lib/follows';
-import { taxonOf, SUBS, type CatKey } from '../lib/taxonomy';
+import { subChipsOf, MARKET_CATS, type SubChip } from '../lib/taxonomy';
 import { WINDOWS, VALUE_FLOORS, VALUE_CEILINGS, fmtCeiling, valueOptionOf, valuePatchOf, TRIAGE_DEFAULTS, isTriageActive, passesTriage, patchTriage, triageToParams, triageFromParams, houseBaselines, type TriageFilters, type HouseBaselines } from '../lib/feed-filters';
 import { facetCatOf, facetChips, toggleFacet } from '../lib/facets';
 import { lotSubjectOf, subjectKeyOf, OTHER as OTHER_SUBJECT } from '../lib/maker-subjects';
 
-export type FeedSort = 'priority' | 'soonest' | 'gap-desc' | 'newest' | 'bids-desc' | 'est-desc' | 'est-asc';
+/** a sport chip's display copy where the stored lens value (sportOfLot's
+ *  label, kept in saved searches as `sp=`) reads differently from the
+ *  taxonomy's sport label that /makers prints */
+const SPORT_SHOWN: Record<string, string> = { 'Boxing / MMA': 'Boxing & MMA' };
+
+export type FeedSort ='priority' | 'soonest' | 'gap-desc' | 'newest' | 'bids-desc' | 'est-desc' | 'est-asc';
 
 export interface FeedFilters extends TriageFilters {
   query: string;
@@ -182,55 +187,78 @@ export default function FeedToolbar({
   // (Oct 9) only where the slugs ARE makers — design and watches. In sports,
   // TCG, science and culture they are old category buckets ("Graded Cards 0",
   // "Memorabilia 0") that the clean sub-category chips below already cover.
-  const makers = useMemo(() => {
-    if (scopeMaker || (effectiveMarket !== 'design' && effectiveMarket !== 'watches')) return [] as [string, number][];
-    const c: Record<string, number> = {};
-    lots.forEach(l => { c[l.artist] = (c[l.artist] || 0) + 1; });
-    return Array.from(marketArtists(effectiveMarket))
-      .map(slug => [slug, c[slug] || 0] as [string, number])
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  }, [lots, effectiveMarket, scopeMaker]);
-
-  // sports → which sport (the cut collectors actually shop by)
-  const sports = useMemo(() => {
-    if (effectiveMarket !== 'sports') return [] as [string, number][];
-    const c: Record<string, number> = {};
-    lots.forEach(l => { const s = sportOfLot(l) || 'Other'; c[s] = (c[s] || 0) + 1; });
-    // "Other" is the cut nobody shops by — always last, never the lead chip
-    return Object.entries(c).sort((a, b) => (a[0] === 'Other' ? 1 : 0) - (b[0] === 'Other' ? 1 : 0) || b[1] - a[1]);
-  }, [lots, effectiveMarket]);
-
-  // inside a vertical → its CLEAN sub-categories (app/lib/taxonomy), the cut
-  // collectors shop by: format for sports/culture (Game-Used, Autographs…),
-  // medium for art. Replaces the old art-only medium enum, which was
-  // 'unknown'/'object' for ~93% of the book. Keys are "cat:sub".
+  // a house's onboarding flood is not "new" (feed-filters houseBaselines) —
+  // the page passes baselines read off its whole book; this pool is the fallback
+  const baselines = useMemo(() => baselinesProp ?? houseBaselines(lots), [baselinesProp, lots]);
   const marketPool = useMemo(() => {
     if (effectiveMarket === 'all') return lots;
     const set = marketArtists(effectiveMarket);
     return lots.filter(l => set.has(l.artist));
   }, [lots, effectiveMarket]);
+  // (chips audit, Oct 9) every chip group counts the pool under every OTHER
+  // pick — maker, sport, sub, facets, window / house / value / new — so a
+  // count always matches what tapping it shows. (The sub chips counted the
+  // whole market: with Basketball picked the strip still read "Cards ·
+  // Singles 5716".)
+  const ctx = useMemo(() => {
+    const mk = filters.maker ? new Set(filters.maker.split(',')) : null;
+    return {
+      inMaker: (l: AuctionLot) => !mk || mk.has(l.artist),
+      inSport: (l: AuctionLot) => !filters.sport || (sportOfLot(l) || 'Other') === filters.sport,
+      triageOk: (l: AuctionLot, drop: Partial<TriageFilters> = {}) =>
+        passesTriage(l, { ...filters, ...drop }, { prevVisitDay, baselines }),
+    };
+  }, [filters, prevVisitDay, baselines]);
+
+  // inside a vertical → its full roster of makers (art keeps mediums instead:
+  // 17 makers is a wall). Zero-count makers stay visible as disabled pills —
+  // coverage honesty: "Rolex 0" tells the truth "vanished Rolex" hides.
+  // (Oct 9) only where the slugs ARE makers — design and watches. In sports,
+  // TCG, science and culture they are old category buckets ("Graded Cards 0",
+  // "Memorabilia 0") that the clean sub-category chips below already cover.
+  const makers = useMemo(() => {
+    if (scopeMaker || (effectiveMarket !== 'design' && effectiveMarket !== 'watches')) return [] as [string, number][];
+    const c: Record<string, number> = {};
+    marketPool.forEach(l => { if (ctx.inSport(l) && ctx.triageOk(l)) c[l.artist] = (c[l.artist] || 0) + 1; });
+    return Array.from(marketArtists(effectiveMarket))
+      .map(slug => [slug, c[slug] || 0] as [string, number])
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }, [marketPool, effectiveMarket, scopeMaker, ctx]);
+
+  // sports → which sport (the cut collectors actually shop by)
+  const sports = useMemo(() => {
+    if (effectiveMarket !== 'sports') return [] as [string, number][];
+    const c: Record<string, number> = {};
+    let total = 0;
+    marketPool.forEach(l => {
+      if (!ctx.inMaker(l) || !ctx.triageOk(l)) return;
+      const s = sportOfLot(l) || 'Other'; c[s] = (c[s] || 0) + 1; total++;
+    });
+    if (filters.sport && !c[filters.sport]) c[filters.sport] = 0;
+    // (chips audit) the long tail — Olympics 13, Wrestling 10, Tennis 5 of
+    // 7,351 — is under 1 lot in 500: no chip (search still finds them)
+    const floor = total * 0.002;
+    // "Other" is the cut nobody shops by — always last, never the lead chip
+    return Object.entries(c)
+      .filter(([s, n]) => s === filters.sport || (n > 0 && n >= floor))
+      .sort((a, b) => (a[0] === 'Other' ? 1 : 0) - (b[0] === 'Other' ? 1 : 0) || b[1] - a[1]);
+  }, [marketPool, effectiveMarket, filters.sport, ctx]);
+
+  // inside a vertical → its CLEAN sub-categories (app/lib/taxonomy
+  // subChipsOf — the one builder /value and /makers use too): format for
+  // sports/culture (Game-Used, Autographs…), medium for art. Only the
+  // market's own categories get chips (MARKET_CATS); a guest category
+  // (Historical in Pop Culture) is one chip until picked.
   const categories = useMemo(() => {
-    if (effectiveMarket === 'all') return [] as { key: string; cat: CatKey; sub: string; label: string; n: number }[];
-    const c = new Map<string, number>();
-    for (const l of marketPool) { const t = taxonOf(l); const k = `${t.cat}:${t.sub}`; c.set(k, (c.get(k) || 0) + 1); }
-    const cats = new Set(Array.from(c.keys()).map(k => k.split(':')[0]));
-    return Array.from(c.entries()).map(([key, n]) => {
-      const [cat, sub] = key.split(':') as [CatKey, string];
-      const sl = SUBS[cat].find(x => x.key === sub)?.label ?? sub;
-      // two clean categories in one market (sports: cards + memorabilia) →
-      // prefix the cards subs so "Sealed Wax" never reads as memorabilia
-      const label = cats.size > 1 && cat === 'sports-cards' ? `Cards · ${sl}` : sl;
-      return { key, cat, sub, label, n };
-    }).sort((a, b) => b.n - a.n);
-  }, [marketPool, effectiveMarket]);
+    if (effectiveMarket === 'all') return [] as SubChip[];
+    const pool = marketPool.filter(l => ctx.inMaker(l) && ctx.inSport(l) && ctx.triageOk(l, { cat: null, sub: null, fx: [] }));
+    return subChipsOf(pool, filters, MARKET_CATS[effectiveMarket]);
+  }, [marketPool, effectiveMarket, filters, ctx]);
   const houses = useMemo(() => {
     const c = new Map<string, number>();
     for (const l of marketPool) { const h = String(l.auctionHouse || ''); if (h) c.set(h, (c.get(h) || 0) + 1); }
     return Array.from(c.entries()).sort((a, b) => b[1] - a[1]);
   }, [marketPool]);
-  // a house's onboarding flood is not "new" (feed-filters houseBaselines) —
-  // the page passes baselines read off its whole book; this pool is the fallback
-  const baselines = useMemo(() => baselinesProp ?? houseBaselines(lots), [baselinesProp, lots]);
   const newCount = useMemo(
     () => marketPool.filter(l => passesTriage(l, { ...TRIAGE_DEFAULTS, newOnly: true }, { prevVisitDay, baselines })).length,
     [marketPool, prevVisitDay, baselines]
@@ -239,31 +267,42 @@ export default function FeedToolbar({
   // in-category facets (Graded / Rookie / era, Film & TV / Music) — once the
   // reader stands in one category; counted with every other filter applied
   const facets = useMemo(() => {
-    const mk = filters.maker ? new Set(filters.maker.split(',')) : null;
-    const scoped = marketPool.filter(l => (!mk || mk.has(l.artist))
-      && (!filters.sport || (sportOfLot(l) || 'Other') === filters.sport));
-    const fc = facetCatOf(filters.cat, scoped);
+    const scoped = marketPool.filter(l => ctx.inMaker(l) && ctx.inSport(l));
+    const fc = facetCatOf(filters.cat, scoped, { cats: MARKET_CATS[effectiveMarket], fx: filters.fx });
     if (!fc) return [];
-    const pool = scoped.filter(l => passesTriage(l, { ...filters, fx: [] }, { prevVisitDay, baselines }));
+    const pool = scoped.filter(l => ctx.triageOk(l, { fx: [] }));
     return facetChips(fc, pool, filters.fx);
-  }, [marketPool, filters, prevVisitDay, baselines]);
+  }, [marketPool, effectiveMarket, filters.cat, filters.fx, ctx]);
   // the phone sheet WRAPS its chips, so a group divider would dangle at a
   // line's edge — the sheet gets the same chips without them
   const facetPillsOf = (dividers: boolean) => facets.map((c, i) => (
     <span key={c.key} style={{ display: 'contents' }}>
       {dividers && i > 0 && facets[i - 1].group !== c.group && <span className="ray-toolbar-divider" aria-hidden="true" />}
       <button className="ray-toolbar-pill" data-active={filters.fx.includes(c.key)} aria-pressed={filters.fx.includes(c.key)}
-        onClick={() => set({ fx: toggleFacet(filters.fx, c.key) })}>
+        onClick={() => set({ fx: toggleFacet(filters.fx, c.key, c.via) })}>
         {c.label} <i>{c.n}</i>
       </button>
     </span>
   ));
-  const subActive = (k: string) => filters.cat != null && `${filters.cat}:${filters.sub}` === k;
-  const toggleSub = (k: string) => {
-    if (subActive(k)) { set({ cat: null, sub: null }); return; }
-    const [cat, sub] = k.split(':') as [CatKey, string];
-    set({ cat, sub });
+  // a sub chip is active on its exact cat + sub; a guest category's chip
+  // (sub null) whenever its category is picked
+  const subActive = (c: SubChip) => filters.cat === c.cat && (c.sub == null || filters.sub === c.sub);
+  const toggleSub = (c: SubChip) => {
+    const guest = categories.some(x => x.cat === c.cat && x.sub == null);
+    // un-picking a guest's sub steps back to the guest category, not out of it
+    if (subActive(c)) { set(c.sub != null && guest ? { sub: null } : { cat: null, sub: null }); return; }
+    set({ cat: c.cat, sub: c.sub });
   };
+  // the strip's category groups sit apart on the desktop row (the divider
+  // already between sports | makers | subs) — never on the wrapping sheet
+  const subPillsOf = (dividers: boolean) => categories.map((c, i) => (
+    <span key={c.key} style={{ display: 'contents' }}>
+      {dividers && i > 0 && categories[i - 1].cat !== c.cat && <span className="ray-toolbar-divider" aria-hidden="true" />}
+      <button className="ray-toolbar-pill" data-active={subActive(c)} aria-pressed={subActive(c)} onClick={() => toggleSub(c)}>
+        {c.label} <i>{c.n}</i>
+      </button>
+    </span>
+  ));
 
   const belowCount = useMemo(
     () => lots.filter(l => belowIds.has(l.id)).length,
@@ -550,7 +589,7 @@ export default function FeedToolbar({
                     aria-pressed={filters.sport === sport}
                     onClick={() => set({ sport: filters.sport === sport ? null : sport })}
                   >
-                    {sport} <i>{n}</i>
+                    {SPORT_SHOWN[sport] ?? sport} <i>{n}</i>
                   </button>
                 ))}
                 {makers.map(([slug, n]) => (
@@ -559,23 +598,13 @@ export default function FeedToolbar({
                     className="ray-toolbar-pill"
                     data-active={filters.maker === slug}
                     aria-pressed={filters.maker === slug}
-                    disabled={n === 0}
+                    disabled={n === 0 && filters.maker !== slug}
                     onClick={() => set({ maker: filters.maker === slug ? null : slug })}
                   >
                     {ARTIST_LABEL[slug] || slug} <i>{n}</i>
                   </button>
                 ))}
-                {categories.map(c => (
-                  <button
-                    key={c.key}
-                    className="ray-toolbar-pill"
-                    data-active={subActive(c.key)}
-                    aria-pressed={subActive(c.key)}
-                    onClick={() => toggleSub(c.key)}
-                  >
-                    {c.label} <i>{c.n}</i>
-                  </button>
-                ))}
+                {subPillsOf(false)}
               </div>
             </>
           )}
@@ -944,7 +973,7 @@ export default function FeedToolbar({
             data-active={filters.sport === sport}
             onClick={() => set({ sport: filters.sport === sport ? null : sport })}
           >
-            {sport} <i>{n}</i>
+            {SPORT_SHOWN[sport] ?? sport} <i>{n}</i>
           </button>
         ))}
 
@@ -955,7 +984,7 @@ export default function FeedToolbar({
             key={slug}
             className="ray-toolbar-pill"
             data-active={filters.maker === slug}
-            disabled={n === 0}
+            disabled={n === 0 && filters.maker !== slug}
             onClick={() => set({ maker: filters.maker === slug ? null : slug })}
           >
             {ARTIST_LABEL[slug] || slug} <i>{n}</i>
@@ -964,16 +993,7 @@ export default function FeedToolbar({
 
         {categories.length > 0 && (sports.length > 0 || makers.length > 0) && <span className="ray-toolbar-divider" aria-hidden="true" />}
 
-        {categories.map(c => (
-          <button
-            key={c.key}
-            className="ray-toolbar-pill"
-            data-active={subActive(c.key)}
-            onClick={() => toggleSub(c.key)}
-          >
-            {c.label} <i>{c.n}</i>
-          </button>
-        ))}
+        {subPillsOf(true)}
         </div>
       )}
 

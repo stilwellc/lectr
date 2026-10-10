@@ -34,12 +34,46 @@ export function settledOnly(lots: AuctionLot[]): { good: AuctionLot[]; dropped: 
   return { good, dropped: lots.length - good.length };
 }
 
+// ── BID HISTORY THROUGH SETTLEMENT ──────────────────────────────────────────
+// The live leg appends a {d,b,n} snapshot per night; at the close the settled
+// record REPLACES the live row by id (fresh id wins). Without a carry the
+// snapshots died with the live row — only Goldin (ray-crawl) kept history on
+// sold lots, so the nightly close-k fit (scripts/lib/close-k-fit.ts) had no
+// own-row history for any sports-crawl house. A settled row now inherits the
+// prior row's bidHistory, compacted to the FIRST sighting + the LAST
+// SETTLED_SNAP_TAIL (the earliest horizon + the run-in to the close are what
+// a days-out fit reads; the middle of a 59-snap trail is weight).
+export const SETTLED_SNAP_TAIL = 12;
+type Snap = { d: string; b: number; n: number };
+
+/** first + last SETTLED_SNAP_TAIL snapshots (≤ 13), order kept; idempotent */
+export function compactBidHistory(hist: Snap[]): Snap[] {
+  const h = hist.filter(s => s && typeof s.d === 'string');
+  if (h.length <= SETTLED_SNAP_TAIL + 1) return h;
+  return [h[0], ...h.slice(-SETTLED_SNAP_TAIL)];
+}
+
+/** the settled `fresh` row, carrying `prev`'s bid trail when fresh has none.
+ *  Live (upcoming) fresh rows pass through untouched — the live leg owns
+ *  their history. A settled fresh row that brings its own bidHistory keeps it
+ *  (compacted). */
+export function withSettledHistory(fresh: AuctionLot, prev: AuctionLot | undefined): AuctionLot {
+  if ((fresh as { status?: string }).status === 'upcoming') return fresh;
+  const own = (fresh as { bidHistory?: Snap[] }).bidHistory;
+  const carried = Array.isArray(own) && own.length ? own : (prev as { bidHistory?: Snap[] } | undefined)?.bidHistory;
+  if (!Array.isArray(carried) || !carried.length) return fresh;
+  const bidHistory = compactBidHistory(carried);
+  return bidHistory.length ? ({ ...fresh, bidHistory } as AuctionLot) : fresh;
+}
+
 export function writeMergedSegment(name: string, fresh: AuctionLot[]): { total: number; added: number } {
   const existing = readSegment(name) as unknown as AuctionLot[];
   const byId = new Map<string, AuctionLot>();
   for (const l of existing) if (l && l.id) byId.set(l.id, l);
   const before = byId.size;
-  for (const l of fresh) if (l && l.id) byId.set(l.id, l);
+  // mid-run incremental flushes (H&S, MLB, Bidsquare) settle through HERE
+  // before the live write — the carry must ride both writers
+  for (const l of fresh) if (l && l.id) byId.set(l.id, withSettledHistory(l, byId.get(l.id)));
   const union = Array.from(byId.values());
   writeSegment(name, union as unknown as Record<string, unknown>[]);
   return { total: union.length, added: union.length - before };
@@ -128,7 +162,6 @@ export function writeMergedSegmentWithLive(
     const prev = prevById.get(l.id);
     if (prev && (prev as { status?: string }).status === 'sold') continue; // never un-sell
     const firstSeen = (prev as { firstSeen?: string } | undefined)?.firstSeen || (l as { firstSeen?: string }).firstSeen;
-    type Snap = { d: string; b: number; n: number };
     const hist: Snap[] = ((prev as { bidHistory?: Snap[] } | undefined)?.bidHistory || []).slice(-58);
     const b = (l as { currentBid?: number }).currentBid || 0;
     const n = (l as { bidCount?: number }).bidCount || 0;
@@ -138,7 +171,9 @@ export function writeMergedSegmentWithLive(
     // what the stale gate above ages on (bidHistory only appends on change)
     byId.set(l.id, { ...l, firstSeen, lastSeen: todayDay, ...(hist.length ? { bidHistory: hist } : {}) } as AuctionLot);
   }
-  for (const l of freshSettled) if (l && l.id) byId.set(l.id, l);
+  // settled last: the sold record wins, but inherits the live row's bid trail
+  // (prevById = last night's row, which tonight's live pass may have extended)
+  for (const l of freshSettled) if (l && l.id) byId.set(l.id, withSettledHistory(l, byId.get(l.id) || prevById.get(l.id)));
   const union = Array.from(byId.values());
   writeSegment(name, union as unknown as Record<string, unknown>[]);
   const upcoming = union.filter(l => (l as { status?: string }).status === 'upcoming').length;

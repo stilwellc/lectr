@@ -795,7 +795,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   let gradeLadderArtifact: ReturnType<typeof fitGradeLadder>['rungs'] | null = null;
   let gradeLadderMeta: { pairs: number; groups: number } | null = null;
   {
-    const { parseCard, playerOf, cardKey, cardLadderKey } = require('../app/lib/cards');
+    const { parseCard, playerOf, cardKey, cardLadderKey, rosterCardPlayerOf } = require('../app/lib/cards');
     // parseCard is a pure function of the title; the same card title recurs
     // across the sold pass AND the live pass (and duplicate listings), so cache
     // by title — each unique title is parsed once. The cached CardId is returned
@@ -1300,6 +1300,12 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         if (l.subCat === 'tcg-other') continue;
         const c = cardIdOf(l);
         lw.playerSlug = c.playerSlug; lw.playerName = c.player;
+        // (r6) a single the slot readers can't name — a numberless pre-war /
+        // oddball issue ("1954 Red Heart Stan Musial"), or a slot run that is
+        // not a person ("#50 Jackie Robinson Inaugural Bowman Card"): the one
+        // KNOWN player it names. A known slot read is never overridden.
+        const np = rosterCardPlayerOf(l.title || '', knownPlayers);
+        if (np.player) { lw.playerSlug = np.playerSlug; lw.playerName = np.player; }
         // a condition-flagged lot must not wear a clean-comp floor: no
         // cardComps → no deep-value seat, no misleading "med" on the page
         if (hasConditionFlag(l.title) || llmConditionFlag(l)) continue;

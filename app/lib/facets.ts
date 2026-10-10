@@ -19,11 +19,22 @@
  * chips after 'Film & TV' / 'Music' — and un-picking (or picking a rival of)
  * the parent drops its children. A chip that cuts nothing stays hidden.
  *
+ * CHIPS AUDIT (Oct 9): "cuts nothing" now means keeps ≥95% of its pool
+ * (taxonomy NEAR_TOTAL — "Signed 474" inside Autographs 477, "Graded 166"
+ * inside Classic 167). When such a hidden chip is a PARENT (Graded, Film &
+ * TV, Music; a grader only when it is every slab) its children open as if it
+ * were picked, and tapping a child picks the parent with it (`via`) — so a
+ * player page whose cards are all slabbed still offers PSA / SGC. The
+ * franchise and complication chips run by count, biggest first. Fine Art
+ * offers no medium chips: the stamped form splits only 54 of 75 'Paintings &
+ * Works on Paper' lots, so "Paintings 22 · Works on paper 32" under that sub
+ * never added up (the keys stay for the lot-card badge).
+ *
  * Measured on the Oct 9 live book (10,871 lots) — see the labels-facets
  * commit for coverage / precision per facet.
  */
 import { parseCard, type CardId } from './cards';
-import { taxonOf, type CatKey, type Taxon } from './taxonomy';
+import { taxonOf, NEAR_TOTAL, type CatKey, type Taxon } from './taxonomy';
 
 export type FacetGroup =
   | 'kind' | 'era' | 'domain' | 'grader' | 'grade' | 'lang' | 'qty' | 'franchise' | 'complication' | 'medium';
@@ -122,8 +133,11 @@ const COMPLICATIONS: [string, string, RegExp][] = [
   ['cx-repeater', 'Minute repeater', /minute[- ]repeat|r[eé]p[eé]tition minutes/i],
 ];
 const COMPLICATION: FacetDef[] = COMPLICATIONS.map(([key, label]) => ({ key, label, group: 'complication', any: 'complication' }));
-/** Fine Art's 'Unique works' sub split by the stamped form (formKey): the two
- *  mediums the subs cannot say (prints / sculpture / ceramics already are subs) */
+/** Fine Art's 'Unique works' sub split by the stamped form (formKey). NOT a
+ *  chip (chips audit, Oct 9): 21 of the sub's 75 live lots carry only
+ *  'original-2d' and a truncated medium, so the split never sums to the sub.
+ *  The keys stay — the lot card's 'Painting' / 'Work on paper' badge, and an
+ *  old shared link's pick (shown so it can be un-picked). */
 const ART_MEDIUM: FacetDef[] = [
   { key: 'painting', label: 'Paintings', group: 'medium', any: 'medium' },
   { key: 'on-paper', label: 'Works on paper', group: 'medium', any: 'medium' },
@@ -143,10 +157,13 @@ export const isEraFacet = (k: string) => DEF[k]?.any === 'era';
 /** the facets a category offers (empty = none). With `fx`, the children of a
  *  picked parent are included (graders under 'Graded', grades under a grader, franchises under
  *  their domain); without, only the top level. */
-export function facetsFor(cat: CatKey | null, fx: readonly string[] = []): FacetDef[] {
-  // a picked key always shows (a shared link may carry a child without its parent)
+export function facetsFor(cat: CatKey | null, fx: readonly string[] = [], implied: readonly string[] = []): FacetDef[] {
+  // a picked key always shows (a shared link may carry a child without its
+  // parent); an implied parent (facetChips: it held every lot) opens its
+  // children but never steps a picked grader's siblings aside
+  const on = implied.length ? [...fx, ...implied] : fx;
   const open = (defs: FacetDef[]) => defs.filter(d => fx.includes(d.key)
-    || (opened(d, fx) && !(d.solo && fx.some(k => rivals(k, d.key)))));
+    || (opened(d, on) && !(d.solo && fx.some(k => rivals(k, d.key)))));
   // a picked parent's children sit right after it: Graded Raw | PSA … | Gem 10 … | Rookie …
   // (cards / TCG carry no 'Single items' chip — their 'Lots' sub already
   // separates multi-card lots, and Raw excludes them)
@@ -156,9 +173,14 @@ export function facetsFor(cat: CatKey | null, fx: readonly string[] = []): Facet
   if (cat === 'space-science') return [FLOWN, SIGNED, SINGLE];
   if (cat === 'historical' || cat === 'sports-memorabilia') return [SIGNED, SINGLE];
   if (cat === 'watches') return COMPLICATION;
-  if (cat === 'fine-art') return ART_MEDIUM;
+  if (cat === 'fine-art') return ART_MEDIUM.filter(d => fx.includes(d.key));
   return [];
 }
+/** every key some other facet opens under (Graded, the graders, the domains) */
+const PARENTS = new Set(ALL.flatMap(d => d.parent ?? []));
+/** is `a` above `key` in the parent chain (Graded above PSA above Gem 10)? */
+const isAncestor = (a: string, key: string): boolean =>
+  !!DEF[key]?.parent?.some(p => p === a || isAncestor(a, p));
 
 const opened = (d: FacetDef | undefined, fx: readonly string[]) => !d?.parent || d.parent.some(p => fx.includes(p));
 /** picking one replaces a rival (same exclusive set) */
@@ -313,31 +335,49 @@ export function passesFacets(l: FacetLot, fx: readonly string[]): boolean {
 
 /** toggle one facet: a rival in its exclusive set is replaced, and children
  *  whose parent is no longer picked are dropped (Raw clears PSA / Gem 10) */
-export function toggleFacet(fx: readonly string[], key: string): string[] {
-  let next = fx.includes(key) ? fx.filter(k => k !== key) : [...fx.filter(k => !rivals(k, key)), key];
+export function toggleFacet(fx: readonly string[], key: string, via: readonly string[] = []): string[] {
+  // picking a child whose parent was only implied (facetChips `via`) picks
+  // the parent with it: PSA ⇒ Graded
+  const add = [...via.filter(k => !fx.includes(k)), key];
+  let next = fx.includes(key) ? fx.filter(k => k !== key)
+    : [...fx.filter(k => !add.some(a => rivals(k, a))), ...add];
   // children of children (Gem 10 under PSA under Graded): drop until stable
   for (let n = -1; n !== next.length;) { n = next.length; next = next.filter(k => opened(DEF[k], next)); }
   return next;
 }
 
 /** the category a facet row belongs to: the picked one, else the pool's only one */
-export function facetCatOf(cat: CatKey | null, lots: FacetLot[]): CatKey | null {
-  if (cat) return facetsFor(cat).length ? cat : null;
+export function facetCatOf(cat: CatKey | null, lots: FacetLot[], opts: { cats?: readonly CatKey[] | null; fx?: readonly string[] } = {}): CatKey | null {
+  const fx = opts.fx ?? [];
+  if (cat) return facetsFor(cat, fx).length ? cat : null;
+  // a market's stray lots (opts.cats: its own categories) don't make the pool
+  // two-category — Science keeps Flown / Signed over 4 stray records
   let only: CatKey | null = null;
   for (const l of lots) {
     const c = taxonOf(l).cat;
+    if (opts.cats && !opts.cats.includes(c)) continue;
     if (only && c !== only) return null;
     only = c;
   }
-  return only && facetsFor(only).length ? only : null;
+  return only && facetsFor(only, fx).length ? only : null;
 }
 
+export type FacetChip = FacetDef & {
+  n: number;
+  /** implied parents a tap on this chip picks with it (toggleFacet's `via`) */
+  via?: string[];
+};
+/** groups whose chips run biggest first (era, grade and language keep their
+ *  natural order: chronology, the grade ladder, English first) */
+const BY_COUNT = new Set<FacetGroup>(['franchise', 'complication']);
+
 /** chip counts over `pool` with the OTHER selected facets applied; a chip that
- *  would match nothing or everything is dropped (it cuts nothing) */
-export function facetChips(cat: CatKey, pool: FacetLot[], fx: readonly string[]): (FacetDef & { n: number })[] {
-  const defs = facetsFor(cat, fx);
-  return defs.map(d => {
-    const others = fx.filter(k => k !== d.key && !rivals(k, d.key) && !anySibs(k, d.key));
+ *  matches nothing or keeps ≥95% of its pool is dropped (it cuts nothing) —
+ *  and a dropped PARENT opens its children as if picked (see the header) */
+export function facetChips(cat: CatKey, pool: FacetLot[], fx: readonly string[]): FacetChip[] {
+  const implied: string[] = [];
+  const count = () => facetsFor(cat, fx, implied).map(d => {
+    const others = [...fx, ...implied].filter(k => k !== d.key && !rivals(k, d.key) && !anySibs(k, d.key));
     let n = 0, base = 0;
     for (const l of pool) {
       if (!passesFacets(l, others)) continue;
@@ -345,7 +385,31 @@ export function facetChips(cat: CatKey, pool: FacetLot[], fx: readonly string[])
       if (lotFacets(l).has(d.key)) n++;
     }
     return { ...d, n, base };
-  }).filter(c => fx.includes(c.key) || (c.n > 0 && c.n < c.base)).map(({ base: _b, ...c }) => c);
+  });
+  let chips = count();
+  // Graded → a sole grader: at most two implied levels
+  for (let pass = 0; pass < 2; pass++) {
+    const add = chips.filter(c => PARENTS.has(c.key) && !fx.includes(c.key) && !implied.includes(c.key)
+      && !fx.some(k => rivals(k, c.key)) && c.n > 0
+      // a grader is implied only when it is EVERY slab (a BGS 9.5 is not a PSA 9.5)
+      && (c.group === 'grader' ? c.n === c.base : c.n >= NEAR_TOTAL * c.base));
+    if (!add.length) break;
+    implied.push(...add.map(c => c.key));
+    chips = count();
+  }
+  const kept: FacetChip[] = chips
+    .filter(c => fx.includes(c.key) || (c.n > 0 && c.n < NEAR_TOTAL * c.base))
+    .map(({ base: _b, ...c }) => {
+      const via = implied.filter(k => isAncestor(k, c.key) && !fx.includes(k));
+      return via.length ? { ...c, via } : c;
+    });
+  // biggest first inside the by-count groups, each group keeping its slot
+  for (const g of Array.from(BY_COUNT)) {
+    const at = kept.map((c, i) => (c.group === g ? i : -1)).filter(i => i >= 0);
+    const sorted = at.map(i => kept[i]).sort((a, b) => b.n - a.n);
+    at.forEach((i, j) => { kept[i] = sorted[j]; });
+  }
+  return kept;
 }
 
 /* ── lot-card badges ─────────────────────────────────────────────────────── */
