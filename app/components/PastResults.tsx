@@ -4,39 +4,12 @@ import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { AuctionLot } from '../types';
 import type { LotCategory } from '../types';
-import { ARTIST_LABEL, marketOf } from '../constants';
+import { marketOf } from '../constants';
 import { houseColors, formatDate, formatPrice, categoryLabels, categoryColors, craftTitle, overEstimatePct } from '../utils';
-import { isSportsScienceObject, sportsForm, classifyForm, FORM_LABEL, cleanGoldinTitle } from '../lib/comps';
+import { cleanGoldinTitle } from '../lib/comps';
+import { makerLineOf, subColumnOf } from '../lib/lot-labels';
 import { safeHref } from '../lib/safe-href';
 import SectionMark from './SectionMark';
-
-/** Known irregular plurals the naive strip-s would mangle ("wristwatches" →
- *  "wristwatche"). Checked before the default rule. */
-const SINGULAR: Record<string, string> = {
-  wristwatches: 'wristwatch',
-  benches: 'bench',
-  tables: 'table',
-};
-
-/** For a sports/science object lot, a human sub-label ("game-worn jersey",
- *  "ticket") in place of the raw "Object" category badge. sportsForm covers
- *  the sports slugs; science slugs fall back to the frozen classifyForm form.
- *  Returns null for every non-sports/science lot — art/design rows unchanged. */
-function objectSubLabel(lot: AuctionLot): string | null {
-  if (!isSportsScienceObject(lot)) return null;
-  const form = sportsForm(lot) ?? classifyForm(lot);
-  const label = FORM_LABEL[form];
-  if (!label) return null;
-  // FORM_LABEL is plural ("game-worn jerseys"); a per-row badge reads as a
-  // single object, so singularize a clean single-word plural ("jerseys" →
-  // "jersey"). Multi-word forms ("tickets & passes", "trophies & awards")
-  // stay as-is rather than mangle a compound.
-  if (/[ &]/.test(label)) return label;
-  if (SINGULAR[label]) return SINGULAR[label];
-  // an unmapped -ches/-ses plural keeps its plural rather than lose the -e
-  if (label.endsWith('ches') || label.endsWith('ses')) return label;
-  return label.endsWith('s') && !label.endsWith('ss') ? label.slice(0, -1) : label;
-}
 
 type SortMode = 'date' | 'price';
 type CategoryFilter = 'all' | LotCategory;
@@ -325,11 +298,13 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
       }}>
         {shown.map((lot, i) => {
           const color = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
-          const catColor = (lot.category && lot.category !== 'unknown') ? categoryColors[lot.category] : null;
-          // sports/science objects get a human sub-label ("game-worn jersey")
-          // in place of the raw "Object" badge; art/design rows unchanged.
-          const catBadge = objectSubLabel(lot) ?? (categoryLabels[lot.category] || lot.category);
-          const makerLabel = lot.artist ? (ARTIST_LABEL[lot.artist] || lot.artist) : '';
+          // the badge speaks the home feed's label vocabulary (app/lib/lot-labels):
+          // the table's short sub column ("Prints & Multiples", "PSA 9") — on
+          // the chip, and where phones fold the chips into text. The chip
+          // keeps its lightness-coded ink off the medium enum.
+          const catColor = categoryColors[lot.category] || categoryColors.unknown;
+          const catBadge = subColumnOf(lot);
+          const makerLabel = lot.artist ? makerLineOf(lot).name : '';
           // Defense-in-depth: strip any crawl-leaked "do not list…" / date
           // prefix from a Goldin title before it renders (W1 filters at source;
           // this guards a legacy archive row that slipped through).
@@ -364,7 +339,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                     {/* the maker's own book — an internal link above the
                         stretched house anchor (which keeps the title/CTA) */}
                     <Link
-                      href={`/makers/${lot.artist}`}
+                      href={makerLineOf(lot).href}
                       className="ray-result-maker"
                       onClick={e => e.stopPropagation()}
                       style={{
@@ -413,7 +388,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                       768px, so this IS the whole meta line there */}
                   <span className="ray-result-meta-mob">
                     <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {catColor ? `${catBadge} · ${lot.auctionHouse}` : lot.auctionHouse}
+                      {catBadge ? `${catBadge} · ${lot.auctionHouse}` : lot.auctionHouse}
                     </span>
                   </span>
                 </div>

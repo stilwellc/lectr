@@ -19,7 +19,7 @@
 
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { ARTIST_LABEL, MARKETS, ROSTER, marketArtists, type Market } from '../../constants';
+import { MARKETS, ROSTER, marketArtists, type Market } from '../../constants';
 import { useMarket } from '../../lib/market';
 import { useRayData, useSoldArchive, retryArchiveLoad, triggerFullLoad, retryFullLoad } from '../../hooks/useRayData';
 import { loadPageStats, type PageStats } from '../../lib/page-data';
@@ -40,7 +40,7 @@ import FeedToolbar, { FeedFilters, FEED_DEFAULTS, FEED_PARAM_KEYS, feedFromParam
 import { useUrlState, useLastVisit, passesTriage, houseBaselines, memoryOf, restoreParams, readFeedMemory, writeFeedMemory } from '../../lib/feed-filters';
 import { byPriority, shortlist, reasonOf, forYou, spread } from '../../lib/priority';
 import { closeIsTimed } from '../../lib/house-tz';
-import { makerLineOf, subColumnOf } from '../../lib/lot-labels';
+import { makerLineOf, labelTagOf, subColumnOf, searchTextOf } from '../../lib/lot-labels';
 import { usePlayerDossiers } from '../../lib/use-player-dossiers';
 import { foldVariants, foldNote, foldQuery, crossSibs, crossNote } from '../../lib/fold';
 import { useFollows, affinityOf } from '../../lib/follows';
@@ -250,6 +250,9 @@ function FeedRow({ lot, onOpen, tone, note, onNote }: { lot: AuctionLot; onOpen:
       : lot.currentBid
         ? `bid ${formatPrice(lot.currentBid)}`
         : '—';
+  // the label's lead word (its lead badge, else the sub) — the full line
+  // ellipsized the maker away at 390px
+  const label = labelTagOf(lot);
   return (
     <button type="button" className="ray-feedrow" onClick={onOpen} aria-label={`Comps for ${craftTitle(lot.title, lot.auctionHouse)}`}>
       <span className="ray-feedrow-thumb" data-tone={tone} aria-hidden>
@@ -270,7 +273,12 @@ function FeedRow({ lot, onOpen, tone, note, onNote }: { lot: AuctionLot; onOpen:
         )}
       </span>
       <span className="ray-feedrow-main">
-        <span className="ray-feedrow-maker">{makerLineOf(lot).name}</span>
+        <span className="ray-feedrow-maker">
+          {makerLineOf(lot).name}
+          {/* the label rides the maker line's spare width in the title tier's
+              ink (the words LotCard prints) — never a new line */}
+          {label && <span style={{ fontWeight: 400, fontSize: '12.5px', color: 'var(--color-text-muted)' }}> · {label}</span>}
+        </span>
         <span className="ray-feedrow-title">{craftTitle(lot.title, lot.auctionHouse)}</span>
         {note && (onNote ? (
           // the row is itself a button: the folded note presses as a link
@@ -719,11 +727,10 @@ export default function TerminalHomePage() {
     // triage: closing window, clean category/sub, house, value floor, new
     arr = arr.filter(l => passesTriage(l, f, { prevVisitDay, baselines }));
     if (q) {
-      arr = arr.filter(l =>
-        `${ARTIST_LABEL[l.artist] || l.artist} ${l.title} ${l.auctionHouse} ${l.saleName} ${l.medium || ''}`
-          .toLowerCase()
-          .includes(q)
-      );
+      // the haystack carries the printed label vocabulary — the player, "PSA
+      // 10", "Signed", "Rookie", "Apollo" (app/lib/lot-labels searchTextOf,
+      // memoised per lot: 10K lots a keystroke)
+      arr = arr.filter(l => searchTextOf(l).includes(q));
     }
     const est = (l: typeof arr[number]) => l.estimateHigh || l.estimateLow || l.currentBid || 0;
     const past = (l: AuctionLot) => !!l.resultsPending && trueSaleDay(l) !== '' && trueSaleDay(l) < crawlDay;
@@ -1410,7 +1417,7 @@ export default function TerminalHomePage() {
                     span={2}
                     stat={gapMultiple(todaysCall.pct)}
                     label="Today's call"
-                    body={`${ARTIST_LABEL[todaysCall.lot.artist] || todaysCall.lot.artist} · ${craftTitle(todaysCall.lot.title)}`}
+                    body={`${makerLineOf(todaysCall.lot).name} · ${craftTitle(todaysCall.lot.title, todaysCall.lot.auctionHouse)}`}
                     href={`/lot/${todaysCall.lot.id}`}
                   />
                 ) : (
