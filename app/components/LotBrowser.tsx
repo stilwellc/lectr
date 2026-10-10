@@ -31,6 +31,7 @@ import { foldVariants, foldNote, foldQuery, crossSibs, crossNote } from '../lib/
 import { affinityOf, type Follow } from '../lib/follows';
 import { feedPass } from '../lib/lot-browser';
 import { useLotModal } from '../lib/use-lot-modal';
+import { cameBack } from '../lib/use-back-scroll';
 import Flick from './Flick';
 
 const NOOP = () => {};
@@ -235,8 +236,10 @@ export interface LotBrowserProps {
   follows?: Follow[];
   /** scoped to one maker's book: the maker lens hides, a saved search
    *  carries the maker; `named` = a real maker (art/design/watches), whose
-   *  shortlist can't diversify across makers */
-  scope?: { maker: string; named: boolean } | null;
+   *  shortlist can't diversify across makers. `subj` = one subject's book
+   *  (a player dossier): every lot is one "who", so the shortlist lifts the
+   *  per-maker cap too */
+  scope?: { maker?: string; subj?: string; named: boolean } | null;
   savedIds?: string[];
   isSaved?: (id: string) => boolean;
   onToggleSave?: (id: string, lot?: AuctionLot) => void;
@@ -377,7 +380,8 @@ export default function LotBrowser({
   // maker's own page lifts the maker cap — the whole pool is one maker).
   // "For you" (Oct 8): only once the reader follows something (maker,
   // player, category, house) — signed in or not (app/lib/follows)
-  const whoCap = scope?.named ? Infinity : undefined;
+  // (a feed scoped to one subject row by ?subj= is one "who" as well)
+  const whoCap = scope?.named || scope?.subj || feedFilters.subj ? Infinity : undefined;
   const youTab = follows.length > 0 && feedFilters.tab === 'you';
   const wantTop = !youTab && feedFilters.sort === 'priority' && (feedFilters.tab ?? 'top') !== 'all';
   const top = useMemo(
@@ -451,6 +455,25 @@ export default function LotBrowser({
     const f = feedFilters;
     return `${f.vertical}|${f.maker}|${f.sport}|${f.category}|${f.belowOnly}|${f.sort}|${f.saleDay ?? ''}|${f.win}|${f.cat}|${f.sub}|${f.house}|${f.minUsd}|${f.maxUsd}|${f.newOnly}|${f.fx.join(",")}|${f.tab}`;
   }, [feedFilters]);
+  // a deep link to this book (`#<anchorId>` — /makers' "+N more on the
+  // block", the compare tray's live list) mounts after the lots load, long
+  // after the browser's own fragment scroll gave up: land it once we exist,
+  // clearing the sticky nav (its own height, measured) so the heading shows
+  useEffect(() => {
+    // (a Back is use-back-scroll's to land — the reader's own place wins)
+    if (window.location.hash !== `#${anchorId}` || cameBack()) return;
+    const go = () => {
+      const el = document.getElementById(anchorId);
+      if (!el) return;
+      const nav = document.querySelector('nav, header');
+      const pad = Math.min(120, (nav?.getBoundingClientRect().bottom ?? 64)) + 8;
+      window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - pad) });
+    };
+    const raf = requestAnimationFrame(go);
+    const t = window.setTimeout(go, 450); // after the chart wells settle
+    return () => { cancelAnimationFrame(raf); window.clearTimeout(t); };
+  }, [anchorId]);
+
   const handleFilters = (next: FeedFilters) => {
     // the shortlist only exists in Matters-most order: any other sort is "All lots"
     if (next.sort !== 'priority' && next.tab === 'top') next = { ...next, tab: 'all' };
@@ -512,6 +535,7 @@ export default function LotBrowser({
         baselines={baselines}
         onResetView={onResetView}
         scopeMaker={scope?.maker ?? null}
+        scopeSubj={scope?.subj ?? null}
       />
 
       {effectiveView === 'table' && feed.length > 0 ? (
@@ -570,7 +594,7 @@ export default function LotBrowser({
                         )}
                       </span>
                     </td>
-                    <td>
+                    <td className="t-work">
                       <Link
                         href={makerLineOf(lot).href}
                         className="t-artist"
@@ -594,7 +618,7 @@ export default function LotBrowser({
                         const n = alsoOf(lot);
                         if (!n) return null;
                         const open = foldOpeners.get(lot.id);
-                        const st = { display: 'block', color: 'var(--color-text-faint)', fontSize: 10.5 } as const;
+                        const st = { display: 'block', color: 'var(--color-text-faint)', fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' } as const;
                         return open
                           ? <button type="button" onClick={e => { e.stopPropagation(); open(); }} style={{ ...st, background: 'none', border: 0, padding: 0, fontFamily: 'inherit', textAlign: 'left', cursor: 'pointer' }}>{n}</button>
                           : <span style={st}>{n}</span>;

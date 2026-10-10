@@ -32,7 +32,7 @@ import { priorityOf } from '../lib/priority';
 import { liveBookHref } from '../lib/lot-browser';
 import { taxonOf, SUBS, CAT_LABEL, SPORTS, subLabel, subLabelOf, type CatKey } from '../lib/taxonomy';
 import { makerLineOf, labelLineOf, searchTextOf } from '../lib/lot-labels';
-import { groupBySubject, SUBJECT_MARKETS, type SubjectGroup } from '../lib/maker-subjects';
+import { groupBySubject, subjectFeedHref, OTHER, SUBJECT_MARKETS, type SubjectGroup } from '../lib/maker-subjects';
 import { livePool, feedQueryMatches, feedSearchHref, sortByPriority } from '../lib/maker-pool';
 import { useFollows, catFollow } from '../lib/follows';
 import type { CatStat } from '../../scripts/cat-stats';
@@ -114,7 +114,8 @@ interface Row {
   /** the "matters most" score of the maker's best live lot (app/lib/priority) */
   topScore: number;
   /** where "Open the dossier" / "+N more" lead — sub-category rows (Oct 9) go
-   *  to the feed filtered to that sub; maker rows to /makers/<slug> */
+   *  to the feed filtered to that sub; maker rows to /makers/<slug>; subject
+   *  rows to the player dossier, else the feed scoped by ?subj= (r5) */
   href?: string;
   /** maker (a real roster slug) · sub (a clean sub-category, "By category")
    *  · subject (a player / Pokémon / person / film / franchise / mission —
@@ -328,7 +329,11 @@ function CompareTray({ sel, rows, onRemove, onClear }: {
   onClear: () => void;
 }) {
   const [expanded, setExpanded] = useState(true);
+  // two reads of the same picks: the 12-quarter trend, or what each has on
+  // the block right now (count, engine flags, its three that matter most)
+  const [view, setView] = useState<'trend' | 'live'>('trend');
   const picked = sel.map(s => rows.find(r => r.slug === s)).filter((r): r is Row => !!r);
+  const liveTotal = picked.reduce((n, r) => n + r.live, 0);
   // shared date domain: the union of each maker's last-12q dates
   const series = picked.map(r => {
     const pts = completeQuarters(r.stats?.priceHistory || []).slice(-12)
@@ -368,12 +373,45 @@ function CompareTray({ sel, rows, onRemove, onClear }: {
           );
         })}
         <span className="mkc-rule" aria-hidden />
+        <span role="radiogroup" aria-label="Compare view" style={{ display: 'inline-flex', gap: 6 }}>
+          {([['trend', 'Trend'], ['live', 'Live']] as const).map(([k, lbl]) => (
+            <button key={k} type="button" role="radio" aria-checked={view === k} className="mk-chip" data-on={view === k || undefined}
+              style={{ height: 24, padding: '0 10px', letterSpacing: '0.06em', textTransform: 'none' }}
+              onClick={() => { setView(k); setExpanded(true); }}>
+              {lbl}
+            </button>
+          ))}
+        </span>
         <button type="button" className="mkc-btn" onClick={() => setExpanded(v => !v)} aria-expanded={expanded}>
           {expanded ? 'Collapse' : 'Expand'}
         </button>
         <button type="button" className="mkc-btn" onClick={onClear}>Clear</button>
       </div>
-      {expanded && (
+      {expanded && view === 'live' && (
+        <div className="rail mkc-body" data-live style={{ '--n': picked.length, maxHeight: '52vh', overflowY: 'auto' } as React.CSSProperties}>
+          {picked.map(r => (
+            <div key={r.slug} className="mkx-live" style={{ margin: 0 }}>
+              <div className="mkx-live-head kicker">
+                {r.label} · {r.live > 0 ? `${r.live.toLocaleString()} live` : 'nothing live'}{r.flags > 0 ? <> · <b className="mkx-live-flagn">{r.flags} flagged</b></> : null}
+              </div>
+              {r.liveLots.slice(0, 3).map(l => (
+                <LiveLotRow key={l.id} l={l} letter={r.label.charAt(0)} kind={r.kind ?? 'maker'} />
+              ))}
+              {r.live > 3 && (
+                <Link href={liveBookHref(r.href ?? `/makers/${r.slug}`, typeof window === 'undefined' ? '' : window.location.search)} className="mkx-live-more">
+                  +{(r.live - 3).toLocaleString()} more on the block <Flick size={9} style={{ marginLeft: 4 }} />
+                </Link>
+              )}
+            </div>
+          ))}
+          {picked.length > 1 && liveTotal > 0 && picked.every(r => !r.href) && (
+            <Link href={compareLiveHref(picked, typeof window === 'undefined' ? '' : window.location.search)} className="ray-call-btn ray-call-btn-primary" style={{ gridColumn: '1 / -1', justifySelf: 'start' }}>
+              See all {liveTotal.toLocaleString()} live lots together
+            </Link>
+          )}
+        </div>
+      )}
+      {expanded && view === 'trend' && (
         <div className="rail mkc-body">
           {series.length >= 2 ? (
             <>
@@ -422,6 +460,49 @@ function CompareTray({ sel, rows, onRemove, onClear }: {
   );
 }
 
+/* one live lot as the dossier's live book prints it (and the compare tray's) */
+function LiveLotRow({ l, letter, kind }: { l: AuctionLot; letter: string; kind: Row['kind'] }) {
+  const closeSoon = l.saleDateTime && (Date.parse(l.saleDateTime) - Date.now()) < 24 * 3600e3 && Date.parse(l.saleDateTime) > Date.now();
+  return (
+    <Link href={`/lot/${l.id}`} className="mkx-lot">
+      <span className="mkx-lot-thumb" aria-hidden>
+        <span className="mkx-lot-letter">{letter}</span>
+        {l.imageUrl && (
+          <img src={httpsImg(l.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
+            onError={e => e.currentTarget.remove()} />
+        )}
+      </span>
+      <span className="mkx-lot-main">
+        <span className="mkx-lot-title">{craftTitle(l.title, l.auctionHouse)}</span>
+        <span className="mkx-lot-sub">
+          {lotSubLine(l, kind)}
+          {l.signal?.label === 'Below Market' && <span className="mkx-lot-flag"> · flagged below market</span>}
+        </span>
+      </span>
+      <span className="mkx-lot-cells">
+        <span className="mkx-lot-est">{formatEstimate(l)}</span>
+        <span className="mkx-lot-close">
+          {closeSoon
+            ? <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}><CloseClock iso={l.saleDateTime!} windowHours={24} /></span>
+            : <>closes {formatDate(l.saleDate)}</>}
+        </span>
+      </span>
+    </Link>
+  );
+}
+
+/** the compare tray's combined live list: the home feed scoped to the picked
+ *  makers (mk=a,b — app/lib/lot-browser feedPass), on their shared market
+ *  when they have one, the /makers triage view carried along */
+function compareLiveHref(picked: Row[], search: string): string {
+  const mkts = new Set(picked.map(r => r.market));
+  const base = mkts.size === 1 ? `/${picked[0].market}` : '/';
+  const p = new URLSearchParams();
+  p.set('mk', picked.map(r => r.slug).join(','));
+  p.set('tab', 'all');
+  return liveBookHref(`${base}?${p.toString()}`, search);
+}
+
 /* the expanded dossier's live book: eight rows, three orders */
 type LiveSort = 'matters' | 'closing' | 'est';
 const LIVE_SORTS: [LiveSort, string][] = [['matters', 'Matters'], ['closing', 'Closing'], ['est', 'Est.']];
@@ -451,8 +532,6 @@ const MakerRowItem = React.memo(function MakerRowItem({
   // 2,000+ subject rows must not each carry a hidden dossier in the DOM
   const [opened, setOpened] = useState(isOpen);
   if (isOpen && !opened) setOpened(true);
-  // subject rows page their live lots in place (no lot browser behind them)
-  const [shownLots, setShownLots] = useState(LIVE_ROWS);
   const inline = r.kind === 'subject' || r.kind === 'rest';
   const canCompare = r.kind !== 'subject' && r.kind !== 'rest';
   const followKey = r.kind === 'subject' || r.kind === 'rest' ? r.followKey ?? null : r.slug;
@@ -464,8 +543,8 @@ const MakerRowItem = React.memo(function MakerRowItem({
     const pick = liveSort === 'matters' ? ls
       : liveSort === 'closing' ? [...ls].sort((a, b) => closeKey(a) - closeKey(b))
       : [...ls].sort((a, b) => estKey(b) - estKey(a));
-    return pick.slice(0, inline ? shownLots : LIVE_ROWS);
-  }, [r.liveLots, liveSort, inline, shownLots]);
+    return pick.slice(0, LIVE_ROWS);
+  }, [r.liveLots, liveSort]);
   const cell = (k: ColKey): React.ReactNode => {
     switch (k) {
       case 'curve': return <span key={k} className="mk-cell mk-spark" aria-hidden>{r.spark ? <Spark values={r.spark} /> : <span className="mk-sparkgap" />}</span>;
@@ -600,43 +679,13 @@ const MakerRowItem = React.memo(function MakerRowItem({
                   </span>
                 )}
               </div>
-              {liveShown.map(l => {
-                const closeSoon = l.saleDateTime && (Date.parse(l.saleDateTime) - Date.now()) < 24 * 3600e3 && Date.parse(l.saleDateTime) > Date.now();
-                return (
-                  <Link key={l.id} href={`/lot/${l.id}`} className="mkx-lot">
-                    <span className="mkx-lot-thumb" aria-hidden>
-                      <span className="mkx-lot-letter">{r.label.charAt(0)}</span>
-                      {l.imageUrl && (
-                        <img src={httpsImg(l.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
-                          onError={e => e.currentTarget.remove()} />
-                      )}
-                    </span>
-                    <span className="mkx-lot-main">
-                      <span className="mkx-lot-title">{craftTitle(l.title, l.auctionHouse)}</span>
-                      <span className="mkx-lot-sub">
-                        {lotSubLine(l, r.kind ?? (r.slug.startsWith(SUBROW) ? 'sub' : 'maker'))}
-                        {l.signal?.label === 'Below Market' && <span className="mkx-lot-flag"> · flagged below market</span>}
-                      </span>
-                    </span>
-                    <span className="mkx-lot-cells">
-                      <span className="mkx-lot-est">{formatEstimate(l)}</span>
-                      <span className="mkx-lot-close">
-                        {closeSoon
-                          ? <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}><CloseClock iso={l.saleDateTime!} windowHours={24} /></span>
-                          : <>closes {formatDate(l.saleDate)}</>}
-                      </span>
-                    </span>
-                  </Link>
-                );
-              })}
-              {inline ? (
-                // a subject has no lot browser behind it — its lots page in place
-                r.live > liveShown.length && (
-                  <button type="button" className="mkx-live-more" onClick={() => setShownLots(n => n + 20)}>
-                    +{(r.live - liveShown.length).toLocaleString()} more on the block{r.live - liveShown.length > 20 ? ' · show 20' : ''}
-                  </button>
-                )
-              ) : r.live > liveShown.length && (
+              {liveShown.map(l => (
+                <LiveLotRow key={l.id} l={l} letter={r.label.charAt(0)} kind={r.kind ?? (r.slug.startsWith(SUBROW) ? 'sub' : 'maker')} />
+              ))}
+              {/* every row's "+N more" lands on an exact list: a maker's lot
+                  browser, a player's dossier, or the feed scoped to the
+                  subject (?subj=) — the /makers triage view carried along */}
+              {r.live > liveShown.length && (
                 <Link href={liveBookHref(r.href ?? `/makers/${r.slug}`, typeof window === 'undefined' ? '' : window.location.search)} className="mkx-live-more">
                   +{(r.live - liveShown.length).toLocaleString()} more on the block <Flick size={9} style={{ marginLeft: 4 }} />
                 </Link>
@@ -703,10 +752,12 @@ const MakerRowItem = React.memo(function MakerRowItem({
             )}
           </div>}
 
-          {(!inline || r.dossierHref || (authEnabled && followKey)) && (
+          {(!inline || r.href || (authEnabled && followKey)) && (
             <div className="mkx-actions">
-              {inline ? (r.dossierHref && (
-                <Link href={r.dossierHref} className="ray-call-btn ray-call-btn-primary">Open the player dossier</Link>
+              {inline ? (r.href && (
+                <Link href={liveBookHref(r.href, typeof window === 'undefined' ? '' : window.location.search, { land: !r.dossierHref })} className="ray-call-btn ray-call-btn-primary">
+                  {r.dossierHref ? 'Open the player dossier' : 'See every lot'}
+                </Link>
               )) : (
                 <Link href={liveBookHref(r.href ?? `/makers/${r.slug}`, typeof window === 'undefined' ? '' : window.location.search, { land: !!r.href })} className="ray-call-btn ray-call-btn-primary">
                   {r.href ? 'See every lot' : 'Open the dossier'}
@@ -724,7 +775,7 @@ const MakerRowItem = React.memo(function MakerRowItem({
               )}
             </div>
           )}
-          {inline && !r.dossierHref && !(authEnabled && followKey) && <div style={{ height: 16 }} aria-hidden />}
+          {inline && !r.href && !(authEnabled && followKey) && <div style={{ height: 16 }} aria-hidden />}
           </>}
         </div>
       </div>
@@ -817,6 +868,9 @@ function subjectRow(g: SubjectGroup<AuctionLot>, players: Map<string, PlayerRec>
     topScore: lots.length ? mattersOf(lots) : -1,
     kind: s ? 'subject' : 'rest',
     dossierHref: dossier ? `/player?id=${encodeURIComponent(s!.playerSlug!)}` : null,
+    // "+N more" / "See every lot": the athlete's dossier (its live book is
+    // this row's pool), else the market's feed scoped to exactly this row
+    href: dossier ? `/player?id=${encodeURIComponent(s!.playerSlug!)}` : subjectFeedHref(g.market, s ? s.key : OTHER),
     followKey: dossier ? s!.playerSlug : null,
   };
 }
@@ -2051,7 +2105,7 @@ button.mkx-live-more{width:100%;background:none;border:none;border-top:1px solid
 .mkc-btn{font-family:var(--font-mono),monospace;font-size:10.5px;letter-spacing:0.08em;padding:5px 11px;background:none;color:var(--color-text-muted);border:1px solid var(--color-border);border-radius:100px;cursor:pointer}
 .mkc-btn:hover{color:var(--color-fg)}
 .mkc-body{padding-bottom:14px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px 26px}
-@media(min-width:900px){.mkc-body{grid-template-columns:minmax(0,7fr) minmax(0,5fr);align-items:start}}
+@media(min-width:900px){.mkc-body{grid-template-columns:minmax(0,7fr) minmax(0,5fr);align-items:start}.mkc-body[data-live]{grid-template-columns:repeat(var(--n),minmax(0,1fr))}}
 .mkc-plotwrap{min-width:0}
 .mkc-plot{position:relative;height:150px;margin-left:44px;margin-right:8px}
 .mkc-plot svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
