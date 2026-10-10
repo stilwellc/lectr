@@ -17,9 +17,10 @@
  *   order        byPriority — what matters most first (app/lib/priority).
  */
 import { isLiveUpcoming, localToday } from '../utils';
-import { ARTIST_LABEL, type Market } from '../constants';
+import { type Market } from '../constants';
+import { searchTextOf } from './lot-labels';
 import { passesTriage, triageToParams, TRIAGE_DEFAULTS, type TriageFilters, type NewLensOpts } from './feed-filters';
-import { byPriority } from './priority';
+import { byPriority, priorityOf, closeMsOf } from './priority';
 
 type PoolLot = Parameters<typeof isLiveUpcoming>[0] & Parameters<typeof passesTriage>[0] & { artist: string };
 
@@ -39,16 +40,15 @@ export function makerLiveLots<L extends PoolLot>(
     .sort(byPriority(Date.now()));
 }
 
-type FeedLot = { artist: string; title?: string | null; auctionHouse?: string | null; saleName?: string | null; medium?: string | null };
+type FeedLot = Parameters<typeof searchTextOf>[0];
 
 /** the home feed's text search, verbatim (TerminalHome feedAll): a lowercase
- *  substring over maker label · title · house · sale · medium */
+ *  substring over the label vocabulary + maker · title · house · sale
+ *  (app/lib/lot-labels searchTextOf) */
 export function feedQueryMatches(l: FeedLot, q: string): boolean {
   const needle = q.trim().toLowerCase();
   if (!needle) return true;
-  return `${ARTIST_LABEL[l.artist] || l.artist} ${l.title} ${l.auctionHouse} ${l.saleName} ${l.medium || ''}`
-    .toLowerCase()
-    .includes(needle);
+  return searchTextOf(l).includes(needle);
 }
 
 /** the home feed (every lot, not the top tab) searched for `q` inside the
@@ -59,4 +59,20 @@ export function feedSearchHref(market: Market, q: string, f: TriageFilters): str
   p.set('tab', 'all');
   triageToParams(f, p);
   return `${market === 'all' ? '/' : `/${market}`}?${p.toString()}`;
+}
+
+/** byPriority's exact order, with each lot's score read ONCE (the comparator
+ *  re-scores both lots on every comparison: ~50ms over 10K live lots → ~10) */
+export function sortByPriority<L extends Parameters<typeof priorityOf>[0]>(lots: readonly L[], nowMs: number = Date.now()): L[] {
+  const keyed = lots.map(l => {
+    const p = priorityOf(l, nowMs);
+    return { l, ok: !!p, s: p?.score ?? 0, c: closeMsOf(l) ?? Infinity, a: p?.a ?? 0 };
+  });
+  keyed.sort((x, y) => {
+    if (!x.ok || !y.ok) return x.ok ? -1 : y.ok ? 1 : 0;
+    if (y.s !== x.s) return y.s - x.s;
+    if (x.c !== y.c) return x.c - y.c;
+    return y.a - x.a;
+  });
+  return keyed.map(k => k.l);
 }

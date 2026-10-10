@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useEffect, useRef, useCallback, useDeferredValue } from 'react';
 import Link from 'next/link';
-import { ARTISTS, ARTIST_LABEL, MARKETS, ROSTER, marketArtists, marketOf, rosterNoun, type Market } from '../constants';
+import { ARTISTS, ARTIST_LABEL, MARKETS, marketArtists, marketOf, rosterNoun, type Market } from '../constants';
 import { useMarket } from '../lib/market';
 import { classifyForm, formsForMarket } from '../lib/comps';
 import { isMisattributed } from '../lib/attribution';
@@ -15,7 +15,7 @@ import { useSavedSearches } from '../lib/alerts';
 import { useAuth } from '../lib/account';
 import ArtistNav from '../components/ArtistNav';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
-import { formatDate, formatPrice, getUpcomingCounts, craftTitle, httpsImg, localToday, isLiveUpcoming } from '../utils';
+import { formatDate, formatPrice, getUpcomingCounts, craftTitle, httpsImg, localToday } from '../utils';
 import { formatEstimate } from '../components/LotCard';
 import { formatDemand } from '../lib/demand';
 import { verifiedMovers, type VerifiedMover } from '../preview/terminal/verified';
@@ -28,10 +28,11 @@ import Flick from '../components/Flick';
 import type { AuctionLot, MarketStats } from '../types';
 import TriageBar from '../components/TriageBar';
 import { useUrlState, useLastVisit, passesTriage, houseBaselines, isTriageActive, TRIAGE_DEFAULTS, triageFromParams, triageToParams, type TriageFilters } from '../lib/feed-filters';
-import { byPriority, priorityOf } from '../lib/priority';
-import { taxonOf, SUBS, CAT_LABEL, SPORTS, subLabel, type CatKey } from '../lib/taxonomy';
+import { priorityOf } from '../lib/priority';
+import { taxonOf, SUBS, CAT_LABEL, SPORTS, subLabel, subLabelOf, type CatKey } from '../lib/taxonomy';
+import { makerLineOf, labelLineOf, searchTextOf } from '../lib/lot-labels';
 import { groupBySubject, SUBJECT_MARKETS, type SubjectGroup } from '../lib/maker-subjects';
-import { livePool, feedQueryMatches, feedSearchHref } from '../lib/maker-pool';
+import { livePool, feedQueryMatches, feedSearchHref, sortByPriority } from '../lib/maker-pool';
 import { useFollows, catFollow } from '../lib/follows';
 import type { CatStat } from '../../scripts/cat-stats';
 
@@ -137,6 +138,7 @@ const SCROLL_KEY = 'mk-scroll:';
 const CAP_ONE = 40;
 const CAP_ALL = 8;
 const CAP_STEP = 40;
+const NO_CAPS: Partial<Record<Market, number>> = {};
 /** a players.json dossier — the sold history an athlete row can honestly carry */
 interface PlayerRec {
   slug: string; n: number; sport: string | null;
@@ -161,6 +163,19 @@ const COLLECTION_CATS: { cat: CatKey; market: Market; prefix: string }[] = [
 ];
 const COLLECTION_MARKETS = new Set<Market>(COLLECTION_CATS.map(c => c.market));
 const SUBROW = 'c:';
+
+/** a live lot's quiet line under its title — the home feed's label line
+ *  (app/lib/lot-labels), then the house. Under a sub row the sub is the row's
+ *  own name, so the lot's player / Pokémon leads and the sub drops; under a
+ *  subject row the subject is the row's name, so the label line alone. */
+function lotSubLine(l: AuctionLot, kind: Row['kind']): string {
+  let parts: string[];
+  if (kind === 'sub') {
+    const who = makerLineOf(l).name;
+    parts = [who !== (ARTIST_LABEL[l.artist] || l.artist) ? who : '', ...labelLineOf(l).split(' · ').filter(p => p !== subLabelOf(l))];
+  } else parts = [labelLineOf(l)];
+  return [...parts, l.auctionHouse].filter(Boolean).join(' · ');
+}
 
 type SortKey = 'matters' | 'sold' | 'live' | 'flags' | 'median' | 'delta' | 'name';
 // Oct 8: "Matters" (the maker's best live lot by app/lib/priority) is the
@@ -493,10 +508,14 @@ const MakerRowItem = React.memo(function MakerRowItem({
         <span className="mk-go" aria-hidden data-open={isOpen || undefined}><Flick size={10} /></span>
         <span className="mk-mob">
           <span className="mk-mob-median">{r.median ? formatPrice(r.median) : r.live > 0 ? `${r.live.toLocaleString()} live` : '—'}</span>
-          <span className="mk-mob-sub" data-dir={r.verified ? r.verified.dir : undefined}>
-            {r.median && r.live > 0 ? `${r.live.toLocaleString()} live · ` : ''}
-            {r.flags > 0 ? `${r.flags} flagged · ` : ''}
-            {r.verified ? `${r.verified.changePct >= 0 ? '+' : '−'}${Math.abs(Math.round(r.verified.changePct))}% · ${r.verified.horizon}` : r.sold != null ? `${r.sold.toLocaleString()} sold` : ''}
+          <span className="mk-mob-sub" data-dir={r.flags === 0 && r.verified ? r.verified.dir : undefined}>
+            {/* phone: live first, then ONE more read — never a line that runs into the tags */}
+            {[
+              r.median && r.live > 0 ? `${r.live.toLocaleString()} live` : '',
+              r.flags > 0 ? `${r.flags} flagged`
+                : r.verified ? `${r.verified.changePct >= 0 ? '+' : '−'}${Math.abs(Math.round(r.verified.changePct))}% · ${r.verified.horizon}`
+                : r.sold != null ? `${r.sold.toLocaleString()} sold` : '',
+            ].filter(Boolean).join(' · ')}
           </span>
         </span>
       </div>
@@ -615,7 +634,7 @@ const MakerRowItem = React.memo(function MakerRowItem({
                     <span className="mkx-lot-main">
                       <span className="mkx-lot-title">{craftTitle(l.title, l.auctionHouse)}</span>
                       <span className="mkx-lot-sub">
-                        {l.auctionHouse}
+                        {lotSubLine(l, r.kind ?? (r.slug.startsWith(SUBROW) ? 'sub' : 'maker'))}
                         {l.signal?.label === 'Below Market' && <span className="mkx-lot-flag"> · flagged below market</span>}
                       </span>
                     </span>
@@ -700,7 +719,8 @@ function topKey(m: Map<string, number>): string | null {
  *  most of their live lots sit in). No quarterly series exists per subject,
  *  so the curve cell stays the dash — never a borrowed line. */
 function subjectRow(g: SubjectGroup<AuctionLot>, players: Map<string, PlayerRec> | null, dossiers: ReadonlySet<string>): Row {
-  const lots = g.lots.slice().sort(byPriority(Date.now()));
+  // the pool arrives in priority order (sortByPriority), so the group does too
+  const lots = g.lots;
   const s = g.subject;
   const artN = new Map<string, number>(), subN = new Map<string, number>(), sportN = new Map<string, number>();
   let flags = 0;
@@ -808,8 +828,9 @@ export default function MakersPage() {
   const [sportPick, setSportPick] = useState<string | null>(null);
   // collection markets: subject rows (default) or the clean sub-category rows
   const [rowsBy, setRowsBy] = useState<RowsBy>('name');
-  // rows shown per collection group before "Show more" (reset on any re-cut)
-  const [caps, setCaps] = useState<Partial<Record<Market, number>>>({});
+  // rows shown per collection group before "Show more" — keyed to the cut,
+  // so any re-cut (filters, sort, search, market) starts back at page one
+  const [capState, setCapState] = useState<{ k: string; caps: Partial<Record<Market, number>> }>({ k: '', caps: {} });
   // the triage row narrows each maker's LIVE book (window, sub-category,
   // house, value floor, new); the roster's sold history is untouched
   const [triage, setTriage] = useUrlState<TriageFilters>(TRIAGE_DEFAULTS, triageFromParams, triageToParams);
@@ -923,7 +944,7 @@ export default function MakersPage() {
   // once and the ledger re-cuts right behind it (was ~400ms blocked per click).
   const dTriage = useDeferredValue(triage);
   const dSport = useDeferredValue(sportPick);
-  const liveAll = useMemo(() => livePool(allLots), [allLots]);
+  const liveAll = useMemo(() => sortByPriority(livePool(allLots)), [allLots]);
   // the sport pick narrows the SPORTS market's lots (by the lot's market, the
   // same membership the triage counts use — a sport-less lot never passes it)
   const sportOk = useCallback((l: AuctionLot, sp: string | null) =>
@@ -932,6 +953,8 @@ export default function MakersPage() {
   // a row's live count is exactly the lots it would list
   const livePass = useMemo(() => {
     const today = localToday();
+    // sorted ONCE, what matters most first — every row's lot list below is a
+    // stable in-order slice of it, so no row re-sorts
     return liveAll.filter(l => sportOk(l, dSport) && passesTriage(l, dTriage, { today, prevVisitDay, baselines }));
   }, [liveAll, dTriage, dSport, sportOk, prevVisitDay, baselines]);
   const filtersOn = isTriageActive(dTriage) || !!dSport;
@@ -943,9 +966,7 @@ export default function MakersPage() {
       e.lots.push(l);
       if (l.signal?.label === 'Below Market') e.flags++;
     }
-    // what matters most first (app/lib/priority), not merely closing soonest
-    const cmp = byPriority(Date.now());
-    m.forEach(e => { e.lots.sort(cmp); });
+    // what matters most first: livePass is already in priority order
     return m;
   }, [livePass]);
   // every live lot in the active market — the masthead's "of N"
@@ -1014,8 +1035,6 @@ export default function MakersPage() {
       const k = `${t.cat}:${t.sub}`;
       const arr = m.get(k); if (arr) arr.push(l); else m.set(k, [l]);
     }
-    const cmp = byPriority(Date.now());
-    m.forEach(a => a.sort(cmp));
     return m;
   }, [livePass]);
 
@@ -1064,6 +1083,7 @@ export default function MakersPage() {
           liveLots: lots,
           topScore: lots.length ? mattersOf(lots) : -1,
           href: `/?${params.toString()}`,
+          kind: 'sub',
         });
       }
     }
@@ -1072,7 +1092,10 @@ export default function MakersPage() {
 
   // ── THE SUBJECT ROWS — players, Pokémon, people, films, franchises,
   // missions (app/lib/maker-subjects), straight off the filtered pool ──
-  const subjectGroups = useMemo(() => groupBySubject(livePass), [livePass]);
+  // (art / design / watches pages never show a subject row — skip the ~100ms
+  // first read of every card title there)
+  const needSubjects = rowsBy === 'name' && (activeKey === 'all' || SUBJECT_MARKETS.has(activeKey));
+  const subjectGroups = useMemo(() => (needSubjects ? groupBySubject(livePass) : new Map<string, SubjectGroup<AuctionLot>>()), [livePass, needSubjects]);
   // athletes' sold history (players.json, ~3MB) — only where athlete rows show,
   // after first paint; until it lands their history cells print the dash
   const [players, setPlayers] = useState<Map<string, PlayerRec> | null>(null);
@@ -1124,7 +1147,9 @@ export default function MakersPage() {
     };
     return rows
       .filter(inMarket)
-      .filter(r => !needle || r.label.toLowerCase().includes(needle) || (r.discipline ?? '').toLowerCase().includes(needle))
+      .filter(r => !needle || r.label.toLowerCase().includes(needle) || (r.discipline ?? '').toLowerCase().includes(needle)
+        // the label vocabulary on the row's live lots — "PSA 10", "GMT", "Apollo", a player
+        || r.liveLots.some(l => searchTextOf(l).includes(needle)))
       .filter(r => !fLive || r.live > 0)
       .filter(r => !fVerified || !!r.verified)
       .filter(r => !fFlagged || r.flags > 0)
@@ -1135,8 +1160,12 @@ export default function MakersPage() {
       .sort((a, b) => (a.kind === 'rest' ? 1 : 0) - (b.kind === 'rest' ? 1 : 0) || cmp(a, b));
   }, [rows, inMarket, q, fLive, fVerified, fFlagged, fFollowing, followedSet, sort, filtersOn]);
 
-  // a re-cut starts every group back at its first page
-  useEffect(() => { setCaps({}); }, [dTriage, dSport, q, sort, rowsBy, activeKey, fLive, fVerified, fFlagged, fFollowing]);
+  const cutKey = JSON.stringify([dTriage, dSport, q, sort, rowsBy, activeKey, fLive, fVerified, fFlagged, fFollowing]);
+  const caps = capState.k === cutKey ? capState.caps : NO_CAPS;
+  const showMore = (m: Market) => setCapState(st => {
+    const cur = st.k === cutKey ? st.caps : {};
+    return { k: cutKey, caps: { ...cur, [m]: (cur[m] ?? (activeKey === 'all' ? CAP_ALL : CAP_ONE)) + CAP_STEP } };
+  });
 
   const groups = useMemo(() =>
     MARKETS
@@ -1363,6 +1392,19 @@ export default function MakersPage() {
     return () => window.clearTimeout(t);
   }, [open]);
 
+  // the sticky bar wraps to two rows on narrower desktops — the group heads
+  // stick under its MEASURED height, never behind it
+  const barRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      document.documentElement.style.setProperty('--mk-bar-h', `${Math.round(el.getBoundingClientRect().height)}px`);
+    });
+    ro.observe(el);
+    return () => { ro.disconnect(); document.documentElement.style.removeProperty('--mk-bar-h'); };
+  }, [loading]);
+
   const jumpTo = useCallback((key: Market) => {
     document.getElementById(`mk-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
@@ -1497,7 +1539,7 @@ export default function MakersPage() {
                     k: 'The verified read', stat: '—', note: 'abstaining',
                     body: `No CI-verified index on the ${activeLabel} book yet — a maker publishes a move only when its 95% interval resolves the sign.`,
                   },
-                  { k: 'The roster', stat: activeKey === 'all' ? ROSTER.makers.toLocaleString() : rosterTotal.toLocaleString(), note: activeKey === 'all' ? `makers · ${ROSTER.categories} categories` : noun, body: `Every name lectr tracks on the ${activeLabel} book — sold history, live lots and the engine's flags in one ledger.` },
+                  { k: 'The roster', stat: activeKey === 'all' ? rosterSplit.makers.toLocaleString() : rosterTotal.toLocaleString(), note: activeKey === 'all' ? `makers · ${rosterSplit.other.toLocaleString()} ${rowsBy === 'name' ? 'names' : 'categories'}` : noun, body: `Every name lectr tracks on the ${activeLabel} book — sold history, live lots and the engine's flags in one ledger.` },
                   { k: 'Verified indexes', stat: verifiedCount.toLocaleString(), note: 'CI-verified indexes', body: 'Repeat-sales reads whose 95% interval resolves the sign — the only price moves the engine will stand behind.' },
                   { k: 'On the block', stat: totalFlags.toLocaleString(), note: 'flagged by the engine', body: totalFlags > 0
                     ? `${totalLive.toLocaleString()} live ${totalLive === 1 ? 'lot' : 'lots'} on the book tonight — ${totalFlags.toLocaleString()} priced under ${totalFlags === 1 ? 'its' : 'their'} comparables.`
@@ -1545,7 +1587,7 @@ export default function MakersPage() {
           </div>
 
           {/* ── THE FILTER BAR ── */}
-          <div className="mk-bar-wrap">
+          <div className="mk-bar-wrap" ref={barRef}>
             <div className="rail mk-bar">
               <label className="mk-search">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
@@ -1689,7 +1731,7 @@ export default function MakersPage() {
                     ))}
                     {g.more > 0 && (
                       <button type="button" className="mkx-live-more mk-more"
-                        onClick={() => setCaps(c => ({ ...c, [g.key]: (c[g.key] ?? (activeKey === 'all' ? CAP_ALL : CAP_ONE)) + CAP_STEP }))}>
+                        onClick={() => showMore(g.key)}>
                         Show {Math.min(CAP_STEP, g.more)} more · {g.more.toLocaleString()} more {g.key === 'sports' ? 'players' : 'names'} on the block
                       </button>
                     )}
@@ -1813,7 +1855,7 @@ button.mkx-live-more{width:100%;background:none;border:none;border-top:1px solid
   .mk-fact[data-abstain]{display:none}
   .mk-facts:has(.mk-fact[data-abstain]){border-top:none}
   .mk-bar-wrap{position:static}
-  .mk-group-head{top:65px}
+  .mk-group .mk-group-head{top:65px}
   .mk-search{flex:1 1 0;min-width:0;order:0}
   .mk-sortsel{order:1;flex:none}
   .mk-bar-chips{order:2;flex:0 0 100%;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
@@ -1828,7 +1870,7 @@ button.mkx-live-more{width:100%;background:none;border:none;border-top:1px solid
 
 /* ── group heads — rooms as framed plates, authority through lightness ── */
 .mk-group{margin-bottom:22px;scroll-margin-top:150px}
-.mk-group-head{position:sticky;top:103px;z-index:20;display:flex;align-items:center;gap:10px;padding:12px 0 9px;background:color-mix(in srgb,var(--color-bg, #08090a) 90%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--color-border)}
+.mk-group-head{position:sticky;top:calc(54px + var(--mk-bar-h, 49px));z-index:20;display:flex;align-items:center;gap:10px;padding:12px 0 9px;background:color-mix(in srgb,var(--color-bg, #08090a) 90%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--color-border)}
 .mk-group-mark{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;flex:none;border:1px solid var(--color-border);border-radius:8px;color:var(--color-text-secondary);background:var(--color-bg-elevated)}
 .mk-group-name{margin:0;font-size:20px;font-weight:350;letter-spacing:-0.02em;white-space:nowrap}
 .mk-group-count{font-family:var(--font-mono),monospace;font-size:10.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--color-text-secondary);border:1px solid var(--color-border);border-radius:100px;padding:1px 8px;flex:none}
@@ -1859,7 +1901,7 @@ button.mkx-live-more{width:100%;background:none;border:none;border-top:1px solid
 .mk-mono img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
 .mk-id{min-width:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .mk-name{font-size:13.5px;font-weight:550;color:var(--color-fg);white-space:nowrap}
-.mk-tags{display:inline-flex;gap:5px;flex-wrap:wrap}
+.mk-tags{display:inline-flex;gap:5px;flex-wrap:wrap;min-width:0;max-width:100%;overflow:hidden}
 .mk-tag{display:inline-block;padding:1px 7px;font-family:var(--font-mono),monospace;font-size:10px;letter-spacing:0.05em;color:var(--color-text-muted);border:1px solid var(--color-border);border-radius:100px;white-space:nowrap}
 .mk-tag-verified{color:var(--color-text-secondary);border-color:var(--color-border-mid)}
 .mk-cell{display:none}

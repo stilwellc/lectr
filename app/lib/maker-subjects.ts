@@ -24,7 +24,9 @@
  */
 import { marketOf, ARTIST_LABEL, type Market } from '../constants';
 import { makerLineOf } from './lot-labels';
-import { subjectOf } from './subject';
+import { subjectOf, nameTokensOk } from './subject';
+
+const CARD_MAKERS = new Set(['sports-cards', 'graded-cards']);
 import { playerSlugOf } from './cards';
 import { lotFacets, FACET_LABEL } from './facets';
 
@@ -74,7 +76,10 @@ function read(l: SubjectLot): LotSubject | null {
   const pm = line.href.match(/^\/player\?id=(.+)$/);
   if (pm) {
     const slug = decodeURIComponent(pm[1]);
-    return { key: `p:${slug}`, name: line.name, kind: 'player', playerSlug: slug };
+    // the card parser can run a name on into the caption ("Mickey Mantle
+    // Boasting Near-Perfect", "AL Home Run Leaders") — a row needs a person
+    if (nameTokensOk(line.name.split(' '))) return { key: `p:${slug}`, name: line.name, kind: 'player', playerSlug: slug };
+    if (CARD_MAKERS.has(l.artist)) return null;
   }
   if (l.artist === 'pokemon') {
     return line.name && line.name !== fallback ? { key: `k:${norm(line.name)}`, name: line.name, kind: 'pokemon', playerSlug: null } : null;
