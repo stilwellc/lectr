@@ -26,13 +26,15 @@ export interface TriageFilters {
   house: string | null;
   /** value floor on the priority anchor (hammer-basis USD) */
   minUsd: number | null;
+  /** value ceiling on the same anchor ("Under $5K") */
+  maxUsd: number | null;
   /** first seen after the reader's previous visit */
   newOnly: boolean;
   /** in-category facets (app/lib/facets): Graded, Rookie, era, Film & TV… */
   fx: string[];
 }
 
-export const TRIAGE_DEFAULTS: TriageFilters = { win: null, cat: null, sub: null, house: null, minUsd: null, newOnly: false, fx: [] };
+export const TRIAGE_DEFAULTS: TriageFilters = { win: null, cat: null, sub: null, house: null, minUsd: null, maxUsd: null, newOnly: false, fx: [] };
 
 export const WINDOWS: { key: CloseWindow; label: string }[] = [
   { key: 'today', label: 'Today' },
@@ -40,6 +42,21 @@ export const WINDOWS: { key: CloseWindow; label: string }[] = [
   { key: 'week', label: 'This week' },
 ];
 export const VALUE_FLOORS = [1000, 5000, 25000, 100000];
+/** the ceilings ("Under $X") — the same rungs, read from the other side */
+export const VALUE_CEILINGS = [1000, 5000, 25000, 100000];
+export const fmtCeiling = (n: number) => (n >= 1000 ? `Under $${n / 1000}K` : `Under $${n}`);
+/** the toolbar's ONE value select (floors, then ceilings): its current option
+ *  ('min:5000' / 'max:5000' / '') and the patch an option applies — picking
+ *  one side clears the other (a range rides the URL or the phone sheet) */
+export function valueOptionOf(f: Pick<TriageFilters, 'minUsd' | 'maxUsd'>): string {
+  return f.minUsd ? `min:${f.minUsd}` : f.maxUsd ? `max:${f.maxUsd}` : '';
+}
+export function valuePatchOf(v: string): Pick<TriageFilters, 'minUsd' | 'maxUsd'> {
+  const [side, n] = v.split(':');
+  const usd = Number(n);
+  if (!Number.isFinite(usd) || usd <= 0) return { minUsd: null, maxUsd: null };
+  return side === 'max' ? { minUsd: null, maxUsd: usd } : { minUsd: usd, maxUsd: null };
+}
 
 function addDays(iso: string, n: number): string {
   const t = Date.parse(`${iso}T00:00:00Z`) + n * 864e5;
@@ -143,16 +160,19 @@ export function passesTriage(l: TriageLot, f: TriageFilters, opts: NewLensOpts =
   }
   if (f.house && l.auctionHouse !== f.house) return false;
   if (f.fx.length && !passesFacets(l, f.fx)) return false;
-  if (f.minUsd) {
+  if (f.minUsd || f.maxUsd) {
+    // a lot with no price anchor can't be placed on either side of a bound
     const p = prioStatic(l);
-    if (!p || p.a < f.minUsd) return false;
+    if (!p) return false;
+    if (f.minUsd && p.a < f.minUsd) return false;
+    if (f.maxUsd && p.a >= f.maxUsd) return false;
   }
   if (f.newOnly && !isNewLot(l, opts)) return false;
   return true;
 }
 
 export function isTriageActive(f: TriageFilters): boolean {
-  return f.win != null || f.cat != null || f.sub != null || f.house != null || f.minUsd != null || f.newOnly || f.fx.length > 0;
+  return f.win != null || f.cat != null || f.sub != null || f.house != null || f.minUsd != null || f.maxUsd != null || f.newOnly || f.fx.length > 0;
 }
 
 // ── URL codec ────────────────────────────────────────────────────────────────
@@ -165,6 +185,7 @@ export function triageToParams(f: TriageFilters, p: URLSearchParams): void {
   put('sub', f.sub);
   put('house', f.house);
   put('min', f.minUsd ? String(f.minUsd) : null);
+  put('max', f.maxUsd ? String(f.maxUsd) : null);
   put('new', f.newOnly ? '1' : null);
   put('fx', f.fx.length ? f.fx.join(',') : null);
 }
@@ -172,12 +193,14 @@ export function triageToParams(f: TriageFilters, p: URLSearchParams): void {
 export function triageFromParams(p: URLSearchParams): TriageFilters {
   const win = p.get('win');
   const min = Number(p.get('min'));
+  const max = Number(p.get('max'));
   return {
     win: win === 'today' || win === '48h' || win === 'week' ? win : null,
     cat: (p.get('cat') as CatKey) || null,
     sub: p.get('sub') || null,
     house: p.get('house') || null,
     minUsd: Number.isFinite(min) && min > 0 ? min : null,
+    maxUsd: Number.isFinite(max) && max > 0 ? max : null,
     newOnly: p.get('new') === '1',
     fx: (p.get('fx') || '').split(',').filter(Boolean),
   };
@@ -260,7 +283,7 @@ export function patchTriage<T extends TriageFilters>(f: T, patch: Partial<T>): T
 // Search text and the Hammer Week day are deliberately NOT remembered: a stale
 // query or a past day reopening on its own would read as a broken feed.
 const MEM_KEY = 'lectr-feed-memory';
-export const MEMORY_KEYS = ['win', 'cat', 'sub', 'house', 'min', 'new', 'fx', 'tab', 'sort', 'below'] as const;
+export const MEMORY_KEYS = ['win', 'cat', 'sub', 'house', 'min', 'max', 'new', 'fx', 'tab', 'sort', 'below'] as const;
 const MARKET_SCOPED = new Set<string>(['cat', 'sub', 'fx']);
 
 export interface FeedMemory { /** market the view was left on */ m: string; /** remembered params */ p: string }

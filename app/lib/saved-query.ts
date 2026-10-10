@@ -47,6 +47,7 @@ export function savedQueryOf(f: SaveableFilters, market: string): SavedQuery {
   if (f.sub) q.sub = f.sub;
   if (f.house) q.house = f.house;
   if (f.minUsd) q.minUsd = f.minUsd;
+  if (f.maxUsd) q.maxUsd = f.maxUsd;
   if (f.fx.length) q.fx = [...f.fx];
   return q;
 }
@@ -54,13 +55,13 @@ export function savedQueryOf(f: SaveableFilters, market: string): SavedQuery {
 /** does the query narrow anything? (saving "everything" is not a search) */
 export function hasCriteria(q: SavedQuery): boolean {
   return !!(q.market || q.maker || q.sport || q.category || q.text || q.belowOnly || q.player
-    || q.win || q.cat || q.sub || q.house || q.minUsd || (q.fx && q.fx.length));
+    || q.win || q.cat || q.sub || q.house || q.minUsd || q.maxUsd || (q.fx && q.fx.length));
 }
 
 /** every key a plain (non-follow, non-signal) saved search may carry */
 export const KNOWN_QUERY_KEYS = new Set([
   'market', 'maker', 'sport', 'category', 'text', 'belowOnly', 'player', 'playerName',
-  'win', 'cat', 'sub', 'house', 'minUsd', 'fx',
+  'win', 'cat', 'sub', 'house', 'minUsd', 'maxUsd', 'fx',
 ]);
 
 /** null when the matcher can honor the query, else why it must be skipped */
@@ -70,6 +71,7 @@ export function unmatchableReason(q: Record<string, unknown>): string | null {
   if (q.win != null && q.win !== 'today' && q.win !== '48h' && q.win !== 'week') return `bad win: ${String(q.win)}`;
   if (q.fx != null && !(Array.isArray(q.fx) && q.fx.every(x => typeof x === 'string'))) return 'bad fx';
   if (q.minUsd != null && !(typeof q.minUsd === 'number' && Number.isFinite(q.minUsd))) return 'bad minUsd';
+  if (q.maxUsd != null && !(typeof q.maxUsd === 'number' && Number.isFinite(q.maxUsd))) return 'bad maxUsd';
   if (!hasCriteria(q as SavedQuery)) return 'no criterion';
   return null;
 }
@@ -83,6 +85,7 @@ export function triageOfQuery(q: SavedQuery): TriageFilters {
     sub: q.sub ?? null,
     house: q.house ?? null,
     minUsd: q.minUsd ?? null,
+    maxUsd: q.maxUsd ?? null,
     fx: q.fx ?? [],
   };
 }

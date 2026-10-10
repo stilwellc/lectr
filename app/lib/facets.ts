@@ -7,8 +7,10 @@
  * — ~13µs a lot), memoized per lot object; nothing is stamped on the payload.
  *
  * Keys are flat strings so the filter is one URL list (`fx=graded,psa,g10`).
- * Keys in an exclusive group (`xor`) replace each other (one era, one grade,
- * one franchise at a time); the rest AND together.
+ * Keys in an exclusive set (`xor`) replace each other (Graded / Raw, one
+ * grader, Film & TV / Music); keys in an any-of set (`any` — era, grade,
+ * language, franchise, complication, medium) OR together ("Chronograph or
+ * Perpetual calendar", "Gem 10 or 9.5"); the sets AND across each other.
  *
  * THE STRIP STAYS SHORT (labels wave, Oct 9): a deeper cut only appears once
  * its parent is picked — the grader after 'Graded', the grade after a grader
@@ -32,6 +34,8 @@ export interface FacetDef {
   group: FacetGroup;
   /** exclusive set: picking one replaces any other key with the same xor */
   xor?: string;
+  /** any-of set: several may be picked, a lot needs only one of them */
+  any?: string;
   /** shown only once one of these keys is picked; dropped when none is */
   parent?: string[];
   /** once a sibling in its exclusive set is picked, the others hide (the
@@ -55,10 +59,10 @@ const CARD_KIND: FacetDef[] = [
   { key: 'numbered', label: 'Numbered', group: 'kind' },
 ];
 const CARD_ERA: FacetDef[] = [
-  { key: 'era-prewar', label: 'Pre-war', group: 'era', xor: 'era' },
-  { key: 'era-vintage', label: '1946–79', group: 'era', xor: 'era' },
-  { key: 'era-80s90s', label: '1980–99', group: 'era', xor: 'era' },
-  { key: 'era-modern', label: '2000+', group: 'era', xor: 'era' },
+  { key: 'era-prewar', label: 'Pre-war', group: 'era', any: 'era' },
+  { key: 'era-vintage', label: '1946–79', group: 'era', any: 'era' },
+  { key: 'era-80s90s', label: '1980–99', group: 'era', any: 'era' },
+  { key: 'era-modern', label: '2000+', group: 'era', any: 'era' },
 ];
 /** the five graders with a real share of the book (88.8% of single cards);
  *  HGA / GAI / CSG / KSA / GMA slabs stay 'Graded' with no grader chip */
@@ -70,13 +74,13 @@ const GRADER: FacetDef[] = GRADER_KEYS.map(([key, label]) => ({ key, label, grou
 const GRADE: FacetDef[] = [
   { key: 'g10', label: 'Gem 10' }, { key: 'g95', label: '9.5' }, { key: 'g9', label: '9' },
   { key: 'g7', label: '7–8.5' }, { key: 'g6', label: '≤6' }, { key: 'gauth', label: 'Authentic' },
-].map(d => ({ ...d, group: 'grade' as const, xor: 'grade', parent: GRADER_KEYS.map(g => g[0]) }));
+].map(d => ({ ...d, group: 'grade' as const, any: 'grade', parent: GRADER_KEYS.map(g => g[0]) }));
 /** TCG language: Japanese 30%, Chinese 8.4%; every other named language is
  *  ≤3 lots on the book (no chip). English = no language named. */
 const TCG_LANG: FacetDef[] = [
-  { key: 'lang-en', label: 'English', group: 'lang', xor: 'lang' },
-  { key: 'lang-ja', label: 'Japanese', group: 'lang', xor: 'lang' },
-  { key: 'lang-zh', label: 'Chinese', group: 'lang', xor: 'lang' },
+  { key: 'lang-en', label: 'English', group: 'lang', any: 'lang' },
+  { key: 'lang-ja', label: 'Japanese', group: 'lang', any: 'lang' },
+  { key: 'lang-zh', label: 'Chinese', group: 'lang', any: 'lang' },
 ];
 const ENT_DOMAIN: FacetDef[] = [
   { key: 'film-tv', label: 'Film & TV', group: 'domain', xor: 'domain' },
@@ -95,7 +99,7 @@ const FRANCHISES: [string, string, 'film-tv' | 'music', RegExp][] = [
   ['fr-elvis', 'Elvis', 'music', /\belvis\b|presley/i],
   ['fr-stones', 'Rolling Stones', 'music', /rolling stones|mick jagger|keith richards/i],
 ];
-const FRANCHISE: FacetDef[] = FRANCHISES.map(([key, label, parent]) => ({ key, label, group: 'franchise', xor: 'franchise', parent: [parent] }));
+const FRANCHISE: FacetDef[] = FRANCHISES.map(([key, label, parent]) => ({ key, label, group: 'franchise', any: 'franchise', parent: [parent] }));
 const FLOWN: FacetDef = { key: 'flown', label: 'Flown', group: 'kind' };
 /** single objects vs multi-item lots ("Lot of 12", "Pair", "(25) Photos").
  *  ONLY 'Single items' is offered as a chip (measured Oct 9): multi-item lots
@@ -117,12 +121,12 @@ const COMPLICATIONS: [string, string, RegExp][] = [
   ['cx-tourbillon', 'Tourbillon', /tourbillon/i],
   ['cx-repeater', 'Minute repeater', /minute[- ]repeat|r[eé]p[eé]tition minutes/i],
 ];
-const COMPLICATION: FacetDef[] = COMPLICATIONS.map(([key, label]) => ({ key, label, group: 'complication', xor: 'complication' }));
+const COMPLICATION: FacetDef[] = COMPLICATIONS.map(([key, label]) => ({ key, label, group: 'complication', any: 'complication' }));
 /** Fine Art's 'Unique works' sub split by the stamped form (formKey): the two
  *  mediums the subs cannot say (prints / sculpture / ceramics already are subs) */
 const ART_MEDIUM: FacetDef[] = [
-  { key: 'painting', label: 'Paintings', group: 'medium', xor: 'medium' },
-  { key: 'on-paper', label: 'Works on paper', group: 'medium', xor: 'medium' },
+  { key: 'painting', label: 'Paintings', group: 'medium', any: 'medium' },
+  { key: 'on-paper', label: 'Works on paper', group: 'medium', any: 'medium' },
 ];
 
 const ALL: FacetDef[] = [
@@ -134,7 +138,7 @@ const DEF: Record<string, FacetDef> = Object.fromEntries(ALL.map(f => [f.key, f]
 /** every facet's display label by key — the chip text, and the vocabulary the
  *  lot-card badges speak (cardBadgesOf) */
 export const FACET_LABEL: Record<string, string> = Object.fromEntries(ALL.map(f => [f.key, f.label]));
-export const isEraFacet = (k: string) => DEF[k]?.xor === 'era';
+export const isEraFacet = (k: string) => DEF[k]?.any === 'era';
 
 /** the facets a category offers (empty = none). With `fx`, the children of a
  *  picked parent are included (graders under 'Graded', grades under a grader, franchises under
@@ -159,6 +163,8 @@ export function facetsFor(cat: CatKey | null, fx: readonly string[] = []): Facet
 const opened = (d: FacetDef | undefined, fx: readonly string[]) => !d?.parent || d.parent.some(p => fx.includes(p));
 /** picking one replaces a rival (same exclusive set) */
 const rivals = (a: string, b: string) => a !== b && DEF[a]?.xor != null && DEF[a].xor === DEF[b]?.xor;
+/** two keys of one any-of set (they OR, so neither narrows the other's count) */
+const anySibs = (a: string, b: string) => a !== b && DEF[a]?.any != null && DEF[a].any === DEF[b]?.any;
 
 /* ── readers ─────────────────────────────────────────────────────────────── */
 
@@ -289,11 +295,20 @@ export function lotFacets(l: FacetLot): ReadonlySet<string> {
   return read(l).keys;
 }
 
-/** AND across the selected facets */
+/** AND across the selected facets — except keys of one any-of set, which OR
+ *  (the lot needs one of them) */
 export function passesFacets(l: FacetLot, fx: readonly string[]): boolean {
   if (!fx.length) return true;
   const s = lotFacets(l);
-  return fx.every(k => s.has(k));
+  let anyOf: Map<string, boolean> | null = null;
+  for (const k of fx) {
+    const a = DEF[k]?.any;
+    if (!a) { if (!s.has(k)) return false; continue; }
+    if (!anyOf) anyOf = new Map();
+    anyOf.set(a, (anyOf.get(a) ?? false) || s.has(k));
+  }
+  if (anyOf) { let all = true; anyOf.forEach(ok => { if (!ok) all = false; }); return all; }
+  return true;
 }
 
 /** toggle one facet: a rival in its exclusive set is replaced, and children
@@ -322,7 +337,7 @@ export function facetCatOf(cat: CatKey | null, lots: FacetLot[]): CatKey | null 
 export function facetChips(cat: CatKey, pool: FacetLot[], fx: readonly string[]): (FacetDef & { n: number })[] {
   const defs = facetsFor(cat, fx);
   return defs.map(d => {
-    const others = fx.filter(k => k !== d.key && !rivals(k, d.key));
+    const others = fx.filter(k => k !== d.key && !rivals(k, d.key) && !anySibs(k, d.key));
     let n = 0, base = 0;
     for (const l of pool) {
       if (!passesFacets(l, others)) continue;
