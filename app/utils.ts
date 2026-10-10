@@ -506,6 +506,32 @@ export function isLiveUpcoming(
   return day >= todayIso;
 }
 
+/** Has a results-pending lot's sale already closed? The house-zone close
+ *  (liveUntilMs: timed close + slack, or the end of the sale day where it is
+ *  held) is behind `nowMs`. Pending lots stay VISIBLE for isLiveUpcoming's
+ *  grace day (they wear the results-pending state), but they are no longer on
+ *  the block: Oct 10, 49 Phillips NY080426 lots that closed Oct 9 10 AM ET
+ *  were counted in /makers' "live" and "Closing tonight". */
+export function isClosedPending(
+  l: { status?: string; resultsPending?: boolean; saleDate?: string | null; saleDateTime?: string | null; auctionHouse?: string | null; saleName?: string | null; currency?: string | null; id?: string | null; closeKind?: 'online' | 'session' | null },
+  nowMs: number = Date.now(),
+): boolean {
+  if (!l.resultsPending || (l.status != null && l.status !== 'upcoming')) return false;
+  const until = liveUntilMs(l);
+  return until != null && nowMs > until;
+}
+
+/** ON THE BLOCK — what every live COUNT reads (/makers rows + masthead, the
+ *  lenses, entity pages): isLiveUpcoming minus the results-pending lots whose
+ *  sale has closed (isClosedPending). */
+export function isOnBlock(
+  l: Parameters<typeof isLiveUpcoming>[0],
+  todayIso: string = localToday(),
+  nowMs: number = Date.now(),
+): boolean {
+  return isLiveUpcoming(l, todayIso, 1, nowMs) && !isClosedPending(l, nowMs);
+}
+
 export function getUpcomingCounts(lots: Array<{ status: string; saleDate: string | null; saleDateTime?: string | null; artist: string; resultsPending?: boolean }>): Record<string, number> {
   const today = localToday();
   const counts: Record<string, number> = {};

@@ -13,7 +13,7 @@ export interface VerifiedMover {
   slug: string;
   label: string;
   market: Market;
-  horizon: string; // '5Y' | '3Y' | '1Y'
+  horizon: string; // '5Y' | '3Y' | '1Y' | 'since <year>' (the full-span MAX read)
   changePct: number;
   ciLoPct: number;
   ciHiPct: number;
@@ -22,8 +22,18 @@ export interface VerifiedMover {
   series: number[]; // rebased index level, for the sparkline
 }
 
-// longest window first — a 5Y read is the more meaningful collector signal
-const HORIZON_PREF = ['5Y', '3Y', '1Y'] as const;
+// longest window first — a 5Y read is the more meaningful collector signal.
+// (P3, Oct 10) MAX last: a maker whose ONLY publishable read is the full
+// span (Patek: 1Y/3Y/5Y CIs straddle zero, MAX +209% [154, 276]) still
+// publishes it — labeled with its span ("since 1991"), never as a 5Y
+const HORIZON_PREF = ['5Y', '3Y', '1Y', 'MAX'] as const;
+
+/** a horizon's printed label: the fixed windows as-is, MAX as its span */
+function horizonLabel(h: string, series: { period?: string }[] | undefined): string | null {
+  if (h !== 'MAX') return h;
+  const y = series?.[0]?.period?.slice(0, 4);
+  return y && /^\d{4}$/.test(y) ? `since ${y}` : null;
+}
 
 /**
  * The publishable makers, optionally scoped to a market. Sorted by the
@@ -44,11 +54,13 @@ export function verifiedMovers(market: MarketData | null, scope?: Market): Verif
     if (!pick) continue;
     const hz = r.horizons[pick];
     if (hz.changePct == null) continue;
+    const horizon = horizonLabel(pick, r.series);
+    if (!horizon) continue;
     out.push({
       slug,
       label: ARTIST_LABEL[slug] || slug,
       market: mkt,
-      horizon: pick,
+      horizon,
       changePct: hz.changePct,
       ciLoPct: hz.ciLoPct ?? hz.changePct,
       ciHiPct: hz.ciHiPct ?? hz.changePct,

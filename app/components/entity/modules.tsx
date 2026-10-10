@@ -208,7 +208,7 @@ function ReadTag({ r }: { r: SubMarketRead }) {
   if (r.readType === 'index' && r.index) {
     const v = r.index.changePct;
     return (
-      <span title={`verified index, ${r.index.horizon}, 90% interval [${r.index.ciLoPct.toFixed(0)}%, ${r.index.ciHiPct.toFixed(0)}%]`}>
+      <span title={`verified index, ${r.index.horizon}, 95% interval [${r.index.ciLoPct.toFixed(0)}%, ${r.index.ciHiPct.toFixed(0)}%]`}>
         <span className={`nsp-lv mono ${v >= 0 ? 'up' : 'down'}`}>{signedPct(v)}</span>
         <span className="nsp-lsub">{r.index.horizon} verified</span>
       </span>

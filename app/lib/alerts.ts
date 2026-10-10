@@ -29,8 +29,12 @@ export interface SavedQuery {
    *  set the search is a "follow" — new lots for that person alert nightly. */
   player?: string | null;
   playerName?: string | null;
-  /** Oct 8: a category / house FOLLOW (app/lib/follows) — clean taxonomy keys */
-  follow?: 'cat' | 'house';
+  /** Oct 8: a category / house FOLLOW (app/lib/follows) — clean taxonomy keys.
+   *  Oct 10: 'entity' — a followed subject / set (a Pokémon, a film, a
+   *  mission …) by its entity id (app/lib/entity/model), matched on lot.ek */
+  follow?: 'cat' | 'house' | 'entity';
+  /** the followed entity's id (follow: 'entity') */
+  id?: string | null;
   cat?: string | null;
   sub?: string | null;
   house?: string | null;

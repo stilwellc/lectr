@@ -84,6 +84,34 @@ test('entity stats: a spark needs ≥4 drawn quarters, yoy needs ≥10 on both s
   assert.equal(g.yoy, null, 'a 9-sale side prints no yoy');
 });
 
+test('entity stats (P3): yoy is like for like — a crawl that adds cheap items moves no price', () => {
+  // 25 identities, each up exactly 20% year on year; the current year ALSO
+  // crawled 4× as many sales, mostly of a cheap identity never seen before
+  const rows: SoldPoint[] = [];
+  for (let i = 0; i < 25; i++) {
+    const base = 1000 + i * 400;
+    rows.push(pt(base, '2025-02-01', undefined, { k: `card${i}` }));
+    rows.push(pt(base * 1.2, '2026-02-01', undefined, { k: `card${i}` }));
+  }
+  for (let i = 0; i < 75; i++) rows.push(pt(50, '2026-03-01', undefined, { k: `new${i % 3}` }));
+  const f = entityFigures(rows, TODAY, L);
+  // the pooled median would read −98%; the matched read is the real +20%
+  assert.deepEqual(f.yoy, { pct: 20, n: 25, basis: 'matched' });
+});
+
+test('entity stats (P3): too few pairs — a keyed lens abstains; an unkeyed one reads the median only on a stable intake', () => {
+  const pairs = (n: number): SoldPoint[] => Array.from({ length: n }, (_, i) => [pt(100, '2025-01-10', undefined, { k: `c${i}` }), pt(130, '2026-01-10', undefined, { k: `c${i}` })]).flat();
+  const unique = (n: number, p: number, d: string): SoldPoint[] => Array.from({ length: n }, () => pt(p, d));
+  // 19 pairs (< MIN_YOY_PAIRS) on a keyed lens (cards): no pooled-median stand-in
+  assert.equal(entityFigures(pairs(19), TODAY, L).yoy, null);
+  // unique works, equal intake: the pooled median, labeled
+  assert.deepEqual(entityFigures([...unique(19, 100, '2025-01-10'), ...unique(19, 130, '2026-01-10')], TODAY, L).yoy, { pct: 30, n: 19, basis: 'median' });
+  // the same, but the current year sold 2× as many: no read
+  assert.equal(entityFigures([...unique(19, 100, '2025-01-10'), ...unique(38, 130, '2026-01-10')], TODAY, L).yoy, null);
+  // 20 pairs: matched, whatever the intake did
+  assert.deepEqual(entityFigures([...pairs(20), ...unique(60, 5, '2026-02-10')], TODAY, L).yoy, { pct: 30, n: 20, basis: 'matched' });
+});
+
 test('entity stats: results are ordered (top by price, recent by date) and houses by count', () => {
   const rows = [pt(5, '2024-06-01', undefined, { h: 'A' }), pt(50, '2026-10-01', undefined, { h: 'B' }), pt(500, '2025-01-01', undefined, { h: 'B' })];
   const f = entityFigures(rows, TODAY, L);

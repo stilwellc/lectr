@@ -42,6 +42,7 @@ import { livePool } from '../../lib/maker-pool';
 import { entityIdOf } from '../../lib/entity/live';
 import { parseEntityId, subEntityLabel } from '../../lib/entity/key';
 import { followKeyOf } from '../../lib/entity/kinds';
+import { catFollow, entityFollow } from '../../lib/follows';
 import { lotSubjectOf } from '../../lib/maker-subjects';
 import { isFlagged } from '../../lib/flags';
 import { taxonOf, SPORTS, type CatKey } from '../../lib/taxonomy';
@@ -182,6 +183,11 @@ export default function EntityPage({ id }: { id: string }) {
 
   const kindNoun = KIND_NOUN[ref.kind === 'subject' ? (ref.subKind || 'subject') : ref.kind] || 'name';
   const followKey = ref.kind === 'maker' || ref.kind === 'player' ? followKeyOf(id, { playerDossier: true }) : null;
+  // a collection follows its clean category; a subject / set its entity id
+  // (app/lib/follows — "For you" ranks its lots, the nightly alerts on them)
+  const follow = followKey ? null
+    : ref.kind === 'sub' && ref.cat ? catFollow(ref.cat as CatKey, ref.sub ?? null)
+    : name ? entityFollow(id, name) : null;
   const sportKey = market === 'sports' ? (SPORTS.find(s => s.label === summary?.discipline)?.key ?? null) : null;
   const flags = live.reduce((n, l) => n + (isFlagged(l) ? 1 : 0), 0);
   const liveHouses = new Set(live.map(l => l.auctionHouse)).size;
@@ -223,7 +229,7 @@ export default function EntityPage({ id }: { id: string }) {
         </div>
         <div className="nsp-title-row">
           <h1 className="nsp-h1">{name || ' '}</h1>
-          {followKey && name ? <FollowButton slug={followKey} name={name} /> : null}
+          {followKey && name ? <FollowButton slug={followKey} name={name} /> : follow && name ? <FollowButton follow={follow} name={name} /> : null}
         </div>
 
         <div className="ns-byline nsp-byline" aria-busy={pending || undefined}>
@@ -259,20 +265,24 @@ export default function EntityPage({ id }: { id: string }) {
             <div>
               <div className="k">Verified index, {verified.horizon}</div>
               <div className={`v ${verified.changePct >= 0 ? 'up' : 'down'}`}><span className="mono">{signedPct(verified.changePct)}</span></div>
-              <div className="s">90% interval [{signedPct(verified.ciLoPct)}, {signedPct(verified.ciHiPct)}] · {verified.n.toLocaleString()} lots</div>
+              <div className="s">95% interval [{signedPct(verified.ciLoPct)}, {signedPct(verified.ciHiPct)}] · {verified.n.toLocaleString()} lots</div>
             </div>
           ) : summary?.yoy ? (
             <div>
               <div className="k">Year on year</div>
               <div className="v"><span className="mono">{signedPct(summary.yoy.pct)}</span></div>
-              <div className="s" title="The median of the last four complete quarters against the four before — a level the mix of what sold moves too, not an appreciation rate">{summary.medScope ? `${summary.medScope.toLowerCase()} median` : 'median'} · 4 qtrs vs 4 · n={summary.yoy.n.toLocaleString()}</div>
+              {summary.yoy.basis === 'matched' ? (
+                <div className="s" title="Like for like: each item (the same card at the same grade, the same reference, the same edition) that sold in both years gives its price ratio; this is the median ratio, the last four complete quarters against the four before">{summary.medScope ? `${summary.medScope.toLowerCase()}, ` : ''}same items · 4 qtrs vs 4 · {summary.yoy.n.toLocaleString()} matched</div>
+              ) : (
+                <div className="s" title="The median of the last four complete quarters against the four before, printed only when both years sold a similar number of lots — a level the mix of what sold moves too, not an appreciation rate">{summary.medScope ? `${summary.medScope.toLowerCase()} median` : 'median'} · 4 qtrs vs 4 · n={summary.yoy.n.toLocaleString()}</div>
+              )}
             </div>
           ) : null}
         </div>
 
         {/* §2 THE LIVE BOOK */}
         {live.length > 0 && (
-          <section id={anchorId} className="nsp-section ns-plate" aria-label="On the block now" style={{ marginTop: 28 }}>
+          <section id={anchorId} className="nsp-section nsp-live ns-plate" aria-label="On the block now">
             <div className="nsp-shead" style={{ marginBottom: 14 }}>
               <div>
                 <span className="ns-kicker">Live</span>

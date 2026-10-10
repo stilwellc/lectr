@@ -19,8 +19,11 @@
  *   quarters     calendar quarters by the saleDate STRING (no local-time
  *                drift), COMPLETE quarters only — never the quarter in
  *                progress; a quarter under MIN_Q_N sales is null (a gap)
- *   yoy          the last 4 complete quarters vs the 4 before, pooled, only
- *                when BOTH sides hold ≥ MIN_YOY_N sales
+ *   yoy          the last 4 complete quarters vs the 4 before, LIKE FOR LIKE
+ *                (yoyOf): the median per-identity price ratio over the
+ *                identities sold in both years (basis 'matched', n = pairs);
+ *                else pooled medians only when both sides hold ≥ MIN_YOY_N
+ *                sales on a stable intake (basis 'median'); else none
  */
 import { medianSorted } from '../stats';
 
@@ -54,6 +57,10 @@ export interface SoldPoint {
   img: string | null;
   /** (facet-bearing entities only) the lot's live-chip facet keys — app/lib/entity/facets */
   fx?: readonly string[];
+  /** the lot's like-for-like identity (scripts/emit-entities identityOf: a
+   *  card + grade, a Pokémon card + grade, a watch reference + material, a
+   *  print edition) — the unit the matched yoy pairs on; absent = none */
+  k?: string | null;
 }
 
 export interface Labels { lens: (k: string) => string; coarse: (k: string) => string }
@@ -69,7 +76,7 @@ export interface EntityFigures {
   spark: (number | null)[] | null;
   sparkN: number[] | null;
   sparkQ: string[];
-  yoy: { pct: number; n: number; basis: 'median' } | null;
+  yoy: Yoy | null;
   quarters: { q: string; med: number | null; n: number; high: number }[];
   yearly: { y: number; med: number | null; n: number; partial?: true }[];
   houses: { h: string; n: number }[];
@@ -116,6 +123,72 @@ function yearlyOf(rows: readonly SoldPoint[], thisYear: number): { y: number; me
     .map(([y, ps]) => (y === thisYear ? { y, med: gated(ps, MIN_MED_N), n: ps.length, partial: true as const } : { y, med: gated(ps, MIN_MED_N), n: ps.length }));
 }
 
+/** a matched yoy needs this many identities sold in BOTH years */
+export const MIN_YOY_PAIRS = 20;
+/** a plain-median yoy only when the two years' sale counts sit within this
+ *  ratio of each other — past it the median reads what the crawl added (a
+ *  4× card / Pokémon intake in 2026), not what prices did */
+export const YOY_COVERAGE_MAX = 1.5;
+/** a lens where at least this share of the two years' sales carry an
+ *  identity reads matched or not at all (never the pooled median) */
+export const YOY_KEYED_SHARE = 0.5;
+
+/**
+ * yoy — the lens's last 4 complete quarters against the 4 before, like with
+ * like (P3, Oct 10). Two honest bases, in order:
+ *   matched  every identity (SoldPoint.k) that sold in BOTH years gives one
+ *            ratio, its this-year median over its last-year median; the read
+ *            is the median of those ratios, n = the identities paired. Same
+ *            card at the same grade, same reference, same edition — the
+ *            crawl adding more cheap (or dear) things cannot move it.
+ *   median   the pooled median against the pooled median — only for a lens
+ *            whose sales mostly carry NO identity (unique works, most
+ *            memorabilia), when both years clear MIN_YOY_N AND their counts
+ *            are within YOY_COVERAGE_MAX of each other (a stable intake).
+ * Neither → null (no read beats a coverage artefact).
+ */
+export type Yoy = { pct: number; n: number; basis: 'matched' | 'median' };
+export function yoyOf(scoped: readonly SoldPoint[], today: string): Yoy | null {
+  const q8 = completeQuarters(today, 8);
+  const prevQ = new Set(q8.slice(0, 4)), curQ = new Set(q8.slice(4));
+  const prev: number[] = [], cur: number[] = [];
+  const pk = new Map<string, number[]>(), ck = new Map<string, number[]>();
+  for (const r of scoped) {
+    const q = quarterOf(r.d);
+    const side = prevQ.has(q) ? 0 : curQ.has(q) ? 1 : -1;
+    if (side < 0) continue;
+    (side ? cur : prev).push(r.p);
+    if (r.k) { const m = side ? ck : pk; (m.get(r.k) || m.set(r.k, []).get(r.k)!).push(r.p); }
+  }
+  const ratios: number[] = [];
+  const raw = (ps: number[]) => medianSorted(ps.slice().sort((a, b) => a - b));
+  pk.forEach((ps, k) => {
+    const cs = ck.get(k);
+    if (!cs) return;
+    const b = raw(ps);
+    if (b > 0) ratios.push(raw(cs) / b);
+  });
+  const pct = (x: number) => Math.round((x - 1) * 1000) / 10;
+  if (ratios.length >= MIN_YOY_PAIRS) {
+    ratios.sort((a, b) => a - b);
+    return { pct: pct(medianSorted(ratios)), n: ratios.length, basis: 'matched' };
+  }
+  // an identity-keyed lens (cards, Pokémon, references, editions) that cannot
+  // pair: its pooled median is a different basket each year (a rookie's
+  // prospect cards then, his flagship cards now) — no read
+  let keyed = 0;
+  pk.forEach(ps => { keyed += ps.length; });
+  ck.forEach(ps => { keyed += ps.length; });
+  if (keyed >= YOY_KEYED_SHARE * (prev.length + cur.length)) return null;
+  if (prev.length >= MIN_YOY_N && cur.length >= MIN_YOY_N) {
+    const hi = Math.max(prev.length, cur.length), lo = Math.min(prev.length, cur.length);
+    if (hi / lo > YOY_COVERAGE_MAX) return null;
+    const a = med(cur), b = med(prev);
+    if (b > 0) return { pct: pct(a / b), n: lo, basis: 'median' };
+  }
+  return null;
+}
+
 export const TITLE_MAX = 120;
 const resultRow = (r: SoldPoint, labels: Labels) => ({ id: r.id, img: r.img, p: Math.round(r.p), d: r.d, t: r.t.slice(0, TITLE_MAX), h: r.h, cat: labels.lens(r.lens) });
 
@@ -153,17 +226,7 @@ export function entityFigures(rows: readonly SoldPoint[], today: string, labels:
   const sparkV = spQ.map(q => gated(byQ.get(q) || [], MIN_Q_N));
   const sparkOk = sparkV.filter(v => v != null).length >= MIN_SPARK_POINTS;
 
-  // yoy: the last 4 complete quarters vs the 4 before, pooled
-  let yoy: EntityFigures['yoy'] = null;
-  {
-    const q8 = completeQuarters(today, 8);
-    const prev = q8.slice(0, 4).flatMap(q => byQ.get(q) || []);
-    const cur = q8.slice(4).flatMap(q => byQ.get(q) || []);
-    if (prev.length >= MIN_YOY_N && cur.length >= MIN_YOY_N) {
-      const a = med(cur), b = med(prev);
-      if (b > 0) yoy = { pct: Math.round((a / b - 1) * 1000) / 10, n: Math.min(prev.length, cur.length), basis: 'median' };
-    }
-  }
+  const yoy = yoyOf(scoped, today);
 
   // the record: every lot, every lens
   let rec: SoldPoint | null = null;

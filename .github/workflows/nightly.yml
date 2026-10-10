@@ -436,7 +436,10 @@ jobs:
           mkdir -p data/qa
           npx tsx scripts/assemble.ts --single-load
         env:
-          NODE_OPTIONS: --max-old-space-size=4096
+          # 6GB (Oct 10): peak live heap ran 3.45GB of 4GB with the entity
+          # files; the per-row identity keys for matched YoY add ~60-100MB.
+          # ubuntu-latest (public repo) has 16GB — headroom, not a budget.
+          NODE_OPTIONS: --max-old-space-size=6144
           RAY_SENTINEL_WARN_ONLY: ${{ github.event.inputs.sentinel_warn_only == 'true' && '1' || '' }}
       - name: Check the entity files (advisory)
         continue-on-error: true

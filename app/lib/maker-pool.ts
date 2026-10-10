@@ -9,14 +9,15 @@
  *                which carries every live lot). Never a maker shard's rows:
  *                the shards are a different nightly snapshot (Oct 9: Warhol
  *                80 live in the shard vs 101 on the served book).
- *   live         isLiveUpcoming on the reader's calendar day (app/utils).
+ *   live         isOnBlock on the reader's calendar day (app/utils): isLiveUpcoming
+ *                minus results-pending lots whose sale has closed.
  *   attribution  the lot's maker slug (`l.artist === slug`) — the same slug
  *                the market membership (marketArtists) is built from.
  *   filters      passesTriage (app/lib/feed-filters) with the page's
  *                houseBaselines + last-visit day.
  *   order        byPriority — what matters most first (app/lib/priority).
  */
-import { isLiveUpcoming, localToday, trueSaleDay } from '../utils';
+import { isLiveUpcoming, isOnBlock, localToday, trueSaleDay } from '../utils';
 import { subjectRowKeyOf } from './maker-subjects';
 import { type Market } from '../constants';
 import { searchTextOf } from './lot-labels';
@@ -27,7 +28,7 @@ type PoolLot = Parameters<typeof isLiveUpcoming>[0] & Parameters<typeof passesTr
 
 /** every live lot on the book (the reader's calendar day) */
 export function livePool<L extends PoolLot>(lots: readonly L[], today: string = localToday()): L[] {
-  return lots.filter(l => isLiveUpcoming(l, today));
+  return lots.filter(l => isOnBlock(l, today));
 }
 
 /** one maker's live lots under the triage filters, what matters most first —
@@ -37,7 +38,7 @@ export function makerLiveLots<L extends PoolLot>(
 ): L[] {
   const today = opts.today ?? localToday();
   return lots
-    .filter(l => l.artist === slug && isLiveUpcoming(l, today) && passesTriage(l, f, { ...opts, today }))
+    .filter(l => l.artist === slug && isOnBlock(l, today) && passesTriage(l, f, { ...opts, today }))
     .sort(byPriority(Date.now()));
 }
 
@@ -50,7 +51,7 @@ export function subjectLivePool<L extends PoolLot & SubjectPoolLot>(
 ): L[] {
   const id = `${market}|${key}`;
   return lots
-    .filter(l => isLiveUpcoming(l, today) && subjectRowKeyOf(l) === id)
+    .filter(l => isOnBlock(l, today) && subjectRowKeyOf(l) === id)
     .sort((a, b) => (trueSaleDay(a) < trueSaleDay(b) ? -1 : trueSaleDay(a) > trueSaleDay(b) ? 1 : 0));
 }
 type SubjectPoolLot = Parameters<typeof subjectRowKeyOf>[0] & Parameters<typeof trueSaleDay>[0];

@@ -95,8 +95,8 @@ export interface EntitiesWire {
     r: ([number, string] | 0)[];
     sp: ((number | null)[] | 0)[];
     spn: (number[] | 0)[];
-    /** yoy [pct, n] (basis median) or [pct, n, 1] (basis index); 0 = none */
-    y: ([number, number] | [number, number, 1] | 0)[];
+    /** yoy [pct, n] (basis median), [pct, n, 1] (basis index) or [pct, n, 2] (basis matched); 0 = none */
+    y: ([number, number] | [number, number, 1 | 2] | 0)[];
   };
   /** verified movers by id (makers only, sparse) */
   vf: Record<string, unknown>;
@@ -137,7 +137,7 @@ export function encodeEntities(list: readonly EntitySummary[], o: WireOpts): Ent
     c.r.push(e.record ? [Math.round(e.record.p), e.record.d] : 0);
     c.sp.push(e.spark ? e.spark.map(v => (v == null ? null : Math.round(v))) : 0);
     c.spn.push(e.sparkN ?? 0);
-    c.y.push(e.yoy ? (e.yoy.basis === 'index' ? [e.yoy.pct, e.yoy.n, 1] : [e.yoy.pct, e.yoy.n]) : 0);
+    c.y.push(e.yoy ? (e.yoy.basis === 'index' ? [e.yoy.pct, e.yoy.n, 1] : e.yoy.basis === 'matched' ? [e.yoy.pct, e.yoy.n, 2] : [e.yoy.pct, e.yoy.n]) : 0);
     if (e.verified != null) vf[e.id] = e.verified;
   }
   return { v: WIRE_V, tier: o.tier, generatedAt: o.generatedAt, lastCrawl: o.lastCrawl, sparkQ: o.sparkQ, tailN: o.tailN, ds, ml, c, vf };
@@ -175,7 +175,7 @@ export function decodeEntities(w: EntitiesWire): EntitiesFile & { tier: 'main' |
       record: r ? { p: r[0], d: r[1] } : null,
       spark,
       sparkN: c.spn[i] || null,
-      yoy: y ? { pct: y[0], n: y[1], basis: y[2] === 1 ? 'index' : 'median' } : null,
+      yoy: y ? { pct: y[0], n: y[1], basis: y[2] === 1 ? 'index' : y[2] === 2 ? 'matched' : 'median' } : null,
       verified: w.vf[id] ?? null,
       thin: c.s12[i] < THIN_SOLD12M,
       caps: { compare: !!spark, follow: p.kind === 'maker' || p.kind === 'player' ? p.slug : null, dossier: sold >= MIN_SOLD },

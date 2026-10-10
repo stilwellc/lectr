@@ -6,7 +6,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildRow, tagOf, searchRow, sortRows, compareRows, needleOf, lotMatches, nameMatches, fold, fmtPct, lastQuarterOf, type Row } from '../entity/ledger';
+import { buildRow, tagOf, searchRow, sortRows, compareRows, needleOf, lotMatches, nameMatches, gradePlusOf, fold, fmtPct, lastQuarterOf, type Row } from '../entity/ledger';
 import { mattersOf } from '../entity/live';
 import { decodeView, viewSearch, VIEW_DEFAULTS, DEFAULT_COLS } from '../entity/view-state';
 import type { EntitySummary } from '../entity/model';
@@ -126,6 +126,11 @@ test('order: thin rows sink; Movers ranks gated moves by size, either way', () =
   // a gated read on a small sample ranks after the well-supported ones
   const small = mk('pl:e', { label: 'E', yoy: { pct: 4204, n: 16, basis: 'median' } });
   assert.deepEqual(sortRows([...rows, small], 'movers').map(r => r.label), ['B', 'D', 'E', 'C', 'A']);
+  // (P3) like-for-like reads lead, well supported on their PAIRS (n counts
+  // identities); a thin matched read sorts with the thin gated reads
+  const matched = mk('pl:f', { label: 'F', yoy: { pct: 45, n: 40, basis: 'matched' } });
+  const fewPairs = mk('pl:g', { label: 'G', yoy: { pct: 90, n: 22, basis: 'matched' } });
+  assert.deepEqual(sortRows([...rows, matched, fewPairs, small], 'movers').map(r => r.label), ['F', 'B', 'D', 'E', 'G', 'C', 'A']);
   assert.deepEqual(sortRows([...rows], 'name').map(r => r.label), ['A', 'B', 'C', 'D']);
   // Matters / Live: thin only breaks a tie
   const t = [mk('pl:x', { label: 'X', live: 5, topScore: 3, thin: true }), mk('pl:y', { label: 'Y', live: 5, topScore: 3, thin: false }), mk('pl:z', { label: 'Z', live: 9, topScore: 9, thin: true })];
@@ -154,4 +159,18 @@ test('view-state P2: body, lots scope and lot order round-trip; legacy sorts/col
   assert.equal(decodeView(new URLSearchParams('sort=delta')).sort, 'movers');
   assert.deepEqual(decodeView(new URLSearchParams('cols=velocity.curve.median')).cols, ['median', 'sold12', 'curve']);
   assert.equal(decodeView(new URLSearchParams('vw=bogus')).vw, 'names');
+});
+
+test('grade search: an exact grade offers its "and up" form, in the reader\'s own words', () => {
+  const g = gradePlusOf(needleOf('Mantle PSA 7'))!;
+  assert.deepEqual(g.plus, ['mantle', 'psa 7+']);
+  assert.equal(g.label, 'PSA 7+');
+  assert.equal(g.q('Mantle PSA 7'), 'Mantle PSA 7+');
+  assert.equal(g.q('apollo 11 Mantle psa  7'), 'apollo 11 Mantle psa  7+');
+  // already widened, a 10, a mission number, a year: nothing to offer
+  assert.equal(gradePlusOf(needleOf('Mantle PSA 7+')), null);
+  assert.equal(gradePlusOf(needleOf('Charizard PSA 10')), null);
+  assert.equal(gradePlusOf(needleOf('Apollo 11')), null);
+  assert.equal(gradePlusOf(needleOf('1952 Topps')), null);
+  assert.equal(gradePlusOf(needleOf('BGS 9.5'))!.label, 'BGS 9.5+');
 });
