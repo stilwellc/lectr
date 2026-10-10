@@ -19,7 +19,7 @@
  * does not re-render on a chip click.
  */
 import { useMemo, useRef } from 'react';
-import { marketOf, ARTIST_MARKET, type Market } from '../../constants';
+import { marketOf, ARTIST_MARKET, MAKER_MARKETS, type Market } from '../../constants';
 import type { AuctionLot } from '../../types';
 import { lotSubjectOf, SUBJECT_MARKETS, type LotSubject } from '../maker-subjects';
 import { entityKeyOf } from './key';
@@ -81,6 +81,8 @@ function entryOf(lots: AuctionLot[]): LiveEntry {
 export function groupByMaker(pool: readonly AuctionLot[]): Map<string, LiveEntry> {
   const by = new Map<string, AuctionLot[]>();
   for (const l of pool) {
+    // a collection lot never keys to a maker — skip its subject read here
+    if (!MAKER_MARKETS.has(marketOf(l.artist))) continue;
     const k = entityIdOf(l);
     if (!k || !k.startsWith('mk:')) continue;
     const a = by.get(k); if (a) a.push(l); else by.set(k, [l]);
@@ -203,7 +205,12 @@ export function useLivePool(allLots: readonly AuctionLot[], market: Market, tria
     : EMPTY_MAP as Map<string, NameEntry>), [pass, all, names, namesAll]);
   const byCat = useMemo(() => (cats ? (prev.current.cat = stabilize(prev.current.cat, groupByCat(pass))) : EMPTY_MAP as Map<string, LiveEntry>), [pass, cats]);
   // a lot the attribution guard drops (no entity) is on no row — and in no "of N"
-  const marketAll = useMemo(() => all.filter(l => (market === 'all' ? ARTIST_MARKET[l.artist] != null : ARTIST_MARKET[l.artist] === market) && entityIdOf(l) != null), [all, market]);
+  const marketAll = useMemo(() => all.filter(l => {
+    const m = ARTIST_MARKET[l.artist];
+    if (market === 'all' ? m == null : m !== market) return false;
+    // only a maker-market lot can be unkeyed (the attribution guard)
+    return !MAKER_MARKETS.has(m) || entityIdOf(l) != null;
+  }), [all, market]);
   const marketPool = useMemo(() => (sport ? marketAll.filter(l => sportOk(l, sport)) : marketAll), [marketAll, sport]);
   return { all, pass, byMaker, byName, byCat, namesAll, marketAll, marketPool };
 }

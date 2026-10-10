@@ -908,6 +908,9 @@ export default function MakersPage() {
     players: rowsBy === 'name' && (activeKey === 'all' || activeKey === 'sports'),
   });
   const shownBy: RowsBy = rowsBy === 'cat' && !entities.subsReady ? 'name' : rowsBy;
+  // the ledger paints once: the eager book AND the summaries' source are in
+  // (never adapter figures that an entities file then replaces)
+  const booting = loading || entities.source === 'pending';
   const filtersOn = isTriageActive(dTriage) || !!dSport;
   const marketLiveAll = pool.marketAll;
   const marketLive = pool.marketPool;
@@ -1104,7 +1107,7 @@ export default function MakersPage() {
   // deep link ?open= — land on the dossier once the ledger has painted.
   // The deepLinked ref makes it fire exactly once.
   useEffect(() => {
-    if (loading || !deepLinked.current || !open) return;
+    if (booting || !deepLinked.current || !open) return;
     deepLinked.current = false;
     // Back from a lot: return to the exact scroll the reader left (saved
     // below), not a re-centred row (~340px jump). A fresh shared link centres.
@@ -1117,7 +1120,7 @@ export default function MakersPage() {
       if (saved != null) window.scrollTo({ top: saved, behavior: 'instant' as ScrollBehavior });
       else document.querySelector(`[data-mk-flip="${CSS.escape(open)}"]`)?.scrollIntoView({ behavior: 'instant' as ScrollBehavior, block: 'center' });
     }));
-  }, [loading, open]);
+  }, [booting, open]);
   // remember where the reader was when they leave for a lot (or the page)
   useEffect(() => {
     const save = () => {
@@ -1241,7 +1244,7 @@ export default function MakersPage() {
     });
     ro.observe(el);
     return () => { ro.disconnect(); document.documentElement.style.removeProperty('--mk-bar-h'); };
-  }, [loading]);
+  }, [booting]);
 
   const jumpTo = useCallback((key: Market) => {
     document.getElementById(`mk-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1304,7 +1307,7 @@ export default function MakersPage() {
       <style dangerouslySetInnerHTML={{ __html: `@media(min-width:940px){.mk-row,.mk-group-head .mk-cols{grid-template-columns:${gridTemplate}}}` }} />
       <ArtistNav activeSlug="artists" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
-      {loading ? (
+      {booting ? (
         <RayLoading />
       ) : (
         <RayEntrance animate={!fromCache}>
@@ -1588,7 +1591,7 @@ export default function MakersPage() {
         </RayEntrance>
       )}
 
-      {picked.length > 0 && !loading && (
+      {picked.length > 0 && !booting && (
         <CompareTray picked={picked} onRemove={onToggleCompare} onClear={() => set({ cmp: [] })} />
       )}
 

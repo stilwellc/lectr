@@ -100,8 +100,10 @@ export function loadEntityDetail(id: string, ver?: string): Promise<EntityDetail
 /** test seam: forget every cached fetch */
 export function _resetEntityCaches() { entitiesP.clear(); catP = null; playersP = null; detailP.clear(); entitiesMissing = false; }
 
-/** a promise's value as state (undefined = pending, null = absent) */
-function useLoad<T>(load: (() => Promise<T | null>) | null): T | null | undefined {
+/** a promise's value as state (undefined = pending, null = absent).
+ *  `keep`: while a NEW loader is pending, return the last one's value (a
+ *  market switch keeps the ledger up instead of falling back to loading) */
+function useLoad<T>(load: (() => Promise<T | null>) | null, keep = false): T | null | undefined {
   const [v, setV] = useState<{ f: unknown; v: T | null } | null>(null);
   useEffect(() => {
     if (!load) return;
@@ -109,7 +111,8 @@ function useLoad<T>(load: (() => Promise<T | null>) | null): T | null | undefine
     load().then(x => { if (on) setV({ f: load, v: x }); });
     return () => { on = false; };
   }, [load]);
-  return load && v && v.f === load ? v.v : undefined;
+  if (!load || !v) return undefined;
+  return v.f === load || keep ? v.v : undefined;
 }
 
 /* ── the quarter rule — the current quarter is a handful of early sales,
@@ -298,11 +301,15 @@ export interface UseEntitiesOpts {
  */
 export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entities {
   const { namesAll, subs: wantSubs = false, players: wantPlayers = false, sport = null } = opts;
-  const { statsByArtist, market: marketData, lastCrawl, loading } = useRayData();
+  const { statsByArtist, market: marketData, lastCrawl } = useRayData();
 
-  // 1. the nightly's file (absent on today's data → the adapters)
-  const loadFile = useMemo(() => (loading ? null : () => loadEntities(market, lastCrawl)), [market, lastCrawl, loading]);
-  const file = useLoad(loadFile);
+  // 1. the nightly's file (absent on an older data build → the adapters).
+  // Asked for at mount, in parallel with the eager book: pages/* revalidate
+  // (public/_headers), so no ?v= is needed, and the ledger waits for the
+  // answer (source 'pending') rather than paint adapter figures that the
+  // file's would then replace
+  const loadFile = useMemo(() => () => loadEntities(market), [market]);
+  const file = useLoad(loadFile, true);
   const fileMap = useMemo(() => {
     if (!file) return null;
     if (file.lastCrawl && lastCrawl && file.lastCrawl !== lastCrawl) {
@@ -331,8 +338,11 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
     for (const a of ARTISTS) {
       const id = makerId(a.slug);
       const fromFile = fileMap?.get(id);
-      m.set(id, fromFile ?? makerBundle(a.slug, a.market as Market, statsByArtist[a.slug] || null,
-        verifiedBySlug.get(a.slug) || null, pageStats?.makerFaces?.[a.slug]?.url || null));
+      const ad = makerBundle(a.slug, a.market as Market, statsByArtist[a.slug] || null,
+        verifiedBySlug.get(a.slug) || null, pageStats?.makerFaces?.[a.slug]?.url || null);
+      // the file's summary, with what it doesn't carry yet ("Settled $", a
+      // face where the build found none) from the same files as before
+      m.set(id, fromFile ? { ...fromFile, s: { ...fromFile.s, revenue: fromFile.s.revenue ?? ad.s.revenue, face: fromFile.s.face ?? ad.s.face } } : ad);
     }
     return m;
   }, [statsByArtist, verifiedBySlug, pageStats, fileMap]);
