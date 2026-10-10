@@ -9,8 +9,8 @@
  *
  *   closeMs(lot)        the close instant: the stamped saleDateTime when the
  *                       house publishes one, else the END of the sale's
- *                       calendar day in the reader's zone (a day-only lot is
- *                       open until its day is over — never longer)
+ *                       calendar day in the HOUSE's zone (a day-only lot is
+ *                       open until its day is over where it is sold)
  *   isOpen(lot, now)    upcoming AND not past its close. A results-pending
  *                       lot past its close is CLOSED (it hammered; the house
  *                       just hasn't posted) — it never counts as live.
@@ -21,37 +21,20 @@
  *                       string), then the reader's clock, re-read every minute.
  */
 import { useEffect, useState } from 'react';
+import { closeMs, closeIsTimed } from './house-tz';
+import { trueSaleDay } from '../utils';
 
 const HOUR = 3_600_000;
 const DAY = 86_400_000;
 export const CLOSING_SOON_MS = 48 * HOUR;
 
-type Closable = { status?: string; saleDate?: string | null; saleDateTime?: string | null; resultsPending?: boolean };
+type Closable = { status?: string; saleDate?: string | null; saleDateTime?: string | null; resultsPending?: boolean; auctionHouse?: string | null; saleName?: string | null; currency?: string | null; id?: string | null };
 
-/** a saleDateTime carries a real time only when it is not a bare midnight-UTC
-    day stamp (several crawlers write `YYYY-MM-DDT00:00:00Z` for day-only) */
-function hasRealTime(s: string): boolean {
-  return /T\d{2}:\d{2}/.test(s) && !/T00:00(:00(\.000)?)?Z$/.test(s);
-}
-
-/** The close instant in epoch ms, or null when the lot carries no usable date. */
-export function closeMs(l: Closable): number | null {
-  const dt = l.saleDateTime || '';
-  if (dt && hasRealTime(dt)) {
-    const t = Date.parse(dt);
-    if (!isNaN(t)) return t;
-  }
-  const day = (dt || l.saleDate || '').slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
-  const [y, m, d] = day.split('-').map(Number);
-  // end of that calendar day in the READER's zone
-  return new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
-}
-
-/** true when the stamped close has a real clock time (not a day-only lot) */
-export function closeIsTimed(l: Closable): boolean {
-  return !!l.saleDateTime && hasRealTime(l.saleDateTime);
-}
+// ONE close clock, shared with the build (app/lib/house-tz): a real close
+// time when the house publishes one; a date-only lot (or a Christie's
+// local-midnight DAY stamp) closes when its sale day ends in the HOUSE's zone
+// — never at a reader-calendar midnight, never at an invented hour.
+export { closeMs, closeIsTimed };
 
 /** Open = still upcoming and its close hasn't passed on the reader's clock. */
 export function isOpen(l: Closable, now: number): boolean {
@@ -75,6 +58,12 @@ function localDayIndex(ms: number): number {
 export function daysToClose(l: Closable, now: number): number | null {
   const c = closeMs(l);
   if (c == null) return null;
+  // a date-only sale is ON its day — count to that day, not to the instant
+  // it ends in the house zone (which can fall on the reader's next day)
+  if (!closeIsTimed(l)) {
+    const day = trueSaleDay(l);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(day)) return Math.floor(Date.parse(`${day}T00:00:00Z`) / DAY) - localDayIndex(now);
+  }
   return localDayIndex(c) - localDayIndex(now);
 }
 

@@ -185,6 +185,11 @@ export function parseBonhamsLot(doc: any, artistSlug: string): AuctionLot | null
   if (endDate) {
     saleDate = endDate.split('T')[0];
   }
+  // THE CLOSE TIME (Oct 9 2026): hammerTime is a real per-lot instant (UTC,
+  // with the room's IANA zone beside it) — an ONLINE sale's scheduled lot
+  // close; a live (PUBLIC) room's session start. auctionEndDate is a day-end
+  // marker (22:59:59) and biddableFrom an opening — neither is stamped.
+  const close = bonhamsCloseStamp(doc.hammerTime?.datetime, doc.auctionType);
 
   const isSold = doc.status === 'SOLD';
   const isBoughtIn = doc.status === 'BI';
@@ -240,11 +245,19 @@ export function parseBonhamsLot(doc: any, artistSlug: string): AuctionLot | null
     auctionHouse: 'Bonhams',
     saleName: doc.heading || '',
     saleDate,
+    ...(close ? { saleDateTime: close.at, closeKind: close.kind } : {}),
     lotNumber: doc.lotNo?.number || null,
     ...money,
     status: statusWithMoney(status, money),
     url: lotUrl,
   };
+}
+
+/** A Bonhams/Bruun lot's real close instant from its hammerTime, or null.
+ *  ONLINE → the lot's scheduled close; any live room → the session start. */
+export function bonhamsCloseStamp(hammerTime: unknown, auctionType: unknown): { at: string; kind: 'online' | 'session' } | null {
+  if (typeof hammerTime !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(hammerTime) || isNaN(Date.parse(hammerTime))) return null;
+  return { at: hammerTime, kind: auctionType === 'ONLINE' ? 'online' : 'session' };
 }
 
 export async function enrichBonhams(lot: AuctionLot): Promise<EnrichResult> {

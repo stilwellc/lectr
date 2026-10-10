@@ -371,6 +371,10 @@ export interface AuctionLot {
       served shards, but KEPT on the eager upcoming.json lots — trueSaleDay()
       (app/utils.ts) prefers it over a possibly-crawl-day saleDate. */
   saleDateTime?: string | null;
+  /** what saleDateTime marks, when the crawler knows (app/lib/house-tz
+      liveUntilMs): 'online' = lots begin closing one by one at that instant;
+      'session' = a live room's session START (lots sell through the session) */
+  closeKind?: 'online' | 'session' | null;
   /** distinguishes "predates tracking" from genuinely "new" */
   firstSeenKnown?: boolean;
   /** = 2; the engine rejects pre-gate rows */

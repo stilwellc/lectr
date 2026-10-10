@@ -22,6 +22,7 @@ import ArtistNav from './ArtistNav';
 import Flick from './Flick';
 // hotlinked photo that unmounts on failure so the monogram plate under it shows
 import PlateImg from './PlateImg';
+import { crossSibs } from '../lib/fold';
 
 /**
  * LotPage — one lot as a CATALOGUE PAGE in the north-star grammar: the
@@ -1037,17 +1038,19 @@ export default function LotPage({ lotId, initialLot }: {
                   />
                 );
               })()}
-              {isUpcoming && lot.crossLive?.length ? (() => {
+              {isUpcoming && crossSibs(lot).length ? (() => {
                 // the build caps crossLive at 3 siblings — the array's
                 // length is a cap, not a count. A stamped total (crossLiveN)
-                // prints; otherwise no number at all.
+                // prints; otherwise no number at all. Same-house entries
+                // (copies at this house) are never "also live at" (fold.crossSibs).
+                const sibs = crossSibs(lot);
                 const n = (lot as AuctionLot & { crossLiveN?: number }).crossLiveN;
                 const others = typeof n === 'number' && n > 0 ? n : null;
                 return (
                   <LeaderRow
                     k="Also live at"
-                    v={`${lot.crossLive![0].house} · ${lot.crossLive![0].bid > 0 ? formatPrice(lot.crossLive![0].bid) + ' bid' : 'open'}`}
-                    sub={lot.crossLive!.length > 1
+                    v={`${sibs[0].house} · ${sibs[0].bid > 0 ? formatPrice(sibs[0].bid) + ' bid' : 'open'}`}
+                    sub={sibs.length > 1
                       ? (others ? `same card at ${others} other venues` : 'same card at other venues')
                       : 'the same card, head to head'}
                   />

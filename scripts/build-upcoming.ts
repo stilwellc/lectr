@@ -28,6 +28,7 @@ import { gapRead, sleeperRead, valueFloor, closeGrowth, validateGapCells, gapCel
 import { CARD_TIER_CODE } from './lib/calls-ledger';
 import { taxonOf } from '../app/lib/taxonomy';
 import { prioStatic } from '../app/lib/priority';
+import { isDayStamp, scheduledClose, normalizeCloseStamp, closeMs as closeInstantOf } from '../app/lib/house-tz';
 import type { AuctionLot as EngineLot } from '../app/types';
 import type { AuctionLot, RealizedPoint, BidCompetitionPoint } from '../app/types';
 
@@ -100,7 +101,21 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
   // Christie's results gated behind login and never scraped) drops, not lingers.
   // ONE predicate (corpus-io isServedUpcoming) shared with sync-lots-db, so the
   // Supabase live book is exactly the set this payload serves.
-  const upcomingLots = lots.filter(l => isServedUpcoming(l));
+  // CLOSE STAMPS (Oct 9 2026, app/lib/house-tz): a Christie's local-midnight
+  // DAY stamp is not a close time (it printed "12:00 AM" countdowns) — the lot
+  // ships date-only; an RR lot (its countdown prints only MM/DD) carries the
+  // house's PUBLISHED close, 7:00 PM ET on the close day (the 30 Minute Rule).
+  // Shallow copies — the corpus rows the crawler handed in are never touched.
+  let rrStamped = 0, dayStampsDropped = 0;
+  const upcomingLots = lots.filter(l => isServedUpcoming(l)).map(l => {
+    const had = (l as { saleDateTime?: string | null }).saleDateTime;
+    if (had ? !isDayStamp(l as Parameters<typeof isDayStamp>[0]) : !scheduledClose(l as Parameters<typeof scheduledClose>[0])) return l;
+    const c = normalizeCloseStamp({ ...l } as Lot & { saleDateTime?: string | null });
+    if (had && !c.saleDateTime) dayStampsDropped++;
+    if (!had && c.saleDateTime) rrStamped++;
+    return c;
+  });
+  console.log(`[upcoming] close stamps: ${rrStamped} RR lots on the 7 PM ET schedule · ${dayStampsDropped} day-only stamps dropped`);
 
   // ── BID-VELOCITY precompute (Goldin live lots; corpus-only bidHistory) ──────
   // lot.bidHistory is Snap[] (Snap = {d:ISO, b:currentBid, n:bidCount}), up to
@@ -215,8 +230,9 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
       // payload snapshots before it ever ranks a ledger.
       {
         const bid = (l as { currentBid?: number }).currentBid || 0;
-        const sdtP = (l as { saleDateTime?: string | null }).saleDateTime || l.saleDate;
-        const closeMs = sdtP ? new Date(sdtP).getTime() : NaN;
+        // the ONE close clock (house-tz): a date-only lot closes at its sale
+        // day's end where it is sold, never at that day's UTC midnight
+        const closeMs = closeInstantOf(l as Parameters<typeof closeInstantOf>[0]) ?? NaN;
         if (closeCurve && bid > 0 && !isNaN(closeMs)) {
           const daysOut = Math.max(0, (closeMs - Date.now()) / 86400000);
           // THE one projection factor (lanes.closeGrowth: bid band × days out)
@@ -461,8 +477,8 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
       if (bp.ok !== true) continue; // (Oct 6) only a validated projection cell
       if (hasConditionFlag((e as { title?: string }).title)) continue; // dirty lot, clean floor — never a board seat
       const sdt = (e as { saleDateTime?: string | null }).saleDateTime || (e as { saleDate?: string }).saleDate;
-      const closeMs = sdt ? new Date(String(sdt)).getTime() : NaN;
-      if (isNaN(closeMs)) continue;
+      const closeMs = closeInstantOf(e as Parameters<typeof closeInstantOf>[0]) ?? NaN;
+      if (!sdt || isNaN(closeMs)) continue;
       const daysOut = (closeMs - nowMs) / 86400000;
       if (daysOut < 0 || daysOut > 3.5) continue; // "coming up on hammer"
       const depth = 1 - bp.allIn / bp.floor;

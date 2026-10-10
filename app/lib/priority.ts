@@ -28,6 +28,7 @@
 import { taxonOf, type CatKey } from './taxonomy';
 import { parseCard, cardLadderKey } from './cards';
 import { trueSaleDay } from '../utils';
+import { closeMs, closeIsTimed } from './house-tz';
 
 /** per-market Size scale, hammer USD: [Size 0, Size 1] on a log axis */
 const SCALE: Record<CatKey, [number, number]> = {
@@ -73,6 +74,7 @@ type ScoreLot = {
   estLowUsd?: number | null; estHighUsd?: number | null;
   currentBid?: number | null; bidCount?: number | null; currency?: string | null;
   saleDate?: string | null; saleDateTime?: string | null;
+  auctionHouse?: string | null; saleName?: string | null; id?: string | null;
   value?: { expectedHammerUsd?: number | null; confidence?: string | null; signal?: { beatRatePct?: number | null } | null } | null;
   signal?: { label?: string | null } | null;
   bidProj?: { ok?: boolean; allIn?: number } | null;
@@ -126,13 +128,11 @@ export function prioStatic(l: ScoreLot): PrioStatic | null {
   return out;
 }
 
-/** Close time in ms. A date-only sale closes at the end of that day. */
+/** Close time in ms. A date-only sale closes at the end of that day, in the house's zone. */
 export function closeMsOf(l: ScoreLot): number | null {
-  // a date-only sale closes at the end of that day on the reader's clock
-  const iso = l.saleDateTime || (l.saleDate ? `${l.saleDate}T23:59:00` : null);
-  if (!iso) return null;
-  const t = new Date(iso).getTime();
-  return isNaN(t) ? null : t;
+  // the ONE close clock (house-tz): a date-only sale closes when its day ends
+  // where it is sold — never an invented reader-local 23:59
+  return closeMs(l);
 }
 
 export function urgencyOf(closeMs: number | null, nowMs: number): number {
@@ -173,7 +173,16 @@ const GENERIC_MAKERS = new Set([
   'science-tech', 'meteorites', 'fossils', 'scientific-instruments',
 ]);
 
-type ShortlistLot = ScoreLot & { id?: string; auctionHouse?: string | null; saleName?: string | null; title?: string | null };
+type ShortlistLot = ScoreLot & { id?: string; auctionHouse?: string | null; saleName?: string | null; title?: string | null;
+  crossLive?: { id: string; house: string; bid: number }[] | null };
+
+/** `id:<sibling>` for the same card live at ANOTHER house (the build's
+ *  crossLive match; same-house entries are copies the card identity covers) */
+function crossIds(l: ShortlistLot): string[] {
+  const out: string[] = [];
+  for (const x of l.crossLive || []) if (x && x.id && x.house !== l.auctionHouse) out.push(`id:${x.id}`);
+  return out;
+}
 
 /** One sale = house + close day. Sale NAMES split one evening (Christie's
  *  "20th/21st Century London Evening Sale" vs "London Sale 25228") and are
@@ -211,20 +220,23 @@ function fill<T extends ShortlistLot>(rows: { l: T; s: number }[], n: number, ca
   const keysOf = (l: T) => {
     const { thing, who } = identityOf(l);
     return { cat: taxonOf(l).cat as string, sale: saleKeyOf(l), who, thing,
-      dup: `${l.auctionHouse}|${normTitle(l.title)}|${prioStatic(l)?.a ?? 0}` };
+      dup: `${l.auctionHouse}|${normTitle(l.title)}|${prioStatic(l)?.a ?? 0}`,
+      // the same card live at another house is the same pick (one seat)
+      self: `id:${l.id}`, cross: crossIds(l) };
   };
+  const mark = (k: ReturnType<typeof keysOf>) => { seen.add(k.dup); seen.add(k.thing); seen.add(k.self); for (const c of k.cross) seen.add(c); };
   for (const l of out) {
     const k = keysOf(l);
-    bump(perCat, k.cat); bump(perSale, k.sale); bump(perWho, k.who); seen.add(k.dup); seen.add(k.thing);
+    bump(perCat, k.cat); bump(perSale, k.sale); bump(perWho, k.who); mark(k);
   }
   for (const { l } of rows) {
     if (out.length >= n) break;
     if (out.includes(l)) continue;
     const k = keysOf(l);
-    if (seen.has(k.dup) || seen.has(k.thing)) continue;
+    if (seen.has(k.dup) || seen.has(k.thing) || seen.has(k.self)) continue;
     if ((perCat.get(k.cat) ?? 0) >= caps.cat || (perSale.get(k.sale) ?? 0) >= caps.sale || (perWho.get(k.who) ?? 0) >= caps.who) continue;
     out.push(l);
-    seen.add(k.dup); seen.add(k.thing);
+    mark(k);
     bump(perCat, k.cat); bump(perSale, k.sale); bump(perWho, k.who);
   }
   return out;
@@ -269,17 +281,24 @@ export function shortlist<T extends ShortlistLot>(lots: T[], nowMs: number = Dat
 export function spread<T extends ShortlistLot>(list: T[], win = 12, max = 3, head = 600): T[] {
   if (list.length <= max) return list;
   // only the screens a reader actually scrolls are re-dealt; keys computed once
-  const pool0 = list.slice(0, head).map(l => ({ l, sk: saleKeyOf(l), wk: identityOf(l).who }));
+  const pool0 = list.slice(0, head).map(l => ({ l, sk: saleKeyOf(l), wk: identityOf(l).who, self: `id:${l.id}`, cross: crossIds(l) }));
   const out: T[] = [];
   let pool = pool0;
   while (pool.length) {
     const sale = new Map<string, number>(), who = new Map<string, number>();
     const rest: typeof pool = [];
+    // the same card live at two houses is ONE thing: once one copy is dealt
+    // into this window, its cross-house twin follows without spending a cap
+    const twins = new Set<string>();
     let taken = 0, i = 0;
     for (; i < pool.length && taken < win; i++) {
       const r = pool[i];
+      if (twins.has(r.self)) { out.push(r.l); for (const c of r.cross) twins.add(c); continue; }
       if ((sale.get(r.sk) ?? 0) >= max || (who.get(r.wk) ?? 0) >= max) { rest.push(r); continue; }
       out.push(r.l); taken++;
+      for (const c of r.cross) twins.add(c);
+      // a twin already pushed down this window comes back up beside it
+      for (let k = rest.length - 1; k >= 0; k--) if (twins.has(rest[k].self)) out.push(rest.splice(k, 1)[0].l);
       sale.set(r.sk, (sale.get(r.sk) ?? 0) + 1); who.set(r.wk, (who.get(r.wk) ?? 0) + 1);
     }
     if (!taken) { for (const r of pool) out.push(r.l); break; }
@@ -302,7 +321,7 @@ export function reasonOf(l: ScoreLot, nowMs: number = Date.now()): string | null
   if (!p) return null;
   const parts: string[] = [];
   const close = closeMsOf(l);
-  if (close != null && !l.saleDateTime && l.saleDate) {
+  if (close != null && !closeIsTimed(l) && l.saleDate) {
     // date-only sale (RR, Phillips, Wright…): the hour is unknown — say the day, never invent "in 8h"
     const t = new Date(nowMs);
     const today = Date.UTC(t.getFullYear(), t.getMonth(), t.getDate());

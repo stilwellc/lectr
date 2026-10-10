@@ -13,6 +13,19 @@ import { type EnrichResult, MEDIUM_PATTERNS, UA, detectCurrency, noteEnrichFail,
 // Phillips embeds lot data as a JSON string in ReactDOM.hydrate props for ArtistLanding.
 // The "maker" prop contains a JSON-encoded string with pastLots.data[].
 
+/** The close instant a Phillips maker-lots record carries, or null.
+ *  saleTypeId 3 (online): the auction END stamp — lots begin closing then.
+ *  A live room: the session START, only when the sale is one day (no end
+ *  stamp, or an end on the start's own day). Stamps are sale-local with an
+ *  offset; 0001-01-01 is the API's "none". */
+export function phillipsCloseStamp(saleTypeId: unknown, start: unknown, end: unknown): { at: string; kind: 'online' | 'session' } | null {
+  const real = (s: unknown): s is string => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s) && !s.startsWith('0001') && !isNaN(Date.parse(s));
+  if (saleTypeId === 3) return real(end) ? { at: end, kind: 'online' } : null;
+  if (!real(start)) return null;
+  if (real(end) && end.slice(0, 10) !== start.slice(0, 10)) return null; // multi-day room
+  return { at: start, kind: 'session' };
+}
+
 /** Last maker-lots page to walk. Nightly = the first 2 pages (fresh sales);
  *  PHILLIPS_DEEP=1 = the full history, optionally capped at `maxPages` per
  *  maker (PHILLIPS_MAX_PAGES — the backfill workflow's slice knob; 0 = no cap). */
@@ -153,6 +166,13 @@ export async function crawlPhillips(artist: ArtistConfig): Promise<AuctionLot[]>
       } else if (lot.saleDate) {
         saleDate = lot.saleDate;
       }
+      // THE CLOSE TIME (Oct 9 2026): both stamps are sale-local with their
+      // offset ("2026-10-09T10:00:00-04:00"), so the day slice above is the
+      // room's day and the instant is real. Online → the END stamp is when
+      // lots begin closing; a live room → the session START. A live sale that
+      // runs across days (end stamp on a later day) keeps date-only: which
+      // session a lot sells in isn't in the feed. 0001-01-01 = no end stamp.
+      const closeStamp = phillipsCloseStamp(lot.saleTypeId, lot.auctionStartDateTimeOffset, lot.auctionEndDateTimeOffset);
 
       // currencySign null = unknown/ambiguous → fail-closed (no price, comp-excluded)
       const money = stampMoney({
@@ -183,6 +203,7 @@ export async function crawlPhillips(artist: ArtistConfig): Promise<AuctionLot[]>
         auctionHouse: 'Phillips',
         saleName: lot.saleTitle || '',
         saleDate,
+        ...(closeStamp ? { saleDateTime: closeStamp.at, closeKind: closeStamp.kind } : {}),
         lotNumber: lotNum ? parseInt(lotNum) : null,
         ...money,
         status: statusWithMoney(isSold ? 'sold' : auctionInPast ? 'bought_in' : 'upcoming', money),
