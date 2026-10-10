@@ -37,6 +37,7 @@
 
 /* ── the Display menu ── */
 .mk-display { position: relative; }
+.mk-display-cols { display: contents; }
 .mk-display-veil { position: fixed; inset: 0; z-index: 39; background: none; border: none; cursor: default; }
 .mk-display-pop { position: absolute; top: calc(100% + 8px); right: 0; z-index: 40; min-width: 200px; background: var(--surface-tip, #101214); border: 1px solid var(--color-border-mid); border-radius: 12px; padding: 8px; display: grid; gap: 1px; }
 .mk-display-head { font-size: 10px; letter-spacing: 0.14em; padding: 4px 8px 7px; }
@@ -260,14 +261,19 @@ a.mkc-col-name:hover { text-decoration: underline dotted; text-underline-offset:
   .mk-head { padding-bottom: 8px; gap: 2px; }
   .mk-read { font-size: 12px; }
   .mk-vread { display: none; }
-  .mk-bar-wrap { position: static; }
+  .mk-bar-wrap { position: relative; top: auto; }
   .mk-group .mk-group-head { top: 54px; }
   .mk-bar { gap: 6px; }
   .mk-search { flex: 1 1 0; min-width: 55%; order: 0; height: 36px; }
   .mk-sortsel { order: 1; flex: none; max-width: 150px; }
   .mk-body { order: 2; }
   .mk-by { order: 3; }
-  .mk-bar-rule, .mk-display { display: none; }
+  .mk-bar-rule { display: none; }
+  /* (r7, D5) the Rows filters reach the phone; the columns stay desktop */
+  .mk-display { order: 1; flex: none; }
+  .mk-display .mk-chip { height: 36px; }
+  .mk-display-cols { display: none; }
+  .mk-display-sep { margin-top: 0; padding-top: 4px; border-top: none; }
   .mk-filters { padding-top: 8px; }
   .mk-filters .ray-triagebar { gap: 6px; margin-bottom: 6px; }
   .mk-sports { margin-bottom: 6px; }

@@ -25,7 +25,7 @@ import { useSavedLots } from '../hooks/useSavedLots';
 // never fetch refs.json twice
 import { useRefs, type RefEntry } from '../hooks/useRefs';
 import { ARTIST_LABEL } from '../constants';
-import { closeCut, formatPrice, formatDate, getUpcomingCounts, houseColors, craftTitle, refLabel, httpsImg, sizedImg } from '../utils';
+import { closeCut, isOnBlock, formatPrice, formatDate, getUpcomingCounts, houseColors, craftTitle, refLabel, httpsImg, sizedImg } from '../utils';
 import PlateImg from './PlateImg';
 import '../northstar-pages.css';
 
@@ -69,7 +69,7 @@ export default function RefPage({ refKey }: { refKey: string }) {
   // slim payload carries `reference` on watch lots)
   const onBlock = useMemo(() => {
     if (!entry) return [];
-    return allLots.filter(l => l.status === 'upcoming' && l.artist === entry.maker && l.reference === entry.ref);
+    return allLots.filter(l => isOnBlock(l) && l.artist === entry.maker && l.reference === entry.ref);
   }, [allLots, entry]);
 
   const nav = <ArtistNav activeSlug={entry ? entry.maker : ''} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />;

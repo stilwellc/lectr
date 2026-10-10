@@ -8,7 +8,7 @@
 import { marketArtists } from '../constants';
 import { searchTextOf } from './lot-labels';
 import type { AuctionLot } from '../types';
-import { trueSaleDay } from '../utils';
+import { trueSaleDay, isClosedPending } from '../utils';
 import { dealScore } from './comps';
 import { sportOfLot } from './submarkets';
 import { passesTriage, type HouseBaselines } from './feed-filters';
@@ -83,7 +83,9 @@ export function feedPass(upcoming: AuctionLot[], f: FeedFilters, o: FeedPassOpts
     arr = arr.filter(l => searchTextOf(l).includes(q));
   }
   const est = (l: AuctionLot) => l.estimateHigh || l.estimateLow || l.currentBid || 0;
-  const past = (l: AuctionLot) => !!l.resultsPending && trueSaleDay(l) !== '' && trueSaleDay(l) < o.crawlDay;
+  // results pending: a past sale day, or (r7) a sale that closed earlier today
+  const pastNow = o.nowMs ?? Date.now();
+  const past = (l: AuctionLot) => !!l.resultsPending && ((trueSaleDay(l) !== '' && trueSaleDay(l) < o.crawlDay) || isClosedPending(l, pastNow));
   if (f.sort === 'priority') {
     // "Matters most" (app/lib/priority): size on each market's own scale,
     // measured edge, evidence, closing time — then re-dealt so no one sale

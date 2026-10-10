@@ -15,7 +15,8 @@ import { useSavedLots } from '../hooks/useSavedLots';
 import { useRefs } from '../hooks/useRefs';
 import { safeHref } from '../lib/safe-href';
 import { splitTitle, deglue, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
-import { isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand } from '../lib/comps';
+import { isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand, contextComps } from '../lib/comps';
+import { enginePoolOf } from '../lib/engine-pool';
 import { lotAllInFactor } from '../lib/premiums';
 import { lotFloor, lotMaxBid, lotProjectedClose } from '../lib/verdict';
 import { formatEstimate, estimateOnly, lotSignal, confidenceMeter } from './LotCard';
@@ -504,9 +505,10 @@ export default function LotPage({ lotId, initialLot }: {
      appraisal, the science/culture reference band, the repeat-sale
      provenance ledger, and resolving a permalink the fast paths all missed —
      is computed here, over the corpus, so it must ask for it. */
-  const engineCall = lot?.value;
-  const engineCalled = !!(engineCall && engineCall.signal && engineCall.compRatio != null
-    && (engineCall.compRatio <= 5 && engineCall.compRatio >= 1 / 5));
+  // (r7) the engine VALUED this lot (any call, or none): its pool, n and
+  // median are stamped — app/lib/engine-pool, one lot one number
+  const enginePool = useMemo(() => enginePoolOf(lot?.value), [lot]);
+  const engineCalled = !!enginePool;
   const needsCorpusRead = useMemo(() => {
     // last-resort resolution — only when the build ships no lot index
     if (!lot) return dbSettled && shardLot === 'noindex';
@@ -519,14 +521,17 @@ export default function LotPage({ lotId, initialLot }: {
     const mkt = ARTIST_MARKET[lot.artist];
     if (mkt === 'science' || mkt === 'culture') return true;  // reference band
     if (isSportsScienceObject(lot)) return false;             // the archive tier answers
-    // a fair call ('at comparable market') prints no engine median — the
-    // certificate falls through to appraiseLot, which is corpus-fed
-    if (engineCalled) return !!engineCall?.signal?.label.startsWith('at');
-    return true;                                              // client-computed read
-  }, [lot, dbSettled, shardLot, pack, engineCalled, engineCall]);
+    // (r7) every valued lot prints the engine's stamped median; its rows
+    // resolve on demand (the comps sentinel), never at first paint
+    if (engineCalled) return false;
+    return true;                                              // client-computed (guarded) read
+  }, [lot, dbSettled, shardLot, pack, engineCalled]);
   useEffect(() => { if (needsCorpusRead) requestFullLots(); }, [needsCorpusRead, requestFullLots]);
   // a pack IS a settled corpus read (computed over the whole book at build)
   const corpusSettled = fullLoaded || fullError || hasPack || !!makerPool;
+  // (r7) a pool the ROWS can be read over: the maker's shard or the corpus
+  // (a pack settles the stamped numbers, not rows it doesn't carry)
+  const rowsSettled = fullLoaded || fullError || !!makerPool;
 
   // set the tab title on the query route (the static set gets real metadata)
   useEffect(() => {
@@ -565,44 +570,46 @@ export default function LotPage({ lotId, initialLot }: {
   }, [lot, hasPack, pack]);
   const called = useMemo(() => {
     if (!lot || band) return null;
-    if (hasPack) {
+    if (hasPack && pack!.c) {
       const c = pack!.c;
-      return c ? { pool: packRowsToLots(c.rows), n: c.n, med: c.med ?? undefined, form: c.form, kind: c.kind as 'form' | 'edition' } : null;
+      return { pool: packRowsToLots(c.rows), n: c.n, med: c.med ?? undefined, form: c.form, kind: c.kind as 'form' | 'edition' };
     }
-    const ev = lot.value;
-    // ×5 ESTIMATE-BAND SANITY (mirrors scripts/build-upcoming.ts): a compRatio
-    // outside [1/5, 5] is a data fault the build killed at the source — the
-    // certificate must never resurrect it. Treat it as no engine call and fall
-    // through to the uncalled-lot path.
-    const evSane = !ev || ev.compRatio == null || (ev.compRatio <= 5 && ev.compRatio >= 1 / 5);
-    if (ev && ev.signal && ev.compRatio != null && evSane) {
-      // 'at comparable market' = the engine looked and called it fair — no
-      // call, no comp pool, no client second-guessing (ComparableModal's
-      // exact doctrine).
-      if (ev.signal.label.startsWith('at')) return null;
-      const byId = new Map(poolLots.map(l => [l.id, l]));
-      // sold-with-price only (ComparableModal's exact guard): a pool id
-      // resolving to a relisted/faulted lot must never feed a price read
-      const pool = (ev.poolIds || [])
-        .map(id => byId.get(id))
-        .filter((x): x is AuctionLot => !!x && x.status === 'sold' && !!x.priceUsd);
-      // pool may resolve EMPTY (engine pools draw on the off-wire corpus
-      // tier) — keep the engine call anyway; the evidence fetch below fills
-      // the rows. Falling through to signalWithPool would print a DIFFERENT
-      // read against the same header (the contradiction Collin caught).
-      return { pool, n: ev.n || pool.length, med: ev.compMedianUsd ?? ev.compValueUsd, form: lot.formKey || null, kind: 'form' as const };
-    }
-    // (Oct 6 2026, wave 3) NO FALLBACK READ: the engine declined (no signal,
-    // abstained, or a ×5 data fault) — the client must not synthesize a
-    // directional read of its own. The 'no read' state renders.
-    return null;
-  }, [lot, poolLots, band, hasPack, pack]);
+    // (r7, QA2 Q3) THE ENGINE'S POOL whenever the engine valued the lot —
+    // a below / above call, "at comparable market", or no direction (it
+    // held the flag back): one lot, one number (app/lib/engine-pool). Before
+    // r7 only a directional call carried its rows; every other valued lot
+    // printed a client appraisal as "Comps median" over an empty list.
+    // enginePoolOf applies the x5 estimate-band sanity (a ratio outside
+    // [1/5, 5] is a data fault the build killed — never resurrected).
+    if (!enginePool) return null;
+    const byId = new Map(poolLots.map(l => [l.id, l]));
+    // sold-with-price only (ComparableModal's exact guard): a pool id
+    // resolving to a relisted/faulted lot must never feed a price read
+    const pool = enginePool.ids
+      .map(id => byId.get(id))
+      .filter((x): x is AuctionLot => !!x && x.status === 'sold' && !!x.priceUsd);
+    // pool may resolve EMPTY (engine pools draw on the off-wire corpus
+    // tier) — keep the engine's numbers anyway; the evidence fetch / the
+    // maker pool below fill the rows. A client read here would print a
+    // DIFFERENT number against the same lot (the contradiction Collin caught).
+    return { pool, n: enginePool.n, med: enginePool.med, form: lot.formKey || null, kind: 'form' as const };
+  }, [lot, poolLots, band, hasPack, pack, enginePool]);
+  // the engine abstained outright (no value): the client's context read —
+  // comps.contextComps, the modal's exact read, GUARDED (floor >=3,
+  // dispersion, x5 of the estimate). Rows and median come from one pool; a
+  // pool that fails the guards is no pool. Card-comp lots keep their card
+  // block. Read only over a real pool (the maker shard or the corpus).
+  const ctx = useMemo(() => {
+    if (!lot || band || called || !rowsSettled || isSportsScienceObject(lot)) return null;
+    if (lot.value?.basis === 'card-comp') return null;
+    return contextComps(lot, poolLots);
+  }, [lot, band, called, rowsSettled, poolLots]);
 
   // build-shipped evidence rows for engine calls whose poolIds aren't on-wire
   // (undefined = loading · null = fetched, nothing there)
   const [evRows, setEvRows] = useState<AuctionLot[] | null | undefined>(undefined);
   const needEvidence = (!!lot && !!called && called.pool.length === 0 && !band)
-    || (!!lot && !called && !band && !isSportsScienceObject(lot) && lot.status === 'upcoming' && !!lot.signal && (lot.signal.basis || 0) > 0);
+    || (!!lot && !called && !band && !ctx?.rows.length && !isSportsScienceObject(lot) && lot.status === 'upcoming' && !!lot.signal && (lot.signal.basis || 0) > 0);
   useEffect(() => {
     if (!needEvidence || !lot) { setEvRows(null); return; }
     let live = true;
@@ -616,11 +623,11 @@ export default function LotPage({ lotId, initialLot }: {
   }, [needEvidence, lot]);
 
   const compRows = useMemo(() => {
-    const pool = band ? band.pool : called ? (called.pool.length ? called.pool : (evRows || [])) : (evRows || []);
+    const pool = band ? band.pool : called ? (called.pool.length ? called.pool : (evRows || [])) : ctx?.rows.length ? ctx.rows : (evRows || []);
     return [...pool]
       .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
       .slice(0, 12);
-  }, [band, called, evRows]);
+  }, [band, called, ctx, evRows]);
 
   // ── provenance: the same physical object across the book ──
   // repeatSaleGroupId is the engine's strict physical-match verdict (photo/
@@ -658,18 +665,22 @@ export default function LotPage({ lotId, initialLot }: {
   // below instead. (Before the lazy pass this hole was a few seconds wide on
   // every lot page; it is now closed outright.)
   const calledIsHonest = !!called && (engineCalled || corpusSettled);
+  // (r7, QA2 Q3 — one lot, one number) the engine's stamped median FIRST
+  // whenever it valued the lot; the realized band; a crawl-stamped signal's
+  // own median; else the guarded context read, and only while its rows show.
+  // The build's unguarded appraisal (pack.a) never prints: on a valued lot
+  // it was a second number ($3.30M beside the engine's $2.04M), on an
+  // abstained one an unguarded read over rows the page never showed.
   const compsMed = useMemo(() => {
     if (!lot) return null;
-    const sigMed = (sig as (NonNullable<typeof sig> & { med?: number }) | null)?.med;
-    if (sigMed != null) return sigMed;
     if (calledIsHonest && called?.med != null) return called.med;
     if (band) return band.median;
-    // (Oct 6 2026, wave 4) no client appraisal: the build's appraisal only,
-    // and only on a lot the engine valued
-    if (hasPack && lot.value) return pack!.a ?? null;
+    const sigMed = (sig as (NonNullable<typeof sig> & { med?: number }) | null)?.med;
+    if (sigMed != null) return sigMed;
+    if (ctx?.median != null && ctx.rows.length) return ctx.median;
     return null;
-  }, [lot, sig, called, calledIsHonest, band, hasPack, pack]);
-  const compsN = sig?.basis ?? (band ? band.n : (calledIsHonest ? called?.n : null)) ?? null;
+  }, [lot, sig, called, calledIsHonest, band, ctx]);
+  const compsN = (calledIsHonest && called ? called.n : null) ?? (band ? band.n : null) ?? sig?.basis ?? (ctx?.median != null && ctx.rows.length ? ctx.rows.length : null);
 
   // ── reference comps: a low-confidence measured RANGE, never a flag ──
   // scienceReferenceBand/cultureReferenceBand scan the whole corpus, so gate
@@ -712,7 +723,9 @@ export default function LotPage({ lotId, initialLot }: {
      the comps sit 1,370px down, two screens in). */
   const poolPartial = !!called && !corpusSettled
     && (!engineCalled || (called.pool.length > 0 && called.n > called.pool.length));
-  const compsNeedCorpus = !corpusSettled && (poolPartial || needEvidence || (!band && !called));
+  // (r7) rows the pack doesn't carry (a valued lot whose pack predates r7,
+  // an abstained lot's context read) wait on a real pool, not on the pack
+  const compsNeedCorpus = !rowsSettled && (poolPartial || needEvidence || (!band && !called) || (!!called && called.pool.length === 0));
   const compsSentinel = useVisibilityTrigger(requestPool, { rootMargin: '0px 0px -180px 0px', enabled: compsNeedCorpus && pack !== undefined });
 
   // ── resolution states ─────────────────────────────────────────────────
@@ -781,14 +794,14 @@ export default function LotPage({ lotId, initialLot }: {
   // ids is the same fault as a client read — the rows under an honest
   // "N comparable sales" head would be a silent subset. (An EMPTY pool is
   // different: the ids live off-wire, and loadCompEvidence ships those rows.)
-  const compsPending = (!band && !called && !corpusSettled)
+  const compsPending = (!band && !called && !rowsSettled && lot.value?.basis !== 'card-comp')
     || poolPartial
     || (needEvidence && evRows === undefined)
     // the evidence file shipped nothing for this lot: the rows exist only in
     // the corpus, so hold the quiet loading state rather than print "the
     // evidence rows couldn't be loaded" at a reader who simply hasn't
     // reached the block yet (the sentinel above is armed for exactly this)
-    || (needEvidence && evRows === null && !corpusSettled);
+    || (needEvidence && evRows === null && !rowsSettled);
   // the head reads from the pending-safe call, so a partial read never sets
   // the headline count either
   const headCalled = compsPending ? null : called;

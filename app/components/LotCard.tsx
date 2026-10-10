@@ -6,7 +6,7 @@ import CloseClock from './CloseClock';
 import { AuctionLot } from '../types';
 import { makerLineOf, labelLineOf } from '../lib/lot-labels';
 import { usePlayerDossiers } from '../lib/use-player-dossiers';
-import { houseColors, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg, sizedImg, localToday } from '../utils';
+import { houseColors, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg, sizedImg, localToday, isClosedPending } from '../utils';
 import ComparableModal from './ComparableModal';
 import Flick from './Flick';
 import { computeDeepSignal, FORM_LABEL, signalMagnitude } from '../lib/comps';
@@ -223,7 +223,7 @@ function LotCard({
   // auction that already happened. "Today" is the crawl day — the data's
   // clock — falling back to the client clock when no crawl stamp is passed.
   const todayIso = (lastCrawl || new Date().toISOString()).slice(0, 10);
-  const isPastPending = isUpcoming && !!lot.resultsPending && !!lot.saleDate && lot.saleDate.slice(0, 10) < todayIso;
+  const isPastPending = isUpcoming && !!lot.resultsPending && !!lot.saleDate && (lot.saleDate.slice(0, 10) < todayIso || isClosedPending(lot));
 
   // "Pablo Picasso / Pablo Picasso" — when the crafted title IS the maker
   // label and the maker line already renders, the title says nothing twice.

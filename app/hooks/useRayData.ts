@@ -5,6 +5,7 @@ import { AuctionLot, MarketStats, RealizedPoint, BidCompetitionPoint } from '../
 import { normalizeCloseStamp } from '../lib/house-tz';
 import { setCloseK } from '../lib/close-k';
 import { floorAtBid } from '../lib/value';
+import { completeQuarters } from '../lib/maker-hero';
 
 // Stable empty-array identity for pre-load fallbacks — a fresh `[]` each render
 // would defeat downstream memoization (e.g. useSoldArchive's allLotsWithArchive).
@@ -748,6 +749,27 @@ function loadSoldLedger() {
     ledgerErrorState = true; notifyLedger();
   })().finally(() => { inflightLedger = false; });
 }
+/** (r7, QA2 N3/Q9) THE DEMAND READ IS A COMPLETE QUARTER: the build's
+ *  series ends on the quarter in progress (a trailing year to today), which
+ *  swung on ten days of tape — home printed Pop Culture −20% (Q4, Oct 10)
+ *  while Q3 read +8%, and /value's pulse read "2026 Q4". Every surface reads
+ *  demand through this hook, so the quarter in progress is dropped here once
+ *  (maker-hero completeQuarters — the rule /makers' group heads already use). */
+const demandTrim = new WeakMap<object, DemandByMarket>();
+const NO_DEMAND: DemandByMarket = {};
+function completeDemand(d: DemandByMarket | undefined): DemandByMarket {
+  if (!d) return NO_DEMAND;
+  const hit = demandTrim.get(d);
+  if (hit) return hit;
+  const out: DemandByMarket = {};
+  for (const k of Object.keys(d) as (keyof DemandByMarket)[]) {
+    const s = d[k];
+    if (Array.isArray(s)) (out as Record<string, unknown>)[k as string] = completeQuarters(s);
+  }
+  demandTrim.set(d, out);
+  return out;
+}
+
 /** On-demand sold-outcomes ledger. Mounting fetches it (contract, like
     useSoldArchive) — only mount it behind a real need (saved-lot orphans). */
 export function useSoldLedger(): LedgerState {
@@ -783,7 +805,7 @@ export function useRayData(): RayData {
     statsByArtist: data?.statsByArtist || {},
     allLots: data?.allLots || EMPTY_LOTS,
     tape: data?.tape || {},
-    demand: data?.demand || {},
+    demand: completeDemand(data?.demand),
     realized: data?.realized || {},
     bidComp: data?.bidComp || {},
     recentSold: data?.recentSold || {},

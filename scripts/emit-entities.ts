@@ -30,7 +30,7 @@ import zlib from 'node:zlib';
 import { SERVED_DIR } from './corpus-io';
 import { servedLastCrawl } from './lib/served-stamp';
 import { MARKETS, MAKER_MARKETS, MAKER_DISCIPLINE, ARTIST_LABEL, marketOf } from '../app/constants';
-import { MIN_SOLD, LENS_LABELS, BUDGET_MARKET_BR, BUDGET_ALL_BR, encodeEntities, tierEntities, isEntitiesWire } from '../app/lib/entity/wire';
+import { MIN_SOLD, LENS_LABELS, BUDGET_MARKET_BR, BUDGET_ALL_BR, encodeEntities, tierEntities, isEntitiesWire, ledgerNamesBy } from '../app/lib/entity/wire';
 import { entityKeyOf, parseEntityId, entityPageOf, subEntityLabel, artistMakerOf } from '../app/lib/entity/key';
 import { entityFigures, completeQuarters, SPARK_QUARTERS, THIN_SOLD12M, type SoldPoint, type Labels } from '../app/lib/entity/stats';
 import type { EntitySummary, EntityDetail } from '../app/lib/entity/model';
@@ -46,6 +46,7 @@ import type { AuctionLot } from '../app/types';
 import { parseCard, cardKey } from '../app/lib/cards';
 import { numericWatchRef, watchMaterialCoarse, isEditionLot, editionIdentityKey } from '../app/lib/identity';
 import { pokemonKey } from './sub-markets';
+import { servedSoldSample, inSampledGroup } from './lib/served-sample';
 
 /** sold-only entities need this much history to get a row (app/lib/entity/wire) */
 export { MIN_SOLD };
@@ -187,6 +188,14 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): BuiltEntiti
   const intern = new Map<string, string>();
   const I = (k: string) => { const h = intern.get(k); if (h) return h; intern.set(k, k); return k; };
   let soldRows = 0, unkeyed = 0;
+  // (r7, QA2 Q2) a result row links its lot only when the lot page can open
+  // it: sold cards / Pokémon outside the served sample live in the corpus
+  // alone, so their rows keep every figure but ship id '' (a plain row)
+  const sampled: { id: unknown; artist: unknown; status: unknown; realizedUsd: unknown; saleDate: unknown }[] = [];
+  input.eachSold(row => { if (inSampledGroup(row)) sampled.push({ id: row.id, artist: row.artist, status: row.status, realizedUsd: row.realizedUsd, saleDate: row.saleDate }); });
+  const served = servedSoldSample(sampled);
+  sampled.length = 0;
+  const linkId = (row: Lot) => (inSampledGroup(row) && !served.has(String(row.id)) ? '' : row.id);
   input.eachSold(row => {
     if (row.status !== 'sold' || !(row.priceUsd! > 0)) return;
     if (seen.has(row.id)) return;
@@ -200,7 +209,7 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): BuiltEntiti
     soldRows++;
     const a = acc(id);
     const ln = lensesOf(l);
-    a.pts.push({ p: row.priceUsd!, d: String(row.saleDate || '').slice(0, 10), h: row.auctionHouse || '', lens: I(ln.lens), coarse: I(ln.coarse), id: row.id, t: row.title || '', img: row.imageUrl || null, fx: facetKeysFor(id, l), k: identityOf(l, ln.lens) });
+    a.pts.push({ p: row.priceUsd!, d: String(row.saleDate || '').slice(0, 10), h: row.auctionHouse || '', lens: I(ln.lens), coarse: I(ln.coarse), id: linkId(row), t: row.title || '', img: row.imageUrl || null, fx: facetKeysFor(id, l), k: identityOf(l, ln.lens) });
     note(a, l, ln);
   });
   for (const l of input.live) {
@@ -314,7 +323,7 @@ export function entityFileBodies(ents: readonly EntitySummary[], live: BuiltEnti
   const keepFace = (e: EntitySummary) => e.kind === 'maker' || (!!live.get(e.id) && !live.get(e.id)!.photo);
   const base = { ...meta, keepFace };
   return {
-    main: JSON.stringify(encodeEntities(main, { ...base, tier: 'main', tailN: tail.length })),
+    main: JSON.stringify(encodeEntities(main, { ...base, tier: 'main', tailN: tail.length, tailBy: ledgerNamesBy(tail) })),
     tail: JSON.stringify(encodeEntities(tail, { ...base, tier: 'tail', tailN: 0 })),
     mainN: main.length,
     tailN: tail.length,

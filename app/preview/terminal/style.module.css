@@ -2609,6 +2609,9 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 /* — type contrast: Linear runs a sharp split — near-white primaries against
    cool-grey secondaries. Values ride at text-primary, labels at text-tertiary. */
 .mtHero .mtLabel { color: var(--tt-fg, #f7f8f8); }
+/* (r7) a flat read (no direction — a demand median AT the estimate) rides
+   the label's ink, never the dark era's paper (invisible on eggshell) */
+.mtHero .mtFigure:not([data-dir]) { color: var(--tt-fg, #f7f8f8); }
 .mtSub { color: var(--tt-muted); }
 
 /* — the masthead title: crisp near-white, tight — Linear's heading voice */

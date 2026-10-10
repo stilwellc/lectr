@@ -38,7 +38,7 @@ import {
 } from '../lib/entity/kinds';
 import type { NameEntry } from '../lib/entity/live';
 import { parseEntityId } from '../lib/entity/key';
-import { decodeEntities, isEntitiesWire } from '../lib/entity/wire';
+import { decodeEntities, isEntitiesWire, ledgerNamesBy } from '../lib/entity/wire';
 import { bestLotImage } from '../lib/img-host';
 
 /** a summary + its detail when the source already holds it (the adapters do) */
@@ -72,7 +72,7 @@ async function getJson<T>(url: string): Promise<T | null> {
 }
 const verOf = (v?: string) => (v ? `?v=${encodeURIComponent(v)}` : '');
 /** a decoded entities file (main or tail) */
-export type LoadedEntities = EntitiesFile & { tier?: 'main' | 'tail'; tailN?: number };
+export type LoadedEntities = EntitiesFile & { tier?: 'main' | 'tail'; tailN?: number; tailBy?: Record<string, number> };
 /** the v2 wire decoded; a v1 file (summaries inline) as-is; else null */
 export function readEntitiesFile(j: unknown): LoadedEntities | null {
   if (isEntitiesWire(j)) return decodeEntities(j);
@@ -319,9 +319,16 @@ export interface Entities {
   file: Map<string, EntityBundle> | null;
   /** the sold-only tail has arrived (or the file has none / wasn't asked) */
   tailReady: boolean;
+  /** (r7, QA2 Q5/Q6) per market: the ledger names (players / subjects /
+   *  sets) the tail holds that `file` does not yet — {} once the tail has
+   *  joined; null while unknown (an older build's all-markets file, before
+   *  the idle prefetch lands). The ledger's name counts add it, so a count
+   *  never jumps when a search pulls the tail in. */
+  tailBy: Readonly<Record<string, number>> | null;
 }
 
 const NO_SET: ReadonlySet<string> = new Set();
+const NO_COUNTS: Readonly<Record<string, number>> = Object.freeze({});
 
 export interface UseEntitiesOpts {
   /** the unfiltered By-name live groups (entity/live namesAll) — a subject
@@ -376,6 +383,7 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
     namesAll?.forEach((g, id) => { if (!miss && (market === 'all' || g.market === market) && !mainMap.has(id) && !id.startsWith('~:')) miss = true; });
     return miss;
   }, [file, mainMap, wantTail, namesAll, market]);
+  const [warmTail, setWarmTail] = useState<{ market: Market; t: LoadedEntities | null } | null>(null);
   // the first keystroke used to pay the tail's fetch + parse + decode
   // (/makers 40→58ms blocking, Oct 10): warm it on idle after first paint so
   // a search finds it already decoded. The promise cache makes this the very
@@ -383,7 +391,7 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
   useEffect(() => {
     if (!file || !file.tailN) return;
     const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (h: number) => void };
-    const run = () => { void loadEntitiesTail(market); };
+    const run = () => { void loadEntitiesTail(market).then(t => setWarmTail({ market, t })); };
     if (w.requestIdleCallback) {
       const h = w.requestIdleCallback(run, { timeout: 4000 });
       return () => w.cancelIdleCallback?.(h);
@@ -485,7 +493,16 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
   const playersReady = !needPlayers || players !== undefined;
 
   const tailReady = !tailNeeded || tailFile !== undefined;
-  return { source, makers, subs, names, subsReady, playersReady, dossiers, file: fileMap, tailReady };
+  const tailBy = useMemo<Readonly<Record<string, number>> | null>(() => {
+    if (!file || !file.tailN) return NO_COUNTS;
+    if (tailNeeded && tailFile) return NO_COUNTS; // joined: the rows count themselves
+    if (file.tailBy) return file.tailBy;
+    if (market !== 'all') return { [market]: file.tailN };
+    // an older all-markets build: count the warmed tail (idle prefetch)
+    if (warmTail?.market === market && warmTail.t) return ledgerNamesBy(warmTail.t.entities.filter(e => !mainMap?.has(e.id)));
+    return null;
+  }, [file, tailNeeded, tailFile, market, warmTail, mainMap]);
+  return { source, makers, subs, names, subsReady, playersReady, dossiers, file: fileMap, tailReady, tailBy };
 }
 const loadPageStatsFn = () => loadPageStats();
 

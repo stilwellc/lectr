@@ -73,6 +73,10 @@ export interface EntitiesWire {
   sparkQ: string[];
   /** main: how many entities the tail file holds */
   tailN: number;
+  /** (r7) main: the tail's ledger names (players / subjects / sets) per
+   *  market — the ledger counts every name it tracks from first paint, not
+   *  only the main tier's (QA2 Q5/Q6). Absent on older builds. */
+  tailBy?: Record<string, number>;
   /** interned strings: disciplines, med lenses */
   ds: string[];
   ml: string[];
@@ -112,6 +116,7 @@ export interface WireOpts {
   lastCrawl: string;
   sparkQ: string[];
   tailN: number;
+  tailBy?: Record<string, number>;
   /** an entity whose summary face the wire keeps (else the face is dropped) */
   keepFace: (s: EntitySummary) => boolean;
 }
@@ -160,7 +165,7 @@ export function encodeEntities(list: readonly EntitySummary[], o: WireOpts): Ent
     if (e.verified != null) vf[e.id] = e.verified;
   }
   if (!c.sb!.some(Boolean)) delete c.sb;
-  return { v: WIRE_V, tier: o.tier, generatedAt: o.generatedAt, lastCrawl: o.lastCrawl, sparkQ: o.sparkQ, tailN: o.tailN, ds, ml, c, vf };
+  return { v: WIRE_V, tier: o.tier, generatedAt: o.generatedAt, lastCrawl: o.lastCrawl, sparkQ: o.sparkQ, tailN: o.tailN, ...(o.tailBy ? { tailBy: o.tailBy } : {}), ds, ml, c, vf };
 }
 
 /** is this payload the v2 wire? */
@@ -168,7 +173,7 @@ export const isEntitiesWire = (j: unknown): j is EntitiesWire =>
   !!j && typeof j === 'object' && (j as { v?: unknown }).v === WIRE_V && !!(j as { c?: { id?: unknown } }).c && Array.isArray((j as EntitiesWire).c.id);
 
 /** the v2 wire → EntitySummary rows (the shape every consumer reads) */
-export function decodeEntities(w: EntitiesWire): EntitiesFile & { tier: 'main' | 'tail'; tailN: number } {
+export function decodeEntities(w: EntitiesWire): EntitiesFile & { tier: 'main' | 'tail'; tailN: number; tailBy?: Record<string, number> } {
   const { c } = w;
   const scope = w.ml.map(k => LENS_LABELS.lens(k));
   const entities: EntitySummary[] = [];
@@ -203,7 +208,20 @@ export function decodeEntities(w: EntitiesWire): EntitiesFile & { tier: 'main' |
       medLens: mlI >= 0 ? w.ml[mlI] : null,
     });
   }
-  return { generatedAt: w.generatedAt, lastCrawl: w.lastCrawl, sparkQ: w.sparkQ, entities, tier: w.tier, tailN: w.tailN };
+  return { generatedAt: w.generatedAt, lastCrawl: w.lastCrawl, sparkQ: w.sparkQ, entities, tier: w.tier, tailN: w.tailN, ...(w.tailBy ? { tailBy: w.tailBy } : {}) };
+}
+
+/** the ledger's name kinds (a /makers By-name row) */
+export const LEDGER_NAME_KINDS: ReadonlySet<string> = new Set(['player', 'subject', 'set']);
+/** (r7) per market: how many ledger names a summary list holds */
+export function ledgerNamesBy(list: readonly { id: string }[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const e of list) {
+    const p = parseEntityId(e.id);
+    if (!p || !LEDGER_NAME_KINDS.has(p.kind)) continue;
+    out[p.market] = (out[p.market] || 0) + 1;
+  }
+  return out;
 }
 
 /** split one file's summaries (already in sold order) into main + tail.

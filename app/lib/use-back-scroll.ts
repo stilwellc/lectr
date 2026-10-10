@@ -50,12 +50,17 @@ export function useBackScroll(ready: boolean): void {
       try { const v = sessionStorage.getItem(slotOf()); y = v == null ? null : Number(v); } catch { /* blocked */ }
       if (y != null && Number.isFinite(y) && y > 0) {
         // the sections above can still settle (chart wells, shards) — land
-        // again a beat later unless the reader has already moved
+        // again a beat later unless the reader has already moved. (r7, QA2
+        // Q14) a page still growing toward the saved spot (the home feed
+        // re-pages its rows, the tape and wall paint) clamps the scroll
+        // short: keep landing every 250ms until it holds, up to ~3.5s
         const go = () => { if (Math.abs(window.scrollY - y!) > 40) window.scrollTo(0, y!); };
         timers.push(window.setTimeout(go, 0), window.setTimeout(go, 350), window.setTimeout(go, 900));
+        for (let t = 1150; t <= 3500; t += 250) timers.push(window.setTimeout(go, t));
         const stop = () => { timers.forEach(t => window.clearTimeout(t)); };
         window.addEventListener('wheel', stop, { once: true, passive: true });
         window.addEventListener('touchstart', stop, { once: true, passive: true });
+        window.addEventListener('keydown', stop, { once: true });
       }
     }
     // (no save on unmount: by then the router has already moved the URL on)

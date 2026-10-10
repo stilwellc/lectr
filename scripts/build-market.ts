@@ -28,6 +28,7 @@ import { mergeCardExtract, pokemonKeyFromExtract, llmConditionFlag, sameObjectFi
 import { buildMarketSeries, buildTimeIndex, buildHouseBias, type MarketSeries } from '../app/lib/indices';
 import { median as statsMedian, weightedMedian } from '../app/lib/stats';
 import { isCompExcluded } from '../app/lib/comps';
+import { enginePoolOf } from '../app/lib/engine-pool';
 import { fitCloseCurve } from './build-market-curve';
 import { appendValueTape } from './build-market-tape';
 import { buildHedonicIndex, buildComposite, type HedonicResult, type MakerIndexResult, type CompositeInput } from './hedonic-index';
@@ -538,7 +539,9 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     let evLots = 0;
     for (const lot of upcoming) {
       const v = (lot as AuctionLot & { value?: ValueResult | null }).value;
-      if (!v?.signal || v.signal.label.startsWith('at')) continue;
+      // (r7) every lot the engine VALUED ships its pool's rows (app/lib/
+      // engine-pool) — at-market and held-back values too, not only calls
+      if (!v || (!(v.signal && !v.signal.label.startsWith('at')) && !enginePoolOf(v as Parameters<typeof enginePoolOf>[0]))) continue;
       const rows = (v.poolIds || [])
         .map(id => soldByIdEv.get(String(id)))
         .filter((s): s is AuctionLot => !!s && ((s as { realizedUsd?: number }).realizedUsd || s.priceUsd || 0) > 0)
@@ -1703,18 +1706,12 @@ async function persistMarket(all: AuctionLot[], t0: number): Promise<AuctionLot[
   // rows (record sale, past results, realized cohort) but 288k would blow the
   // payload — ship the most-recent 1,500 + top 500 by price (the record lives
   // in the top slice) on the ON-DEMAND archive tier; the rest stay corpus-only.
-  const soldCards = lotsForSlug('sports-cards').concat(lotsForSlug('graded-cards')).filter(l => l.status === 'sold' && (l.realizedUsd || 0) > 0);
-  const cardSample = new Set<string>();
-  soldCards.slice().sort((a, b) => (a.saleDate! < b.saleDate! ? 1 : -1)).slice(0, 1500).forEach(l => cardSample.add(String(l.id)));
-  soldCards.slice().sort((a, b) => b.realizedUsd! - a.realizedUsd!).slice(0, 500).forEach(l => cardSample.add(String(l.id)));
-  console.log(`[market] served sold-card sample: ${cardSample.size} of ${soldCards.length}`);
-  // Pokémon: same sampling doctrine — the maker page needs real rows (record
-  // sale, past results) but the 40k history stays corpus-only.
-  const soldPokemon = lotsForSlug('pokemon').filter(l => l.status === 'sold' && (l.realizedUsd || 0) > 0);
-  const pokemonSample = new Set<string>();
-  soldPokemon.slice().sort((a, b) => (a.saleDate! < b.saleDate! ? 1 : -1)).slice(0, 1500).forEach(l => pokemonSample.add(String(l.id)));
-  soldPokemon.slice().sort((a, b) => b.realizedUsd! - a.realizedUsd!).slice(0, 500).forEach(l => pokemonSample.add(String(l.id)));
-  console.log(`[market] served sold-pokemon sample: ${pokemonSample.size} of ${soldPokemon.length}`);
+  // (r7) one sampler for the served write AND the entity emitter
+  // (scripts/lib/served-sample) — an entity page links a sold card only when
+  // the lot page can open it
+  const { servedSoldSample } = require('./lib/served-sample') as typeof import('./lib/served-sample');
+  const soldSample = servedSoldSample(lotsForSlug('sports-cards').concat(lotsForSlug('graded-cards'), lotsForSlug('pokemon')));
+  console.log(`[market] served sold card + Pokémon sample: ${soldSample.size}`);
   // Culture is a MIXED vertical (Goldin no-estimate + Sotheby's/Christie's
   // estimate-bearing), and only sports/science surfaces mount the phase-3
   // archive — so Goldin culture sold rows (~9k) went unreachable, hiding half
@@ -1731,8 +1728,7 @@ async function persistMarket(all: AuctionLot[], t0: number): Promise<AuctionLot[
   // corpus-only: SOLD sport cards + Pokémon stay off the wire — except the
   // samples above. Live lots always ship (they're on the block).
   const isCorpusOnly = (l: Record<string, unknown>) =>
-    ((l.artist === 'sports-cards' || l.artist === 'graded-cards') && l.status === 'sold' && !cardSample.has(String(l.id))) ||
-    (l.artist === 'pokemon' && l.status === 'sold' && !pokemonSample.has(String(l.id)));
+    (l.artist === 'sports-cards' || l.artist === 'graded-cards' || l.artist === 'pokemon') && l.status === 'sold' && !soldSample.has(String(l.id));
   // (the corpus + served write runs LAST, below: it consumes `all` — every
   // lot is replaced by its written-and-reparsed row as it streams out)
 

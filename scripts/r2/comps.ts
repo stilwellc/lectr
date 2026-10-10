@@ -15,6 +15,7 @@ import {
   scienceReferenceBand, cultureReferenceBand, makerReferenceBand,
 } from '../../app/lib/comps';
 import { anchorPartitions } from './pools';
+import { enginePoolOf } from '../../app/lib/engine-pool';
 import { displayRow } from '../../functions/_lib/format';
 
 const slim = (l: AuctionLot) => displayRow(l as unknown as Record<string, unknown>) as unknown as PackRow;
@@ -73,20 +74,18 @@ export function compsFor(src: CompSource, lot: AuctionLot): CompsAnswer {
     if (band) pack.b = { form: band.form, median: band.median, low: band.low, high: band.high, n: band.n, confidence: band.confidence, rows: [...band.pool].sort(byDateDesc).map(slim) };
   }
   if (!pack.b) {
-    const ev = lot.value;
-    const evSane = !ev || ev.compRatio == null || (ev.compRatio <= 5 && ev.compRatio >= 1 / 5);
-    if (ev && ev.signal && ev.compRatio != null && evSane) {
-      // 'at comparable market' = the engine looked and called it fair: no call
-      if (!ev.signal.label.startsWith('at')) {
-        const resolved = (ev.poolIds || []).map(id => src.byId(String(id)))
-          .filter((x): x is AuctionLot => !!x && x.status === 'sold' && !!x.priceUsd);
-        pack.c = {
-          n: ev.n || resolved.length,
-          med: (ev as { compMedianUsd?: number | null }).compMedianUsd ?? ev.compValueUsd ?? null,
-          form: lot.formKey || null, kind: 'form', resolved: resolved.length,
-          rows: [...resolved].sort(byDateDesc).map(slim), ps: pricesOf(resolved),
-        };
-      }
+    // (r7 — one lot, one number) the engine's pool for every lot it valued:
+    // a call, "at comparable market", or a value it held the flag back on
+    // (app/lib/engine-pool — the lot page's and the build pack's exact read)
+    const ep = enginePoolOf(lot.value);
+    if (ep) {
+      const resolved = ep.ids.map(id => src.byId(id))
+        .filter((x): x is AuctionLot => !!x && x.status === 'sold' && !!x.priceUsd);
+      pack.c = {
+        n: ep.n, med: ep.med,
+        form: lot.formKey || null, kind: 'form', resolved: resolved.length,
+        rows: [...resolved].sort(byDateDesc).map(slim), ps: pricesOf(resolved),
+      };
     }
     // (Oct 6 2026, wave 3) NO FALLBACK READ: a lot the engine declined gets
     // no comp call and no signal (was the client signalWithPool read)

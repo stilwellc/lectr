@@ -15,11 +15,11 @@
    the pagination.
    ============================================================ */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Market } from '../constants';
 import type { AuctionLot } from '../types';
-import { formatDate, formatPrice, craftTitle, httpsImg, sizedImg, localToday, trueSaleDay } from '../utils';
+import { formatDate, formatPrice, craftTitle, httpsImg, sizedImg, localToday, trueSaleDay, isClosedPending } from '../utils';
 import LotCard, { lotSignal, confidenceMeter } from './LotCard';
 import { signalMagnitude } from '../lib/comps';
 import ComparableModal from './ComparableModal';
@@ -374,9 +374,24 @@ export default function LotBrowser({
     return s;
   }, [upcoming]);
 
+  // (r7, QA2 Q4) the ON-THE-BLOCK pool every count reads: a results-pending
+  // lot whose sale has closed still lists (sunk, dressed "results pending")
+  // but counts in no tab, chip, facet or flag — the same isOnBlock /makers,
+  // the nav and /value count with
+  const onBlock = useMemo(() => {
+    const now = Date.now();
+    return upcoming.some(l => isClosedPending(l, now)) ? upcoming.filter(l => !isClosedPending(l, now)) : upcoming;
+  }, [upcoming]);
+  const countOf = useCallback((arr: readonly AuctionLot[]) => {
+    if (onBlock === upcoming) return arr.length;
+    const now = Date.now();
+    let n = 0;
+    for (const l of arr) if (!isClosedPending(l, now)) n++;
+    return n;
+  }, [onBlock, upcoming]);
   const ownBelow = useMemo(
-    () => (belowSignalProp ? null : belowSignalOf(upcoming, compLots)),
-    [belowSignalProp, upcoming, compLots]
+    () => (belowSignalProp ? null : belowSignalOf(onBlock, compLots)),
+    [belowSignalProp, onBlock, compLots]
   );
   const belowSignal = belowSignalProp ?? ownBelow!;
   const belowIds = belowSignal.ids;
@@ -531,17 +546,17 @@ export default function LotBrowser({
           data-active={!topTab && !youTab}
           onClick={() => handleFilters({ ...feedFilters, tab: 'all' })}
         >
-          All lots <i>{feedAll.length.toLocaleString()}</i>
+          All lots <i>{countOf(feedAll).toLocaleString()}</i>
         </button>
       </div>
 
       <FeedToolbar
-        lots={upcoming}
+        lots={onBlock}
         belowIds={belowIds}
         filters={feedFilters}
         onChange={handleFilters}
-        shown={fold && !topTab && !youTab ? feedAll.length : feed.length}
-        total={upcoming.length}
+        shown={countOf(fold && !topTab && !youTab ? feedAll : feed)}
+        total={onBlock.length}
         market={market}
         onMarketReset={onMarketReset}
         view={effectiveView}
@@ -646,7 +661,7 @@ export default function LotBrowser({
                     <td className="t-cat">{subColumnOf(lot)}</td>
                     <td className="t-date" title={saleWhenTitle(lot)}>{formatDate(lot.saleDate)}</td>
                     <td className="num t-days">
-                      {dth == null ? '—' : dth <= 0 ? 'today' : `${dth}d`}
+                      {isClosedPending(lot) ? 'closed' : dth == null ? '—' : dth <= 0 ? 'today' : `${dth}d`}
                     </td>
                     <td className="num t-bids" title={bidCellTitle(lot, housesWithBids)}>
                       {bidCellFace(lot, housesWithBids)}
