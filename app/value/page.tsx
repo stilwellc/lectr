@@ -49,7 +49,7 @@ import {
 // globals.css "THE CELL SYSTEM"): figure cells for the reads room, the
 // forced-color cell classes re-plate the call. Never redefined here.
 import { CellGrid, FigureCell, FigGate, FigReplay, FigPools } from '../components/cells';
-import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isLiveUpcoming, trueSaleDay, toneOf } from '../utils';
+import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isOnBlock, trueSaleDay, toneOf } from '../utils';
 import { closeMs as closeAt } from '../lib/house-tz';
 import { dealScore, signalMagnitude, estUsdBand } from '../lib/comps';
 import { medianOr } from '../lib/stats';
@@ -809,7 +809,7 @@ export default function ValuePage() {
     // THE ONE FLAGGED RANKING — dealScore (lib/comps): calibrated odds first,
     // then the gap capped at 400%. Same ordering as every other surface.
     return marketLots
-      .filter(l => isLiveUpcoming(l, today))
+      .filter(l => isOnBlock(l, today))
       .map(l => ({ lot: l, signal: lotSignal(l, marketLots) }))
       .filter(d => d.signal && d.signal.label === 'Below Market')
       .sort((a, b) => dealScore(b.lot, b.signal!.pct) - dealScore(a.lot, a.signal!.pct));
@@ -838,7 +838,7 @@ export default function ValuePage() {
   // corpus, so every "in the book" denominator must re-scope to live lots
   const liveLots = useMemo(() => {
     const today = localToday();
-    return marketLots.filter(l => isLiveUpcoming(l, today));
+    return marketLots.filter(l => isOnBlock(l, today));
   }, [marketLots]);
 
   // ── THE GAP + THE SLEEPERS: the two uncertified lanes, computed from the
@@ -901,7 +901,7 @@ export default function ValuePage() {
   );
   const allFlagCount = useMemo(() => {
     const today = localToday();
-    return allLots.filter(l => isLiveUpcoming(l, today) && l.signal?.label === 'Below Market').length;
+    return allLots.filter(l => isOnBlock(l, today) && l.signal?.label === 'Below Market').length;
   }, [allLots]);
 
   // SETTLED CALLS — the honesty-critical tape. A lot only carries a
@@ -978,13 +978,13 @@ export default function ValuePage() {
     (l: AuctionLot) => passesTriage(l, triage, { prevVisitDay, baselines }),
     [triage, prevVisitDay, baselines]
   );
-  // (Oct 9) the triage chips count the lots ON the lanes — counting the whole
-  // live book offered "Graded 833" over a board that held none of them
-  const laneLots = useMemo(() => {
-    const seen = new Map<string, (typeof deals)[number]['lot']>();
-    for (const x of [...deals, ...gapRows, ...sleeperRows]) if (!seen.has(x.lot.id)) seen.set(x.lot.id, x.lot);
-    return Array.from(seen.values());
-  }, [deals, gapRows, sleeperRows]);
+  // (Oct 9) the triage chips count the lots ON the board — counting the whole
+  // live book offered "Graded 833" over a board that held none of them.
+  // (r7, QA2 Q10) and only the FLAGS (the call + the Flags list the chips sit
+  // over): counting the sleepers too read "Historical & Documents 41" over a
+  // list of 38, chips summing to 102 under "96 flags live". The chips still
+  // narrow every lane.
+  const flagLots = useMemo(() => deals.map(d => d.lot), [deals]);
   const dealsView = useMemo(() => deals.filter(d => inTriage(d.lot)), [deals, inTriage]);
   const gapRowsView = useMemo(() => gapRows.filter(r => inTriage(r.lot)), [gapRows, inTriage]);
   const sleeperRowsView = useMemo(() => sleeperRows.filter(r => inTriage(r.lot)), [sleeperRows, inTriage]);
@@ -2084,14 +2084,14 @@ export default function ValuePage() {
               on the phone's first screen instead of four screens down */}
           <div id="narrow" className="rail ray-enter vd-room" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))' }}>
             <TriageBar
-              lots={laneLots}
+              lots={flagLots}
               cats={activeKey === 'all' ? undefined : MARKET_CATS[activeKey]}
               filters={triage}
               onChange={setTriage}
               prevVisitDay={prevVisitDay}
               baselines={baselines}
-              shown={dealsView.length + gapRowsView.length + sleeperRowsView.length}
-              total={deals.length + gapRows.length + sleeperRows.length}
+              shown={dealsView.length}
+              total={deals.length}
               label="Narrow the lanes"
             />
           </div>

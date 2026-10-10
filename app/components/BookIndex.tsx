@@ -23,7 +23,7 @@ import { loadPageStats, type PageStats } from '../lib/page-data';
 import { ARTIST_LABEL } from '../constants';
 import { makerLineOf } from '../lib/lot-labels';
 import { encodeRefPath } from '../ref/ref-path';
-import { craftTitle, formatDate, formatPrice, getUpcomingCounts, isLiveUpcoming, localToday, refLabel, trueSaleDay, houseColors } from '../utils';
+import { craftTitle, formatDate, formatPrice, getUpcomingCounts, isLiveUpcoming, isOnBlock, localToday, refLabel, trueSaleDay, houseColors } from '../utils';
 import { signalMagnitude, dealScore } from '../lib/comps';
 import { OPEN_CK_EVENT } from './CommandK';
 import '../northstar-pages.css';

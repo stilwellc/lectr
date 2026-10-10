@@ -193,6 +193,16 @@ const tagFor = (read: TapeRowData['read']): string => {
   return read.kind === 'demand' ? 'Demand read' : 'Descriptive';
 };
 
+/** (r7, QA2 Q9) a demand read in words: the median sold lot's hammer over
+ *  its estimate midpoint. A median that lands ON the midpoint (Art, Watches
+ *  and Total since 2026 Q2 — 3–5% of sales hammer exactly at mid and the
+ *  rest split evenly) is a real read, not a missing one: it prints "0%" in
+ *  ink with "at estimate", never a green "+0.0%" wearing an up arrow. */
+function demandFig(v: number): { text: string; dir: 'up' | 'down' | undefined; word: string } {
+  if (Math.abs(v) < 0.5) return { text: '0%', dir: undefined, word: 'at estimate' };
+  return { text: fmtPct(v), dir: v > 0 ? 'up' : 'down', word: 'over estimate' };
+}
+
 const fmtCI = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`;
 
 /** the phone tag — same claim, fewer letters (the two-line tracker gives the
@@ -232,7 +242,7 @@ export function TapeMonument({ row, play }: { row: TapeRowData; play: boolean })
   const r = row.read;
   return (
     <button type="button" className={styles.mtMon} data-play={play ? 'true' : undefined}
-      data-dir={r.kind === 'index' ? (r.changePct >= 0 ? 'up' : 'down') : r.kind === 'demand' ? (r.now >= 0 ? 'up' : 'down') : undefined}
+      data-dir={r.kind === 'index' ? (r.changePct >= 0 ? 'up' : 'down') : r.kind === 'demand' ? demandFig(r.now).dir : undefined}
       onClick={() => setMarket(row.key)}
       aria-label={`${row.label} — open the ${row.label} lander`}>
       {/* the certificate row — the ledger's dotted leader carries the horizon
@@ -271,12 +281,12 @@ export function TapeMonument({ row, play }: { row: TapeRowData; play: boolean })
       )}
       {r.kind === 'demand' && (
         <>
-          <span className={`${styles.mtMonFigure} ${styles.pctData}`} data-dir={r.now >= 0 ? 'up' : 'down'}>
-            {fmtPct(r.now)}
+          <span className={`${styles.mtMonFigure} ${styles.pctData}`} data-dir={demandFig(r.now).dir}>
+            {demandFig(r.now).text}
           </span>
-          <span className={styles.mtMonBeam}>{r.series.length >= 2 && <DemandLine series={r.series} dir={r.now >= 0 ? 'up' : 'down'} />}</span>
+          <span className={styles.mtMonBeam}>{r.series.length >= 2 && <DemandLine series={r.series} dir={demandFig(r.now).dir} />}</span>
           <span className={styles.mtMonMeta}>
-            <span>demand · sold over estimate</span>
+            <span>demand · {demandFig(r.now).dir ? 'sold over estimate' : 'sold at estimate'}</span>
             <span>{fmtInt(row.lots)} lots</span>
           </span>
         </>
@@ -328,7 +338,7 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
               <CIBeam mini lo={r.read.ciLo} hi={r.read.ciHi} point={r.read.changePct}
                 dir={r.read.changePct >= 0 ? 'up' : 'down'} play={play} delay={i * 0.08} />
             )}
-            {r.read.kind === 'demand' && r.read.series.length >= 2 && <DemandLine mini series={r.read.series} dir={r.read.now >= 0 ? 'up' : 'down'} />}
+            {r.read.kind === 'demand' && r.read.series.length >= 2 && <DemandLine mini series={r.read.series} dir={demandFig(r.read.now).dir} />}
             {/* descriptive series draw NEUTRAL — delta ink is for certified/
                 measured reads; a typical-$ drift earns no green/red */}
             {r.read.kind === 'descriptive' && (r.read.series.length >= 2
@@ -349,11 +359,11 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
             )}
             {r.read.kind === 'demand' && (
               <>
-                <span className={`${styles.mtFigure} ${styles.pctData}`} data-dir={r.read.now >= 0 ? 'up' : 'down'}>
-                  <span className={styles.tri} data-dir={r.read.now >= 0 ? 'up' : 'down'} aria-hidden />
-                  {fmtPct(r.read.now)}<span className={styles.mtHz} aria-hidden />
+                <span className={`${styles.mtFigure} ${styles.pctData}`} data-dir={demandFig(r.read.now).dir}>
+                  <span className={styles.tri} data-dir={demandFig(r.read.now).dir} aria-hidden />
+                  {demandFig(r.read.now).text}<span className={styles.mtHz} aria-hidden />
                 </span>
-                <span className={styles.mtSub}>over estimate · {fmtInt(r.lots)} lots</span>
+                <span className={styles.mtSub}>{demandFig(r.read.now).word} · {fmtInt(r.lots)} lots</span>
               </>
             )}
             {r.read.kind === 'descriptive' && (
@@ -438,7 +448,7 @@ export function SubTape({ market, activeKey, play }: {
                   point={idx.changePct} dir={idx.changePct >= 0 ? 'up' : 'down'} play={play} delay={i * 0.08} />
               )}
               {!idx && r.readType === 'demand' && (r.demandSeries?.length ?? 0) >= 2 && (
-                <DemandLine mini series={r.demandSeries as { period: string; value: number }[]} dir={(r.demandNow ?? 0) >= 0 ? 'up' : 'down'} />
+                <DemandLine mini series={r.demandSeries as { period: string; value: number }[]} dir={demandFig(r.demandNow ?? 0).dir} />
               )}
               {!idx && r.readType !== 'demand' && <span className={styles.mtAbstain}>—</span>}
             </span>
@@ -456,11 +466,11 @@ export function SubTape({ market, activeKey, play }: {
               )}
               {!idx && r.readType === 'demand' && (
                 <>
-                  <span className={`${styles.mtFigure} ${styles.pctData}`} data-dir={(r.demandNow ?? 0) >= 0 ? 'up' : 'down'}>
-                    <span className={styles.tri} data-dir={(r.demandNow ?? 0) >= 0 ? 'up' : 'down'} aria-hidden />
-                    {fmtPct(r.demandNow ?? 0)}<span className={styles.mtHz} aria-hidden />
+                  <span className={`${styles.mtFigure} ${styles.pctData}`} data-dir={demandFig(r.demandNow ?? 0).dir}>
+                    <span className={styles.tri} data-dir={demandFig(r.demandNow ?? 0).dir} aria-hidden />
+                    {demandFig(r.demandNow ?? 0).text}<span className={styles.mtHz} aria-hidden />
                   </span>
-                  <span className={styles.mtSub}>over estimate{r.lots ? ` · ${fmtInt(r.lots)} lots` : ''}</span>
+                  <span className={styles.mtSub}>{demandFig(r.demandNow ?? 0).word}{r.lots ? ` · ${fmtInt(r.lots)} lots` : ''}</span>
                 </>
               )}
               {!idx && r.readType !== 'demand' && (

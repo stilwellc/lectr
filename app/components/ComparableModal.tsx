@@ -8,6 +8,7 @@ import { marketOf } from '../constants';
 import { makerLineOf, labelLineOf, drillLabelOf } from '../lib/lot-labels';
 import { houseColors, categoryColors, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText } from '../utils';
 import { contextComps, isSportsScienceObject, FORM_LABEL, signalMagnitude, type Form } from '../lib/comps';
+import { enginePoolOf } from '../lib/engine-pool';
 import type { SoldComp } from '../types';
 import { drillRowFor, drillSlugFor } from '../lib/submarkets';
 import { signedPct, dirOf } from './SubMarketDirectory';
@@ -358,7 +359,11 @@ export default function ComparableModal({
   // the panel, and restore focus to the triggering element on close.
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null;
-    closeBtnRef.current?.focus();
+    // preventScroll (r7, QA2 Q14): the panel is mid-entrance (translated)
+    // when it takes focus, and a plain focus() scrolled the PAGE under the
+    // overlay to "reveal" it — the feed jumped ~1,300px, and Back from the
+    // lot page then restored that jumped position
+    closeBtnRef.current?.focus({ preventScroll: true });
 
     const trapTab = (e: KeyboardEvent) => {
       if (e.key !== 'Tab' || !panelRef.current) return;
@@ -385,7 +390,7 @@ export default function ComparableModal({
     window.addEventListener('keydown', trapTab);
     return () => {
       window.removeEventListener('keydown', trapTab);
-      previouslyFocused?.focus();
+      previouslyFocused?.focus({ preventScroll: true });
     };
   }, []);
 
@@ -439,6 +444,21 @@ export default function ComparableModal({
     return null;
   }, [lot, allLots]);
 
+  // (r7, QA2 Q3 — one lot, one number) the engine VALUED the lot without a
+  // below / above call ("at comparable market", or a flag it held back):
+  // its pool and its median are the lot's comps — the lot page's exact read
+  // (app/lib/engine-pool). Before r7 this modal re-ranked same-maker sales
+  // of its own (Phillips NY080426-83: "15 comps, median $40K" beside the
+  // engine's 13-sale $56.9K).
+  const valued = useMemo(() => {
+    if (called) return null;
+    const ep = enginePoolOf((lot as AuctionLot & { value?: Parameters<typeof enginePoolOf>[0] }).value);
+    if (!ep) return null;
+    const byId = new Map(allLots.map(l => [l.id, l]));
+    const pool = ep.ids.map(id => byId.get(id)).filter((x): x is AuctionLot => !!x && x.status === 'sold' && !!x.priceUsd);
+    return { pool, med: ep.med, n: ep.n };
+  }, [lot, allLots, called]);
+
   // EVIDENCE FALLBACK: the engine's pool draws on the corpus-only tier, so
   // poolIds often resolve to ZERO on-wire rows — and the section would then
   // contradict its own header ("8 sales" … "no comparable sales"). The build
@@ -450,7 +470,8 @@ export default function ComparableModal({
   // call at all (its fallback pool also lives in the full corpus) — both have
   // build-shipped evidence. Sports/science objects keep their archive band.
   const needEvidence = (!!called && called.pool.length === 0)
-    || (!called && !isSportsScienceObject(lot) && lot.status === 'upcoming' && !!lot.signal && (lot.signal.basis || 0) > 0);
+    || (!!valued && valued.pool.length === 0)
+    || (!called && !valued && !isSportsScienceObject(lot) && lot.status === 'upcoming' && !!lot.signal && (lot.signal.basis || 0) > 0);
   useEffect(() => {
     if (!needEvidence) { setEvRows(null); return; }
     let live = true;
@@ -498,15 +519,16 @@ export default function ComparableModal({
   // is still downloading: the client read is running against a truncated pool,
   // so a confident "0 comparable sales (no call)" would contradict the card
   // glow. Show the loading state instead (LotPage's compsPending pattern).
-  const compsPending = (!called && !band && !fullLoaded && !fullError)
+  const compsPending = (!called && !valued && !band && !fullLoaded && !fullError)
     || (needEvidence && evRows === undefined);
 
   const comparables = useMemo(() => {
-    if (called) {
+    const engine = called ?? valued;
+    if (engine) {
       // the call's own pool, most recent first — this IS the statistic.
       // When the on-wire corpus can't resolve the ids, the build-shipped
       // evidence rows are the same pool (deep-corpus sales), not a substitute.
-      const poolRows = called.pool.length ? called.pool : (evRows || []);
+      const poolRows = engine.pool.length ? engine.pool : (evRows || []);
       return [...poolRows]
         .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
         .map(l => ({ lot: l, score: 1 }));
@@ -532,7 +554,7 @@ export default function ComparableModal({
         .map(l => ({ lot: l, score: 1 }));
     }
     return ctx.map(l => ({ lot: l, score: 1 }));
-  }, [lot, allLots, called, band, evRows]);
+  }, [lot, allLots, called, valued, band, evRows]);
 
   const compStats = useMemo(() => {
     if (comparables.length === 0) return null;
@@ -547,9 +569,9 @@ export default function ComparableModal({
     // The comps-vs-ask read itself is the ENGINE's (called.signal.label/pct)
     // — this modal computes no ratio of its own, so it can never color a
     // pure-premium 1.0–1.3 band green against the engine's own threshold.
-    const median = called?.signal.med ?? medianSorted(prices);
+    const median = called?.signal.med ?? valued?.med ?? medianSorted(prices);
     return { median, low, high, total: prices.length };
-  }, [comparables, called, band]);
+  }, [comparables, called, valued, band]);
 
   // PROOF SURFACE HONESTY: when the printed median is the ENGINE's number
   // (called.signal.med) and it differs >10% from the median of the pool the
@@ -1009,6 +1031,9 @@ export default function ComparableModal({
                     ? `The call — this exact work, sold ${n} times${shown}`
                     : `The call — ${n} comparable ${FORM_LABEL[called.signal.form]}${(lot as AuctionLot & { value?: { crossPlayer?: boolean } | null }).value?.crossPlayer ? ' · same-game jerseys, player-tier matched' : ''}${shown}`;
                 })()
+              : valued
+                // (r7) the engine valued it without a call: its pool, its n
+                ? `The pool — ${valued.n} comparable sales${!compsPending && comparables.length < valued.n ? ` · ${comparables.length} shown` : ''} · no call`
               : band
                 ? `Recent sold — ${band.n} comparable ${(FORM_LABEL as Record<string, string>)[band.form] || band.form}${band.confidence === 'low' ? ' · thin evidence' : ''}`
                 : compsPending || comparables.length === 0
@@ -1075,7 +1100,7 @@ export default function ComparableModal({
                   When the ENGINE called it, the pool exists in the deep corpus
                   — say that, never "no comps" against our own header. */}
               {(() => {
-                const n = (called && (called.signal as { basis?: number }).basis) || (lot.status === 'upcoming' && lot.signal?.basis) || 0;
+                const n = (called && (called.signal as { basis?: number }).basis) || valued?.n || (lot.status === 'upcoming' && lot.signal?.basis) || 0;
                 return n > 0
                   ? <>The {n} sales behind this call sit in the deep corpus &mdash; the evidence rows couldn&rsquo;t be loaded right now.</>
                   : <>No comparable sales clear the gates for this lot &mdash; lectr doesn&rsquo;t manufacture a pool.</>;

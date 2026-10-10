@@ -28,7 +28,7 @@ import { SERVED_DIR, CORPUS_DIR, streamGzLines } from './corpus-io';
 import { readCalls } from './lib/calls-ledger';
 import { ARTISTS, MARKETS, marketArtists, marketOf } from '../app/constants';
 import {
-  appraiseLot, soldCompBand, isSportsScienceObject,
+  soldCompBand, isSportsScienceObject,
   scienceReferenceBand, cultureReferenceBand,
 } from '../app/lib/comps';
 import { isMisattributed } from '../app/lib/attribution';
@@ -38,6 +38,7 @@ import { betterFace } from '../app/lib/img-host';
 import { overEstimatePct } from '../app/utils';
 import { bucketOf, markFallbackProjections, type PageStats, type LotPack, type PackRow, type SettledCallRow } from '../app/lib/page-data';
 import type { AuctionLot } from '../app/types';
+import { enginePoolOf } from '../app/lib/engine-pool';
 
 export interface PageStatsOpts {
   /** id → the corpus row an engine pool may name off the served book (the
@@ -216,7 +217,6 @@ export async function emitPageStats(opts: PageStatsOpts = {}): Promise<void> {
   const mainByArtist = group(allLots, l => l.artist);
   const bandPool = allLots.concat(archive);                               // bandPoolLots
   const bandByArtistId = group(bandPool.filter(l => isSportsScienceObject(l)), l => `${l.artist}|${idKey(l)}`);
-  const mainByArtistId = group(allLots.filter(l => isSportsScienceObject(l)), l => `${l.artist}|${idKey(l)}`);
   const cultureSet = new Set(['movie-tv', 'music-memorabilia', 'entertainment-memorabilia']);
   const culturePool = allLots.filter(l => cultureSet.has(l.artist));
   const byGroupId = group(bandPool.filter(l => !!l.repeatSaleGroupId), l => String(l.repeatSaleGroupId));
@@ -242,29 +242,27 @@ export async function emitPageStats(opts: PageStatsOpts = {}): Promise<void> {
         if (band) pack.b = { form: band.form, median: band.median, low: band.low, high: band.high, n: band.n, confidence: band.confidence, rows: top12(band.pool) };
       }
       if (!pack.b) {
-        const ev = lot.value;
-        const evSane = !ev || ev.compRatio == null || (ev.compRatio <= 5 && ev.compRatio >= 1 / 5);
-        if (ev && ev.signal && ev.compRatio != null && evSane) {
-          if (!ev.signal.label.startsWith('at')) {
-            const pool = (ev.poolIds || []).map(id => soldById.get(id)).filter((x): x is AuctionLot => !!x);
-            pack.c = { n: ev.n || pool.length, med: (ev as { compMedianUsd?: number | null }).compMedianUsd ?? ev.compValueUsd ?? null, form: lot.formKey || null, kind: 'form', resolved: pool.length, rows: top12(pool), ps: pricesOf(pool) };
-            // engine pools draw on the corpus-only tier too — fill the rest below
-            if (pool.length < (ev.poolIds || []).length) {
-              engineGaps.push({ c: pack.c, ids: (ev.poolIds || []).map(String), found: pool });
-              for (const id of ev.poolIds || []) if (!soldById.has(String(id))) offWire.add(String(id));
-            }
+        // (r7, QA2 Q3 — one lot, one number) the ENGINE'S POOL for every
+        // lot it valued: a below / above call, "at comparable market", or a
+        // value it held the flag back on (app/lib/engine-pool) — before r7
+        // only a directional call shipped its rows, and every other valued
+        // lot printed a client appraisal over an empty list
+        const ep = enginePoolOf(lot.value);
+        if (ep) {
+          const pool = ep.ids.map(id => soldById.get(id)).filter((x): x is AuctionLot => !!x);
+          pack.c = { n: ep.n, med: ep.med, form: lot.formKey || null, kind: 'form', resolved: pool.length, rows: top12(pool), ps: pricesOf(pool) };
+          // engine pools draw on the corpus-only tier too — fill the rest below
+          if (pool.length < ep.ids.length) {
+            engineGaps.push({ c: pack.c, ids: ep.ids, found: pool });
+            for (const id of ep.ids) if (!soldById.has(id)) offWire.add(id);
           }
         }
         // (Oct 6 2026, wave 3) NO FALLBACK READ: a lot the engine declined
         // carries no comp call (the client signalWithPool read used to fill
         // pack.c here — a directional read the engine had abstained from)
-        // appraisal — only where the certificate falls through to it
-        const sigMed = (lot.signal as { med?: number } | null | undefined)?.med;
-        // (Oct 6 2026, wave 4) and only on a lot the ENGINE valued
-        if (lot.value && sigMed == null && (!pack.c || pack.c.med == null)) {
-          const pool = sso ? (mainByArtistId.get(`${lot.artist}|${idKey(lot)}`) || []) : (mainByArtist.get(lot.artist) || []);
-          pack.a = appraiseLot(lot, pool)?.value ?? null;
-        }
+        // (r7) no pack.a: the build's unguarded appraisal printed as a
+        // second "Comps median" beside the engine's (one lot, one number);
+        // a lot the engine didn't value reads the guarded context read
       }
       if (mkt === 'science') pack.r = scienceReferenceBand(lot, mainByArtist.get(lot.artist) || []);
       else if (mkt === 'culture') pack.r = cultureReferenceBand(lot, culturePool);

@@ -200,13 +200,20 @@ export default function MakersPage() {
   const words = useMemo(() => needleOf(dQ), [dQ]);
   const collection = activeKey === 'all' || SUBJECT_MARKETS.has(activeKey);
   const wantSubs = rowsBy === 'cat' && collection;
+  // (r7, QA2 D4) a compare pick from a collection market (a player, a
+  // Pokémon, a sub) needs its live bucket on a maker tab too — without it
+  // Jordan / Charizard read "Live —" on Art and the tray's lots shrink
+  const pickNames = compare.some(id => /^(pl|sj|st|~):/.test(id));
+  const pickCats = compare.some(id => id.startsWith('cs:'));
   const pool = useLivePool(allLots, activeKey, dTriage, {
     sport: dSport, prevVisitDay, baselines,
-    names: collection, cats: wantSubs,
+    names: collection || pickNames, cats: wantSubs || pickCats,
   });
   // the sold-only tail: a search (any name lectr tracks), or an order that
   // reads sold history
-  const wantTail = words.length > 0 || sort === 'median' || sort === 'movers' || sort === 'sold12' || sort === 'name';
+  // (r7) or a "Show more" that pages past the main tier's names
+  const [tailAsk, setTailAsk] = useState(false);
+  const wantTail = tailAsk || words.length > 0 || sort === 'median' || sort === 'movers' || sort === 'sold12' || sort === 'name';
   const entities = useEntities(activeKey, {
     namesAll: pool.namesAll, subs: wantSubs, sport: dSport,
     players: rowsBy === 'name' && (activeKey === 'all' || activeKey === 'sports'),
@@ -298,12 +305,24 @@ export default function MakersPage() {
     return sortRows(out, sort);
   }, [rows, inMarket, words, dFl, fLive, fVerified, filtersOn, fFollowing, followedSet, lotFollowed, sort]);
 
+  // (r7, QA2 Q5/Q6) ONE name count: the names lectr tracks in a market are
+  // the main tier's rows plus the sold-only tail's — counted from the file's
+  // own per-market tally until the tail joins (a search, a sold-history
+  // order, a Show more past the main tier), so no count jumps on a keystroke
+  // and Total's group heads read what the market tabs read. Only where the
+  // sold-only names would show: By name, a collection book, no filter.
+  const tailOpen = shownBy === 'name' && collection && !filtersOn;
+  const tailListed = tailOpen && words.length === 0 && !dFl && !fLive && !fVerified && !fFollowing;
+  const tailOf = useCallback((m: string) => entities.tailBy?.[m] ?? 0, [entities.tailBy]);
   const cutKey = JSON.stringify([dTriage, dSport, dQ, dFl, sort, shownBy, activeKey, fLive, fVerified, fFollowing]);
   const caps = capState.k === cutKey ? capState.caps : NO_CAPS;
-  const showMore = (m: Market) => setCapState(st => {
+  const showMore = (m: Market, tailToo: boolean) => {
+    if (tailToo) setTailAsk(true);
+    setCapState(st => {
     const cur = st.k === cutKey ? st.caps : {};
     return { k: cutKey, caps: { ...cur, [m]: (cur[m] ?? (activeKey === 'all' ? CAP_ALL : CAP_ONE)) + CAP_STEP } };
-  });
+    });
+  };
 
   const soldMaxBy = useMemo(() => {
     const m = new Map<Market, number>();
@@ -320,10 +339,12 @@ export default function MakersPage() {
         const g = visible.filter(r => r.market === m.key);
         const cap = caps[m.key] ?? (activeKey === 'all' && !MAKER_MARKETS.has(m.key) ? CAP_ALL : CAP_ONE);
         const named = g.filter(r => r.kind !== 'rest');
+        const tailN = tailListed ? tailOf(m.key) : 0;
+        const namedN = named.length + tailN;
         let shown = g, more = 0;
-        if (named.length > cap) {
-          shown = [...named.slice(0, cap), ...g.filter(r => r.kind === 'rest')];
-          more = named.length - cap;
+        if (namedN > cap) {
+          if (named.length > cap) shown = [...named.slice(0, cap), ...g.filter(r => r.kind === 'rest')];
+          more = namedN - Math.min(cap, named.length);
         }
         const live = g.reduce((s, r) => s + r.live, 0);
         const flags = g.reduce((s, r) => s + r.flags, 0);
@@ -333,14 +354,14 @@ export default function MakersPage() {
         let dp: (typeof ds)[number] | null = null;
         for (let i = ds.length - 1; i >= 0; i--) if (ds[i].date < curQuarter) { dp = ds[i]; break; }
         return {
-          key: m.key as Market, label: m.label, rows: g, named: named.length, shown, more, live, flags,
+          key: m.key as Market, label: m.label, rows: g, named: namedN, shown, more, moreInTail: tailN > 0 && named.length - Math.min(cap, named.length) < CAP_STEP, live, flags,
           soldMax: soldMaxBy.get(m.key as Market) ?? 1,
           demandNow: dp ? dp.value : null,
           demandQ: dp ? dp.date : null,
         };
       })
       .filter(g => g.rows.length > 0),
-    [visible, soldMaxBy, activeKey, demand, caps, curQuarter]);
+    [visible, soldMaxBy, activeKey, demand, caps, curQuarter, tailListed, tailOf]);
 
   // ── THE LOTS — the market's live book under the same filters + search ──
   const lkSet = useMemo(() => new Set(lk), [lk]);
@@ -421,8 +442,14 @@ export default function MakersPage() {
     return { label: g.label, n, q: g.q(q) };
   }, [words, q, pool.marketPool, dTriage, dFl, prevVisitDay, baselines, searchLots]);
 
-  const rosterTotal = useMemo(() => rows.filter(r => inMarket(r) && r.kind !== 'rest').length, [rows, inMarket]);
-  const shownTotal = useMemo(() => visible.filter(r => r.kind !== 'rest').length, [visible]);
+  const tailIn = useCallback((on: boolean) => {
+    if (!on) return 0;
+    let n = 0;
+    for (const m of MARKETS) if (m.key !== 'all' && (activeKey === 'all' || m.key === activeKey)) n += tailOf(m.key);
+    return n;
+  }, [activeKey, tailOf]);
+  const rosterTotal = useMemo(() => rows.filter(r => inMarket(r) && r.kind !== 'rest').length + tailIn(tailOpen), [rows, inMarket, tailIn, tailOpen]);
+  const shownTotal = useMemo(() => visible.filter(r => r.kind !== 'rest').length + tailIn(tailListed), [visible, tailIn, tailListed]);
   const marketLiveAll = pool.marketAll;
   const totalLive = useMemo(() => {
     if (!filtersOn) return marketLiveAll.length;
@@ -490,6 +517,18 @@ export default function MakersPage() {
       if (saved != null) window.scrollTo({ top: saved, behavior: 'instant' as ScrollBehavior });
       else document.querySelector(`[data-mk-flip="${CSS.escape(open)}"]`)?.scrollIntoView({ behavior: 'instant' as ScrollBehavior, block: 'center' });
     }));
+    // (r7, QA2 Q14) the open dossier and the rows above it still settle
+    // (its detail bucket, faces, the sold-only tail) — land again a beat
+    // later unless the reader has moved (use-back-scroll's pattern)
+    if (saved == null) return;
+    const y = saved;
+    const go = () => { if (Math.abs(window.scrollY - y) > 40) window.scrollTo({ top: y, behavior: 'instant' as ScrollBehavior }); };
+    const timers = [window.setTimeout(go, 350), window.setTimeout(go, 900), window.setTimeout(go, 1600)];
+    const stop = () => timers.forEach(t => window.clearTimeout(t));
+    window.addEventListener('wheel', stop, { once: true, passive: true });
+    window.addEventListener('touchstart', stop, { once: true, passive: true });
+    window.addEventListener('keydown', stop, { once: true });
+    return () => { stop(); window.removeEventListener('wheel', stop); window.removeEventListener('touchstart', stop); window.removeEventListener('keydown', stop); };
   }, [booting, open]);
   useEffect(() => {
     const save = () => {
@@ -766,6 +805,9 @@ export default function MakersPage() {
                     <>
                       <button type="button" className="mk-display-veil" aria-label="Close display menu" onClick={() => setShowDisplay(false)} />
                       <div className="mk-display-pop" role="menu" aria-label="Columns and rows">
+                        {/* the columns are a desktop grid — a phone row prints its
+                            fixed read, so only the Rows filters show there (D5) */}
+                        <div className="mk-display-cols">
                         <div className="mk-display-head kicker">Columns</div>
                         {COLS.map(c => {
                           const on = cols.includes(c.k);
@@ -782,6 +824,7 @@ export default function MakersPage() {
                             </button>
                           );
                         })}
+                        </div>
                         <div className="mk-display-head kicker mk-display-sep">Rows</div>
                         {/* (Only followed moved to the Following lens — signed out too) */}
                         {([['on', 'Only on the block', fLive], ['vi', 'Only verified indexes', fVerified]] as ['on' | 'vi', string, boolean][]).map(([k, label, on]) => (
@@ -947,7 +990,7 @@ export default function MakersPage() {
                         />
                       ))}
                       {g.more > 0 && (
-                        <button type="button" className="mkx-live-more mk-more" onClick={() => showMore(g.key)}>
+                        <button type="button" className="mkx-live-more mk-more" onClick={() => showMore(g.key, g.moreInTail)}>
                           Show {Math.min(CAP_STEP, g.more)} more · {g.more.toLocaleString()} more {g.key === 'sports' ? 'players and sets' : MAKER_MARKETS.has(g.key) ? rosterNoun(g.key, 2) : 'names'}
                         </button>
                       )}

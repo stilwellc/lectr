@@ -25,7 +25,7 @@ import { useRayData, useSoldArchive, retryArchiveLoad, triggerFullLoad, retryFul
 import { loadPageStats, type PageStats } from '../../lib/page-data';
 import { signalCallOf } from '../../lib/account';
 import { useSavedLots } from '../../hooks/useSavedLots';
-import { formatDate, formatPrice, getUpcomingCounts, craftTitle, fmtSignedPct, localToday, trueSaleDay, isLiveUpcoming, overEstimatePct } from '../../utils';
+import { formatDate, formatPrice, getUpcomingCounts, craftTitle, fmtSignedPct, localToday, trueSaleDay, isLiveUpcoming, isClosedPending, overEstimatePct } from '../../utils';
 import ArtistNav from '../../components/ArtistNav';
 import { lotSignal } from '../../components/LotCard';
 import { dealScore } from '../../lib/comps';
@@ -47,6 +47,7 @@ import Greeting from '../../components/Greeting';
 import { OPEN_CK_EVENT } from '../../components/CommandK';
 import LotBrowser, { belowSignalOf } from '../../components/LotBrowser';
 import { useLotModal } from '../../lib/use-lot-modal';
+import { useBackScroll } from '../../lib/use-back-scroll';
 
 // Terminal design assets (the DESIGN win)
 import IndexHero from './IndexHero';
@@ -295,7 +296,20 @@ export default function TerminalHomePage() {
       .sort((a, b) => (trueSaleDay(a) < trueSaleDay(b) ? -1 : trueSaleDay(a) > trueSaleDay(b) ? 1 : 0));
   }, [marketLots]);
 
+  // (r7, QA2 Q4) what every count reads: the lots still on the block — a
+  // results-pending lot whose sale closed lists in the feed (sunk, "results
+  // pending") but is no longer live in any number (the same isOnBlock the
+  // nav, /makers and /value count with)
+  const onBlockLots = useMemo(() => {
+    const now = Date.now();
+    return upcoming.filter(l => !isClosedPending(l, now));
+  }, [upcoming]);
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
+  // (r7, QA2 Q14) Back from a lot lands where the reader left the feed: the
+  // filters come back from the URL, the paged depth from the browser's
+  // persistKey, and the scroll here (the feed mounts after the book loads,
+  // so the browser's own restoration lands on a short page)
+  useBackScroll(upcoming.length > 0);
 
   // THE RAIL'S MICRO-READS — one standardized read per cell: live lots on
   // the block (Collin, Aug 22 2026: no % in the rail — one grammar, eight
@@ -336,7 +350,7 @@ export default function TerminalHomePage() {
   }, [upcoming]);
 
   // One shared below-market pass.
-  const belowSignal = useMemo(() => belowSignalOf(upcoming, marketLots), [upcoming, marketLots]);
+  const belowSignal = useMemo(() => belowSignalOf(onBlockLots, marketLots), [onBlockLots, marketLots]);
   const belowIds = belowSignal.ids;
 
   // TONIGHT'S WALL — the call lot + the next best flagged-with-image, then
@@ -485,12 +499,12 @@ export default function TerminalHomePage() {
     // local day, the same clock the feed filter runs on (never the crawl day,
     // which can lag and print "in 2d" for tomorrow's hammer).
     const today = localToday();
-    const lot = upcoming.find(l => l.saleDate && l.saleDate.slice(0, 10) >= today) || null;
+    const lot = onBlockLots.find(l => l.saleDate && l.saleDate.slice(0, 10) >= today) || null;
     if (!lot) return null;
     const d = Math.round((Date.parse(`${lot.saleDate.slice(0, 10)}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
     const word = d <= 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d}d`;
     return { lot, word };
-  }, [upcoming]);
+  }, [onBlockLots]);
 
 
   // The watchlist strip — what changed since you saved.
@@ -603,7 +617,7 @@ export default function TerminalHomePage() {
               onOpenBelow={openBelowLens}
               onCommand={openCommandK}
               appreciation={appreciation}
-              onBlock={upcoming.length}
+              onBlock={onBlockLots.length}
               play={!fromCache}
               isMobile={mounted && isMobile}
               serial={lastCrawl}
@@ -646,6 +660,7 @@ export default function TerminalHomePage() {
                   onResetView={restoredView && !viewIsDefault ? resetView : undefined}
                   onOpenLot={setTableLot}
                   anchorId="on-the-block"
+                  persistKey={`/home/${activeKey}`}
                 />
 
                 {tableLot && (
@@ -735,13 +750,13 @@ export default function TerminalHomePage() {
                   <ColorCell
                     dir="ink"
                     span={2}
-                    stat={belowMktCount > 0 ? belowMktCount.toLocaleString() : upcoming.length > 0 ? upcoming.length.toLocaleString() : undefined}
+                    stat={belowMktCount > 0 ? belowMktCount.toLocaleString() : onBlockLots.length > 0 ? onBlockLots.length.toLocaleString() : undefined}
                     label="Today's call"
                     body={
                       belowMktCount > 0
                         ? `No single call tonight — ${belowMktCount.toLocaleString()} ${belowMktCount === 1 ? 'lot' : 'lots'} flagged under their comparables on the live book.`
-                        : upcoming.length > 0
-                          ? `No flags on this book tonight — ${upcoming.length.toLocaleString()} ${upcoming.length === 1 ? 'lot' : 'lots'} on the block, priced in line with their comps.`
+                        : onBlockLots.length > 0
+                          ? `No flags on this book tonight — ${onBlockLots.length.toLocaleString()} ${onBlockLots.length === 1 ? 'lot' : 'lots'} on the block, priced in line with their comps.`
                           : 'The book is quiet — the crawl refreshes daily.'
                     }
                     href="#on-the-block"

@@ -532,11 +532,15 @@ export function isOnBlock(
   return isLiveUpcoming(l, todayIso, 1, nowMs) && !isClosedPending(l, nowMs);
 }
 
+/** live lots per maker slug — the nav, the market rail, ⌘K. (r7, QA2 Q4) on
+ *  the block only (isOnBlock): a results-pending lot whose sale has closed
+ *  still shows (it wears its results-pending state) but counts nowhere. */
 export function getUpcomingCounts(lots: Array<{ status: string; saleDate: string | null; saleDateTime?: string | null; artist: string; resultsPending?: boolean }>): Record<string, number> {
   const today = localToday();
+  const now = Date.now();
   const counts: Record<string, number> = {};
   for (const lot of lots) {
-    if (isLiveUpcoming(lot, today)) {
+    if (isOnBlock(lot, today, now)) {
       counts[lot.artist] = (counts[lot.artist] || 0) + 1;
     }
   }
