@@ -25,14 +25,16 @@ test('a timed lot closes at its stamped instant, by the minute', () => {
   assert.equal(closesWithin(lot, close - 49 * H), false);
 });
 
-test('a bare-midnight UTC stamp is day-only: open through the end of that local day', () => {
-  const lot = { status: 'upcoming', saleDate: '2026-11-19', saleDateTime: '2026-11-19T00:00:00.000Z' };
-  const endOfDay = new Date(2026, 10, 19, 23, 59, 59, 999).getTime();
+test('a bare-midnight UTC stamp is day-only: open through the end of that day where the sale is held', () => {
+  const lot = { status: 'upcoming', saleDate: '2026-11-19', saleDateTime: '2026-11-19T00:00:00.000Z', auctionHouse: 'Wright' };
+  // Wright is Chicago: Nov 19 ends at 05:59:59.999Z Nov 20 (CST)
+  const endOfDay = Date.parse('2026-11-20T05:59:59.999Z');
   assert.equal(closeMs(lot), endOfDay);
   assert.equal(closeWord(lot, new Date(2026, 10, 19, 9).getTime()), 'today');
   assert.equal(closeWord(lot, new Date(2026, 10, 18, 9).getTime()), 'tomorrow');
   assert.equal(closeWord(lot, new Date(2026, 10, 15, 9).getTime()), 'in 4d');
-  assert.equal(isOpen(lot, new Date(2026, 10, 20, 0, 1).getTime()), false);
+  assert.equal(isOpen(lot, Date.parse('2026-11-20T05:59:00Z')), true);
+  assert.equal(isOpen(lot, Date.parse('2026-11-20T06:01:00Z')), false);
 });
 
 test('results-pending lots past their close are closed, never live', () => {

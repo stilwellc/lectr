@@ -39,9 +39,10 @@ import MarketSwitch from '../../components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS, FEED_PARAM_KEYS, feedFromParams, feedToParams } from '../../components/FeedToolbar';
 import { useUrlState, useLastVisit, passesTriage, houseBaselines, memoryOf, restoreParams, readFeedMemory, writeFeedMemory } from '../../lib/feed-filters';
 import { byPriority, shortlist, reasonOf, forYou, spread } from '../../lib/priority';
+import { closeIsTimed } from '../../lib/house-tz';
 import { makerLineOf, subColumnOf } from '../../lib/lot-labels';
 import { usePlayerDossiers } from '../../lib/use-player-dossiers';
-import { foldVariants, foldNote, foldQuery } from '../../lib/fold';
+import { foldVariants, foldNote, foldQuery, crossSibs, crossNote } from '../../lib/fold';
 import { useFollows, affinityOf } from '../../lib/follows';
 import { Colophon, daysWord, pickCall } from '../../components/Terminal';
 import Flick from '../../components/Flick';
@@ -587,7 +588,10 @@ export default function TerminalHomePage() {
   // The pulse board's "closing next" line: each house's NEAREST close in the
   // scoped live book, soonest first. n = lots that settle that day.
   const closingNext = useMemo(() => {
-    const byHouse = new Map<string, { house: string; when: string; n: number }>();
+    // "tonight" is earned by a real close time this evening (house-tz
+    // closeIsTimed) — a date-only house closing today reads "today"
+    const byHouse = new Map<string, { house: string; when: string; n: number; tonight?: boolean }>();
+    const evening = (l: AuctionLot) => closeIsTimed(l) && new Date(l.saleDateTime as string).getHours() >= 17;
     for (const l of upcoming) {
       if (l.resultsPending) continue;
       const h = l.auctionHouse;
@@ -595,8 +599,8 @@ export default function TerminalHomePage() {
       const when = trueSaleDay(l);
       if (!when) continue;
       const cur = byHouse.get(h);
-      if (!cur || when < cur.when) byHouse.set(h, { house: h, when, n: 1 });
-      else if (when === cur.when) cur.n++;
+      if (!cur || when < cur.when) byHouse.set(h, { house: h, when, n: 1, tonight: evening(l) });
+      else if (when === cur.when) { cur.n++; if (evening(l)) cur.tonight = true; }
     }
     return Array.from(byHouse.values()).sort((a, b) => (a.when < b.when ? -1 : 1)).slice(0, 3);
   }, [upcoming]);
@@ -786,9 +790,19 @@ export default function TerminalHomePage() {
     [feedAll, topTab, youTab, follows, fold]
   );
   // the reason line: the shortlist's "why it's here", then the folded copies
+  // at this house ("Also PSA 8, PSA 6"), then the same card live at another
+  // house ("Also live at REA · $220 bid" — the live lot's own bid)
+  const liveById = useMemo(() => new Map(upcoming.map(l => [l.id, l])), [upcoming]);
   const alsoOf = (lot: AuctionLot): string | null => {
     const g = fold?.group.get(lot.id);
-    return g ? foldNote(lot, g.members.filter(m => m.id !== lot.id), g.kind) : null;
+    const sameHouse = g ? g.members.filter(m => m.id !== lot.id && m.auctionHouse === lot.auctionHouse) : [];
+    const elsewhere = new Map<string, AuctionLot>();
+    if (g) for (const m of g.members) if (m.auctionHouse !== lot.auctionHouse) elsewhere.set(m.id, m);
+    for (const s of crossSibs(lot)) { const o = liveById.get(s.id); if (o) elsewhere.set(o.id, o); }
+    return [
+      g && sameHouse.length ? foldNote(lot, sameHouse, g.kind) : null,
+      elsewhere.size ? crossNote(lot, Array.from(elsewhere.values())) : null,
+    ].filter(Boolean).join(' · ') || null;
   };
   const noteOf = (lot: AuctionLot): string | null =>
     [topTab || youTab ? reasonOf(lot) : null, alsoOf(lot)].filter(Boolean).join(' · ') || null;

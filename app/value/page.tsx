@@ -50,6 +50,7 @@ import {
 // forced-color cell classes re-plate the call. Never redefined here.
 import { CellGrid, FigureCell, FigGate, FigReplay, FigPools } from '../components/cells';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isLiveUpcoming, trueSaleDay, toneOf } from '../utils';
+import { closeMs as closeAt } from '../lib/house-tz';
 import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
 import { medianOr } from '../lib/stats';
 import { gapRead, sleeperRead, type GapRead, type SleeperRead } from '../lib/lanes';
@@ -831,10 +832,9 @@ export default function ValuePage() {
       if (typeof l.bidCount !== 'number' || l.bidCount !== 0) return false;
       const cvu = l.value?.compValueUsd;
       if (!cvu || cvu <= 0) return false;
-      const iso = l.saleDateTime || (l.saleDate ? `${l.saleDate}T23:59:59Z` : null);
-      if (!iso) return false;
-      const ms = Date.parse(iso);
-      return !isNaN(ms) && (ms - now) / 86400000 > 7;
+      // the ONE close clock (house-tz): date-only = the sale day's end where it is sold
+      const ms = closeAt(l);
+      return ms != null && (ms - now) / 86400000 > 7;
     }).length;
   }, [liveLots]);
 
