@@ -12,14 +12,14 @@ test('maker line: the Pokémon on a numbered card; sealed product names its set 
   assert.equal(makerLineOf({ artist: 'pokemon', title: '2003 Pokemon Skyridge Holo #H9 Gengar - BGS PRISTINE 10' }).name, 'Gengar');
   const box = makerLineOf({ artist: 'pokemon', title: '2005 Pokemon EX Deoxys Factory-Sealed Booster Box (36 Packs)' });
   assert.equal(box.name, 'Deoxys');
-  assert.equal(box.href, '/makers/pokemon');
+  assert.equal(box.href, makerHref('pokemon'));
   assert.equal(makerLineOf({ artist: 'pokemon', title: 'Pokemon Booster Box Sealed' }).name, 'Pokémon');
 });
 
 test('maker line: real makers and memorabilia are untouched', () => {
   assert.equal(makerLineOf({ artist: 'andy-warhol', title: 'Marilyn' }).href, '/makers/andy-warhol');
   const sealed = makerLineOf({ artist: 'sports-cards', title: '97 Flair Showcase Basketball Factory-Sealed Hobby Box (24 Packs)' });
-  assert.equal(sealed.href, '/makers/sports-cards');
+  assert.equal(sealed.href, makerHref('sports-cards'));
   // (r5) sealed wax names its product line + year; the maker link stands
   assert.equal(sealed.name, '1997 Flair Showcase Basketball');
 });
@@ -35,6 +35,7 @@ test('label line: quiet subs give way to badges; loud subs lead', () => {
 });
 
 import { labelTagOf, catSubLineOf, searchTextOf, drillLabelOf } from '../lot-labels';
+import { makerHref } from '../entity/retired';
 
 test('tag / cat·sub line: the lead badge or the sub; Other subs drop on the lot page', () => {
   assert.equal(labelTagOf({ artist: 'rolex', subCat: 'wristwatches', title: 'A fine and rare platinum chronograph wristwatch' }), 'Chronograph');

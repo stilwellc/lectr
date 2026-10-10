@@ -37,6 +37,7 @@ import {
   DISCIPLINE, COLLECTION_CATS, PLAYER_CAT, REST_TAG, FR_DOMAIN, pageHrefOf, followKeyOf, KIND,
 } from '../lib/entity/kinds';
 import type { NameEntry } from '../lib/entity/live';
+import { parseEntityId } from '../lib/entity/key';
 import { decodeEntities, isEntitiesWire } from '../lib/entity/wire';
 
 /** a summary + its detail when the source already holds it (the adapters do) */
@@ -55,6 +56,7 @@ export interface PlayerRec {
   cats: Record<string, { n: number; medUsd: number | null; ttmMedUsd: number | null }>;
   yearly?: { y: number; med: number; n: number }[];
   objects: { id: string; d: string; p: number; t: string; cat: string }[];
+  recent?: { id?: string; d: string; p: number; t: string; cat: string }[];
 }
 
 /* ── module caches (one fetch per session; remounts never refetch) ── */
@@ -118,6 +120,17 @@ export function loadEntityDetail(id: string, ver?: string): Promise<EntityDetail
   let p = detailP.get(b);
   if (!p) { p = getJson<Record<string, EntityDetail>>(`${BASE}/pages/entity-${b}.json${verOf(ver)}`); detailP.set(b, p); }
   return p.then(m => (m && m[id]) || null);
+}
+/** one entity's summary from its market's entities file (null: absent) */
+export async function loadEntitySummary(id: string): Promise<EntitySummary | null> {
+  const p = parseEntityId(id);
+  if (!p) return null;
+  const f = await loadEntities(p.market);
+  const hit = f?.entities.find(e => e.id === id);
+  if (hit || !f?.tailN) return hit ?? null;
+  // a sold-only entity outside the main tier: the tail holds it
+  const t = await loadEntitiesTail(p.market);
+  return t?.entities.find(e => e.id === id) ?? null;
 }
 /** test seam: forget every cached fetch */
 export function _resetEntityCaches() { entitiesP.clear(); tailP.clear(); catP = null; playersP = null; detailP.clear(); entitiesMissing = false; }
@@ -448,9 +461,21 @@ export function prefetchSubs(): void { void loadCatStats(); }
  * stats.json for a maker, cat-stats for a sub, players.json for an athlete.
  * `known` short-circuits with a bundle the caller already holds.
  */
-export function useEntity(id: string | null, enabled = true, known?: EntityBundle | null): { summary: EntitySummary | null; detail: EntityDetail | null; loading: boolean } {
+export function useEntity(id: string | null, enabled = true, known?: EntityBundle | null): { summary: EntitySummary | null; detail: EntityDetail | null; loading: boolean; summaryPending: boolean } {
   const { statsByArtist, lastCrawl, loading: booting } = useRayData();
   const have = !!known?.detail;
+  // the summary, when the caller holds none (an entity page): its market's
+  // entities file; on a data build without one, the maker adapter (stats.json)
+  const loadSummary = useMemo(() => (id && enabled && !known?.s ? () => loadEntitySummary(id) : null), [id, enabled, known]);
+  const fileSummary = useLoad(loadSummary);
+  const adapterSummary = useMemo(() => {
+    if (fileSummary !== null || !id || kindOfId(id) !== 'maker') return null;
+    const slug = id.slice(3);
+    const st = statsByArtist[slug];
+    return st ? makerBundle(slug, parseEntityId(id)?.market ?? 'all', st, null, null).s : null;
+  }, [fileSummary, id, statsByArtist]);
+  const summary = known?.s ?? fileSummary ?? adapterSummary ?? null;
+  const summaryPending = !!loadSummary && fileSummary === undefined;
   const load = useMemo(() => {
     if (!id || !enabled || have || booting) return null;
     return async (): Promise<EntityDetail | null> => {
@@ -477,12 +502,13 @@ export function useEntity(id: string | null, enabled = true, known?: EntityBundl
           yearly: pr.yearly || [],
           cats: Object.entries(pr.cats).map(([key, c]) => ({ key, label: ARTIST_LABEL[key] || key, n: c.n, med12m: c.ttmMedUsd, med12mN: 0 })),
           top: pr.objects.map(o => ({ id: o.id, img: null, p: o.p, d: o.d, t: o.t, h: '', cat: o.cat })),
+          recent: (pr.recent || []).map(o => ({ id: o.id || '', img: null, p: o.p, d: o.d, t: o.t, h: '', cat: o.cat })),
         };
       }
       return null;
     };
   }, [id, enabled, have, booting, lastCrawl, statsByArtist]);
   const loaded = useLoad(load);
-  if (have) return { summary: known!.s, detail: known!.detail, loading: false };
-  return { summary: known?.s ?? null, detail: loaded ?? null, loading: !!load && loaded === undefined };
+  if (have) return { summary: known!.s, detail: known!.detail, loading: false, summaryPending: false };
+  return { summary, detail: loaded ?? null, loading: !!load && loaded === undefined, summaryPending };
 }

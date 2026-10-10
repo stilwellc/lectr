@@ -10,6 +10,7 @@ import ArtistAvatar from '../ArtistAvatar';
 import Flick from '../Flick';
 import { ARTISTS, marketArtists, Market } from '../../constants';
 import { RankMark } from '../marks';
+import { makerHref } from '../../lib/entity/retired';
 
 interface Props {
   statsByArtist: Record<string, MarketStats>;
@@ -133,7 +134,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
         return {
           key: a.slug,
           label: a.label,
-          href: `/makers/${a.slug}`,
+          href: makerHref(a.slug),
           pinLast: false,
           totalRevenue: st?.totalAuctionRevenue || 0,
           medianSale: st?.medianPriceLast12Months || 0,
@@ -536,7 +537,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
             {(expanded ? sorted : sorted.slice(0, COLLAPSED_ROWS)).map((row) => (
               <tr key={row.slug} className="ray-rankings-row">
                 <td className="ray-rankings-td ray-rankings-sticky" style={{ fontWeight: 500 }}>
-                  <Link href={`/makers/${row.slug}`} className="ray-maker-link">
+                  <Link href={makerHref(row.slug)} className="ray-maker-link">
                     <ArtistAvatar label={row.label} size={24} />
                     {row.label}
                   </Link>
@@ -612,7 +613,7 @@ export default function ArtistRankingsTable({ statsByArtist, allLots, market }: 
                 );
               })
             : (expanded ? sorted : sorted.slice(0, COLLAPSED_ROWS)).map((row, i) => (
-                <Link key={row.slug} href={`/makers/${row.slug}`} className="ray-rankings-card">
+                <Link key={row.slug} href={makerHref(row.slug)} className="ray-rankings-card">
                   <span className="ray-rankings-card-rank">{String(i + 1)}</span>
                   <span className="ray-rankings-card-name">
                     <ArtistAvatar label={row.label} size={24} />

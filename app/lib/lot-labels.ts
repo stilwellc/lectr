@@ -25,6 +25,7 @@ import { parseCard, cardLadderKey, playerSlugOf } from './cards';
 import { taxonOf, subLabel, CAT_LABEL, SPORTS, type CatKey } from './taxonomy';
 import { cardBadgesOf } from './facets';
 import { subjectOf, cardGroupOf } from './subject';
+import { makerHref } from './entity/retired';
 
 const CARD_MAKERS = new Set(['sports-cards', 'graded-cards']);
 const POKE_NAME = /#[\w-]+\s+(.+?)(?:\s+-\s|\s*$)/;
@@ -58,7 +59,7 @@ const memo = new WeakMap<object, { v: number; line: MakerLine }>();
 export function makerLineOf(lot: NamedLot): MakerLine {
   const hit = memo.get(lot as object);
   if (hit && hit.v === dossierVer) return hit.line;
-  const fallback: MakerLine = { name: ARTIST_LABEL[lot.artist] || lot.artist, href: `/makers/${lot.artist}` };
+  const fallback: MakerLine = { name: ARTIST_LABEL[lot.artist] || lot.artist, href: makerHref(lot.artist) };
   let out = fallback;
   const title = String(lot.title || '');
   if (title && CARD_MAKERS.has(lot.artist) && taxonOf(lot).cat === 'sports-cards') {

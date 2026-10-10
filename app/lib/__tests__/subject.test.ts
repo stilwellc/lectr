@@ -4,6 +4,7 @@ import { personOf, filmOf, missionOf, subjectOf, castOf, actOf, cardGroupOf } fr
 import { teamOf, teamCardOf, productLineOf, pokemonSetOf, programOf, instrumentBrandOf } from '../subject-groups';
 import { makerLineOf, registerPlayerDossiers } from '../lot-labels';
 import { craftTitle, expandLeadYear, splitTitle } from '../../utils';
+import { makerHref } from '../entity/retired';
 
 test('subject: the signer / athlete leading a memorabilia title', () => {
   assert.equal(personOf('Sylvester Stallone Signed Rocky IV Photograph - 16x20 - Beckett'), 'Sylvester Stallone');
@@ -103,16 +104,16 @@ test('subject: readers per pseudo-maker — film before person on Film & TV, mis
 
 test('maker line: memorabilia subjects take the slot; athletes link to an EXISTING dossier only', () => {
   const ent = makerLineOf({ artist: 'entertainment-memorabilia', title: 'Sylvester Stallone Signed Rocky IV Photograph - 16x20 - Beckett' });
-  assert.deepEqual(ent, { name: 'Sylvester Stallone', href: '/makers/entertainment-memorabilia' });
+  assert.deepEqual(ent, { name: 'Sylvester Stallone', href: makerHref('entertainment-memorabilia') });
   const t = 'Kobe Bryant Signed, Framed Los Angeles Lakers Jersey - 42x34 - Steiner';
   // before the dossier index lands: the maker link stands
-  assert.equal(makerLineOf({ artist: 'autographs', title: t, playerName: 'Kobe Bryant', playerSlug: 'kobe-bryant' }).href, '/makers/autographs');
+  assert.equal(makerLineOf({ artist: 'autographs', title: t, playerName: 'Kobe Bryant', playerSlug: 'kobe-bryant' }).href, makerHref('autographs'));
   registerPlayerDossiers(['kobe-bryant']);
   const kobe = { artist: 'autographs', title: t, playerName: 'Kobe Bryant', playerSlug: 'kobe-bryant' };
   assert.deepEqual(makerLineOf(kobe), { name: 'Kobe Bryant', href: '/player?id=kobe-bryant' });
   // a name with no dossier, or one the pipeline didn't stamp, keeps the maker link
-  assert.equal(makerLineOf({ artist: 'game-used', title: 'Crucial Catch - Eagles Jack Stoll Game Worn Jersey (10/13/2024) Size 44', playerName: 'Jack Stoll', playerSlug: 'jack-stoll' }).href, '/makers/game-used');
-  assert.equal(makerLineOf({ artist: 'autographs', title: t }).href, '/makers/autographs');
+  assert.equal(makerLineOf({ artist: 'game-used', title: 'Crucial Catch - Eagles Jack Stoll Game Worn Jersey (10/13/2024) Size 44', playerName: 'Jack Stoll', playerSlug: 'jack-stoll' }).href, makerHref('game-used'));
+  assert.equal(makerLineOf({ artist: 'autographs', title: t }).href, makerHref('autographs'));
   // nothing readable → the pseudo-maker label, unchanged
   assert.equal(makerLineOf({ artist: 'autographs', title: 'Moneyball Multi-Signed Oakland Athletics Jersey (48 Signatures)' }).name, 'Autographs');
   registerPlayerDossiers([]);
