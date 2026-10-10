@@ -58,6 +58,7 @@
 
 /* ── sections: registration plate + quiet kicker + light headline ── */
 .nsp-section { margin-top: 40px; }
+.nsp-section.nsp-live { margin-top: 28px; }
 .nsp-shead {
   display: flex; justify-content: space-between; align-items: flex-end;
   gap: 8px 18px; flex-wrap: wrap; padding-top: 14px;
@@ -178,4 +179,9 @@ a.nsp-more:hover { color: var(--color-fg); }
   .nsp-lsub { white-space: normal; }
   .nsp-lv { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .nsp-links { gap: 8px; }
+  /* an entity's live book: the byline above already says "N live", so the
+     section head steps aside and the first lot lands on the first screen
+     (QA E2: Mantle's first row sat at y=824 of 844) */
+  .nsp-section.nsp-live { margin-top: 14px; }
+  .nsp-live > .nsp-shead { display: none; }
 }

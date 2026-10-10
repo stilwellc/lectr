@@ -12,7 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { taxonOf, subMatches, type CatKey } from './taxonomy';
 import { prioStatic } from './priority';
 import { passesFacets } from './facets';
-import { localToday, trueSaleDay } from '../utils';
+import { localToday, trueSaleDay, isClosedPending } from '../utils';
 
 export type CloseWindow = 'today' | '48h' | 'week';
 
@@ -70,6 +70,7 @@ function addDays(iso: string, n: number): string {
 type TriageLot = Parameters<typeof prioStatic>[0] & {
   title?: string | null;
   auctionHouse?: string | null; firstSeen?: string | null; saleDate?: string | null; saleDateTime?: string | null;
+  status?: string; resultsPending?: boolean; closeKind?: 'online' | 'session' | null;
 };
 
 // ── onboarding baselines ─────────────────────────────────────────────────────
@@ -154,6 +155,8 @@ export function passesTriage(l: TriageLot, f: TriageFilters, opts: NewLensOpts =
     const today = opts.today ?? localToday();
     const day = trueSaleDay(l);
     if (!day) return false;
+    // a sale that has closed is not closing (results pending past its close)
+    if (isClosedPending(l)) return false;
     const last = f.win === 'today' ? today : f.win === '48h' ? addDays(today, 1) : addDays(today, 6);
     if (day > last) return false;
   }

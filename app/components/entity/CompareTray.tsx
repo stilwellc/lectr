@@ -25,7 +25,10 @@ export default function CompareTray({ picked, search, onRemove, onClear, onSeeLo
   /** the lots body scoped to these ids */
   onSeeLots: (ids: string[]) => void;
 }) {
-  const [expanded, setExpanded] = useState(true);
+  // collapsed by default: the bar + chips keep the ledger's rows visible (an
+  // open tray over two picks covered 514px of a 900px screen — QA D3); the
+  // columns open on request, capped at 40vh
+  const [expanded, setExpanded] = useState(false);
   const liveTotal = picked.reduce((n, r) => n + r.live, 0);
   return (
     <div className="mkc" role="region" aria-label="Compare">
@@ -46,7 +49,7 @@ export default function CompareTray({ picked, search, onRemove, onClear, onSeeLo
         )}
         {picked.length >= 2 && (
           <button type="button" className="mkc-btn" onClick={() => setExpanded(v => !v)} aria-expanded={expanded}>
-            {expanded ? 'Collapse' : 'Expand'}
+            {expanded ? 'Collapse' : 'Side by side'}
           </button>
         )}
         <button type="button" className="mkc-btn" onClick={onClear}>Clear</button>

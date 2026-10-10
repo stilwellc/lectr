@@ -63,6 +63,9 @@ export function followHits(q: Query, fresh: any[], now: number): any[] {
  *  with), and a query the matcher can't fully honor (an unknown field, a
  *  malformed value, no criterion) earns NOTHING rather than everything. */
 export function hitsFor(q: Query, fresh: any[], now: number, log: (m: string) => void = () => {}): any[] {
+  // a subject / set follow (a Pokémon, a film …) is a person-like follow:
+  // every new lot filed under that entity key (the build's `ek` stamp)
+  if (q.follow === 'entity') return q.id ? fresh.filter(l => l.ek === q.id).slice(0, MAX_PER_SEARCH) : [];
   if (q.follow) return q.follow === 'cat' || q.follow === 'house' ? followHits(q, fresh, now) : [];
   const why = unmatchableReason(q as Record<string, unknown>);
   if (why) { log(why); return []; }

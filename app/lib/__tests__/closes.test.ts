@@ -12,7 +12,8 @@ import assert from 'node:assert/strict';
 import {
   houseTzOf, dayEndMs, isDayStamp, closeIsTimed, closeMs, liveUntilMs, scheduledClose, normalizeCloseStamp,
 } from '../house-tz';
-import { isLiveUpcoming, trueSaleDay } from '../../utils';
+import { isLiveUpcoming, isOnBlock, isClosedPending, trueSaleDay } from '../../utils';
+import { passesTriage, TRIAGE_DEFAULTS } from '../feed-filters';
 import { reasonOf, shortlist, spread } from '../priority';
 import { foldVariants, crossNote, crossSibs } from '../fold';
 
@@ -96,6 +97,24 @@ test('stale live: timed closes by kind — online stagger, live session, extende
   const rp = { auctionHouse: 'Bonhams', status: 'upcoming', saleDate: '2026-10-08', resultsPending: true };
   assert.equal(isLiveUpcoming(rp, '2026-10-09', 1, NOW), true);
   assert.equal(isLiveUpcoming(rp, '2026-10-10', 1, NOW), false);
+});
+
+test('on the block: a closed results-pending sale is visible but never counted live or closing', () => {
+  // Oct 10 prod: Phillips NY080426 online, closed Oct 9 10:00 ET, results pending
+  const ph = { id: 'phillips-NY080426-11', auctionHouse: 'Phillips', status: 'upcoming', saleDate: '2026-10-09', saleDateTime: '2026-10-09T10:00:00-04:00', closeKind: 'online' as const, resultsPending: true, estimateLow: 26000, estimateHigh: 52000, currency: 'USD' };
+  const oct10 = Date.parse('2026-10-10T17:57:00Z');
+  assert.equal(isLiveUpcoming(ph, '2026-10-10', 1, oct10), true); // still visible (grace day)
+  assert.equal(isClosedPending(ph, oct10), true);
+  assert.equal(isOnBlock(ph, '2026-10-10', oct10), false);
+  // the Closing-tonight lens drops it whatever its sale day
+  assert.equal(passesTriage(ph, { ...TRIAGE_DEFAULTS, win: 'today' }, { today: '2026-10-10' }), false);
+  // still open: a pending flag on a sale whose close is ahead stays on the block
+  const open = { ...ph, saleDateTime: undefined, closeKind: null, saleDate: '2026-10-10', auctionHouse: "Christie's", id: 'c-1' };
+  assert.equal(isClosedPending(open, Date.parse('2026-10-10T18:00:00Z')), false);
+  assert.equal(isOnBlock(open, '2026-10-10', Date.parse('2026-10-10T18:00:00Z')), true);
+  // not pending = isLiveUpcoming, untouched
+  const live = { ...ph, resultsPending: false, saleDateTime: '2026-10-10T20:00:00Z' };
+  assert.equal(isOnBlock(live, '2026-10-10', oct10), true);
 });
 
 test('reason line: a date-only sale names the day; RR names its scheduled close', () => {

@@ -42,6 +42,7 @@ import { livePool } from '../../lib/maker-pool';
 import { entityIdOf } from '../../lib/entity/live';
 import { parseEntityId, subEntityLabel } from '../../lib/entity/key';
 import { followKeyOf } from '../../lib/entity/kinds';
+import { catFollow, entityFollow } from '../../lib/follows';
 import { lotSubjectOf } from '../../lib/maker-subjects';
 import { isFlagged } from '../../lib/flags';
 import { taxonOf, SPORTS, type CatKey } from '../../lib/taxonomy';
@@ -182,6 +183,11 @@ export default function EntityPage({ id }: { id: string }) {
 
   const kindNoun = KIND_NOUN[ref.kind === 'subject' ? (ref.subKind || 'subject') : ref.kind] || 'name';
   const followKey = ref.kind === 'maker' || ref.kind === 'player' ? followKeyOf(id, { playerDossier: true }) : null;
+  // a collection follows its clean category; a subject / set its entity id
+  // (app/lib/follows — "For you" ranks its lots, the nightly alerts on them)
+  const follow = followKey ? null
+    : ref.kind === 'sub' && ref.cat ? catFollow(ref.cat as CatKey, ref.sub ?? null)
+    : name ? entityFollow(id, name) : null;
   const sportKey = market === 'sports' ? (SPORTS.find(s => s.label === summary?.discipline)?.key ?? null) : null;
   const flags = live.reduce((n, l) => n + (isFlagged(l) ? 1 : 0), 0);
   const liveHouses = new Set(live.map(l => l.auctionHouse)).size;
@@ -223,7 +229,7 @@ export default function EntityPage({ id }: { id: string }) {
         </div>
         <div className="nsp-title-row">
           <h1 className="nsp-h1">{name || ' '}</h1>
-          {followKey && name ? <FollowButton slug={followKey} name={name} /> : null}
+          {followKey && name ? <FollowButton slug={followKey} name={name} /> : follow && name ? <FollowButton follow={follow} name={name} /> : null}
         </div>
 
         <div className="ns-byline nsp-byline" aria-busy={pending || undefined}>
@@ -276,7 +282,7 @@ export default function EntityPage({ id }: { id: string }) {
 
         {/* §2 THE LIVE BOOK */}
         {live.length > 0 && (
-          <section id={anchorId} className="nsp-section ns-plate" aria-label="On the block now" style={{ marginTop: 28 }}>
+          <section id={anchorId} className="nsp-section nsp-live ns-plate" aria-label="On the block now">
             <div className="nsp-shead" style={{ marginBottom: 14 }}>
               <div>
                 <span className="ns-kicker">Live</span>

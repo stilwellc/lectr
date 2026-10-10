@@ -15,10 +15,10 @@ import { useAuth } from './account';
 import { useSavedSearches, type SavedQuery } from './alerts';
 import { taxonOf, subMatches, CAT_LABEL, subLabel, type CatKey } from './taxonomy';
 
-export type FollowKind = 'maker' | 'cat' | 'house';
+export type FollowKind = 'maker' | 'cat' | 'house' | 'entity';
 export interface Follow {
   kind: FollowKind;
-  /** maker/player slug · "cat" or "cat:sub" · house name */
+  /** maker/player slug · "cat" or "cat:sub" · house name · entity id (sj:/st:) */
   key: string;
   label: string;
 }
@@ -29,16 +29,23 @@ export function catFollow(cat: CatKey, sub: string | null): Follow {
 export function houseFollow(house: string): Follow {
   return { kind: 'house', key: house, label: house };
 }
+/** a subject / set (a Pokémon, a film, a mission, a sealed set …) by its
+ *  entity id — matched on the lot's build-stamped entity key (`ek`) */
+export function entityFollow(id: string, label: string): Follow {
+  return { kind: 'entity', key: id, label };
+}
 
 function queryOf(f: Follow): SavedQuery {
   if (f.kind === 'maker') return { player: f.key, playerName: f.label };
   if (f.kind === 'house') return { follow: 'house', house: f.key, label: f.label };
+  if (f.kind === 'entity') return { follow: 'entity', id: f.key, label: f.label };
   const [cat, sub] = f.key.split(':');
   return { follow: 'cat', cat, sub: sub || null, label: f.label };
 }
 function followOf(q: SavedQuery): Follow | null {
   if (q.player) return { kind: 'maker', key: q.player, label: q.playerName || q.player };
   if (q.follow === 'house' && q.house) return { kind: 'house', key: q.house, label: q.label || q.house };
+  if (q.follow === 'entity' && q.id) return { kind: 'entity', key: q.id, label: q.label || q.id };
   if (q.follow === 'cat' && q.cat) return { kind: 'cat', key: q.sub ? `${q.cat}:${q.sub}` : q.cat, label: q.label || q.cat };
   return null;
 }
@@ -103,10 +110,10 @@ export function useFollows() {
 
 /**
  * How strongly one lot matches the reader's follows (0–1): a followed maker or
- * player 1, a followed sub-category 0.8, a whole category 0.6, a house 0.4.
+ * player (or subject / set) 1, a followed sub-category 0.8, a whole category 0.6, a house 0.4.
  */
 export function affinityOf(
-  l: { artist?: string | null; playerSlug?: string | null; auctionHouse?: string | null; subCat?: string | null; drill?: string | null },
+  l: { artist?: string | null; playerSlug?: string | null; auctionHouse?: string | null; subCat?: string | null; drill?: string | null; ek?: string | null },
   follows: Follow[],
 ): number {
   if (!follows.length) return 0;
@@ -118,6 +125,7 @@ export function affinityOf(
       const [cat, sub] = f.key.split(':');
       if (t.cat === cat && (!sub || subMatches(cat, sub, t.sub))) a = Math.max(a, sub ? 0.8 : 0.6);
     } else if (f.kind === 'house' && l.auctionHouse === f.key) a = Math.max(a, 0.4);
+    else if (f.kind === 'entity' && l.ek === f.key) a = Math.max(a, 1);
   }
   return a;
 }

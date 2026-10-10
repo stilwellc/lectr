@@ -81,3 +81,9 @@ test('hitsFor: follows keep their capped shortlist branch', () => {
   // a player follow is a plain search on the player field
   assert.equal(hitsFor({ player: 'kaws', playerName: 'KAWS' }, [card(), art()], NOW).length, 1);
 });
+
+test('hitsFor: a subject / set follow alerts on its entity key', () => {
+  const fresh = [card({ ek: 'sj:tcg|k:charizard' }), card({ ek: 'pl:shohei-ohtani' }), art()];
+  assert.equal(hitsFor({ follow: 'entity', id: 'sj:tcg|k:charizard', label: 'Charizard' }, fresh, NOW).length, 1);
+  assert.equal(hitsFor({ follow: 'entity', id: null, label: 'x' }, fresh, NOW).length, 0);
+});

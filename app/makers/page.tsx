@@ -35,7 +35,7 @@ import {
   useMakersView, viewSearch, DEFAULT_COLS, COMPARE_MAX, COL_KEYS, LOT_ORDERS,
   type SortKey, type LiveSort, type RowsBy, type LotOrder, type ViewBody, type MakersView,
 } from '../lib/entity/view-state';
-import { buildRow, sortRows, searchRow, flaggedRow, followedRow, needleOf, lotMatches, fmtPct, type Row } from '../lib/entity/ledger';
+import { buildRow, sortRows, searchRow, flaggedRow, followedRow, needleOf, lotMatches, gradePlusOf, fmtPct, type Row } from '../lib/entity/ledger';
 import EntityRow, { COLS, colSpec, gridTemplateOf } from '../components/entity/EntityRow';
 import CompareTray from '../components/entity/CompareTray';
 import './makers.css';
@@ -405,6 +405,19 @@ export default function MakersPage() {
     }
     return n;
   }, [words, pool.marketPool, dTriage, dFl, prevVisitDay, baselines]);
+  // a grade search is EXACT ("PSA 7" = 7 only): when its "and up" form finds
+  // more live lots, the search row offers it in one line (QA S1)
+  const gradePlus = useMemo(() => {
+    const g = gradePlusOf(words);
+    if (!g) return null;
+    const today = localToday();
+    let n = 0;
+    for (const l of pool.marketPool) {
+      if (lotMatches(l, g.plus) && passesTriage(l, dTriage, { today, prevVisitDay, baselines }) && (!dFl || isFlagged(l))) n++;
+    }
+    if (n <= searchLots) return null;
+    return { label: g.label, n, q: g.q(q) };
+  }, [words, q, pool.marketPool, dTriage, dFl, prevVisitDay, baselines, searchLots]);
 
   const rosterTotal = useMemo(() => rows.filter(r => inMarket(r) && r.kind !== 'rest').length, [rows, inMarket]);
   const shownTotal = useMemo(() => visible.filter(r => r.kind !== 'rest').length, [visible]);
@@ -839,6 +852,11 @@ export default function MakersPage() {
                     </span>
                   )}
                   {words.length > 0 && <span className="mk-lots-q">matching &ldquo;{dQ.trim()}&rdquo;</span>}
+                  {gradePlus && (
+                    <button type="button" className="mk-chip" onClick={() => set({ q: gradePlus.q })} title="Grades match exactly; the + form is that grade and up">
+                      {gradePlus.label} · {gradePlus.n.toLocaleString()}
+                    </button>
+                  )}
                   <span className="mk-bar-rule" aria-hidden />
                   <button type="button" className="mk-chip" onClick={() => setBody('names')}>Back to {namesNoun}</button>
                 </div>
@@ -869,6 +887,13 @@ export default function MakersPage() {
                     </span>
                     <span className="mk-lotsrow-t"><b>{searchLots.toLocaleString()}</b> live {searchLots === 1 ? 'lot matches' : 'lots match'} &ldquo;{dQ.trim()}&rdquo;</span>
                     <span className="mk-lotsrow-go">See the lots <span aria-hidden>→</span></span>
+                  </button>
+                )}
+                {gradePlus && (
+                  <button type="button" className="mk-lotsrow" onClick={() => set({ q: gradePlus.q })}>
+                    <span className="mk-mono" aria-hidden>+</span>
+                    <span className="mk-lotsrow-t"><b>{gradePlus.n.toLocaleString()}</b> live at {gradePlus.label.slice(0, -1)} and up · grades match exactly</span>
+                    <span className="mk-lotsrow-go">Search {gradePlus.label} <span aria-hidden>→</span></span>
                   </button>
                 )}
                 {groups.length === 0 ? (
