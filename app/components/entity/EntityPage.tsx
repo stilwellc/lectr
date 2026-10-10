@@ -83,6 +83,24 @@ const KIND_NOUN: Record<string, string> = {
   pokemon: 'Pokémon', person: 'person', film: 'film', franchise: 'franchise',
   mission: 'mission', team: 'team', band: 'band', brand: 'brand',
 };
+/** the live book's page on an entity page: 12 rows, then Show more (round 7 —
+ *  the page scans first; home keeps its 24) */
+const LIVE_PAGE = 12;
+
+/* phone, tightened (round 7): the header's same type and ledger set closer,
+   the record's caption held to two lines (its full title on hover / in the
+   lot), so the first live lot lands higher; the line's and the results' lens
+   pills ride one swipeable row instead of wrapping to three */
+const ENTITY_CSS = `
+@media (max-width: 640px) {
+  .nsp-doss .nsp-title-row .nsp-h1 { margin-top: 4px; }
+  .nsp-doss .nsp-byline { margin-top: 14px; row-gap: 10px; }
+  .nsp-doss .nsp-pills { flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; margin-inline: calc(-1 * var(--gutter)); padding-inline: var(--gutter); }
+  .nsp-doss .nsp-pills::-webkit-scrollbar { display: none; }
+  .nsp-doss .nsp-pills > * { flex: none; }
+  .nsp-doss .nsp-byline .s.nsp-clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+}`;
+
 const MARKET_LABEL: Record<string, string> = Object.fromEntries(MARKETS.map(m => [m.key, m.key === 'tcg' ? 'TCG' : m.label]));
 
 export default function EntityPage({ id }: { id: string }) {
@@ -212,7 +230,7 @@ export default function EntityPage({ id }: { id: string }) {
     <div className="terminal-shell">
       {nav}
       <div className="rail nsp-doss">
-        <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
+        <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS + ENTITY_CSS }} />
 
         {/* §1 THE HEADER */}
         <div className="nsp-kicker-row">
@@ -258,7 +276,7 @@ export default function EntityPage({ id }: { id: string }) {
                 ) : null}
                 {recId ? <Link href={`/lot?id=${encodeURIComponent(recId)}`} style={{ color: 'inherit', textDecoration: 'none' }}>{formatPrice(rec.p)}</Link> : formatPrice(rec.p)}
               </div>
-              <div className="s">{[recTitle ? (recTitle.length > 40 ? closeCut(recTitle.slice(0, 40), 40) : recTitle) : null, rec.h, rec.d ? rec.d.slice(0, 4) : null].filter(Boolean).join(' · ')}</div>
+              <div className="s nsp-clamp2" title={[recTitle, rec.h, rec.d ? rec.d.slice(0, 4) : null].filter(Boolean).join(' · ') || undefined}>{[recTitle ? (recTitle.length > 40 ? closeCut(recTitle.slice(0, 40), 40) : recTitle) : null, rec.h, rec.d ? rec.d.slice(0, 4) : null].filter(Boolean).join(' · ')}</div>
             </div>
           ) : null}
           {verified ? (
@@ -305,6 +323,7 @@ export default function EntityPage({ id }: { id: string }) {
               baselines={baselines}
               anchorId={anchorId}
               persistKey={`/entity/${id}`}
+              pageSize={LIVE_PAGE}
             />
           </section>
         )}
