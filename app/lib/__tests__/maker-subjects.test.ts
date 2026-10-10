@@ -68,3 +68,29 @@ test('maker-pool: the feed search link carries the query and the triage', () => 
   assert.equal(feedSearchHref('sports', 'Mantle', { ...TRIAGE_DEFAULTS, win: 'week' }), '/sports?q=Mantle&tab=all&win=week');
   assert.equal(feedSearchHref('all', 'x', TRIAGE_DEFAULTS), '/?q=x&tab=all');
 });
+
+test('maker-subjects (r5): teams, sets, programs and instrument makers get their own rows', () => {
+  assert.equal(subjectRowKeyOf(lot('autographs', '1986 New York Mets Team-Signed Baseball (25 Signatures)')), 'sports|t:1986-new-york-mets');
+  assert.equal(subjectRowKeyOf(lot('unopened-wax', '1986 Fleer Basketball Unopened Wax Box (36 Packs)')), 'sports|s:1986-fleer-basketball');
+  // a set lot of the same product shares the wax row
+  assert.equal(subjectRowKeyOf(lot('sports-cards', '1986 Fleer Basketball Complete Set (132)')), 'sports|s:1986-fleer-basketball');
+  assert.equal(subjectRowKeyOf(lot('pokemon', '1999 Pokemon Base Set Unlimited Factory-Sealed Booster Box (36 Packs)')), 'tcg|s:base-set');
+  assert.equal(subjectRowKeyOf(lot('space-exploration', 'Apollo Command Module Globe Valve')), 'science|m:apollo');
+  assert.equal(subjectRowKeyOf(lot('entertainment-memorabilia', '1984 Gibson Les Paul Custom - Cherry Sunburst')), 'culture|b:gibson');
+  assert.equal(lotSubjectOf(lot('graded-cards', '1957 Topps #171 Boston Red Sox Team PSA NM 7', { playerName: 'Boston Red Sox' }))?.key, 't:boston-red-sox');
+  // an act read off the title joins its franchise row; "The X" and "X" are one act; a solo act stays the person
+  assert.equal(lotSubjectOf(lot('entertainment-memorabilia', '1964 The Beatles Type I Original Photo by MirrorPic/London'))?.key, 'fr:fr-beatles');
+  assert.equal(lotSubjectOf(lot('entertainment-memorabilia', 'The Clash Signed Album'))?.key, lotSubjectOf(lot('entertainment-memorabilia', 'Clash Band-Signed Vinyl Record Sleeve'))?.key);
+  assert.equal(lotSubjectOf(lot('entertainment-memorabilia', 'Michael Jackson Signed Photograph'))?.key, 'p:michael-jackson');
+});
+
+test('maker-subjects (r5): hyphenated and nickname players; un-numbered cards by the stamped athlete', () => {
+  assert.equal(lotSubjectOf(lot('graded-cards', '89 Fleer #64 Kareem Abdul-Jabbar - PSA GEM MT 10'))?.key, 'p:kareem-abdul-jabbar');
+  assert.equal(lotSubjectOf(lot('graded-cards', '1959 Topps #480 Red Schoendienst PSA NM-MT 8'))?.key, 'p:red-schoendienst');
+  // a run-on caption keeps its leading name
+  assert.equal(lotSubjectOf(lot('graded-cards', '1959 Topps #468 Duke Snider Play Brings L.A. Victory PSA NM-MT 8'))?.name, 'Duke Snider');
+  assert.equal(lotSubjectOf(lot('graded-cards', '1928 Exhibits Frank Frisch PSA VG-EX 4', { playerName: 'Frank Frisch' }))?.key, 'p:frank-frisch');
+  // the stamped name never claims a multi-signed piece
+  assert.equal(lotSubjectOf(lot('sports-cards', 'Michael Jordan/Larry Bird/Magic Johnson Multi-Signed Poster Display', { playerName: 'Michael Jordan' })), null);
+  assert.equal(lotSubjectOf(lot('autographs', 'Signed 1989 Score #645 Randy Johnson Rookie PSA/DNA GEM MINT 10'))?.key, 'p:randy-johnson');
+});

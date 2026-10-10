@@ -13,6 +13,7 @@ import { catFollow, houseFollow } from '../lib/follows';
 import { taxonOf, SUBS, type CatKey } from '../lib/taxonomy';
 import { WINDOWS, VALUE_FLOORS, VALUE_CEILINGS, fmtCeiling, valueOptionOf, valuePatchOf, TRIAGE_DEFAULTS, isTriageActive, passesTriage, patchTriage, triageToParams, triageFromParams, houseBaselines, type TriageFilters, type HouseBaselines } from '../lib/feed-filters';
 import { facetCatOf, facetChips, toggleFacet } from '../lib/facets';
+import { lotSubjectOf, subjectKeyOf, OTHER as OTHER_SUBJECT } from '../lib/maker-subjects';
 
 export type FeedSort = 'priority' | 'soonest' | 'gap-desc' | 'newest' | 'bids-desc' | 'est-desc' | 'est-asc';
 
@@ -20,8 +21,13 @@ export interface FeedFilters extends TriageFilters {
   query: string;
   /** on the total market: narrow to one vertical */
   vertical: Market | null;
-  /** inside a vertical: narrow to one maker */
+  /** inside a vertical: narrow to one maker — or several, comma-joined
+   *  (the /makers compare tray's combined live list) */
   maker: string | null;
+  /** one /makers subject row, exactly: the lot's subject key inside its
+   *  market (app/lib/maker-subjects — `p:<player>`, `k:<pokémon>`,
+   *  `f:<film>`, `fr:<franchise>`, `m:<mission>`, `~` = no subject named) */
+  subj?: string | null;
   /** sports: narrow to one sport (Soccer, Basketball, …) */
   sport: string | null;
   category: string | null;
@@ -38,6 +44,7 @@ export const FEED_DEFAULTS: FeedFilters = {
   query: '',
   vertical: null,
   maker: null,
+  subj: null,
   sport: null,
   category: null,
   belowOnly: false,
@@ -59,6 +66,7 @@ export function feedToParams(f: FeedFilters, p: URLSearchParams): void {
   put('q', f.query.trim() || null);
   put('v', f.vertical);
   put('mk', f.maker);
+  put('subj', f.subj ?? null);
   put('sp', f.sport);
   put('below', f.belowOnly ? '1' : null);
   put('sort', f.sort !== FEED_DEFAULTS.sort ? f.sort : null);
@@ -68,7 +76,7 @@ export function feedToParams(f: FeedFilters, p: URLSearchParams): void {
 }
 /** every query key the feed codec owns — any of them in the URL means the
  *  URL governs the view (a remembered view is never layered on top) */
-export const FEED_PARAM_KEYS = ['q', 'v', 'mk', 'sp', 'below', 'sort', 'day', 'tab', 'win', 'cat', 'sub', 'house', 'min', 'max', 'new', 'fx'];
+export const FEED_PARAM_KEYS = ['q', 'v', 'mk', 'subj', 'sp', 'below', 'sort', 'day', 'tab', 'win', 'cat', 'sub', 'house', 'min', 'max', 'new', 'fx'];
 export function feedFromParams(p: URLSearchParams): FeedFilters {
   const sort = p.get('sort') as FeedSort | null;
   const v = p.get('v');
@@ -77,6 +85,7 @@ export function feedFromParams(p: URLSearchParams): FeedFilters {
     query: p.get('q') || '',
     vertical: v && MARKETS.some(m => m.key === v && m.key !== 'all') ? (v as Market) : null,
     maker: p.get('mk') || null,
+    subj: p.get('subj') || null,
     sport: p.get('sp') || null,
     belowOnly: p.get('below') === '1',
     sort: sort && SORTS.includes(sort) ? sort : FEED_DEFAULTS.sort,
@@ -116,6 +125,7 @@ export default function FeedToolbar({
   baselines: baselinesProp,
   onResetView,
   scopeMaker = null,
+  scopeSubj = null,
 }: {
   lots: AuctionLot[];          // the unfiltered upcoming pool (for counts)
   belowIds: Set<string>;
@@ -143,6 +153,9 @@ export default function FeedToolbar({
    *  hidden (it could only offer the page itself) and a saved search carries
    *  the maker */
   scopeMaker?: string | null;
+  /** a player dossier's lot browser: the pool IS this subject (no saved
+   *  search — the dossier's Follow is the alert) */
+  scopeSubj?: string | null;
 }) {
   // The below-market lens auto-ranks by gap (its smart default) — but it must
   // hand back whatever sort the reader had picked when the lens comes off,
@@ -226,7 +239,8 @@ export default function FeedToolbar({
   // in-category facets (Graded / Rookie / era, Film & TV / Music) — once the
   // reader stands in one category; counted with every other filter applied
   const facets = useMemo(() => {
-    const scoped = marketPool.filter(l => (!filters.maker || l.artist === filters.maker)
+    const mk = filters.maker ? new Set(filters.maker.split(',')) : null;
+    const scoped = marketPool.filter(l => (!mk || mk.has(l.artist))
       && (!filters.sport || (sportOfLot(l) || 'Other') === filters.sport));
     const fc = facetCatOf(filters.cat, scoped);
     if (!fc) return [];
@@ -389,7 +403,29 @@ export default function FeedToolbar({
     document.body
   ) : null;
   const isFiltered =
-    filters.query !== '' || filters.vertical !== null || filters.maker !== null || filters.sport !== null || filters.category !== null || filters.belowOnly || filters.saleDay != null || isTriageActive(filters);
+    filters.query !== '' || filters.vertical !== null || filters.maker !== null || !!filters.subj || filters.sport !== null || filters.category !== null || filters.belowOnly || filters.saleDay != null || isTriageActive(filters);
+  // a scope the lens pills can't show — one /makers subject row, or the
+  // compare tray's several makers — prints as one active pill that clears it
+  const scopeChip = useMemo(() => {
+    if (filters.subj) {
+      let label = '', n = 0;
+      for (const l of lots) {
+        if (subjectKeyOf(l) !== filters.subj) continue;
+        n++;
+        if (!label) label = lotSubjectOf(l)?.name || '';
+      }
+      return { label: label || (filters.subj === OTHER_SUBJECT ? 'No subject named' : filters.subj.replace(/^[a-z]+:/, '').replace(/-/g, ' ')), n, clear: { subj: null } as Partial<FeedFilters> };
+    }
+    if (filters.maker && !scopeMaker && !makers.some(([s]) => s === filters.maker)) {
+      const ms = filters.maker.split(',');
+      const n = lots.filter(l => ms.includes(l.artist)).length;
+      return { label: ms.map(m => ARTIST_LABEL[m] || m).join(' + '), n, clear: { maker: null } as Partial<FeedFilters> };
+    }
+    return null;
+  }, [filters.subj, filters.maker, scopeMaker, makers, lots]);
+  // the alert matcher stores one maker and no subject — a search it can't
+  // honor is never offered (an unmatchable alert would never fire)
+  const saveable = !scopeSubj && !filters.subj && !(filters.maker || '').includes(',');
 
   // Chrome earns its keep: a single-page feed (watches' 21 lots) doesn't
   // need sort pills or a view toggle — search + the below-market lens only.
@@ -839,6 +875,11 @@ export default function FeedToolbar({
             </>
           );
         })()}
+        {scopeChip && (
+          <button className="ray-toolbar-pill" data-active title="Clear" onClick={() => set(scopeChip.clear)}>
+            {scopeChip.label} {scopeChip.n > 0 && <i>{scopeChip.n}</i>}
+          </button>
+        )}
         {market !== 'all' && onMarketReset && (
           <button className="ray-toolbar-pill" onClick={onMarketReset}>
             <Flick size={10} style={{ transform: 'scaleX(-1)', marginLeft: 0, marginRight: 5 }} /> Total market
@@ -951,7 +992,7 @@ export default function FeedToolbar({
             <button className="ray-toolbar-reset" onClick={() => onChange(clearedFilters(filters))}>
               Clear
             </button>
-            <SaveSearch filters={scopeMaker ? { ...filters, maker: scopeMaker } : filters} market={effectiveMarket} />
+            {saveable && <SaveSearch filters={scopeMaker ? { ...filters, maker: scopeMaker } : filters} market={effectiveMarket} />}
           </>
         ) : (
           <>{total.toLocaleString()} lots</>

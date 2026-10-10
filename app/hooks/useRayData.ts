@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { AuctionLot, MarketStats, RealizedPoint, BidCompetitionPoint } from '../types';
 import { normalizeCloseStamp } from '../lib/house-tz';
+import { setCloseK } from '../lib/close-k';
 
 // Stable empty-array identity for pre-load fallbacks — a fresh `[]` each render
 // would defeat downstream memoization (e.g. useSoldArchive's allLotsWithArchive).
@@ -319,7 +320,7 @@ function loadRayData(): Promise<RayPayload> {
 
   inflight = (async () => {
     // ── phase 1: the small eager payload — stats + meta + upcoming (w/ signals)
-    const [statsR, metaR, upR, btR, mkR, cbR, rcR] = await Promise.allSettled([
+    const [statsR, metaR, upR, btR, mkR, cbR, rcR, ckR] = await Promise.allSettled([
       fetchJson('/data/ray/stats.json'),
       fetchJson('/data/ray/meta.json'),
       fetchJson('/data/ray/upcoming.json'),
@@ -327,7 +328,14 @@ function loadRayData(): Promise<RayPayload> {
       fetchJson('/data/ray/market.json'),
       fetchJson('/data/ray/close-board.json'),
       fetchJson('/data/ray/receipts.json'),
+      // the bid rooms' close multiples, refit with the book every night
+      // (app/lib/close-k.ts) — fetched beside upcoming.json (same crawl, same
+      // revalidation; the file carries its lastCrawl) and installed BEFORE the
+      // first paint so the priority order never reshuffles after it. Missing
+      // or malformed → the compiled table stands.
+      fetchJson('/data/ray/close-k.json'),
     ]);
+    if (ckR.status === 'fulfilled') setCloseK(ckR.value);
     const market = mkR.status === 'fulfilled' ? (mkR.value as MarketData) : null;
     const receipts = rcR.status === 'fulfilled' ? (rcR.value as ReceiptsData) : null;
     const statsData = statsR.status === 'fulfilled' ? statsR.value : null;

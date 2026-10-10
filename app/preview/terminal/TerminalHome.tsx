@@ -275,9 +275,9 @@ export default function TerminalHomePage() {
     if (lensMarket.current === activeKey) return;
     lensMarket.current = activeKey;
     setFeedFilters(f =>
-      f.vertical === null && f.maker === null && f.sport === null && f.category === null && f.saleDay == null && f.cat == null && f.sub == null
+      f.vertical === null && f.maker === null && !f.subj && f.sport === null && f.category === null && f.saleDay == null && f.cat == null && f.sub == null
         ? f
-        : { ...f, vertical: null, maker: null, sport: null, category: null, saleDay: null, cat: null, sub: null }
+        : { ...f, vertical: null, maker: null, subj: null, sport: null, category: null, saleDay: null, cat: null, sub: null }
     );
   }, [activeKey, setFeedFilters]);
 

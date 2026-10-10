@@ -13,6 +13,7 @@ import { dealScore } from './comps';
 import { sportOfLot } from './submarkets';
 import { passesTriage, type HouseBaselines } from './feed-filters';
 import { byPriority, spread } from './priority';
+import { subjectKeyOf } from './maker-subjects';
 import type { FeedFilters } from '../components/FeedToolbar';
 
 // The default view's diversity cap: max 8 lots per maker per page window.
@@ -62,7 +63,13 @@ export function feedPass(upcoming: AuctionLot[], f: FeedFilters, o: FeedPassOpts
     const vset = marketArtists(f.vertical);
     arr = arr.filter(l => vset.has(l.artist));
   }
-  if (f.maker && !o.scoped) arr = arr.filter(l => l.artist === f.maker);
+  if (f.maker && !o.scoped) {
+    // one maker, or the compare tray's several (comma-joined)
+    const ms = new Set(f.maker.split(','));
+    arr = arr.filter(l => ms.has(l.artist));
+  }
+  // one /makers subject row, exactly (a player, a Pokémon, a film …)
+  if (f.subj && !o.scoped) arr = arr.filter(l => subjectKeyOf(l) === f.subj);
   if (f.sport) arr = arr.filter(l => (sportOfLot(l) || 'Other') === f.sport);
   if (f.category) arr = arr.filter(l => l.category === f.category);
   if (f.saleDay) arr = arr.filter(l => l.saleDate?.slice(0, 10) === f.saleDay);
@@ -110,7 +117,7 @@ export function feedPass(upcoming: AuctionLot[], f: FeedFilters, o: FeedPassOpts
     );
   } else {
     arr = [...arr.filter(l => !past(l)), ...arr.filter(past)];
-    if (!o.scoped && !q && !f.vertical && !f.maker && !f.sport && !f.category && !f.belowOnly && !f.saleDay) {
+    if (!o.scoped && !q && !f.vertical && !f.maker && !f.subj && !f.sport && !f.category && !f.belowOnly && !f.saleDay) {
       arr = diversifyFeed(arr, o.pageSize);
     }
   }
@@ -136,7 +143,8 @@ const SPORT_LABEL: Record<string, string> = {
  * `land: false` (the "Open the dossier" button) carries the view but opens
  * the page at its top;
  * a collection row's home-feed link keeps its own cat/sub and gains the
- * window / house / floor / new / facets.
+ * window / house / floor / new / facets; a player dossier (`/player?id=`)
+ * opens on "All lots" at its live book (#on-the-block), like a maker page.
  */
 export function liveBookHref(base: string, search: string, opts: { land?: boolean } = {}): string {
   const land = opts.land ?? true;
@@ -155,7 +163,10 @@ export function liveBookHref(base: string, search: string, opts: { land?: boolea
   const spk = src.get('spk');
   if (spk && SPORT_LABEL[spk] && !out.has('sp')) out.set('sp', SPORT_LABEL[spk]);
   const isMaker = path.startsWith('/makers/');
-  if (isMaker && land) out.set('tab', 'all');
+  // a player dossier's live book is a lot browser too — the reader came for
+  // the rest of the book, so it opens on "All lots" like a maker page's
+  const isBook = isMaker || path === '/player';
+  if (isBook && land && !own.has('tab')) out.set('tab', 'all');
   const q = out.toString();
   const hash = !land ? '' : isMaker ? '#upcoming' : '#on-the-block';
   return `${path}${q ? `?${q}` : ''}${hash}`;

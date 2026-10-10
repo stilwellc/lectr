@@ -75,14 +75,70 @@ export function isMisattributed(artist: string, title: string, desc = ''): boole
     // startsWith, not equality — the captured token keeps its accent
     // ("prouvé" for surname 'prouv'), so a real "Jean Prouvé (1901-1984)"
     // must read as the maker, not a collision
-    if (m && !m[1].startsWith(surname)) {
+    // (r5) a title the maker LEADS ("[PICASSO] - Balzac (1799-1850). Le Chef-d'œuvre inconnu",
+    // "PICASSO, Pablo (1881-1973), illustrator -- Mérimée") is the maker's illustrated book
+    const leads = makerLeads(t, surname);
+    if (m && !leads && !m[1].startsWith(surname)) {
       // rescue a genuine collaboration only when the maker is named SEPARATELY,
       // after the other artist's dates ("Le Corbusier (1887-1965), and Pierre
       // Jeanneret …") — not when the surname merely sits inside the other
       // artist's name before the dates (Orozco's middle name)
       const after = t.slice((m.index ?? 0) + m[0].length);
       if (!new RegExp(`\\b${surname}`).test(after)) return true;
+      // (r5) …and only a JOINED collaboration ("Le Corbusier (1887-1965), and Pierre
+      // Jeanneret", "… & Andy Warhol (1928-1987)"). A maker named only inside the
+      // WORK's title is the subject, not the hand: "STURTEVANT (1924-2014) Warhol
+      // Flowers", "Gavin Turk (b. 1967) … Warhol". A tracked maker leading is left
+      // to the reclassifier, which re-files the lot under them.
+      if ((mk === 'art' || mk === 'design') && !TRACKED_SURNAMES.has(m[1].replace(/[.'’]+$/, '')) && !joinedCollab(after, surname)) return true;
     }
   }
+  if ((mk === 'art' || mk === 'design') && notByMaker(artist, title, desc)) return true;
+  return false;
+}
+
+const TRACKED_SURNAMES = new Set(Object.values(MAKER_SURNAME).flatMap(s => [s, s === 'prouv' ? 'prouvé' : s]));
+
+/** the title LEADS with the maker ("Picasso (Pablo) -- …", "PABLO PICASSO L'Enterrement …",
+ *  "[PICASSO] - Balzac …") — never a qualified lead ("After Pablo Picasso", "School of …") */
+function makerLeads(t: string, surname: string): boolean {
+  return new RegExp(`^\\W*(?!(?:after|d'apr|copy|school|circle|follower|manner|style|studio|workshop|atelier|attributed|imitator|homm?age|in the|portrait)\\b)(?:[a-zà-ÿ'’-]+\\.?\\s+){0,2}${surname}`).test(t);
+}
+
+/** the maker is a co-author: joined to the other artist, carrying their own life dates, or the
+ *  named hand of the plates ("… with six full-page etchings … by Henri Matisse") */
+function joinedCollab(after: string, surname: string): boolean {
+  if (new RegExp(`\\bby (?:and after )?(?:[a-zà-ÿ.'’-]+\\s+){0,2}${surname}`).test(after)) return true;
+  if (/^\s*(?:,\s*)?(?:and|&|\+|with|und|et|y)\b|^\s*[&+]/.test(after)) return true;
+  return new RegExp(`\\b${surname}[a-zà-ÿ]*\\s*\\(\\s*(?:b\\.\\s*)?1[6-9]\\d\\d`).test(after);
+}
+
+/** artists whose practice IS re-making another artist's work — never the original's hand */
+const APPROPRIATION_RE = /\b(?:(?:elaine )?sturtevant|mike bidlo|sherrie levine|richard pettibone|deborah kass|gavin turk|death nyc|mr\.? brainwash|thierry guetta|russell young)\b/;
+const QUALIFIED_LEAD_RE = /^\s*(?:copy after|attributed to|circle of|school of|follower of|followers of|manner of|in the manner of|style of|in the style of|workshop of|studio of|atelier of|imitator of)\b/;
+
+/**
+ * (r5) The lot is ABOUT the maker, not BY them — appropriation, "after",
+ * school-of, "in the manner of", homage. The classify.ts art-attribution pass
+ * (NOT_BY_LEAD_RE / NOT_BY_INLINE_RE) knew these for a fixed surname list and
+ * Sturtevant/Bidlo by name, at reclassify time; this is the same guard for
+ * EVERY name-routed maker, applied where isMisattributed runs (the corpus
+ * scrub before any stat, the maker shards and faces in emit-page-stats).
+ */
+export function notByMaker(artist: string, title: string, desc = ''): boolean {
+  const surname = MAKER_SURNAME[artist];
+  const t = (title || '').toLowerCase();
+  const d = (desc || '').slice(0, 300).toLowerCase();
+  if (QUALIFIED_LEAD_RE.test(t) || QUALIFIED_LEAD_RE.test(d)) return true;
+  const appr = t.match(APPROPRIATION_RE);
+  if (appr && !(surname && appr[0].includes(surname))) return true;
+  // a title the maker leads keeps the maker ("Picasso (Pablo) -- Apollinaire … plates by Picasso … plates after Picasso")
+  if (!surname || makerLeads(t, surname)) return false;
+  // another TRACKED maker leading ("ROY LICHTENSTEIN … from Hommage à Picasso") is re-filed
+  // under them by the reclassifier — never dropped here
+  if (Object.values(MAKER_SURNAME).some(s => s !== surname && new RegExp(`^\\W*(?:[a-zà-ÿ.'’-]+\\s+){0,2}${s}`).test(t))) return false;
+  const near = `(?:[a-zà-ÿ.'’-]+\\s+){0,2}${surname}`;
+  // "(after Andy Warhol)", ", after Warhol", "in the manner of Picasso", "school of Matisse", "homage to Warhol"
+  if (new RegExp(`(?:^|[\\s(,;])(?<!by and )(?:after|d'apr[eè]s|in the manner of|manner of|in the style of|style of|school of|circle of|follower of|imitator of|homm?age (?:[àa]|to))\\s+${near}\\b`).test(t)) return true;
   return false;
 }

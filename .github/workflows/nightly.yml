@@ -410,6 +410,19 @@ jobs:
       # sentinel only. It does NOT relax the corpus-shrink sanity gate or
       # the engine holdout gate (threshold changes follow the replay policy:
       # scripts/ci/gate-replay.ts, docs/RUNBOOK.md "Engine-gate policy").
+      # THE CLOSE-K ARCHIVE (Oct 9 2026): the newest 75 nightly bid-room book
+      # snapshots + last night's table. build-upcoming (inside assemble) joins
+      # them to tonight's sold rows and refits the bid rooms' close multiples
+      # → public/data/ray/close-k.json (app/lib/close-k.ts, scripts/lib/
+      # close-k-fit.ts). Advisory: an empty archive fits on Goldin's
+      # bidHistory alone and every thin cell keeps the compiled table.
+      - name: Pull the close-k archive (advisory)
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/data-store.sh pull-closek 75
       - name: Assemble + engine + eager payload + engine gate + page data + search (one corpus load)
         run: |
           mkdir -p data/qa
@@ -469,6 +482,15 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh push
+      # tonight's published bid-room book → closek/snaps/ (write-once, ~100KB)
+      # + the fitted table → closek/latest.json (tomorrow's diff baseline).
+      # Only after a published push: the archive holds books that were served.
+      - name: Archive the close-k snapshot → R2 (advisory)
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/data-store.sh push-closek
       # THE LOT API (docs/data-pipeline.md §3): everything the /api/* Pages
       # Functions serve, precomputed (Free plan: no compute at the edge).
       # Uploaded write-once under api/v/<version>/, pointer flipped LAST.

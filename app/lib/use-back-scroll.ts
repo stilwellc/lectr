@@ -18,7 +18,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('popstate', () => { lastPopAt = Date.now(); });
 }
 
-function cameBack(): boolean {
+export function cameBack(): boolean {
   if (Date.now() - lastPopAt < 4000) return true;
   try {
     const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
