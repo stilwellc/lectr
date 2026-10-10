@@ -41,7 +41,7 @@ export default function CompareTray({ picked, search, onRemove, onClear, onSeeLo
         <span className="mkc-rule" aria-hidden />
         {picked.length > 1 && liveTotal > 0 && (
           <button type="button" className="mkc-btn" onClick={() => onSeeLots(picked.map(r => r.id))}>
-            See all {liveTotal.toLocaleString()} live together
+            All {liveTotal.toLocaleString()} live lots
           </button>
         )}
         {picked.length >= 2 && (

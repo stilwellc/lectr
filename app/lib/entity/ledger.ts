@@ -25,6 +25,7 @@ import { mattersOf, type LiveEntry } from './live';
 import { completeQuarters, type EntityBundle } from '../../hooks/useEntities';
 import type { EntityDetail, EntityRecord, EntitySummary } from './model';
 import { entityPageOf } from './key';
+import { makerHref } from './retired';
 import { rowKindOf, rowPolicy, KIND, type RowKind } from './kinds';
 import type { SortKey } from './view-state';
 
@@ -107,7 +108,11 @@ export function buildRow(id: string, b: EntityBundle, live: LiveEntry | undefine
   // the page an entity id names (P2: every player has a dossier, a subject
   // or a set its /entity page); a By-category row and the remainder land on
   // their feed list
-  const page = kind === 'sub' || kind === 'rest' ? null : (entityPageOf(id) ?? pol.page);
+  // a maker's link goes through makerHref (a retired pseudo-maker's slug
+  // resolves to its real home — app/lib/entity/retired)
+  const page = kind === 'sub' || kind === 'rest' ? null
+    : kind === 'maker' ? makerHref(id.slice(3))
+    : (entityPageOf(id) ?? pol.page);
   return {
     id, kind, label: s.label, market: s.market,
     tag: tagOf(kind, s),

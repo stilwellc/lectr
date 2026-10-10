@@ -232,7 +232,8 @@ a.mkc-col-name:hover { text-decoration: underline dotted; text-underline-offset:
 /* a compare column is narrow: the lot's figures sit under its title */
 .mkc-lots .mkx-lot { grid-template-columns: 36px minmax(0, 1fr); gap: 4px 10px; }
 .mkc-lots .mkx-lot-thumb { width: 36px; height: 30px; grid-row: span 2; }
-.mkc-lots .mkx-lot-cells { grid-column: 2; display: flex; gap: 8px; text-align: left; min-width: 0; }
+.mkc-lots .mkx-lot-cells { grid-column: 2; display: flex; flex-wrap: wrap; column-gap: 8px; text-align: left; min-width: 0; }
+.mkc-lots .mkx-lot-est { white-space: nowrap; }
 .mkc-lots .mkx-lot-close { white-space: nowrap; }
 
 /* ── empty state — a patent-figure plate (FigureCell) ── */
@@ -273,11 +274,14 @@ a.mkc-col-name:hover { text-decoration: underline dotted; text-underline-offset:
   .mk-filters .ray-triagebar .ray-toolbar-pill, .mk-filters .ray-triagebar .ray-toolbar-select, .mk-sports .ray-toolbar-pill { min-height: 38px; }
   .mk-row { padding: 9px 4px; gap: 10px; }
   .mk-group-head .mk-cols { padding: 6px 4px 7px; }
-  .mkc-body { max-height: 46vh; }
+  .mkc-body { max-height: 42vh; }
+  .mkc-title, .mkc-rule { display: none; }
+  .mkc-bar { gap: 6px; padding-top: 8px; padding-bottom: 8px; }
   /* a phone lot row: the figures sit under the title, never squeeze it */
   .mkx-lot { grid-template-columns: 40px minmax(0, 1fr); gap: 3px 10px; padding: 8px 10px; }
   .mkx-lot-thumb { width: 40px; height: 32px; grid-row: span 2; }
-  .mkx-lot-cells { grid-column: 2; display: flex; gap: 8px; text-align: left; min-width: 0; }
+  .mkx-lot-cells { grid-column: 2; display: flex; flex-wrap: wrap; column-gap: 8px; text-align: left; min-width: 0; }
+  .mkx-lot-est { white-space: nowrap; }
   .mkx-lot-close { white-space: nowrap; }
   .mkx-live { margin: 12px 4px 0; }
   .mkx-grid { padding: 12px 4px 0; }

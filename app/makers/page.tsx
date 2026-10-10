@@ -30,6 +30,7 @@ import { NAME_HEAD, COLLECTION_CATS, COLLECTION_MARKETS, SUBJECT_MARKETS } from 
 import { useLivePool, entityIdOf, nameBucketOf, catIdOf, type LiveEntry } from '../lib/entity/live';
 import { useEntities, subBundle, prefetchSubs, loadEntities, loadEntitiesTail, type EntityBundle } from '../hooks/useEntities';
 import { parseEntityId } from '../lib/entity/key';
+import { makerHref } from '../lib/entity/retired';
 import {
   useMakersView, viewSearch, DEFAULT_COLS, COMPARE_MAX, COL_KEYS, LOT_ORDERS,
   type SortKey, type LiveSort, type RowsBy, type LotOrder, type ViewBody, type MakersView,
@@ -631,7 +632,7 @@ export default function MakersPage() {
 
   const v = topVerified?.verified ?? null;
   const vSlug = topVerified ? makerSlugOf(topVerified.id) : null;
-  const vHref = vSlug && MAKER_MARKETS.has(topVerified!.market) ? `/makers/${vSlug}` : null;
+  const vHref = vSlug ? makerHref(vSlug) : null;
 
   return (
     <div className="terminal-shell mk-shell">
