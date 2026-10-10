@@ -449,7 +449,10 @@ export async function crawlChristiesAuctions(scope: 'watches' | 'science' | 'spo
         auctionHouse: "Christie's",
         saleName,
         saleDate: saleDay,
-        saleDateTime: endDate || null,
+        // only a date we TRUST: a now-anchored stale www date (resultsPending)
+        // must not ride along as saleDateTime — house-tz would read a 2013
+        // stamp as a timed close and drop the kept-visible lot from live.
+        saleDateTime: resultsPending ? null : (endDate || null),
         lotNumber: null,
         // W2: price realised is buyer-inclusive → premiumNative; keep native +
         // convert with a dated rate. Estimates are in the same sale currency.
