@@ -33,6 +33,7 @@ import { normalizeCorpus } from './lib/corpus-normalize';
 import { markPhase } from './lib/mem-trace';
 import { computeStats } from './compute-stats';
 import { buildCatStats } from './cat-stats';
+import { isMisattributed } from '../app/lib/attribution';
 import { ARTISTS } from '../app/constants';
 import type { AuctionLot, MarketStats } from '../app/types';
 
@@ -404,15 +405,26 @@ async function main() {
   // ONE group-by pass instead of a full-corpus filter per ARTISTS slug (~40
   // scans of 455k). Map push preserves allLots order, so each group is identical
   // to the old filter → computeStats output is byte-for-byte the same.
+  // (Oct 10) THE ATTRIBUTION GUARD at the stat itself: normalize already
+  // scrubs misattributed rows from the corpus (dropMisattributed), but a stat
+  // must never depend on a pass upstream having run — a maker's figures are
+  // only the maker's lots (app/lib/attribution, the guard the maker shards,
+  // faces and the entity key apply)
   const bySlug = new Map<string, AuctionLot[]>();
+  let notBy = 0;
   for (const l of allLots) {
+    if (isMisattributed(l.artist, l.title || '', (l as { description?: string }).description || '')) { notBy++; continue; }
     const arr = bySlug.get(l.artist);
     if (arr) arr.push(l); else bySlug.set(l.artist, [l]);
   }
+  if (notBy) console.log(`[assemble] stats: ${notBy} rows not by their maker kept out of stats.json`);
+  // THE COHERENCE STAMP (scripts/lib/served-stamp): one crawl stamp for meta,
+  // stats and cat-stats — written once, here
+  const lastCrawl = new Date().toISOString();
   const statsByArtist: Record<string, MarketStats> = {};
   for (const a of ARTISTS) {
     const lots = bySlug.get(a.slug);
-    if (lots && lots.length) statsByArtist[a.slug] = computeStats(lots, existing[a.slug] || null);
+    if (lots && lots.length) statsByArtist[a.slug] = { ...computeStats(lots, existing[a.slug] || null), crawl: lastCrawl } as MarketStats;
     else if (existing[a.slug]) statsByArtist[a.slug] = existing[a.slug]; // carry a slug with no lots this run
   }
   bySlug.clear(); // it holds every row: the handoff below must be their only holder
@@ -426,11 +438,11 @@ async function main() {
   // post-normalize, so subCat/drill are stamped (scripts/cat-stats.ts)
   {
     const catStats = buildCatStats(allLots as AuctionLot[]);
-    fs.writeFileSync(path.join(SERVED_DIR, 'cat-stats.json'), JSON.stringify({ generatedAt: new Date().toISOString(), rows: catStats }));
+    fs.writeFileSync(path.join(SERVED_DIR, 'cat-stats.json'), JSON.stringify({ generatedAt: new Date().toISOString(), lastCrawl, rows: catStats }));
     console.log(`[assemble] cat-stats.json: ${Object.keys(catStats).length} rows`);
   }
   fs.writeFileSync(metaPath, JSON.stringify({
-    lastCrawl: new Date().toISOString(),
+    lastCrawl,
     artists: ARTISTS.map(a => ({ slug: a.slug, displayName: a.label })),
     sources: Array.from(new Set(allLots.map(l => l.auctionHouse))).sort(),
     totalLots: allLots.length,
@@ -486,6 +498,29 @@ async function runDownstream(corpus: Record<string, unknown>[]): Promise<void> {
   // 2 · the off-book corpus rows page data resolves engine pools from
   const ps = await import('./emit-page-stats');
   const corpusRows = ps.pageStatsCorpusRows(corpus, ps.pageStatsCandidateIds(eager));
+  // 2b · THE ENTITY FILES (makers overhaul, Oct 10 — scripts/emit-entities):
+  // every entity figure from the FULL corpus (the population stats.json and
+  // players.json read, corpus-only cards + Pokémon included), keyed by the
+  // one entityKeyOf the eager lots were just stamped with. Before the value
+  // book (it normalizes rows in place). NOT advisory: a night without entity
+  // files fails the run after every other output is written (the push below
+  // never ships a payload whose makers pages would read last night's rows).
+  let entitiesFailed = false;
+  try {
+    const en = await import('./emit-entities');
+    const meta = JSON.parse(fs.readFileSync(path.join(SERVED_DIR, 'meta.json'), 'utf8')) as { lastCrawl?: string };
+    let market = null;
+    try { market = JSON.parse(fs.readFileSync(path.join(SERVED_DIR, 'market.json'), 'utf8')); } catch { market = null; }
+    en.emitEntities({
+      eachSold: visit => { for (const l of corpus) visit(l as unknown as AuctionLot); },
+      live: eager as unknown as AuctionLot[],
+      lastCrawl: meta.lastCrawl || '',
+      market,
+      today: en.buildDay(),
+      outDir: path.join(SERVED_DIR, 'pages'),
+    });
+  } catch (e) { entitiesFailed = true; console.error('[entities] FAILED:', (e as Error).stack || (e as Error).message); }
+  markPhase('entities');
   // 3 · THE ENGINE GATE (was: the "Validate engine" step)
   const { runValidateEngine } = await import('./validate-engine');
   fs.mkdirSync(path.join('data', 'qa'), { recursive: true });
@@ -509,6 +544,8 @@ async function runDownstream(corpus: Record<string, unknown>[]): Promise<void> {
   markPhase('value book');
   corpus.length = 0; // the corpus is released: the emitters below read the served book
   // 4 · page data + search index — advisory, as their nightly steps were
+  // (emitPageStats deletes only its own lot-idx / lot-pack / maker files —
+  // the entity files written above survive it)
   try { await ps.emitPageStats({ corpusRows }); }
   catch (e) { console.log(`::warning title=emit page data failed::${(e as Error).message} — pages fall back to the corpus path`); }
   markPhase('page data');
@@ -519,6 +556,10 @@ async function runDownstream(corpus: Record<string, unknown>[]): Promise<void> {
     console.error(`[assemble] engine gate FAILED (${gate.failures}) — exit 1 (outputs written; the push step will not run)`);
     process.exitCode = 1;
   }
+  // advisory: the makers/player pages fail soft to stats.json + players.json
+  // when the entity files are absent, so a failed emit must never hold back
+  // the night's book (the check step below warns on stale/missing files)
+  if (entitiesFailed) console.error('::warning title=entities::entity files FAILED — makers pages fall back to stats.json/players.json tonight');
 }
 
 

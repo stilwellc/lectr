@@ -29,9 +29,11 @@ import { readCalls } from './lib/calls-ledger';
 import { ARTISTS, MARKETS, marketArtists, marketOf } from '../app/constants';
 import {
   appraiseLot, soldCompBand, isSportsScienceObject,
-  scienceReferenceBand, cultureReferenceBand, classifyForm, formsForMarket,
+  scienceReferenceBand, cultureReferenceBand,
 } from '../app/lib/comps';
 import { isMisattributed } from '../app/lib/attribution';
+import { entityKeyOf } from '../app/lib/entity/key';
+import { faceValueOf } from './emit-entities';
 import { overEstimatePct } from '../app/utils';
 import { bucketOf, markFallbackProjections, type PageStats, type LotPack, type PackRow, type SettledCallRow } from '../app/lib/page-data';
 import type { AuctionLot } from '../app/types';
@@ -126,20 +128,23 @@ export async function emitPageStats(opts: PageStatsOpts = {}): Promise<void> {
   // ── 4 · maker faces (/makers heroBySlug, verbatim) + maker shards ─────────
   const makerFaces: PageStats['makerFaces'] = {};
   for (const l of allLots) {
-    if (!l.imageUrl) continue;
     if (isMisattributed(l.artist, l.title || '')) continue;
-    const forms = formsForMarket(marketOf(l.artist));
-    if (forms) { const f = classifyForm(l); if (f === 'unknown' || !forms.has(f)) continue; }
-    const val = l.priceUsd || l.currentBid || l.estimateHigh || l.estimateLow || 0;
+    // THE face rule — one definition, shared with the entity faces
+    const val = faceValueOf(l);
+    if (val == null) continue;
     const cur = makerFaces[l.artist];
-    if (!cur || val > cur.val) makerFaces[l.artist] = { url: l.imageUrl, val };
+    if (!cur || val > cur.val) makerFaces[l.artist] = { url: l.imageUrl!, val };
   }
   // maker rows: the served row minus crawl bookkeeping no page reads
   // (artist is implied by the file — the client restores it)
   const DROP = new Set(['artist', 'firstSeen', '_vn', 'entitySrc', 'heightCm', 'widthCm', 'depthCm', 'subjectKeys', 'itemClass', 'drill']);
+  // (Oct 10) every row carries its entity key `ek` (app/lib/entity/key) —
+  // the same key the live book and the entity files use, so a maker page's
+  // sold history and its live lots are attributed by one function
   const slim = (l: AuctionLot) => {
     const o: Record<string, unknown> = {};
     for (const k in l) if (!DROP.has(k)) o[k] = (l as unknown as Record<string, unknown>)[k];
+    o.ek = entityKeyOf(l as unknown as Parameters<typeof entityKeyOf>[0]);
     return o;
   };
   const makerShards: Record<string, number> = {};

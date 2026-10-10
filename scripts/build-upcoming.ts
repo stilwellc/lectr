@@ -16,6 +16,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { readCorpus as readCorpusShared, slimForClient, isServedUpcoming } from './corpus-io';
+import { entityKeyOf } from '../app/lib/entity/key';
+import { servedLastCrawl } from './lib/served-stamp';
 import {
   engineFlagOf, soldCompBand, isSportsScienceObject, sportsForm, classifyForm, FORM_LABEL,
 } from '../app/lib/comps';
@@ -226,6 +228,13 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
       // null must survive serialization as null, never be omitted as a "null
       // weight" the way slimForClient does for corpus fields.
       emitted.signal = signal;
+      // THE ENTITY KEY (Oct 10, makers overhaul): the row this lot counts under
+      // on /makers and every entity page — app/lib/entity/key, the same
+      // function the entity emitter files sold rows with. Read off the corpus
+      // row (its description feeds the attribution guard); null (a lot not by
+      // the maker it is filed under) is stamped too, so a client never
+      // recomputes it into a different answer.
+      emitted.ek = entityKeyOf(l as unknown as Parameters<typeof entityKeyOf>[0]);
       // BID-VELOCITY stamp (Goldin live lots) — bidHistory is corpus-only and in
       // the STRIP set, so it never reaches the client; this precomputed digest
       // does. bidVelocity is NOT in STRIP, so slimForClient keeps it (verified).
@@ -507,7 +516,9 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
     const dvCounts = Object.keys(deepValue).map(k => `${k}:${deepValue[k].length}`).join(' ') || 'none';
     console.log(`[upcoming] deep value (proj ≥25% under floor, closes ≤3.5d): ${dvCounts}`);
   }
-  const out = { generatedAt: new Date().toISOString(), tape, demand, realized, bidComp, recentSold, deepValue, lots: upcoming };
+  // THE COHERENCE STAMP (Oct 10): the crawl this payload was built from —
+  // every served JSON the makers pages read carries it (scripts/lib/served-stamp)
+  const out = { generatedAt: new Date().toISOString(), lastCrawl: servedLastCrawl(dataDir), tape, demand, realized, bidComp, recentSold, deepValue, lots: upcoming };
   fs.writeFileSync(path.join(dataDir, 'upcoming.json'), JSON.stringify(out));
   // tonight's bid-room book → the close-k snapshot archive (the nightly ships
   // data/closek/tonight.json.gz write-once to R2 closek/snaps/)

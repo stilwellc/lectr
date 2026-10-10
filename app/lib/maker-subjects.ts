@@ -79,7 +79,11 @@ function read(l: SubjectLot): LotSubject | null {
   if (!SUBJECT_MARKETS.has(marketOf(l.artist))) return null;
   const line = makerLineOf(l);
   const fallback = ARTIST_LABEL[l.artist] || l.artist;
-  const pm = line.href.match(/^\/player\?id=(.+)$/);
+  // (Oct 10) only a CARD's parsed player reads off the maker line: a person's
+  // /player link there depends on which dossiers the page registered, and the
+  // row key must not (the build stamps it as `ek` with no registry) — people
+  // on memorabilia read through subjectOf below, to the same `p:<slug>` key
+  const pm = CARD_MAKERS.has(l.artist) ? line.href.match(/^\/player\?id=(.+)$/) : null;
   if (pm) {
     const slug = decodeURIComponent(pm[1]);
     // the card parser can run a name on into the caption ("Mickey Mantle
@@ -109,7 +113,12 @@ function read(l: SubjectLot): LotSubject | null {
     // the maker line carries a sealed lot's set too (r5) — that is a set row, not a Pokémon
     const g = cardGroupOf(l);
     if (g && line.name === g.name) return groupRow(g.name, g.kind);
-    return line.name && line.name !== fallback ? { key: `k:${norm(line.name)}`, name: line.name, kind: 'pokemon', playerSlug: null } : null;
+    if (!line.name || line.name === fallback) return null;
+    // (Oct 10) one row per SPECIES: "Dark Charizard", "Blaine's Charizard",
+    // "Charizard VMAX" and "Mega Charizard X ex" are all Charizard (the card
+    // name split 105 live Charizard lots over 30 rows)
+    const sp = pokemonSpeciesOf(line.name);
+    return { key: `k:${norm(sp)}`, name: sp, kind: 'pokemon', playerSlug: null };
   }
   // (r5) a signed card catalogued under Autographs ("Signed 1989 Score #645 Randy Johnson Rookie") — the card's player
   if (l.artist === 'autographs' && /^Signed (?:18|19|20)\d{2}\b/.test(String(l.title || ''))) {
@@ -147,6 +156,34 @@ function read(l: SubjectLot): LotSubject | null {
   }
   return null;
 }
+/** the trainers / teams a card names as the Pokémon's owner ("Blaine's Charizard") */
+const POKE_OWNER = /^(?:(?:Team )?Rocket|Team (?:Magma|Aqua|Plasma|Galactic|Flare|Skull|Yell)|Blaine|Brock|Misty|Erika|Sabrina|Koga|Lt\. Surge|Giovanni|Lillie|Butler|Sky|Marnie|Cynthia|Iono|Ethan|Arven|Hop|Steven|Lance|Red|Blue|N|Mega Tokyo|Fukuoka|Tokyo|Osaka|Yokohama|Kyoto|Sapporo|Nagoya|Hiroshima|Tohoku)['’]s /;
+/** the nouns of trainer / stadium cards an owner's name leads ("Rocket's Hideout") */
+const TRAINER_WORD = /\b(?:Scheme|Hideout|Gym|Way|Plan|Wrath|Perfume|Quiz|Training|Method|Control|Tricks?|Tricky|Secret|Conspiracy|Invasion|Kindness|Rival|Protection|Gambit|Ambush|Fury|Mansion|Lab|Laboratory|Island|Badge|Ball|Energy|Stadium|Tower|Cave|Castle|Base|Ship|Machine|Order|Raid|Gift|Help|Resolve|Determination|Mischief|Pride|Care|Bargain|Request|Fighting Spirit|Assault|Attack)\b/;
+/** the variant words a card name wraps around its species */
+const POKE_PREFIX = /^(?:Dark|Light|Shining|Crystal|Gold Star|Radiant|Shadow|Ancient|Mega|M|Alolan|Galarian|Hisuian|Paldean|Baby|Cool|Mechanical)\s+/;
+const POKE_SUFFIX = /\s+(?:ex|EX|GX|V|VMAX|VSTAR|V-UNION|BREAK|Prime|LEGEND|Star|δ|[CGF]B?\s*L[Vv]\.?\s*X|L[Vv]\.?\s*X|Lv\.?\s*\d+|Full Art|Holo|[XY](?= ex| EX|$))$/;
+/** "Ivy Pikachu", "Red Cheeks Pikachu", "Special Delivery Pikachu" — promo names that end in the species */
+const POKE_TAIL_SPECIES = /\s(Pikachu|Charizard|Mewtwo|Eevee|Snorlax|Magikarp)$/;
+
+/** the species a Pokémon card name is about ("Mega Charizard X ex" → "Charizard");
+ *  a name with no species pattern (a trainer card, a tag team) is returned as read */
+export function pokemonSpeciesOf(name: string): string {
+  let s = name.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/,.*$/, '').replace(/\s+/g, ' ').trim();
+  if (/ & /.test(s)) return s; // tag team: its own card name
+  for (let i = 0; i < 4; i++) {
+    const before = s;
+    s = s.replace(POKE_SUFFIX, '').replace(POKE_PREFIX, '').trim();
+    // an owner's Pokémon, never an owner's trainer card ("Giovanni's Scheme")
+    const owned = s.replace(POKE_OWNER, '');
+    if (owned !== s && !TRAINER_WORD.test(owned)) s = owned.trim();
+    if (s === before) break;
+  }
+  const tail = s.match(POKE_TAIL_SPECIES);
+  if (tail) s = tail[1];
+  return s || name;
+}
+
 function groupRow(name: string, kind: 'team' | 'set' | 'brand' | string): LotSubject {
   const k = kind === 'team' ? 'team' : kind === 'brand' ? 'brand' : 'set';
   return { key: `${k[0]}:${norm(name)}`, name, kind: k, playerSlug: null };
