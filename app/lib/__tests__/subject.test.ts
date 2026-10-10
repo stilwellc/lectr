@@ -183,7 +183,8 @@ test('subject (r5): sealed wax / set lots → product line + year', () => {
   assert.equal(productLineOf('1986 Fleer Basketball Unopened Wax Box (36 Packs)'), '1986 Fleer Basketball');
   assert.equal(productLineOf('1963 Fleer Football Complete Set (88) With Checklist'), '1963 Fleer Football');
   assert.equal(productLineOf('1969 Topps Football-Series 2 Unopened 10-Cent Wax Pack (12 Cards)'), '1969 Topps Football');
-  assert.equal(productLineOf('1969 Topps Baseball High-Grade Complete Set (664)'), '1969 Topps Baseball');
+  // (r7) baseball is the default sport of an unnamed line — "1969 Topps Baseball" IS "1969 Topps"
+  assert.equal(productLineOf('1969 Topps Baseball High-Grade Complete Set (664)'), '1969 Topps');
   // a card number, a featured player, an unknown issuer → no line
   assert.equal(productLineOf('2017 Panini Donruss Rated Rookie #327 Patrick Mahomes PSA-Graded Collection (10)'), null);
   assert.equal(productLineOf('1985 FTCC "The Three Stooges" Second Series Unopened Box (36 Packs)'), null);

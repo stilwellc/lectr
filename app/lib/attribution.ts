@@ -94,7 +94,20 @@ export function isMisattributed(artist: string, title: string, desc = ''): boole
     }
   }
   if ((mk === 'art' || mk === 'design') && notByMaker(artist, title, desc)) return true;
+  if ((mk === 'art' || mk === 'design') && workByOtherMaker(artist, t)) return true;
   return false;
+}
+
+/** (r7 data fix) the work on the lot is ANOTHER tracked artist's: "Fab 5 Freddy and Beside's
+ *  'Change the Beat' 12 inch vinyl, signed and with original artwork by Keith Haring" sat on
+ *  Fab 5 Freddy's book as his $32,760 record — the art on it is Haring's */
+function workByOtherMaker(artist: string, t: string): boolean {
+  const m = t.match(/\b(?:original )?(?:art(?:work)?|drawings?|paintings?|illustrations?|sketch(?:es)?|cover art) by ((?:[a-zà-ÿ.'’-]+\s*){1,3})/);
+  if (!m) return false;
+  const own = MAKER_SURNAME[artist];
+  // a joint hand that includes the maker ("drawings by Picasso and Matisse" on Picasso) keeps him
+  if (own && new RegExp(`\\b${own}`).test(m[1])) return false;
+  return Object.values(MAKER_SURNAME).some(s => s !== own && new RegExp(`\\b${s}`).test(m[1]));
 }
 
 const TRACKED_SURNAMES = new Set(Object.values(MAKER_SURNAME).flatMap(s => [s, s === 'prouv' ? 'prouvé' : s]));
@@ -141,4 +154,33 @@ export function notByMaker(artist: string, title: string, desc = ''): boolean {
   // "(after Andy Warhol)", ", after Warhol", "in the manner of Picasso", "school of Matisse", "homage to Warhol"
   if (new RegExp(`(?:^|[\\s(,;])(?<!by and )(?:after|d'apr[eè]s|in the manner of|manner of|in the style of|style of|school of|circle of|follower of|imitator of|homm?age (?:[àa]|to))\\s+${near}\\b`).test(t)) return true;
   return false;
+}
+
+/* ── (r7 data fix) an artist's OWN WORK sold on a collectibles desk ──────
+   RR Auction / Goldin catalogue Warhol, Picasso, Lichtenstein, Haring and
+   Matisse under entertainment memorabilia — signed screenprints, sketches,
+   original drawings beside signed books, postcards and dollar bills. The
+   entity key (app/lib/entity/key) files a lot BY the artist under the maker
+   (mk:<slug>); everything else — an autograph, a signed book, a photo of or
+   by someone else — stays the artist's person subject (signed & ephemera).
+   Measured on the full local corpus, Oct 10: Warhol 198 culture-desk sales,
+   Picasso 71, Lichtenstein 33, Haring 26, Matisse 18. */
+/** the object IS a work: a print, a drawing, a painting, a sculpture */
+const WORK_NOUN = /\b(?:screen ?prints?|silk ?screens?|silkscreen prints?|serigraphs?|lithographs?|etchings?|engravings?|woodcuts?|linocuts?|aquatints?|prints?|sketch(?:es)?|drawings?|doodles?|paintings?|painted|watercolou?rs?|gouaches?|collages?|original art(?:work)?|artwork|on canvas|ceramics?|sculptures?|maquettes?)\b/i;
+/** a carrier the artist SIGNED — ephemera, unless an original work rides on it */
+const EPHEMERA = /\b(?:books?|catalogue?s?|catalogs?|postcards?|cards?|invitations?|posters?|ads?|advertisements?|magazines?|dust jackets?|checks?|cheques?|letters?|documents?|photographs?|photos?|programs?|dollar|bills?|labels?|pages?|signatures?|menus?|envelopes?|covers?|albums?|records?|vinyl|t-shirts?|shirts?|bags?|tickets?|stamps?|currency|notes?)\b/i;
+/** an original work drawn ON the carrier ("Signed Book with Sketch", "… with Original Drawing") */
+const WORK_ON_CARRIER = /\bwith\b[^,;()–-]{0,40}?\b(?:sketch(?:es)?|drawings?|doodles?|self-portraits?|artwork|paintings?|watercolou?rs?)\b|\b(?:original|hand-drawn) (?:sketch|drawing|doodle)\b|\b(?:sketch|drawing|doodle)(?:es|s)? (?:on|in|inside)\b/i;
+/** the five artists the collectibles desks name as a subject (the person slug IS the maker slug) */
+const ABOUT_ARTIST = /\b(?:(?:photo(?:graph)?|portrait|picture|image|snapshot|bust|caricature|likeness)s? of|depicting)\s+(?:pablo |andy |roy |keith |henri )?(?:picasso|warhol|lichtenstein|haring|matisse)\b/i;
+/** an artist's work on a collectibles desk: the title names a work, not a signed carrier,
+ *  and no one else's hand ("… 'Andy Mouse' by Keith Haring") or a second artist joined
+ *  to the lead ("Andy Warhol and Jamie Wyeth Signed Prints") */
+export function isWorkByArtist(title: string): boolean {
+  const t = String(title || '');
+  if (/^\s*(?:\S+\s+){1,3}(?:and|&)\s+[A-Z]/.test(t)) return false;
+  if (/\bby (?:[A-Z][\w'’.-]*\s+){1,3}/.test(`${t.replace(/\bby (?:hand|the artist)\b/gi, '')} `)) return false;
+  if (ABOUT_ARTIST.test(t)) return false;
+  if (EPHEMERA.test(t)) return WORK_ON_CARRIER.test(t);
+  return WORK_NOUN.test(t);
 }

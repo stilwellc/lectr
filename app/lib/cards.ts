@@ -9,6 +9,7 @@
  */
 
 import { leadYearOf } from './lead-year';
+import { canonPlayerName } from './player-name';
 
 export interface CardId {
   player: string | null;      // "LeBron James"
@@ -558,7 +559,15 @@ export function knownPlayerSet(cardPlayers: Iterable<string | null | undefined>,
     if (!name) continue;
     const words = name.trim().split(/\s+/);
     if (words.length < 2 || words.length > 4 || NOT_A_PLAYER_WORD.test(name)) continue;
+    // (r7 data fix) the roster holds people only (app/lib/player-name): team cards
+    // read "New York" in the player slot ≥3 times, and stamped 5,315 autographs,
+    // balls and photos as the player "New York"; presidents' baseballs, "Mantle Hits"
+    // (a famous non-athlete stays IN the roster — the object reader must stop at "Richard Nixon
+    // Single Signed …" rather than read on to "Warren Giles"; the stamp then drops the name)
     const slug = playerSlugOf(name);
+    // (same name in any case: "FREDERICK LILLYWHITE" is Frederick Lillywhite)
+    const canon = canonPlayerName(name, name);
+    if (!canon || playerSlugOf(canon) !== slug) continue;
     if (slug) n.set(slug, (n.get(slug) || 0) + 1);
   }
   const out = new Set<string>();

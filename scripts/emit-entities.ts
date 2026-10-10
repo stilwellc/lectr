@@ -31,7 +31,7 @@ import { SERVED_DIR } from './corpus-io';
 import { servedLastCrawl } from './lib/served-stamp';
 import { MARKETS, MAKER_MARKETS, MAKER_DISCIPLINE, ARTIST_LABEL, marketOf } from '../app/constants';
 import { MIN_SOLD, LENS_LABELS, BUDGET_MARKET_BR, BUDGET_ALL_BR, encodeEntities, tierEntities, isEntitiesWire } from '../app/lib/entity/wire';
-import { entityKeyOf, parseEntityId, entityPageOf, subEntityLabel } from '../app/lib/entity/key';
+import { entityKeyOf, parseEntityId, entityPageOf, subEntityLabel, artistMakerOf } from '../app/lib/entity/key';
 import { entityFigures, completeQuarters, SPARK_QUARTERS, THIN_SOLD12M, type SoldPoint, type Labels } from '../app/lib/entity/stats';
 import type { EntitySummary, EntityDetail } from '../app/lib/entity/model';
 import { lotSubjectOf } from '../app/lib/maker-subjects';
@@ -85,6 +85,11 @@ export function identityOf(l: Lot, lens: string): string | null {
   return null;
 }
 
+/** (r7) a set entity's scope, printed as its discipline */
+export const SET_SCOPE = 'Sets, lots & sealed · singles file under the player';
+/** (r7) a tracked artist's person subject (their works file under the maker) */
+export const ARTIST_EPHEMERA = 'Signed & ephemera · works file under the maker';
+
 /** the lens labels (one copy, shared with the client's decoder) */
 export const LABELS: Labels = LENS_LABELS;
 
@@ -98,6 +103,8 @@ interface Acc {
   sports: Map<string, number>;
   domains: Map<string, number>;
   subs: Map<string, number>;
+  /** (r7) the live lots' fine lenses — the median prefers the live book's lens (stats FigureOpts) */
+  liveLens: Map<string, number>;
   face: { url: string; val: number } | null;
 }
 
@@ -161,7 +168,7 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): BuiltEntiti
   const accs = new Map<string, Acc>();
   const acc = (id: string): Acc => {
     let a = accs.get(id);
-    if (!a) accs.set(id, a = { id, pts: [], live: 0, livePhoto: false, names: new Map(), sports: new Map(), domains: new Map(), subs: new Map(), face: null });
+    if (!a) accs.set(id, a = { id, pts: [], live: 0, livePhoto: false, names: new Map(), sports: new Map(), domains: new Map(), subs: new Map(), liveLens: new Map(), face: null });
     return a;
   };
   const note = (a: Acc, l: Lot, ln: ReturnType<typeof lensesOf>) => {
@@ -203,7 +210,9 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): BuiltEntiti
     const a = acc(id);
     a.live++;
     if (l.imageUrl) a.livePhoto = true;
-    note(a, l, lensesOf(l));
+    const ln = lensesOf(l);
+    vote(a.liveLens, ln.lens);
+    note(a, l, ln);
   }
 
   const verified = new Map<string, unknown>();
@@ -216,7 +225,12 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): BuiltEntiti
     if (!(a.live >= 1 || a.pts.length >= MIN_SOLD)) return;
     const ref = parseEntityId(a.id);
     if (!ref) return;
-    const f = entityFigures(a.pts, input.today, LABELS);
+    // (r7) a SUBJECT's typical sale reads its live book's lens, when that lens holds at least half
+    // its live lots (≥ 3 live) and has a 12-month median of its own (stats FigureOpts). Makers and
+    // players keep their sold-dominant lens: their median is the long-run read the ledger ranks on
+    const ll = (ref.kind === 'subject' || ref.kind === 'set') ? top(a.liveLens) : null;
+    const liveLens = ll && a.live >= 3 && (a.liveLens.get(ll) || 0) * 2 >= a.live ? ll : null;
+    const f = entityFigures(a.pts, input.today, LABELS, { liveLens });
     const domSub = top(a.subs);
     const subTag = domSub ? LABELS.lens(domSub) : null;
     let label: string;
@@ -232,6 +246,12 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): BuiltEntiti
       const sport = top(a.sports);
       const domain = top(a.domains);
       if (ref.kind === 'player') discipline = (sport && SPORTS.find(s => s.key === sport)?.label) || subTag;
+      // (r7 data fix) a set is its sealed product, complete / partial sets and multi-card lots —
+      // every single files under its player (one entity per lot) — and says so
+      else if (ref.kind === 'set') discipline = SET_SCOPE;
+      // a tracked artist's own works file under the maker (entity key); what stays here is signed
+      // ephemera and pieces about them — said so, so ⌘K's second "Andy Warhol" is not a twin
+      else if (ref.subKind === 'person' && artistMakerOf(ref.subjectKey?.slice(2))) discipline = ARTIST_EPHEMERA;
       else if (ref.subKind === 'film' || ref.subKind === 'franchise' || (ref.subKind === 'person' && ref.market === 'culture')) {
         discipline = (domain && DOMAINS.find(x => x.key === domain)?.label) || subTag;
       } else discipline = subTag;
@@ -256,6 +276,7 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): BuiltEntiti
       record: f.record,
       spark: f.spark,
       sparkN: f.sparkN,
+      sparkBasis: f.sparkBasis,
       yoy: f.yoy,
       verified: ref.kind === 'maker' ? verified.get(ref.slug!) ?? null : null,
       thin: f.sold12m < THIN_SOLD12M,

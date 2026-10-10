@@ -34,6 +34,10 @@ import { subjectOf, nameTokensOk, cardGroupOf, leadOf } from './subject';
 const CARD_MAKERS = new Set(['sports-cards', 'graded-cards']);
 import { playerSlugOf, parseCard, cardLadderKey } from './cards';
 import { lotFacets, FACET_LABEL } from './facets';
+import { canonPlayerName, NOT_PERSON_RUN, isPublicFigure, publicFigureOf, mononymOf } from './player-name';
+import { taxonOf, SPORTS } from './taxonomy';
+// (r7 data fix) the athlete-name rules moved to app/lib/player-name — re-exported for the old importers
+export { canonPlayerName, NICKNAME_IS_NAME, athleteName, isPublicFigure } from './player-name';
 
 export type SubjectKind = 'player' | 'pokemon' | 'person' | 'film' | 'franchise' | 'mission' | 'team' | 'set' | 'brand';
 
@@ -75,95 +79,15 @@ export function lotSubjectOf(l: SubjectLot): LotSubject | null {
   return v;
 }
 
-/* ── (r7, Oct 10) ONE ATHLETE PER PLAYER ROW ──────────────────────────────
-   The readers above hand back a name RUN; three shapes of run minted rows
-   that are no person (measured on the prod sports entities, Oct 10: 29 of
-   5,355 player ids, ~400 sold lots; 3,161 of 19,674 ids over the full local
-   corpus incl. one-sale ids):
-     joined     two names fused into one: a given name + its quoted nickname
-                ('Larry "Yogi" Berra' stamped "Larry Yogi Berra"), or a duo
-                joined by a hyphen ("Yogi Berra-Phil Rizzuto Game-Worn …")
-     run-on     the caption glued after the name ("Babe Ruth Hits 60th
-                Homer", "LeBron James Diamond", "Jimmy Dykes Age 36",
-                "Roberto Clemente White Base Bobblehead")
-     not one    a subset / team / promo card the parser read as a name
-                ("A.L. Batting Leaders", "Rival Fence Busters", "Buc Hill
-                Aces", "Quaker Oats Premium")
-   canonPlayerName is applied to EVERY player name before it becomes a key. */
-
-/** words no athlete's name holds: the run is a subset / team / promo card, never a person */
-const NOT_PERSON_RUN = /\b(?:Perez-Steele|Berk Ross|Post Cereal|Leaders|Busters|Aces|Hitters|Sluggers|Bombers|Batterymates|Twins Trio|Trio|Variation|Showing|Brewing|Premium|Tournament|Winner|Moments|Co\.?|Inc\.?)(?=\s|$)/i;
-/** caption words a house glues after the name — trimmed off the end of the run */
-const RUN_ON_TAIL = /\s(?:Pittsburgh|Boston|Brooklyn|Philadelphia|Detroit|Baltimore|Seattle|Oakland|Minnesota|Milwaukee|Atlanta|Cleveland|Houston|Montreal|Toronto|Kansas|UDA|Perfect|Strip|Special|Blasts|News|Label|Hits|Throwing|Batting|Pitching|Fielding|Swinging|Sliding|Catching|Hurls|Clubs|Raps|Age|High|Low|Diamond|Supernova|Aquamarine|Emerald|Sapphire|Ruby|Boldly|Pants|MVP|Graded|Perforated|Proof|Contact-Proof|Day|Engraved|Pristine|Handwritten|Highlights|Chicago|Cincinnati|Endorsed|Pro|Photograph|Photo|Alive)$/i;
-/** praise / issuer words a house leads the name with ("Extraordinary Babe Ruth Single-Signed…", "1959 Bazooka Mickey Mantle") */
-const RUN_ON_LEAD = /^(?:Extraordinary|Outstanding|Spectacular|Exceptional|Incredible|Remarkable|Stunning|Superb|Important|Historic|Rare|Scarce|Unique|Bazooka|Swell)\s/;
-/** a colour the title binds to the card's back / base, never the athlete's surname ("Roberto Clemente White Base") */
-const COLOUR_BACK = /^(?:White|Black|Red|Blue|Gray|Grey|Green|Yellow|Orange|Brown|Gold|Silver|Tan|Cream)\s+(?:Back|Base|Borders?|Background|Letter|Name|Cap|Jersey|Uniform)\b/;
-/** nicknames that ARE the name the hobby files the athlete under ('Larry "Yogi" Berra' is Yogi Berra;
- *  'Walt "Clyde" Frazier' stays Walt Frazier) */
-export const NICKNAME_IS_NAME: ReadonlySet<string> = new Set([
-  'Yogi', 'Babe', 'Catfish', 'Honus', 'Dizzy', 'Whitey', 'Duke', 'Goose', 'Magic', 'Lefty', 'Cy', 'Rube', 'Satchel',
-  'Mookie', 'Pee Wee', 'Smoky Joe', 'Shoeless Joe', 'Cool Papa', 'Pistol Pete', 'Bubba', 'Tiger', 'Bo',
-]);
-const reEscN = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const bareName = (s: string) => s.replace(/[()"“”]/g, '').replace(/\s+/g, ' ').trim().replace(/(?<=[a-z])['’]$/, '');
-
-/**
- * The one athlete a reader's name run names — or null when the run is no
- * person. Pure: the run and the lot's own title only.
- */
-export function canonPlayerName(name: string | null | undefined, title: string): string | null {
-  let n = bareName(String(name || ''));
-  if (!n) return null;
-  const t = String(title || '');
-  if (NOT_PERSON_RUN.test(n)) return null;
-  // joined: a duo fused by a hyphen ("Yogi Berra-Phil Rizzuto") — a duo files under its first-named
-  const duo = n.match(/^(\S+ \S+?)-([A-Z]\S* \S+)$/);
-  if (duo && nameTokensOk(duo[1].split(' ')) && nameTokensOk(duo[2].split(' '))) n = duo[1];
-  // joined: given name + the quoted nickname the title prints between it and the surname
-  const toks = n.split(' ');
-  if (toks.length >= 3) {
-    for (let i = 1; i < toks.length - 1; i++) {
-      for (let k = 1; k <= 2 && i + k < toks.length; k++) {
-        const nick = toks.slice(i, i + k).join(' ');
-        const q = new RegExp(`${reEscN(toks.slice(0, i).join(' '))}\\s+[("“]${reEscN(nick)}[)"”]\\s+${reEscN(toks.slice(i + k).join(' '))}`);
-        if (q.test(t)) {
-          const keep = NICKNAME_IS_NAME.has(nick) ? [nick, ...toks.slice(i + k)] : [...toks.slice(0, i), ...toks.slice(i + k)];
-          n = keep.join(' ');
-          i = toks.length; break;
-        }
-      }
-    }
-  }
-  // a reader that dropped the nickname ('Larry "Yogi" Berra' → "Larry Berra") gets it back when it IS the name
-  const two = n.split(' ');
-  if (two.length === 2) {
-    const m = new RegExp(`(?:^|\\s)${reEscN(two[0])}\\s+[("“]([A-Z][A-Za-z]+(?: [A-Z][a-z]+)?)[)"”]\\s+${reEscN(two[1])}(?![A-Za-z])`).exec(t);
-    if (m && NICKNAME_IS_NAME.has(m[1])) n = `${m[1]} ${two[1]}`;
-  }
-  // run-on: caption words after the name, and a colour bound to the back / base
-  const ok = (x: string) => nameTokensOk(x.split(' ')) || nameTokensOk(x.normalize('NFD').replace(/[̀-ͯ]/g, '').split(' '));
-  for (let i = 0; i < 3; i++) {
-    const before = n;
-    // a trim stands only when what is left still reads as a name ("Booker T. Washington" keeps its surname)
-    if (n.split(' ').length > 2) { const c = n.replace(RUN_ON_TAIL, '').replace(RUN_ON_LEAD, ''); if (c !== n && ok(c)) n = c; }
-    const w = n.split(' ');
-    if (w.length > 2) {
-      const last = w[w.length - 1];
-      const at = t.search(new RegExp(`${reEscN(w.slice(0, -1).join(' '))}\\s+${reEscN(last)}\\s`));
-      if (at >= 0 && COLOUR_BACK.test(t.slice(at + w.slice(0, -1).join(' ').length).trim()) && ok(w.slice(0, -1).join(' '))) n = w.slice(0, -1).join(' ');
-    }
-    if (n === before) break;
-  }
-  // (accents folded for the shape test only: "Alperen Şengün")
-  return ok(n) ? n : null;
-}
-
-/** a player row off a reader's name, canonical (null: no person) */
+/** a player row off a reader's name, canonical (null: no person). (r7 data
+ *  fix) a one-word athlete (Pelé) is a player; a famous NON-athlete on a
+ *  sports desk (a president's baseball, Marilyn Monroe's photos) is a
+ *  person row — keyed sj:sports|p:…, never a /player (app/lib/player-name) */
 function playerRow(name: string | null | undefined, title: string, kind: SubjectKind = 'player'): LotSubject | null {
-  const n = canonPlayerName(name, title);
+  const pf = publicFigureOf(name);
+  const n = pf ?? mononymOf(name) ?? canonPlayerName(name, title);
   const slug = n ? playerSlugOf(n) : null;
-  return n && slug ? { key: `p:${slug}`, name: n, kind, playerSlug: slug } : null;
+  return n && slug ? { key: `p:${slug}`, name: n, kind: pf || isPublicFigure(n) ? 'person' : kind, playerSlug: slug } : null;
 }
 
 function read(l: SubjectLot): LotSubject | null {
@@ -190,7 +114,7 @@ function read(l: SubjectLot): LotSubject | null {
   }
   if (CARD_MAKERS.has(l.artist)) {
     const g = cardGroupOf(l);
-    if (g) return groupRow(g.name, g.kind);
+    if (g) return groupRow(g.kind === 'set' ? setNameOf(g.name, l) : g.name, g.kind);
     // (r6) a slot run that is not a person falls through to the pipeline stamp below (rosterCardPlayerOf)
     // (r5) a card with no number to key (pre-war, oddball issues: "1928 Exhibits Frank Frisch") —
     // the pipeline-stamped athlete, when the title spells that exact name
@@ -237,7 +161,7 @@ function read(l: SubjectLot): LotSubject | null {
     if (r) return r;
   }
   if (s?.kind === 'mission' || s?.kind === 'program') return { key: `m:${norm(s.name)}`, name: s.name, kind: 'mission', playerSlug: null };
-  if (s?.kind === 'team' || s?.kind === 'set' || s?.kind === 'brand') return groupRow(s.name, s.kind);
+  if (s?.kind === 'team' || s?.kind === 'set' || s?.kind === 'brand') return groupRow(s.kind === 'set' && marketOf(l.artist) === 'sports' ? setNameOf(s.name, l) : s.name, s.kind);
   if (s?.kind === 'person') {
     // (r5) an act read off the title IS its franchise facet ("The Beatles" / fr-beatles,
     // "The Rolling Stones" / "Rolling Stones") — one row, the facet's
@@ -247,14 +171,21 @@ function read(l: SubjectLot): LotSubject | null {
     // "The Clash Signed…" and "Clash Band-Signed…" are one act — the row key drops a leading "The"
     // sports memorabilia names an athlete — the same row as their cards (r7: one athlete,
     // canonical; a one-word signer — "Pele Signed…" — or an owner's possessive keeps its read)
+    // (r7 data fix) …and a run that is no athlete files under NO person on a sports desk: a team, a
+    // venue, a one-word caption ("Enormous Signed…", "Tennis Autographed…", "Presidential …") read
+    // in the name slot minted /player ids ("pl:green-bay", "pl:yankee-stadium", "pl:enormous")
     if (marketOf(l.artist) === 'sports') {
       if (NOT_PERSON_RUN.test(s.name)) return null;
+      // a leading run that is no athlete (a postcard photographer — "J.D. McCarthy Signed Mickey
+      // Mantle Postcard" — a club, a venue) yields to the pipeline-stamped athlete the title spells
       const r = playerRow(s.name, title);
       if (r) return r;
+      const sp = stampedPlayerOf(l);
+      return sp ? playerRow(sp.name, title) : null;
     }
     const slug = marketOf(l.artist) === 'culture' && /^The [A-Z]/.test(s.name) ? playerSlugOf(s.name.slice(4)) : playerSlugOf(s.name);
     if (!slug) return null;
-    return { key: `p:${slug}`, name: s.name, kind: marketOf(l.artist) === 'sports' ? 'player' : 'person', playerSlug: slug };
+    return { key: `p:${slug}`, name: s.name, kind: 'person', playerSlug: slug };
   }
   const fr = franchiseOf(l);
   if (s?.kind === 'film') {
@@ -332,7 +263,8 @@ export function stampedPlayerOf(l: { artist: string; title?: string | null; play
   if (!raw || !l.playerSlug || NOT_ONE_ATHLETE_MAKERS.has(l.artist)) return null;
   const name = raw.split(/\s+/).map(capWord).join(' ');
   // (accents folded for the shape test only: "Alperen Şengün")
-  if (!nameTokensOk(fold(name).split(' ')) || CARD_TAIL.test(name) || NOT_STAMP_NAME.test(name)) return null;
+  // (r7) …or a one-word athlete the hobby files by one name (app/lib/player-name mononymOf: Ronaldo, Pelé)
+  if ((!nameTokensOk(fold(name).split(' ')) && !mononymOf(name)) || CARD_TAIL.test(name) || NOT_STAMP_NAME.test(name)) return null;
   const slug = playerSlugOf(name);
   if (!slug || slug !== l.playerSlug) return null;
   const title = fold(String(l.title || ''));
@@ -347,6 +279,18 @@ export function stampedPlayerOf(l: { artist: string; title?: string | null; play
   // the lead: nothing but a lot number and a date before the name
   if (mustLead && leadOf(`${before.replace(/^\d{1,4}\s+/, '')}Z`) !== 'Z') return null;
   return { name, slug };
+}
+
+/** (r7 data fix) one id per set: a sports product line that names no sport takes the lot's own
+ *  when it is not baseball (the default — app/lib/subject-groups productLineOf drops the word),
+ *  so "1986 Fleer" (baseball) never merges into "1986 Fleer Basketball". The sport the taxonomy
+ *  reads off the lot; none → as is. */
+const SPORT_WORD = /\b(?:Baseball|Basketball|Football|Hockey|Soccer|Golf|Boxing|Racing|Tennis|Wrestling|Olympics?|Multi-Sport|Non-Sport|Star Wars|Star Trek|Marvel|Garbage Pail|Wacky Packages|Mars Attacks)\b/i;
+function setNameOf(name: string, l: SubjectLot): string {
+  if (SPORT_WORD.test(name)) return name;
+  const sport = taxonOf(l as Parameters<typeof taxonOf>[0]).sport;
+  const label = sport ? SPORTS.find(x => x.key === sport)?.label : null;
+  return label && sport !== 'other-sports' && sport !== 'baseball' && !label.includes('&') ? `${name} ${label}` : name;
 }
 
 function groupRow(name: string, kind: 'team' | 'set' | 'brand' | string): LotSubject {

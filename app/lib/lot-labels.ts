@@ -26,6 +26,7 @@ import { taxonOf, subLabel, CAT_LABEL, SPORTS, type CatKey } from './taxonomy';
 import { cardBadgesOf } from './facets';
 import { subjectOf, cardGroupOf } from './subject';
 import { makerHref } from './entity/retired';
+import { athleteName, notOnePerson } from './player-name';
 
 const CARD_MAKERS = new Set(['sports-cards', 'graded-cards']);
 const POKE_NAME = /#[\w-]+\s+(.+?)(?:\s+-\s|\s*$)/;
@@ -66,7 +67,14 @@ export function makerLineOf(lot: NamedLot): MakerLine {
     const id = parseCard(title);
     // a player only off a parsed card identity — never a guessed name from a memorabilia title
     if (!id.notCard && !id.multi && id.player && id.playerSlug && cardLadderKey(id) && PERSON.test(id.player) && !CARD_WORD.test(id.player.replace(/^Red (?=[A-Z][a-z])/, ''))) {
-      out = { name: id.player, href: `/player?id=${encodeURIComponent(id.playerSlug)}` };
+      // (r7 data fix) only an ATHLETE links to /player (app/lib/player-name): a team card's
+      // "New York" ("1961 Topps #228 New York Yankees Team") linked to a phantom /player?id=new-york;
+      // a surname-only highlight ("Mantle Hits") or a non-athlete is no /player either. The run-on's
+      // first two words stand in when they are the athlete ("Duke Snider Play Brings")
+      const two = id.player.split(' ').slice(0, 2).join(' ');
+      const ath = notOnePerson(id.player) ? null : athleteName(id.player, title) ?? (two !== id.player ? athleteName(two, title) : null);
+      const slug = ath ? playerSlugOf(ath) : null;
+      if (ath && slug) out = { name: ath, href: `/player?id=${encodeURIComponent(slug)}` };
     }
   } else if (title && lot.artist === 'pokemon') {
     const m = title.match(POKE_NAME);

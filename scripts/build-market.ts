@@ -804,7 +804,17 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   let gradeLadderArtifact: ReturnType<typeof fitGradeLadder>['rungs'] | null = null;
   let gradeLadderMeta: { pairs: number; groups: number } | null = null;
   {
-    const { parseCard, playerOf, cardKey, cardLadderKey, rosterCardPlayerOf } = require('../app/lib/cards');
+    const { parseCard, playerOf, cardKey, cardLadderKey, rosterCardPlayerOf, playerSlugOf } = require('../app/lib/cards');
+    // (r7 data fix) THE athlete test (app/lib/player-name — the one the entity key reads): a
+    // stamped / parsed name is kept only as its canonical athlete. A team card's "New York",
+    // "Mantle Hits", "Yankee Stadium", a president's baseball never become a player (players.json
+    // held "New York" with 5,315 sales, and its /player page rendered blank)
+    const { athleteName } = require('../app/lib/player-name');
+    const athleteOf = (p: { player: string | null; playerSlug?: string | null }, title: string): { player: string | null; playerSlug: string | null } => {
+      const a = p.player ? athleteName(p.player, title) : null;
+      const slug = a ? playerSlugOf(a) : null;
+      return a && slug ? { player: a, playerSlug: slug } : { player: null, playerSlug: null };
+    };
     // parseCard is a pure function of the title; the same card title recurs
     // across the sold pass AND the live pass (and duplicate listings), so cache
     // by title — each unique title is parsed once. The cached CardId is returned
@@ -851,11 +861,12 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         // are valued against (the "Missing Back at clean prices" class)
         if (hasConditionFlag(l.title) || llmConditionFlag(l)) continue;
         const c = cardIdOf(l);
-        l._card = c; l._pid = c.playerSlug; l._pname = c.player;
+        const ca = athleteOf(c, l.title || '');
+        l._card = c; l._pid = ca.playerSlug; l._pname = ca.player;
         const ck = cardKey(c); if (ck) (byCardKey.get(ck) || byCardKey.set(ck, []).get(ck)!).push(l);
         const lk = cardLadderKey(c); if (lk) (byLadderKey.get(lk) || byLadderKey.set(lk, []).get(lk)!).push(l);
       } else {
-        const p = playerOf(l.title || '', l.artist, knownPlayers);
+        const p = athleteOf(playerOf(l.title || '', l.artist, knownPlayers), l.title || '');
         l._pid = p.playerSlug; l._pname = p.player;
       }
       if (l._pid && l._pname) {
@@ -1310,7 +1321,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
       if (l.status !== 'upcoming' && !CARD_SLUGS.has(l.artist)) {
         const sw = l as AuctionLot & { _pid?: string | null; _pname?: string | null; playerSlug?: string | null; playerName?: string | null };
         let pid = sw._pid ?? null, pname = sw._pname ?? null;
-        if (pid == null) { const p = playerOf(l.title || '', l.artist, knownPlayers); pid = p.playerSlug; pname = p.player; }
+        if (pid == null) { const p = athleteOf(playerOf(l.title || '', l.artist, knownPlayers), l.title || ''); pid = p.playerSlug; pname = p.player; }
         sw.playerSlug = pid; sw.playerName = pname;
         if (pid) soldStamped++;
         continue;
@@ -1320,12 +1331,13 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
       if (CARD_SLUGS.has(l.artist)) {
         if (l.subCat === 'tcg-other') continue;
         const c = cardIdOf(l);
-        lw.playerSlug = c.playerSlug; lw.playerName = c.player;
+        const ca = athleteOf(c, l.title || '');
+        lw.playerSlug = ca.playerSlug; lw.playerName = ca.player;
         // (r6) a single the slot readers can't name — a numberless pre-war /
         // oddball issue ("1954 Red Heart Stan Musial"), or a slot run that is
         // not a person ("#50 Jackie Robinson Inaugural Bowman Card"): the one
         // KNOWN player it names. A known slot read is never overridden.
-        const np = rosterCardPlayerOf(l.title || '', knownPlayers);
+        const np = athleteOf(rosterCardPlayerOf(l.title || '', knownPlayers), l.title || '');
         if (np.player) { lw.playerSlug = np.playerSlug; lw.playerName = np.player; }
         // a condition-flagged lot must not wear a clean-comp floor: no
         // cardComps → no deep-value seat, no misleading "med" on the page
@@ -1439,7 +1451,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
           }
         }
       } else {
-        const p = playerOf(l.title || '', l.artist, knownPlayers);
+        const p = athleteOf(playerOf(l.title || '', l.artist, knownPlayers), l.title || '');
         lw.playerSlug = p.playerSlug; lw.playerName = p.player;
       }
     }

@@ -99,6 +99,8 @@ export interface EntitiesWire {
      *  (basis matched); since R7 [pct, n, 0|1|2, lo, hi] with its 90% interval;
      *  0 = none */
     y: ([number, number] | [number, number, 0 | 1 | 2] | [number, number, 0 | 1 | 2, number, number] | 0)[];
+    /** (r7) spark basis: 1 = matched (same items, chained), 0 = median; absent on older files */
+    sb?: (0 | 1)[];
   };
   /** verified movers by id (makers only, sparse) */
   vf: Record<string, unknown>;
@@ -138,7 +140,7 @@ export function encodeEntities(list: readonly EntitySummary[], o: WireOpts): Ent
     if (i === undefined) { i = arr.length; arr.push(v); m.set(v, i); }
     return i;
   };
-  const c: EntitiesWire['c'] = { id: [], l: [], d: [], f: [], s: [], s12: [], m: [], mn: [], ml: [], r: [], sp: [], spn: [], y: [] };
+  const c: EntitiesWire['c'] = { id: [], l: [], d: [], f: [], s: [], s12: [], m: [], mn: [], ml: [], r: [], sp: [], spn: [], y: [], sb: [] };
   const vf: Record<string, unknown> = {};
   for (const e of list) {
     c.id.push(e.id);
@@ -154,8 +156,10 @@ export function encodeEntities(list: readonly EntitySummary[], o: WireOpts): Ent
     c.sp.push(e.spark ? e.spark.map(v => (v == null ? null : Math.round(v))) : 0);
     c.spn.push(e.sparkN ?? 0);
     c.y.push(e.yoy ? yoyCell(e.yoy) : 0);
+    c.sb!.push(e.spark && e.sparkBasis === 'matched' ? 1 : 0);
     if (e.verified != null) vf[e.id] = e.verified;
   }
+  if (!c.sb!.some(Boolean)) delete c.sb;
   return { v: WIRE_V, tier: o.tier, generatedAt: o.generatedAt, lastCrawl: o.lastCrawl, sparkQ: o.sparkQ, tailN: o.tailN, ds, ml, c, vf };
 }
 
@@ -191,6 +195,7 @@ export function decodeEntities(w: EntitiesWire): EntitiesFile & { tier: 'main' |
       record: r ? { p: r[0], d: r[1] } : null,
       spark,
       sparkN: c.spn[i] || null,
+      sparkBasis: spark ? (c.sb?.[i] ? 'matched' : 'median') : null,
       yoy: y ? yoyOfCell(y) : null,
       verified: w.vf[id] ?? null,
       thin: c.s12[i] < THIN_SOLD12M,
