@@ -12,7 +12,8 @@ import { useMakerRows } from '../../hooks/useMakerRows';
 import type { MarketData } from '../../hooks/useRayData';
 import { useSavedLots } from '../../hooks/useSavedLots';
 import { useMarket } from '../../lib/market';
-import { getUpcomingCounts, formatDate, localToday, isLiveUpcoming, refLabel, median } from '../../utils';
+import { getUpcomingCounts, formatDate, trueSaleDay, refLabel, median } from '../../utils';
+import { makerLiveLots } from '../../lib/maker-pool';
 import { useRefs, refsForMaker } from '../../hooks/useRefs';
 import { encodeRefPath } from '../../ref/ref-path';
 
@@ -369,6 +370,30 @@ function MakerDecadeBand({ lots, label }: { lots: AuctionLot[]; label: string })
   );
 }
 
+// THE LIVE BOOK — the maker's live lots in the shared lot browser
+// (components/UpcomingLots → LotBrowser), anchored at #upcoming: the
+// engine-flags line and /makers' "+N more on the block" land here.
+function LiveBook({ slug, upcoming, compLots, savedIds, onToggleSave, lastCrawl, fromCache }: {
+  slug: string; upcoming: AuctionLot[]; compLots: AuctionLot[]; savedIds: string[];
+  onToggleSave: (id: string) => void; lastCrawl?: string | null; fromCache: boolean;
+}) {
+  if (upcoming.length === 0) return null;
+  return (
+    <div id="upcoming" className="ray-enter" style={{ '--enter-delay': '120ms' } as React.CSSProperties}>
+      <UpcomingLots
+        slug={slug}
+        lots={upcoming}
+        allLots={compLots}
+        savedIds={savedIds}
+        onToggleSave={onToggleSave}
+        mark="02"
+        lastCrawl={lastCrawl || undefined}
+        fromCache={fromCache}
+      />
+    </div>
+  );
+}
+
 // The gated sold/upcoming sections. `sold`/`chartLots` already carry any
 // merged archive rows; the hero re-renders with them too. Kept as a leaf so
 // both the standard (phase-2) and archive (phase-3) bodies reuse it verbatim.
@@ -378,7 +403,6 @@ function MakerSections({
   chartLots,
   upcoming,
   sold,
-  allLots,
   savedIds,
   onToggleSave,
   ownedIds,
@@ -426,19 +450,6 @@ function MakerSections({
             onCategoryChange={onCategoryChange}
             fallbackData={stats?.priceHistory}
             mark="01"
-          />
-        </div>
-      )}
-      {upcoming.length > 0 && (
-        <div id="upcoming">
-          <UpcomingLots
-            lots={upcoming}
-            allLots={allLots}
-            stats={stats || undefined}
-            savedIds={savedIds}
-            onToggleSave={onToggleSave}
-            mark="02"
-            enterDelay={180}
           />
         </div>
       )}
@@ -511,14 +522,12 @@ export default function ArtistDetailPage() {
   // a fresh array identity every render, defeating exactly that.
   const { lots, upcoming, sold } = useMemo(() => {
     const lots = mk.rows ?? allLots.filter(l => l.artist === slug);
-    const today = localToday(); // the reader's local YYYY-MM-DD
-    const upcoming = lots
-      .filter(l => isLiveUpcoming(l, today))
-      .sort((a, b) => {
-        if (!a.saleDate) return 1;
-        if (!b.saleDate) return -1;
-        return new Date(a.saleDate).getTime() - new Date(b.saleDate).getTime();
-      });
+    // the live book comes from the EAGER served book (upcoming.json), never
+    // the maker shard — a different nightly snapshot that disagreed with the
+    // /makers row count (Warhol 80 vs 101). app/lib/maker-pool is the one
+    // definition both pages count with; hammer order for the lot browser.
+    const upcoming = makerLiveLots(allLots, slug)
+      .sort((a, b) => (trueSaleDay(a) < trueSaleDay(b) ? -1 : trueSaleDay(a) > trueSaleDay(b) ? 1 : 0));
     const sold = lots.filter(l => l.status === 'sold');
     return { lots, upcoming, sold };
   }, [allLots, slug, mk.rows]);
@@ -564,6 +573,14 @@ export default function ArtistDetailPage() {
               <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
                 <ArtistHero animate={!fromCache} slug={slug} serial={lastCrawl ? lastCrawl.slice(0, 10).replace(/-/g, '') : undefined} label={label} stats={stats} lots={lots} upcomingCount={upcoming.length} market={market} />
               </div>
+              {/* #28/#30 — engine flags + live activity, then THE LIVE BOOK
+                  itself (Oct 9: right under the hero — it was ~2,600px down,
+                  under the price history; the dossier's actionable part) */}
+              <div className="ray-enter" style={{ '--enter-delay': '80ms' } as React.CSSProperties}>
+                <ValueEnginePresence upcoming={upcoming} />
+                <MovingNowSummary upcoming={upcoming} />
+              </div>
+              <LiveBook slug={slug} upcoming={upcoming} compLots={allLots} savedIds={savedIds} onToggleSave={toggleWithLot} lastCrawl={lastCrawl} fromCache={fromCache} />
               {/* watch makers: the model-family ledger — pre-aggregated drill
                   rows scoped to this maker (Daytona vs Cellini, honest reads) */}
               {market === 'watches' && (
@@ -587,11 +604,6 @@ export default function ArtistDetailPage() {
                   <VerticalContextLedger marketData={marketData} vertical={market} label={label} />
                 </div>
               )}
-              {/* #28/#30 — engine flags + live activity above the fold */}
-              <div className="ray-enter" style={{ '--enter-delay': '120ms' } as React.CSSProperties}>
-                <ValueEnginePresence upcoming={upcoming} />
-                <MovingNowSummary upcoming={upcoming} />
-              </div>
             </RayEntrance>
           )}
 
@@ -599,6 +611,7 @@ export default function ArtistDetailPage() {
             <ArchiveMakerBody
               slug={slug}
               serial={lastCrawl ? lastCrawl.slice(0, 10).replace(/-/g, '') : undefined}
+              lastCrawl={lastCrawl}
               label={label}
               stats={stats}
               phaseLots={lots}
@@ -683,6 +696,7 @@ function LegacyArchiveProbe({ slug, phaseLots, onState }: {
 function ArchiveMakerBody({
   slug,
   serial,
+  lastCrawl,
   label,
   stats,
   phaseLots,
@@ -699,6 +713,7 @@ function ArchiveMakerBody({
   pre: { rows: AuctionLot[] | null; error: boolean } | null;
   slug: string;
   serial?: string;
+  lastCrawl?: string | null;
   label: string;
   stats: MarketStats | null;
   phaseLots: AuctionLot[];
@@ -729,9 +744,15 @@ function ArchiveMakerBody({
         <div className="ray-enter" style={{ '--enter-delay': '60ms' } as React.CSSProperties}>
           <ArtistHero animate={!fromCache} slug={slug} serial={serial} label={label} stats={stats} lots={makerLots} upcomingCount={upcoming.length} bidMarket market={marketOf(slug)} />
         </div>
+        {/* the value/activity summaries + the live book read the
+            always-present eager upcoming book and paint immediately */}
+        <div className="ray-enter" style={{ '--enter-delay': '80ms' } as React.CSSProperties}>
+          <ValueEnginePresence upcoming={upcoming} />
+          <MovingNowSummary upcoming={upcoming} />
+        </div>
+        <LiveBook slug={slug} upcoming={upcoming} compLots={makerLots} savedIds={savedIds} onToggleSave={onToggleSave} lastCrawl={lastCrawl} fromCache={fromCache} />
         {/* #26 — sports player strip + #32 decade band ride the deep merged
-            set, so they wait for the archive; the value/activity summaries
-            read the always-present phase-2 upcoming and paint immediately. */}
+            set, so they wait for the archive */}
         {marketOf(slug) === 'sports' && archiveLoaded && (
           <div className="rail ray-enter" style={{ '--enter-delay': '80ms' } as React.CSSProperties}>
             <PlayerStrip lots={makerLots} label={label} />
@@ -742,10 +763,6 @@ function ArchiveMakerBody({
             <MakerDecadeBand lots={makerLots} label={label} />
           </div>
         )}
-        <div className="ray-enter" style={{ '--enter-delay': '110ms' } as React.CSSProperties}>
-          <ValueEnginePresence upcoming={upcoming} />
-          <MovingNowSummary upcoming={upcoming} />
-        </div>
       </RayEntrance>
 
       {!archiveLoaded ? (

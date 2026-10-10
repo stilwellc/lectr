@@ -11,7 +11,7 @@ import SaveSearch from './SaveSearch';
 import FollowChip from './FollowChip';
 import { catFollow, houseFollow } from '../lib/follows';
 import { taxonOf, SUBS, type CatKey } from '../lib/taxonomy';
-import { WINDOWS, VALUE_FLOORS, TRIAGE_DEFAULTS, isTriageActive, passesTriage, patchTriage, triageToParams, triageFromParams, houseBaselines, type TriageFilters, type HouseBaselines } from '../lib/feed-filters';
+import { WINDOWS, VALUE_FLOORS, VALUE_CEILINGS, fmtCeiling, TRIAGE_DEFAULTS, isTriageActive, passesTriage, patchTriage, triageToParams, triageFromParams, houseBaselines, type TriageFilters, type HouseBaselines } from '../lib/feed-filters';
 import { facetCatOf, facetChips, toggleFacet } from '../lib/facets';
 
 export type FeedSort = 'priority' | 'soonest' | 'gap-desc' | 'newest' | 'bids-desc' | 'est-desc' | 'est-asc';
@@ -68,7 +68,7 @@ export function feedToParams(f: FeedFilters, p: URLSearchParams): void {
 }
 /** every query key the feed codec owns — any of them in the URL means the
  *  URL governs the view (a remembered view is never layered on top) */
-export const FEED_PARAM_KEYS = ['q', 'v', 'mk', 'sp', 'below', 'sort', 'day', 'tab', 'win', 'cat', 'sub', 'house', 'min', 'new', 'fx'];
+export const FEED_PARAM_KEYS = ['q', 'v', 'mk', 'sp', 'below', 'sort', 'day', 'tab', 'win', 'cat', 'sub', 'house', 'min', 'max', 'new', 'fx'];
 export function feedFromParams(p: URLSearchParams): FeedFilters {
   const sort = p.get('sort') as FeedSort | null;
   const v = p.get('v');
@@ -115,6 +115,7 @@ export default function FeedToolbar({
   prevVisitDay = null,
   baselines: baselinesProp,
   onResetView,
+  scopeMaker = null,
 }: {
   lots: AuctionLot[];          // the unfiltered upcoming pool (for counts)
   belowIds: Set<string>;
@@ -138,6 +139,10 @@ export default function FeedToolbar({
   /** set when the view was restored from the reader's last visit: a quiet
    *  "Reset view" puts the feed back on the defaults and forgets it */
   onResetView?: () => void;
+  /** a maker page's lot browser: the pool IS this maker — the maker lens is
+   *  hidden (it could only offer the page itself) and a saved search carries
+   *  the maker */
+  scopeMaker?: string | null;
 }) {
   // The below-market lens auto-ranks by gap (its smart default) — but it must
   // hand back whatever sort the reader had picked when the lens comes off,
@@ -165,13 +170,13 @@ export default function FeedToolbar({
   // TCG, science and culture they are old category buckets ("Graded Cards 0",
   // "Memorabilia 0") that the clean sub-category chips below already cover.
   const makers = useMemo(() => {
-    if (effectiveMarket !== 'design' && effectiveMarket !== 'watches') return [] as [string, number][];
+    if (scopeMaker || (effectiveMarket !== 'design' && effectiveMarket !== 'watches')) return [] as [string, number][];
     const c: Record<string, number> = {};
     lots.forEach(l => { c[l.artist] = (c[l.artist] || 0) + 1; });
     return Array.from(marketArtists(effectiveMarket))
       .map(slug => [slug, c[slug] || 0] as [string, number])
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  }, [lots, effectiveMarket]);
+  }, [lots, effectiveMarket, scopeMaker]);
 
   // sports → which sport (the cut collectors actually shop by)
   const sports = useMemo(() => {
@@ -407,6 +412,7 @@ export default function FeedToolbar({
     (filters.win !== null ? 1 : 0) +
     (filters.house !== null ? 1 : 0) +
     (filters.minUsd !== null ? 1 : 0) +
+    (filters.maxUsd !== null ? 1 : 0) +
     (filters.newOnly ? 1 : 0) +
     filters.fx.length;
   const sheetHasContent =
@@ -564,6 +570,12 @@ export default function FeedToolbar({
               <button key={v} className="ray-toolbar-pill" data-active={filters.minUsd === v} aria-pressed={filters.minUsd === v}
                 onClick={() => set({ minUsd: filters.minUsd === v ? null : v })}>
                 {fmtFloor(v)}
+              </button>
+            ))}
+            {VALUE_CEILINGS.map(v => (
+              <button key={`max-${v}`} className="ray-toolbar-pill" data-active={filters.maxUsd === v} aria-pressed={filters.maxUsd === v}
+                onClick={() => set({ maxUsd: filters.maxUsd === v ? null : v })}>
+                {fmtCeiling(v)}
               </button>
             ))}
           </div>
@@ -859,6 +871,11 @@ export default function FeedToolbar({
               <option value="">Any value</option>
               {VALUE_FLOORS.map(v => <option key={v} value={v}>{fmtFloor(v)}</option>)}
             </select>
+            <select className="ray-toolbar-pill ray-toolbar-select" aria-label="Maximum value" data-active={filters.maxUsd != null}
+              value={filters.maxUsd ?? ''} onChange={e => set({ maxUsd: e.target.value ? Number(e.target.value) : null })}>
+              <option value="">Any max</option>
+              {VALUE_CEILINGS.map(v => <option key={v} value={v}>{fmtCeiling(v)}</option>)}
+            </select>
             {filters.cat && <FollowChip follow={catFollow(filters.cat, filters.sub)} />}
             {filters.house && <FollowChip follow={houseFollow(filters.house)} />}
           </>
@@ -936,7 +953,7 @@ export default function FeedToolbar({
             <button className="ray-toolbar-reset" onClick={() => onChange(clearedFilters(filters))}>
               Clear
             </button>
-            <SaveSearch filters={filters} market={effectiveMarket} />
+            <SaveSearch filters={scopeMaker ? { ...filters, maker: scopeMaker } : filters} market={effectiveMarket} />
           </>
         ) : (
           <>{total.toLocaleString()} lots</>

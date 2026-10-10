@@ -39,6 +39,7 @@ export interface SavedQuery {
    *  cat/sub/house above double as triage keys when `follow` is absent */
   win?: 'today' | '48h' | 'week' | null;
   minUsd?: number | null;
+  maxUsd?: number | null;
   fx?: string[];
 }
 
@@ -71,6 +72,7 @@ export function describeQuery(q: SavedQuery, labels: { maker?: string; category?
   if (q.text) parts.push(`“${q.text}”`);
   if (q.house) parts.push(q.house);
   if (q.minUsd) parts.push(q.minUsd >= 1000 ? `$${q.minUsd / 1000}K+` : `$${q.minUsd}+`);
+  if (q.maxUsd) parts.push(q.maxUsd >= 1000 ? `under $${q.maxUsd / 1000}K` : `under $${q.maxUsd}`);
   if (q.win) parts.push(q.win === 'today' ? 'closing today' : q.win === '48h' ? 'closing in 48 hours' : 'closing this week');
   if (q.belowOnly) parts.push('below market');
   if (labels.market) parts.push(labels.market);

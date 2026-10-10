@@ -333,7 +333,10 @@ function fill<T extends ShortlistLot>(rows: { l: T; s: number }[], n: number, ca
  * the caps leave empty go to the next-best lots under looser caps — never to
  * filler below SEAT_MIN (only the category cap loosens; one sale never gets a 4th seat).
  */
-export function shortlist<T extends ShortlistLot>(lots: T[], nowMs: number = Date.now(), n = 20): T[] {
+export function shortlist<T extends ShortlistLot>(lots: T[], nowMs: number = Date.now(), n = 20, opts: { who?: number } = {}): T[] {
+  // a pool that IS one maker (a maker page's live book) can't diversify
+  // across makers — the caller lifts the per-maker cap there (opts.who)
+  const who = opts.who ?? 2;
   const rows: { l: T; s: number; close: number; a: number }[] = [];
   for (const l of lots) {
     const p = priorityOf(l, nowMs);
@@ -347,11 +350,11 @@ export function shortlist<T extends ShortlistLot>(lots: T[], nowMs: number = Dat
     rows.push({ l, s: p.score, close, a: p.a });
   }
   rows.sort((x, y) => (y.s - x.s) || (x.close - y.close) || (y.a - x.a));
-  const out = fill(rows, n, { cat: 5, sale: 3, who: 2 }, [], nowMs);
-  if (out.length < n) fill(rows, n, { cat: 8, sale: 3, who: 2 }, out, nowMs);
+  const out = fill(rows, n, { cat: 5, sale: 3, who }, [], nowMs);
+  if (out.length < n) fill(rows, n, { cat: 8, sale: 3, who }, out, nowMs);
   // a reader narrowed to one market (PSA cards: ~all Goldin) asked for that
   // room — once every other sale is spent, its best lots may take more seats
-  if (out.length < n) fill(rows, n, { cat: Infinity, sale: 8, who: 2 }, out, nowMs);
+  if (out.length < n) fill(rows, n, { cat: Infinity, sale: 8, who }, out, nowMs);
   return out;
 }
 
