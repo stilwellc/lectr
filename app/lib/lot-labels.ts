@@ -10,7 +10,8 @@
  */
 import { ARTIST_LABEL } from '../constants';
 import { parseCard, cardLadderKey } from './cards';
-import { taxonOf } from './taxonomy';
+import { taxonOf, subLabel, CAT_LABEL } from './taxonomy';
+import { cardBadgesOf } from './facets';
 
 const CARD_MAKERS = new Set(['sports-cards', 'graded-cards']);
 const POKE_NAME = /#[\w-]+\s+(.+?)(?:\s+-\s|\s*$)/;
@@ -44,4 +45,30 @@ export function makerLineOf(lot: NamedLot): MakerLine {
   }
   memo.set(lot as object, out);
   return out;
+}
+
+/** subs that say nothing on a card ("Singles", "Other") — the badges speak instead */
+const QUIET_SUBS = new Set(['singles', 'other', 'objects', 'space-other']);
+
+/**
+ * The one label line a lot carries on cards and rows: its clean sub-category
+ * (app/lib/taxonomy — the same words as the filter chips) plus up to two
+ * facet badges (app/lib/facets.cardBadgesOf), e.g. "Pokémon · Vintage ·
+ * PSA 10", "Space · Apollo · Signed · Flown". Quiet subs drop out; the
+ * category stands in only when nothing else would print.
+ */
+export function labelLineOf(lot: Parameters<typeof cardBadgesOf>[0] & NamedLot): string {
+  const t = taxonOf(lot);
+  const parts: string[] = [];
+  if (!QUIET_SUBS.has(t.sub)) parts.push(subLabel(t.cat, t.sub));
+  for (const b of cardBadgesOf(lot)) if (!parts.includes(b)) parts.push(b);
+  if (!parts.length) parts.push(CAT_LABEL[t.cat]);
+  return parts.join(' · ');
+}
+
+/** the short table-column label: the sub, or the lead badge when the sub is quiet */
+export function subColumnOf(lot: Parameters<typeof cardBadgesOf>[0] & NamedLot): string {
+  const t = taxonOf(lot);
+  if (!QUIET_SUBS.has(t.sub)) return subLabel(t.cat, t.sub);
+  return cardBadgesOf(lot)[0] ?? CAT_LABEL[t.cat];
 }

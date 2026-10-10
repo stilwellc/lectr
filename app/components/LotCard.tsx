@@ -4,9 +4,8 @@ import { useState, useMemo, useInsertionEffect, memo } from 'react';
 import Link from 'next/link';
 import CloseClock from './CloseClock';
 import { AuctionLot } from '../types';
-import { ARTIST_LABEL } from '../constants';
-import { makerLineOf } from '../lib/lot-labels';
-import { houseColors, categoryLabels, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg, sizedImg, localToday } from '../utils';
+import { makerLineOf, labelLineOf } from '../lib/lot-labels';
+import { houseColors, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg, sizedImg, localToday } from '../utils';
 import ComparableModal from './ComparableModal';
 import Flick from './Flick';
 import { computeDeepSignal, FORM_LABEL, signalMagnitude } from '../lib/comps';
@@ -208,7 +207,8 @@ function LotCard({
     setReminded(true);
     setTimeout(() => setReminded(false), 2500);
   }
-  const catLabel = categoryLabels[lot.category] || null;
+  // the clean sub + facet badges ("PSA 10 · Rookie", "Apollo · Signed · Flown") — app/lib/lot-labels
+  const catLabel = useMemo(() => labelLineOf(lot), [lot]);
   const isUpcoming = lot.status === 'upcoming';
   // A concluded lot that never sold — bought_in (failed to meet reserve) or an
   // unresolved result. It must NOT speak formatEstimate() in the price slot
@@ -363,7 +363,7 @@ function LotCard({
         <div style={{ fontSize: 12.5, color: 'var(--color-text-faint)', letterSpacing: '-0.01em', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {isNewToday && <span className="ray-newchip" style={{ marginRight: 6 }}>New today</span>}
           {lot.auctionHouse}
-          {catLabel && lot.category !== 'unknown' && lot.category !== 'object' ? ` · ${catLabel}` : ''}
+          {catLabel ? ` · ${catLabel}` : ''}
           {isPastPending
             ? ` · hammered ${formatDate(lot.saleDate)} · results pending`
             : isNoSale
@@ -582,7 +582,7 @@ function LotCard({
         )}
         <div style={{ fontSize: 13.5, color: 'var(--color-text-faint)', letterSpacing: '-0.01em', marginBottom: 10 }}>
           {lot.auctionHouse}
-          {catLabel && lot.category !== 'unknown' && lot.category !== 'object' ? ` · ${catLabel}` : ''}
+          {catLabel ? ` · ${catLabel}` : ''}
           {isPastPending
             ? ` · hammered ${formatDate(lot.saleDate)} · results pending`
             : isNoSale

@@ -35,12 +35,11 @@ import PastResults from '../../components/PastResults';
 import RayEntrance, { RayLoading } from '../../components/RayEntrance';
 import SettlementSlip from '../../components/SettlementSlip';
 import { sportOfLot } from '../../lib/submarkets';
-import { subCatLabel } from '../../lib/subcat-labels';
 import MarketSwitch from '../../components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS, FEED_PARAM_KEYS, feedFromParams, feedToParams } from '../../components/FeedToolbar';
 import { useUrlState, useLastVisit, passesTriage, houseBaselines, memoryOf, restoreParams, readFeedMemory, writeFeedMemory } from '../../lib/feed-filters';
 import { byPriority, shortlist, reasonOf, forYou, spread } from '../../lib/priority';
-import { makerLineOf } from '../../lib/lot-labels';
+import { makerLineOf, subColumnOf } from '../../lib/lot-labels';
 import { foldVariants, foldNote, foldQuery } from '../../lib/fold';
 import { useFollows, affinityOf } from '../../lib/follows';
 import { Colophon, daysWord, pickCall } from '../../components/Terminal';
@@ -158,18 +157,9 @@ function openCommandK() {
 // app/utils.ts as `trueSaleDay`, shared with isLiveUpcoming so the feed, the
 // nav counts, /value and /[artist] all judge liveness on the same day string.
 
-// Ledger-table dressing: the category cell's short label, and the
-// days-to-hammer count (whole days from the reader's local day to the true
+// Ledger-table dressing: the days-to-hammer count (whole days from the reader's local day to the true
 // sale day — "In 2d" is a promise to the user, so it runs on the user's clock,
 // the same one the feed filter uses).
-const CAT_LABEL: Record<string, string> = {
-  original: 'Original',
-  print: 'Print',
-  photograph: 'Photo',
-  sculpture: 'Sculpture',
-  design: 'Design',
-  object: 'Object',
-};
 function daysToHammer(l: AuctionLot, todayDay: string): number | null {
   const day = trueSaleDay(l);
   if (!day) return null;
@@ -1197,7 +1187,7 @@ export default function TerminalHomePage() {
                                 })()}
                               </td>
                               <td>{lot.auctionHouse}</td>
-                              <td className="t-cat">{lot.subCat ? subCatLabel(lot.subCat) : CAT_LABEL[lot.category] || '—'}</td>
+                              <td className="t-cat">{subColumnOf(lot)}</td>
                               <td className="t-date" title={saleWhenTitle(lot)}>{formatDate(lot.saleDate)}</td>
                               <td className="num t-days">
                                 {dth == null ? '—' : dth <= 0 ? 'today' : `${dth}d`}

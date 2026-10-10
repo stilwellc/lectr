@@ -18,3 +18,13 @@ test('maker line: real makers and memorabilia are untouched', () => {
   const sealed = makerLineOf({ artist: 'sports-cards', title: '97 Flair Showcase Basketball Factory-Sealed Hobby Box (24 Packs)' });
   assert.equal(sealed.href, '/makers/sports-cards');
 });
+
+import { labelLineOf, subColumnOf } from '../lot-labels';
+
+test('label line: quiet subs give way to badges; loud subs lead', () => {
+  const card = { artist: 'graded-cards', title: '1952 Topps #311 Mickey Mantle - PSA VG+ 3.5' };
+  assert.equal(labelLineOf(card), 'PSA 3.5');
+  assert.equal(subColumnOf(card), 'PSA 3.5');
+  const ent = { artist: 'movie-tv', subCat: 'worn-personal', drill: 'hollywood', title: 'Production-Used Command Battle Droid Head Prop from Star Wars' };
+  assert.ok(labelLineOf(ent).startsWith('Props'));
+});
