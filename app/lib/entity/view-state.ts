@@ -23,14 +23,26 @@ import { kindOfId, makerId, subjectId, setId, playerId, subId } from './model';
 import { isRestId, restId } from './kinds';
 import type { Market } from '../../constants';
 
-export type SortKey = 'matters' | 'sold' | 'live' | 'flags' | 'median' | 'delta' | 'name';
-export const SORT_KEYS: SortKey[] = ['matters', 'sold', 'live', 'flags', 'median', 'delta', 'name'];
+/** the ledger's orders (P2): what matters · live · flags · movers (yoy,
+ *  n-gated) · 12-month median · 12-month sold · A–Z */
+export type SortKey = 'matters' | 'live' | 'flags' | 'movers' | 'median' | 'sold12' | 'name';
+export const SORT_KEYS: SortKey[] = ['matters', 'live', 'flags', 'movers', 'median', 'sold12', 'name'];
 export const DEFAULT_SORT: SortKey = 'matters';
+/** pre-P2 sort keys in shared links */
+const LEGACY_SORT: Record<string, SortKey> = { sold: 'sold12', delta: 'movers' };
 
-export type ColKey = 'curve' | 'median' | 'delta' | 'flags' | 'live' | 'sold' | 'record' | 'settled' | 'velocity';
-export const COL_KEYS: ColKey[] = ['curve', 'median', 'delta', 'flags', 'live', 'sold', 'record', 'settled', 'velocity'];
-// (Oct 9 r4) Verified Δ is opt-in: it prints a dash on all but a handful of rows
-export const DEFAULT_COLS: ColKey[] = ['curve', 'median', 'flags', 'live', 'sold'];
+/** the row's columns, in print order (the Display menu toggles them) */
+export type ColKey = 'live' | 'median' | 'sold12' | 'curve' | 'yoy' | 'flags' | 'sold' | 'record' | 'settled' | 'delta';
+export const COL_KEYS: ColKey[] = ['live', 'median', 'sold12', 'curve', 'yoy', 'flags', 'sold', 'record', 'settled', 'delta'];
+export const DEFAULT_COLS: ColKey[] = ['live', 'median', 'sold12', 'curve', 'yoy'];
+/** pre-P2 column keys in shared links */
+const LEGACY_COL: Record<string, ColKey> = { velocity: 'sold12' };
+
+/** the ledger's two bodies: the entity rows, or the matching live lots */
+export type ViewBody = 'names' | 'lots';
+/** the lots body's order (the home feed's FeedSort subset) */
+export type LotOrder = 'priority' | 'soonest' | 'est-desc' | 'gap-desc' | 'newest';
+export const LOT_ORDERS: LotOrder[] = ['priority', 'soonest', 'est-desc', 'gap-desc', 'newest'];
 
 export type LiveSort = 'matters' | 'closing' | 'est';
 export const LIVE_SORT_KEYS: LiveSort[] = ['matters', 'closing', 'est'];
@@ -58,6 +70,13 @@ export interface MakersView {
   by: RowsBy;
   /** the compare tray's picks (entity ids) */
   cmp: string[];
+  /** the body: entity rows, or the live lots matching the filters + search */
+  vw: ViewBody;
+  /** the lots body scoped to these entities (a row's "+N more", the compare
+   *  tray's "see them together") — empty = the whole market */
+  lk: string[];
+  /** the lots body's order */
+  lo: LotOrder;
   /** the triage row (window, category, house, value, new, facets) */
   triage: TriageFilters;
 }
@@ -65,11 +84,12 @@ export interface MakersView {
 export const VIEW_DEFAULTS: MakersView = {
   q: '', on: false, vi: false, fl: false, fw: false,
   sort: DEFAULT_SORT, cols: DEFAULT_COLS, open: null, ls: 'matters', spk: null, by: 'name', cmp: [],
+  vw: 'names', lk: [], lo: 'priority',
   triage: TRIAGE_DEFAULTS,
 };
 
 /** every key the codec owns (the triage keys are feed-filters') */
-export const VIEW_KEYS = ['q', 'on', 'vi', 'fl', 'fw', 'sort', 'cols', 'open', 'ls', 'spk', 'by', 'cmp'] as const;
+export const VIEW_KEYS = ['q', 'on', 'vi', 'fl', 'fw', 'sort', 'cols', 'open', 'ls', 'spk', 'by', 'cmp', 'vw', 'lk', 'lo'] as const;
 
 const ROSTER: ReadonlySet<string> = new Set<string>(ARTISTS.map(a => a.slug));
 
@@ -105,16 +125,30 @@ export function idToParam(id: string): string {
   return id.startsWith('mk:') ? id.slice(3) : id;
 }
 
-export function decodeView(p: URLSearchParams): MakersView {
-  const sort = p.get('sort') as SortKey | null;
-  const spk = p.get('spk');
-  const cols = (p.get('cols') || '').split('.').filter((k): k is ColKey => (COL_KEYS as string[]).includes(k));
-  const ls = p.get('ls') as LiveSort | null;
-  const cmp: string[] = [];
-  for (const raw of (p.get('cmp') || '').split(',')) {
+/** a comma list of row ids (dedup, capped) */
+function idsFromParam(v: string | null, max: number): string[] {
+  const out: string[] = [];
+  for (const raw of (v || '').split(',')) {
     const id = idFromParam(raw);
-    if (id && !cmp.includes(id) && cmp.length < COMPARE_MAX) cmp.push(id);
+    if (id && !out.includes(id) && out.length < max) out.push(id);
   }
+  return out;
+}
+
+export function decodeView(p: URLSearchParams): MakersView {
+  const rawSort = p.get('sort') || '';
+  const sort = (LEGACY_SORT[rawSort] ?? rawSort) as SortKey;
+  const spk = p.get('spk');
+  const cols: ColKey[] = [];
+  for (const k of (p.get('cols') || '').split('.')) {
+    const c = (LEGACY_COL[k] ?? k) as ColKey;
+    if ((COL_KEYS as string[]).includes(c) && !cols.includes(c)) cols.push(c);
+  }
+  // print order is the registry's, whatever order the link lists them in
+  cols.sort((a, b) => COL_KEYS.indexOf(a) - COL_KEYS.indexOf(b));
+  const ls = p.get('ls') as LiveSort | null;
+  const lo = p.get('lo') as LotOrder | null;
+  const cmp = idsFromParam(p.get('cmp'), COMPARE_MAX);
   return {
     q: p.get('q') || '',
     on: p.get('on') === '1',
@@ -128,6 +162,9 @@ export function decodeView(p: URLSearchParams): MakersView {
     spk: spk && SPORTS.some(x => x.key === spk) ? spk : null,
     by: p.get('by') === 'cat' ? 'cat' : 'name',
     cmp,
+    vw: p.get('vw') === 'lots' ? 'lots' : 'names',
+    lk: idsFromParam(p.get('lk'), 8),
+    lo: lo && LOT_ORDERS.includes(lo) ? lo : 'priority',
     triage: triageFromParams(p),
   };
 }
@@ -149,6 +186,11 @@ export function encodeView(v: MakersView, p: URLSearchParams): void {
     if (v.ls !== 'matters') p.set('ls', v.ls);
   }
   if (v.cmp.length) p.set('cmp', v.cmp.map(idToParam).join(','));
+  if (v.vw === 'lots') {
+    p.set('vw', 'lots');
+    if (v.lk.length) p.set('lk', v.lk.map(idToParam).join(','));
+    if (v.lo !== 'priority') p.set('lo', v.lo);
+  }
   triageToParams(v.triage, p);
 }
 

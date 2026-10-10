@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useMemo, useState, useEffect, useRef, useCallback, useDeferredValue, createContext, useContext } from 'react';
-import Link from 'next/link';
-import { ARTISTS, ARTIST_LABEL, MARKETS, marketArtists, rosterNoun, type Market } from '../constants';
+import React, { useMemo, useState, useEffect, useRef, useCallback, useDeferredValue } from 'react';
+import { ARTISTS, MARKETS, MAKER_MARKETS, rosterNoun, type Market } from '../constants';
 import { useMarket } from '../lib/market';
 import MarketSwitch from '../components/MarketSwitch';
 import MarketIcon from '../components/MarketIcon';
@@ -12,815 +11,83 @@ import { useSavedSearches } from '../lib/alerts';
 import { useAuth } from '../lib/account';
 import ArtistNav from '../components/ArtistNav';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
-import { formatDate, formatPrice, getUpcomingCounts, craftTitle, httpsImg, localToday, trueSaleDay } from '../utils';
-import { formatEstimate } from '../components/LotCard';
+import { formatDate, getUpcomingCounts, localToday } from '../utils';
 import { formatDemand } from '../lib/demand';
-import type { VerifiedMover } from '../preview/terminal/verified';
 import { FigureCell, FigGate } from '../components/cells';
-import CountUp from '../components/CountUp';
-import CloseClock from '../components/CloseClock';
-import Masthead, { Accent } from '../components/Masthead';
+import { Accent } from '../components/Masthead';
 import { Colophon } from '../components/Terminal';
-import Flick from '../components/Flick';
+import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import TriageBar from '../components/TriageBar';
+import LotBrowser from '../components/LotBrowser';
+import { FEED_DEFAULTS, type FeedFilters } from '../components/FeedToolbar';
 import { useLastVisit, passesTriage, houseBaselines, isTriageActive, TRIAGE_DEFAULTS, type TriageFilters } from '../lib/feed-filters';
-import { liveBookHref } from '../lib/lot-browser';
-import { taxonOf, SUBS, SPORTS, subLabelOf, MARKET_CATS, type CatKey } from '../lib/taxonomy';
-import { makerLineOf, labelLineOf, searchTextOf } from '../lib/lot-labels';
-import { feedQueryMatches, feedSearchHref } from '../lib/maker-pool';
+import { taxonOf, SUBS, SPORTS, MARKET_CATS, type CatKey } from '../lib/taxonomy';
 import { useFollows, catFollow } from '../lib/follows';
 import { isFlagged } from '../lib/flags';
-import { makerId, makerSlugOf, subId, subPartsOf, recordOf, type EntityDetail, type EntityRecord } from '../lib/entity/model';
+import { makerId, makerSlugOf, subId, subPartsOf } from '../lib/entity/model';
+import { NAME_HEAD, COLLECTION_CATS, COLLECTION_MARKETS, SUBJECT_MARKETS } from '../lib/entity/kinds';
+import { useLivePool, entityIdOf, nameBucketOf, catIdOf, type LiveEntry } from '../lib/entity/live';
+import { useEntities, subBundle, prefetchSubs, loadEntities, loadEntitiesTail, type EntityBundle } from '../hooks/useEntities';
+import { parseEntityId } from '../lib/entity/key';
+import { makerHref } from '../lib/entity/retired';
 import {
-  BID_MARKETS, NAME_HEAD, COLLECTION_CATS, COLLECTION_MARKETS, SUBJECT_MARKETS, rowKindOf, rowPolicy, type RowKind,
-} from '../lib/entity/kinds';
-import { useLivePool, type LiveEntry } from '../lib/entity/live';
-import { useEntities, useEntity, subBundle, completeQuarters, prefetchSubs, type EntityBundle } from '../hooks/useEntities';
-import {
-  useMakersView, viewSearch, DEFAULT_SORT, DEFAULT_COLS, COMPARE_MAX,
-  type SortKey, type ColKey, type LiveSort, type RowsBy,
+  useMakersView, viewSearch, DEFAULT_COLS, COMPARE_MAX, COL_KEYS, LOT_ORDERS,
+  type SortKey, type LiveSort, type RowsBy, type LotOrder, type ViewBody, type MakersView,
 } from '../lib/entity/view-state';
+import { buildRow, sortRows, searchRow, flaggedRow, needleOf, lotMatches, fmtPct, type Row } from '../lib/entity/ledger';
+import EntityRow, { COLS, colSpec, gridTemplateOf } from '../components/entity/EntityRow';
+import CompareTray from '../components/entity/CompareTray';
+import './makers.css';
 
 /**
- * Makers — THE DIRECTORY, trading grade. The ledger of every tracked name is
- * a value surface: rows carry the engine's live flag count, dossiers carry
- * the row's closing-soonest live lots, compare overlays up to four rebased
- * curves, a Display menu chooses the columns, follows ride the saved-search
- * plumbing, and every control (compare and the dossier's live order
- * included) lives in the URL.
+ * Makers — THE LEDGER (makers overhaul P2, Oct 10 2026). The first screen is
+ * the ledger: one compact header line (the counts and the one verified read)
+ * over one search that finds names AND lots, the quick lenses, and the rows.
  *
- * MAKERS OVERHAUL P1 (Oct 10): one row-model path. Every row — a maker, a
- * player, a subject, a set, a clean sub-category, a market's remainder — is
- * an EntitySummary (app/hooks/useEntities: the nightly's entities file, else
- * fail-soft adapters over stats.json / cat-stats / players.json) joined to
- * its live lots by entity id (app/lib/entity/live). Kind rules come from the
- * KIND registry (app/lib/entity/kinds); the URL from one codec
- * (app/lib/entity/view-state).
+ *   - Every row is one EntityRow (app/components/entity), every kind the same
+ *     shape (app/lib/entity/ledger buildRow) — a maker, a player, a Pokémon,
+ *     a film, a set, a clean sub-category, a market's remainder.
+ *   - The body is the NAMES (entity rows) or the LOTS (the live lots the
+ *     filters + search match, in the shared LotBrowser's rows). The
+ *     lot-centric lenses — Closing tonight, Flagged, New since last visit —
+ *     open the lots; a search offers its matching lots as the first row.
+ *   - Every control lives in the URL (app/lib/entity/view-state), compare
+ *     and the body included.
+ *   - Rows page 40 at a time per group; sold-only names (the entities file's
+ *     main + tail tiers) join the live ones.
  */
 
-/** a ledger row: the summary's figures + the live join, flattened for the
- *  memoized row component */
-interface Row {
-  id: string; kind: RowKind; label: string; market: Market;
-  discipline: string | null;
-  /** a real photo of the row's flagship lot */
-  hero: string | null;
-  spark: number[] | null;
-  live: number;
-  flags: number;
-  sold: number | null;
-  median: number | null;
-  /** tooltip scoping a median narrower than its column */
-  medianNote: string | null;
-  revenue: number;
-  velocity: number;
-  /** the tail's start year when velocity is NOT a true 12-month count */
-  velocitySince: string | null;
-  record: EntityRecord | null;
-  verified: VerifiedMover | null;
-  thin: boolean;
-  /** measured momentum: consecutive rising quarterly medians */
-  rising: number;
-  /** the record hammered inside the last 12 months */
-  recordFresh: string | null;
-  liveLots: AuctionLot[];
-  /** the "matters most" score of the row's best live lots (app/lib/priority) */
-  topScore: number;
-  /** where "Open the dossier" / "+N more" lead: a maker's page, a player's
-   *  dossier, else the feed scoped to the row (sub ?cat=&sub=, subject ?subj=) */
-  page: string;
-  /** a non-maker row lands on a list ("See every lot"); a maker opens its page */
-  lands: boolean;
-  /** subject rows: the athlete's /player dossier, when one exists */
-  dossierHref: string | null;
-  followKey: string | null;
-  canCompare: boolean;
-  /** subject / remainder rows print the inline dossier */
-  inline: boolean;
-  /** sold history the source holds (quarters, houses) — null = none */
-  detail: EntityDetail | null;
-  bundle: EntityBundle;
-}
-
-/* the open dossier / compare tray links carry the /makers view (triage +
-   sport) — built from state, read from context so a filter change re-renders
-   the links, never the rows */
-const ViewSearch = createContext('');
-function CarryLink({ base, land, className, style, children }: { base: string; land?: boolean; className?: string; style?: React.CSSProperties; children: React.ReactNode }) {
-  const search = useContext(ViewSearch);
-  return <Link href={liveBookHref(base, search, land === undefined ? {} : { land })} className={className} style={style}>{children}</Link>;
-}
-
-const SCROLL_KEY = 'mk-scroll:';
-/** rows per collection group before "Show more" (2,000+ players on sports) */
+/** rows per group before "Show more" */
 const CAP_ONE = 40;
 const CAP_ALL = 8;
 const CAP_STEP = 40;
 const NO_CAPS: Partial<Record<Market, number>> = {};
+const SCROLL_KEY = 'mk-scroll:';
 
-/** a live lot's quiet line under its title — the home feed's label line
- *  (app/lib/lot-labels), then the house. Under a sub row the sub is the row's
- *  own name, so the lot's player / Pokémon leads and the sub drops; under a
- *  subject row the subject is the row's name, so the label line alone. */
-function lotSubLine(l: AuctionLot, kind: RowKind): string {
-  let parts: string[];
-  if (kind === 'sub') {
-    const who = makerLineOf(l).name;
-    parts = [who !== (ARTIST_LABEL[l.artist] || l.artist) ? who : '', ...labelLineOf(l).split(' · ').filter(p => p !== subLabelOf(l))];
-  } else parts = [labelLineOf(l)];
-  return [...parts, l.auctionHouse].filter(Boolean).join(' · ');
-}
-
-const SORT_NOTE: Record<SortKey, string> = {
-  matters: 'What matters most: the summed priority of each row\'s three most important live lots — size, measured edge, bids, closing time',
-  sold: 'Sales tracked, all time',
-  live: 'Live lots passing the filters',
-  flags: 'Live lots priced below their comparables',
-  median: 'Median sale, trailing 12 months',
-  delta: 'CI-verified repeat-sales move',
-  name: 'Alphabetical',
-};
-const SORTS: { k: SortKey; label: string }[] = [
-  { k: 'matters', label: 'Matters' },
-  { k: 'sold', label: 'Sold' },
-  { k: 'live', label: 'Live' },
-  { k: 'flags', label: 'Flags' },
-  { k: 'median', label: 'Median' },
-  { k: 'delta', label: 'Verified Δ' },
-  { k: 'name', label: 'A–Z' },
+const SORTS: { k: SortKey; label: string; note: string }[] = [
+  { k: 'matters', label: 'Matters', note: 'What matters most: the summed priority of each row\'s three most important live lots — size, measured edge, bids, closing time' },
+  { k: 'live', label: 'Live', note: 'Live lots passing the filters' },
+  { k: 'flags', label: 'Flags', note: 'Live lots priced below their comparables' },
+  { k: 'movers', label: 'Movers', note: 'The biggest year-over-year moves, either way — only rows whose two years both clear the sample gate' },
+  { k: 'median', label: 'Median', note: 'Median sale, trailing 12 months (thin rows last)' },
+  { k: 'sold12', label: 'Sold 12 mo', note: 'Sales tracked in the last 12 months' },
+  { k: 'name', label: 'A–Z', note: 'Alphabetical' },
 ];
-
-/* ── THE DISPLAY MENU — Linear's signature: choose the properties ── */
-const COLS: { k: ColKey; label: string; width: string }[] = [
-  { k: 'curve', label: '12q curve', width: '96px' },
-  { k: 'median', label: 'Median · 12mo', width: '104px' },
-  { k: 'delta', label: 'Verified Δ', width: '84px' },
-  { k: 'flags', label: 'Flags', width: '56px' },
-  { k: 'live', label: 'Live', width: '60px' },
-  { k: 'sold', label: 'Sold', width: '84px' },
-  { k: 'record', label: 'Record', width: '84px' },
-  { k: 'settled', label: 'Settled $', width: '84px' },
-  { k: 'velocity', label: '12mo sold', width: '76px' },
-];
-/** what each column head means (hover) */
-const COL_NOTE: Record<ColKey, string> = {
-  curve: 'Quarterly median sale, last 12 complete quarters',
-  median: 'Median sale price over the trailing 12 months',
-  delta: 'CI-verified repeat-sales move (95% interval resolves the sign)',
-  flags: 'Live lots the engine prices below their comparables',
-  live: 'Live lots on the block that pass the filters above',
-  sold: 'Sales tracked, all time',
-  record: 'Highest price tracked',
-  settled: 'Total hammer tracked, all time',
-  velocity: 'Sales tracked in the last 12 months',
+const LOT_ORDER_LABEL: Record<LotOrder, string> = {
+  priority: 'Matters', soonest: 'Closing', 'est-desc': 'Estimate', 'gap-desc': 'Gap', newest: 'Newest',
 };
 
-/** a detail's quarters in the chart's shape */
-type HistPoint = { date: string; medianPrice: number; avgPrice: number };
-const histOf = (d: EntityDetail | null): HistPoint[] =>
-  (d?.quarters || []).map(q => ({ date: q.q, medianPrice: q.med ?? 0, avgPrice: q.med ?? 0 }));
-
-/** a compare pick's quarterly medians: its detail history, else (an
- *  entities-file summary, no detail in hand) its spark on the file's quarters */
-function trendOf(r: Row): HistPoint[] {
-  if (r.detail?.quarters.length) return histOf(r.detail);
-  const sp = r.bundle.s.spark, q = r.bundle.sparkQ;
-  if (!sp || !q || q.length !== sp.length) return [];
-  return sp.map((v, i) => ({ date: q[i], medianPrice: v ?? 0, avgPrice: v ?? 0 }));
+/** a live lot is one of these entities' (a row id: entity, remainder, category) */
+function lotInScope(l: AuctionLot, ids: ReadonlySet<string>): boolean {
+  const id = entityIdOf(l);
+  if (id && ids.has(id)) return true;
+  if (id && ids.has(nameBucketOf(id, l))) return true;
+  return ids.has(catIdOf(l));
 }
-
-const fmtUsd = (n: number) =>
-  n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B`
-  : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M`
-  : n >= 1e4 ? `$${Math.round(n / 1e3)}K`
-  : `$${Math.round(n).toLocaleString()}`;
-
-function Spark({ values }: { values: number[] }) {
-  const w = 90, h = 22;
-  const min = Math.min(...values), max = Math.max(...values);
-  const span = max - min || 1;
-  const px = (i: number) => (i / (values.length - 1)) * (w - 6) + 2;
-  const py = (v: number) => h - 3 - ((v - min) / span) * (h - 6);
-  const pts = values.map((v, i) => `${px(i)},${py(v)}`).join(' ');
-  return (
-    <svg width={w} height={h} aria-hidden>
-      <polyline points={pts} fill="none" stroke="var(--lw-5, rgba(255, 255, 255, 0.5))" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={px(values.length - 1)} cy={py(values[values.length - 1])} r="2" fill="var(--color-fg)" />
-    </svg>
-  );
-}
-
-/* ── THE DOSSIER CHART — line stretches; tick text is HTML, never distorts ── */
-function DossierChart({ hist }: { hist: HistPoint[] }) {
-  const pts = completeQuarters(hist).filter(p => (p.medianPrice || p.avgPrice) > 0);
-  if (pts.length < 4) return null;
-  const vals = pts.map(p => p.medianPrice || p.avgPrice);
-  const min = Math.min(...vals), max = Math.max(...vals);
-  const span = max - min || 1;
-  const xPct = (i: number) => (i / (pts.length - 1)) * 100;
-  const yPct = (v: number) => (1 - (v - min) / span) * 100;
-  const line = vals.map((v, i) => `${xPct(i)},${yPct(v)}`).join(' ');
-  const yTicks = [min, min + span / 2, max];
-  const years: { i: number; y: string }[] = [];
-  pts.forEach((p, i) => {
-    const y = String(p.date).slice(0, 4);
-    if (!years.length || years[years.length - 1].y !== y) years.push({ i, y });
-  });
-  const step = Math.ceil(years.length / 6);
-  const shownYears = years.filter((_, k) => k % step === 0);
-  return (
-    <div className="mkx-chart" aria-label="Quarterly median sale price">
-      <div className="mkx-plot">
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-          {yTicks.map((t, k) => (
-            <line key={k} x1="0" y1={yPct(t)} x2="100" y2={yPct(t)} stroke="var(--lw-07, rgba(255, 255, 255, 0.07))" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-          ))}
-          <polyline points={line} fill="none" stroke="var(--lw-7, rgba(255, 255, 255, 0.7))" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-        </svg>
-        <span className="mkx-dot" style={{ left: '100%', top: `${yPct(vals[vals.length - 1])}%` }} aria-hidden />
-        {yTicks.map((t, k) => (
-          <span key={k} className="mkx-tick mkx-tick-y" style={{ top: `${yPct(t)}%` }}>{fmtUsd(t)}</span>
-        ))}
-        {shownYears.map(({ i, y }) => (
-          <span key={y} className="mkx-tick mkx-tick-x" style={{ left: `${xPct(i)}%` }}>{y}</span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function CIWhisker({ v }: { v: VerifiedMover }) {
-  const lo = v.ciLoPct, hi = v.ciHiPct, pt = v.changePct;
-  const dLo = Math.min(lo, 0) - Math.abs(hi - lo) * 0.08;
-  const dHi = Math.max(hi, 0) + Math.abs(hi - lo) * 0.08;
-  const x = (val: number) => ((val - dLo) / (dHi - dLo || 1)) * 100;
-  return (
-    <svg viewBox="0 0 100 16" className="mkx-ci" preserveAspectRatio="none" aria-hidden>
-      {dLo < 0 && dHi > 0 && <line x1={x(0)} y1="0" x2={x(0)} y2="16" stroke="var(--lw-18, rgba(255, 255, 255, 0.18))" strokeWidth="1" strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />}
-      <line x1={x(lo)} y1="8" x2={x(hi)} y2="8" stroke="var(--lw-5, rgba(255, 255, 255, 0.5))" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-      <line x1={x(lo)} y1="4" x2={x(lo)} y2="12" stroke="var(--lw-5, rgba(255, 255, 255, 0.5))" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-      <line x1={x(hi)} y1="4" x2={x(hi)} y2="12" stroke="var(--lw-5, rgba(255, 255, 255, 0.5))" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-      <circle cx={x(pt)} cy="8" r="2.4" fill={pt >= 0 ? 'var(--color-up)' : 'var(--color-down-text)'} />
-    </svg>
-  );
-}
-
-/* ── COMPARE — up to four rows' last-12q medians rebased onto one axis.
-   Monochrome differentiation by LINE STYLE (solid/dashed/dotted/dash-dot):
-   mint & coral stay reserved for each maker's own signed Δ. ── */
-const DASHES = ['', '7 5', '2 4', '9 3 2 3'];
-const STROKES = ['var(--lw-92, rgba(255, 255, 255, 0.92))', 'var(--lw-72, rgba(255, 255, 255, 0.72))', 'var(--lw-55, rgba(255, 255, 255, 0.55))', 'var(--lw-4, rgba(255, 255, 255, 0.4))'];
-function CompareTray({ picked, onRemove, onClear }: {
-  /** the picks that resolve on the current ledger, in pick order */
-  picked: Row[];
-  onRemove: (id: string) => void;
-  onClear: () => void;
-}) {
-  const [expanded, setExpanded] = useState(true);
-  // two reads of the same picks: the 12-quarter trend, or what each has on
-  // the block right now (count, engine flags, its three that matter most)
-  const [view, setView] = useState<'trend' | 'live'>('trend');
-  const liveTotal = picked.reduce((n, r) => n + r.live, 0);
-  // shared date domain: the union of each pick's last-12q dates
-  const series = picked.map(r => {
-    const pts = completeQuarters(trendOf(r)).slice(-12)
-      .map(p => ({ d: String(p.date), v: p.medianPrice || p.avgPrice }))
-      .filter(p => p.v > 0);
-    const base = pts.length ? pts[0].v : 0;
-    return { r, pts: base > 0 ? pts.map(p => ({ d: p.d, v: (p.v / base - 1) * 100 })) : [] };
-  }).filter(s => s.pts.length >= 4);
-  // a pick with <4 quarters is dropped from `series` — so the bar chip's
-  // swatch MUST index by series position (via this map), not by picked
-  // position, or every pick after the dropped one gets a swatch that
-  // mismatches its plotted line.
-  const seriesIdx = new Map(series.map((s, i) => [s.r.id, i]));
-  const dates = Array.from(new Set(series.flatMap(s => s.pts.map(p => p.d)))).sort();
-  const vals = series.flatMap(s => s.pts.map(p => p.v));
-  const min = Math.min(0, ...vals), max = Math.max(0, ...vals);
-  const span = max - min || 1;
-  const xPct = (d: string) => dates.length > 1 ? (dates.indexOf(d) / (dates.length - 1)) * 100 : 50;
-  const yPct = (v: number) => (1 - (v - min) / span) * 100;
-  return (
-    <div className="mkc" role="region" aria-label="Compare makers">
-      <div className="rail mkc-bar">
-        <span className="mkc-title">Compare</span>
-        {picked.map(r => {
-          const si = seriesIdx.get(r.id);
-          return (
-            <span key={r.id} className="mkc-chip" data-thin={si == null || undefined}>
-              <svg width="16" height="8" aria-hidden>
-                <line x1="1" y1="4" x2="15" y2="4" strokeWidth="1.6"
-                  stroke={si != null ? STROKES[si] : 'var(--lw-28, rgba(255, 255, 255, 0.28))'}
-                  strokeDasharray={si != null ? (DASHES[si] || undefined) : '2 2'} />
-              </svg>
-              {r.label}
-              {si == null && <span className="mkc-chip-thin" title="not enough history to plot">thin</span>}
-              <button type="button" onClick={() => onRemove(r.id)} aria-label={`Remove ${r.label} from compare`}>×</button>
-            </span>
-          );
-        })}
-        <span className="mkc-rule" aria-hidden />
-        <span role="radiogroup" aria-label="Compare view" style={{ display: 'inline-flex', gap: 6 }}>
-          {([['trend', 'Trend'], ['live', 'Live']] as const).map(([k, lbl]) => (
-            <button key={k} type="button" role="radio" aria-checked={view === k} className="mk-chip" data-on={view === k || undefined}
-              style={{ height: 24, padding: '0 10px', letterSpacing: '0.06em', textTransform: 'none' }}
-              onClick={() => { setView(k); setExpanded(true); }}>
-              {lbl}
-            </button>
-          ))}
-        </span>
-        <button type="button" className="mkc-btn" onClick={() => setExpanded(v => !v)} aria-expanded={expanded}>
-          {expanded ? 'Collapse' : 'Expand'}
-        </button>
-        <button type="button" className="mkc-btn" onClick={onClear}>Clear</button>
-      </div>
-      {expanded && view === 'live' && (
-        <div className="rail mkc-body" data-live style={{ '--n': picked.length, maxHeight: '52vh', overflowY: 'auto' } as React.CSSProperties}>
-          {picked.map(r => (
-            <div key={r.id} className="mkx-live" style={{ margin: 0 }}>
-              <div className="mkx-live-head kicker">
-                {r.label} · {r.live > 0 ? `${r.live.toLocaleString()} live` : 'nothing live'}{r.flags > 0 ? <> · <b className="mkx-live-flagn">{r.flags} flagged</b></> : null}
-              </div>
-              {r.liveLots.slice(0, 3).map(l => (
-                <LiveLotRow key={l.id} l={l} letter={r.label.charAt(0)} kind={r.kind} />
-              ))}
-              {r.live > 3 && (
-                <CarryLink base={r.page} className="mkx-live-more">
-                  +{(r.live - 3).toLocaleString()} more on the block <Flick size={9} style={{ marginLeft: 4 }} />
-                </CarryLink>
-              )}
-            </div>
-          ))}
-          {picked.length > 1 && liveTotal > 0 && picked.every(r => r.kind === 'maker') && (
-            <CarryLink base={compareLiveBase(picked)} className="ray-call-btn ray-call-btn-primary" style={{ gridColumn: '1 / -1', justifySelf: 'start' }}>
-              See all {liveTotal.toLocaleString()} live lots together
-            </CarryLink>
-          )}
-        </div>
-      )}
-      {expanded && view === 'trend' && (
-        <div className="rail mkc-body">
-          {series.length >= 2 ? (
-            <>
-              <div className="mkc-plotwrap">
-                <div className="mkc-plot">
-                  <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-                    <line x1="0" y1={yPct(0)} x2="100" y2={yPct(0)} stroke="var(--lw-16, rgba(255, 255, 255, 0.16))" strokeWidth="1" strokeDasharray="2 4" vectorEffect="non-scaling-stroke" />
-                    {series.map((s, i) => (
-                      <polyline key={s.r.id}
-                        points={s.pts.map(p => `${xPct(p.d)},${yPct(p.v)}`).join(' ')}
-                        fill="none" stroke={STROKES[i]} strokeWidth="1.6"
-                        strokeDasharray={DASHES[i] || undefined}
-                        strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-                    ))}
-                  </svg>
-                  <span className="mkx-tick mkx-tick-y" style={{ top: `${yPct(max)}%` }}>{`${max >= 0 ? '+' : ''}${Math.round(max)}%`}</span>
-                  <span className="mkx-tick mkx-tick-y" style={{ top: `${yPct(0)}%` }}>0%</span>
-                  <span className="mkx-tick mkx-tick-y" style={{ top: `${yPct(min)}%` }}>{`${min >= 0 ? '+' : ''}${Math.round(min)}%`}</span>
-                </div>
-                <div className="mkc-cap kicker">Δ% from each maker&rsquo;s own 12-quarter start · quarterly medians</div>
-              </div>
-              <div className="mkc-legend">
-                {series.map((s, i) => {
-                  const end = s.pts[s.pts.length - 1].v;
-                  return (
-                    <div key={s.r.id} className="mkc-leg">
-                      <svg width="18" height="8" aria-hidden><line x1="1" y1="4" x2="17" y2="4" stroke={STROKES[i]} strokeWidth="1.6" strokeDasharray={DASHES[i] || undefined} /></svg>
-                      <span className="mkc-leg-name">{s.r.label}</span>
-                      <b data-dir={end >= 0 ? 'up' : 'down'}>{end >= 0 ? '+' : '−'}{Math.abs(Math.round(end))}%</b>
-                      <span className="mkc-leg-sub">
-                        {s.r.median ? `med ${formatPrice(s.r.median)}` : ''}
-                        {s.r.record ? ` · rec ${fmtUsd(s.r.record.p)}` : ''}
-                        {s.r.sold != null ? ` · ${s.r.sold.toLocaleString()} sold` : ''}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          ) : (
-            <p className="mkc-note">Pick {2 - series.length} more maker{2 - series.length === 1 ? '' : 's'} with enough history — hover a row and hit the compare mark, or press <kbd>c</kbd> on a focused row.</p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* one live lot as the dossier's live book prints it (and the compare tray's) */
-function LiveLotRow({ l, letter, kind }: { l: AuctionLot; letter: string; kind: RowKind }) {
-  const closeSoon = l.saleDateTime && (Date.parse(l.saleDateTime) - Date.now()) < 24 * 3600e3 && Date.parse(l.saleDateTime) > Date.now();
-  return (
-    <Link href={`/lot/${l.id}`} className="mkx-lot">
-      <span className="mkx-lot-thumb" aria-hidden>
-        <span className="mkx-lot-letter">{letter}</span>
-        {l.imageUrl && (
-          <img src={httpsImg(l.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
-            onError={e => e.currentTarget.remove()} />
-        )}
-      </span>
-      <span className="mkx-lot-main">
-        <span className="mkx-lot-title">{craftTitle(l.title, l.auctionHouse)}</span>
-        <span className="mkx-lot-sub">
-          {lotSubLine(l, kind)}
-          {isFlagged(l) && <span className="mkx-lot-flag"> · flagged below market</span>}
-        </span>
-      </span>
-      <span className="mkx-lot-cells">
-        <span className="mkx-lot-est">{formatEstimate(l)}</span>
-        <span className="mkx-lot-close">
-          {closeSoon
-            ? <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}><CloseClock iso={l.saleDateTime!} windowHours={24} /></span>
-            : <>closes {formatDate(l.saleDate)}</>}
-        </span>
-      </span>
-    </Link>
-  );
-}
-
-/** the compare tray's combined live list: the home feed scoped to the picked
- *  makers (mk=a,b — app/lib/lot-browser feedPass), on their shared market
- *  when they have one (the /makers triage view is carried by CarryLink) */
-function compareLiveBase(picked: Row[]): string {
-  const mkts = new Set(picked.map(r => r.market));
-  const base = mkts.size === 1 ? `/${picked[0].market}` : '/';
-  const p = new URLSearchParams();
-  p.set('mk', picked.map(r => makerSlugOf(r.id) || r.id).join(','));
-  p.set('tab', 'all');
-  return `${base}?${p.toString()}`;
-}
-
-/* the expanded dossier's live book: eight rows, three orders */
-const LIVE_SORTS: [LiveSort, string][] = [['matters', 'Matters'], ['closing', 'Closing'], ['est', 'Est.']];
-const LIVE_ROWS = 8;
-/** the close instant (timed close, else the true sale day's start) */
-const closeKey = (l: AuctionLot) => {
-  const t = l.saleDateTime ? Date.parse(l.saleDateTime) : NaN;
-  if (Number.isFinite(t)) return t;
-  const d = trueSaleDay(l);
-  return d ? Date.parse(`${d}T00:00:00Z`) : Infinity;
-};
-/** the asking level: estimate high, else low, else the live bid */
-const estKey = (l: AuctionLot) => l.estimateHigh || l.estimateLow || l.currentBid || 0;
-
-/** perf instrumentation: a build with NEXT_PUBLIC_MK_PROFILE=1 counts row
- *  renders on window.__mkR (the P1 re-render measurements); compiled out otherwise */
-function countRender(id: string) {
-  if (process.env.NEXT_PUBLIC_MK_PROFILE && typeof window !== 'undefined') {
-    const w = window as unknown as { __mkR?: number; __mkIds?: string[] };
-    w.__mkR = (w.__mkR || 0) + 1;
-    (w.__mkIds = w.__mkIds || []).push(id);
-  }
-}
-
-/* ── ONE ROW (memoized — a chip click re-renders only the rows whose live
-   pool or summary actually changed: every prop is a primitive or a stable
-   reference) ── */
-const MakerRowItem = React.memo(function MakerRowItem({
-  r, soldMax, isOpen, cols, isSel, isFollowed, authEnabled, liveSort,
-  onToggleOpen, onToggleCompare, onToggleFollow, onLiveSort,
-}: {
-  r: Row; soldMax: number; isOpen: boolean; cols: ColKey[];
-  isSel: boolean; isFollowed: boolean; authEnabled: boolean;
-  /** the dossier's live-book order (the URL's `ls`, while this row is open) */
-  liveSort: LiveSort;
-  onToggleOpen: (id: string) => void;
-  onToggleCompare: (id: string) => void;
-  onToggleFollow: (key: string, label: string) => void;
-  onLiveSort: (ls: LiveSort) => void;
-}) {
-  countRender(r.id);
-  // the dossier mounts on first open and stays (so it can animate closed) —
-  // 2,000+ subject rows must not each carry a hidden dossier in the DOM
-  const [opened, setOpened] = useState(isOpen);
-  if (isOpen && !opened) setOpened(true);
-  const { inline, canCompare, followKey } = r;
-  // the dossier's sold history: the row's own (fail-soft sources hold it),
-  // else the entity's detail bucket, fetched when the dossier first opens
-  const liveShown = useMemo(() => {
-    const ls = r.liveLots;
-    const pick = liveSort === 'matters' ? ls
-      : liveSort === 'closing' ? [...ls].sort((a, b) => closeKey(a) - closeKey(b))
-      : [...ls].sort((a, b) => estKey(b) - estKey(a));
-    return pick.slice(0, LIVE_ROWS);
-  }, [r.liveLots, liveSort]);
-  const cell = (k: ColKey): React.ReactNode => {
-    switch (k) {
-      case 'curve': return <span key={k} className="mk-cell mk-spark" aria-hidden>{r.spark ? <Spark values={r.spark} /> : <span className="mk-sparkgap" />}</span>;
-      case 'median': return <span key={k} className="mk-cell" title={r.median && r.medianNote ? r.medianNote : undefined}>{r.median ? formatPrice(r.median) : '—'}</span>;
-      case 'delta': return (
-        <span key={k} className="mk-cell mk-delta" data-dir={r.verified ? r.verified.dir : undefined}>
-          {r.verified ? `${r.verified.changePct >= 0 ? '+' : '−'}${Math.abs(Math.round(r.verified.changePct))}%` : '—'}
-        </span>
-      );
-      case 'flags': return <span key={k} className="mk-cell mk-flags" data-hot={r.flags > 0 || undefined}>{r.flags > 0 ? r.flags.toLocaleString() : '—'}</span>;
-      case 'live': return <span key={k} className="mk-cell" data-live={r.live > 0 || undefined}>{r.live > 0 ? r.live.toLocaleString() : '—'}</span>;
-      case 'sold': return (
-        <span key={k} className="mk-cell mk-faint mk-soldcell">
-          {r.sold != null ? r.sold.toLocaleString() : '—'}
-          {r.sold != null && r.sold > 0 && (
-            <span className="mk-soldtrack" aria-hidden><span style={{ width: `${Math.max(3, Math.round((r.sold / soldMax) * 100))}%` }} /></span>
-          )}
-        </span>
-      );
-      case 'record': return <span key={k} className="mk-cell">{r.record ? fmtUsd(r.record.p) : '—'}</span>;
-      case 'settled': return <span key={k} className="mk-cell mk-faint">{r.revenue > 0 ? fmtUsd(r.revenue) : '—'}</span>;
-      case 'velocity': return (
-        <span key={k} className="mk-cell mk-faint" title={r.velocitySince ? `last ${r.velocity} sales, since ${r.velocitySince} — not a 12-month window` : undefined}>
-          {r.velocity > 0 ? (r.velocitySince ? `${r.velocity.toLocaleString()} since ${r.velocitySince}` : r.velocity.toLocaleString()) : '—'}
-        </span>
-      );
-    }
-  };
-  return (
-    <div
-      className="mk-item" data-mk-flip={r.id} data-open={isOpen || undefined} data-sel={isSel || undefined}
-      onKeyDown={e => {
-        if (e.key === 'Escape' && isOpen) { e.preventDefault(); onToggleOpen(r.id); }
-      }}
-    >
-      <div
-        role="button" tabIndex={0} data-mk-row data-slug={r.id}
-        className="mk-row"
-        aria-expanded={isOpen}
-        aria-label={`${r.label} — open the maker's read`}
-        onClick={() => onToggleOpen(r.id)}
-        onKeyDown={e => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleOpen(r.id); }
-        }}
-      >
-        <span className="mk-mono" aria-hidden>
-          <span className="mk-mono-letter">{r.label.charAt(0)}</span>
-          {r.hero && (
-            <img src={httpsImg(r.hero)} alt="" referrerPolicy="no-referrer" loading="lazy"
-              onError={e => e.currentTarget.remove()} />
-          )}
-        </span>
-        <span className="mk-id">
-          <span className="mk-name">{r.label}</span>
-          <span className="mk-tags">
-            {r.discipline && <span className="mk-tag">{r.discipline}</span>}
-            {!inline && BID_MARKETS.has(r.market) && <span className="mk-tag">bid market</span>}
-            {r.verified && <span className="mk-tag mk-tag-verified" title={`CI-verified ${r.verified.horizon} move · 95% CI ${Math.round(r.verified.ciLoPct)}% to ${Math.round(r.verified.ciHiPct)}%`}>verified · {r.verified.horizon}</span>}
-            {r.recordFresh && <span className="mk-tag mk-tag-verified">record · {r.recordFresh}</span>}
-            {r.rising >= 3 && <span className="mk-tag" title={`${r.rising} consecutive quarters of rising median sale`}>{r.rising}q rising</span>}
-            {r.thin && <span className="mk-tag">thin history</span>}
-          </span>
-        </span>
-        {cols.map(cell)}
-        <span className="mk-go" aria-hidden data-open={isOpen || undefined}><Flick size={10} /></span>
-        <span className="mk-mob">
-          <span className="mk-mob-median">{r.median ? formatPrice(r.median) : r.live > 0 ? `${r.live.toLocaleString()} live` : '—'}</span>
-          <span className="mk-mob-sub" data-dir={r.flags === 0 && r.verified ? r.verified.dir : undefined}>
-            {/* phone: live first, then ONE more read — never a line that runs into the tags */}
-            {[
-              r.median && r.live > 0 ? `${r.live.toLocaleString()} live` : '',
-              r.flags > 0 ? `${r.flags} flagged`
-                : r.verified ? `${r.verified.changePct >= 0 ? '+' : '−'}${Math.abs(Math.round(r.verified.changePct))}% · ${r.verified.horizon}`
-                : r.sold != null ? `${r.sold.toLocaleString()} sold` : '',
-            ].filter(Boolean).join(' · ')}
-          </span>
-        </span>
-      </div>
-
-      {/* hover actions — SIBLINGS of the row button (never nested interactive) */}
-      <span className="mk-acts">
-        {authEnabled && followKey && (
-          <button
-            type="button" className="mk-act" data-on={isFollowed || undefined}
-            aria-pressed={isFollowed} aria-label={isFollowed ? `Unfollow ${r.label}` : `Follow ${r.label}`}
-            title={isFollowed ? 'Following — alerts on every new lot' : 'Follow — alerts on every new lot'}
-            onClick={e => { e.stopPropagation(); onToggleFollow(followKey, r.label); }}
-          >
-            <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden>
-              {isFollowed
-                ? <path d="M2.5 7.5l3 3 6-7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                : <path d="M7 1.5v11M1.5 7h11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />}
-            </svg>
-          </button>
-        )}
-        {canCompare && (
-          <button
-            type="button" className="mk-act" data-on={isSel || undefined}
-            aria-pressed={isSel} aria-label={isSel ? `Remove ${r.label} from compare` : `Compare ${r.label}`}
-            title={isSel ? 'In compare — click to remove' : 'Add to compare (or press c on the row)'}
-            onClick={e => { e.stopPropagation(); onToggleCompare(r.id); }}
-          >
-            <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
-              <path d="M1.5 12.5L6 6l3 3.5 3.5-6" />
-              <path d="M1.5 9L5 4.5" opacity="0.45" />
-            </svg>
-          </button>
-        )}
-      </span>
-
-      {/* ── THE DOSSIER ── */}
-      <div className="mkx">
-        <div className="mkx-in">
-          {opened && <>
-          {/* THE LIVE BOOK — the row's lots, first in the dossier. Eight
-              rows, re-orderable: what matters most (the row's own order) ·
-              closing soonest · highest estimate. */}
-          {r.liveLots.length > 0 && (
-            <div className="mkx-live">
-              <div className="mkx-live-head kicker" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                <span>On the block · {r.live.toLocaleString()} live{r.flags > 0 ? <> · <b className="mkx-live-flagn">{r.flags} flagged by the engine</b></> : null}</span>
-                {r.liveLots.length > 1 && (
-                  <span role="radiogroup" aria-label="Order the live lots" style={{ display: 'inline-flex', gap: 6 }}>
-                    {LIVE_SORTS.map(([k, lbl]) => (
-                      <button key={k} type="button" role="radio" aria-checked={liveSort === k} className="mk-chip" data-on={liveSort === k || undefined}
-                        style={{ height: 24, padding: '0 10px', letterSpacing: '0.06em', textTransform: 'none' }}
-                        onClick={() => onLiveSort(k)}>
-                        {lbl}
-                      </button>
-                    ))}
-                  </span>
-                )}
-              </div>
-              {liveShown.map(l => (
-                <LiveLotRow key={l.id} l={l} letter={r.label.charAt(0)} kind={r.kind} />
-              ))}
-              {/* every row's "+N more" lands on an exact list: a maker's lot
-                  browser, a player's dossier, or the feed scoped to the
-                  subject (?subj=) — the /makers triage view carried along */}
-              {r.live > liveShown.length && (
-                <CarryLink base={r.page} className="mkx-live-more">
-                  +{(r.live - liveShown.length).toLocaleString()} more on the block <Flick size={9} style={{ marginLeft: 4 }} />
-                </CarryLink>
-              )}
-            </div>
-          )}
-
-          {r.hero && (
-            <div className="mkx-hero" aria-hidden>
-              <img src={httpsImg(r.hero)} alt="" referrerPolicy="no-referrer" loading="lazy"
-                onError={e => e.currentTarget.closest('.mkx-hero')?.remove()} />
-              <span className="mkx-hero-cap">{r.label}{r.discipline ? ` · ${r.discipline}` : ''}</span>
-            </div>
-          )}
-          <DossierSold r={r} />
-
-          {(!inline || r.lands || (authEnabled && followKey)) && (
-            <div className="mkx-actions">
-              {inline ? (r.lands && (
-                <CarryLink base={r.page} land={!r.dossierHref} className="ray-call-btn ray-call-btn-primary">
-                  {r.dossierHref ? 'Open the player dossier' : 'See every lot'}
-                </CarryLink>
-              )) : (
-                <CarryLink base={r.page} land={r.lands} className="ray-call-btn ray-call-btn-primary">
-                  {r.lands ? 'See every lot' : 'Open the dossier'}
-                </CarryLink>
-              )}
-              {canCompare && (
-                <button type="button" className="mk-chip" data-on={isSel || undefined} onClick={() => onToggleCompare(r.id)}>
-                  {isSel ? 'In compare' : 'Add to compare'}
-                </button>
-              )}
-              {authEnabled && followKey && (
-                <button type="button" className="mk-chip" data-on={isFollowed || undefined} onClick={() => onToggleFollow(followKey, r.label)}>
-                  {isFollowed ? 'Following' : 'Follow'}
-                </button>
-              )}
-            </div>
-          )}
-          {inline && !r.lands && !(authEnabled && followKey) && <div style={{ height: 16 }} aria-hidden />}
-          </>}
-        </div>
-      </div>
-    </div>
-  );
-});
-
-/* the dossier's sold history — its own component, so only an OPEN dossier
-   carries the detail hook (a closed row never subscribes to anything) */
-function DossierSold({ r }: { r: Row }) {
-  const { inline } = r;
-  // the row's own history (fail-soft sources hold it), else the entity's
-  // detail bucket, fetched when the dossier first opens
-  const { detail } = useEntity(r.id, !r.detail && !inline, r.bundle);
-  const det = r.detail ?? detail;
-  const hist = useMemo(() => histOf(det), [det]);
-  const houses = det?.houses?.length ? det.houses.slice().sort((a, b) => b.n - a.n).slice(0, 3) : null;
-  // the slim summary carries the record's price + day; its title + house
-  // come from the detail's top results
-  const rec = useMemo(() => recordOf(r.record, det), [r.record, det]);
-  return (
-    <>
-      {hist.length >= 4 ? (
-        <div className="mkx-chartwrap">
-          <div className="mkx-chart-cap kicker">Quarterly median sale · full tracked history</div>
-          <DossierChart hist={hist} />
-        </div>
-      ) : !inline ? (
-        <div className="mkx-none ns-well"><span className="ns-well-body">Not enough sold history for a curve yet — the ledger fills as {r.label} lots settle.</span></div>
-      ) : null}
-      {/* a subject with no matched sold history prints no empty record/book */}
-      {(!inline || det) && <div className="mkx-grid">
-        <div>
-          <span className="kicker">The record</span>
-          {rec ? (
-            <p><b>{formatPrice(rec.p)}</b>{rec.t ? <> · {rec.t.length > 44 ? `${rec.t.slice(0, 44)}…` : rec.t}</> : null}{rec.h ? <> · {rec.h}</> : null}{rec.d ? <> · {formatDate(rec.d)}</> : null}</p>
-          ) : <p>—</p>}
-        </div>
-        <div>
-          <span className="kicker">The book</span>
-          <p>
-            {r.sold != null && <><b>{r.sold.toLocaleString()}</b> sold tracked</>}
-            {r.revenue > 0 && <> · <b>{fmtUsd(r.revenue)}</b> settled</>}
-            {r.velocity > 0 && (r.velocitySince
-              ? <> · last {r.velocity.toLocaleString()} sales · since {r.velocitySince}</>
-              : <> · {r.velocity.toLocaleString()} in 12mo</>)}
-          </p>
-        </div>
-        {houses && (
-          <div>
-            <span className="kicker">The houses</span>
-            <div className="mkx-houses">
-              {houses.map((h, _, arr) => (
-                <div key={h.h} className="mkx-house">
-                  <span className="mkx-house-name">{h.h}</span>
-                  <span className="mkx-house-track" aria-hidden><span style={{ width: `${Math.round((h.n / Math.max(1, arr[0].n)) * 100)}%` }} /></span>
-                  <span className="mkx-house-n">{h.n.toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {r.verified && (
-          <div>
-            <span className="kicker">Verified move · {r.verified.horizon}</span>
-            <div className="mkx-verified">
-              <b data-dir={r.verified.dir}>{r.verified.changePct >= 0 ? '+' : '−'}{Math.abs(Math.round(r.verified.changePct))}%</b>
-              <CIWhisker v={r.verified} />
-              <span className="mkx-ci-ends">95% CI {Math.round(r.verified.ciLoPct)}% to {Math.round(r.verified.ciHiPct)}% · n {r.verified.n.toLocaleString()}</span>
-            </div>
-          </div>
-        )}
-      </div>}
-    </>
-  );
-}
-
-/* ═════════ THE ROW MODEL — one path for every kind ═════════ */
-
-/** trailing consecutive rising medians */
-function risingOf(meds: readonly number[]): number {
-  let n = 0;
-  for (let i = meds.length - 1; i > 0 && meds[i] > meds[i - 1]; i--) n++;
-  return n;
-}
-
-/** one entity bundle + its live join → a ledger row. What the row links to
- *  and offers is the KIND registry's Phase-1 policy (rowPolicy), never the
- *  summary's caps (those ship with the Phase-2 ledger). */
-function buildRow(id: string, b: EntityBundle, live: LiveEntry | undefined, dossiers: ReadonlySet<string>, now = Date.now()): Row {
-  const s = b.s;
-  const kind: RowKind = rowKindOf(id) ?? s.kind;
-  const lots = live?.lots ?? EMPTY_LOTS;
-  const spark = s.spark ? s.spark.filter((v): v is number => v != null && v > 0) : null;
-  // momentum over the full complete-quarter history when the source holds it
-  const meds = b.detail?.quarters.length
-    ? completeQuarters(b.detail.quarters.map(q => ({ date: q.q, med: q.med ?? 0 })), now).map(q => q.med).filter(v => v > 0)
-    : (spark ?? []);
-  const recDate = s.record?.d ? Date.parse(s.record.d) : NaN;
-  const pol = rowPolicy(id, { playerDossier: kind === 'player' && dossiers.has(id.slice(3)) });
-  return {
-    id, kind, label: s.label, market: s.market,
-    discipline: s.discipline,
-    // a maker's face is its flagship (page-stats / the build's face rule);
-    // a subject or sub row shows its best live lot
-    hero: kind === 'maker' ? s.face : (b.liveFace ?? lots.find(l => l.imageUrl)?.imageUrl ?? s.face ?? null),
-    spark: spark && spark.length >= 4 ? spark : null,
-    live: lots.length,
-    flags: live?.flags ?? 0,
-    sold: s.sold,
-    median: s.med12m || null,
-    medianNote: s.med12m && s.medScope ? `12-month median · ${s.medScope} sales` : null,
-    revenue: s.revenue ?? 0,
-    velocity: s.sold12m ?? 0,
-    velocitySince: s.sold12mSince ?? null,
-    record: s.record,
-    verified: (s.verified as VerifiedMover | null) ?? null,
-    thin: s.thin,
-    rising: risingOf(meds),
-    recordFresh: !isNaN(recDate) && now - recDate < 365 * 86400e3 ? s.record!.d.slice(0, 4) : null,
-    liveLots: lots,
-    topScore: live?.score ?? -1,
-    page: pol.page,
-    lands: pol.lands,
-    dossierHref: pol.dossierHref,
-    followKey: pol.follow,
-    canCompare: pol.compare,
-    inline: pol.inline,
-    detail: b.detail,
-    bundle: b,
-  };
-}
-const EMPTY_LOTS: AuctionLot[] = [];
 
 /** rows keep their identity while their bundle and live entry do — the
- *  React.memo on MakerRowItem then holds across a filter re-cut */
+ *  React.memo on EntityRow then holds across a filter re-cut */
 function useRowCache(dossiers: ReadonlySet<string>) {
   const cache = useRef(new Map<string, { b: EntityBundle; live: LiveEntry | undefined; d: ReadonlySet<string>; row: Row }>());
   return useCallback((id: string, b: EntityBundle, live: LiveEntry | undefined): Row => {
@@ -832,23 +99,47 @@ function useRowCache(dossiers: ReadonlySet<string>) {
   }, [dossiers]);
 }
 
+/** compare picks from another market than the one on screen: their own
+ *  market's entities file (main, then the tail for a sold-only pick) — the
+ *  same summary that market's ledger prints, never an adapter stand-in */
+function useForeignPicks(ids: readonly string[], active: Market): Map<string, EntityBundle> {
+  const [got, setGot] = useState<Map<string, EntityBundle>>(() => new Map());
+  const want = useMemo(() => (active === 'all' ? [] : ids.filter(id => {
+    const m = parseEntityId(id)?.market;
+    return !!m && m !== active;
+  })), [ids, active]);
+  const key = want.join(',');
+  useEffect(() => {
+    if (!want.length) return;
+    let on = true;
+    (async () => {
+      const out = new Map<string, EntityBundle>();
+      for (const id of want) {
+        const m = parseEntityId(id)!.market;
+        let f = await loadEntities(m);
+        let s = f?.entities.find(e => e.id === id);
+        if (!s && f?.tailN) { f = await loadEntitiesTail(m); s = f?.entities.find(e => e.id === id); }
+        if (s) out.set(id, { s, detail: null, sparkQ: f?.sparkQ ?? null });
+      }
+      if (on) setGot(out);
+    })();
+    return () => { on = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return got;
+}
+
 export default function MakersPage() {
-  // EVERY FIGURE on this page is phase-1 eager: stats.json (makers), the
-  // eager upcoming book (every live lot), market.json (verified reads); the
-  // entity summaries (app/hooks/useEntities) add page-stats faces and, on the
-  // collection markets, players.json / cat-stats.json until the nightly
-  // writes entities files. The sold corpus is never asked for.
   const { allLots, lastCrawl, loading, fromCache, demand } = useRayData();
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const activeLabel = activeKey === 'all' ? 'full' : activeKey === 'tcg' ? 'TCG' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
-  const mktSet = useMemo(() => marketArtists(activeKey), [activeKey]);
-  const { savedIds } = useSavedLots();
+  const { savedIds, isSaved, toggle: toggleSave } = useSavedLots();
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
   // ── THE VIEW — one URL codec (app/lib/entity/view-state) ──
   const [view, setView, hydrated] = useMakersView(activeKey);
-  const { q, on: fLive, vi: fVerified, fl: fFlagged, fw: fFollowing, sort, cols, open, spk: sportPick, by: rowsBy, cmp: compare, triage } = view;
+  const { q, on: fLive, vi: fVerified, fl: fFlagged, fw: fFollowing, sort, cols, open, spk: sportPick, by: rowsBy, cmp: compare, vw, lk, lo, triage } = view;
   const search = useMemo(() => viewSearch(view), [view]);
 
   // follows ride the saved-search plumbing (FollowButton's exact semantics)
@@ -861,16 +152,12 @@ export default function MakersPage() {
       const p = (sr.query as { player?: string }).player;
       if (p) s.add(p);
     }
-    // sub-category rows (cs:<cat>:<sub>) — category follows, signed in or not
     for (const f of allFollows) if (f.kind === 'cat' && f.key.includes(':')) s.add(`cs:${f.key}`);
     return s;
   }, [searches, allFollows]);
 
-  // rows shown per collection group before "Show more" — keyed to the cut,
-  // so any re-cut (filters, sort, search, market) starts back at page one
   const [capState, setCapState] = useState<{ k: string; caps: Partial<Record<Market, number>> }>({ k: '', caps: {} });
   const prevVisitDay = useLastVisit();
-  // a house's first-crawl flood is not "new" (feed-filters houseBaselines)
   const baselines = useMemo(() => houseBaselines(allLots), [allLots]);
   const setTriage = useCallback((next: TriageFilters | ((prev: TriageFilters) => TriageFilters)) =>
     setView(v => ({ triage: typeof next === 'function' ? next(v.triage) : next })), [setView]);
@@ -879,7 +166,7 @@ export default function MakersPage() {
   useEffect(() => {
     if (triageMarket.current === activeKey) return;
     triageMarket.current = activeKey;
-    setView(v => ({ triage: v.triage.cat || v.triage.sub ? { ...v.triage, cat: null, sub: null } : v.triage, spk: null }));
+    setView(v => ({ triage: v.triage.cat || v.triage.sub ? { ...v.triage, cat: null, sub: null } : v.triage, spk: null, lk: [] }));
   }, [activeKey, setView]);
   const [showDisplay, setShowDisplay] = useState(false);
   const deepLinked = useRef(false);
@@ -889,34 +176,32 @@ export default function MakersPage() {
     deepChecked.current = true;
     if (open) deepLinked.current = true;
   }, [hydrated, open]);
-
   const searchRef = useRef<HTMLInputElement | null>(null);
 
-  // ── THE LIVE BOOK + THE ENGINE'S READ — the DEFERRED filters: a chip press
-  // repaints the chip at once and the ledger re-cuts right behind it ──
+  // ── THE LIVE BOOK — the DEFERRED filters: a chip press repaints the chip
+  // at once and the ledger re-cuts right behind it ──
   const dTriage = useDeferredValue(triage);
   const dSport = useDeferredValue(sportPick);
   const dQ = useDeferredValue(q);
+  const dFl = useDeferredValue(fFlagged);
+  const words = useMemo(() => needleOf(dQ), [dQ]);
   const collection = activeKey === 'all' || SUBJECT_MARKETS.has(activeKey);
-  // By category waits for its figures: the toggle lights at once, the ledger
-  // keeps the subject rows until the sub rows can print (never a flash of
-  // the wrong rows) — prefetched on the toggle's hover / focus
   const wantSubs = rowsBy === 'cat' && collection;
   const pool = useLivePool(allLots, activeKey, dTriage, {
     sport: dSport, prevVisitDay, baselines,
     names: collection, cats: wantSubs,
   });
+  // the sold-only tail: a search (any name lectr tracks), or an order that
+  // reads sold history
+  const wantTail = words.length > 0 || sort === 'median' || sort === 'movers' || sort === 'sold12' || sort === 'name';
   const entities = useEntities(activeKey, {
     namesAll: pool.namesAll, subs: wantSubs, sport: dSport,
     players: rowsBy === 'name' && (activeKey === 'all' || activeKey === 'sports'),
+    tail: wantTail,
   });
   const shownBy: RowsBy = rowsBy === 'cat' && !entities.subsReady ? 'name' : rowsBy;
-  // the ledger paints once: the eager book AND the summaries' source are in
-  // (never adapter figures that an entities file then replaces)
   const booting = loading || entities.source === 'pending';
   const filtersOn = isTriageActive(dTriage) || !!dSport;
-  const marketLiveAll = pool.marketAll;
-  const marketLive = pool.marketPool;
 
   // ── THE ROWS — one row-model path for every kind ──
   const rowOf = useRowCache(entities.dossiers);
@@ -924,8 +209,6 @@ export default function MakersPage() {
     const id = makerId(a.slug);
     return rowOf(id, entities.makers.get(id)!, pool.byMaker.get(id));
   }), [entities.makers, pool.byMaker, rowOf]);
-  // By category: every clean sub with sold figures or a live lot; before
-  // cat-stats lands (never shown — shownBy) the bundle would be live-only
   const liveOnlySubs = useMemo(() => {
     const m = new Map<string, EntityBundle>();
     for (const c of COLLECTION_CATS) for (const sub of SUBS[c.cat]) {
@@ -948,8 +231,8 @@ export default function MakersPage() {
     }
     return out;
   }, [shownBy, entities.subs, pool.byCat, liveOnlySubs, rowOf]);
-  // By name: players, Pokémon, people, films, franchises, missions, sets
-  // (app/lib/maker-subjects) — a row while something of it passes the filters
+  // By name: every live subject (passing the filters), plus — with no live
+  // filter on — the sold-only names the entities file tracks
   const subjectRows = useMemo<Row[]>(() => {
     if (shownBy !== 'name' || !collection) return [];
     const out: Row[] = [];
@@ -957,11 +240,17 @@ export default function MakersPage() {
       const b = entities.names.get(id);
       if (b) out.push(rowOf(id, b, live));
     });
+    if (!filtersOn && entities.file) {
+      entities.file.forEach((b, id) => {
+        if (pool.byName.has(id) || !COLLECTION_MARKETS.has(b.s.market)) return;
+        const k = b.s.kind;
+        if (k !== 'player' && k !== 'subject' && k !== 'set') return;
+        out.push(rowOf(id, b, undefined));
+      });
+    }
     return out;
-  }, [shownBy, collection, pool.byName, entities.names, rowOf]);
+  }, [shownBy, collection, pool.byName, entities.names, entities.file, filtersOn, rowOf]);
 
-  // collection markets list subjects (default) or, "By category", the clean
-  // sub rows; art/design/watches keep their makers
   const rows = useMemo<Row[]>(() => {
     const coll = shownBy === 'name' ? subjectRows : subRows;
     return [...makerRows.filter(r => !COLLECTION_MARKETS.has(r.market)), ...coll];
@@ -972,53 +261,35 @@ export default function MakersPage() {
     for (const r of rows) m.set(r.id, r);
     return m;
   }, [makerRows, rows]);
-  // the keyboard handler resolves the focused row through this
   const rowByIdRef = useRef(rowById);
   useEffect(() => { rowByIdRef.current = rowById; }, [rowById]);
   const inMarket = useCallback((r: Row) => activeKey === 'all' || r.market === activeKey, [activeKey]);
-  // the roster as shown — collection markets count their rows (never the
-  // "Other lots" remainder), not slugs
-  const rosterTotal = useMemo(() => rows.filter(r => inMarket(r) && r.kind !== 'rest').length, [rows, inMarket]);
-  const rowNoun = useCallback((m: Market, n: number) =>
-    (shownBy === 'name' && SUBJECT_MARKETS.has(m) ? (n === 1 ? 'name' : 'names') : rosterNoun(m, n)), [shownBy]);
-  const noun = activeKey === 'all' ? (rosterTotal === 1 ? 'tracked name' : 'tracked names') : rowNoun(activeKey, rosterTotal);
 
+  // ── THE VISIBLE LEDGER — search (names AND lots), lenses, chips, order ──
   const visible = useMemo(() => {
-    const needle = dQ.trim().toLowerCase();
-    const cmp = (a: Row, b: Row): number => {
-      switch (sort) {
-        case 'matters': return b.topScore - a.topScore || b.live - a.live || (b.sold ?? 0) - (a.sold ?? 0);
-        case 'live': return b.live - a.live || (b.sold ?? 0) - (a.sold ?? 0);
-        case 'flags': return b.flags - a.flags || b.live - a.live;
-        case 'median': return (b.median ?? -1) - (a.median ?? -1);
-        case 'delta': return (b.verified?.changePct ?? -Infinity) - (a.verified?.changePct ?? -Infinity);
-        case 'name': return a.label.localeCompare(b.label);
-        default: return (b.sold ?? 0) - (a.sold ?? 0);
-      }
-    };
-    return rows
-      .filter(inMarket)
-      .filter(r => !needle || r.label.toLowerCase().includes(needle) || (r.discipline ?? '').toLowerCase().includes(needle)
-        // the label vocabulary on the row's live lots — "PSA 10", "GMT", "Apollo", a player
-        || r.liveLots.some(l => searchTextOf(l).includes(needle)))
-      .filter(r => !fLive || r.live > 0)
-      .filter(r => !fVerified || !!r.verified)
-      .filter(r => !fFlagged || r.flags > 0)
+    const out: Row[] = [];
+    for (const r0 of rows) {
+      if (!inMarket(r0)) continue;
+      let r = searchRow(r0, words);
+      if (!r) continue;
+      if (dFl) { r = flaggedRow(r); if (!r) continue; }
+      if (fLive && r.live === 0) continue;
+      if (fVerified && !r.verified) continue;
       // a filtered book shows only the rows with a live lot passing it
-      .filter(r => !filtersOn || r.live > 0)
-      .filter(r => !fFollowing || (!!r.followKey && followedSet.has(r.followKey)))
-      // the remainder row always closes its group
-      .sort((a, b) => (a.kind === 'rest' ? 1 : 0) - (b.kind === 'rest' ? 1 : 0) || cmp(a, b));
-  }, [rows, inMarket, dQ, fLive, fVerified, fFlagged, fFollowing, followedSet, sort, filtersOn]);
+      if (filtersOn && r.live === 0) continue;
+      if (fFollowing && !(r.follow && followedSet.has(r.follow))) continue;
+      out.push(r);
+    }
+    return sortRows(out, sort);
+  }, [rows, inMarket, words, dFl, fLive, fVerified, filtersOn, fFollowing, followedSet, sort]);
 
-  const cutKey = JSON.stringify([dTriage, dSport, dQ, sort, shownBy, activeKey, fLive, fVerified, fFlagged, fFollowing]);
+  const cutKey = JSON.stringify([dTriage, dSport, dQ, dFl, sort, shownBy, activeKey, fLive, fVerified, fFollowing]);
   const caps = capState.k === cutKey ? capState.caps : NO_CAPS;
   const showMore = (m: Market) => setCapState(st => {
     const cur = st.k === cutKey ? st.caps : {};
     return { k: cutKey, caps: { ...cur, [m]: (cur[m] ?? (activeKey === 'all' ? CAP_ALL : CAP_ONE)) + CAP_STEP } };
   });
 
-  // the sold-bar scale per market: all-time sold never moves with the filters
   const soldMaxBy = useMemo(() => {
     const m = new Map<Market, number>();
     for (const r of rows) m.set(r.market, Math.max(m.get(r.market) ?? 1, r.sold ?? 0));
@@ -1030,90 +301,133 @@ export default function MakersPage() {
       .filter(m => m.key !== 'all' && (activeKey === 'all' || m.key === activeKey))
       .map(m => {
         const g = visible.filter(r => r.market === m.key);
-        // subject groups page: the first `cap` names, then the remainder row
+        const cap = caps[m.key] ?? (activeKey === 'all' && !MAKER_MARKETS.has(m.key) ? CAP_ALL : CAP_ONE);
+        const named = g.filter(r => r.kind !== 'rest');
         let shown = g, more = 0;
-        if (shownBy === 'name' && SUBJECT_MARKETS.has(m.key)) {
-          const cap = caps[m.key] ?? (activeKey === 'all' ? CAP_ALL : CAP_ONE);
-          const named = g.filter(r => r.kind !== 'rest');
-          if (named.length > cap) {
-            shown = [...named.slice(0, cap), ...g.filter(r => r.kind === 'rest')];
-            more = named.length - cap;
-          }
+        if (named.length > cap) {
+          shown = [...named.slice(0, cap), ...g.filter(r => r.kind === 'rest')];
+          more = named.length - cap;
         }
         const live = g.reduce((s, r) => s + r.live, 0);
         const flags = g.reduce((s, r) => s + r.flags, 0);
-        const revenue = g.reduce((s, r) => s + r.revenue, 0);
-        const soldMax = soldMaxBy.get(m.key as Market) ?? 1;
-        const ds = demand?.[m.key] || [];
-        const demandNow = ds.length ? ds[ds.length - 1].value : null;
-        return { key: m.key as Market, label: m.label, rows: g, shown, more, live, flags, revenue, soldMax, demandNow };
-      })
-      .filter(g => g.rows.length > 0),
-    [visible, soldMaxBy, activeKey, demand, shownBy, caps]);
-
-  const cockpit = useMemo(() =>
-    MARKETS
-      .filter(m => m.key !== 'all' && (activeKey === 'all' || m.key === activeKey))
-      .map(m => {
-        const g = rows.filter(r => r.market === m.key);
         const ds = demand?.[m.key] || [];
         return {
-          key: m.key as Market, label: m.label,
-          makers: g.filter(r => r.kind !== 'rest').length,
-          live: g.reduce((s, r) => s + r.live, 0),
-          flags: g.reduce((s, r) => s + r.flags, 0),
+          key: m.key as Market, label: m.label, rows: g, named: named.length, shown, more, live, flags,
+          soldMax: soldMaxBy.get(m.key as Market) ?? 1,
           demandNow: ds.length ? ds[ds.length - 1].value : null,
         };
-      }),
-    [rows, activeKey, demand]);
+      })
+      .filter(g => g.rows.length > 0),
+    [visible, soldMaxBy, activeKey, demand, caps]);
 
-  const totalLive = useMemo(() => rows.filter(inMarket).reduce((s, r) => s + r.live, 0), [rows, inMarket]);
-  const totalFlags = useMemo(() => rows.filter(inMarket).reduce((s, r) => s + r.flags, 0), [rows, inMarket]);
-  const verifiedCount = useMemo(() => rows.filter(r => inMarket(r) && r.verified).length, [rows, inMarket]);
+  // ── THE LOTS — the market's live book under the same filters + search ──
+  const lkSet = useMemo(() => new Set(lk), [lk]);
+  const lotsPool = useMemo<AuctionLot[]>(() => {
+    const base = lkSet.size ? pool.all.filter(l => lotInScope(l, lkSet)) : pool.marketPool;
+    return words.length ? base.filter(l => lotMatches(l, words)) : base;
+  }, [lkSet, pool.all, pool.marketPool, words]);
+  // the counts the body switch, the lenses and the search row print — the
+  // same predicates LotBrowser's pass applies (triage, flagged), so a count
+  // is exactly the list it opens
+  // per-lot lens bits, once per pool (never per chip click)
+  const lensBits = useMemo(() => {
+    const o = { today: localToday(), prevVisitDay, baselines };
+    const tonight = new Uint8Array(lotsPool.length), fresh = new Uint8Array(lotsPool.length), flag = new Uint8Array(lotsPool.length);
+    lotsPool.forEach((l, i) => {
+      tonight[i] = passesTriage(l, { ...TRIAGE_DEFAULTS, win: 'today' }, o) ? 1 : 0;
+      fresh[i] = passesTriage(l, { ...TRIAGE_DEFAULTS, newOnly: true }, o) ? 1 : 0;
+      flag[i] = isFlagged(l) ? 1 : 0;
+    });
+    return { tonight, fresh, flag };
+  }, [lotsPool, prevVisitDay, baselines]);
+  const lensCounts = useMemo(() => {
+    const o = { today: localToday(), prevVisitDay, baselines };
+    const tri = { ...dTriage, win: null, newOnly: false };
+    const triOn = isTriageActive(tri);
+    const win = dTriage.win;
+    let shown = 0, tonight = 0, flagged = 0, fresh = 0;
+    for (let i = 0; i < lotsPool.length; i++) {
+      const l = lotsPool[i];
+      if (triOn && !passesTriage(l, tri, o)) continue;
+      const fl = lensBits.flag[i] === 1, t = lensBits.tonight[i] === 1, n = lensBits.fresh[i] === 1;
+      const winOk = !win || (win === 'today' ? t : passesTriage(l, { ...TRIAGE_DEFAULTS, win }, o));
+      const newOk = !dTriage.newOnly || n;
+      if (t && newOk && (!dFl || fl)) tonight++;
+      if (fl && winOk && newOk) flagged++;
+      if (n && winOk && (!dFl || fl)) fresh++;
+      if (winOk && newOk && (!dFl || fl)) shown++;
+    }
+    return { shown, tonight, flagged, fresh };
+  }, [lotsPool, lensBits, dTriage, dFl, prevVisitDay, baselines]);
+  // the search row's count: the whole market (never the lk scope)
+  const searchLots = useMemo(() => {
+    if (!words.length) return 0;
+    const today = localToday();
+    let n = 0;
+    for (const l of pool.marketPool) {
+      if (lotMatches(l, words) && passesTriage(l, dTriage, { today, prevVisitDay, baselines }) && (!dFl || isFlagged(l))) n++;
+    }
+    return n;
+  }, [words, pool.marketPool, dTriage, dFl, prevVisitDay, baselines]);
 
-  // ── THE VERIFIED READ — the strongest CI-verified maker move currently
-  // published on the active book: largest |Δ| among the same verifiedMovers
-  // rows the ledger already prints (no re-derivation). LAMP LAW: the color
-  // cell's dir comes from the REAL sign of the published changePct. ──
+  const rosterTotal = useMemo(() => rows.filter(r => inMarket(r) && r.kind !== 'rest').length, [rows, inMarket]);
+  const shownTotal = useMemo(() => visible.filter(r => r.kind !== 'rest').length, [visible]);
+  const marketLiveAll = pool.marketAll;
+  const totalLive = useMemo(() => {
+    if (!filtersOn) return marketLiveAll.length;
+    let n = 0;
+    for (const g of groups) n += g.live;
+    return n;
+  }, [filtersOn, marketLiveAll, groups]);
+  const totalFlags = useMemo(() => marketLiveAll.reduce((n, l) => n + (isFlagged(l) ? 1 : 0), 0), [marketLiveAll]);
+
+  // ── THE VERIFIED READ — the strongest CI-verified move published on this
+  // book (the same verifiedMovers the rows print; dir = the real sign) ──
   const topVerified = useMemo(() => {
     let best: Row | null = null;
-    // makerRows, not rows: the verified indices live on the roster slugs
-    // (e.g. sports-cards), which collection markets show as sub rows
     for (const r of makerRows) {
-      const slug = makerSlugOf(r.id);
-      if (!slug || !mktSet.has(slug) || !r.verified) continue;
+      if (!r.verified || !(activeKey === 'all' || r.market === activeKey)) continue;
       if (!best || Math.abs(r.verified.changePct) > Math.abs(best.verified!.changePct)) best = r;
     }
     return best;
-  }, [makerRows, mktSet]);
+  }, [makerRows, activeKey]);
 
   // ── stable callbacks for the memoized rows ──
-  const onToggleOpen = useCallback((id: string) => {
-    setView(v => ({ open: v.open === id ? null : id }));
-  }, [setView]);
+  const onToggleOpen = useCallback((id: string) => setView(v => ({ open: v.open === id ? null : id })), [setView]);
   const onToggleCompare = useCallback((id: string) => {
     setView(v => ({ cmp: v.cmp.includes(id) ? v.cmp.filter(s => s !== id) : v.cmp.length >= COMPARE_MAX ? v.cmp : [...v.cmp, id] }));
   }, [setView]);
   const onLiveSort = useCallback((ls: LiveSort) => setView({ ls }), [setView]);
   const onToggleFollow = useCallback((key: string, label: string) => {
     const sp = subPartsOf(key);
-    if (sp) {
-      void toggleCatFollow(catFollow(sp.cat as CatKey, sp.sub));
-      return;
-    }
+    if (sp) { void toggleCatFollow(catFollow(sp.cat as CatKey, sp.sub)); return; }
     if (!user) { openLogin(); return; }
     const existing = searches.find(s => (s.query as { player?: string }).player === key);
     if (existing) void removeSearch(existing.id);
     else void saveSearch(`Following ${label}`, { player: key, playerName: label });
   }, [user, openLogin, searches, removeSearch, saveSearch, toggleCatFollow]);
+  const listTop = useRef<HTMLDivElement | null>(null);
+  const toBody = useCallback(() => {
+    // the body swaps under the reader: bring its top under the sticky bar
+    requestAnimationFrame(() => {
+      const el = listTop.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top;
+      if (top < 0) window.scrollTo({ top: window.scrollY + top - 140, behavior: 'instant' as ScrollBehavior });
+    });
+  }, []);
+  const onSeeLots = useCallback((id: string) => { setView({ vw: 'lots', lk: [id] }); toBody(); }, [setView, toBody]);
+  const onSeeLotsMany = useCallback((ids: string[]) => { setView({ vw: 'lots', lk: ids }); toBody(); }, [setView, toBody]);
+  const setBody = useCallback((b: ViewBody) => { setView({ vw: b, lk: [] }); toBody(); }, [setView, toBody]);
+  // a lot-centric lens turned ON opens the lots
+  const lens = useCallback((patch: (v: MakersView) => Partial<MakersView>, turningOn: boolean) => {
+    setView(v => ({ ...patch(v), ...(turningOn ? { vw: 'lots' as ViewBody } : {}) }));
+  }, [setView]);
 
-  // deep link ?open= — land on the dossier once the ledger has painted.
-  // The deepLinked ref makes it fire exactly once.
+  // deep link ?open= — land on the dossier once the ledger has painted
   useEffect(() => {
     if (booting || !deepLinked.current || !open) return;
     deepLinked.current = false;
-    // Back from a lot: return to the exact scroll the reader left (saved
-    // below), not a re-centred row (~340px jump). A fresh shared link centres.
     let saved: number | null = null;
     try {
       const v = sessionStorage.getItem(SCROLL_KEY + window.location.pathname + window.location.search);
@@ -1124,7 +438,6 @@ export default function MakersPage() {
       else document.querySelector(`[data-mk-flip="${CSS.escape(open)}"]`)?.scrollIntoView({ behavior: 'instant' as ScrollBehavior, block: 'center' });
     }));
   }, [booting, open]);
-  // remember where the reader was when they leave for a lot (or the page)
   useEffect(() => {
     const save = () => {
       try { sessionStorage.setItem(SCROLL_KEY + window.location.pathname + window.location.search, String(Math.round(window.scrollY))); } catch { /* ignore */ }
@@ -1135,12 +448,11 @@ export default function MakersPage() {
     return () => { document.removeEventListener('click', onClick, true); window.removeEventListener('pagehide', save); };
   }, []);
 
-  // ── INPUT CRAFT — '/', j/k, c (compare), f (follow) — c and f follow the
-  // focused row's own capabilities (KIND registry), on every row kind ──
+  // ── INPUT CRAFT — '/', j/k, c (compare), f (follow) ──
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+      const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
       if (t?.closest('[role="dialog"],[role="listbox"],[role="menu"]')) return;
       if (document.querySelector('.ray-ck-overlay, .ray-maker-sheet')) return;
       if (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey) {
@@ -1148,11 +460,9 @@ export default function MakersPage() {
         searchRef.current?.focus();
         return;
       }
-      if (typing) return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === 'c' || e.key === 'f') {
-        const el = document.activeElement as HTMLElement | null;
-        const id = el?.dataset?.slug;
+        const id = (document.activeElement as HTMLElement | null)?.dataset?.slug;
         const row = id ? rowByIdRef.current.get(id) : undefined;
         if (!row) return;
         if (e.key === 'c') {
@@ -1160,9 +470,9 @@ export default function MakersPage() {
           e.preventDefault();
           onToggleCompare(row.id);
         } else {
-          if (!authEnabled || !row.followKey) return;
+          if (!authEnabled || !row.follow) return;
           e.preventDefault();
-          onToggleFollow(row.followKey, row.label);
+          onToggleFollow(row.follow, row.label);
         }
         return;
       }
@@ -1183,7 +493,7 @@ export default function MakersPage() {
   const listRef = useRef<HTMLDivElement | null>(null);
   const flipPos = useRef<Map<string, number>>(new Map());
   const flipTimers = useRef<number[]>([]);
-  const flipKey = groups.map(g => g.shown.map(r => r.id).join(',')).join('|');
+  const flipKey = vw === 'names' ? groups.map(g => g.shown.map(r => r.id).join(',')).join('|') : '';
   React.useLayoutEffect(() => {
     const board = listRef.current;
     if (!board) { flipPos.current = new Map(); return; }
@@ -1196,7 +506,7 @@ export default function MakersPage() {
     flipTimers.current.forEach(t => window.clearTimeout(t));
     flipTimers.current = [];
     const reduce = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (!reduce && prev.size > 0 && next.size === prev.size && Array.from(next.keys()).every(k => prev.has(k))) {
+    if (!reduce && prev.size > 0 && next.size === prev.size && next.size <= 120 && Array.from(next.keys()).every(k => prev.has(k))) {
       const moved: HTMLElement[] = [];
       board.querySelectorAll<HTMLElement>('[data-mk-flip]').forEach(el => {
         const delta = (prev.get(el.dataset.mkFlip!) ?? 0) - (next.get(el.dataset.mkFlip!) ?? 0);
@@ -1206,8 +516,6 @@ export default function MakersPage() {
           moved.push(el);
         }
       });
-      // force the style flush — a rAF from this commit runs before the first
-      // recalc; without the reflow the transition has no origin (teleports)
       if (moved.length) void board.offsetHeight;
       requestAnimationFrame(() => {
         for (const el of moved) {
@@ -1215,29 +523,23 @@ export default function MakersPage() {
           el.style.transition = 'transform 360ms var(--ease-signature)';
         }
       });
-      flipTimers.current.push(window.setTimeout(() => {
-        for (const el of moved) el.style.transition = '';
-      }, 420));
+      flipTimers.current.push(window.setTimeout(() => { for (const el of moved) el.style.transition = ''; }, 420));
     }
     flipPos.current = next;
   }, [flipKey]);
-  // dossier open/close shifts rows without changing flipKey — re-measure
   useEffect(() => {
     const t = window.setTimeout(() => {
       const board = listRef.current;
       if (!board) return;
       const boardTop = board.getBoundingClientRect().top;
       const next = new Map<string, number>();
-      board.querySelectorAll<HTMLElement>('[data-mk-flip]').forEach(el => {
-        next.set(el.dataset.mkFlip!, el.getBoundingClientRect().top - boardTop);
-      });
+      board.querySelectorAll<HTMLElement>('[data-mk-flip]').forEach(el => next.set(el.dataset.mkFlip!, el.getBoundingClientRect().top - boardTop));
       flipPos.current = next;
     }, 380);
     return () => window.clearTimeout(t);
   }, [open]);
 
-  // the sticky bar wraps to two rows on narrower desktops — the group heads
-  // stick under its MEASURED height, never behind it
+  // the sticky bar's MEASURED height — the group heads stick under it
   const barRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const el = barRef.current;
@@ -1249,23 +551,6 @@ export default function MakersPage() {
     return () => { ro.disconnect(); document.documentElement.style.removeProperty('--mk-bar-h'); };
   }, [booting]);
 
-  const jumpTo = useCallback((key: Market) => {
-    document.getElementById(`mk-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, []);
-
-  const gridTemplate = useMemo(() =>
-    `30px minmax(0,1fr) ${cols.map(k => COLS.find(c => c.k === k)!.width).join(' ')} 18px`,
-    [cols]);
-
-  // the roster split the masthead prints: real makers · named subjects (or categories)
-  const rosterSplit = useMemo(() => {
-    let makers = 0, other = 0;
-    for (const r of rows) {
-      if (!inMarket(r) || r.kind === 'rest') continue;
-      if (r.kind === 'maker') makers++; else other++;
-    }
-    return { makers, other };
-  }, [rows, inMarket]);
   // sport pills count the market's lots under every other filter
   const sportCounts = useMemo(() => {
     const m = new Map<string, number>();
@@ -1278,610 +563,335 @@ export default function MakersPage() {
     }
     return m;
   }, [activeKey, marketLiveAll, dTriage, prevVisitDay, baselines]);
-  // a search the names can't answer is offered to the lots (home feed search)
-  const searchLots = useMemo(() => {
-    const needle = dQ.trim();
-    if (!needle) return 0;
-    const today = localToday();
-    let n = 0;
-    for (const l of marketLiveAll) if (feedQueryMatches(l, needle) && passesTriage(l, dTriage, { today, prevVisitDay, baselines })) n++;
-    return n;
-  }, [dQ, marketLiveAll, dTriage, prevVisitDay, baselines]);
-  // the triage chips offer only this market's own categories (a stray film
-  // piece filed under a sports pseudo-maker is still counted, never chipped)
-  const marketCats = useMemo<CatKey[] | undefined>(() => {
-    if (activeKey === 'all') return undefined;
-    return MARKET_CATS[activeKey];
-  }, [activeKey]);
-  const nameHead = shownBy === 'cat' && activeKey !== 'all' && SUBJECT_MARKETS.has(activeKey) ? 'Category' : activeKey === 'all' ? 'Maker · name' : NAME_HEAD[activeKey] ?? 'Maker';
+  const marketCats = useMemo<CatKey[] | undefined>(() => (activeKey === 'all' ? undefined : MARKET_CATS[activeKey]), [activeKey]);
+  const nameHead = (m: Market) => shownBy === 'cat' && SUBJECT_MARKETS.has(m) ? 'Category' : NAME_HEAD[m] ?? (MAKER_MARKETS.has(m) ? rosterNoun(m, 1).replace(/^./, c => c.toUpperCase()) : 'Name');
+  const namesNoun = activeKey === 'all' ? 'names' : shownBy === 'cat' && SUBJECT_MARKETS.has(activeKey) ? 'categories' : SUBJECT_MARKETS.has(activeKey) ? 'names' : rosterNoun(activeKey, 2);
+  const bodyNoun = namesNoun.replace(/^./, c => c.toUpperCase());
 
-  // the compare tray prints the picks that resolve on this ledger (a sub row
-  // picked By category waits in the URL while By name is shown) — never an
-  // empty tray reading "Pick 2 more"
-  const picked = useMemo(() => compare.map(id => rowById.get(id)).filter((r): r is Row => !!r), [compare, rowById]);
+  // the compare tray prints every pick that resolves — any kind, any market
+  // whose summaries are loaded (a pick from elsewhere waits in the URL)
+  const foreign = useForeignPicks(compare, activeKey);
+  const picked = useMemo(() => compare.map(id => {
+    const live = pool.byMaker.get(id) ?? pool.byName.get(id) ?? pool.byCat.get(id);
+    const fb = foreign.get(id);
+    if (fb) return rowOf(id, fb, live);
+    const m = parseEntityId(id)?.market;
+    // another market's pick waits for its own file (never an adapter figure)
+    if (activeKey !== 'all' && m && m !== activeKey) return null;
+    const hit = rowById.get(id);
+    if (hit) return hit;
+    const b = entities.makers.get(id) ?? entities.names.get(id) ?? entities.file?.get(id) ?? entities.subs.get(id);
+    return b ? rowOf(id, b, live) : null;
+  }).filter((r): r is Row => !!r), [compare, rowById, entities, pool, rowOf, foreign, activeKey]);
+
+  // the lots body's LotBrowser filters: the shared triage + flagged + order
+  const lotFilters = useMemo<FeedFilters>(() => ({
+    ...FEED_DEFAULTS, ...triage, query: '', belowOnly: fFlagged, sort: lo, tab: 'all',
+  }), [triage, fFlagged, lo]);
+  const onLotFilters = useCallback((next: FeedFilters) => {
+    const { win, cat, sub, house, minUsd, maxUsd, newOnly, fx } = next;
+    setView({ triage: { win, cat, sub, house, minUsd, maxUsd, newOnly, fx }, fl: next.belowOnly, ...(LOT_ORDERS.includes(next.sort as LotOrder) ? { lo: next.sort as LotOrder } : {}) });
+  }, [setView]);
+  const scopeLabel = useMemo(() => lk.map(id => rowById.get(id)?.label ?? picked.find(r => r.id === id)?.label ?? id.replace(/^[a-z~]+:/, '')).join(' · '), [lk, rowById, picked]);
 
   const set = setView;
+  const clearAll = () => set({ q: '', on: false, vi: false, fl: false, fw: false, triage: TRIAGE_DEFAULTS, spk: null, lk: [] });
+
+  const lensLead = (
+    <>
+      <button type="button" className="ray-toolbar-pill" data-active={triage.win === 'today'} aria-pressed={triage.win === 'today'}
+        aria-disabled={lensCounts.tonight === 0 && triage.win !== 'today' ? true : undefined}
+        title="Lots whose sale closes today, on your calendar"
+        onClick={() => lens(v => ({ triage: { ...v.triage, win: v.triage.win === 'today' ? null : 'today' } }), triage.win !== 'today')}>
+        Closing tonight <i>{lensCounts.tonight.toLocaleString()}</i>
+      </button>
+      <button type="button" className="ray-toolbar-pill" data-active={fFlagged} aria-pressed={fFlagged}
+        aria-disabled={lensCounts.flagged === 0 && !fFlagged ? true : undefined}
+        title="Live lots the engine prices below their comparables"
+        onClick={() => lens(v => ({ fl: !v.fl }), !fFlagged)}>
+        Flagged <i>{lensCounts.flagged.toLocaleString()}</i>
+      </button>
+      {(lensCounts.fresh > 0 || triage.newOnly) && (
+        <button type="button" className="ray-toolbar-pill" data-active={triage.newOnly} aria-pressed={triage.newOnly}
+          onClick={() => lens(v => ({ triage: { ...v.triage, newOnly: !v.triage.newOnly } }), !triage.newOnly)}>
+          {prevVisitDay ? 'New since last visit' : 'New today'} <i>{lensCounts.fresh.toLocaleString()}</i>
+        </button>
+      )}
+      <span className="ray-toolbar-divider" aria-hidden="true" />
+    </>
+  );
+
+  // phone: the market keys are one swipeable strip — the active key in view
+  const switchRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = switchRef.current?.querySelector<HTMLElement>('.ray-rail-cell[data-active="true"]');
+    const box = switchRef.current;
+    if (!el || !box || box.scrollWidth <= box.clientWidth) return;
+    box.scrollLeft = Math.max(0, el.offsetLeft - (box.clientWidth - el.offsetWidth) / 2);
+  }, [activeKey, booting]);
+
+  const v = topVerified?.verified ?? null;
+  const vSlug = topVerified ? makerSlugOf(topVerified.id) : null;
+  const vHref = vSlug ? makerHref(vSlug) : null;
 
   return (
-    <ViewSearch.Provider value={search}>
-    <div className="terminal-shell" style={{ minHeight: '100vh', fontFamily: 'var(--font-sans), sans-serif' }}>
-      <style dangerouslySetInnerHTML={{ __html: MAKERS_CSS }} />
-      {/* the column set is dynamic — the grid template rides a CSS var */}
-      <style dangerouslySetInnerHTML={{ __html: `@media(min-width:940px){.mk-row,.mk-group-head .mk-cols{grid-template-columns:${gridTemplate}}}` }} />
+    <div className="terminal-shell mk-shell">
       <ArtistNav activeSlug="artists" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
 
       {booting ? (
         <RayLoading />
       ) : (
         <RayEntrance animate={!fromCache}>
-          <section className="rail ray-enter" style={{ paddingTop: 24, paddingBottom: 4 }}>
-            <div style={{ marginBottom: 22 }}><MarketSwitch compact /></div>
-            <Masthead
-              kicker={`The roster · ${activeLabel} market`}
-              datum={activeKey === 'all'
-                // the full roster is 32 named makers + 22 category pseudo-
-                // artists — "54 tracked names" counted categories as names
-                ? `${rosterSplit.makers} makers · ${rosterSplit.other.toLocaleString()} ${shownBy === 'name' ? 'names' : 'categories'}`
-                : <CountUp to={rosterTotal} format={n => `${Math.round(n)} ${noun}`} duration={900} animate={!fromCache} />}
-              title={<>Every maker, one <Accent>ledger</Accent>.</>}
-              sub={
-                <>
-                  {filtersOn
-                    ? <><b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{totalLive.toLocaleString()} of {marketLiveAll.length.toLocaleString()} live lots</b> match the filters</>
-                    : <><b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{totalLive.toLocaleString()} live lots</b> on the block</>}
-                  {totalFlags > 0 && <> · <b style={{ color: 'var(--color-fg)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{totalFlags}</b> flagged by the engine</>}
-                  {verifiedCount > 0 && <> · {verifiedCount} CI-verified indexes</>}
-                </>
-              }
-            />
+          {/* ── THE HEADER — the market switch, then ONE line: the statement,
+              the counts, the one verified read ── */}
+          <section className="rail ray-enter mk-top">
+            <div className="mk-switch" ref={switchRef}><MarketSwitch compact /></div>
+            <header className="mk-head">
+              <h1 className="mk-h1">Every maker, one <Accent>ledger</Accent></h1>
+              <p className="mk-read">
+                <b>{totalLive.toLocaleString()}</b> live{filtersOn ? <> of {marketLiveAll.length.toLocaleString()}</> : null}
+                {totalFlags > 0 && <> · <b>{totalFlags.toLocaleString()}</b> flagged</>}
+                {' '}· <b>{rosterTotal.toLocaleString()}</b> {namesNoun}
+                {v && (
+                  <span className="mk-vread" title={`The strongest CI-verified move on the ${activeLabel} book · 95% CI ${Math.round(v.ciLoPct)}% to ${Math.round(v.ciHiPct)}% · n ${v.n.toLocaleString()}`}>
+                    {' '}· verified {v.horizon}{' '}
+                    {vHref ? <Link href={vHref}>{topVerified!.label}</Link> : topVerified!.label}{' '}
+                    <b data-dir={v.changePct >= 0 ? 'up' : 'down'}>{fmtPct(v.changePct)}</b>
+                  </span>
+                )}
+              </p>
+            </header>
           </section>
 
-          {/* ── THE COCKPIT ── */}
-          {activeKey === 'all' && (
-            <section className="rail ray-enter mk-cockroom" style={{ '--enter-delay': '30ms', paddingTop: 4, paddingBottom: 2 } as React.CSSProperties}>
-              <div className="mk-cockpit ns-plate" role="list">
-                {cockpit.map(c => (
-                  <button key={c.key} type="button" role="listitem" className="mk-cock" onClick={() => jumpTo(c.key)}>
-                    <span className="mk-cock-head">
-                      <span className="mk-cock-icon" aria-hidden><MarketIcon market={c.key} size={13} /></span>
-                      <span className="mk-cock-name">{c.label}</span>
-                    </span>
-                    <span className="mk-cock-v">
-                      <CountUp to={c.live} format={n => Math.round(n).toLocaleString()} duration={900} animate={!fromCache} />
-                      <i>live</i>
-                      {c.flags > 0 && <em className="mk-cock-flag">{c.flags} flagged</em>}
-                    </span>
-                    <span className="mk-cock-s">
-                      {c.makers.toLocaleString()} {rowNoun(c.key, c.makers)}
-                      {c.demandNow !== null && <> · <b data-dir={c.demandNow >= 0 ? 'up' : 'down'}>{formatDemand(c.demandNow)}</b></>}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* ══ THE FACTS LEDGER — four facts as hairline rows (de-slop law 7,
-              never a bento): the strongest CI-verified maker read on this
-              book (dir is the real sign of its published Δ; abstains when
-              there is none), then the same counts the masthead prints. ══ */}
-          <section className="rail ray-enter mk-cellroom" style={{ '--enter-delay': '35ms' } as React.CSSProperties}>
-            <div className="mk-facts" role="list">
-              {(() => {
-                const v = topVerified && topVerified.verified ? topVerified.verified : null;
-                const dir = v ? (v.changePct > 0 ? 'up' : v.changePct < 0 ? 'down' : undefined) : undefined;
-                const facts: { k: string; stat: string; note: string; body: string; dir?: string; href?: string }[] = [
-                  v ? {
-                    k: `The verified read · ${v.horizon}`,
-                    stat: `${v.changePct >= 0 ? '+' : '−'}${Math.abs(Math.round(v.changePct))}%`,
-                    note: topVerified!.label,
-                    body: `The strongest CI-verified move on the ${activeLabel} book · 95% CI ${Math.round(v.ciLoPct)}% to ${Math.round(v.ciHiPct)}% · n ${v.n.toLocaleString()}`,
-                    dir, href: `/makers/${makerSlugOf(topVerified!.id)}`,
-                  } : {
-                    k: 'The verified read', stat: '—', note: 'abstaining',
-                    body: `No CI-verified index on the ${activeLabel} book yet — a maker publishes a move only when its 95% interval resolves the sign.`,
-                  },
-                  { k: 'The roster', stat: activeKey === 'all' ? rosterSplit.makers.toLocaleString() : rosterTotal.toLocaleString(), note: activeKey === 'all' ? `makers · ${rosterSplit.other.toLocaleString()} ${shownBy === 'name' ? 'names' : 'categories'}` : noun, body: `Every name lectr tracks on the ${activeLabel} book — sold history, live lots and the engine's flags in one ledger.` },
-                  { k: 'Verified indexes', stat: verifiedCount.toLocaleString(), note: 'CI-verified indexes', body: 'Repeat-sales reads whose 95% interval resolves the sign — the only price moves the engine will stand behind.' },
-                  { k: 'On the block', stat: totalFlags.toLocaleString(), note: 'flagged by the engine', body: totalFlags > 0
-                    ? `${totalLive.toLocaleString()} live ${totalLive === 1 ? 'lot' : 'lots'} on the book tonight — ${totalFlags.toLocaleString()} priced under ${totalFlags === 1 ? 'its' : 'their'} comparables.`
-                    : totalLive > 0 ? `${totalLive.toLocaleString()} live ${totalLive === 1 ? 'lot' : 'lots'} on the book tonight — none flagged under its comparables.` : 'The book is quiet — the crawl refreshes daily.' },
-                ];
-                return facts.map(f => {
-                  const inner = (
-                    <>
-                      <span className="mk-fact-k">{f.k}<span className="mk-fact-body">{f.body}</span></span>
-                      <span className="mk-fact-v"><b data-dir={f.dir}>{f.stat}</b><span>{f.note}</span></span>
-                    </>
-                  );
-                  return f.href
-                    ? <Link key={f.k} role="listitem" href={f.href} className="mk-fact">{inner}</Link>
-                    : <div key={f.k} role="listitem" className="mk-fact" data-abstain={f.note === 'abstaining' || undefined}>{inner}</div>;
-                });
-              })()}
-            </div>
-          </section>
-
-          {/* ── THE TRIAGE ROW (Oct 8) — narrows every row's live book. The
-              chips light from the live filters; their counts read the
-              deferred ones (re-counted behind the ledger, not in the click) ── */}
-          <div className="rail" style={{ marginTop: 10 }}>
-            <TriageBar
-              lots={marketLive}
-              filters={triage}
-              countFilters={dTriage}
-              onChange={setTriage}
-              prevVisitDay={prevVisitDay}
-              baselines={baselines}
-              cats={marketCats}
-              shown={totalLive}
-              total={marketLiveAll.length}
-              label="Narrow the live lots"
-            />
-            {activeKey === 'sports' && (
-              <div className="ray-triagebar-row ray-triagebar-subs ray-markets-fade mk-sports" role="group" aria-label="Sport">
-                <button type="button" className="ray-toolbar-pill" data-active={sportPick == null} aria-pressed={sportPick == null} onClick={() => set({ spk: null })}>All sports</button>
-                {/* biggest first like the home feed's sport chips, the catch-all last */}
-                {SPORTS.filter(sp => (sportCounts.get(sp.key) || 0) > 0 || sportPick === sp.key)
-                  .sort((a, b) => (a.key === 'other-sports' ? 1 : 0) - (b.key === 'other-sports' ? 1 : 0) || (sportCounts.get(b.key) || 0) - (sportCounts.get(a.key) || 0))
-                  .map(sp => (
-                  <button key={sp.key} type="button" className="ray-toolbar-pill" data-active={sportPick === sp.key} aria-pressed={sportPick === sp.key}
-                    onClick={() => set({ spk: sportPick === sp.key ? null : sp.key })}>
-                    {sp.label} <i>{(sportCounts.get(sp.key) || 0).toLocaleString()}</i>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* ── THE FILTER BAR ── */}
+          {/* ── THE BAR — one search (names AND lots), the body, the order ── */}
           <div className="mk-bar-wrap" ref={barRef}>
             <div className="rail mk-bar">
               <label className="mk-search">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
                   <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.5-4.5" />
                 </svg>
-                <input
-                  ref={searchRef}
-                  type="search" value={q} onChange={e => set({ q: e.target.value })}
-                  placeholder={activeKey === 'sports' ? 'Filter players…' : SUBJECT_MARKETS.has(activeKey) || activeKey === 'all' ? 'Filter names…' : 'Filter makers…'} aria-label="Filter the roster"
-                />
-                {q ? (
-                  <button type="button" className="mk-clear" onClick={() => set({ q: '' })} aria-label="Clear filter">×</button>
-                ) : (
-                  <kbd className="mk-kbd" aria-hidden>/</kbd>
-                )}
+                <input ref={searchRef} type="search" value={q} onChange={e => set({ q: e.target.value })}
+                  placeholder={activeKey === 'sports' ? 'Search players and lots…' : MAKER_MARKETS.has(activeKey) ? 'Search makers and lots…' : 'Search names and lots…'}
+                  aria-label="Search names and live lots" />
+                {q ? <button type="button" className="mk-clear" onClick={() => set({ q: '' })} aria-label="Clear search">×</button>
+                  : <kbd className="mk-kbd" aria-hidden>/</kbd>}
               </label>
-              {/* phone: the chips ride one swipeable strip under the search */}
-              <span className="mk-bar-chips">
-              <button type="button" className="mk-chip" data-on={fFlagged || undefined} onClick={() => set(v => ({ fl: !v.fl }))} aria-pressed={fFlagged}>
-                Flagged
-              </button>
-              <button type="button" className="mk-chip" data-on={fLive || undefined} onClick={() => set(v => ({ on: !v.on }))} aria-pressed={fLive}>
-                On the block
-              </button>
-              <button type="button" className="mk-chip" data-on={fVerified || undefined} onClick={() => set(v => ({ vi: !v.vi }))} aria-pressed={fVerified}>
-                Verified index
-              </button>
-              {authEnabled && (
-                <button type="button" className="mk-chip" data-on={fFollowing || undefined}
-                  onClick={() => { if (!user) { openLogin(); return; } set(v => ({ fw: !v.fw })); }} aria-pressed={fFollowing}>
-                  Following
-                </button>
-              )}
-              {collection && (
+              <div className="ray-seg mk-seg mk-body" role="tablist" aria-label="Show">
+                {([['names', `${bodyNoun}`, shownTotal], ['lots', 'Lots', lensCounts.shown]] as [ViewBody, string, number][]).map(([k, label, n]) => (
+                  <button key={k} type="button" role="tab" className="ray-seg-btn" data-active={vw === k} aria-selected={vw === k}
+                    onClick={() => setBody(k)}>
+                    {label} <span className="mk-seg-n">{n.toLocaleString()}</span>
+                  </button>
+                ))}
+              </div>
+              {collection && vw === 'names' && (
                 <div className="ray-seg mk-seg mk-by" role="tablist" aria-label="Rows in the collection markets">
                   {([['name', 'By name'], ['cat', 'By category']] as [RowsBy, string][]).map(([k, label]) => (
                     <button key={k} type="button" role="tab" className="ray-seg-btn" data-active={rowsBy === k}
                       aria-selected={rowsBy === k} onClick={() => set({ by: k })}
                       onPointerEnter={k === 'cat' ? prefetchSubs : undefined} onFocus={k === 'cat' ? prefetchSubs : undefined}
-                      title={k === 'name' ? 'Players, Pokémon, people, films, franchises and missions' : 'Clean sub-categories, with their sold history'}>
+                      title={k === 'name' ? 'Players, Pokémon, people, films, franchises, missions and sets' : 'Clean sub-categories, with their sold history'}>
                       {label}
                     </button>
                   ))}
                 </div>
               )}
-              </span>
               <span className="mk-bar-rule" aria-hidden />
-              <span className="mk-count" title="Roster rows shown">{visible.filter(r => r.kind !== 'rest').length.toLocaleString()} of {rosterTotal.toLocaleString()}</span>
-              <div className="mk-display">
-                <button type="button" className="mk-chip" data-on={showDisplay || undefined} onClick={() => setShowDisplay(v => !v)} aria-expanded={showDisplay}>
-                  Display
-                </button>
-                {showDisplay && (
-                  <>
-                    <button type="button" className="mk-display-veil" aria-label="Close display menu" onClick={() => setShowDisplay(false)} />
-                    <div className="mk-display-pop" role="menu" aria-label="Visible columns">
-                      <div className="mk-display-head kicker">Columns</div>
-                      {COLS.map(c => {
-                        const on = cols.includes(c.k);
-                        return (
-                          <button key={c.k} type="button" role="menuitemcheckbox" aria-checked={on} className="mk-display-item" data-on={on || undefined}
-                            onClick={() => set(v => {
-                              const prev = v.cols;
-                              const nx = on ? prev.filter(k => k !== c.k) : [...COLS.map(x => x.k).filter(k => prev.includes(k) || k === c.k)];
-                              return { cols: nx.length ? nx : prev }; // never zero columns
-                            })}>
-                            <span className="mk-display-check" aria-hidden>{on ? '✓' : ''}</span>
-                            {c.label}
-                          </button>
-                        );
-                      })}
-                      <button type="button" className="mk-display-reset" onClick={() => set({ cols: DEFAULT_COLS })}>Reset</button>
-                    </div>
-                  </>
-                )}
-              </div>
-              <div className="ray-seg mk-seg mk-sortseg" role="tablist" aria-label="Sort the directory">
-                {SORTS.map(s => (
-                  <button key={s.k} type="button" role="tab" className="ray-seg-btn" data-active={sort === s.k}
-                    aria-selected={sort === s.k} onClick={() => set({ sort: s.k })} title={SORT_NOTE[s.k]}>
-                    {s.label}
+              {vw === 'names' && (
+                <div className="mk-display">
+                  <button type="button" className="mk-chip" data-on={showDisplay || fLive || fVerified || fFollowing || undefined} onClick={() => setShowDisplay(x => !x)} aria-expanded={showDisplay}>
+                    Display
                   </button>
-                ))}
-              </div>
-              {/* phone: one select instead of seven wrapping tabs */}
-              <select className="ray-toolbar-pill ray-toolbar-select mk-sortsel" aria-label="Sort the directory" data-active={sort !== DEFAULT_SORT}
-                value={sort} onChange={e => set({ sort: e.target.value as SortKey })}>
-                {SORTS.map(s => <option key={s.k} value={s.k}>Sort · {s.label}</option>)}
-              </select>
+                  {showDisplay && (
+                    <>
+                      <button type="button" className="mk-display-veil" aria-label="Close display menu" onClick={() => setShowDisplay(false)} />
+                      <div className="mk-display-pop" role="menu" aria-label="Columns and rows">
+                        <div className="mk-display-head kicker">Columns</div>
+                        {COLS.map(c => {
+                          const on = cols.includes(c.k);
+                          return (
+                            <button key={c.k} type="button" role="menuitemcheckbox" aria-checked={on} className="mk-display-item" data-on={on || undefined}
+                              title={c.note}
+                              onClick={() => set(x => {
+                                const prev = x.cols;
+                                const nx = on ? prev.filter(k => k !== c.k) : COL_KEYS.filter(k => prev.includes(k) || k === c.k);
+                                return { cols: nx.length ? nx : prev };
+                              })}>
+                              <span className="mk-display-check" aria-hidden>{on ? '✓' : ''}</span>
+                              {c.label}
+                            </button>
+                          );
+                        })}
+                        <div className="mk-display-head kicker mk-display-sep">Rows</div>
+                        {([['on', 'Only on the block', fLive], ['vi', 'Only verified indexes', fVerified], ...(authEnabled ? [['fw', 'Only followed', fFollowing]] : [])] as ['on' | 'vi' | 'fw', string, boolean][]).map(([k, label, on]) => (
+                          <button key={k} type="button" role="menuitemcheckbox" aria-checked={on} className="mk-display-item" data-on={on || undefined}
+                            onClick={() => { if (k === 'fw' && !user) { openLogin(); return; } set(x => ({ [k]: !x[k] })); }}>
+                            <span className="mk-display-check" aria-hidden>{on ? '✓' : ''}</span>
+                            {label}
+                          </button>
+                        ))}
+                        <button type="button" className="mk-display-reset" onClick={() => set({ cols: DEFAULT_COLS, on: false, vi: false, fw: false })}>Reset</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+              {vw === 'names' ? (
+                <select className="ray-toolbar-pill ray-toolbar-select mk-sortsel" aria-label="Order the ledger" data-active={sort !== 'matters'}
+                  value={sort} onChange={e => set({ sort: e.target.value as SortKey })} title={SORTS.find(s => s.k === sort)?.note}>
+                  {SORTS.map(s => <option key={s.k} value={s.k}>Sort · {s.label}</option>)}
+                </select>
+              ) : (
+                <select className="ray-toolbar-pill ray-toolbar-select mk-sortsel" aria-label="Order the lots" data-active={lo !== 'priority'}
+                  value={lo} onChange={e => set({ lo: e.target.value as LotOrder })}>
+                  {LOT_ORDERS.map(k => <option key={k} value={k}>Sort · {LOT_ORDER_LABEL[k]}</option>)}
+                </select>
+              )}
             </div>
           </div>
 
-          {/* ── THE DIRECTORY ── */}
-          <section className="rail ray-enter" style={{ '--enter-delay': '40ms', paddingTop: 6, paddingBottom: picked.length ? 120 : 30 } as React.CSSProperties}>
-            <div ref={listRef}>
-              {groups.length === 0 ? (
-                <div className="mk-empty">
-                  {/* the empty state as a patent plate — the gate drawing:
-                      many candidates fan in, none leaves under these filters */}
-                  <FigureCell
-                    figure={<FigGate />}
-                    label="The directory"
-                    body={<>
-                      No {activeKey === 'sports' ? 'player' : 'name'} matches the current filters in the {activeLabel} market.
-                      {dQ.trim() && searchLots > 0 && <>{' '}<Link className="mk-reset" href={feedSearchHref(activeKey, dQ, triage)}>Search {searchLots.toLocaleString()} live {searchLots === 1 ? 'lot' : 'lots'} for &ldquo;{dQ.trim()}&rdquo;</Link> ·</>}
-                      {' '}<button type="button" className="mk-reset" onClick={() => set({ q: '', on: false, vi: false, fl: false, fw: false, triage: TRIAGE_DEFAULTS, spk: null })}>Clear the filters</button>
-                    </>}
-                  />
-                </div>
-              ) : groups.map(g => (
-                <div key={g.key} id={`mk-${g.key}`} className="mk-group ns-plate">
-                  <div className="mk-group-head">
-                    <span className="mk-group-mark" aria-hidden><MarketIcon market={g.key} size={15} /></span>
-                    <h2 className="mk-group-name">{g.label}</h2>
-                    <span className="mk-group-count">{g.rows.filter(r => r.kind !== 'rest').length.toLocaleString()}</span>
-                    <span className="mk-group-rule" aria-hidden />
-                    <span className="mk-group-read">
-                      {g.flags > 0 && <b className="mk-group-flags">{g.flags} flagged</b>}
-                      {g.revenue > 0 && <>{g.flags > 0 ? ' · ' : ''}{fmtUsd(g.revenue)} settled</>}
-                      {g.live > 0 && <>{(g.flags > 0 || g.revenue > 0) ? ' · ' : ''}{g.live.toLocaleString()} on the block</>}
-                      {g.demandNow !== null && (
-                        <>{(g.flags > 0 || g.revenue > 0 || g.live > 0) ? ' · ' : ''}demand <b data-dir={g.demandNow >= 0 ? 'up' : 'down'}>{formatDemand(g.demandNow)}</b></>
-                      )}
+          {/* ── THE LENSES + THE TRIAGE — narrow every row's live book (and the
+              lots body) at once; the lot-centric lenses open the lots ── */}
+          <div className="rail mk-filters">
+            <TriageBar
+              lots={pool.marketPool}
+              filters={triage}
+              countFilters={dTriage}
+              onChange={setTriage}
+              prevVisitDay={prevVisitDay}
+              baselines={baselines}
+              cats={marketCats}
+              label="Narrow the live lots"
+              lead={lensLead}
+              omit={['today', 'new']}
+            />
+            {activeKey === 'sports' && (
+              <div className="ray-triagebar-row ray-triagebar-subs ray-markets-fade mk-sports" role="group" aria-label="Sport">
+                <button type="button" className="ray-toolbar-pill" data-active={sportPick == null} aria-pressed={sportPick == null} onClick={() => set({ spk: null })}>All sports</button>
+                {SPORTS.filter(sp => (sportCounts.get(sp.key) || 0) > 0 || sportPick === sp.key)
+                  .sort((a, b) => (a.key === 'other-sports' ? 1 : 0) - (b.key === 'other-sports' ? 1 : 0) || (sportCounts.get(b.key) || 0) - (sportCounts.get(a.key) || 0))
+                  .map(sp => (
+                    <button key={sp.key} type="button" className="ray-toolbar-pill" data-active={sportPick === sp.key} aria-pressed={sportPick === sp.key}
+                      onClick={() => set({ spk: sportPick === sp.key ? null : sp.key })}>
+                      {sp.label} <i>{(sportCounts.get(sp.key) || 0).toLocaleString()}</i>
+                    </button>
+                  ))}
+              </div>
+            )}
+          </div>
+
+          <section className="rail ray-enter mk-body-room" style={{ '--enter-delay': '30ms', paddingBottom: picked.length > 1 ? 420 : picked.length ? 70 : 30 } as React.CSSProperties}>
+            <div ref={listTop} />
+            {vw === 'lots' ? (
+              /* ── THE LOTS — the shared LotBrowser's rows over exactly the
+                 lots the counts promised ── */
+              <div className="mk-lots">
+                <div className="mk-lots-head">
+                  <span className="mk-lots-n"><b>{lensCounts.shown.toLocaleString()}</b> live {lensCounts.shown === 1 ? 'lot' : 'lots'}</span>
+                  {lk.length > 0 && (
+                    <span className="mkc-chip mk-scope">
+                      {scopeLabel}
+                      <button type="button" onClick={() => set({ lk: [] })} aria-label="Show the whole market's lots">×</button>
                     </span>
-                    {/* the column heads ride the sticky group head — always over their numbers */}
-                    <div className="mk-cols" aria-hidden>
-                      <span /><span className="kicker">{activeKey === 'all' && SUBJECT_MARKETS.has(g.key) && shownBy === 'name' ? NAME_HEAD[g.key] : activeKey === 'all' && SUBJECT_MARKETS.has(g.key) ? 'Category' : activeKey === 'all' ? 'Maker' : nameHead}</span>
-                      {cols.map(k => (
-                        <span key={k} className="kicker mk-col-k" title={COL_NOTE[k]}>{COLS.find(c => c.k === k)!.label}</span>
+                  )}
+                  {words.length > 0 && <span className="mk-lots-q">matching &ldquo;{dQ.trim()}&rdquo;</span>}
+                  <span className="mk-bar-rule" aria-hidden />
+                  <button type="button" className="mk-chip" onClick={() => setBody('names')}>Back to {namesNoun}</button>
+                </div>
+                <LotBrowser
+                  bare
+                  lots={lotsPool}
+                  compLots={allLots}
+                  filters={lotFilters}
+                  onFiltersChange={onLotFilters}
+                  market={activeKey}
+                  savedIds={savedIds}
+                  isSaved={isSaved}
+                  onToggleSave={toggleSave}
+                  lastCrawl={lastCrawl}
+                  fromCache={fromCache}
+                  prevVisitDay={prevVisitDay}
+                  baselines={baselines}
+                  anchorId="mk-lots"
+                  persistKey={`/makers/lots/${activeKey}`}
+                />
+              </div>
+            ) : (
+              <div ref={listRef} className="mk-list-room" style={{ '--mk-grid': gridTemplateOf(cols) } as React.CSSProperties}>
+                {words.length > 0 && searchLots > 0 && (
+                  <button type="button" className="mk-lotsrow" onClick={() => setBody('lots')}>
+                    <span className="mk-mono" aria-hidden>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.5-4.5" /></svg>
+                    </span>
+                    <span className="mk-lotsrow-t"><b>{searchLots.toLocaleString()}</b> live {searchLots === 1 ? 'lot matches' : 'lots match'} &ldquo;{dQ.trim()}&rdquo;</span>
+                    <span className="mk-lotsrow-go">See the lots <span aria-hidden>→</span></span>
+                  </button>
+                )}
+                {groups.length === 0 ? (
+                  <div className="mk-empty">
+                    <FigureCell
+                      figure={<FigGate />}
+                      label="Nothing matches"
+                      body={<>
+                        No {activeKey === 'sports' ? 'player' : 'name'} matches the current filters in the {activeLabel} market.
+                        {' '}<button type="button" className="mk-reset" onClick={clearAll}>Clear the filters</button>
+                      </>}
+                    />
+                  </div>
+                ) : groups.map(g => (
+                  <div key={g.key} id={`mk-${g.key}`} className="mk-group" data-solo={activeKey !== 'all' || undefined}>
+                    <div className="mk-group-head">
+                      <span className="mk-group-mark" aria-hidden><MarketIcon market={g.key} size={15} /></span>
+                      <h2 className="mk-group-name">{g.label}</h2>
+                      <span className="mk-group-count">{g.named.toLocaleString()}</span>
+                      <span className="mk-group-rule" aria-hidden />
+                      <span className="mk-group-read">
+                        {g.flags > 0 && <b className="mk-group-flags">{g.flags} flagged</b>}
+                        {g.live > 0 && <>{g.flags > 0 ? ' · ' : ''}{g.live.toLocaleString()} on the block</>}
+                        {g.demandNow !== null && <>{g.flags > 0 || g.live > 0 ? ' · ' : ''}demand <b data-dir={g.demandNow >= 0 ? 'up' : 'down'}>{formatDemand(g.demandNow)}</b></>}
+                      </span>
+                      <div className="mk-cols">
+                        <span /><span className="mk-col-name">{nameHead(g.key)}</span>
+                        {cols.map(k => {
+                          const c = colSpec(k);
+                          return c.sort
+                            ? <button key={k} type="button" className="mk-col-k" data-on={sort === c.sort || undefined} title={c.note} onClick={() => set({ sort: sort === c.sort ? 'matters' : c.sort })}>{c.label}</button>
+                            : <span key={k} className="mk-col-k" title={c.note}>{c.label}</span>;
+                        })}
+                        <span className="mk-col-mob">Live · median 12 mo</span>
+                        <span className="mk-col-end" />
+                      </div>
+                    </div>
+                    <div className="mk-list">
+                      {g.shown.map(r => (
+                        <EntityRow
+                          key={r.id}
+                          r={r} soldMax={g.soldMax} isOpen={open === r.id} cols={cols}
+                          isSel={compare.includes(r.id)} isFollowed={!!r.follow && followedSet.has(r.follow)} authEnabled={authEnabled}
+                          liveSort={open === r.id ? view.ls : 'matters'} search={open === r.id ? search : ''}
+                          onToggleOpen={onToggleOpen} onToggleCompare={onToggleCompare} onToggleFollow={onToggleFollow}
+                          onLiveSort={onLiveSort} onSeeLots={onSeeLots}
+                        />
                       ))}
-                      <span className="kicker mk-col-mob">Median · live</span>
-                      <span className="mk-col-end" />
+                      {g.more > 0 && (
+                        <button type="button" className="mkx-live-more mk-more" onClick={() => showMore(g.key)}>
+                          Show {Math.min(CAP_STEP, g.more)} more · {g.more.toLocaleString()} more {g.key === 'sports' ? 'players and sets' : MAKER_MARKETS.has(g.key) ? rosterNoun(g.key, 2) : 'names'}
+                        </button>
+                      )}
                     </div>
                   </div>
-                  <div className="mk-list">
-                    {g.shown.map(r => (
-                      <MakerRowItem
-                        key={r.id}
-                        r={r} soldMax={g.soldMax} isOpen={open === r.id} cols={cols}
-                        isSel={compare.includes(r.id)} isFollowed={!!r.followKey && followedSet.has(r.followKey)} authEnabled={authEnabled}
-                        liveSort={open === r.id ? view.ls : 'matters'}
-                        onToggleOpen={onToggleOpen} onToggleCompare={onToggleCompare} onToggleFollow={onToggleFollow} onLiveSort={onLiveSort}
-                      />
-                    ))}
-                    {g.more > 0 && (
-                      <button type="button" className="mkx-live-more mk-more"
-                        onClick={() => showMore(g.key)}>
-                        Show {Math.min(CAP_STEP, g.more)} more · {g.more.toLocaleString()} more {g.key === 'sports' ? 'players' : 'names'} on the block
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </section>
         </RayEntrance>
       )}
 
       {picked.length > 0 && !booting && (
-        <CompareTray picked={picked} onRemove={onToggleCompare} onClear={() => set({ cmp: [] })} />
+        <CompareTray picked={picked} search={search} onRemove={onToggleCompare} onClear={() => set({ cmp: [] })} onSeeLots={onSeeLotsMany} />
       )}
 
       <Colophon record={null} />
     </div>
-    </ViewSearch.Provider>
   );
 }
-
-const MAKERS_CSS = `
-/* ════ THE MAKERS DIRECTORY — trading grade (Aug 2026 pass 3) ════ */
-
-/* ── THE COCKPIT ── */
-/* the plate rule (ns-plate) draws the top hairline + crop marks */
-.mk-cockpit{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));border-bottom:1px solid var(--color-border)}
-.mk-cock{display:grid;gap:3px;align-content:start;text-align:left;padding:14px 16px 12px;background:none;border:none;border-left:1px solid var(--color-hair,rgba(255,255,255,0.06));cursor:pointer;color:inherit;transition:background var(--duration-fast) var(--ease-signature)}
-.mk-cock:first-child{border-left:none}
-.mk-cock:hover{background:var(--color-hover-item)}
-.mk-cock:focus-visible{outline:1.5px solid color-mix(in srgb,var(--color-fg) 70%,transparent);outline-offset:-1.5px}
-.mk-cock-head{display:flex;align-items:center;gap:7px;min-width:0}
-.mk-cock-icon{display:inline-flex;color:var(--color-text-muted);flex:none}
-.mk-cock-name{font-size:11px;font-weight:550;letter-spacing:0.02em;color:var(--color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mk-cock-v{font-family:var(--font-mono),monospace;font-size:21px;font-weight:500;letter-spacing:-0.01em;font-variant-numeric:tabular-nums;color:var(--color-fg);line-height:1.15;display:flex;align-items:baseline;flex-wrap:wrap;column-gap:5px}
-.mk-cock-v i{font-style:normal;font-size:10.5px;color:var(--color-text-faint);letter-spacing:0.06em}
-.mk-cock-v em{font-style:normal;font-family:var(--font-mono),monospace;font-size:10.5px;font-weight:700;color:var(--color-fg);letter-spacing:0.02em}
-.mk-cock-s{font-size:10.5px;color:var(--color-text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
-.mk-cock-s b{font-weight:700;font-family:var(--font-mono),monospace}
-.mk-cock-s b[data-dir="up"]{color:var(--color-up)}
-.mk-cock-s b[data-dir="down"]{color:var(--color-down-text)}
-@media(max-width:700px){.mk-cockpit{grid-template-columns:repeat(2,1fr)}.mk-cock{border-bottom:1px solid var(--color-hair,rgba(255,255,255,0.06))}}
-
-/* ── THE VERIFIED READ CELL room ── */
-.mk-cellroom{padding-top:10px;padding-bottom:20px}
-/* under two-column width the span-2 color cell must stand down: a span-2
-   item in a one-track auto-fit grid forces an implicit column and overflows
-   the 390px viewport (the home page's own rule; !important because the span
-   rides an inline style) */
-/* the facts ledger — hairline rows (was a 5-unit bento with an orphan) */
-.mk-facts{border-top:1px solid var(--color-border)}
-.mk-fact{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 24px;align-items:baseline;padding:14px 2px;border-bottom:1px solid var(--color-border);color:inherit;text-decoration:none}
-a.mk-fact:hover{background:var(--color-hover-item)}
-a.mk-fact:focus-visible{outline:2px solid var(--color-fg);outline-offset:2px}
-.mk-fact-k{font-size:14px;font-weight:500;color:var(--color-fg);min-width:0}
-.mk-fact-body{display:block;font-size:12.5px;font-weight:400;color:var(--color-text-muted);line-height:1.5;margin-top:3px;max-width:68ch}
-.mk-fact-v{text-align:right;white-space:nowrap}
-.mk-fact-v b{display:block;font-family:var(--font-mono),monospace;font-size:26px;font-weight:500;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;color:var(--color-fg);line-height:1.1}
-.mk-fact-v b[data-dir="up"]{color:var(--color-up)}
-.mk-fact-v b[data-dir="down"]{color:var(--color-down-text)}
-.mk-fact-v span{display:block;font-size:11.5px;color:var(--color-text-faint);margin-top:2px}
-@media(max-width:560px){.mk-fact{grid-template-columns:1fr}.mk-fact-v{text-align:left;order:-1}.mk-fact-v b{display:inline;margin-right:8px}.mk-fact-v span{display:inline}}
-
-/* ── the filter bar ── */
-.mk-bar-wrap{position:sticky;top:54px;z-index:30;background:color-mix(in srgb,var(--surface-mix, #0b0c0e) 88%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--color-border)}
-.mk-bar{display:flex;align-items:center;gap:8px;padding-top:9px;padding-bottom:9px;flex-wrap:wrap}
-.mk-search{display:inline-flex;align-items:center;gap:7px;flex:0 1 210px;min-width:140px;padding:0 12px;height:30px;background:var(--color-bg-elevated);border:1px solid var(--color-border);border-radius:999px;color:var(--color-text-faint)}
-.mk-search input{flex:1;min-width:0;background:none;border:none;outline:none;font-family:var(--font-sans),sans-serif;font-size:12.5px;color:var(--color-fg)}
-.mk-search input::placeholder{color:var(--color-text-faint)}
-.mk-search:focus-within{border-color:var(--color-fg);box-shadow:0 0 0 2px color-mix(in srgb,var(--color-fg) 22%,transparent)}
-.mk-clear{background:none;border:none;color:var(--color-text-faint);cursor:pointer;font-size:14px;padding:0 2px}
-.mk-kbd{font-family:var(--font-mono),monospace;font-size:10px;color:var(--color-text-faint);border:1px solid var(--color-border);border-radius:5px;padding:1px 5px;line-height:1.3}
-.mk-chip{font-family:var(--font-mono),monospace;font-size:10.5px;letter-spacing:0.08em;padding:0 12px;height:28px;background:none;color:var(--color-text-muted);border:1px solid var(--color-border);border-radius:100px;cursor:pointer;transition:color var(--duration-fast) var(--ease-signature),border-color var(--duration-fast) var(--ease-signature),background var(--duration-fast) var(--ease-signature)}
-.mk-chip:hover{color:var(--color-fg)}
-.mk-chip[data-on]{background:var(--color-fg);color:var(--color-bg);border-color:var(--color-fg)}
-.mk-chip:active,.mkc-btn:active,.mk-act:active{transform:scale(0.98)}
-.mk-bar-rule{flex:1}
-.mk-count{font-family:var(--font-mono),monospace;font-size:10.5px;color:var(--color-text-faint);font-variant-numeric:tabular-nums;white-space:nowrap}
-.mk-seg .ray-seg-btn{font-size:11.5px;padding:5px 10px}
-@media(max-width:700px){.mk-seg{order:9;flex-basis:100%;overflow-x:auto}.mk-bar-rule{display:none}}
-
-/* ── the Display menu ── */
-.mk-display{position:relative}
-.mk-display-veil{position:fixed;inset:0;z-index:39;background:none;border:none;cursor:default}
-.mk-display-pop{position:absolute;top:calc(100% + 8px);right:0;z-index:40;min-width:180px;background:var(--surface-tip, #101214);border:1px solid var(--color-border-mid);border-radius:12px;padding:8px;display:grid;gap:1px}
-.mk-display-head{font-size:10px;letter-spacing:0.14em;padding:4px 8px 7px}
-.mk-display-item{display:flex;align-items:center;gap:8px;padding:6px 8px;background:none;border:none;border-radius:7px;font-family:var(--font-sans),sans-serif;font-size:12px;color:var(--color-text-muted);cursor:pointer;text-align:left;transition:background var(--duration-fast) var(--ease-signature),color var(--duration-fast) var(--ease-signature)}
-.mk-display-item:hover{background:var(--color-hover-item);color:var(--color-fg)}
-.mk-display-item[data-on]{color:var(--color-fg)}
-.mk-display-check{width:13px;flex:none;font-size:11px;color:var(--color-fg)}
-.mk-display-reset{margin-top:5px;padding:6px 8px;background:none;border:none;border-top:1px solid var(--color-hair,rgba(255,255,255,0.06));font-family:var(--font-mono),monospace;font-size:10.5px;letter-spacing:0.06em;color:var(--color-text-faint);cursor:pointer;text-align:left}
-.mk-display-reset:hover{color:var(--color-fg)}
-
-/* ── column kickers — inside the sticky group head (Oct 9 r4) ── */
-.mk-group-head{flex-wrap:wrap}
-.mk-group-head .mk-cols{flex:0 0 100%;display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:12px;align-items:baseline;padding:6px 14px 0}
-.mk-cols .kicker{font-size:10px;letter-spacing:0.14em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default}
-.mk-col-k,.mk-col-end{display:none}
-.mk-col-mob{text-align:right}
-@media(min-width:940px){
-  .mk-group-head .mk-cols{gap:14px;padding-right:64px}
-  .mk-col-k{display:block;text-align:right}
-  .mk-col-end{display:block}
-  .mk-col-mob{display:none}
-}
-
-/* ── the paging row under a long subject group ── */
-button.mkx-live-more{width:100%;background:none;border:none;border-top:1px solid var(--color-hair,rgba(255,255,255,0.05));cursor:pointer}
-.mk-more{padding:12px}
-
-/* ── sport pills / phone sort select ── */
-.mk-sports{margin:-4px 0 12px}
-.mk-bar .ray-toolbar-select{-webkit-appearance:none;appearance:none;cursor:pointer;padding-right:26px;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 13px) 52%,calc(100% - 9px) 52%;background-size:4px 4px,4px 4px;background-repeat:no-repeat}
-@media(min-width:940px){.mk-sortsel{display:none}}
-@media(max-width:939px){.mk-sortseg,.mk-display{display:none}}
-
-/* ── phone: the ledger within reach — the market keypad already switches
-   markets, so the cockpit tiles and the facts' prose stand down ── */
-@media(min-width:701px){.mk-bar-chips{display:contents}}
-@media(max-width:700px){
-  .mk-cockroom{display:none}
-  .mk-fact[data-abstain]{display:none}
-  .mk-facts:has(.mk-fact[data-abstain]){border-top:none}
-  .mk-bar-wrap{position:static}
-  .mk-group .mk-group-head{top:65px}
-  .mk-search{flex:1 1 0;min-width:0;order:0}
-  .mk-sortsel{order:1;flex:none}
-  .mk-bar-chips{order:2;flex:0 0 100%;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
-  .mk-bar-chips::-webkit-scrollbar{display:none}
-  .mk-bar-chips .mk-chip{flex:none}
-  .mk-count{display:none}
-  .mk-by.mk-seg{order:0;flex:none;flex-basis:auto;overflow:visible}
-  .mk-cellroom{padding-bottom:8px}
-  .mk-fact:not(:first-child){display:none}
-  .mk-fact-body{display:none}
-}
-
-/* ── group heads — rooms as framed plates, authority through lightness ── */
-.mk-group{margin-bottom:22px;scroll-margin-top:150px}
-.mk-group-head{position:sticky;top:calc(54px + var(--mk-bar-h, 49px));z-index:20;display:flex;align-items:center;gap:10px;padding:12px 0 9px;background:color-mix(in srgb,var(--color-bg, #08090a) 90%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--color-border)}
-.mk-group-mark{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;flex:none;border:1px solid var(--color-border);border-radius:8px;color:var(--color-text-secondary);background:var(--color-bg-elevated)}
-.mk-group-name{margin:0;font-size:20px;font-weight:350;letter-spacing:-0.02em;white-space:nowrap}
-.mk-group-count{font-family:var(--font-mono),monospace;font-size:10.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--color-text-secondary);border:1px solid var(--color-border);border-radius:100px;padding:1px 8px;flex:none}
-.mk-group-rule{flex:1;border-top:1px solid var(--color-border)}
-.mk-group-read{font-size:11.5px;color:var(--color-text-faint);white-space:nowrap;font-variant-numeric:tabular-nums}
-.mk-group-read b{font-weight:700;font-family:var(--font-mono),monospace}
-.mk-group-read b[data-dir="up"]{color:var(--color-up)}
-.mk-group-read b[data-dir="down"]{color:var(--color-down-text)}
-@media(max-width:939px){
-  /* the read shrinks and ellipsizes inside the head instead of running past
-     the 390px viewport (right edge measured at 466–509px) */
-  .mk-group-head{min-width:0}
-  .mk-group-rule{flex:1 1 8px;min-width:8px}
-  .mk-group-read{min-width:0;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis}
-}
-.mk-group-flags{color:var(--color-fg)}
-
-/* ── rows ── */
-.mk-item{position:relative;border-bottom:1px solid var(--color-hair,rgba(255,255,255,0.06));background:transparent}
-.mk-list .mk-item:last-child{border-bottom:none}
-.mk-item[data-open]{background:var(--color-hover-item)}
-.mk-item[data-sel]{box-shadow:inset 2px 0 0 var(--color-fg)}
-.mk-row{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 14px;min-height:52px;color:inherit;text-decoration:none;cursor:pointer;transition:background var(--duration-fast) var(--ease-signature)}
-.mk-row:hover{background:var(--color-hover-item)}
-.mk-row:focus-visible{outline:1.5px solid color-mix(in srgb,var(--color-fg) 70%,transparent);outline-offset:-1.5px;background:var(--color-hover-item)}
-.mk-mono{position:relative;width:30px;height:30px;flex:none;border-radius:8px;overflow:hidden;background:var(--color-bg-elevated);border:1px solid var(--color-hair,rgba(255,255,255,0.06))}
-.mk-mono-letter{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:650;color:var(--color-text-secondary)}
-.mk-mono img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
-.mk-id{min-width:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-.mk-name{font-size:13.5px;font-weight:550;color:var(--color-fg);white-space:nowrap}
-.mk-tags{display:inline-flex;gap:5px;flex-wrap:wrap;min-width:0;max-width:100%;overflow:hidden}
-.mk-tag{display:inline-block;padding:1px 7px;font-family:var(--font-mono),monospace;font-size:10px;letter-spacing:0.05em;color:var(--color-text-muted);border:1px solid var(--color-border);border-radius:100px;white-space:nowrap}
-.mk-tag-verified{color:var(--color-text-secondary);border-color:var(--color-border-mid)}
-.mk-cell{display:none}
-.mk-go{display:none}
-.mk-mob{text-align:right;flex:none}
-.mk-mob-median{display:block;font-family:var(--font-mono),monospace;font-size:12.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--color-fg)}
-.mk-mob-sub{display:block;font-family:var(--font-mono),monospace;font-size:10.5px;color:var(--color-text-faint);font-variant-numeric:tabular-nums}
-.mk-mob-sub[data-dir="up"]{color:var(--color-up)}
-.mk-mob-sub[data-dir="down"]{color:var(--color-down-text)}
-.mk-acts{display:none}
-@media(min-width:940px){
-  .mk-row{gap:14px;padding-right:64px}
-  .mk-mob{display:none}
-  .mk-cell{display:block;font-family:var(--font-mono),monospace;font-size:12.5px;letter-spacing:-0.01em;font-variant-numeric:tabular-nums;color:var(--color-fg);text-align:right;white-space:nowrap;overflow:hidden}
-  .mk-faint{color:var(--color-text-faint)}
-  .mk-cell[data-live]{font-weight:700}
-  .mk-flags{color:var(--color-text-faint)}
-  .mk-flags[data-hot]{color:var(--color-fg);font-weight:700}
-  .mk-delta{color:var(--color-text-faint)}
-  .mk-delta[data-dir="up"]{color:var(--color-up);font-weight:700}
-  .mk-delta[data-dir="down"]{color:var(--color-down-text);font-weight:700}
-  .mk-spark{display:flex;justify-content:flex-end;align-items:center}
-  .mk-sparkgap{display:inline-block;width:90px}
-  .mk-go{display:flex;justify-content:flex-end;color:var(--color-text-faint);transition:transform var(--duration-fast) var(--ease-signature)}
-  .mk-go[data-open]{transform:rotate(90deg)}
-  .mk-soldcell{overflow:visible}
-  .mk-soldtrack{display:block;height:2px;margin-top:4px;background:var(--lw-07, rgba(255, 255, 255, 0.07));border-radius:2px}
-  .mk-soldtrack>span{display:block;height:100%;border-radius:2px;background:var(--lw-4, rgba(255, 255, 255, 0.4));margin-left:auto}
-  /* hover actions — absolute siblings of the row (valid interactive nesting) */
-  .mk-acts{display:flex;gap:4px;position:absolute;top:11px;right:30px;z-index:2;opacity:0;transition:opacity var(--duration-fast) var(--ease-signature)}
-  .mk-item:hover .mk-acts,.mk-item:focus-within .mk-acts,.mk-item[data-sel] .mk-acts{opacity:1}
-  .mk-act{width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:var(--color-bg-elevated);border:1px solid var(--color-border);border-radius:999px;color:var(--color-text-muted);cursor:pointer;padding:0;transition:color var(--duration-fast) var(--ease-signature),border-color var(--duration-fast) var(--ease-signature)}
-  .mk-act:hover{color:var(--color-fg);border-color:var(--color-border-mid)}
-  .mk-act[data-on]{color:var(--color-fg);border-color:var(--color-border-mid);background:var(--color-hover-item)}
-}
-
-/* ── THE DOSSIER ── */
-.mkx{display:grid;grid-template-rows:0fr;transition:grid-template-rows 340ms var(--ease-signature)}
-.mk-item[data-open] .mkx{grid-template-rows:1fr}
-.mkx-in{overflow:hidden;min-height:0;visibility:hidden;transition:visibility 0s 340ms}
-.mk-item[data-open] .mkx-in{visibility:visible;transition:visibility 0s;border-top:1px solid var(--color-hair,rgba(255,255,255,0.06))}
-/* the dossier hero — the maker's flagship lot photo as a banner */
-.mkx-hero{position:relative;margin:14px 16px 0;height:150px;border-radius:12px;overflow:hidden;background:var(--color-bg-elevated)}
-.mkx-hero img{width:100%;height:100%;object-fit:cover;display:block}
-.mkx-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 45%,color-mix(in srgb,var(--color-bg, #08090a) 78%,transparent) 100%)}
-.mkx-hero-cap{position:absolute;left:14px;bottom:11px;z-index:1;font-size:12px;font-weight:600;letter-spacing:0.01em;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,0.6)}
-@media(min-width:940px){.mkx-hero{height:190px}}
-.mkx-chartwrap{padding:14px 16px 0}
-.mkx-chart-cap{font-size:10px;letter-spacing:0.14em;margin-bottom:8px}
-.mkx-chart{width:100%;height:150px;padding:4px 10px 18px 46px;box-sizing:border-box}
-.mkx-plot{position:relative;width:100%;height:100%}
-.mkx-plot svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible}
-.mkx-dot{position:absolute;width:5px;height:5px;border-radius:100px;background:var(--color-fg);transform:translate(-50%,-50%)}
-.mkx-tick{position:absolute;font-family:var(--font-mono),monospace;font-size:10px;color:var(--color-text-faint);font-variant-numeric:tabular-nums;white-space:nowrap}
-.mkx-tick-y{left:-8px;transform:translate(-100%,-50%)}
-.mkx-tick-x{bottom:-16px;transform:translateX(-50%)}
-/* the no-curve explanation — a cream well (ns-well provides ground+radius+pad) */
-.mkx-none{margin:14px 16px 0}
-.mkx-none .ns-well-body{font-size:12.5px;color:var(--color-text-muted)}
-.mkx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px 26px;padding:14px 16px 0}
-.mkx-grid .kicker{font-size:10px;letter-spacing:0.14em}
-.mkx-grid p{margin:4px 0 0;font-size:12px;color:var(--color-text-muted);line-height:1.55}
-.mkx-grid p b{color:var(--color-fg);font-weight:600;font-variant-numeric:tabular-nums}
-.mkx-houses{margin-top:6px;display:grid;gap:4px}
-.mkx-house{display:grid;grid-template-columns:minmax(64px,96px) minmax(0,1fr) 52px;gap:8px;align-items:center}
-.mkx-house-name{font-size:11px;color:var(--color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mkx-house-track{display:block;height:3px;background:var(--lw-07, rgba(255, 255, 255, 0.07));border-radius:2px}
-.mkx-house-track>span{display:block;height:100%;border-radius:2px;background:var(--lw-4, rgba(255, 255, 255, 0.4))}
-.mkx-house-n{font-family:var(--font-mono),monospace;font-size:10.5px;color:var(--color-text-faint);text-align:right;font-variant-numeric:tabular-nums}
-.mkx-verified{margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.mkx-verified b{font-family:var(--font-mono),monospace;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
-.mkx-verified b[data-dir="up"]{color:var(--color-up)}
-.mkx-verified b[data-dir="down"]{color:var(--color-down-text)}
-.mkx-ci{width:110px;height:16px;flex:none}
-.mkx-ci-ends{font-family:var(--font-mono),monospace;font-size:10px;color:var(--color-text-faint);font-variant-numeric:tabular-nums}
-.mkx-actions{display:flex;align-items:center;gap:12px;padding:14px 16px 16px;flex-wrap:wrap}
-
-/* ── the live book inside the dossier ── */
-.mkx-live{margin:14px 16px 0;border:1px solid var(--color-hair,rgba(255,255,255,0.07));border-radius:12px;overflow:clip}
-.mkx-live-head{font-size:10px;letter-spacing:0.14em;padding:9px 12px 8px;border-bottom:1px solid var(--color-hair,rgba(255,255,255,0.06))}
-.mkx-live-flagn{color:var(--color-fg);font-weight:700;letter-spacing:0.06em}
-.mkx-lot{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 12px;color:inherit;text-decoration:none;border-bottom:1px solid var(--color-hair,rgba(255,255,255,0.05));transition:background var(--duration-fast) var(--ease-signature)}
-.mkx-lot:last-of-type{border-bottom:none}
-.mkx-lot:hover{background:var(--color-hover-item)}
-.mkx-lot-thumb{position:relative;width:44px;height:34px;border-radius:6px;overflow:hidden;background:var(--color-bg-elevated);display:flex;align-items:center;justify-content:center;flex:none}
-.mkx-lot-letter{font-size:14px;font-weight:650;color:var(--color-text-faint)}
-.mkx-lot-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.mkx-lot-main{min-width:0}
-.mkx-lot-title{display:block;font-size:12px;font-weight:550;color:var(--color-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mkx-lot-sub{display:block;font-size:10.5px;color:var(--color-text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mkx-lot-flag{color:var(--color-fg);font-weight:600}
-.mkx-lot-cells{text-align:right;flex:none}
-.mkx-lot-est{display:block;font-family:var(--font-mono),monospace;font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--color-fg)}
-.mkx-lot-close{display:block;font-family:var(--font-mono),monospace;font-size:10px;color:var(--color-text-faint);font-variant-numeric:tabular-nums}
-.mkx-live-more{display:flex;align-items:center;justify-content:center;padding:8px 12px;font-family:var(--font-mono),monospace;font-size:10.5px;letter-spacing:0.06em;color:var(--color-text-muted);text-decoration:none;border-top:1px solid var(--color-hair,rgba(255,255,255,0.05))}
-.mkx-live-more:hover{color:var(--color-fg)}
-
-/* ── THE COMPARE TRAY ── */
-.mkc{position:fixed;left:0;right:0;bottom:0;z-index:35;background:color-mix(in srgb,var(--surface-mix, #0b0c0e) 94%,transparent);backdrop-filter:blur(18px);border-top:1px solid var(--color-border-mid)}
-.mkc-bar{display:flex;align-items:center;gap:8px;padding-top:9px;padding-bottom:9px;flex-wrap:wrap}
-.mkc-title{font-family:var(--font-mono),monospace;font-size:10.5px;letter-spacing:0.14em;text-transform:uppercase;color:var(--color-text-muted)}
-.mkc-chip{display:inline-flex;align-items:center;gap:7px;padding:3px 6px 3px 9px;font-size:12px;font-weight:600;color:var(--color-fg);border:1px solid var(--color-border);border-radius:100px}
-.mkc-chip button{background:none;border:none;color:var(--color-text-faint);cursor:pointer;font-size:13px;padding:0 3px;line-height:1}
-.mkc-chip button:hover{color:var(--color-fg)}
-.mkc-chip[data-thin]{color:var(--color-text-muted)}
-.mkc-chip-thin{font-family:var(--font-mono),monospace;font-size:10px;letter-spacing:0.06em;color:var(--color-text-faint);text-transform:uppercase}
-.mkc-rule{flex:1}
-.mkc-btn{font-family:var(--font-mono),monospace;font-size:10.5px;letter-spacing:0.08em;padding:5px 11px;background:none;color:var(--color-text-muted);border:1px solid var(--color-border);border-radius:100px;cursor:pointer}
-.mkc-btn:hover{color:var(--color-fg)}
-.mkc-body{padding-bottom:14px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px 26px}
-@media(min-width:900px){.mkc-body{grid-template-columns:minmax(0,7fr) minmax(0,5fr);align-items:start}.mkc-body[data-live]{grid-template-columns:repeat(var(--n),minmax(0,1fr))}}
-.mkc-plotwrap{min-width:0}
-.mkc-plot{position:relative;height:150px;margin-left:44px;margin-right:8px}
-.mkc-plot svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
-.mkc-cap{font-size:10px;letter-spacing:0.1em;margin-top:8px}
-.mkc-legend{display:grid;gap:6px;align-content:start;padding-top:2px}
-.mkc-leg{display:flex;align-items:baseline;gap:8px;min-width:0}
-.mkc-leg svg{flex:none;align-self:center}
-.mkc-leg-name{font-size:12.5px;font-weight:600;color:var(--color-fg);white-space:nowrap}
-.mkc-leg b{font-family:var(--font-mono),monospace;font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums}
-.mkc-leg b[data-dir="up"]{color:var(--color-up)}
-.mkc-leg b[data-dir="down"]{color:var(--color-down-text)}
-.mkc-leg-sub{font-family:var(--font-mono),monospace;font-size:10.5px;color:var(--color-text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
-.mkc-note{margin:0;font-size:12.5px;color:var(--color-text-muted)}
-.mkc-note kbd{font-family:var(--font-mono),monospace;font-size:10.5px;border:1px solid var(--color-border);border-radius:5px;padding:1px 5px}
-
-/* ── empty state — a patent-figure plate (FigureCell) ── */
-.mk-empty{margin:20px 0}
-.mk-empty .ns-cell-body{font-size:13.5px;color:var(--color-text-muted)}
-.mk-reset{background:none;border:none;padding:0;font:inherit;color:var(--color-fg);cursor:pointer;text-decoration:underline dotted}
-`;
