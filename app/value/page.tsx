@@ -56,7 +56,7 @@ import { medianOr } from '../lib/stats';
 import { gapRead, sleeperRead, valueFloor, type GapRead, type SleeperRead } from '../lib/lanes';
 import TriageBar from '../components/TriageBar';
 import { useUrlState, useLastVisit, passesTriage, isTriageActive, houseBaselines, TRIAGE_DEFAULTS, triageFromParams, triageToParams, WINDOWS, fmtCeiling, relaxTriage, type TriageFilters, type RelaxKey } from '../lib/feed-filters';
-import { CAT_LABEL, SUBS } from '../lib/taxonomy';
+import { CAT_LABEL, SUBS, MARKET_CATS } from '../lib/taxonomy';
 import { byPriority, spread } from '../lib/priority';
 import { makerLineOf, labelLineOf } from '../lib/lot-labels';
 
@@ -2066,6 +2066,7 @@ export default function ValuePage() {
           <div id="narrow" className="rail ray-enter vd-room" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))' }}>
             <TriageBar
               lots={laneLots}
+              cats={activeKey === 'all' ? undefined : MARKET_CATS[activeKey]}
               filters={triage}
               onChange={setTriage}
               prevVisitDay={prevVisitDay}

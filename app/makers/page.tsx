@@ -30,7 +30,7 @@ import TriageBar from '../components/TriageBar';
 import { useUrlState, useLastVisit, passesTriage, houseBaselines, isTriageActive, TRIAGE_DEFAULTS, triageFromParams, triageToParams, type TriageFilters } from '../lib/feed-filters';
 import { priorityOf } from '../lib/priority';
 import { liveBookHref } from '../lib/lot-browser';
-import { taxonOf, SUBS, CAT_LABEL, SPORTS, subLabel, subLabelOf, type CatKey } from '../lib/taxonomy';
+import { taxonOf, SUBS, CAT_LABEL, SPORTS, subLabel, subLabelOf, MARKET_CATS, type CatKey } from '../lib/taxonomy';
 import { makerLineOf, labelLineOf, searchTextOf } from '../lib/lot-labels';
 import { groupBySubject, subjectFeedHref, OTHER, SUBJECT_MARKETS, type SubjectGroup } from '../lib/maker-subjects';
 import { livePool, feedQueryMatches, feedSearchHref, sortByPriority } from '../lib/maker-pool';
@@ -1540,11 +1540,7 @@ export default function MakersPage() {
   // piece filed under a sports pseudo-maker is still counted, never chipped)
   const marketCats = useMemo<CatKey[] | undefined>(() => {
     if (activeKey === 'all') return undefined;
-    const own: Record<string, CatKey[]> = {
-      art: ['fine-art'], design: ['design'], watches: ['watches'],
-      sports: ['sports-cards', 'sports-memorabilia'], tcg: ['tcg'], science: ['space-science'], culture: ['entertainment', 'historical'],
-    };
-    return own[activeKey];
+    return MARKET_CATS[activeKey];
   }, [activeKey]);
   const nameHead = rowsBy === 'cat' && activeKey !== 'all' && SUBJECT_MARKETS.has(activeKey) ? 'Category' : activeKey === 'all' ? 'Maker · name' : NAME_HEAD[activeKey] ?? 'Maker';
 
@@ -1669,7 +1665,10 @@ export default function MakersPage() {
             {activeKey === 'sports' && (
               <div className="ray-triagebar-row ray-triagebar-subs ray-markets-fade mk-sports" role="group" aria-label="Sport">
                 <button type="button" className="ray-toolbar-pill" data-active={sportPick == null} aria-pressed={sportPick == null} onClick={() => setSportPick(null)}>All sports</button>
-                {SPORTS.filter(sp => (sportCounts.get(sp.key) || 0) > 0 || sportPick === sp.key).map(sp => (
+                {/* biggest first like the home feed's sport chips, the catch-all last */}
+                {SPORTS.filter(sp => (sportCounts.get(sp.key) || 0) > 0 || sportPick === sp.key)
+                  .sort((a, b) => (a.key === 'other-sports' ? 1 : 0) - (b.key === 'other-sports' ? 1 : 0) || (sportCounts.get(b.key) || 0) - (sportCounts.get(a.key) || 0))
+                  .map(sp => (
                   <button key={sp.key} type="button" className="ray-toolbar-pill" data-active={sportPick === sp.key} aria-pressed={sportPick === sp.key}
                     onClick={() => setSportPick(sportPick === sp.key ? null : sp.key)}>
                     {sp.label} <i>{(sportCounts.get(sp.key) || 0).toLocaleString()}</i>
