@@ -40,6 +40,7 @@ import MarketSwitch from '../../components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS, feedFromParams, feedToParams } from '../../components/FeedToolbar';
 import { useUrlState, useLastVisit, passesTriage } from '../../lib/feed-filters';
 import { byPriority, shortlist, reasonOf, forYou, spread } from '../../lib/priority';
+import { makerLineOf } from '../../lib/lot-labels';
 import { useFollows, affinityOf } from '../../lib/follows';
 import { Colophon, daysWord, pickCall } from '../../components/Terminal';
 import Flick from '../../components/Flick';
@@ -276,7 +277,7 @@ function FeedRow({ lot, onOpen, tone, note }: { lot: AuctionLot; onOpen: () => v
         )}
       </span>
       <span className="ray-feedrow-main">
-        <span className="ray-feedrow-maker">{ARTIST_LABEL[lot.artist] || lot.artist}</span>
+        <span className="ray-feedrow-maker">{makerLineOf(lot).name}</span>
         <span className="ray-feedrow-title">{craftTitle(lot.title)}</span>
         {note && <span className="ray-feedrow-title" style={{ color: 'var(--color-text-secondary)', fontSize: '0.86em' }}>{note}</span>}
       </span>
@@ -1073,11 +1074,11 @@ export default function TerminalHomePage() {
                               </td>
                               <td>
                                 <Link
-                                  href={`/makers/${lot.artist}`}
+                                  href={makerLineOf(lot).href}
                                   className="t-artist"
                                   onClick={e => e.stopPropagation()}
                                 >
-                                  {ARTIST_LABEL[lot.artist] || lot.artist}
+                                  {makerLineOf(lot).name}
                                 </Link>
                                 {/* a REAL button (Enter + Space for free), row
                                     semantics intact for AT */}

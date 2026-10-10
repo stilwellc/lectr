@@ -5,6 +5,7 @@ import Link from 'next/link';
 import CloseClock from './CloseClock';
 import { AuctionLot } from '../types';
 import { ARTIST_LABEL } from '../constants';
+import { makerLineOf } from '../lib/lot-labels';
 import { houseColors, categoryLabels, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg, sizedImg, localToday } from '../utils';
 import ComparableModal from './ComparableModal';
 import Flick from './Flick';
@@ -220,7 +221,9 @@ function LotCard({
 
   // "Pablo Picasso / Pablo Picasso" — when the crafted title IS the maker
   // label and the maker line already renders, the title says nothing twice.
-  const makerLabel = lot.artist ? (ARTIST_LABEL[lot.artist] || lot.artist) : '';
+  // pseudo-makers ("Sports Cards", "Pokémon") give way to the card's player / Pokémon (app/lib/lot-labels)
+  const maker = lot.artist ? makerLineOf(lot) : null;
+  const makerLabel = maker ? maker.name : '';
   const titleText = craftTitle(lot.title);
   const titleDupesMaker = showArtist && !!lot.artist && titleText === makerLabel;
 
@@ -328,7 +331,7 @@ function LotCard({
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
           {showArtist && lot.artist && (
             <Link
-              href={`/makers/${lot.artist}`}
+              href={maker?.href ?? `/makers/${lot.artist}`}
               className="ray-lot-maker"
               onClick={e => e.stopPropagation()}
               style={{ fontSize: 14, letterSpacing: '-0.01em', color: 'var(--color-fg)', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}
@@ -534,7 +537,7 @@ function LotCard({
                 card action (the house URL stays on the card's primary action
                 only, never on the name) */}
             <Link
-              href={`/makers/${lot.artist}`}
+              href={maker?.href ?? `/makers/${lot.artist}`}
               className="ray-lot-maker"
               onClick={e => e.stopPropagation()}
               style={{
