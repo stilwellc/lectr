@@ -21,7 +21,7 @@ type TriageLot = Parameters<typeof passesTriage>[0];
 const fmtFloor = (n: number) => (n >= 1000 ? `$${n / 1000}K+` : `$${n}+`);
 
 export default function TriageBar({
-  lots, filters, onChange, prevVisitDay = null, baselines = null, shown, total, showSubs = true, label = 'Narrow the board',
+  lots, filters, onChange, prevVisitDay = null, baselines = null, shown, total, showSubs = true, label = 'Narrow the board', cats: onlyCats,
 }: {
   lots: TriageLot[];
   filters: TriageFilters;
@@ -36,6 +36,9 @@ export default function TriageBar({
   /** hide the sub-category chips (a page that already groups by them) */
   showSubs?: boolean;
   label?: string;
+  /** offer chips only for these categories (a market's own) — a stray lot
+   *  filed in another category still counts, it just gets no chip */
+  cats?: readonly CatKey[];
 }) {
   const set = (patch: Partial<TriageFilters>) => onChange(patchTriage(filters, patch));
 
@@ -46,11 +49,20 @@ export default function TriageBar({
   const chips = useMemo(() => {
     const byCat = new Map<CatKey, number>();
     const bySub = new Map<string, number>();
-    for (const l of lots) {
+    // chips count the pool under every OTHER filter (window, house, value,
+    // new) so a count always matches what tapping it shows
+    const pool = (filters.win || filters.house || filters.minUsd || filters.newOnly)
+      ? lots.filter(l => passesTriage(l, { ...filters, cat: null, sub: null, fx: [] }, { prevVisitDay, baselines }))
+      : lots;
+    for (const l of pool) {
       const t = taxonOf(l);
+      if (onlyCats && !onlyCats.includes(t.cat)) continue;
       byCat.set(t.cat, (byCat.get(t.cat) || 0) + 1);
       const k = `${t.cat}:${t.sub}`; bySub.set(k, (bySub.get(k) || 0) + 1);
     }
+    // the picked chip never vanishes under another filter — it shows its 0
+    if (filters.cat && !byCat.has(filters.cat)) byCat.set(filters.cat, 0);
+    if (filters.cat && filters.sub && !bySub.has(`${filters.cat}:${filters.sub}`)) bySub.set(`${filters.cat}:${filters.sub}`, 0);
     const subChips = (only?: CatKey) => Array.from(bySub.entries())
       .filter(([k]) => !only || k.startsWith(`${only}:`))
       .map(([key, n]) => {
@@ -62,7 +74,7 @@ export default function TriageBar({
     const cats = Array.from(byCat.entries()).sort((a, b) => b[1] - a[1])
       .map(([cat, n]) => ({ key: `${cat}:`, cat, sub: null as string | null, label: CAT_LABEL[cat], n }));
     return { level: 'cat' as const, items: cats, deeper: filters.cat ? subChips(filters.cat) : [] };
-  }, [lots, filters.cat]);
+  }, [lots, filters, onlyCats, prevVisitDay, baselines]);
   const houses = useMemo(() => {
     const c = new Map<string, number>();
     for (const l of lots) { const h = String((l as { auctionHouse?: string }).auctionHouse || ''); if (h) c.set(h, (c.get(h) || 0) + 1); }
