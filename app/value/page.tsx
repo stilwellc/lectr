@@ -55,6 +55,7 @@ import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
 import { medianOr } from '../lib/stats';
 import { gapRead, sleeperRead, type GapRead, type SleeperRead } from '../lib/lanes';
 import TriageBar from '../components/TriageBar';
+import { MARKET_CATS } from '../lib/taxonomy';
 import { useUrlState, useLastVisit, passesTriage, isTriageActive, houseBaselines, TRIAGE_DEFAULTS, triageFromParams, triageToParams, type TriageFilters } from '../lib/feed-filters';
 import { byPriority, spread } from '../lib/priority';
 import { makerLineOf, labelLineOf } from '../lib/lot-labels';
@@ -2045,6 +2046,7 @@ export default function ValuePage() {
           <div className="rail ray-enter" style={{ marginTop: 8 }}>
             <TriageBar
               lots={laneLots}
+              cats={activeKey === 'all' ? undefined : MARKET_CATS[activeKey]}
               filters={triage}
               onChange={setTriage}
               prevVisitDay={prevVisitDay}

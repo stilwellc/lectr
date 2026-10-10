@@ -8,7 +8,7 @@
  * empty cut.
  */
 import { useMemo } from 'react';
-import { taxonOf, SUBS, CAT_LABEL, type CatKey } from '../lib/taxonomy';
+import { taxonOf, subChipsOf, CAT_LABEL, type CatKey, type SubChip } from '../lib/taxonomy';
 import FollowChip from './FollowChip';
 import { catFollow, houseFollow } from '../lib/follows';
 import { facetCatOf, facetChips, toggleFacet } from '../lib/facets';
@@ -48,7 +48,6 @@ export default function TriageBar({
   // category chip is picked, its subs appear so the reader can go one deeper.
   const chips = useMemo(() => {
     const byCat = new Map<CatKey, number>();
-    const bySub = new Map<string, number>();
     // chips count the pool under every OTHER filter (window, house, value,
     // new) so a count always matches what tapping it shows
     const pool = (filters.win || filters.house || filters.minUsd || filters.newOnly)
@@ -58,22 +57,15 @@ export default function TriageBar({
       const t = taxonOf(l);
       if (onlyCats && !onlyCats.includes(t.cat)) continue;
       byCat.set(t.cat, (byCat.get(t.cat) || 0) + 1);
-      const k = `${t.cat}:${t.sub}`; bySub.set(k, (bySub.get(k) || 0) + 1);
     }
     // the picked chip never vanishes under another filter — it shows its 0
     if (filters.cat && !byCat.has(filters.cat)) byCat.set(filters.cat, 0);
-    if (filters.cat && filters.sub && !bySub.has(`${filters.cat}:${filters.sub}`)) bySub.set(`${filters.cat}:${filters.sub}`, 0);
-    const subChips = (only?: CatKey) => Array.from(bySub.entries())
-      .filter(([k]) => !only || k.startsWith(`${only}:`))
-      .map(([key, n]) => {
-        const [cat, sub] = key.split(':') as [CatKey, string];
-        const sl = SUBS[cat].find(x => x.key === sub)?.label ?? sub;
-        return { key, cat, sub: sub as string | null, label: !only && byCat.size > 1 && cat === 'sports-cards' ? `Cards · ${sl}` : sl, n };
-      }).sort((a, b) => b.n - a.n);
-    if (byCat.size <= 2) return { level: 'sub' as const, items: subChips() };
+    // a market's strip (one or two categories): the shared sub builder —
+    // the same chips, order and cuts as the home feed (taxonomy subChipsOf)
+    if (byCat.size <= 2) return { level: 'sub' as const, items: subChipsOf(pool, filters, onlyCats) };
     const cats = Array.from(byCat.entries()).sort((a, b) => b[1] - a[1])
-      .map(([cat, n]) => ({ key: `${cat}:`, cat, sub: null as string | null, label: CAT_LABEL[cat], n }));
-    return { level: 'cat' as const, items: cats, deeper: filters.cat ? subChips(filters.cat) : [] };
+      .map(([cat, n]): SubChip => ({ key: `${cat}:`, cat, sub: null, label: CAT_LABEL[cat], n }));
+    return { level: 'cat' as const, items: cats, deeper: filters.cat ? subChipsOf(pool, filters, [filters.cat]) : [] };
   }, [lots, filters, onlyCats, prevVisitDay, baselines]);
   const houses = useMemo(() => {
     const c = new Map<string, number>();
@@ -87,13 +79,26 @@ export default function TriageBar({
   // in-category facets (Graded / Rookie / era, Film & TV / Music): counted over
   // the pool as every OTHER filter already narrows it
   const facets = useMemo(() => {
-    const fc = facetCatOf(filters.cat, lots);
+    const fc = facetCatOf(filters.cat, lots, { cats: onlyCats, fx: filters.fx });
     if (!fc) return [];
     const pool = lots.filter(l => passesTriage(l, { ...filters, fx: [] }, { prevVisitDay, baselines }));
     return facetChips(fc, pool, filters.fx);
-  }, [lots, filters, prevVisitDay, baselines]);
-  const subActive = (k: string) => filters.cat != null && `${filters.cat}:${filters.sub}` === k;
+  }, [lots, filters, onlyCats, prevVisitDay, baselines]);
+  // a sub chip is active on its exact cat + sub; a category chip (the total
+  // market's, or a guest category's in a market strip) while its cat is picked
+  const subActive = (c: SubChip) => filters.cat === c.cat && (c.sub == null || filters.sub === c.sub);
   const catActive = (cat: CatKey) => filters.cat === cat;
+  const toggleSub = (c: SubChip, inCat: boolean) => {
+    // un-picking a sub inside a picked category steps back to the category
+    if (subActive(c)) { set(c.sub != null && inCat ? { sub: null } : { cat: null, sub: null }); return; }
+    set({ cat: c.cat, sub: c.sub });
+  };
+  const subPill = (c: SubChip, inCat: boolean) => (
+    <button key={c.key} type="button" className="ray-toolbar-pill" data-active={subActive(c)} aria-pressed={subActive(c)}
+      onClick={() => toggleSub(c, inCat)}>
+      {c.label} <i>{c.n}</i>
+    </button>
+  );
 
   return (
     <div className="ray-triagebar" role="group" aria-label={label}>
@@ -153,7 +158,9 @@ export default function TriageBar({
           <span className="ray-triagebar-count">{shown.toLocaleString()} of {total.toLocaleString()}</span>
         )}
       </div>
-      {showSubs && chips.items.length > 1 && (
+      {/* a market strip shows even one chip (subChipsOf already dropped the
+          ones that cut nothing — "Pocket & Pendant 1" is a real cut) */}
+      {showSubs && chips.items.length > (chips.level === 'cat' ? 1 : 0) && (
         <div className="ray-triagebar-row ray-triagebar-subs ray-markets-fade">
           {chips.level === 'cat'
             ? chips.items.map(c => (
@@ -162,22 +169,17 @@ export default function TriageBar({
                 {c.label} <i>{c.n}</i>
               </button>
             ))
-            : chips.items.map(c => (
-              <button key={c.key} type="button" className="ray-toolbar-pill" data-active={subActive(c.key)} aria-pressed={subActive(c.key)}
-                onClick={() => (subActive(c.key) ? set({ cat: null, sub: null }) : set({ cat: c.cat, sub: c.sub }))}>
-                {c.label} <i>{c.n}</i>
-              </button>
+            : chips.items.map((c, i) => (
+              <span key={c.key} style={{ display: 'contents' }}>
+                {i > 0 && chips.items[i - 1].cat !== c.cat && <span className="ray-toolbar-divider" aria-hidden="true" />}
+                {subPill(c, chips.items.some(x => x.cat === c.cat && x.sub == null))}
+              </span>
             ))}
         </div>
       )}
-      {showSubs && chips.level === 'cat' && chips.deeper.length > 1 && (
+      {showSubs && chips.level === 'cat' && chips.deeper.length > 0 && (
         <div className="ray-triagebar-row ray-triagebar-subs ray-markets-fade">
-          {chips.deeper.map(c => (
-            <button key={c.key} type="button" className="ray-toolbar-pill" data-active={subActive(c.key)} aria-pressed={subActive(c.key)}
-              onClick={() => (subActive(c.key) ? set({ sub: null }) : set({ cat: c.cat, sub: c.sub }))}>
-              {c.label} <i>{c.n}</i>
-            </button>
-          ))}
+          {chips.deeper.map(c => subPill(c, true))}
         </div>
       )}
       {facets.length > 0 && (
@@ -186,7 +188,7 @@ export default function TriageBar({
             <span key={c.key} style={{ display: 'contents' }}>
               {i > 0 && facets[i - 1].group !== c.group && <span className="ray-toolbar-divider" aria-hidden="true" />}
               <button type="button" className="ray-toolbar-pill" data-active={filters.fx.includes(c.key)} aria-pressed={filters.fx.includes(c.key)}
-                onClick={() => set({ fx: toggleFacet(filters.fx, c.key) })}>
+                onClick={() => set({ fx: toggleFacet(filters.fx, c.key, c.via) })}>
                 {c.label} <i>{c.n}</i>
               </button>
             </span>

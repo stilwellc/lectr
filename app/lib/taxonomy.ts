@@ -472,3 +472,91 @@ export function subLabelOf(l: LotLike): string {
 export function catLabelOf(l: LotLike): string {
   return CAT_LABEL[taxonOf(l).cat];
 }
+
+// ── the sub-category chip strip (Oct 9, chips audit) ────────────────────────
+// ONE builder for every strip that offers sub-categories — the home feed's
+// refine row + phone sheet (FeedToolbar), /value and /makers (TriageBar), a
+// maker page's lot browser — so the same pool always reads the same chips.
+
+/** each market's own clean categories: a stray lot filed in another category
+ *  (a film costume a sports house sells) stays on the board and in the
+ *  counts, it just gets no chip ("Props & Wardrobe 8" in Sports) */
+export const MARKET_CATS: Record<string, CatKey[]> = {
+  art: ['fine-art'], design: ['design'], watches: ['watches'],
+  sports: ['sports-cards', 'sports-memorabilia'], tcg: ['tcg'], science: ['space-science'],
+  culture: ['entertainment', 'historical'],
+};
+/** a category that shares a market's strip as a GUEST rides as one chip, its
+ *  subs one tap deeper (Pop Culture: 7 entertainment subs + "Historical &
+ *  Documents" instead of 14 interleaved subs, where "Autographs & Documents"
+ *  sat next to "Presidential & Political" and read as the historical papers) */
+const GUEST_CATS = new Set<CatKey>(['historical']);
+/** the catch-all subs: never the lead chip, always last in their category */
+const CATCH_ALL_SUBS = new Set([
+  'fine-art:other', 'entertainment:other', 'space-science:space-other', 'design:objects', 'sports-memorabilia:equipment',
+]);
+/** a chip that keeps ≥95% of its pool cuts nothing worth a tap — hidden
+ *  unless picked ("Wristwatches 70" of 72, "Signed 474" inside Autographs) */
+export const NEAR_TOTAL = 0.95;
+export const cutsSomething = (n: number, base: number) => n > 0 && n < NEAR_TOTAL * base;
+
+export interface SubChip {
+  /** "cat:sub", or "cat:" for a guest category's own chip */
+  key: string;
+  cat: CatKey;
+  /** null = a guest category's chip (picks the category, no sub) */
+  sub: string | null;
+  label: string;
+  n: number;
+}
+
+/**
+ * The sub-category chips for `pool` (n = lots in that sub). `cats` limits the
+ * chips to a market's own categories; `pick` is the reader's current cat /
+ * sub (a picked chip always shows, at 0 if the other filters emptied it).
+ * Order: categories by size, each one's subs by count with the catch-all
+ * last; a guest category is one chip, its subs right after it once picked.
+ * A chip that keeps ≥95% of the strip's lots is dropped (NEAR_TOTAL).
+ */
+export function subChipsOf(
+  pool: readonly LotLike[],
+  pick: { cat: CatKey | null; sub: string | null },
+  cats?: readonly CatKey[] | null,
+): SubChip[] {
+  const by = new Map<CatKey, Map<string, number>>();
+  let total = 0;
+  for (const l of pool) {
+    const t = taxonOf(l);
+    if (cats && !cats.includes(t.cat)) continue;
+    let m = by.get(t.cat);
+    if (!m) by.set(t.cat, (m = new Map()));
+    m.set(t.sub, (m.get(t.sub) || 0) + 1);
+    total++;
+  }
+  if (pick.cat && (!cats || cats.includes(pick.cat))) {
+    if (!by.has(pick.cat)) by.set(pick.cat, new Map());
+    const m = by.get(pick.cat)!;
+    if (pick.sub && !m.has(pick.sub)) m.set(pick.sub, 0);
+  }
+  const sum = (m: Map<string, number>) => { let s = 0; m.forEach(v => { s += v; }); return s; };
+  const order = Array.from(by.entries()).map(([cat, m]) => ({ cat, m, n: sum(m) })).sort((a, b) => b.n - a.n);
+  const multi = order.length > 1;
+  const last = (cat: CatKey, sub: string) => (CATCH_ALL_SUBS.has(`${cat}:${sub}`) ? 1 : 0);
+  const subsOf = (cat: CatKey, m: Map<string, number>, base: number, prefix: string): SubChip[] =>
+    Array.from(m.entries())
+      .filter(([sub, n]) => (pick.cat === cat && pick.sub === sub) || cutsSomething(n, base))
+      .sort((a, b) => last(cat, a[0]) - last(cat, b[0]) || b[1] - a[1])
+      .map(([sub, n]) => ({ key: `${cat}:${sub}`, cat, sub, label: prefix + subLabel(cat, sub), n }));
+  const out: SubChip[] = [];
+  order.forEach(({ cat, m, n }, i) => {
+    if (multi && i > 0 && GUEST_CATS.has(cat)) {
+      out.push({ key: `${cat}:`, cat, sub: null, label: CAT_LABEL[cat], n });
+      if (pick.cat === cat) out.push(...subsOf(cat, m, n, ''));
+      return;
+    }
+    // two categories in one strip (sports: cards + memorabilia) → the cards
+    // subs say so, so "Sealed Product" never reads as memorabilia
+    out.push(...subsOf(cat, m, total, multi && cat === 'sports-cards' ? 'Cards · ' : ''));
+  });
+  return out;
+}
