@@ -17,6 +17,7 @@ import { ARTIST_MARKET } from '../../app/constants';
 import { SUBJECT_DOMAINS } from './subject-domains';
 import { NON_SPORT_TCG_RE } from './classify';
 import { isCardLotTitle } from '../../app/lib/cards';
+import { CRIME_EXTRA_RE, isCrimeTitle, HIST_MUSIC_RE, MERCURY_CAPSULE_RE, POKE_VINTAGE_SET_RE, isShowbizTitle, sportsMemSubOf } from '../../app/lib/taxonomy';
 
 type Lot = Record<string, unknown>;
 
@@ -190,14 +191,16 @@ const CULT_KIND: Record<string, string> = {
 const CULT_TEXT_DOMAIN: [RegExp, string][] = [
   [/\b(?:astronauts?|cosmonauts?|nasa|apollo \d+|space shuttle|mercury seven|moonwalkers?)\b/i, 'space-science'],
   [/\b(?:signers? of the declaration|declaration (?:of independence )?signers?|presidents?|presidential|vice[- ]president|first lady|white house|senat(?:e|ors?)|congress(?:man|woman|ional)?|impeachment|(?:presidential|political) campaign|campaign (?:buttons?|posters?|pins?|banners?|ribbons?|badges?)|inaugura(?:l|tion)|jugate|supreme court|chief justice|governor|secretary of state|prime minister|parliament|mayor|ambassador|electoral|confederate president|political)\b/i, 'political'],
-  [/\b(?:concerts?|tour (?:posters?|programs?|books?|jackets?|shirts?|pass(?:es)?)|(?<!(?:photo|photograph|autograph|stamp|scrap|sticker|card|cabinet card) )albums?(?!\s+pages?)|rock band|the band|band[- ](?:signed|members?)|guitars?|singers?|songs?|songwriter|lyrics?|rock (?:and|&|n'?) roll|vinyl|gold record|platinum record|grammy|drum ?sticks?|drumheads?|setlist|set list|stage[- ](?:worn|played|used)|backstage|recording|motown|woodstock|orchestra|opera|symphony|composer|musical quot\w*|musical score|ballroom)\b/i, 'music'],
+  [/\b(?:led zeppelin|concerts?|tour (?:posters?|programs?|books?|jackets?|shirts?|pass(?:es)?)|(?<!(?:photo|photograph|autograph|stamp|scrap|sticker|card|cabinet card) )albums?(?!\s+pages?)|rock band|the band|band[- ](?:signed|members?)|guitars?|singers?|songs?|songwriter|lyrics?|rock (?:and|&|n'?) roll|vinyl|gold record|platinum record|grammy|drum ?sticks?|drumheads?|setlist|set list|stage[- ](?:worn|played|used)|backstage|recording|motown|woodstock|orchestra|opera|symphony|composer|musical quot\w*|musical score|ballroom)\b/i, 'music'],
   [/\b(?:films?|movies?|motion picture|screen[- ](?:used|worn|matched)|production[- ](?:made|used|drawing|cels?|art)|film studios?|actors?|actress(?:es)?|one[- ]sheets?|lobby cards?|animation|animated|cels?|walt disney|disney|television|tv series|tv show|sitcom|episode|ursa|oscars?|academy awards?|emmys?|hollywood|filmmakers?|screenplay|shooting script|movie poster|dicaprio|winslet)\b/i, 'hollywood'],
   [/\b(?:wwii|ww2|wwi|world war|army|navy|naval|admiral|soldiers?|battle(?:ship|field)?|regiment(?:al)?|air aces?|luftwaffe|military|marine corps|usmc|usaf|pearl harbor|d-day|nazi|third reich|medal of honor|fighter pilot|(?:civil|revolutionary) war(?![- ](?:dated|date))|war of 1812|continental army|confederate|union army)\b/i, 'military'],
   // (Oct 8) ~28k historical culture lots fell to Entertainment for want of a
   // cue: the notorious (crime), the aviators and polar explorers (aviation —
   // filed military before), and the event / document / church words
   [/\b(?:gangsters?|mobsters?|mafia|mug ?shots?|outlaws?|bootlegg(?:er|ers|ing)|wanted poster|alcatraz|bank robber|serial killer|al capone|john dillinger|bonnie (?:and|&) clyde|clyde barrow|bonnie parker|baby face nelson|pretty boy floyd|machine gun kelly|billy the kid|jesse james|bugsy siegel|lucky luciano|dutch schultz|charles manson|lee harvey oswald|jack ruby|john wilkes booth|lizzie borden)\b/i, 'crime'],
-  [/\b(?:aviation|aviators?|aviatrix|aeronaut\w*|airplanes?|aeroplanes?|airships?|zeppelin|hindenburg|lindbergh|spirit of st\.? louis|wright brothers|orville wright|wilbur wright|kitty hawk|amelia earhart|earhart|wiley post|bl[eé]riot|north pole|south pole|antarctic\w*|arctic expedition|polar expedition|peary|shackleton|amundsen|nansen|richard e\.? byrd|admiral byrd)\b/i, 'aviation'],
+  // (Oct 9 labels audit) the Massacre, the Capone family, the New York families
+  [CRIME_EXTRA_RE, 'crime'],
+  [/\b(?:aviation|aviators?|aviatrix|aeronaut\w*|airplanes?|aeroplanes?|airships?|(?<!led )zeppelin|hindenburg|lindbergh|spirit of st\.? louis|wright brothers|orville wright|wilbur wright|kitty hawk|amelia earhart|earhart|wiley post|bl[eé]riot|north pole|south pole|antarctic\w*|arctic expedition|polar expedition|peary|shackleton|amundsen|nansen|richard e\.? byrd|admiral byrd)\b/i, 'aviation'],
   // the Titanic of the 1997 film (a screen-used prop, a DiCaprio still) is film
   [/\b(?:titanic\b(?!.*\b(?:screen[- ](?:used|worn|matched)|production[- ](?:used|made)|dicaprio|winslet|james cameron|props?|1953|1997|20th century[- ]fox)\b)|lusitania|newspapers?|colonial (?:currency|notes?|bills?)|continental currency)\b/i, 'historic'],
   // case-sensitive church titles: John Pope the Union general is not a pope
@@ -267,7 +270,9 @@ const SCI_KIND: Record<string, string> = {
 };
 const SPACE_PROGRAM: [string, RegExp][] = [
   ['apollo', /apollo/i],
+  // (Oct 9 labels audit) + the capsules by name ("Aurora 7 Flown Heat Shield")
   ['mercury-gemini', /\bgemini\b|\bmercury\b/i],
+  ['mercury-gemini', MERCURY_CAPSULE_RE],
   ['shuttle-iss', /shuttle|sts-\d|\biss\b/i],
   // (wave 2) Skylab flew Apollo hardware (the Apollo Applications Program) —
   // read after an explicit shuttle-era mention ("Skylab and Shuttle-Era Suits")
@@ -292,7 +297,7 @@ const SPACE_PROGRAM: [string, RegExp][] = [
 /** (Oct 8) the scientists a culture 'space-science' lot names → 'science' */
 const SCIENTIST_RE = /\b(?:einstein|newton|curie|tesla|edison|darwin|hawking|galileo|faraday|bohr|oppenheimer|feynman|freud|pasteur|salk|sabin|schweitzer|morse|graham bell|marconi|fleming|lister|pauling|planck|jung|heisenberg|fermi|teller|watson|crick|carver|nightingale|goodall|tombaugh|hubble|sagan|scientists?|physicists?|chemists?|inventors?|nobel|dna|apple computer|steve jobs|wozniak|computer)\b/i;
 /** (Oct 8) aviation pioneers / polar explorers inside a 'space-science' lot */
-const AVIATION_RE = /\b(?:aviation|aviators?|aviatrix|airplanes?|aeroplanes?|airships?|zeppelin|hindenburg|lindbergh|wright brothers|orville wright|wilbur wright|earhart|wiley post|bl[eé]riot|sikorsky|whittle|chuck yeager|yeager|peary|shackleton|amundsen|byrd|explorers?)\b/i;
+const AVIATION_RE = /\b(?:aviation|aviators?|aviatrix|airplanes?|aeroplanes?|airships?|(?<!led )zeppelin|hindenburg|lindbergh|wright brothers|orville wright|wilbur wright|earhart|wiley post|bl[eé]riot|sikorsky|whittle|chuck yeager|yeager|peary|shackleton|amundsen|byrd|explorers?)\b/i;
 /** (Oct 8) a culture lot whose domain reads 'space-science' → the space
  *  program it names, a scientist ('science') or an aviator ('aviation'),
  *  else stays 'space-science' */
@@ -523,6 +528,16 @@ function brandDefaultSport(title: string): string | null {
   return 'baseball';
 }
 
+/** (Oct 9 labels audit) the memorabilia junk drawer's passes and magazine
+ *  covers, and the signed jerseys / bats a trophy house slug filed as trophies
+ *  (taxonomy.ts sportsMemSubOf — the view-time read of the same rule) */
+const MEM_KIND_SUB: Record<string, string> = { memorabilia: 'equipment', equipment: 'equipment', trophies: 'trophies' };
+const MEM_SUB_KIND: Record<string, string> = { tickets: 'tickets', programs: 'programs', autographs: 'autographs' };
+function sportsMemKindOf(title: string, kind: string | null): string | null {
+  if (!kind || !MEM_KIND_SUB[kind]) return kind;
+  return MEM_SUB_KIND[sportsMemSubOf(title, MEM_KIND_SUB[kind])] ?? kind;
+}
+
 export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
   const vert = ARTIST_MARKET[l.artist as keyof typeof ARTIST_MARKET];
   const title = (l.title as string) || '';
@@ -537,7 +552,7 @@ export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
     // (Oct 8 sports audit, Lots & Sets) a multi-card bulk lot ("Lot of (25)",
     // "(400) … Cards", "Shoebox Collection", "Complete Set") is its own kind —
     // the same detector parseCard's `multi` reads, so it never comps as a card
-    const subCat = kind === 'cards' && isCardLotTitle(title) ? 'card-lots' : kind;
+    const subCat = kind === 'cards' && isCardLotTitle(title) ? 'card-lots' : sportsMemKindOf(title, kind);
     let drill = sportSlugOf(l.sport);
     if (drill === 'golf' && GOLF_FALSE_STAMP_RE.test(title) && !/\bgolf/i.test(title)) drill = null;
     // (wave 3) a cricket / rugby / polo lot has no drill of ours
@@ -632,7 +647,8 @@ export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
     const y = (title.match(/\b(19|20)\d{2}\b/) || [])[0];
     const y2 = y ? null : title.match(/^\s*'?(\d{2})\s+(?:\S+\s+){0,2}?pok[eé]mon\b/i);
     const yr = y ? parseInt(y, 10) : y2 ? (+y2[1] >= 90 ? 1900 : 2000) + +y2[1] : null;
-    const drill = POKE_ECARD_RE.test(title) ? 'vintage' : yr ? (yr <= 2002 ? 'vintage' : yr <= 2016 ? 'classic' : 'modern') : null;
+    // (Oct 9 labels audit) no year: a WotC set name ("Japanese Jungle #25") is vintage
+    const drill = POKE_ECARD_RE.test(title) ? 'vintage' : yr ? (yr <= 2002 ? 'vintage' : yr <= 2016 ? 'classic' : 'modern') : POKE_VINTAGE_SET_RE.test(title) ? 'vintage' : null;
     return { subCat, drill, flown: null };
   }
 
@@ -646,11 +662,23 @@ export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
     // (Oct 8) the new historical cues (a Titanic, an outlaw, an airship) name
     // a FILM in a film / music sale ("THE OUTLAW" one-sheet, "Titanic, 1997")
     const sale = (l.saleName as string) || '';
+    // (Oct 9 labels audit) ...and in a film-archive title ("Ursa Authentic",
+    // "Production-Worn … from Die Hart (2020-Present)") — a John Wick soldier
+    // costume read military; a band / an instrument names music, not a war or
+    // an airship ("Led Zeppelin", "Army Themed Guitar", "Battle Flyer
+    // Featuring Grandmaster Flash")
+    // (a showbiz SALE alone never voids a military read: RR's general autograph
+    // sales carry "entertainment" and Civil War letters)
+    const showbizSale = SHOWBIZ_SALE_RE.test(sale), showbizTitle = isShowbizTitle(title);
     const textDomain = (s: string): string | null => {
       const d = cultureTextDomain(s);
-      return d && SHOWBIZ_SALE_RE.test(sale) && (d === 'historic' || d === 'crime' || d === 'aviation') ? null : d;
+      if ((d === 'aviation' || d === 'military' || d === 'historic' || d === 'royalty') && HIST_MUSIC_RE.test(title)) return 'music';
+      if (d && (showbizSale || showbizTitle) && (d === 'historic' || d === 'crime' || d === 'aviation')) return null;
+      return d === 'military' && showbizTitle ? null : d;
     };
     if (!drill) drill = textDomain(title);
+    // (Oct 9) the Massacre / Prohibition read 'historic' off a "newspaper"
+    if ((!drill || drill === 'historic') && isCrimeTitle(title)) drill = 'crime';
     if (!drill && sportMaps?.bySubject && Array.isArray(subjects)) {
       // a subject the curated list files 'other' (Civil War, Titanic, WWII)
       // spans domains — it is never learned

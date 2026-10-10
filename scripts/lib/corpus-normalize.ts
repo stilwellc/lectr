@@ -17,6 +17,7 @@ import { leadsWithSetCode } from './set-codes';
 import { attachExtractions, fillWatchReferencesFromExtract } from './extract/apply';
 import { segmentOf } from '../corpus-io';
 import { reclassifyLot, isSpaceLeadTitle } from './classify';
+import { cultureObjectAt, WORN_RE } from '../../app/lib/taxonomy';
 import { saleDayOf, SALE_DAY_HOUSES } from './sale-day';
 import { seasonToDate } from './sports-crawl';
 import { saleCloseFor, galleryStubClose, GALLERY_HOUSES } from './sale-close-dates';
@@ -1988,16 +1989,21 @@ const CULT_KIND_RULES: [RegExp, string][] = [
   // recording; a sealed or graded retail cassette is a mass item — classify.ts)
   [/\b(?:record|records|vinyl|(?<!(?:photo|photograph|autograph|stamp|scrap|sticker|cigarette card|card|cabinet card) )albums?(?!\s+pages?)|lp|45rpm|acetate|test pressing|cassettes?|demo (?:tapes?|recordings?|discs?)|master tapes?|reel[- ]to[- ]reel)\b/i, 'record'],
 ];
+/** the kinds a strong object phrase never re-files (taxonomy cultureObjectOf) */
+const CULT_AUTOGRAPH_KINDS = new Set(['signed-cut', 'check', 'signed-photo', 'document', 'autograph-other']);
 /** no object noun named: a bare signature mark is still an autograph */
 const CULT_AUTOGRAPH_FALLBACK_RE = /\b(?:signed|autographed|autographs?|signatures?|inscribed)\b/i;
 /** the rule whose noun is named earliest in `s` (ties → rule order), or null */
 function earliestCultKind(s: string): string | null {
+  return earliestCultKindAt(s).kind;
+}
+function earliestCultKindAt(s: string): { kind: string | null; at: number } {
   let best: string | null = null, at = Infinity;
   for (const [re, c] of CULT_KIND_RULES) {
     const m = re.exec(s);
     if (m && m.index < at) { at = m.index; best = c; }
   }
-  return best;
+  return { kind: best, at };
 }
 /** the description's own object line: the title echo and the trailing
  *  authenticity / provenance boilerplate ("accompanied by a letter of
@@ -2015,9 +2021,24 @@ export function cultureItemClass(l: { title?: string | null; description?: strin
   let title = String(l.title || '').replace(/["“”]/g, ' ');
   if (/\b(?:drawings?|sketch(?:es)?|paintings?|illustrations?|caricatures?)\b/i.test(title)) title = title.replace(/\bportraits?\b/gi, ' ');
   if (CULT_CARD_RE.test(title)) return 'card';
+  // (Oct 9 labels audit) a STRONG object phrase beats the first noun named —
+  // "Pink Panther in Cowboy Hat Animation Cel" is a cel (not a hat), "Les Paul
+  // Type I Original Photo" a photo (not a guitar), concept art / storyboards
+  // production art, a Mondo print or a gig flyer a poster, "Backstage Cloth
+  // Passes" a ticket. Production art outranks even "prop"; an autograph /
+  // document / signed photo keeps its kind (taxonomy.ts cultureObjectOf — the
+  // view-time read of the same rule)
+  const { kind: strong, at: strongAt } = cultureObjectAt(title);
+  // (a garment named WORN outranks the costume sketch sold with it)
+  if (strong === 'cel-art') return WORN_RE.test(title) ? 'costume' : strong;
   // the word "prop" names the kind wherever it sits ("Stormtrooper Helmet Prop")
   if (/\bprops?\b/i.test(title)) return 'prop';
-  const fromTitle = earliestCultKind(title) ?? (CULT_AUTOGRAPH_FALLBACK_RE.test(title) ? 'autograph-other' : null);
+  const first = earliestCultKindAt(title);
+  const fromTitle = first.kind ?? (CULT_AUTOGRAPH_FALLBACK_RE.test(title) ? 'autograph-other' : null);
+  // a photo print wins over any object noun; a poster / ticket only over one
+  // named after it (or an awards-show word: a Grammy Awards ticket stub)
+  if (strong && !CULT_AUTOGRAPH_KINDS.has(fromTitle || '')
+    && (strong === 'photo' || !first.kind || strongAt <= first.at || (strong === 'ticket' && first.kind === 'award'))) return strong;
   if (fromTitle) return fromTitle;
   // (wave 4) a POSE names a photograph in RR's own headline only — a
   // description's "in flying pose" describes a model or a figure
