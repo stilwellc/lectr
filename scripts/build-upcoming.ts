@@ -28,6 +28,8 @@ import { gapRead, sleeperRead, valueFloor, closeGrowth, validateGapCells, gapCel
 import { CARD_TIER_CODE } from './lib/calls-ledger';
 import { taxonOf } from '../app/lib/taxonomy';
 import { prioStatic } from '../app/lib/priority';
+import { setCloseK } from '../app/lib/close-k';
+import { refitCloseK, snapFromBook, writeSnap, CLOSE_K_DIR } from './lib/close-k-fit';
 import { isDayStamp, scheduledClose, normalizeCloseStamp, closeMs as closeInstantOf } from '../app/lib/house-tz';
 import type { AuctionLot as EngineLot } from '../app/types';
 import type { AuctionLot, RealizedPoint, BidCompetitionPoint } from '../app/types';
@@ -87,6 +89,13 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
     const cc = mj?.markets?.all?.analytics?.closeCurve;
     if (cc?.buckets?.length) closeCurve = cc;
   } catch { /* no curve yet */ }
+  // THE BID ROOMS' CLOSE MULTIPLES (app/lib/close-k.ts), refit tonight from
+  // the sold rows' bidHistory + the archived nightly book snapshots
+  // (data/closek/snaps/, pulled from R2 before assemble) → close-k.json, and
+  // installed here so tonight's priority read uses the same table the client
+  // will load. A failed refit keeps the compiled table (client + build).
+  const closeK = refitCloseK(lots as unknown as Record<string, unknown>[], dataDir);
+  if (closeK) setCloseK(closeK);
   const freshCalls: Call[] = [];
   // THE GAP'S PUBLISH GATE (Oct 6 2026, lanes.validateGapCells): the cells
   // whose graded projections land within [0.8, 1.25] of realized at n ≥ 50
@@ -500,6 +509,13 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
   }
   const out = { generatedAt: new Date().toISOString(), tape, demand, realized, bidComp, recentSold, deepValue, lots: upcoming };
   fs.writeFileSync(path.join(dataDir, 'upcoming.json'), JSON.stringify(out));
+  // tonight's bid-room book → the close-k snapshot archive (the nightly ships
+  // data/closek/tonight.json.gz write-once to R2 closek/snaps/)
+  try {
+    const snap = snapFromBook(out.generatedAt, upcoming as unknown as Record<string, unknown>[]);
+    const bytes = writeSnap(path.join(CLOSE_K_DIR, 'tonight.json.gz'), snap);
+    console.log(`[close-k] snapshot: ${snap.rows.length} bid-room lots, ${Math.round(bytes / 1024)}KB gz`);
+  } catch (e) { console.log(`::warning title=close-k snapshot failed::${(e as Error).message}`); }
   const kb = Math.round(fs.statSync(path.join(dataDir, 'upcoming.json')).size / 1024);
   const recentCounts = Object.keys(recentSold).map(k => `${k}:${recentSold[k].length}`).join(' ');
   const bcLast = bidComp.sports.length ? bidComp.sports[bidComp.sports.length - 1] : null;

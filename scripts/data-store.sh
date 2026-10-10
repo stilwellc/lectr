@@ -22,6 +22,8 @@
 #   latest/house-ledger.json      per-house crawl ledger (scripts/emit-status.ts)
 #   qa/validate-engine/<UTC>-<run>.json   every night's engine-gate report
 #                          (scripts/ci/gate-replay.ts replays them)
+#   closek/snaps/<UTC>-<run>.json.gz   WRITE-ONCE nightly bid-room book snapshot
+#   closek/latest.json     last night's fitted close-k table (pull-closek / push-closek)
 #
 # Retention: versions/ accumulates ~176MB/day (corpus.tar + served.tar.gz per
 # push). Prefer an R2 lifecycle rule on the versions/ prefix; until one is
@@ -924,6 +926,31 @@ pull_gate_reports() { # dir [n=30] — the newest n archived reports (scripts/ci
   echo "[data-store] pulled $(find "$dir" -name '*.json' | wc -l | tr -d ' ') gate report(s) into $dir"
 }
 
+# ── CLOSE-K ARCHIVE (Oct 9 2026): the bid rooms' close multiples refit nightly
+# (scripts/lib/close-k-fit.ts). closek/snaps/<UTC>-<run>.json.gz = one night's
+# served bid-room book (id, bid, count, close, room; ~100KB), WRITE-ONCE and
+# kept (≈36MB/yr); closek/latest.json = last night's fitted table (the diff
+# baseline). Advisory both ways: no archive just means the fit leans on
+# Goldin's bidHistory and the compiled table.
+pull_closek() { # [n=75] — the newest n snapshots → data/closek/snaps/, last table → data/closek/prev.json
+  local n="${1:-75}" dir=data/closek/snaps keys k
+  mkdir -p "$dir"
+  keys=$(list_keys_retry "closek/snaps/") || { echo "[data-store] pull-closek: listing failed — fitting without the archive"; return 0; }
+  for k in $(printf '%s\n' "$keys" | grep . | sort | tail -n "$n"); do
+    [ -s "$dir/$(basename "$k")" ] && continue
+    with_retry obj_get_once "$k" "$dir/$(basename "$k")" || { rm -f "$dir/$(basename "$k")"; echo "[data-store] WARNING: $k unreadable"; }
+  done
+  obj_get_clean "closek/latest.json" "data/closek/prev.json" "[data-store] no prior close-k table yet (first night)" || rm -f data/closek/prev.json
+  echo "[data-store] close-k archive: $(find "$dir" -name '*.json.gz' | wc -l | tr -d ' ') snapshot(s) in $dir"
+}
+push_closek() { # tonight's snapshot (write-once) + the fitted table
+  if [ -s data/closek/tonight.json.gz ]; then
+    obj_put "closek/snaps/$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_RUN_ID:-local}.json.gz" data/closek/tonight.json.gz
+  else echo "[data-store] no close-k snapshot tonight"; fi
+  if [ -s public/data/ray/close-k.json ]; then obj_put "closek/latest.json" public/data/ray/close-k.json
+  else echo "[data-store] no close-k table tonight"; fi
+}
+
 # ── UI-SHOTS FIXTURE (a pinned served payload the visual rig renders) ────────
 # The rig used to screenshot PROD, so every nightly's data drifted the frames
 # (red 28/28 days). Now it builds the site from a FROZEN served payload whose
@@ -1003,5 +1030,7 @@ case "${1:-}" in
   pull-accuracy-ledger) mkdir -p data/qa; obj_get_clean "latest/accuracy-ledger.json" "data/qa/accuracy-ledger.prev.json" "[data-store] no accuracy ledger yet (first night)" || { rm -f data/qa/accuracy-ledger.prev.json; echo "[data-store] WARNING: accuracy ledger unreadable — starting fresh (frozen daily rows are rebuilt from the tape where it still holds them)"; } ;;
   put-gate-report) put_gate_report "${2:-data/qa/validate-engine.json}" ;;
   pull-gate-reports) pull_gate_reports "${2:-data/qa/gate-reports}" "${3:-30}" ;;
+  pull-closek) pull_closek "${2:-75}" ;;
+  push-closek) push_closek ;;
   *) echo "usage: $0 pull|push|pull-version <versions/…> [served-only]|push-segment <name>|pull-segment <name>|pull-segments|assemble-segments <house…> [--archive <segment…>]|pull-meta|pull-backtest|push-backtest|prune [keep=14]|handoff-put <name> <path>|handoff-get <name> <dest>|handoff-clean|handoff-prune [days=2]|pin-fixture|pull-fixture [key]|list-segment-versions <house>|restore-segment <house> <date>|prune-segment-versions [days=30] [keep=3]|restore-drill <house> [date]|pull-ledger|push-ledger|pull-accuracy-ledger|put-gate-report [file]|pull-gate-reports [dir] [n=30]  (env: DATA_PUSH_FORCE=1, SEGMENT_PUSH_FORCE=1, SEGMENT_SHRINK_OK=1, DATA_FRESH_ALLOW_STALE=1, RESTORE_PREFIX=)"; exit 1 ;;
 esac

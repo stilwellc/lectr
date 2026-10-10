@@ -57,3 +57,6 @@ shots/
 /public/og/live/
 /public/og/lot/
 /.og-cache/
+
+# close-k archive pulled from / pushed to R2 (scripts/lib/close-k-fit.ts) — never committed
+/data/closek/

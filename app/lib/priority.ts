@@ -19,7 +19,7 @@
  *        midpoint (estimates on the served book are ALREADY USD — never
  *        re-convert by `currency`). Art 27% median error vs engine 104%.
  *      · bid rooms (Goldin, REA, Memory Lane, NFL, Hake's): the live bid
- *        PROJECTED to its close (CLOSE_K: bid × the room's measured multiple
+ *        PROJECTED to its close (close-k.ts: bid × the room's measured multiple
  *        by days out × bid size), blended with a sound engine read. Cards
  *        40% median error vs 67% under the old est → engine → bid order,
  *        whose engine read ran 198% and whose raw bid ran 46% low.
@@ -38,6 +38,7 @@ import { taxonOf, type CatKey } from './taxonomy';
 import { parseCard, cardLadderKey } from './cards';
 import { trueSaleDay } from '../utils';
 import { closeMs, closeIsTimed } from './house-tz';
+import { closeKOf, closeKRoomOf } from './close-k';
 
 /** per-market Size scale, hammer USD: [Size 0, Size 1] on a log axis */
 const SCALE: Record<CatKey, [number, number]> = {
@@ -91,50 +92,21 @@ type ScoreLot = {
 };
 
 /**
- * THE BID ROOMS (Oct 9 anchor study). A live bid days out is a floor, not a
- * price: measured on 8,003 lots that sold after appearing in the served book
- * (Sep 20–Oct 8 snapshots) plus 75K Goldin bidHistory snapshots on sold corpus
- * lots, hammer ÷ live bid runs from ~1.1× (NFL, close night) to 12× (Goldin
- * Weekly, sub-$100 bid, 5 days out) — and falls as the bid grows ($100K+
- * Elite bids close at ~1.3–1.4×). Each room's median multiple, by days out
- * [<1, 1–3, 3–7, 7–14, 14+] × live bid [<$100, $100–1K, $1–10K, $10–100K,
- * $100K+], ≥25 sales per measured cell. Empty cells borrow Goldin Elite's
- * shape (the one room measured at every bid size and horizon): the nearest
- * measured bid band × Elite's ratio between the two bands, then the room's
- * last measured day × Elite's day ratio (REA is measured only on close night,
- * RR only inside 7 days, $100K+ bids almost only at Elite). Never below 1,
- * never shrinking with time to close.
+ * THE BID ROOMS (Oct 9 anchor study; refit nightly — app/lib/close-k.ts). A
+ * live bid days out is a floor, not a price: hammer ÷ live bid runs from
+ * ~1.1× (NFL, close night) to 12× (Goldin Weekly, sub-$100 bid, 5 days out)
+ * and falls as the bid grows ($100K+ Elite bids close at ~1.3–1.4×). The
+ * multiple by room × days out × bid size is close-k.ts closeKOf: the compiled
+ * Oct 9 table until the served close-k.json (refit every night from sold rows
+ * + bid snapshots) is installed by setCloseK.
  */
-const CLOSE_K: Record<string, number[][]> = {
-  'goldin-weekly': [[3.1, 2.05, 1.78, 1.29, 1.04], [5.2, 2.68, 2.02, 1.53, 1.24], [12.2, 4.17, 2.85, 2.02, 1.62], [37.5, 10.5, 4, 2.54, 1.88], [37.5, 10.5, 4, 2.54, 1.88]],
-  'goldin-weekly-tcg': [[2.4, 1.54, 1.61, 1.78, 1.43], [3.2, 1.91, 2.07, 1.92, 1.55], [8.12, 3.34, 3.45, 2.46, 1.98], [23.84, 10.43, 6.39, 4.05, 3], [23.84, 10.43, 7.7, 4.54, 3]],
-  'goldin-elite': [[1.89, 1.89, 2, 1.62, 1.3], [2.3, 2.3, 2.27, 1.73, 1.41], [2.57, 2.57, 2.61, 1.75, 1.41], [3.77, 3.77, 3.73, 2.36, 1.75], [3.77, 5.23, 5.09, 3, 1.75]],
-  'goldin-thematic': [[2.33, 2.33, 2.24, 1.85, 1.49], [3.1, 2.86, 2.62, 1.96, 1.59], [4.11, 3, 2.62, 1.96, 1.59], [4.11, 3.13, 2.73, 1.96, 1.59], [4.11, 4.34, 3.73, 2.2, 1.59]],
-  hakes: [[1.57, 1.62, 1.71, 1.38, 1.11], [1.83, 1.62, 1.71, 1.38, 1.11], [1.92, 1.69, 1.71, 1.38, 1.11], [3.25, 1.98, 1.96, 1.38, 1.11], [4, 1.98, 1.96, 1.38, 1.11]],
-  'memory-lane': [[1.21, 1.21, 1.33, 1.28, 1.02], [1.33, 1.33, 1.46, 1.34, 1.08], [1.61, 1.61, 1.77, 1.47, 1.18], [2.36, 2.36, 2.53, 1.98, 1.47], [2.36, 3.28, 3.46, 2.52, 1.47]],
-  nfl: [[1.08, 1.08, 1.14, 1, 1], [1.49, 1.19, 1.14, 1, 1], [2.13, 1.45, 1.14, 1, 1], [3.73, 1.64, 1.62, 1.03, 1], [3.73, 2.27, 2.21, 1.31, 1]],
-  rea: [[1.39, 1.32, 1.26, 1.02, 1], [1.68, 1.61, 1.43, 1.09, 1], [1.88, 1.8, 1.64, 1.1, 1], [2.75, 2.63, 2.35, 1.49, 1.1], [2.75, 3.66, 3.21, 1.89, 1.1]],
-  rr: [[1.27, 1.27, 1.34, 1.21, 1], [1.8, 1.8, 1.77, 1.21, 1], [2.21, 2.21, 2.25, 1.33, 1.07], [3.24, 3.24, 3.21, 1.8, 1.33], [3.24, 4.51, 4.38, 2.28, 1.33]],
-};
 /** bid rooms whose house estimate beat the bid projection, paired on the same
  *  lots (RR: estimate 21% median error vs 36%). Hake's estimates ran +42%
  *  high, so Hake's bids lead. */
 const EST_ROOMS: ReadonlySet<string> = new Set(['rr']);
 
 function roomOf(l: ScoreLot, cat: CatKey): string | null {
-  switch (l.auctionHouse) {
-    case 'Goldin': {
-      const s = l.saleName || '';
-      if (/weekly/i.test(s)) return cat === 'tcg' ? 'goldin-weekly-tcg' : 'goldin-weekly';
-      return /thematic/i.test(s) ? 'goldin-thematic' : 'goldin-elite';
-    }
-    case "Hake's": return 'hakes';
-    case 'Memory Lane': return 'memory-lane';
-    case 'NFL Auction': return 'nfl';
-    case 'REA': return 'rea';
-    case 'RR Auction': return 'rr';
-    default: return null;
-  }
+  return closeKRoomOf(l.auctionHouse, l.saleName, cat);
 }
 
 /** The live bid projected to its close: bid × the room's measured multiple for
@@ -146,9 +118,7 @@ function bidProjection(l: ScoreLot, cat: CatKey, nowMs: number): { a: number; ro
   const close = closeMsOf(l);
   if (!room || close == null || close <= nowMs) return null;
   const days = (close - nowMs) / 864e5;
-  const row = CLOSE_K[room][days < 1 ? 0 : days < 3 ? 1 : days < 7 ? 2 : days < 14 ? 3 : 4];
-  const k = row[bid < 100 ? 0 : bid < 1_000 ? 1 : bid < 10_000 ? 2 : bid < 100_000 ? 3 : 4];
-  return { a: bid * Math.max(1, k), room, days };
+  return { a: bid * closeKOf(room, days, bid), room, days };
 }
 
 function anchorOf(l: ScoreLot, nowMs: number): { a: number; src: AnchorSrc; over?: boolean } | null {
