@@ -86,12 +86,14 @@ test('kinds: the phase-1 row policy reproduces the old per-kind rules', () => {
   const pl2 = rowPolicy('pl:nobody-known');
   assert.deepEqual([pl2.page, pl2.dossierHref, pl2.follow], ['/sports?subj=p%3Anobody-known&tab=all', null, null]);
   const sj = rowPolicy('sj:tcg|k:charizard');
-  assert.deepEqual([sj.page, sj.follow, sj.compare], ['/tcg?subj=k%3Acharizard&tab=all', null, false]);
+  // (r7) a subject follows by its own entity id (app/lib/follows entityFollow)
+  assert.deepEqual([sj.page, sj.follow, sj.compare], ['/tcg?subj=k%3Acharizard&tab=all', 'sj:tcg|k:charizard', false]);
   const rest = rowPolicy(restId('sports'));
   assert.equal(rowKindOf(restId('sports')), 'rest');
   assert.equal(rest.page, '/sports?subj=%7E&tab=all');
   assert.equal(KIND.rest.compare, false);
-  assert.equal(followKeyOf('st:sports|s:x'), null);
+  assert.equal(followKeyOf('st:sports|s:x'), 'st:sports|s:x');
+  assert.equal(followKeyOf(restId('sports')), null);
   assert.equal(pageHrefOf('st:sports|s:1986-fleer-basketball'), '/sports?subj=s%3A1986-fleer-basketball&tab=all');
 });
 
