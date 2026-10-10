@@ -17,6 +17,7 @@ import { ARTIST_MARKET } from '../../app/constants';
 import { SUBJECT_DOMAINS } from './subject-domains';
 import { NON_SPORT_TCG_RE } from './classify';
 import { isCardLotTitle } from '../../app/lib/cards';
+import { leadYearOf } from '../../app/lib/lead-year';
 import { CRIME_EXTRA_RE, isCrimeTitle, HIST_MUSIC_RE, MERCURY_CAPSULE_RE, POKE_VINTAGE_SET_RE, isShowbizTitle, sportsMemSubOf } from '../../app/lib/taxonomy';
 
 type Lot = Record<string, unknown>;
@@ -522,8 +523,9 @@ function brandDefaultSport(title: string): string | null {
   if (!BRAND_BASEBALL_RE.test(title) || !/\bcards?\b|#|\bpsa\b|\bbgs\b|\bsgc\b|\bbox(?:es)?\b|\bpacks?\b|\brookie\b|\bauto(?:graph)?s?\b|\brefractor\b/i.test(title)) return null;
   // vintage Bowman (1948-55) printed baseball AND football / basketball
   const y4 = title.match(/\b(19[3-9]\d|20[0-3]\d)\b/);
-  const y2 = title.match(/^\s*(\d\d)\s/); // Goldin's two-digit years ("97 Bowman's Best …")
-  const yr = y4 ? +y4[1] : y2 ? (+y2[1] < 40 ? 2000 + +y2[1] : 1900 + +y2[1]) : null;
+  // Goldin's two-digit years ("97 Bowman's Best …") — the shared lead-year rule
+  const y2 = y4 ? null : leadYearOf(title.trim(), { yearLed: true });
+  const yr = y4 ? +y4[1] : y2 ? parseInt(y2.year, 10) : null;
   if (/\bbowman\b/i.test(title) && !/\btopps\b/i.test(title) && (yr == null || yr < 1989)) return null;
   return 'baseball';
 }

@@ -1,4 +1,5 @@
 import { medianOr } from './lib/stats';
+import { leadYearOf } from './lib/lead-year';
 
 // Neutral ivory ramp: houses are distinguished by LIGHTNESS, not hue — hue is
 // reserved for meaning (wine = emphasis, gold = site primary). Each step mixes
@@ -67,37 +68,27 @@ export function cleanText(raw?: string | null): string {
   t = t.replace(/&[a-z#0-9]+;/gi, m => ENTITY[m.toLowerCase()] ?? ' ');
   return t.replace(/\s+/g, ' ').trim();
 }
-/** card brands that only exist as a 19xx/20xx set word — "87 Fleer", "24 Topps Chrome", "24 FC Barcelona Topps…" */
-const LEAD_BRAND = /^(?:(?:FC|AC|AS|CF|SL) \S+ )?(?:Topps|Panini|Upper Deck|Bowman(?:'s)?|SkyBox|Skybox|Fleer|Donruss|Prizm|Select|Leaf|Hoops|Flair|National Treasures|Definitive|DAKA|Pok[eé]mon|O-Pee-Chee|Score|Stadium Club|Finest|SP|SPx|Mundicromo|Parkhurst|Star(?= #| Co\b| Court| Basketball| All-))\b/;
-/** pre-war catalog codes and sets — always 19xx: "11 T206", "16 M101-2", "10 E97 Briggs", "W514" */
-const LEAD_PREWAR = /^(?:T\d{1,3}|E\d{1,3}|M10\d|W5\d\d|P2|R3\d\d|N\d{2,3}|D\d{3}|White Border|Cracker Jack|Goudey|Diamond Stars|Play Ball)\b/;
-const LEAD_YY = /^(\d{2})(-\d{2})? (?=\S)/;
-/** 19th-century formats — "92 John H. Ryder Studio Cabinet Cy Young" is 1892, not 1992 */
-const C19_CUE = /\b(?:Cabinet|Old Judge|N\d{2,3}|CDV|Carte de Visite|Tintype|Daguerreotype|Allen & Ginter|Goodwin|Mayo|Kalamazoo)\b/;
 /**
  * expandLeadYear — Goldin leads a title with a 2-digit year ("94 Mario Lemieux
  * Game-Used…", "87 Fleer #57…", "08 Upper Deck…"); bare, it reads like a typo.
- * Widened to four digits only when the century is certain:
- *   · a pre-war catalog code follows ("11 T206" → 1911, "16 M101-2" → 1916);
- *   · a card brand follows (any house): 00–26 → 20xx, 27–99 → 19xx;
- *   · on Goldin, 27–99 before a capitalised word → 19xx ("94 Mario Lemieux"),
- *     unless a 19th-century format is named (cabinet cards, Old Judge, N-codes).
- * 00–26 before anything else ("26 Babe Ruth Sliding…" is 1926; "14 Fernando
- * Torres…" is 2014) stays as printed. Only the LEADING token is touched —
- * "Cards (24)", "#57", "09-11" mid-title never change; ranges keep their tail
- * ("09-11 T206" → "1909-11 T206").
+ * Widened to four digits only when the century is certain — by the ONE rule
+ * the card parser keys on (lib/lead-year.ts leadCentury, so a card is shown
+ * under the year it is keyed under): a pre-war catalog code ("11 T206" → 1911,
+ * "16 M101-2" → 1916), a card brand (00–26 → 20xx, 27–99 → 19xx), and on
+ * Goldin only, its year-led convention (27–99 before a capitalised word →
+ * 19xx; a 19th-century format named — "92 John H. Ryder Studio Cabinet" →
+ * 1892). 00–26 before anything else ("26 Babe Ruth Sliding…" is 1926; "14
+ * Fernando Torres…" is 2014) and a lot number ("29 Topps 1981 Cello…") stay
+ * as printed. Only the LEADING token is touched — "Cards (24)", "#57",
+ * "09-11" mid-title never change; ranges keep their tail ("09-11 T206" →
+ * "1909-11 T206").
  */
 export function expandLeadYear(t: string, house?: string | null): string {
-  const m = t.match(LEAD_YY);
+  const m = t.match(/^(\d{2})(?:-\d{2})? (?=\S)/);
   if (!m) return t;
-  const n = parseInt(m[1], 10);
-  const rest = t.slice(m[0].length);
-  let century: '19' | '20' | null = null;
-  if (LEAD_PREWAR.test(rest)) century = '19';
-  else if (LEAD_BRAND.test(rest)) century = n <= 26 ? '20' : '19';
-  else if (house === 'Goldin' && n > 26 && /^[A-Z]/.test(rest) && !C19_CUE.test(rest)) century = '19';
-  if (!century) return t;
-  return `${century}${m[1]}${m[2] ?? ''} ${rest}`;
+  const ly = leadYearOf(t, { yearLed: house === 'Goldin' });
+  if (!ly) return t;
+  return `${ly.year} ${t.slice(m[0].length)}`;
 }
 
 export function craftTitle(raw: string, house?: string | null): string {

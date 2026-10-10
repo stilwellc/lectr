@@ -94,7 +94,10 @@ test('lead year: Goldin 2-digit years widen only when the century is certain', (
   assert.equal(expandLeadYear('94 Mario Lemieux Game-Used Jersey'), '94 Mario Lemieux Game-Used Jersey');
   assert.equal(expandLeadYear('26 Babe Ruth Sliding Type I Original Photo', 'Goldin'), '26 Babe Ruth Sliding Type I Original Photo');
   assert.equal(expandLeadYear('14 Fernando Torres Match-Worn, Signed Chelsea Jersey', 'Goldin'), '14 Fernando Torres Match-Worn, Signed Chelsea Jersey');
-  assert.equal(expandLeadYear('92 John H. Ryder Studio Cabinet Cy Young Rookie Card', 'Goldin'), '92 John H. Ryder Studio Cabinet Cy Young Rookie Card');
+  // (Oct 9) a 19th-century format is now widened to 18xx — the card parser
+  // keys it 1892 (the shared lead-year rule), so the title shows 1892 too
+  // instead of the bare "92" that read as 1992
+  assert.equal(expandLeadYear('92 John H. Ryder Studio Cabinet Cy Young Rookie Card', 'Goldin'), '1892 John H. Ryder Studio Cabinet Cy Young Rookie Card');
   // never another number, never a non-year lead
   assert.equal(expandLeadYear('25 Cats Name(d) Sam and One Blue Pussy', "Christie's"), '25 Cats Name(d) Sam and One Blue Pussy');
   assert.equal(expandLeadYear('15-Year-Old Lewis Hamilton Race-Worn Fire Suit', 'Goldin'), '15-Year-Old Lewis Hamilton Race-Worn Fire Suit');

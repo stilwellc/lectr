@@ -7,6 +7,8 @@
 import { test } from 'node:test';
 import * as assert from 'assert';
 import { parseCard, playerOf, cardKey } from '../../app/lib/cards';
+import { leadCentury, leadYearOf } from '../../app/lib/lead-year';
+import { expandLeadYear } from '../../app/utils';
 
 test('a lot number before a 4-digit year is skipped, never read as a 2-digit year', () => {
   assert.equal(parseCard('77 1962 Topps #200 Mickey Mantle PSA 5').year, '1962');
@@ -59,4 +61,86 @@ test('structured NFL/MLB Auction slot: no "<Name> Signed", no national / MiLB te
 test('a sport word ends a leading name run (Oct 6 re-audit)', () => {
   assert.equal(parseCard('Wayne Gretzky Hockey Card').player, 'Wayne Gretzky');
   assert.equal(playerOf('MICKEY MANTLE BASEBALL', 'sports-memorabilia').player, 'MICKEY MANTLE');
+});
+
+/* (Oct 9 2026) the two-digit lead year: ONE rule (app/lib/lead-year.ts) for
+ * the parser AND the display. The old parser read every two-digit lead ≤ 40
+ * as 20xx — Goldin's "11 T206 …" (1911) keyed 2011, "13 M101-2" 2013,
+ * "09-11 T206" 2009-11, "21 W514" 2021, and a lot number "30 …" minted 2030. */
+const Y = (t: string) => parseCard(t).year;
+
+test('lead year: pre-war catalog codes are 19xx', () => {
+  assert.equal(Y('11 T206 White Border Christy Mathewson, Portrait - Sweet Caporal/350 - PSA GD 2'), '1911');
+  assert.equal(Y('13 M101-2 Sporting News Supplements Joe Jackson - PSA PR 1'), '1913');
+  assert.equal(Y('10 E97 Briggs Co. Lozenge Dennis Sullivan, Boston - SGC VG 3'), '1910');
+  assert.equal(Y('21 W514 #56 Rogers Hornsby, Hand Cut - SGC EX 5 - Pop 1'), '1921');
+  assert.equal(Y('15 W530 Pinkerton #159 Ty Cobb, Blank Back - PSA PR 1'), '1915');
+  assert.equal(Y('12 P2 Sweet Caporal Pins Ty Cobb, Small Letters - PSA MINT 9'), '1912');
+  assert.equal(Y('36 R327 National Chicle Diamond Stars 1935 #66 Joe Medwick Rookie Card - SGC NM 7'), '1936');
+  assert.equal(Y('11 White Border Ira Thomas Carolina Brights - PSA GD 2'), '1911');
+  // a re-used 1930s set name before 27 is a modern issue — not certain
+  assert.equal(leadCentury(8, 'Goudey #1 Ken Griffey Jr.'), null);
+  assert.equal(leadCentury(33, 'Goudey #53 Babe Ruth'), '19');
+  // the keyed card is the 1921 card — the same key as the 4-digit title
+  assert.equal(cardKey(parseCard('21 W514 #56 Rogers Hornsby - SGC EX 5')), cardKey(parseCard('1921 W514 #56 Rogers Hornsby - SGC EX 5')));
+});
+
+test('lead year: ranges keep their tail under the right century', () => {
+  assert.equal(Y('09-11 T206 Honus Wagner - PSA 1'), '1909-11');
+  assert.equal(Y('96-97 Fleer #1 Michael Jordan'), '1996-97');
+  assert.equal(Y('34-36 Diamond Stars #1 Lefty Grove'), '1934-36');
+});
+
+test('lead year: 19th-century formats are 18xx', () => {
+  assert.equal(Y('92 John H. Ryder Studio Cabinet Cy Young Rookie Card - PSA FR 1.5 (MK) - Pop 1'), '1892');
+  assert.equal(Y('87 N172 Old Judge Cap Anson - PSA 2'), '1887');
+  assert.equal(Y('88 Goodwin & Co. Champions Cap Anson - SGC 3'), '1888');
+  // a coach named Goodwin is not Goodwin & Co.
+  assert.equal(Y("97 Tiger Woods Stanford University Men's Golf Polo Shirt - Wally Goodwin (Coach) LOP"), '1997');
+});
+
+test('lead year: card brands — 00–26 are 20xx, 27–99 are 19xx', () => {
+  assert.equal(Y('24 Topps Chrome #1 Shohei Ohtani - PSA 10'), '2024');
+  assert.equal(Y("'24 Topps Chrome #1 Shohei Ohtani"), '2024');
+  assert.equal(Y('26 Topps 1980-81 Topps Rookie Autographs Gold Rainbow #80B2R-CF Cooper Flagg (#26/50)'), '2026');
+  assert.equal(Y('87 Fleer #57 Michael Jordan Rookie Card - PSA 8'), '1987');
+  assert.equal(Y('52 Parkhurst #66 Gordie Howe Rookie Card - PSA VG 3'), '1952');
+  assert.equal(Y('00 SkyBox Hoops Pure Players 100% #4 Grant Hill (#077/100) - BGS 9.5'), '2000');
+  assert.equal(Y('10 Press Pass Fusion #18 Stephen Curry Signed Rookie Card - PSA Authentic'), '2010');
+  assert.equal(Y('04 NBA Hoops Hot Prospects #112 LeBron James Rookie Card (#0990/1000) - PSA NM 7'), '2004');
+  assert.equal(Y('22 Contenders Lottery Ticket #14 Moses Moody Rookie Card - PSA NM-MT 8'), '2022');
+  assert.equal(Y('04 UD MVP #205 Dwyane Wade Rookie Card - PSA MINT 9'), '2004');
+  // 27+ before a capitalised word (Goldin's convention) — no card is from 2027+
+  assert.equal(Y('30 Rogers Peet #34 Ty Cobb - PSA EX-MT 6'), '1930');
+});
+
+test('lead year: an uncertain century or a lot number is no year — never guessed', () => {
+  // 00–26 before a name: "26 Babe Ruth…" is 1926, "14 Fernando Torres…" 2014
+  assert.equal(Y('26 Babe Ruth Sliding Type I Original Photo - PSA/DNA'), null);
+  assert.equal(Y('14 Fernando Torres Match-Worn, Signed Chelsea Jersey'), null);
+  assert.equal(cardKey(parseCard('17 Stephen Curry Practice-Worn, Signed Under Armour Curry 3 Low-Top Sneakers')), null);
+  // a lot number before a decade / year / box lot
+  assert.equal(Y('27 Circa 1870s Charles Gould CDV (SGC)'), null);
+  assert.equal(Y('30 Beautiful Early 1900s American Caramel Stock Certificate'), null);
+  assert.equal(Y('24 1880s Gilbert & Bacon Cabinet Harry Stovey - SGC VG 3'), null);
+  assert.equal(Y('29 Topps 1981 Cello, 1985 Cello and 1984 Rack Pack Baseball Card Boxes (3)'), null);
+  // dates and karats are not years
+  assert.equal(Y('10/26/84 Michael Jordan NBA Debut Ticket Stub PSA EX-MT 6'), null);
+  assert.equal(Y("18 karat white gold and diamond 'himalia' wristwatch, cartier"), null);
+  // and the title stays as written on display
+  assert.equal(expandLeadYear('26 Babe Ruth Sliding Type I Original Photo', 'Goldin'), '26 Babe Ruth Sliding Type I Original Photo');
+  assert.equal(expandLeadYear('29 Topps 1981 Cello Boxes (3)', 'Lelands'), '29 Topps 1981 Cello Boxes (3)');
+});
+
+test('lead year: the display widens to exactly the year the parser keys (Goldin)', () => {
+  const titles = [
+    '11 T206 White Border Ty Cobb, Bat on Shoulder - PSA 3', '09-11 T206 Honus Wagner', '13 M101-2 Sporting News Ty Cobb',
+    '92 John H. Ryder Studio Cabinet Cy Young Rookie Card', '87 Fleer #57 Michael Jordan', '24 Topps Chrome #1 Shohei Ohtani',
+    '94 Mario Lemieux Game-Used Jersey', '26 Babe Ruth Sliding Type I Original Photo', '30 Rogers Peet #34 Ty Cobb',
+  ];
+  for (const t of titles) {
+    const lead = expandLeadYear(t, 'Goldin').match(/^(\d{4}(?:-\d{2})?) /);
+    assert.equal(lead ? lead[1] : null, parseCard(t).year, t);
+    assert.equal(leadYearOf(t, { yearLed: true })?.year ?? null, parseCard(t).year, t);
+  }
 });
