@@ -39,7 +39,7 @@ import { subCatLabel } from '../../lib/subcat-labels';
 import MarketSwitch from '../../components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS, feedFromParams, feedToParams } from '../../components/FeedToolbar';
 import { useUrlState, useLastVisit, passesTriage } from '../../lib/feed-filters';
-import { byPriority, shortlist, reasonOf, forYou } from '../../lib/priority';
+import { byPriority, shortlist, reasonOf, forYou, spread } from '../../lib/priority';
 import { useFollows, affinityOf } from '../../lib/follows';
 import { Colophon, daysWord, pickCall } from '../../components/Terminal';
 import Flick from '../../components/Flick';
@@ -693,10 +693,12 @@ export default function TerminalHomePage() {
     const est = (l: typeof arr[number]) => l.estimateHigh || l.estimateLow || l.currentBid || 0;
     const past = (l: AuctionLot) => !!l.resultsPending && trueSaleDay(l) !== '' && trueSaleDay(l) < crawlDay;
     if (f.sort === 'priority') {
-      // "Matters most" (app/lib/priority): size, measured edge, evidence,
-      // closing time — results-pending lots still sink to the end
+      // "Matters most" (app/lib/priority): size on each market's own scale,
+      // measured edge, evidence, closing time — then re-dealt so no one sale
+      // or player runs >3 deep in any 12 (a 3,489-lot REA night can't wall
+      // the first screens). Results-pending lots still sink to the end.
       const now = Date.now();
-      const live = arr.filter(l => !past(l)).sort(byPriority(now));
+      const live = spread(arr.filter(l => !past(l)).sort(byPriority(now)));
       arr = [...live, ...arr.filter(past)];
     } else if (f.sort === 'est-desc') arr = [...arr].sort((a, b) => est(b) - est(a));
     else if (f.sort === 'est-asc') arr = [...arr].sort((a, b) => est(a) - est(b));

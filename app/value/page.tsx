@@ -55,7 +55,7 @@ import { medianOr } from '../lib/stats';
 import { gapRead, sleeperRead, type GapRead, type SleeperRead } from '../lib/lanes';
 import TriageBar from '../components/TriageBar';
 import { useUrlState, useLastVisit, passesTriage, TRIAGE_DEFAULTS, triageFromParams, triageToParams, type TriageFilters } from '../lib/feed-filters';
-import { byPriority } from '../lib/priority';
+import { byPriority, spread } from '../lib/priority';
 
 const ROWS_PAGE = 12;
 
@@ -932,7 +932,10 @@ export default function ValuePage() {
     const base = call ? dealsView.filter(d => d.lot.id !== call.lot.id) : dealsView;
     if (sortMode === 'priority') {
       const cmp = byPriority(Date.now());
-      return [...base].sort((a, b) => cmp(a.lot, b.lot));
+      const sorted = [...base].sort((a, b) => cmp(a.lot, b.lot));
+      // re-dealt like the home feed: ≤3 per sale or maker in any 12 rows
+      const byLot = new Map(sorted.map(d => [d.lot, d] as const));
+      return spread(sorted.map(d => d.lot)).map(l => byLot.get(l)!);
     }
     if (sortMode !== 'closing') return base;
     // hammer time: exact close first, day-only after, ties by odds order

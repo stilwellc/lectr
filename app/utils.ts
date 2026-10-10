@@ -430,7 +430,18 @@ export function makeAuctionIcs(lot: {
  *  and always wins. Every liveness comparison runs on this, never on the raw
  *  (possibly crawl-day) saleDate. */
 export function trueSaleDay(l: { saleDate?: string | null; saleDateTime?: string | null }): string {
-  return l.saleDateTime ? l.saleDateTime.slice(0, 10) : (l.saleDate || '').slice(0, 10);
+  const dt = l.saleDateTime;
+  // A zoned instant (Z / ±hh:mm) is a moment, not a calendar day: read it on
+  // the reader's calendar. Slicing the ISO took the UTC date, so every Goldin
+  // close (10pm ET = 02:00Z) landed on the NEXT day and "48 hours" showed 1
+  // lot out of 1,180 closing tomorrow night. Naive stamps stay as written.
+  if (dt && dt.length > 10 && /(?:Z|[+-]\d\d:?\d\d)$/.test(dt)) {
+    const d = new Date(dt);
+    if (!isNaN(d.getTime())) {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+  }
+  return dt ? dt.slice(0, 10) : (l.saleDate || '').slice(0, 10);
 }
 
 /** THE upcoming-visibility predicate — ONE definition of "live" for every

@@ -65,7 +65,7 @@ test('priority: urgency windows and closed lots', () => {
   assert.equal(urgencyOf(NOW + 100 * 3_600_000, NOW), 0.25);
   assert.equal(urgencyOf(NOW + 400 * 3_600_000, NOW), 0);
   assert.equal(urgencyOf(NOW - 3_600_000, NOW), 0);
-  const p = priorityOf({ artist: 'andy-warhol', estimateLow: 1_000_000, estimateHigh: 1_000_000, saleDateTime: inHours(3), value: { confidence: 'high' } }, NOW);
+  const p = priorityOf({ artist: 'andy-warhol', estimateLow: 20_000_000, estimateHigh: 20_000_000, saleDateTime: inHours(3), value: { confidence: 'high' } }, NOW);
   assert.equal(p?.score, 40 + 20 + 15);
 });
 
