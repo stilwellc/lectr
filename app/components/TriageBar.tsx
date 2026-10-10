@@ -21,10 +21,14 @@ type TriageLot = Parameters<typeof passesTriage>[0];
 const fmtFloor = (n: number) => (n >= 1000 ? `$${n / 1000}K+` : `$${n}+`);
 
 export default function TriageBar({
-  lots, filters, onChange, prevVisitDay = null, baselines = null, shown, total, showSubs = true, label = 'Narrow the board', cats: onlyCats,
+  lots, filters, countFilters, onChange, prevVisitDay = null, baselines = null, shown, total, showSubs = true, label = 'Narrow the board', cats: onlyCats,
 }: {
   lots: TriageLot[];
   filters: TriageFilters;
+  /** the filters the chip COUNTS read (default `filters`): a page that
+   *  defers its re-cut (useDeferredValue) passes the deferred copy, so a
+   *  click lights the chip at once and the ~10K-lot recount runs behind it */
+  countFilters?: TriageFilters;
   onChange: (next: TriageFilters) => void;
   prevVisitDay?: string | null;
   /** houses' onboarding days (feed-filters houseBaselines over the page's
@@ -41,6 +45,7 @@ export default function TriageBar({
   cats?: readonly CatKey[];
 }) {
   const set = (patch: Partial<TriageFilters>) => onChange(patchTriage(filters, patch));
+  const cf = countFilters ?? filters;
 
   // Chips adapt to the pool: a pool spanning 3+ clean categories (the total
   // market) gets CATEGORY chips; inside one or two (a single market — sports
@@ -50,8 +55,8 @@ export default function TriageBar({
     const byCat = new Map<CatKey, number>();
     // chips count the pool under every OTHER filter (window, house, value,
     // new) so a count always matches what tapping it shows
-    const pool = (filters.win || filters.house || filters.minUsd || filters.newOnly)
-      ? lots.filter(l => passesTriage(l, { ...filters, cat: null, sub: null, fx: [] }, { prevVisitDay, baselines }))
+    const pool = (cf.win || cf.house || cf.minUsd || cf.newOnly)
+      ? lots.filter(l => passesTriage(l, { ...cf, cat: null, sub: null, fx: [] }, { prevVisitDay, baselines }))
       : lots;
     for (const l of pool) {
       const t = taxonOf(l);
@@ -59,14 +64,14 @@ export default function TriageBar({
       byCat.set(t.cat, (byCat.get(t.cat) || 0) + 1);
     }
     // the picked chip never vanishes under another filter — it shows its 0
-    if (filters.cat && !byCat.has(filters.cat)) byCat.set(filters.cat, 0);
+    if (cf.cat && !byCat.has(cf.cat)) byCat.set(cf.cat, 0);
     // a market's strip (one or two categories): the shared sub builder —
     // the same chips, order and cuts as the home feed (taxonomy subChipsOf)
-    if (byCat.size <= 2) return { level: 'sub' as const, items: subChipsOf(pool, filters, onlyCats) };
+    if (byCat.size <= 2) return { level: 'sub' as const, items: subChipsOf(pool, cf, onlyCats) };
     const cats = Array.from(byCat.entries()).sort((a, b) => b[1] - a[1])
       .map(([cat, n]): SubChip => ({ key: `${cat}:`, cat, sub: null, label: CAT_LABEL[cat], n }));
-    return { level: 'cat' as const, items: cats, deeper: filters.cat ? subChipsOf(pool, filters, [filters.cat]) : [] };
-  }, [lots, filters, onlyCats, prevVisitDay, baselines]);
+    return { level: 'cat' as const, items: cats, deeper: cf.cat ? subChipsOf(pool, cf, [cf.cat]) : [] };
+  }, [lots, cf, onlyCats, prevVisitDay, baselines]);
   const houses = useMemo(() => {
     const c = new Map<string, number>();
     for (const l of lots) { const h = String((l as { auctionHouse?: string }).auctionHouse || ''); if (h) c.set(h, (c.get(h) || 0) + 1); }
@@ -79,11 +84,11 @@ export default function TriageBar({
   // in-category facets (Graded / Rookie / era, Film & TV / Music): counted over
   // the pool as every OTHER filter already narrows it
   const facets = useMemo(() => {
-    const fc = facetCatOf(filters.cat, lots, { cats: onlyCats, fx: filters.fx });
+    const fc = facetCatOf(cf.cat, lots, { cats: onlyCats, fx: cf.fx });
     if (!fc) return [];
-    const pool = lots.filter(l => passesTriage(l, { ...filters, fx: [] }, { prevVisitDay, baselines }));
-    return facetChips(fc, pool, filters.fx);
-  }, [lots, filters, onlyCats, prevVisitDay, baselines]);
+    const pool = lots.filter(l => passesTriage(l, { ...cf, fx: [] }, { prevVisitDay, baselines }));
+    return facetChips(fc, pool, cf.fx);
+  }, [lots, cf, onlyCats, prevVisitDay, baselines]);
   // a sub chip is active on its exact cat + sub; a category chip (the total
   // market's, or a guest category's in a market strip) while its cat is picked
   const subActive = (c: SubChip) => filters.cat === c.cat && (c.sub == null || filters.sub === c.sub);
