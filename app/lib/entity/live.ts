@@ -8,12 +8,11 @@
  * /player keep their maker-pool readers until Phase 4 mounts them on the
  * same model.
  *
- * THE KEY. A lot's entity id is its build-stamped `ek` (app/lib/entity/key.ts
- * entityKeyOf, run by the data build on every served lot). A book that
- * predates the stamp falls back to `entityIdOf` below — a thin adapter over
- * the SAME readers the roster used (maker slug; maker-subjects lotSubjectOf
- * for the collection markets; taxonomy for the unnamed), so a stamped and an
- * unstamped book bucket identically.
+ * THE KEY. A lot's entity id is its build-stamped `ek`; a book that predates
+ * the stamp falls back to calling app/lib/entity/key entityKeyOf — the very
+ * function the build stamps with, so a stamped and an unstamped book bucket
+ * identically. By category is the one cut that is NOT the entity: every lot
+ * (named or not) under its clean sub-category (taxonomy).
  *
  * STABLE IDENTITY. Each bucket keeps its previous array/entry object when a
  * re-cut leaves its lots unchanged, so a memoized row whose pool did not move
@@ -23,33 +22,23 @@ import { useMemo, useRef } from 'react';
 import { marketOf, ARTIST_MARKET, type Market } from '../../constants';
 import type { AuctionLot } from '../../types';
 import { lotSubjectOf, SUBJECT_MARKETS, type LotSubject } from '../maker-subjects';
+import { entityKeyOf } from './key';
 import { taxonOf } from '../taxonomy';
 import { livePool, sortByPriority } from '../maker-pool';
 import { passesTriage, isTriageActive, type TriageFilters, type HouseBaselines } from '../feed-filters';
 import { priorityOf } from '../priority';
 import { localToday } from '../../utils';
 import { isFlagged } from '../flags';
-import { makerId, playerId, setId, subjectId, subId } from './model';
+import { subId } from './model';
 import { restId } from './kinds';
 
-type KeyLot = AuctionLot & { ek?: string | null };
+type KeyLot = AuctionLot & { ek?: string | null; description?: string | null };
 
-/** the entity id of a lot when the book carries no `ek` stamp — the roster's
- *  own readers: a maker market lot → its maker; a collection lot → the
- *  subject maker-subjects reads (athlete → pl:, set → st:, any other subject
- *  → sj:), else its clean sub-category (cs:) */
-export function entityIdOf(l: KeyLot): string {
-  if (l.ek) return l.ek;
-  const m = marketOf(l.artist);
-  if (!SUBJECT_MARKETS.has(m)) return makerId(l.artist);
-  const s = lotSubjectOf(l);
-  if (!s) {
-    const t = taxonOf(l);
-    return subId(t.cat, t.sub);
-  }
-  if (m === 'sports' && s.key.startsWith('p:')) return playerId(s.key.slice(2));
-  if (s.key.startsWith('s:')) return setId(m, s.key);
-  return subjectId(m, s.key);
+/** a lot's entity id: the build's `ek` stamp, else app/lib/entity/key
+ *  entityKeyOf (the same function the build stamps with) — null = a
+ *  maker-market lot the attribution guard says is not by its maker */
+export function entityIdOf(l: KeyLot): string | null {
+  return l.ek !== undefined ? l.ek : entityKeyOf(l);
 }
 
 /** the By-category bucket (a clean sub-category) every lot also has */
@@ -87,11 +76,13 @@ function entryOf(lots: AuctionLot[]): LiveEntry {
   return { lots, flags, score: lots.length ? mattersOf(lots) : -1 };
 }
 
-/** maker buckets: every live lot under its roster slug (`mk:<artist>`) */
+/** maker buckets: every live lot whose entity is a maker (`mk:<artist>`;
+ *  the attribution guard has already dropped the lots not by their maker) */
 export function groupByMaker(pool: readonly AuctionLot[]): Map<string, LiveEntry> {
   const by = new Map<string, AuctionLot[]>();
   for (const l of pool) {
-    const k = makerId(l.artist);
+    const k = entityIdOf(l);
+    if (!k || !k.startsWith('mk:')) continue;
     const a = by.get(k); if (a) a.push(l); else by.set(k, [l]);
   }
   const out = new Map<string, LiveEntry>();
@@ -118,7 +109,9 @@ export function groupByName(pool: readonly AuctionLot[]): Map<string, NameEntry>
   for (const l of pool) {
     const market = marketOf(l.artist);
     if (!SUBJECT_MARKETS.has(market)) continue;
-    const k = nameBucketOf(entityIdOf(l), l);
+    const id = entityIdOf(l);
+    if (!id) continue;
+    const k = nameBucketOf(id, l);
     // the spelling + subject come from the reader — a stamped book only needs
     // them for the fail-soft summary (entities files carry the label)
     const s = k.startsWith('~:') ? null : lotSubjectOf(l);
@@ -209,7 +202,8 @@ export function useLivePool(allLots: readonly AuctionLot[], market: Market, tria
     ? (prev.current.name = stabilize(prev.current.name, pass === all ? new Map(namesAll) : groupByName(pass)))
     : EMPTY_MAP as Map<string, NameEntry>), [pass, all, names, namesAll]);
   const byCat = useMemo(() => (cats ? (prev.current.cat = stabilize(prev.current.cat, groupByCat(pass))) : EMPTY_MAP as Map<string, LiveEntry>), [pass, cats]);
-  const marketAll = useMemo(() => all.filter(l => (market === 'all' ? ARTIST_MARKET[l.artist] != null : ARTIST_MARKET[l.artist] === market)), [all, market]);
+  // a lot the attribution guard drops (no entity) is on no row — and in no "of N"
+  const marketAll = useMemo(() => all.filter(l => (market === 'all' ? ARTIST_MARKET[l.artist] != null : ARTIST_MARKET[l.artist] === market) && entityIdOf(l) != null), [all, market]);
   const marketPool = useMemo(() => (sport ? marketAll.filter(l => sportOk(l, sport)) : marketAll), [marketAll, sport]);
   return { all, pass, byMaker, byName, byCat, namesAll, marketAll, marketPool };
 }

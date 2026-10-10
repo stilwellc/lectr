@@ -29,6 +29,10 @@ import { useUrlState, useLastVisit, houseBaselines } from '../lib/feed-filters';
 import { useBackScroll } from '../lib/use-back-scroll';
 import { subjectLivePool } from '../lib/maker-pool';
 import { signedPct } from './SubMarketDirectory';
+import { playerRowTag, latestContiguousRun } from '../lib/player-rows';
+import { fetchLots } from '../lib/api';
+import { httpsImg, sizedImg } from '../utils';
+import PlateImg from './PlateImg';
 import '../northstar-pages.css';
 
 interface CatCell { n: number; medUsd: number; ttmMedUsd: number | null }
@@ -37,7 +41,8 @@ export interface PlayerEntry {
   cats: Record<string, CatCell>;
   yearly: { y: number; med: number; n: number }[];
   objects: { id: string; d: string; p: number; t: string; cat: string }[];
-  recent: { d: string; p: number; t: string; cat: string }[];
+  /** `id` from the Oct 10 build on (older players.json rows carry none) */
+  recent: { id?: string; d: string; p: number; t: string; cat: string }[];
 }
 
 const CAT_LABEL: Record<string, string> = {
@@ -92,11 +97,16 @@ function usePlayers(): { players: PlayerEntry[] | null; failed: boolean } {
 // mapped to a money HeroLine). A mix-affected median level, labeled as such —
 // not appreciation. Abstains under 3 qualifying years, as the old line did.
 function TrendLine({ yearly, name }: { yearly: PlayerEntry['yearly']; name: string }) {
+  // (Oct 10) the line is drawn over the latest run of CONSECUTIVE years
+  // only: the chart spaces points evenly, so Mantle's 2019 ($8,954, n=29)
+  // beside 2023 ($377) drew a smooth cliff across three years with no data.
+  // Earlier years sit in the note with their n — never bridged.
+  const { run, dropped } = useMemo(() => latestContiguousRun(yearly), [yearly]);
   const points = useMemo<HeroLine['points']>(
-    () => yearly.map(p => ({ period: String(p.y), value: p.med, n: p.n })),
-    [yearly],
+    () => run.map(p => ({ period: String(p.y), value: p.med, n: p.n })),
+    [run],
   );
-  if (yearly.length < 3) return null;
+  if (run.length < 3) return null;
   const anchor: HeroLine = {
     key: 'card-median',
     label: `${name} · yearly card median`,
@@ -109,7 +119,7 @@ function TrendLine({ yearly, name }: { yearly: PlayerEntry['yearly']; name: stri
       <div className="nsp-shead">
         <div>
           <span className="ns-kicker">The line</span>
-          <h2 className="nsp-h2">Yearly card median, {yearly[0].y}–{yearly[yearly.length - 1].y}</h2>
+          <h2 className="nsp-h2">Yearly card median, {run[0].y}–{run[run.length - 1].y}</h2>
         </div>
         <span className="nsp-shctx">card sales only · years with 5+ sales</span>
       </div>
@@ -118,9 +128,63 @@ function TrendLine({ yearly, name }: { yearly: PlayerEntry['yearly']; name: stri
       </div>
       <p className="nsp-note">
         The typical (median) price a {name} card fetched each year — a mix-affected level, not an appreciation rate.
+        {' '}{run.map(p => `${p.y}: ${p.n.toLocaleString()} sales`).join(' · ')}.
+        {dropped.length > 0 && (
+          <>
+            {' '}Earlier: {dropped.map(p => `${p.y} ${formatPrice(p.med)} (${p.n.toLocaleString()} sales)`).join(', ')} — not drawn; a gap in the
+            record separates {dropped.length === 1 ? 'it' : 'them'} from the line.
+          </>
+        )}
       </p>
     </section>
   );
+}
+
+/** One sale row, linked to its lot page when the row carries an id, with
+ *  the lot's thumbnail when the lot API returned one (letter tile otherwise —
+ *  the lot page's comps grammar). */
+function SaleRow({ row, img }: { row: { id?: string; d: string; p: number; t: string; cat: string }; img?: string | null }) {
+  const tag = playerRowTag(row.t, row.cat).label;
+  const title = (row.t || '').length >= 80 ? closeCut(row.t, 1) : row.t;
+  const body = (
+    <>
+      <span className="lectr-lot-comp-thumb" aria-hidden>
+        <span>{(title || '?').trim().charAt(0)}</span>
+        {img && <PlateImg src={sizedImg(httpsImg(img)!, 160)} alt="" loading="lazy" referrerPolicy="no-referrer" />}
+      </span>
+      <span className="lectr-lot-comp-t">
+        <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{title}</span>
+        <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
+          {tag} · {formatDate(row.d, { month: 'short', year: 'numeric' })}
+        </span>
+      </span>
+      <span className="lectr-lot-comp-p">{formatPrice(row.p)}</span>
+    </>
+  );
+  return row.id
+    ? <Link href={`/lot?id=${encodeURIComponent(row.id)}`} className="lectr-lot-comp">{body}</Link>
+    : <span className="lectr-lot-comp" style={{ cursor: 'default' }}>{body}</span>;
+}
+
+/** thumbnails for the dossier's sale rows — one batched lot-API read; a
+ *  missing API (local dev, an old deploy) simply leaves the letter tiles */
+function useRowImages(ids: string[]): Record<string, string | null> {
+  const key = ids.join(',');
+  const [imgs, setImgs] = useState<Record<string, string | null>>({});
+  useEffect(() => {
+    if (!key) return;
+    let dead = false;
+    fetchLots(key.split(','))
+      .then(m => {
+        if (dead) return;
+        const out: Record<string, string | null> = {};
+        m.forEach((l, id) => { out[id] = l.imageUrl || null; });
+        setImgs(out);
+      })
+      .catch(() => { /* letter tiles stand */ });
+    return () => { dead = true; };
+  }, [key]);
+  return imgs;
 }
 
 export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
@@ -156,6 +220,16 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
   const scope = useMemo(() => ({ subj: `p:${playerSlug}`, named: true }), [playerSlug]);
   const toggleSave = useCallback((id: string, lot?: AuctionLot) => { toggle(id, lot); }, [toggle]);
   useBackScroll(!!entry && live.length > 0);
+
+  // (Oct 10) "Top object results" holds objects only: players.json filed
+  // graded cards and card-shaped autographs there (Mantle: five slabs of six)
+  // — a row is a card by its TITLE (app/lib/player-rows), not its house desk
+  const objects = useMemo(() => (entry?.objects || []).filter(o => !playerRowTag(o.t, o.cat).card), [entry]);
+  const rowIds = useMemo(
+    () => [...objects.map(o => o.id), ...(entry?.recent || []).map(r => r.id || '')].filter(Boolean),
+    [objects, entry],
+  );
+  const rowImgs = useRowImages(rowIds);
 
   const nav = <ArtistNav activeSlug="" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />;
 
@@ -209,7 +283,8 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
           The whole market for one athlete — cards, game-worn and the physical record read together across every
           sale lectr has catalogued{(() => {
             // one span from every row the page prints (card years + recent rows)
-            const ys = [...entry.yearly.map(y => y.y), ...entry.recent.map(r => +String(r.d || '').slice(0, 4)).filter(y => y > 1900)];
+            // (Oct 10) the object rows count too — Mantle's dek said 2019–2026 over a 2017 row
+            const ys = [...entry.yearly.map(y => y.y), ...[...entry.recent, ...objects].map(r => +String(r.d || '').slice(0, 4)).filter(y => y > 1900)];
             if (!ys.length) return '';
             const lo = Math.min(...ys), hi = Math.max(...ys);
             return lo === hi ? `, ${lo}` : `, ${lo}–${hi}`;
@@ -330,27 +405,17 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
 
         <TrendLine yearly={entry.yearly} name={name} />
 
-        {entry.objects.length > 0 && (
+        {objects.length > 0 && (
           <section className="nsp-section ns-plate" aria-label="Top object results">
             <div className="nsp-shead">
               <div>
                 <span className="ns-kicker">The physical market</span>
                 <h2 className="nsp-h2">Top object results</h2>
               </div>
-              <span className="nsp-shctx">game-worn, trophies &amp; tickets</span>
+              <span className="nsp-shctx">game-worn, autographs, trophies &amp; tickets · cards excluded</span>
             </div>
             <div className="nsp-rows">
-              {entry.objects.map((o, i) => (
-                <span key={i} className="lectr-lot-comp" style={{ cursor: 'default' }}>
-                  <span className="lectr-lot-comp-t">
-                    <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{(o.t || '').length >= 80 ? closeCut(o.t, 1) : o.t}</span>
-                    <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
-                      {CAT_LABEL[o.cat] || o.cat} · {formatDate(o.d, { month: 'short', year: 'numeric' })}
-                    </span>
-                  </span>
-                  <span className="lectr-lot-comp-p">{formatPrice(o.p)}</span>
-                </span>
-              ))}
+              {objects.map(o => <SaleRow key={o.id} row={o} img={rowImgs[o.id]} />)}
             </div>
           </section>
         )}
@@ -364,17 +429,7 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
             <span className="nsp-shctx">realized, buyer&rsquo;s premium included</span>
           </div>
           <div className="nsp-rows">
-            {entry.recent.map((s, i) => (
-              <span key={i} className="lectr-lot-comp" style={{ cursor: 'default' }}>
-                <span className="lectr-lot-comp-t">
-                  <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{(s.t || '').length >= 80 ? closeCut(s.t, 1) : s.t}</span>
-                  <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
-                    {CAT_LABEL[s.cat] || s.cat} · {formatDate(s.d, { month: 'short', year: 'numeric' })}
-                  </span>
-                </span>
-                <span className="lectr-lot-comp-p">{formatPrice(s.p)}</span>
-              </span>
-            ))}
+            {entry.recent.map((s, i) => <SaleRow key={s.id || i} row={s} img={s.id ? rowImgs[s.id] : null} />)}
           </div>
           <p className="nsp-note">
             Medians over every {name} sale lectr has catalogued — cards and the physical market read together.

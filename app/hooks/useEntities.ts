@@ -35,7 +35,14 @@ import {
 import type { NameEntry } from '../lib/entity/live';
 
 /** a summary + its detail when the source already holds it (the adapters do) */
-export interface EntityBundle { s: EntitySummary; detail: EntityDetail | null }
+export interface EntityBundle {
+  s: EntitySummary;
+  detail: EntityDetail | null;
+  /** an entities-file summary: the complete quarters its spark covers */
+  sparkQ?: string[] | null;
+  /** a By-name subject: its best live photo (the unfiltered live group's first) */
+  liveFace?: string | null;
+}
 
 /** a players.json dossier — the sold history an athlete row can honestly carry */
 export interface PlayerRec {
@@ -260,7 +267,7 @@ export interface Entities {
   source: 'entities' | 'adapter' | 'pending';
   /** roster makers (mk:), every market */
   makers: Map<string, EntityBundle>;
-  /** clean sub-categories (cs:) — empty until cat-stats lands (subsReady) */
+  /** By-category rows (cs: ids, cat-stats figures) — empty until cat-stats lands (subsReady) */
   subs: Map<string, EntityBundle>;
   /** By-name subjects (pl: / sj: / st: + each market's remainder row) */
   names: Map<string, EntityBundle>;
@@ -303,7 +310,8 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
       console.warn(`[entities] entities-${market}.json is crawl ${file.lastCrawl}, the book is ${lastCrawl}`);
     }
     const m = new Map<string, EntityBundle>();
-    for (const s of file.entities) m.set(s.id, { s, detail: null });
+    const sparkQ = file.sparkQ ?? null;
+    for (const s of file.entities) m.set(s.id, { s, detail: null, sparkQ });
     return m;
   }, [file, lastCrawl, market]);
   const source: Entities['source'] = file === undefined ? 'pending' : file ? 'entities' : 'adapter';
@@ -329,29 +337,27 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
     return m;
   }, [statsByArtist, verifiedBySlug, pageStats, fileMap]);
 
-  // 2b. subs — cat-stats only when By category is (about to be) shown, or the
-  // entities file can't answer a per-sport row
-  const needCat = wantSubs && (source === 'adapter' || (source === 'entities' && !!sport));
-  const catStats = useLoad(needCat ? loadCatStats : null);
+  // 2b. subs — By category is the CATEGORY's figures (cat-stats: every lot
+  // in the sub, named or not). The entities file's cs: summaries are the
+  // unnamed remainder only (a named lot keys to its subject), so they never
+  // stand in for a category row.
+  const catStats = useLoad(wantSubs ? loadCatStats : null);
   const subs = useMemo(() => {
     const m = new Map<string, EntityBundle>();
-    if (!wantSubs) return m;
+    if (!wantSubs || !catStats) return m;
     for (const c of COLLECTION_CATS) {
       for (const sub of SUBS[c.cat]) {
         const id = subId(c.cat, sub.key);
         const key = `${c.cat}:${sub.key}`;
         const sportsCat = c.cat === 'sports-cards' || c.cat === 'sports-memorabilia';
-        const fromFile = !(sportsCat && sport) ? fileMap?.get(id) : undefined;
-        if (fromFile) { m.set(id, fromFile); continue; }
-        if (!catStats) continue;
         const st = catStats[sportsCat && sport ? `${key}:${sport}` : key] || null;
         const label = c.prefix && !(c.cat === 'tcg' && sub.key === 'other-tcg') ? `${c.prefix} · ${sub.label}` : sub.label;
         m.set(id, subBundle(c.cat, sub.key, label, c.market, st, sport));
       }
     }
     return m;
-  }, [wantSubs, catStats, sport, fileMap]);
-  const subsReady = !wantSubs || (source === 'entities' && !sport) || catStats !== undefined;
+  }, [wantSubs, catStats, sport]);
+  const subsReady = !wantSubs || catStats !== undefined;
 
   // 2c. names — athletes' sold history after first paint (players.json ~3MB)
   const [playersLoad, setPlayersLoad] = useState<(() => Promise<Map<string, PlayerRec> | null>) | null>(null);
@@ -367,7 +373,8 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
     if (!namesAll) return m;
     namesAll.forEach((g, id) => {
       const fromFile = fileMap?.get(id);
-      m.set(id, fromFile ?? nameBundle(id, g, players ?? null, dossiers));
+      const liveFace = g.lots.find(l => l.imageUrl)?.imageUrl || null;
+      m.set(id, fromFile ? { ...fromFile, liveFace } : { ...nameBundle(id, g, players ?? null, dossiers), liveFace });
     });
     return m;
   }, [namesAll, players, dossiers, fileMap]);
@@ -414,8 +421,8 @@ export function useEntity(id: string | null, enabled = true, known?: EntityBundl
         return {
           ...EMPTY_DETAIL,
           yearly: pr.yearly || [],
-          cats: Object.entries(pr.cats).map(([key, c]) => ({ key, label: ARTIST_LABEL[key] || key, n: c.n, med12m: c.ttmMedUsd, med12mN: null })),
-          top: pr.objects.map(o => ({ id: o.id, p: o.p, d: o.d, t: o.t, h: '', cat: o.cat })),
+          cats: Object.entries(pr.cats).map(([key, c]) => ({ key, label: ARTIST_LABEL[key] || key, n: c.n, med12m: c.ttmMedUsd, med12mN: 0 })),
+          top: pr.objects.map(o => ({ id: o.id, img: null, p: o.p, d: o.d, t: o.t, h: '', cat: o.cat })),
         };
       }
       return null;

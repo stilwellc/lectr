@@ -90,9 +90,18 @@ export default function RecordPlate({
   }, [rotates, reduce, deck.length]);
 
   const cur = deck[Math.min(idx, deck.length - 1)];
-  const showImg = !!cur.imageUrl && imgOk;
-  // holding the well's space for a photo that hasn't arrived yet
-  const holdImg = !showImg && imagePending && idx === 0;
+  // (Oct 10) NO BLANK BOXES: the framed well only draws once its photo has
+  // actually decoded. A stalled hotlink (Christie's CDN hangs rather than
+  // erroring) used to leave a 190px empty frame over the certificate on
+  // Warhol, Rolex and Pokémon; now the image loads in an invisible probe
+  // and the well appears only on a real load. `imagePending` (the old
+  // reserved-space hold) is accepted for API compatibility but no longer
+  // reserves an empty frame.
+  void imagePending;
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const hasImg = !!cur.imageUrl && imgOk;
+  const showImg = hasImg && loadedSrc === cur.imageUrl;
+  const holdImg = false;
   // the head re-numbers as the vitrine turns; single-sale keeps the given label
   const headLabel = rotates
     ? idx === 0
@@ -112,19 +121,28 @@ export default function RecordPlate({
           lands. Only the first card reserves; later vitrine cards turn after
           the corpus is in, so their images are already known. */}
       {holdImg && <span className="lectr-recplate-img lectr-recplate-img-hold" aria-hidden />}
-      {showImg && (
-        <span className="lectr-recplate-img" aria-hidden>
+      {hasImg && (
+        <span
+          className="lectr-recplate-img"
+          aria-hidden
+          // until it decodes, the photo waits in a 1px invisible probe — no frame drawn
+          style={showImg ? undefined : { position: 'absolute', width: 1, height: 1, opacity: 0, outline: 'none', background: 'none', pointerEvents: 'none' }}
+        >
           <img
             key={cur.imageUrl}
             src={sizedImg(httpsImg(cur.imageUrl!)!, PLATE_IMG_W)}
             alt=""
-            loading="lazy"
             decoding="async"
             referrerPolicy="no-referrer"
             onError={() => setImgOk(false)}
-            // cache hits never fire onError — complete with zero naturalWidth
-            // at attach is a cached failure
-            ref={el => { if (el && el.complete && el.naturalWidth === 0) setImgOk(false); }}
+            onLoad={e => { if (e.currentTarget.naturalWidth > 0) setLoadedSrc(cur.imageUrl!); else setImgOk(false); }}
+            // cache hits may have completed before React attached onLoad:
+            // complete + a real width is a load, zero width a cached failure
+            ref={el => {
+              if (!el || !el.complete) return;
+              if (el.naturalWidth === 0) setImgOk(false);
+              else if (loadedSrc !== cur.imageUrl) setLoadedSrc(cur.imageUrl!);
+            }}
           />
         </span>
       )}

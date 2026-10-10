@@ -33,7 +33,7 @@ import { useFollows, catFollow } from '../lib/follows';
 import { isFlagged } from '../lib/flags';
 import { makerId, makerSlugOf, subId, subPartsOf, type EntityDetail, type EntityRecord } from '../lib/entity/model';
 import {
-  BID_MARKETS, NAME_HEAD, COLLECTION_CATS, COLLECTION_MARKETS, SUBJECT_MARKETS, KIND, rowKindOf, type RowKind,
+  BID_MARKETS, NAME_HEAD, COLLECTION_CATS, COLLECTION_MARKETS, SUBJECT_MARKETS, rowKindOf, rowPolicy, type RowKind,
 } from '../lib/entity/kinds';
 import { useLivePool, type LiveEntry } from '../lib/entity/live';
 import { useEntities, useEntity, subBundle, completeQuarters, prefetchSubs, type EntityBundle } from '../hooks/useEntities';
@@ -179,7 +179,16 @@ const COL_NOTE: Record<ColKey, string> = {
 /** a detail's quarters in the chart's shape */
 type HistPoint = { date: string; medianPrice: number; avgPrice: number };
 const histOf = (d: EntityDetail | null): HistPoint[] =>
-  (d?.quarters || []).map(q => ({ date: q.q, medianPrice: q.med, avgPrice: q.med }));
+  (d?.quarters || []).map(q => ({ date: q.q, medianPrice: q.med ?? 0, avgPrice: q.med ?? 0 }));
+
+/** a compare pick's quarterly medians: its detail history, else (an
+ *  entities-file summary, no detail in hand) its spark on the file's quarters */
+function trendOf(r: Row): HistPoint[] {
+  if (r.detail?.quarters.length) return histOf(r.detail);
+  const sp = r.bundle.s.spark, q = r.bundle.sparkQ;
+  if (!sp || !q || q.length !== sp.length) return [];
+  return sp.map((v, i) => ({ date: q[i], medianPrice: v ?? 0, avgPrice: v ?? 0 }));
+}
 
 const fmtUsd = (n: number) =>
   n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B`
@@ -275,7 +284,7 @@ function CompareTray({ picked, onRemove, onClear }: {
   const liveTotal = picked.reduce((n, r) => n + r.live, 0);
   // shared date domain: the union of each pick's last-12q dates
   const series = picked.map(r => {
-    const pts = completeQuarters(histOf(r.detail)).slice(-12)
+    const pts = completeQuarters(trendOf(r)).slice(-12)
       .map(p => ({ d: String(p.date), v: p.medianPrice || p.avgPrice }))
       .filter(p => p.v > 0);
     const base = pts.length ? pts[0].v : 0;
@@ -759,24 +768,26 @@ function risingOf(meds: readonly number[]): number {
   return n;
 }
 
-/** one entity bundle + its live join → a ledger row */
-function buildRow(id: string, b: EntityBundle, live: LiveEntry | undefined, now = Date.now()): Row {
+/** one entity bundle + its live join → a ledger row. What the row links to
+ *  and offers is the KIND registry's Phase-1 policy (rowPolicy), never the
+ *  summary's caps (those ship with the Phase-2 ledger). */
+function buildRow(id: string, b: EntityBundle, live: LiveEntry | undefined, dossiers: ReadonlySet<string>, now = Date.now()): Row {
   const s = b.s;
   const kind: RowKind = rowKindOf(id) ?? s.kind;
-  const spec = KIND[kind];
   const lots = live?.lots ?? EMPTY_LOTS;
   const spark = s.spark ? s.spark.filter((v): v is number => v != null && v > 0) : null;
   // momentum over the full complete-quarter history when the source holds it
   const meds = b.detail?.quarters.length
-    ? completeQuarters(b.detail.quarters.map(q => ({ date: q.q, med: q.med })), now).map(q => q.med).filter(v => v > 0)
+    ? completeQuarters(b.detail.quarters.map(q => ({ date: q.q, med: q.med ?? 0 })), now).map(q => q.med).filter(v => v > 0)
     : (spark ?? []);
   const recDate = s.record?.d ? Date.parse(s.record.d) : NaN;
-  const maker = kind === 'maker';
+  const pol = rowPolicy(id, { playerDossier: kind === 'player' && dossiers.has(id.slice(3)) });
   return {
     id, kind, label: s.label, market: s.market,
     discipline: s.discipline,
-    // a maker's face ships precomputed (page-stats); a sub row shows its best live lot
-    hero: maker ? s.face : (s.face ?? lots.find(l => l.imageUrl)?.imageUrl ?? null),
+    // a maker's face is its flagship (page-stats / the build's face rule);
+    // a subject or sub row shows its best live lot
+    hero: kind === 'maker' ? s.face : (b.liveFace ?? lots.find(l => l.imageUrl)?.imageUrl ?? s.face ?? null),
     spark: spark && spark.length >= 4 ? spark : null,
     live: lots.length,
     flags: live?.flags ?? 0,
@@ -793,12 +804,12 @@ function buildRow(id: string, b: EntityBundle, live: LiveEntry | undefined, now 
     recordFresh: !isNaN(recDate) && now - recDate < 365 * 86400e3 ? s.record!.d.slice(0, 4) : null,
     liveLots: lots,
     topScore: live?.score ?? -1,
-    page: s.page ?? (maker ? `/makers/${makerSlugOf(id)}` : '/'),
-    lands: !maker && !!s.page,
-    dossierHref: s.caps.dossier && kind === 'player' ? s.page : null,
-    followKey: s.caps.follow,
-    canCompare: spec.compare,
-    inline: spec.inline,
+    page: pol.page,
+    lands: pol.lands,
+    dossierHref: pol.dossierHref,
+    followKey: pol.follow,
+    canCompare: pol.compare,
+    inline: pol.inline,
     detail: b.detail,
     bundle: b,
   };
@@ -807,15 +818,15 @@ const EMPTY_LOTS: AuctionLot[] = [];
 
 /** rows keep their identity while their bundle and live entry do — the
  *  React.memo on MakerRowItem then holds across a filter re-cut */
-function useRowCache() {
-  const cache = useRef(new Map<string, { b: EntityBundle; live: LiveEntry | undefined; row: Row }>());
+function useRowCache(dossiers: ReadonlySet<string>) {
+  const cache = useRef(new Map<string, { b: EntityBundle; live: LiveEntry | undefined; d: ReadonlySet<string>; row: Row }>());
   return useCallback((id: string, b: EntityBundle, live: LiveEntry | undefined): Row => {
     const hit = cache.current.get(id);
-    if (hit && hit.b === b && hit.live === live) return hit.row;
-    const row = buildRow(id, b, live);
-    cache.current.set(id, { b, live, row });
+    if (hit && hit.b === b && hit.live === live && hit.d === dossiers) return hit.row;
+    const row = buildRow(id, b, live, dossiers);
+    cache.current.set(id, { b, live, d: dossiers, row });
     return row;
-  }, []);
+  }, [dossiers]);
 }
 
 export default function MakersPage() {
@@ -902,7 +913,7 @@ export default function MakersPage() {
   const marketLive = pool.marketPool;
 
   // ── THE ROWS — one row-model path for every kind ──
-  const rowOf = useRowCache();
+  const rowOf = useRowCache(entities.dossiers);
   const makerRows = useMemo<Row[]>(() => ARTISTS.map(a => {
     const id = makerId(a.slug);
     return rowOf(id, entities.makers.get(id)!, pool.byMaker.get(id));

@@ -7,51 +7,14 @@
  * kind is called, what its column head says, whether it can be compared or
  * followed, how its dossier prints, and where its page is.
  */
-import { ARTIST_LABEL, type Market } from '../../constants';
+import { ARTIST_LABEL, MAKER_DISCIPLINE, type Market } from '../../constants';
 import type { CatKey } from '../taxonomy';
 import { SUBJECT_MARKETS, subjectFeedHref } from '../maker-subjects';
 import { kindOfId, makerSlugOf, subPartsOf, subjectPartsOf, type EntityKind } from './model';
 
-/* ── the curated disciplines (a roster maker's tag) ── */
-export const DISCIPLINE: Record<string, string> = {
-  'george-condo': 'Contemporary painting',
-  'futura-2000': 'Street art',
-  'kaws': 'Street & pop',
-  'andy-warhol': 'Pop art',
-  'tom-sachs': 'Sculpture & bricolage',
-  'barry-mcgee': 'Street art',
-  'keith-haring': 'Pop & street',
-  'peter-saul': 'Pop surrealism',
-  'ed-ruscha': 'Pop & conceptual',
-  'r-crumb': 'Underground comix',
-  'raymond-pettibon': 'Drawing',
-  'henri-matisse': 'Modern master',
-  'pablo-picasso': 'Modern master',
-  'fab-5-freddy': 'Street art',
-  'francesco-clemente': 'Neo-expressionism',
-  'eddie-martinez': 'Contemporary painting',
-  'kenny-scharf': 'Street & pop',
-  'jean-michel-basquiat': 'Neo-expressionism',
-  'roy-lichtenstein': 'Pop art',
-  'francis-bacon': 'Figurative master',
-  'alexander-calder': 'Sculpture & mobiles',
-  'rashid-johnson': 'Contemporary',
-  'jeff-koons': 'Sculpture & editions',
-  'george-nakashima': 'Studio furniture',
-  'charles-eames': 'Mid-century modern',
-  'jean-prouve': 'Modernist metalwork',
-  'pierre-jeanneret': 'Chandigarh modernism',
-  'rolex': 'Watchmaker',
-  'patek-philippe': 'Watchmaker',
-  'audemars-piguet': 'Watchmaker',
-  'omega': 'Watchmaker',
-  'cartier': 'Watchmaker & jeweler',
-  'meteorites': 'Natural history',
-  'fossils': 'Natural history',
-  'space-exploration': 'Space history',
-  'scientific-instruments': 'Instruments',
-  'science-tech': 'Technology',
-};
+/* ── the curated disciplines (a roster maker's tag) — one copy, shared with
+   the build (scripts/emit-entities) ── */
+export const DISCIPLINE: Record<string, string> = MAKER_DISCIPLINE;
 
 /** markets where a maker row is a bid market (the row's "bid market" tag).
  *  NOTE: the maker page (app/makers/[slug]) still passes `bidMarket` for
@@ -146,6 +109,38 @@ export function pageHrefOf(id: string, opts: { playerDossier?: boolean } = {}): 
   }
   // the remainder row: its market's feed scoped to the lots no reader names
   return subjectFeedHref(id.slice(2) as Market, '~');
+}
+
+/**
+ * THE PHASE-1 ROW POLICY — what a ledger row links to and offers, decided by
+ * kind (this registry), never by a summary's caps: the entities file's caps
+ * (compare on any entity with a spark, follow on every athlete, the
+ * /entity?id= page) arrive with the Phase-2 ledger, behind the owner's
+ * before/after review. Until then a row behaves exactly as it did.
+ */
+export interface RowPolicy {
+  /** where "Open the dossier" / "+N more" lead */
+  page: string;
+  /** a non-maker row lands on a list ("See every lot"); a maker opens its page */
+  lands: boolean;
+  /** the athlete's /player dossier (only where page-stats lists one) */
+  dossierHref: string | null;
+  follow: string | null;
+  compare: boolean;
+  inline: boolean;
+}
+export function rowPolicy(id: string, opts: { playerDossier?: boolean } = {}): RowPolicy {
+  const kind = rowKindOf(id) ?? 'subject';
+  const spec = KIND[kind];
+  const page = pageHrefOf(id, opts);
+  return {
+    page,
+    lands: kind !== 'maker',
+    dossierHref: kind === 'player' && opts.playerDossier ? page : null,
+    follow: followKeyOf(id, opts),
+    compare: spec.compare,
+    inline: spec.inline,
+  };
 }
 
 /** a roster maker's display label */

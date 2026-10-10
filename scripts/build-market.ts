@@ -15,13 +15,14 @@ import * as fs from 'fs';
 import { hasConditionFlag } from '../app/lib/condition';
 import * as path from 'path';
 import type { AuctionLot } from '../app/types';
-import { ARTISTS } from '../app/constants';
+import { ARTISTS, ARTIST_LABEL } from '../app/constants';
 import { buildIdf, buildVectors } from '../app/lib/similarity';
 import { groupRepeatSales, repeatSaleEligible, withVectors } from './lib/repeat-sale';
 import { buildMakerIndicesParallel } from './lib/maker-pool';
 import { buildCompCandidateIndex, compCandidates, type CompCandidateIndex, resolveComps, estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, noEstGateOf, buyerFields, vsBidRead, floorAtBid, pullTowardBid, isNewReleaseCard, vsBidLive, VSBID_WINDOW_DAYS, quantile, knownKey, ENGINE_VERSION, ENGINE_FLAGS_CANDIDATE, CARD_THIN, type ValueResult, type AbstainReason } from '../app/lib/value';
 import { fitCardCalibration, cardGate, CARD_GATE, CARD_BAND_WIDE_Q, type CardResidual, type CardCalibration } from '../app/lib/cards-gate';
 import { inferHammerUsd } from '../app/lib/premiums';
+import { playerRowTag } from '../app/lib/player-rows';
 import { pokemonKey } from './sub-markets';
 import { mergeCardExtract, pokemonKeyFromExtract, llmConditionFlag, sameObjectFilter, flushExtractQueue } from './lib/extract/apply';
 import { buildMarketSeries, buildTimeIndex, buildHouseBias, type MarketSeries } from '../app/lib/indices';
@@ -33,6 +34,8 @@ import { buildHedonicIndex, buildComposite, type HedonicResult, type MakerIndexR
 import { buildSubMarkets, buildDrillRows, buildVerticalRepeatSale } from './sub-markets';
 import { fitGradeLadder } from './lib/grade-ladder';
 import { markPhase } from './lib/mem-trace';
+import { servedLastCrawl } from './lib/served-stamp';
+import { taxonOf } from '../app/lib/taxonomy';
 import { sportOf, overEstimatePct } from '../app/utils';
 import type { MarketAnalytics } from '../app/types';
 
@@ -781,7 +784,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   refsOut.sort((a, b) => (b.n as number) - (a.n as number));
   if (!opts.evalOnly) {
     fs.mkdirSync(SERVED, { recursive: true });
-    fs.writeFileSync(path.join(SERVED, 'refs.json'), JSON.stringify({ generatedAt: new Date().toISOString().slice(0, 10), refs: refsOut }));
+    fs.writeFileSync(path.join(SERVED, 'refs.json'), JSON.stringify({ generatedAt: new Date().toISOString().slice(0, 10), lastCrawl: servedLastCrawl(SERVED), refs: refsOut }));
     console.log(`[market] refs.json: ${refsOut.length} references (${(fs.statSync(path.join(SERVED, 'refs.json')).size / 1024).toFixed(0)}KB) · ${((Date.now() - tRef) / 1000).toFixed(0)}s`);
   }
 
@@ -919,39 +922,51 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     for (const [slug, { name, lots: ls }] of Array.from(byPlayer.entries())) {
       if (ls.length < 25) continue;
       ls.sort((a, b) => (a.saleDate! < b.saleDate! ? -1 : 1));
-      const cats: Record<string, { n: number; medUsd: number; ttmMedUsd: number | null }> = {};
+      // (Oct 10) EVERY slug the player's sales sit under — the old five-slug
+      // list left graded cards, autographs and memorabilia counted in `n` but
+      // in no category (Mantle: 6,560 sold, cats summing 3,954). Each row
+      // names its scope (`label`), so a median never prints unlabeled.
+      const cats: Record<string, { n: number; medUsd: number; ttmMedUsd: number | null; label: string }> = {};
       const cut = Date.now() - 365 * 864e5;
-      for (const cat of ['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia']) {
+      const slugsOf = Array.from(new Set(ls.map(l => l.artist)));
+      for (const cat of slugsOf) {
         const cl = ls.filter(l => l.artist === cat);
-        if (!cl.length) continue;
         const ttm = cl.filter(l => (l as AuctionLot & { _saleMs?: number })._saleMs! > cut).map(l => l.realizedUsd!);
         cats[cat] = {
           n: cl.length,
           medUsd: Math.round(median(cl.map(l => l.realizedUsd!))),
           ttmMedUsd: ttm.length >= 5 ? Math.round(median(ttm)) : null,
+          label: ARTIST_LABEL[cat] || cat,
         };
       }
       // yearly card trend (cards are the dense series; objects ride `recent`)
-      const cardLots = ls.filter(l => l.artist === 'sports-cards');
+      const cardLots = ls.filter(l => CARD_SLUGS.has(l.artist));
       const byYear = new Map<number, number[]>();
       for (const l of cardLots) { const y = +l.saleDate!.slice(0, 4); (byYear.get(y) || byYear.set(y, []).get(y)!).push(l.realizedUsd!); }
       const yearly = Array.from(byYear.entries()).filter(([, v]) => v.length >= 5).sort((a, b) => a[0] - b[0])
         .map(([y, v]) => ({ y, med: Math.round(median(v)), n: v.length }));
-      // the marquee object results (top game-used/trophy hammers — the wider market)
-      const objects = ls.filter(l => l.artist !== 'sports-cards')
+      // the marquee object results (top game-used/trophy/ticket hammers — the
+      // wider market). Oct 10: never a card — by TITLE (app/lib/player-rows:
+      // card-shaped "autographs"/graded rows) or by clean category — and every
+      // row carries its id so the dossier can link it to its lot page.
+      const objects = ls.filter(l => !playerRowTag(l.title, l.artist).card
+        && taxonOf(l as unknown as Parameters<typeof taxonOf>[0]).cat !== 'sports-cards')
         .sort((a, b) => (b.realizedUsd! - a.realizedUsd!)).slice(0, 6)
         .map(l => ({ id: l.id, d: l.saleDate, p: Math.round(l.realizedUsd!), t: (l.title || '').slice(0, 80), cat: l.artist }));
       const recent = ls.slice(-8).reverse()
-        .map(l => ({ d: l.saleDate, p: Math.round(l.realizedUsd!), t: (l.title || '').slice(0, 80), cat: l.artist }));
+        .map(l => ({ id: l.id, d: l.saleDate, p: Math.round(l.realizedUsd!), t: (l.title || '').slice(0, 80), cat: l.artist }));
       // sport: majority vote over the lots' stamped sport field
       const sportVotes = new Map<string, number>();
       for (const l of ls) { const s = (l as AuctionLot & { sport?: string | null }).sport; if (s) sportVotes.set(s, (sportVotes.get(s) || 0) + 1); }
       const sport = Array.from(sportVotes.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
-      playersOut.push({ slug, name, sport, n: ls.length, cats, yearly, objects, recent });
+      // the record across EVERY category (a card included), with its scope
+      const recLot = ls.reduce<PLot | null>((b, l) => (!b || l.realizedUsd! > b.realizedUsd! ? l : b), null);
+      const record = recLot ? { id: recLot.id, d: recLot.saleDate, p: Math.round(recLot.realizedUsd!), t: (recLot.title || '').slice(0, 80), cat: recLot.artist, img: recLot.imageUrl || null } : null;
+      playersOut.push({ slug, name, sport, n: ls.length, cats, yearly, objects, record, recent });
     }
     playersOut.sort((a, b) => (b.n as number) - (a.n as number));
     if (!opts.evalOnly) {
-      fs.writeFileSync(path.join(SERVED, 'players.json'), JSON.stringify({ generatedAt: new Date().toISOString().slice(0, 10), players: playersOut }));
+      fs.writeFileSync(path.join(SERVED, 'players.json'), JSON.stringify({ generatedAt: new Date().toISOString().slice(0, 10), lastCrawl: servedLastCrawl(SERVED), players: playersOut }));
       console.log(`[market] players.json: ${playersOut.length} players (${(fs.statSync(path.join(SERVED, 'players.json')).size / 1048576).toFixed(1)}MB)`);
     }
 
@@ -1484,7 +1499,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
       for (const slug of STATS_SLUGS) {
         const slugLots = lotsForSlug(slug);
         if (!slugLots.length) continue;
-        stats[slug] = computeStats(slugLots, stats[slug] || null);
+        stats[slug] = { ...computeStats(slugLots, stats[slug] || null), crawl: servedLastCrawl(SERVED) };
         console.log(`[market] stats.json: ${slug} row (${slugLots.length} lots, record $${(stats[slug].recordPrice || 0).toLocaleString()})`);
       }
       fs.writeFileSync(statsPath, JSON.stringify(stats, null, 2));
@@ -1631,6 +1646,8 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
       '| grid by bid band', JSON.stringify(closeCurve.grid));
   }
 
+  // the coherence stamp (scripts/lib/served-stamp)
+  (market as unknown as Record<string, unknown>).lastCrawl = servedLastCrawl(SERVED);
   fs.writeFileSync(path.join(SERVED, 'market.json'), JSON.stringify(market));
   // persist same-object pairs queued for the next extraction run (no-op when off)
   flushExtractQueue();

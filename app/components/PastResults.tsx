@@ -8,6 +8,7 @@ import { marketOf } from '../constants';
 import { houseColors, formatDate, formatPrice, categoryLabels, categoryColors, craftTitle, overEstimatePct } from '../utils';
 import { cleanGoldinTitle } from '../lib/comps';
 import { makerLineOf, subColumnOf } from '../lib/lot-labels';
+import { subChipsOf, taxonOf, type CatKey } from '../lib/taxonomy';
 import { safeHref } from '../lib/safe-href';
 import SectionMark from './SectionMark';
 
@@ -35,6 +36,11 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
   const [sortBy, setSortBy] = useState<SortMode>('date');
   const [internalFilter, setInternalFilter] = useState<CategoryFilter>('all');
   const [sportFilter, setSportFilter] = useState<string>('all');
+  // (Oct 10) the pills speak the live chips' taxonomy (app/lib/taxonomy
+  // subChipsOf — "Prints & Multiples", "Paintings & Works on Paper", "Autographs")
+  // unless a caller still drives the legacy medium enum from outside
+  const legacy = externalFilter !== undefined;
+  const [pick, setPick] = useState<{ cat: CatKey | null; sub: string | null }>({ cat: null, sub: null });
 
   const categoryFilter = externalFilter ?? internalFilter;
   const setCategoryFilter = (cat: CategoryFilter) => {
@@ -72,11 +78,18 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
       a[0] === 'Other' ? 1 : b[0] === 'Other' ? -1 : b[1] - a[1]);
   }, [lots]);
 
+  const chips = useMemo(() => (legacy ? [] : subChipsOf(lots, pick)), [lots, pick, legacy]);
+  const pickLabel = pick.cat ? chips.find(c => c.cat === pick.cat && c.sub === pick.sub)?.label ?? null : null;
+
   const filtered = useMemo(() => {
-    let out = categoryFilter === 'all' ? lots : lots.filter(l => l.category === categoryFilter);
+    let out = legacy
+      ? (categoryFilter === 'all' ? lots : lots.filter(l => l.category === categoryFilter))
+      : !pick.cat
+        ? lots
+        : lots.filter(l => { const t = taxonOf(l); return t.cat === pick.cat && (pick.sub === null || t.sub === pick.sub); });
     if (sportGroups && sportFilter !== 'all') out = out.filter(l => (l.sport || 'Other') === sportFilter);
     return out;
-  }, [lots, categoryFilter, sportGroups, sportFilter]);
+  }, [lots, categoryFilter, sportGroups, sportFilter, legacy, pick]);
 
   const sorted = useMemo(() => {
     const copy = [...filtered];
@@ -84,23 +97,11 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
       copy.sort((a, b) => (b.priceUsd || 0) - (a.priceUsd || 0));
       return copy;
     }
-    // 'date' = most recent, but round-robin across houses so every house
-    // surfaces near the top instead of one high-volume house monopolizing
-    // the view (e.g. Bonhams burying Sotheby's / Christie's / Phillips).
-    copy.sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime());
-    const groups = new Map<string, typeof copy>();
-    for (const l of copy) {
-      const g = groups.get(l.auctionHouse) || [];
-      g.push(l);
-      groups.set(l.auctionHouse, g);
-    }
-    if (groups.size < 2) return copy;
-    const queues = Array.from(groups.values());
-    const woven: typeof copy = [];
-    for (let i = 0; woven.length < copy.length; i++) {
-      for (const q of queues) if (i < q.length) woven.push(q[i]);
-    }
-    return woven;
+    // 'date' = most recent first, strictly (Oct 10). The old round-robin
+    // across houses wove Oct 2026 → May 2026 → Jun 2024 → Oct 2026 under a
+    // "Date" pill — a sort that doesn't sort.
+    copy.sort((a, b) => (new Date(b.saleDate).getTime() || 0) - (new Date(a.saleDate).getTime() || 0));
+    return copy;
   }, [filtered, sortBy]);
 
   const shown = sorted.slice(0, visible);
@@ -211,8 +212,13 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
               Recent <span style={{ fontStyle: 'normal' }}>results</span>
             </h2>
             <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', fontWeight: 400, marginTop: 6 }}>
-              {filtered.length.toLocaleString()} results
-              {categoryFilter !== 'all' && ` · ${categoryLabels[categoryFilter]}`}
+              {/* the results list's own count — only when a pill narrows it
+                  (the page's one lots-tracked figure lives in the hero) */}
+              {legacy
+                ? <>{filtered.length.toLocaleString()} results{categoryFilter !== 'all' && ` · ${categoryLabels[categoryFilter]}`}</>
+                : pickLabel
+                  ? `${filtered.length.toLocaleString()} ${pickLabel}`
+                  : 'Most recent sales first'}
             </p>
             {sub && (
               <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', fontWeight: 400, margin: '8px 0 0', maxWidth: 560, lineHeight: 1.5 }}>
@@ -241,7 +247,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
           </div>
         </div>
 
-        {showToolbar && availableCategories.length > 1 && (
+        {showToolbar && legacy && availableCategories.length > 1 && (
           <div style={{ display: 'flex', gap: 6, marginTop: 14, flexWrap: 'wrap' }}>
             <button
               className="ray-sort-pill"
@@ -260,6 +266,31 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                 {categoryLabels[cat] || cat}
               </button>
             ))}
+          </div>
+        )}
+
+        {showToolbar && !legacy && chips.length > 0 && (
+          <div className="ray-sport-chips" style={{ display: 'flex', gap: 6, marginTop: 14, flexWrap: 'wrap' }}>
+            <button
+              className="ray-sort-pill"
+              data-active={!pick.cat ? 'true' : 'false'}
+              onClick={() => { setPick({ cat: null, sub: null }); setVisible(20); }}
+            >
+              All
+            </button>
+            {chips.map(c => {
+              const on = pick.cat === c.cat && pick.sub === c.sub;
+              return (
+                <button
+                  key={c.key}
+                  className="ray-sort-pill"
+                  data-active={on ? 'true' : 'false'}
+                  onClick={() => { setPick(on ? { cat: null, sub: null } : { cat: c.cat, sub: c.sub }); setVisible(20); }}
+                >
+                  {c.label} <i>{c.n.toLocaleString()}</i>
+                </button>
+              );
+            })}
           </div>
         )}
 

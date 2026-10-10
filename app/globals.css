@@ -2888,6 +2888,15 @@ html .lectr-recplate-k {
 @media (min-width: 900px) {
   .lectr-dossier-hero { grid-template-columns: minmax(0, 1fr) clamp(260px, 30vw, 360px); gap: clamp(28px, 4vw, 56px); }
 }
+/* maker page (Oct 10): the compact market switch opens the page on desktop;
+   ≤899px it folds to a 2×4 keypad that pushed the maker's name ~114px down,
+   so there the same switch sits below the live book instead */
+.mkr-switch-foot { display: none; }
+@media (max-width: 899px) {
+  /* the wrapper keeps its top padding — the name still gets its breath */
+  .mkr-switch-top > * { display: none; }
+  .mkr-switch-foot { display: block; }
+}
 
 /* M8 — THE RECORD PLATE: the record sale as a framed object. Certificate
    fallback first (engraved figure + date + house in the certificate voice);

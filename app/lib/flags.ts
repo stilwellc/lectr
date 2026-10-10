@@ -32,10 +32,11 @@ export function isFlagged(l: FlaggableLot): boolean {
   return !!l.value?.signal && l.value.signal.label === FLAG_VALUE;
 }
 
-/** the value engine appraised this lot (the denominator the maker page's
- *  "N of M appraised live lots" divides by) */
+/** the value engine CALLED this lot (the denominator the maker page's
+ *  "N of M appraised live lots" divides by) — an abstention (value read,
+ *  signal null) is not a call */
 export function isAppraised(l: FlaggableLot): boolean {
-  return !!l.value && l.value.signal !== undefined;
+  return !!l.value?.signal;
 }
 
 /** flagged lots in a pool */

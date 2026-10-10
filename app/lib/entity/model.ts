@@ -11,9 +11,9 @@
  * LIVE COUNTS ARE NOT IN THE SUMMARY. The client joins live lots to entities
  * by the lot's entity key (`ek`, stamped at build) — app/lib/entity/live.ts.
  *
- * ID GRAMMAR (one string, prefix = kind):
- *   mk:<artistSlug>              a roster maker (art / design / watches, and
- *                                the collection pseudo-makers' own slugs)
+ * ID GRAMMAR (one string, prefix = kind — app/lib/entity/key.ts entityKeyOf
+ * files every lot, parseEntityId reads an id):
+ *   mk:<artistSlug>              a roster maker (art / design / watches)
  *   pl:<playerSlug>              an athlete (sports)
  *   sj:<market>|<subjectKey>     a Pokémon / person / film / franchise /
  *                                mission / team / brand (maker-subjects keys)
@@ -75,22 +75,34 @@ export interface EntitySummary extends EntityRef {
   revenue?: number | null;
   /** when sold12m is NOT a true 365-day count: the start year of the span it covers */
   sold12mSince?: string | null;
+  /** (data) the clean `cat:sub` lens med12m / spark / yoy read — medScope is its label */
+  medLens?: string | null;
 }
+
+/** one result row (top / recent / a lens's top) */
+export interface EntityResultRow { id: string; img: string | null; p: number; d: string; t: string; h: string; cat: string }
 
 /** per-entity detail (pages/entity-<bb>.json; fail-soft from the same old files) */
 export interface EntityDetail {
-  /** quarterly medians, full tracked history (current quarter included; the
-   *  reader drops it — completeQuarters) */
-  quarters: { q: string; med: number; n: number; high: number }[];
-  yearly: { y: number; med: number; n: number }[];
+  /** quarterly medians, complete quarters (null med = a thin quarter, a gap) */
+  quarters: { q: string; med: number | null; n: number; high: number }[];
+  /** every year with a sale; the current year is marked partial */
+  yearly: { y: number; med: number | null; n: number; partial?: true }[];
   houses: { h: string; n: number }[];
-  cats: { key: string; label: string; n: number; med12m: number | null; med12mN: number | null }[];
-  top: { id: string; img?: string | null; p: number; d: string; t: string; h: string; cat?: string }[];
-  recent: { id: string; img?: string | null; p: number; d: string; t: string; h: string; cat?: string }[];
-  lensSplit?: { key: string; label: string; n: number; med: number }[];
+  cats: { key: string; label: string; n: number; med12m: number | null; med12mN: number }[];
+  top: EntityResultRow[];
+  recent: EntityResultRow[];
+  /** (>1 coarse lens only) unique vs editions, cards vs memorabilia — n all-time, n12 / med the trailing year */
+  lensSplit?: { key: string; label: string; n: number; n12: number; med: number | null; yearly: { y: number; med: number | null; n: number; partial?: true }[]; top: EntityResultRow[] }[];
 }
 
-export interface EntitiesFile { generatedAt: string; lastCrawl: string; entities: EntitySummary[] }
+export interface EntitiesFile {
+  generatedAt: string;
+  lastCrawl: string;
+  /** (data) the complete quarters every summary's spark covers, oldest first */
+  sparkQ?: string[];
+  entities: EntitySummary[];
+}
 
 /* ── id helpers ── */
 
