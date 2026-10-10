@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildEntities, entityFileBodies, brotliBytes } from '../emit-entities';
 import {
-  encodeEntities, decodeEntities, tierEntities, isEntitiesWire, derivedLabelOf,
+  encodeEntities, decodeEntities, tierEntities, isEntitiesWire, derivedLabelOf, yoyCell, yoyOfCell,
   MAIN_SOLD_ONLY, BUDGET_MARKET_BR, BUDGET_ALL_BR, type EntitiesWire,
 } from '../../app/lib/entity/wire';
 import { recordOf, type EntitySummary } from '../../app/lib/entity/model';
@@ -56,6 +56,20 @@ test('wire: decode(encode(summaries)) gives back every field the client reads; r
   assert.equal(w.c.l[w.c.id.indexOf('mk:andy-warhol')], 0, 'a maker\'s label is derived');
   assert.equal(derivedLabelOf('mk:andy-warhol'), 'Andy Warhol');
   assert.ok(!body.main.includes('Shot Sage Blue Marilyn'), 'the record title lives in the detail bucket');
+});
+
+test('wire (R7): a yoy cell carries its basis and 90% interval; an older cell decodes without one', () => {
+  for (const y of [
+    { pct: 12.5, n: 40, basis: 'matched' as const, lo: 3.1, hi: 22 },
+    { pct: -8, n: 25, basis: 'median' as const, lo: -20.4, hi: 4.2 },
+    { pct: 30, n: 900, basis: 'index' as const, lo: 25, hi: 35 },
+  ]) assert.deepEqual(yoyOfCell(JSON.parse(JSON.stringify(yoyCell(y)))), y);
+  // pre-R7 cells
+  assert.deepEqual(yoyOfCell([5, 12]), { pct: 5, n: 12, basis: 'median' });
+  assert.deepEqual(yoyOfCell([5, 12, 1]), { pct: 5, n: 12, basis: 'index' });
+  assert.deepEqual(yoyOfCell([5, 12, 2]), { pct: 5, n: 12, basis: 'matched' });
+  // an interval-less read still encodes to the old cell
+  assert.deepEqual(yoyCell({ pct: 5, n: 12, basis: 'median' }), [5, 12]);
 });
 
 test('wire: the face ships for a maker and a live entity with no live photo — never where the live photo leads', () => {
@@ -142,7 +156,8 @@ function synth(count: number, liveN: number, seed: number, kinds: { prefix: (slu
       record: sold ? { p: 100 + Math.floor(r() * 500_000), d: `20${10 + Math.floor(r() * 16)}-0${1 + Math.floor(r() * 9)}-1${Math.floor(r() * 10)}`, t: `${2000 + Math.floor(r() * 25)} ${word()} Chrome Refractor #${Math.floor(r() * 400)} ${label} Signed Rookie Card (#${Math.floor(r() * 99)}/99) - PSA GEM MT 10`, h: pick(['Goldin', 'Heritage', 'REA', 'Memory Lane', 'Lelands']), id: `goldin-${hex(24)}`, img } : null,
       spark: hasSpark ? Array.from({ length: 12 }, () => (r() < 0.2 ? null : 50 + Math.floor(r() * 3000))) : null,
       sparkN: hasSpark ? Array.from({ length: 12 }, () => Math.floor(r() * 60)) : null,
-      yoy: hasSpark && r() < 0.4 ? { pct: Math.round((r() * 200 - 60) * 10) / 10, n: 10 + Math.floor(r() * 200), basis: 'median' } : null,
+      // (R7) every read carries its 90% interval
+      yoy: hasSpark && r() < 0.4 ? ((pct: number) => ({ pct, n: 10 + Math.floor(r() * 200), basis: r() < 0.5 ? 'matched' as const : 'median' as const, lo: Math.round((pct - r() * 30) * 10) / 10, hi: Math.round((pct + r() * 30) * 10) / 10 }))(Math.round((r() * 200 - 60) * 10) / 10) : null,
       verified: null, thin: sold12m < 5, caps: { compare: hasSpark, follow: p.kind === 'player' ? p.slug : null, dossier: sold >= 10 },
     });
   }

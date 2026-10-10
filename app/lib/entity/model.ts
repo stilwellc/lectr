@@ -25,6 +25,10 @@ import type { Market } from '../../constants';
 
 export type EntityKind = 'maker' | 'player' | 'subject' | 'set' | 'sub';
 
+/** a year-over-year read (app/lib/entity/stats yoyOf), its basis named and
+ *  — since R7 — its 90% interval [lo, hi] in percent */
+export interface EntityYoy { pct: number; n: number; basis: 'matched' | 'median' | 'index'; lo?: number; hi?: number }
+
 export interface EntityRef { id: string; kind: EntityKind; market: Market }
 
 export interface EntityRecord {
@@ -63,8 +67,9 @@ export interface EntitySummary extends EntityRef {
   sparkN: number[] | null;
   /** like for like (app/lib/entity/stats yoyOf): 'matched' = the median of
    *  per-identity ratios, n = identities sold in both years; 'median' = pooled
-   *  medians, only on a stable intake, n = the smaller year */
-  yoy: { pct: number; n: number; basis: 'matched' | 'median' | 'index' } | null;
+   *  medians, only on a stable intake, n = the smaller year. lo/hi = its 90%
+   *  interval in percent (R7; absent on an older payload) */
+  yoy: EntityYoy | null;
   /** market.json verified mover, passed through */
   verified: unknown | null;
   /** sold12m < 5 → sorts below well-supported rows */

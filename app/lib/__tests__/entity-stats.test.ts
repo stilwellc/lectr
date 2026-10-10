@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { entityFigures, completeQuarters, quarterOf, dayMinus, MIN_MED_N, type SoldPoint, type Labels } from '../entity/stats';
+import { entityFigures, completeQuarters, quarterOf, dayMinus, medianRankLo, yoyOf, MIN_MED_N, type SoldPoint, type Labels } from '../entity/stats';
 
 const TODAY = '2026-10-09';
 const L: Labels = { lens: k => k.split(':')[1], coarse: k => k };
@@ -79,7 +79,7 @@ test('entity stats: a spark needs ≥4 drawn quarters, yoy needs ≥10 on both s
   for (let i = 0; i < 10; i++) rows.push(pt(100, '2024-12-01'));  // 2024-Q4 (prev side)
   for (let i = 0; i < 10; i++) rows.push(pt(150, '2026-02-01'));  // 2026-Q1 (cur side)
   const f = entityFigures(rows, TODAY, L);
-  assert.deepEqual(f.yoy, { pct: 50, n: 10, basis: 'median' });
+  assert.deepEqual(f.yoy, { pct: 50, n: 10, basis: 'median', lo: 50, hi: 50 });
   const g = entityFigures(rows.slice(1), TODAY, L);
   assert.equal(g.yoy, null, 'a 9-sale side prints no yoy');
 });
@@ -96,20 +96,62 @@ test('entity stats (P3): yoy is like for like — a crawl that adds cheap items 
   for (let i = 0; i < 75; i++) rows.push(pt(50, '2026-03-01', undefined, { k: `new${i % 3}` }));
   const f = entityFigures(rows, TODAY, L);
   // the pooled median would read −98%; the matched read is the real +20%
-  assert.deepEqual(f.yoy, { pct: 20, n: 25, basis: 'matched' });
+  assert.deepEqual(f.yoy, { pct: 20, n: 25, basis: 'matched', lo: 20, hi: 20 });
 });
 
 test('entity stats (P3): too few pairs — a keyed lens abstains; an unkeyed one reads the median only on a stable intake', () => {
   const pairs = (n: number): SoldPoint[] => Array.from({ length: n }, (_, i) => [pt(100, '2025-01-10', undefined, { k: `c${i}` }), pt(130, '2026-01-10', undefined, { k: `c${i}` })]).flat();
   const unique = (n: number, p: number, d: string): SoldPoint[] => Array.from({ length: n }, () => pt(p, d));
-  // 19 pairs (< MIN_YOY_PAIRS) on a keyed lens (cards): no pooled-median stand-in
-  assert.equal(entityFigures(pairs(19), TODAY, L).yoy, null);
+  // 4 pairs (< MIN_YOY_PAIRS: no 90% interval exists) on a keyed lens
+  // (cards): no pooled-median stand-in
+  assert.equal(entityFigures(pairs(4), TODAY, L).yoy, null);
+  // (R7) 5 pairs that agree: a matched read, its interval printed
+  assert.deepEqual(entityFigures(pairs(5), TODAY, L).yoy, { pct: 30, n: 5, basis: 'matched', lo: 30, hi: 30 });
   // unique works, equal intake: the pooled median, labeled
-  assert.deepEqual(entityFigures([...unique(19, 100, '2025-01-10'), ...unique(19, 130, '2026-01-10')], TODAY, L).yoy, { pct: 30, n: 19, basis: 'median' });
+  assert.deepEqual(entityFigures([...unique(19, 100, '2025-01-10'), ...unique(19, 130, '2026-01-10')], TODAY, L).yoy, { pct: 30, n: 19, basis: 'median', lo: 30, hi: 30 });
   // the same, but the current year sold 2× as many: no read
   assert.equal(entityFigures([...unique(19, 100, '2025-01-10'), ...unique(38, 130, '2026-01-10')], TODAY, L).yoy, null);
   // 20 pairs: matched, whatever the intake did
-  assert.deepEqual(entityFigures([...pairs(20), ...unique(60, 5, '2026-02-10')], TODAY, L).yoy, { pct: 30, n: 20, basis: 'matched' });
+  assert.deepEqual(entityFigures([...pairs(20), ...unique(60, 5, '2026-02-10')], TODAY, L).yoy, { pct: 30, n: 20, basis: 'matched', lo: 30, hi: 30 });
+});
+
+test('entity stats (R7): the median interval is distribution-free — exact binomial ranks', () => {
+  // n = 5: [min, max] holds the median with 93.75% (≥ 90%); n < 5 has no 90% interval
+  assert.equal(medianRankLo(4), 0);
+  assert.equal(medianRankLo(5), 1);
+  // n = 20: P(Bin(20,½) ≤ 5) = 2.07% ≤ 5%, ≤ 6 = 5.77% > 5% → rank 6
+  assert.equal(medianRankLo(20), 6);
+  // the 98% level used for a wide pooled-median move is stricter
+  assert.ok(medianRankLo(20, 0.98) < medianRankLo(20));
+  // large n: the normal approximation, continuous with the exact ranks
+  assert.ok(Math.abs(medianRankLo(61) - medianRankLo(60)) <= 1);
+});
+
+test('entity stats (R7): a yoy prints only when it means something — bounded, or a clear move', () => {
+  const D0 = '2025-01-10', D1 = '2026-01-10';
+  // matched pairs with the given this-year/last-year ratios
+  const ratios = (rs: number[]): SoldPoint[] => rs.flatMap((r, i) => [pt(1000, D0, undefined, { k: `c${i}` }), pt(1000 * r, D1, undefined, { k: `c${i}` })]);
+  // tight around flat: printed, its interval straddling 0
+  const flat = yoyOf(ratios([0.95, 0.98, 1, 1.01, 1.03, 1.05, 0.97, 1.02]), TODAY)!;
+  assert.equal(flat.basis, 'matched');
+  assert.ok(flat.lo < 0 && flat.hi > 0 && flat.hi - flat.lo < 20);
+  // wide but every identity rose: a clear move, printed with its wide interval
+  const up = yoyOf(ratios([1.1, 1.4, 2, 3, 5, 1.2, 2.5]), TODAY)!;
+  assert.ok(up.lo > 0 && up.hi > 100, JSON.stringify(up));
+  // wide and both ways: noise — no read
+  assert.equal(yoyOf(ratios([0.3, 0.5, 0.8, 1, 1.3, 2, 3.5, 0.4, 2.6]), TODAY), null);
+});
+
+test('entity stats (R7): a pooled median needs a stable intake AND a bounded or clear read', () => {
+  const D0 = '2025-01-10', D1 = '2026-01-10';
+  const spread = (n: number, mid: number, d: string, w: number) => Array.from({ length: n }, (_, i) => pt(mid * Math.exp(w * (i / (n - 1) - 0.5)), d));
+  // 40 a side, tight spread, +10%: printed
+  const ok = yoyOf([...spread(40, 1000, D0, 0.6), ...spread(40, 1100, D1, 0.6)], TODAY)!;
+  assert.equal(ok.basis, 'median');
+  assert.ok(Math.abs(ok.pct - 10) < 1 && ok.lo < 10 && ok.hi > 10);
+  // 12 a side over a 50× price range, +20%: the interval spans far past ±30
+  // log points either side of 0 — no read
+  assert.equal(yoyOf([...spread(12, 1000, D0, 4), ...spread(12, 1200, D1, 4)], TODAY), null);
 });
 
 test('entity stats: results are ordered (top by price, recent by date) and houses by count', () => {
