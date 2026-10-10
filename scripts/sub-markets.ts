@@ -481,8 +481,11 @@ export function buildDrillRows(all: AuctionLot[]): Record<string, DrillRead[]> {
       // the era axis — THE divergence story in cards ('track A vs B': vintage
       // vs modern was the one card split Collin kept). _card.year covers 85.6%
       // of sold cards; the repeat-sale index runs per era bucket via cardKey.
-      const y = (l as unknown as { _card?: { year?: number } })._card?.year;
-      const era = y == null ? null : y < 1980 ? 'vintage' : y < 2000 ? 'classic' : 'modern';
+      // (Oct 9) the year is a STRING ("1996-97") — compared raw, a season
+      // span was NaN and fell through to modern
+      const yr = (l as unknown as { _card?: { year?: string | null } })._card?.year;
+      const y = yr ? parseInt(String(yr), 10) : NaN;
+      const era = !Number.isFinite(y) ? null : y < 1980 ? 'vintage' : y < 2000 ? 'classic' : 'modern';
       if (era) add(`spe|${era}`, `cards-era:${era}`, subCatLabel(`era-${era}`), 'sports', 'cards', l);
     } else if (vert === 'watches' && l.drill) {
       add(`w|${l.artist}|${l.drill}`, `${l.artist}:${l.drill}`, `${subCatLabel(l.drill)} · ${ARTISTS_LABEL[l.artist] || l.artist}`, 'watches', l.artist, l);
