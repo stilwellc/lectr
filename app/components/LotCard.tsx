@@ -12,6 +12,7 @@ import Flick from './Flick';
 import { computeDeepSignal, FORM_LABEL, signalMagnitude } from '../lib/comps';
 import { safeHref } from '../lib/safe-href';
 import { cardCompsHammer } from '../lib/verdict';
+import { makerHref } from '../lib/entity/retired';
 
 // stable empty-array identity — a fresh `[]` default each render would defeat
 // the buySignal useMemo and the memo() wrapper below.
@@ -337,7 +338,7 @@ function LotCard({
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
           {showArtist && lot.artist && (
             <Link
-              href={maker?.href ?? `/makers/${lot.artist}`}
+              href={maker?.href ?? makerHref(lot.artist)}
               className="ray-lot-maker"
               onClick={e => e.stopPropagation()}
               style={{ fontSize: 14, letterSpacing: '-0.01em', color: 'var(--color-fg)', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}
@@ -553,7 +554,7 @@ function LotCard({
                 card action (the house URL stays on the card's primary action
                 only, never on the name) */}
             <Link
-              href={maker?.href ?? `/makers/${lot.artist}`}
+              href={maker?.href ?? makerHref(lot.artist)}
               className="ray-lot-maker"
               onClick={e => e.stopPropagation()}
               style={{

@@ -21,10 +21,12 @@ import { useEffect, useState, type ImgHTMLAttributes } from 'react';
  * guarantees the monogram is never sitting under an opaque dead element.
  * (Pattern lifted from RecordPlate.tsx.)
  */
-export default function PlateImg({ src, ...rest }: ImgHTMLAttributes<HTMLImageElement> & { src?: string }) {
+export default function PlateImg({ src, onDead, ...rest }: ImgHTMLAttributes<HTMLImageElement> & { src?: string; onDead?: () => void }) {
   const [ok, setOk] = useState(true);
   // a dead hotlink on one row must not blank the next when the list re-keys
   useEffect(() => { setOk(true); }, [src]);
+  // a caller whose FRAME should go with the photo (no empty bordered box)
+  useEffect(() => { if (!ok) onDead?.(); }, [ok, onDead]);
   if (!src || !ok) return null;
   return (
     <img

@@ -10,6 +10,7 @@ import Flick from './Flick';
 import { useDialogFocus } from './useDialogFocus';
 import { useAuth } from '../lib/account';
 import { useUnseenAlertCount } from '../lib/alerts';
+import { makerHref } from '../lib/entity/retired';
 
 /* NAV MARKS — the constructed line-mark language on the top bar: overview is a
    dashboard grid, value the CI caliper (lectr's own read), makers a signature,
@@ -185,7 +186,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
       onKeyDown={e => {
         if (e.key === 'Enter') {
           const first = filteredGroups[0]?.makers[0];
-          if (query.trim() && first) navigate(`/makers/${first.slug}`);
+          if (query.trim() && first) navigate(makerHref(first.slug));
         } else if (e.key === 'ArrowDown') {
           e.preventDefault();
           dropdownRef.current
@@ -217,7 +218,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
               role="menuitem"
               className="ray-artist-dropdown-item"
               data-active={activeSlug === a.slug ? 'true' : 'false'}
-              onClick={() => navigate(`/makers/${a.slug}`)}
+              onClick={() => navigate(makerHref(a.slug))}
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
             >
               <span>{a.label}</span>
@@ -694,7 +695,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
                       role="menuitem"
                       className="ray-artist-dropdown-item"
                       data-active={activeSlug === a.slug ? 'true' : 'false'}
-                      onClick={() => navigate(`/makers/${a.slug}`)}
+                      onClick={() => navigate(makerHref(a.slug))}
                       style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                     >
                       <span>{a.label}</span>

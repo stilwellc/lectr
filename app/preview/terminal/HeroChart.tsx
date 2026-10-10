@@ -60,6 +60,10 @@ interface Props {
   /** print every line's label at its end persistently (the direct-label
       grammar; default only ≤3-series charts do) */
   alwaysLabels?: boolean;
+  /** an explicit x axis (every period, in order). With it, a line BREAKS
+      where it skips a period — a missing year is a gap on the axis, never a
+      smooth bridge — and a point with no neighbour draws as a dot. */
+  periods?: string[];
 }
 
 /* ── scales & paths ────────────────────────────────────────── */
@@ -133,7 +137,7 @@ function ribbonPath(pts: HeroPoint[], xOf: Map<string, number>, yOf: (v: number)
 }
 
 /* one pane's geometry: x from the shared period axis, y from its own domain */
-function usePane(lines: HeroLine[], periods: string[], w: number, h: number, padTop: number, padBot: number) {
+function usePane(lines: HeroLine[], periods: string[], w: number, h: number, padTop: number, padBot: number, breakGaps = false) {
   return useMemo(() => {
     const xOf = new Map<string, number>();
     const span = Math.max(1, periods.length - 1);
@@ -145,12 +149,23 @@ function usePane(lines: HeroLine[], periods: string[], w: number, h: number, pad
     const pad = (max - min) * 0.10;
     min -= pad; max += pad;
     const yOf = (v: number) => padTop + (1 - (v - min) / (max - min)) * (h - padTop - padBot);
+    const idx = new Map<string, number>();
+    periods.forEach((p, i) => idx.set(p, i));
     const paths = lines.map(l => {
       const pts = l.points.filter(p => xOf.has(p.period));
-      return { line: l, pts, d: monotonePath(pts.map(p => xOf.get(p.period)!), pts.map(p => yOf(p.value))) };
+      if (!breakGaps) return { line: l, pts, d: monotonePath(pts.map(p => xOf.get(p.period)!), pts.map(p => yOf(p.value))), dots: [] as HeroPoint[] };
+      // one subpath per run of adjacent periods; a lone point is a dot
+      const runs: HeroPoint[][] = [];
+      for (const p of pts) {
+        const last = runs[runs.length - 1];
+        if (last && idx.get(p.period)! - idx.get(last[last.length - 1].period)! === 1) last.push(p);
+        else runs.push([p]);
+      }
+      const d = runs.filter(r => r.length > 1).map(r => monotonePath(r.map(p => xOf.get(p.period)!), r.map(p => yOf(p.value)))).join('');
+      return { line: l, pts, d, dots: runs.filter(r => r.length === 1).map(r => r[0]) };
     });
     return { xOf, yOf, min, max, paths };
-  }, [lines, periods, w, h, padTop, padBot]);
+  }, [lines, periods, w, h, padTop, padBot, breakGaps]);
 }
 
 /* ── the component ─────────────────────────────────────────── */
@@ -158,7 +173,7 @@ function usePane(lines: HeroLine[], periods: string[], w: number, h: number, pad
 export default function HeroChart({
   anchor, layers = [], subLayers = [], subLabel, highlight,
   height = 280, subHeight = 84, compact = false, play, flip = false,
-  hideTickLabels = false, band = false, alwaysLabels = false,
+  hideTickLabels = false, band = false, alwaysLabels = false, periods: axis,
 }: Props) {
   const reduce = useReducedMotion();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -181,15 +196,16 @@ export default function HeroChart({
 
   // the shared quarterly axis — union of every visible line's periods, sorted
   const periods = useMemo(() => {
+    if (axis && axis.length) return axis;
     const set = new Set<string>(anchor.points.map(p => p.period));
     for (const l of [...layers, ...subLayers]) for (const p of l.points) set.add(p.period);
     return Array.from(set).sort();
-  }, [anchor, layers, subLayers]);
+  }, [anchor, layers, subLayers, axis]);
 
   const flipped = flip && subLayers.length > 0;
   const mainLines = useMemo(() => (flipped ? subLayers : [anchor, ...layers]), [flipped, subLayers, anchor, layers]);
   const subLines = useMemo(() => (flipped ? [anchor] : subLayers), [flipped, anchor, subLayers]);
-  const main = usePane(mainLines, periods, W, height, 18, compact ? 22 : 26);
+  const main = usePane(mainLines, periods, W, height, 18, compact ? 22 : 26, !!axis);
   const sub = usePane(subLines, periods, W, subHeight, 10, 8);
   const hasSub = subLines.length > 0;
 
@@ -331,6 +347,9 @@ export default function HeroChart({
             <g style={{ opacity: highlight == null ? 1 : 0.35, transition: 'opacity 0.25s ease' }}>
               <path d={main.paths[0].d} fill="none" stroke="var(--color-fg, #E8EAED)" strokeWidth={2.25}
                 strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+              {main.paths[0].dots.map(p => (
+                <circle key={`dot${p.period}`} cx={main.xOf.get(p.period)} cy={main.yOf(p.value)} r={2.2} fill="var(--color-fg, #E8EAED)" />
+              ))}
             </g>
           )}
 

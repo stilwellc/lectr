@@ -12,6 +12,7 @@ import { CIBeam, DemandLine } from './SubMarketBoard';
 import { fmtInt, fmtMoneyCompact } from './hooks';
 import { fmtPct } from './verified';
 import styles from './style.module.css';
+import { makerHref } from '../../lib/entity/retired';
 
 /* ============================================================
    THE MARKET TAPE — the hero's stage, in the 02 board's grammar.
@@ -382,7 +383,7 @@ const SUB_CAP = 6;
 const MAKER_LED: ReadonlySet<string> = new Set(['art', 'design']);
 
 function subHref(r: SubMarketRead): string {
-  return r.slug.includes(':') ? `/sub/${r.slug.replace(':', '/')}` : `/makers/${r.slug}`;
+  return r.slug.includes(':') ? `/sub/${r.slug.replace(':', '/')}` : makerHref(r.slug);
 }
 
 const subTag = (r: SubMarketRead): string =>

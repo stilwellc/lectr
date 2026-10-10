@@ -52,6 +52,8 @@ export interface SoldPoint {
   id: string;
   t: string;
   img: string | null;
+  /** (facet-bearing entities only) the lot's live-chip facet keys — app/lib/entity/facets */
+  fx?: readonly string[];
 }
 
 export interface Labels { lens: (k: string) => string; coarse: (k: string) => string }

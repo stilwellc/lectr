@@ -38,6 +38,7 @@ import { lotSubjectOf } from '../app/lib/maker-subjects';
 import { taxonOf, CAT_LABEL, SPORTS, DOMAINS } from '../app/lib/taxonomy';
 import { classifyForm, formsForMarket } from '../app/lib/comps';
 import { bucketOf } from '../app/lib/page-data';
+import { facetKeysFor, facetSplits } from '../app/lib/entity/facets';
 import { isLiveUpcoming } from '../app/utils';
 import { verifiedMovers } from '../app/preview/terminal/verified';
 import type { AuctionLot } from '../app/types';
@@ -88,6 +89,7 @@ function readerView(l: Lot): Lot {
     playerName: l.playerName, playerSlug: l.playerSlug, description: l.description,
     imageUrl: l.imageUrl, medium: l.medium, category: l.category, status: l.status,
     priceUsd: l.priceUsd, currentBid: l.currentBid, estimateHigh: l.estimateHigh, estimateLow: l.estimateLow,
+    flown: l.flown,
   } as Lot;
 }
 
@@ -168,7 +170,7 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): BuiltEntiti
     soldRows++;
     const a = acc(id);
     const ln = lensesOf(l);
-    a.pts.push({ p: row.priceUsd!, d: String(row.saleDate || '').slice(0, 10), h: row.auctionHouse || '', lens: I(ln.lens), coarse: I(ln.coarse), id: row.id, t: row.title || '', img: row.imageUrl || null });
+    a.pts.push({ p: row.priceUsd!, d: String(row.saleDate || '').slice(0, 10), h: row.auctionHouse || '', lens: I(ln.lens), coarse: I(ln.coarse), id: row.id, t: row.title || '', img: row.imageUrl || null, fx: facetKeysFor(id, l) });
     note(a, l, ln);
   });
   for (const l of input.live) {
@@ -243,6 +245,8 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): BuiltEntiti
         quarters: f.quarters, yearly: f.yearly, houses: f.houses, cats: f.cats, top: f.top, recent: f.recent,
       };
       if (f.lensSplit) det.lensSplit = f.lensSplit;
+      const fx = facetSplits(a.id, a.pts, input.today);
+      if (fx) det.facets = fx;
       details.set(a.id, det);
     }
   });

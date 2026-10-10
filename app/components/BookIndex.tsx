@@ -27,6 +27,7 @@ import { craftTitle, formatDate, formatPrice, getUpcomingCounts, isLiveUpcoming,
 import { signalMagnitude, dealScore } from '../lib/comps';
 import { OPEN_CK_EVENT } from './CommandK';
 import '../northstar-pages.css';
+import { makerHref } from '../lib/entity/retired';
 
 type Kind = 'lot' | 'ref' | 'player';
 
@@ -98,7 +99,7 @@ export default function BookIndex({ kind }: { kind: Kind }) {
             refsByMaker.map(([maker, rows]) => (
               <div key={maker} style={{ marginBottom: 26 }}>
                 <div className="lectr-lot-shead" style={{ paddingTop: 6 }}>
-                  <h2 className="lectr-lot-h2"><Link href={`/makers/${maker}`} style={{ color: 'inherit', textDecoration: 'none' }}>{ARTIST_LABEL[maker] || maker}</Link></h2>
+                  <h2 className="lectr-lot-h2"><Link href={makerHref(maker)} style={{ color: 'inherit', textDecoration: 'none' }}>{ARTIST_LABEL[maker] || maker}</Link></h2>
                   <span className="nsp-note" style={{ margin: 0 }}>{rows.length} {rows.length === 1 ? 'reference' : 'references'}</span>
                 </div>
                 {rows.slice(0, 8).map(r => (
