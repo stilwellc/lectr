@@ -5,6 +5,7 @@ import { AuctionLot, MarketStats } from '../types';
 import { marketOf } from '../constants';
 import LotCard from './LotCard';
 import SectionMark from './SectionMark';
+import { byPriority } from '../lib/priority';
 
 const COLLAPSED_CARDS = 12;
 
@@ -39,7 +40,7 @@ export default function UpcomingLots({
   lastCrawl?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [sortBy, setSortBy] = useState<'date' | 'price'>('date');
+  const [sortBy, setSortBy] = useState<'date' | 'priority' | 'price'>('date');
   const [sportFilter, setSportFilter] = useState<string>('all');
 
   // SPORT chips — derived from the data, so they appear automatically when it
@@ -61,9 +62,13 @@ export default function UpcomingLots({
   );
 
   // 'date' keeps the caller's order (the page already sorts by sale date);
-  // 'price' ranks by estimate mid, highest ask first
+  // 'price' ranks by estimate mid, highest ask first; 'priority' is the home
+  // feed's "Matters most" (app/lib/priority — size, measured edge, evidence,
+  // closing time). Date stays the default: a maker page is read as a calendar.
   const sorted = useMemo(
-    () => (sortBy === 'price' ? [...bySport].sort((a, b) => askOf(b) - askOf(a)) : bySport),
+    () => (sortBy === 'price' ? [...bySport].sort((a, b) => askOf(b) - askOf(a))
+      : sortBy === 'priority' ? [...bySport].sort(byPriority(Date.now()))
+      : bySport),
     [bySport, sortBy]
   );
   const shown = expanded ? sorted : sorted.slice(0, COLLAPSED_CARDS);
@@ -167,6 +172,13 @@ export default function UpcomingLots({
               onClick={() => setSortBy('date')}
             >
               Date
+            </button>
+            <button
+              className="ray-sort-pill"
+              data-active={sortBy === 'priority' ? 'true' : 'false'}
+              onClick={() => setSortBy('priority')}
+            >
+              Matters most
             </button>
             <button
               className="ray-sort-pill"

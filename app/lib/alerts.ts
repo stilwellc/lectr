@@ -35,6 +35,11 @@ export interface SavedQuery {
   sub?: string | null;
   house?: string | null;
   label?: string | null;
+  /** Oct 9: the triage row on a plain saved search (app/lib/saved-query) —
+   *  cat/sub/house above double as triage keys when `follow` is absent */
+  win?: 'today' | '48h' | 'week' | null;
+  minUsd?: number | null;
+  fx?: string[];
 }
 
 export interface SavedSearch {
@@ -53,7 +58,7 @@ export interface AlertRow {
 }
 
 /** One human line for a stored query — mirrors how the toolbar talks. */
-export function describeQuery(q: SavedQuery, labels: { maker?: string; category?: string; market?: string }): string {
+export function describeQuery(q: SavedQuery, labels: { maker?: string; category?: string; market?: string; cat?: string; fx?: string }): string {
   // a follow reads as the person's name — "Following Michael Jordan"
   if (q.player) return `Following ${q.playerName || q.player}`;
   if (q.follow) return `Following ${q.label || q.house || q.cat}`;
@@ -61,7 +66,12 @@ export function describeQuery(q: SavedQuery, labels: { maker?: string; category?
   if (labels.maker) parts.push(labels.maker);
   else if (q.sport) parts.push(q.sport);
   else if (labels.category) parts.push(labels.category);
+  if (labels.cat) parts.push(labels.cat);
+  if (labels.fx) parts.push(labels.fx);
   if (q.text) parts.push(`“${q.text}”`);
+  if (q.house) parts.push(q.house);
+  if (q.minUsd) parts.push(q.minUsd >= 1000 ? `$${q.minUsd / 1000}K+` : `$${q.minUsd}+`);
+  if (q.win) parts.push(q.win === 'today' ? 'closing today' : q.win === '48h' ? 'closing in 48 hours' : 'closing this week');
   if (q.belowOnly) parts.push('below market');
   if (labels.market) parts.push(labels.market);
   return parts.join(' · ') || 'everything on the block';

@@ -13,7 +13,7 @@ import FollowChip from './FollowChip';
 import { catFollow, houseFollow } from '../lib/follows';
 import { facetCatOf, facetChips, toggleFacet } from '../lib/facets';
 import {
-  WINDOWS, VALUE_FLOORS, TRIAGE_DEFAULTS, isTriageActive, passesTriage, patchTriage, type TriageFilters,
+  WINDOWS, VALUE_FLOORS, TRIAGE_DEFAULTS, isTriageActive, passesTriage, patchTriage, type TriageFilters, type HouseBaselines,
 } from '../lib/feed-filters';
 
 type TriageLot = Parameters<typeof passesTriage>[0];
@@ -21,12 +21,15 @@ type TriageLot = Parameters<typeof passesTriage>[0];
 const fmtFloor = (n: number) => (n >= 1000 ? `$${n / 1000}K+` : `$${n}+`);
 
 export default function TriageBar({
-  lots, filters, onChange, prevVisitDay = null, shown, total, showSubs = true, label = 'Narrow the board',
+  lots, filters, onChange, prevVisitDay = null, baselines = null, shown, total, showSubs = true, label = 'Narrow the board',
 }: {
   lots: TriageLot[];
   filters: TriageFilters;
   onChange: (next: TriageFilters) => void;
   prevVisitDay?: string | null;
+  /** houses' onboarding days (feed-filters houseBaselines over the page's
+   *  whole book — this bar's `lots` may be a narrow lane pool) */
+  baselines?: HouseBaselines | null;
   /** optional "N of M" read-out */
   shown?: number;
   total?: number;
@@ -66,17 +69,17 @@ export default function TriageBar({
     return Array.from(c.entries()).sort((a, b) => b[1] - a[1]);
   }, [lots]);
   const newCount = useMemo(
-    () => lots.filter(l => passesTriage(l, { ...TRIAGE_DEFAULTS, newOnly: true }, { prevVisitDay })).length,
-    [lots, prevVisitDay]
+    () => lots.filter(l => passesTriage(l, { ...TRIAGE_DEFAULTS, newOnly: true }, { prevVisitDay, baselines })).length,
+    [lots, prevVisitDay, baselines]
   );
   // in-category facets (Graded / Rookie / era, Film & TV / Music): counted over
   // the pool as every OTHER filter already narrows it
   const facets = useMemo(() => {
     const fc = facetCatOf(filters.cat, lots);
     if (!fc) return [];
-    const pool = lots.filter(l => passesTriage(l, { ...filters, fx: [] }, { prevVisitDay }));
+    const pool = lots.filter(l => passesTriage(l, { ...filters, fx: [] }, { prevVisitDay, baselines }));
     return facetChips(fc, pool, filters.fx);
-  }, [lots, filters, prevVisitDay]);
+  }, [lots, filters, prevVisitDay, baselines]);
   const subActive = (k: string) => filters.cat != null && `${filters.cat}:${filters.sub}` === k;
   const catActive = (cat: CatKey) => filters.cat === cat;
 

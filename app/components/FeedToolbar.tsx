@@ -11,7 +11,7 @@ import SaveSearch from './SaveSearch';
 import FollowChip from './FollowChip';
 import { catFollow, houseFollow } from '../lib/follows';
 import { taxonOf, SUBS, type CatKey } from '../lib/taxonomy';
-import { WINDOWS, VALUE_FLOORS, TRIAGE_DEFAULTS, isTriageActive, passesTriage, patchTriage, triageToParams, triageFromParams, type TriageFilters } from '../lib/feed-filters';
+import { WINDOWS, VALUE_FLOORS, TRIAGE_DEFAULTS, isTriageActive, passesTriage, patchTriage, triageToParams, triageFromParams, houseBaselines, type TriageFilters, type HouseBaselines } from '../lib/feed-filters';
 import { facetCatOf, facetChips, toggleFacet } from '../lib/facets';
 
 export type FeedSort = 'priority' | 'soonest' | 'gap-desc' | 'newest' | 'bids-desc' | 'est-desc' | 'est-asc';
@@ -66,6 +66,9 @@ export function feedToParams(f: FeedFilters, p: URLSearchParams): void {
   put('tab', f.tab && f.tab !== FEED_DEFAULTS.tab ? f.tab : null);
   triageToParams(f, p);
 }
+/** every query key the feed codec owns — any of them in the URL means the
+ *  URL governs the view (a remembered view is never layered on top) */
+export const FEED_PARAM_KEYS = ['q', 'v', 'mk', 'sp', 'below', 'sort', 'day', 'tab', 'win', 'cat', 'sub', 'house', 'min', 'new', 'fx'];
 export function feedFromParams(p: URLSearchParams): FeedFilters {
   const sort = p.get('sort') as FeedSort | null;
   const v = p.get('v');
@@ -110,6 +113,8 @@ export default function FeedToolbar({
   pageSize = 24,
   showToggle = true,
   prevVisitDay = null,
+  baselines: baselinesProp,
+  onResetView,
 }: {
   lots: AuctionLot[];          // the unfiltered upcoming pool (for counts)
   belowIds: Set<string>;
@@ -127,6 +132,12 @@ export default function FeedToolbar({
   showToggle?: boolean;
   /** the reader's previous visit day (feed-filters useLastVisit) — drives "New" */
   prevVisitDay?: string | null;
+  /** houses' onboarding days (feed-filters houseBaselines) — keeps a first
+   *  crawl's flood out of "New" */
+  baselines?: HouseBaselines;
+  /** set when the view was restored from the reader's last visit: a quiet
+   *  "Reset view" puts the feed back on the defaults and forgets it */
+  onResetView?: () => void;
 }) {
   // The below-market lens auto-ranks by gap (its smart default) — but it must
   // hand back whatever sort the reader had picked when the lens comes off,
@@ -199,9 +210,12 @@ export default function FeedToolbar({
     for (const l of marketPool) { const h = String(l.auctionHouse || ''); if (h) c.set(h, (c.get(h) || 0) + 1); }
     return Array.from(c.entries()).sort((a, b) => b[1] - a[1]);
   }, [marketPool]);
+  // a house's onboarding flood is not "new" (feed-filters houseBaselines) —
+  // the page passes baselines read off its whole book; this pool is the fallback
+  const baselines = useMemo(() => baselinesProp ?? houseBaselines(lots), [baselinesProp, lots]);
   const newCount = useMemo(
-    () => marketPool.filter(l => passesTriage(l, { ...TRIAGE_DEFAULTS, newOnly: true }, { prevVisitDay })).length,
-    [marketPool, prevVisitDay]
+    () => marketPool.filter(l => passesTriage(l, { ...TRIAGE_DEFAULTS, newOnly: true }, { prevVisitDay, baselines })).length,
+    [marketPool, prevVisitDay, baselines]
   );
   const newLabel = prevVisitDay ? 'New since last visit' : 'New today';
   // in-category facets (Graded / Rookie / era, Film & TV / Music) — once the
@@ -211,9 +225,9 @@ export default function FeedToolbar({
       && (!filters.sport || (sportOfLot(l) || 'Other') === filters.sport));
     const fc = facetCatOf(filters.cat, scoped);
     if (!fc) return [];
-    const pool = scoped.filter(l => passesTriage(l, { ...filters, fx: [] }, { prevVisitDay }));
+    const pool = scoped.filter(l => passesTriage(l, { ...filters, fx: [] }, { prevVisitDay, baselines }));
     return facetChips(fc, pool, filters.fx);
-  }, [marketPool, filters, prevVisitDay]);
+  }, [marketPool, filters, prevVisitDay, baselines]);
   const facetPills = facets.map((c, i) => (
     <span key={c.key} style={{ display: 'contents' }}>
       {i > 0 && facets[i - 1].group !== c.group && <span className="ray-toolbar-divider" aria-hidden="true" />}
@@ -924,6 +938,11 @@ export default function FeedToolbar({
           </>
         ) : (
           <>{total.toLocaleString()} lots</>
+        )}
+        {onResetView && (
+          <button className="ray-toolbar-reset" onClick={onResetView} title="This view was restored from your last visit">
+            Reset view
+          </button>
         )}
       </span>
     </div>

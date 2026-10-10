@@ -37,8 +37,8 @@ import SettlementSlip from '../../components/SettlementSlip';
 import { sportOfLot } from '../../lib/submarkets';
 import { subCatLabel } from '../../lib/subcat-labels';
 import MarketSwitch from '../../components/MarketSwitch';
-import FeedToolbar, { FeedFilters, FEED_DEFAULTS, feedFromParams, feedToParams } from '../../components/FeedToolbar';
-import { useUrlState, useLastVisit, passesTriage } from '../../lib/feed-filters';
+import FeedToolbar, { FeedFilters, FEED_DEFAULTS, FEED_PARAM_KEYS, feedFromParams, feedToParams } from '../../components/FeedToolbar';
+import { useUrlState, useLastVisit, passesTriage, houseBaselines, memoryOf, restoreParams, readFeedMemory, writeFeedMemory } from '../../lib/feed-filters';
 import { byPriority, shortlist, reasonOf, forYou, spread } from '../../lib/priority';
 import { makerLineOf } from '../../lib/lot-labels';
 import { foldVariants, foldNote, foldQuery } from '../../lib/fold';
@@ -403,6 +403,30 @@ export default function TerminalHomePage() {
   // Oct 8: the feed state lives in the URL (reload / share reopens the view)
   const [feedFilters, setFeedFilters] = useUrlState<FeedFilters>(FEED_DEFAULTS, feedFromParams, feedToParams);
   const prevVisitDay = useLastVisit();
+  // a house's first-crawl flood is not "new" (feed-filters houseBaselines),
+  // read off the whole loaded book so every market agrees
+  const baselines = useMemo(() => houseBaselines(allLots), [allLots]);
+  // Oct 9 — "open my feed the way I left it": a bare visit (no feed param in
+  // the URL) restores the reader's last triage + tab + sort on this device;
+  // a URL with any feed param wins untouched. Runs after useUrlState's own
+  // mount read (effects fire in order), so the restore lands in the URL too.
+  const [restoredView, setRestoredView] = useState(false);
+  useEffect(() => {
+    const here = new URLSearchParams(window.location.search);
+    if (FEED_PARAM_KEYS.some(k => here.has(k))) return;
+    const p = restoreParams(readFeedMemory(), activeKey);
+    if (!p) return;
+    setFeedFilters(feedFromParams(p));
+    setRestoredView(true);
+    // mount-only: the memory is read once per visit
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // every reader-made change is the new "way I left it"
+  const rememberFeed = useCallback((next: FeedFilters) => {
+    const p = new URLSearchParams();
+    feedToParams(next, p);
+    writeFeedMemory(memoryOf(p, activeKey));
+  }, [activeKey]);
   const { follows } = useFollows();
   const [tableLot, setTableLotRaw] = useState<AuctionLot | null>(null);
   // THE MODAL JOINS HISTORY (audit-navbugs defect 1): opening a lot pushes a
@@ -697,7 +721,7 @@ export default function TerminalHomePage() {
     if (f.saleDay) arr = arr.filter(l => l.saleDate?.slice(0, 10) === f.saleDay);
     if (f.belowOnly) arr = arr.filter(l => belowIds.has(l.id));
     // triage: closing window, clean category/sub, house, value floor, new
-    arr = arr.filter(l => passesTriage(l, f, { prevVisitDay }));
+    arr = arr.filter(l => passesTriage(l, f, { prevVisitDay, baselines }));
     if (q) {
       arr = arr.filter(l =>
         `${ARTIST_LABEL[l.artist] || l.artist} ${l.title} ${l.auctionHouse} ${l.saleName} ${l.medium || ''}`
@@ -746,7 +770,7 @@ export default function TerminalHomePage() {
       }
     }
     return arr;
-  }, [upcoming, feedFilters, belowSignal, belowIds, pageSize, crawlDay, prevVisitDay]);
+  }, [upcoming, feedFilters, belowSignal, belowIds, pageSize, crawlDay, prevVisitDay, baselines]);
 
   // The feed the reader sees. "What matters" (the default tab, Matters-most
   // order only) is the capped shortlist of whatever is filtered: ≥$2.5K,
@@ -812,12 +836,25 @@ export default function TerminalHomePage() {
     // the shortlist only exists in Matters-most order: any other sort is "All lots"
     if (next.sort !== 'priority' && next.tab === 'top') next = { ...next, tab: 'all' };
     setFeedFilters(next);
+    rememberFeed(next);
     setVisibleUpcoming(pageSize);
   };
+  // the quiet way back: defaults, and the remembered view is forgotten
+  const resetView = () => {
+    setFeedFilters(FEED_DEFAULTS);
+    writeFeedMemory(null);
+    setRestoredView(false);
+    setVisibleUpcoming(pageSize);
+  };
+  const viewIsDefault = useMemo(() => {
+    const p = new URLSearchParams();
+    feedToParams(feedFilters, p);
+    return p.toString() === '';
+  }, [feedFilters]);
 
   // The below-market lens: biggest gap first, at the feed.
   const openBelowLens = () => {
-    setFeedFilters(f => ({ ...f, belowOnly: true, sort: 'gap-desc' }));
+    setFeedFilters(f => { const next: FeedFilters = { ...f, belowOnly: true, sort: 'gap-desc' }; rememberFeed(next); return next; });
     setVisibleUpcoming(pageSize);
     document.getElementById('on-the-block')?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -1069,6 +1106,8 @@ export default function TerminalHomePage() {
                   pageSize={pageSize}
                   showToggle={!narrowView}
                   prevVisitDay={prevVisitDay}
+                  baselines={baselines}
+                  onResetView={restoredView && !viewIsDefault ? resetView : undefined}
                 />
 
                 {effectiveView === 'table' && feed.length > 0 ? (
