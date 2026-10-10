@@ -29,7 +29,7 @@
  */
 import { marketOf, ARTIST_LABEL, type Market } from '../constants';
 import { makerLineOf } from './lot-labels';
-import { subjectOf, nameTokensOk, cardGroupOf } from './subject';
+import { subjectOf, nameTokensOk, cardGroupOf, leadOf } from './subject';
 
 const CARD_MAKERS = new Set(['sports-cards', 'graded-cards']);
 import { playerSlugOf, parseCard, cardLadderKey } from './cards';
@@ -129,6 +129,18 @@ function read(l: SubjectLot): LotSubject | null {
     }
   }
   const s = subjectOf(l);
+  // (Oct 10, P3) a sports OBJECT lot the title readers miss — lower-case
+  // desk titles ("michael jordan 1998 nba finals ‘the last dance’ game worn
+  // jersey"), ALL-CAPS ones, a lot-number lead ("182 Mickey Mantle Signed…"),
+  // a name with no verb after it ("Michael Jordan 1992 Olympic … Jersey") —
+  // files under the pipeline-stamped athlete when the title spells that one
+  // name (stampedPlayerOf's guards). A team read yields to it only when the
+  // athlete LEADS the title ("1938 Lou Gehrig New York Yankees Game-Used
+  // Road Jersey" is Gehrig's, not the Yankees').
+  if (marketOf(l.artist) === 'sports' && !CARD_MAKERS.has(l.artist) && (!s || s.kind === 'team')) {
+    const sp = stampedPlayerOf(l, s?.kind === 'team');
+    if (sp) return { key: `p:${sp.slug}`, name: sp.name, kind: 'player', playerSlug: sp.slug };
+  }
   if (s?.kind === 'mission' || s?.kind === 'program') return { key: `m:${norm(s.name)}`, name: s.name, kind: 'mission', playerSlug: null };
   if (s?.kind === 'team' || s?.kind === 'set' || s?.kind === 'brand') return groupRow(s.name, s.kind);
   if (s?.kind === 'person') {
@@ -182,6 +194,58 @@ export function pokemonSpeciesOf(name: string): string {
   const tail = s.match(POKE_TAIL_SPECIES);
   if (tail) s = tail[1];
   return s || name;
+}
+
+/** sealed product is never one athlete's, whatever name the box carries */
+const NOT_ONE_ATHLETE_MAKERS = new Set(['unopened-wax']);
+/** a piece several people signed — never filed under one of them */
+const GROUP_PIECE = /\b(?:multi|dual|team|triple|trio|quad|co|group|band|cast)[- ]?(?:signed|autographed)\b|\bsigned by (?:the |all |\(?\d)|\(\d+\+?\)\s*signatures\b|\b\d+\+?\s+signatures\b/i;
+/** words that make the name a lot's highlight or a second party, not its subject */
+const NAME_AFTER = /(?:\bwith|\bw\/|\bincluding|\bincl\.?|\bfeaturing|\bfeat\.?|\bplus|\band|&|\/|\bvs\.?|\bversus|,)\s*$/i;
+/** another name joined straight after it — a duo / trio, not one athlete's piece */
+const NAME_THEN_PARTY = /^\s*(?:,|&|\/|\band\b|\bvs\.?)\s*([A-Za-z][\w'’-]*)\s+([A-Za-z][\w'’-]*)/i;
+/** a card parser's run-on into the card's own words ("Aaron Judge Prospect") */
+const CARD_TAIL = /\s(?:Prospects?|Auto|Autos|Rc|Patch|Relic|Refractor|Parallel|Variation|Insert|Promo|Proof|Boldly|Nicely|Beautifully|Superbly|Neatly|Clearly|Wonderfully|Exceptionally|Originally)$/i;
+/** place / product words a stamped "name" never holds ("Yankee Stadium", "High Grade") */
+const NOT_STAMP_NAME = /\b(?:Stadium|Park|Field|Arena|Grade|Graded|Panel|Box|Set|Team|Club|Series|Cup|Bowl|Hall|Gum|Caramel|Tobacco|Postcards?|Exhibits?|Newly|Discovered|Example)\b/i;
+const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/&quot;|&#0?39;|&apos;/g, ' ').replace(/[.’'"“”‘()]/g, '').replace(/\s+/g, ' ').trim();
+const reEsc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const capWord = (w: string) => (w === w.toUpperCase() || w === w.toLowerCase() ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w);
+
+/**
+ * (Oct 10, P3) the athlete the pipeline stamped on a sports OBJECT lot
+ * (build-market playerOf over the corpus's known-player roster), when the
+ * title backs it as the lot's ONE subject:
+ *   - the stamped name reads as a person (nameTokensOk on its cased form —
+ *     never "New York", "St. Louis", "Yankee Stadium Seat")
+ *   - the title spells it (case, accents, punctuation folded)
+ *   - not a multi/dual/team-signed piece, not a highlight ("… Lot with Ted
+ *     Williams", "Silk w/Tris Speaker"), not a second party ("Ruth and
+ *     Gehrig" stays off Gehrig), and no party joined straight after it
+ *     ("Muhammad Ali & George Chuvalo …" stays unassigned here)
+ *   - `mustLead`: the name opens the title past a lot number / date lead
+ * Pure: reads the lot's own fields only.
+ */
+export function stampedPlayerOf(l: { artist: string; title?: string | null; playerName?: string | null; playerSlug?: string | null }, mustLead = false): { name: string; slug: string } | null {
+  const raw = l.playerName?.trim();
+  if (!raw || !l.playerSlug || NOT_ONE_ATHLETE_MAKERS.has(l.artist)) return null;
+  const name = raw.split(/\s+/).map(capWord).join(' ');
+  // (accents folded for the shape test only: "Alperen Şengün")
+  if (!nameTokensOk(fold(name).split(' ')) || CARD_TAIL.test(name) || NOT_STAMP_NAME.test(name)) return null;
+  const slug = playerSlugOf(name);
+  if (!slug || slug !== l.playerSlug) return null;
+  const title = fold(String(l.title || ''));
+  if (!title || GROUP_PIECE.test(title)) return null;
+  const m = new RegExp(`(^|[^A-Za-z0-9])${reEsc(fold(name))}(?![A-Za-z0-9])`, 'i').exec(title);
+  if (!m) return null;
+  const at = m.index + m[1].length;
+  const before = title.slice(0, at), after = title.slice(at + fold(name).length);
+  if (NAME_AFTER.test(before)) return null;
+  const party = NAME_THEN_PARTY.exec(after);
+  if (party && nameTokensOk([capWord(party[1]), capWord(party[2])])) return null;
+  // the lead: nothing but a lot number and a date before the name
+  if (mustLead && leadOf(`${before.replace(/^\d{1,4}\s+/, '')}Z`) !== 'Z') return null;
+  return { name, slug };
 }
 
 function groupRow(name: string, kind: 'team' | 'set' | 'brand' | string): LotSubject {

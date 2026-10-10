@@ -42,6 +42,9 @@ import { facetKeysFor, facetSplits } from '../app/lib/entity/facets';
 import { isLiveUpcoming } from '../app/utils';
 import { verifiedMovers } from '../app/preview/terminal/verified';
 import type { AuctionLot } from '../app/types';
+import { parseCard, cardKey } from '../app/lib/cards';
+import { numericWatchRef, watchMaterialCoarse, isEditionLot, editionIdentityKey } from '../app/lib/identity';
+import { pokemonKey } from './sub-markets';
 
 /** sold-only entities need this much history to get a row (app/lib/entity/wire) */
 export { MIN_SOLD };
@@ -64,6 +67,21 @@ export function lensesOf(l: Lot): { lens: string; coarse: string; sport?: string
   const t = taxonOf(l);
   const lens = `${t.cat}:${t.sub}`;
   return { lens, coarse: MAKER_MARKETS.has(marketOf(l.artist)) ? lens : t.cat, sport: t.sport, domain: t.domain };
+}
+
+/** (P3, Oct 10) a sold lot's like-for-like identity — the unit the matched
+ *  yoy pairs on (app/lib/entity/stats yoyOf): the same card at the same
+ *  grade (cards: cardKey; Pokémon: sub-markets pokemonKey), the same watch
+ *  reference in the same case material, the same print edition. null = no
+ *  identity a resale could repeat (a unique work, most memorabilia). */
+export function identityOf(l: Lot, lens: string): string | null {
+  if (l.artist === 'pokemon') return pokemonKey(l);
+  if (lens.startsWith('sports-cards:')) return cardKey(parseCard(String(l.title || '')));
+  const ref = numericWatchRef(l);
+  if (ref) return `${ref}|${watchMaterialCoarse(l) || '?'}`;
+  const m = marketOf(l.artist);
+  if ((m === 'art' || m === 'design') && isEditionLot(l)) return editionIdentityKey(l);
+  return null;
 }
 
 /** the lens labels (one copy, shared with the client's decoder) */
@@ -90,6 +108,8 @@ function readerView(l: Lot): Lot {
     imageUrl: l.imageUrl, medium: l.medium, category: l.category, status: l.status,
     priceUsd: l.priceUsd, currentBid: l.currentBid, estimateHigh: l.estimateHigh, estimateLow: l.estimateLow,
     flown: l.flown,
+    // (P3) the identity readers' fields (identityOf)
+    reference: l.reference, formKey: l.formKey, saleName: l.saleName,
   } as Lot;
 }
 
@@ -170,7 +190,7 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): BuiltEntiti
     soldRows++;
     const a = acc(id);
     const ln = lensesOf(l);
-    a.pts.push({ p: row.priceUsd!, d: String(row.saleDate || '').slice(0, 10), h: row.auctionHouse || '', lens: I(ln.lens), coarse: I(ln.coarse), id: row.id, t: row.title || '', img: row.imageUrl || null, fx: facetKeysFor(id, l) });
+    a.pts.push({ p: row.priceUsd!, d: String(row.saleDate || '').slice(0, 10), h: row.auctionHouse || '', lens: I(ln.lens), coarse: I(ln.coarse), id: row.id, t: row.title || '', img: row.imageUrl || null, fx: facetKeysFor(id, l), k: identityOf(l, ln.lens) });
     note(a, l, ln);
   });
   for (const l of input.live) {

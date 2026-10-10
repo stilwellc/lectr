@@ -108,7 +108,7 @@ const footnote = [
 function moverClause(m: VerifiedMover) {
   return (
     <>
-      <B>{m.label} is {m.dir === 'up' ? 'up' : 'down'} {absPct(m.changePct)} over {HORIZON_PHRASE[m.horizon] ?? m.horizon}</B>
+      <B>{m.label} is {m.dir === 'up' ? 'up' : 'down'} {absPct(m.changePct)} {m.horizon.startsWith('since ') ? m.horizon : `over ${HORIZON_PHRASE[m.horizon] ?? m.horizon}`}</B>
       {' '}(95% CI {pct(m.ciLoPct)} to {pct(m.ciHiPct)}), on a {m.n.toLocaleString()}-lot cohort
     </>
   );

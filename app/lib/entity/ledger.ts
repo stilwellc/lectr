@@ -62,7 +62,7 @@ export interface Row {
   record: EntityRecord | null;
   verified: VerifiedMover | null;
   /** year-over-year, only when both sides clear the n gate (the build's rule) */
-  yoy: { pct: number; n: number; basis: 'median' | 'index' } | null;
+  yoy: { pct: number; n: number; basis: 'matched' | 'median' | 'index' } | null;
   thin: boolean;
   liveLots: AuctionLot[];
   /** "Matters": the summed priority of the row's three most important live lots */
@@ -256,7 +256,10 @@ const by = (a: number, b: number) => b - a;
  *  its two years (the build's gate is 10 a side; the column still prints
  *  every gated read) */
 export const MOVERS_MIN_N = 60;
-const moverTier = (r: Row) => (r.yoy ? (r.yoy.n >= MOVERS_MIN_N ? 0 : 1) : 2);
+/** …or, for a like-for-like read (basis 'matched'), on this many identities
+ *  sold in both years (its n counts pairs, not sales) */
+export const MOVERS_MIN_PAIRS = 30;
+const moverTier = (r: Row) => (r.yoy ? (r.yoy.n >= (r.yoy.basis === 'matched' ? MOVERS_MIN_PAIRS : MOVERS_MIN_N) ? 0 : 1) : 2);
 
 /** the ledger's comparator; `thin` sinks under supported rows (always for
  *  the sold-history reads, as the tie-break otherwise) */

@@ -296,6 +296,8 @@ export default function MakersPage() {
     return m;
   }, [rows]);
 
+  // the quarter in progress, as the demand series keys it ("2026 Q4")
+  const curQuarter = useMemo(() => { const t = localToday(); return `${t.slice(0, 4)} Q${Math.ceil(Number(t.slice(5, 7)) / 3)}`; }, []);
   const groups = useMemo(() =>
     MARKETS
       .filter(m => m.key !== 'all' && (activeKey === 'all' || m.key === activeKey))
@@ -310,15 +312,20 @@ export default function MakersPage() {
         }
         const live = g.reduce((s, r) => s + r.live, 0);
         const flags = g.reduce((s, r) => s + r.flags, 0);
+        // (P3) the newest COMPLETE quarter's read — never the quarter in
+        // progress (a 10-day-old Q4 printed Pop Culture −20% while Q3 read +8%)
         const ds = demand?.[m.key] || [];
+        let dp: (typeof ds)[number] | null = null;
+        for (let i = ds.length - 1; i >= 0; i--) if (ds[i].date < curQuarter) { dp = ds[i]; break; }
         return {
           key: m.key as Market, label: m.label, rows: g, named: named.length, shown, more, live, flags,
           soldMax: soldMaxBy.get(m.key as Market) ?? 1,
-          demandNow: ds.length ? ds[ds.length - 1].value : null,
+          demandNow: dp ? dp.value : null,
+          demandQ: dp ? dp.date : null,
         };
       })
       .filter(g => g.rows.length > 0),
-    [visible, soldMaxBy, activeKey, demand, caps]);
+    [visible, soldMaxBy, activeKey, demand, caps, curQuarter]);
 
   // ── THE LOTS — the market's live book under the same filters + search ──
   const lkSet = useMemo(() => new Set(lk), [lk]);
@@ -848,7 +855,7 @@ export default function MakersPage() {
                       <span className="mk-group-read">
                         {g.flags > 0 && <b className="mk-group-flags">{g.flags} flagged</b>}
                         {g.live > 0 && <>{g.flags > 0 ? ' · ' : ''}{g.live.toLocaleString()} on the block</>}
-                        {g.demandNow !== null && <>{g.flags > 0 || g.live > 0 ? ' · ' : ''}demand <b data-dir={g.demandNow >= 0 ? 'up' : 'down'}>{formatDemand(g.demandNow)}</b></>}
+                        {g.demandNow !== null && <>{g.flags > 0 || g.live > 0 ? ' · ' : ''}demand <b data-dir={g.demandNow >= 0 ? 'up' : 'down'} title={g.demandQ ? `Median hammer over estimate, the 12 months to the end of ${g.demandQ}` : undefined}>{formatDemand(g.demandNow).replace('-', '−')}</b></>}
                       </span>
                       <div className="mk-cols">
                         <span /><span className="mk-col-name">{nameHead(g.key)}</span>

@@ -61,8 +61,10 @@ export interface EntitySummary extends EntityRef {
   /** complete quarters only (never the partial current quarter); null = thin quarter (n<3) */
   spark: (number | null)[] | null;
   sparkN: number[] | null;
-  /** only when both sides n >= MIN */
-  yoy: { pct: number; n: number; basis: 'median' | 'index' } | null;
+  /** like for like (app/lib/entity/stats yoyOf): 'matched' = the median of
+   *  per-identity ratios, n = identities sold in both years; 'median' = pooled
+   *  medians, only on a stable intake, n = the smaller year */
+  yoy: { pct: number; n: number; basis: 'matched' | 'median' | 'index' } | null;
   /** market.json verified mover, passed through */
   verified: unknown | null;
   /** sold12m < 5 → sorts below well-supported rows */
