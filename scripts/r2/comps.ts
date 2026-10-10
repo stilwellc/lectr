@@ -11,16 +11,14 @@ import type { AuctionLot } from '../../app/types';
 import type { LotPack, PackRow } from '../../app/lib/page-data';
 import { marketOf } from '../../app/constants';
 import {
-  appraiseLot, soldCompBand, isSportsScienceObject, areComparable,
+  appraiseLot, soldCompBand, isSportsScienceObject, contextComps,
   scienceReferenceBand, cultureReferenceBand, makerReferenceBand,
 } from '../../app/lib/comps';
-import { scoreComparable } from '../../app/lib/comp-score';
 import { anchorPartitions } from './pools';
 import { displayRow } from '../../functions/_lib/format';
 
 const slim = (l: AuctionLot) => displayRow(l as unknown as Record<string, unknown>) as unknown as PackRow;
 
-const MAX_CONTEXT = 15;
 const byDateDesc = (a: AuctionLot, b: AuctionLot) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime();
 const pricesOf = (pool: AuctionLot[]) => pool.map(l => Math.round(l.priceUsd || 0)).filter(p => p > 0).sort((a, b) => a - b);
 
@@ -107,16 +105,11 @@ export function compsFor(src: CompSource, lot: AuctionLot): CompsAnswer {
     if (rows.length >= 2) pack.p = rows.sort((a, b) => ((a.saleDate || '') < (b.saleDate || '') ? -1 : 1)).map(slim);
   }
 
-  // the modal's context list: only when there is neither a call nor a band
+  // the modal's context list: only when there is neither a call nor a band —
+  // comps.contextComps, the modal's exact read (guarded: a pool that fails the
+  // engine's floor / dispersion / ×5 scale guards is no pool)
   let ctx: PackRow[] = [];
-  if (!pack.c && !pack.b) {
-    const scored = formPool
-      .filter(l => l.artist === lot.artist && l.status === 'sold' && l.priceUsd && l.id !== lot.id && areComparable(lot, l))
-      .map(s => ({ lot: s, score: scoreComparable(lot, s), t: new Date(s.saleDate).getTime() }));
-    // the modal's exact comparator, with each date parsed once
-    scored.sort((a, b) => (Math.abs(a.score - b.score) > 0.01 ? b.score - a.score : b.t - a.t));
-    ctx = scored.slice(0, MAX_CONTEXT).map(x => slim(x.lot));
-  }
+  if (!pack.c && !pack.b) ctx = contextComps(lot, formPool).rows.map(slim);
 
   const exId = lot.value?.exact?.id;
   const ex = exId ? src.byId(String(exId)) : undefined;

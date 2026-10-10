@@ -1,9 +1,9 @@
 /**
  * comp-score.ts — the comps modal's CONTEXT ranking (similarity of a sold lot
- * to the anchor: medium class, dimensions, estimate proximity, year), lifted
- * verbatim from app/components/ComparableModal.tsx so the server-side comps
- * API (functions/_lib/comps-api.ts) ranks context rows exactly as the modal
- * did over the client corpus. Pure; no React.
+ * to the anchor: medium class, dimensions, estimate proximity, year). Read
+ * ONLY through comps.contextComps — the modal and the build-time comps
+ * answers (scripts/r2/comps.ts) rank context rows with the same call.
+ * Pure; no React.
  */
 import type { AuctionLot } from '../types';
 

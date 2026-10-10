@@ -27,6 +27,8 @@ import { AuctionLot, ObjectType, SoldComp } from '../types';
 // import the shape gate below without a module cycle.
 import { quantileSorted as quantile, medianSorted } from './stats';
 import { readWatchKey, refSuffixMaterial } from './watch-ref';
+import { scoreComparable } from './comp-score';
+import { marketOf } from '../constants';
 
 export type Form =
   | 'book' | 'ephemera' | 'poster' | 'photograph' | 'textile'
@@ -257,13 +259,21 @@ function parseDimsUncached(dims: string): [number, number] | null {
   if (sheet) str = sheet[1].trim();
   // word-boundary: bare includes('in') fired on 'included'/'in.' suffixes of
   // cm-first strings and mis-scaled dims 2.54× (area gates then reject true comps)
-  const useIn = /(?:\b(?:in|inch|inches)\b|")/.test(str.toLowerCase());
+  // The LEADING measurement's unit wins (Oct 10 2026): the unit token may sit
+  // flush on the number ("48 x 41in. (122 x 104cm.)" — `\bin` never matched
+  // after a digit, so the cm parenthetical rescaled a 122cm Bacon to 48cm
+  // and 35cm heads cleared the 2.5× area gate), and a cm-first string with
+  // an inch parenthetical ("122 x 104 cm (48 x 41 in.)") is centimetres.
+  const low = str.toLowerCase();
+  const inAt = low.search(/(?<=[\d\s.)])(?:in|inch|inches)\b|"/);
+  const cmAt = low.search(/(?<=[\d\s.])cm\b/);
+  const isCm = cmAt >= 0 && (inAt < 0 || cmAt < inAt);
   const tokens = str.split(/\s*(?:[x×]|\bby\b)\s*/i).map(s => s.trim());
   if (tokens.length < 2) return null;
   const h = parseFrac(tokens[0]);
   const w = parseFrac(tokens[1]);
   if (!h || !w) return null;
-  if (!useIn && str.toLowerCase().includes('cm')) return [h / 2.54, w / 2.54];
+  if (isCm) return [h / 2.54, w / 2.54];
   return [h, w];
 }
 
@@ -912,6 +922,17 @@ function compPoolRead(lot: AuctionLot, allLots: AuctionLot[]): CompRead | null {
   // 2 · same-form comps through the hard gates (curried: anchor derived once)
   if (pool.length === 0) {
     pool = sold.filter(comparableTo(lot));
+    // ESTIMATE-TIER BAND (art/design form path, Oct 10 2026): a unique work
+    // comps works the market priced at its tier, never the maker's whole
+    // same-form record — "5 Deaths Twice II" ($9.3M est) read a $135K median
+    // off 1980s commission portraits and small undated canvases. The band is
+    // on each comp's own PRE-SALE estimate (the house's tier judgment), never
+    // on its realized price, so the read never selects its own outcome.
+    // Measured (temporal holdout, art/design form reads with an estimate):
+    //   ≥$500K  err ×2.15 → ×1.26 · >3× wrong 32.2% → 2.0% · cov 858 → 796
+    //   $100–500K ×2.07 → ×1.32 · 30.4% → 3.3% · <$50K ×1.58 → ×1.34 · 14.0% → 3.5%
+    // An anchor with too few tier comps falls to the pool floor and abstains.
+    if (tierBanded(lot)) pool = pool.filter(c => inEstimateTier(c, estMid));
     if (pool.length > 24) {
       // prefer recent sales and titles that share words with this lot —
       // overlap/date are scored ONCE per lot, not once per sort comparison
@@ -1016,6 +1037,72 @@ function compPoolRead(lot: AuctionLot, allLots: AuctionLot[]): CompRead | null {
   }
 
   return { pool, med, kind, form, confidence, estMid, flagEligible };
+}
+
+/** THE ESTIMATE-TIER BAND — a comp's own pre-sale estimate midpoint must sit
+ *  within ×/÷ COMP_TIER.ratio of the anchor's. ×2 measured better than ×3 at
+ *  every tier (≥$500K: ×1.26 vs ×1.35 error, 2.0% vs 3.6% wild). */
+export const COMP_TIER = { ratio: 2 };
+const TIER_MARKETS = new Set(['art', 'design']);
+/** the art / design form path is the measured population; watches gate on
+ *  reference + material, sports/science objects on identity */
+function tierBanded(lot: AuctionLot): boolean {
+  return TIER_MARKETS.has(marketOf(lot.artist)) && !isSportsScienceObject(lot);
+}
+function inEstimateTier(c: AuctionLot, estMid: number): boolean {
+  const e = estUsdBand(c);
+  if (!e.low || !e.high) return false; // no pre-sale tier evidence → not a tier comp
+  const m = (e.low + e.high) / 2;
+  return m <= estMid * COMP_TIER.ratio && m >= estMid / COMP_TIER.ratio;
+}
+
+/** THE POOL GUARDS every printed comp median answers to (compPoolRead's
+ *  frozen invariants, ENGINE SPEC v2 §1.1): pool floor ≥ 3, IQR/median ≤ 2.5,
+ *  and — when the lot carries an estimate — the median inside ×/÷ 5 of it
+ *  (value.ts POOL_SCALE: a pool off the estimate's scale prices another
+ *  object). Returns the median, or null = abstain. */
+export function guardedMedian(prices: readonly number[], estMid: number | null): number | null {
+  if (prices.length < 3) return null;
+  const sorted = prices.slice().sort((a, b) => a - b);
+  const med = median(sorted);
+  if (!(med > 0)) return null;
+  if ((quantile(sorted, 0.75) - quantile(sorted, 0.25)) / med > 2.5) return null;
+  if (estMid && (med > estMid * 5 || med < estMid / 5)) return null;
+  return med;
+}
+
+/** THE CONTEXT READ — the comps modal's rows for a lot with neither an
+ *  engine call nor a realized band (and scripts/r2/comps.ts's ctx rows):
+ *  gated comps ranked by similarity (comp-score), top CONTEXT_MAX. Before
+ *  Oct 10 2026 these rows printed a "Median" stat with none of the engine's
+ *  guards — the $9.3M Warhol "5 Deaths Twice II" read $135K, and 11 of 31
+ *  live ≥$500K art/design lots printed a context median outside ×/÷ 5 of
+ *  their estimate. Now (a) art / design rows read through the estimate-tier
+ *  band (COMP_TIER, the appraisal's own law) and (b) the pool answers to
+ *  guardedMedian: a pool that fails it is NO pool (rows empty → the modal's
+ *  "no comparable sales clear the gates" state). Measured (temporal holdout,
+ *  art/design sold lots since 2015, read = the context median):
+ *    ≥$500K     err ×1.32 → ×1.22 · >3× wrong 14.9% → 2.4% · cov 95.2% → 87.6%
+ *    $100–500K  ×1.38 → ×1.30 · 10.4% → 2.9% · cov 94.0% → 89.7%
+ *    <$100K     ×1.44 → ×1.40 · 10.5% → 7.0% · cov 91.1% → 87.6%
+ *  (guards alone, no tier band: ≥$500K 6.7% wild at 85.8% cov — the band
+ *  both purifies and RESCUES pools the ×5 guard would kill). */
+export const CONTEXT_MAX = 15;
+export function contextComps(lot: AuctionLot, allLots: AuctionLot[]): { rows: AuctionLot[]; median: number | null } {
+  const gate = comparableTo(lot);
+  const est = estUsdBand(lot);
+  const estMid = est.low && est.high ? (est.low + est.high) / 2 : null;
+  // the same estimate-tier band the appraisal reads through (art / design)
+  const tier = estMid && tierBanded(lot) ? estMid : null;
+  const rows = allLots
+    .filter(l => l.artist === lot.artist && l.status === 'sold' && l.priceUsd && l.id !== lot.id && gate(l)
+      && (tier == null || inEstimateTier(l, tier)))
+    .map(s => ({ s, sc: scoreComparable(lot, s), t: new Date(s.saleDate).getTime() }))
+    .sort((a, b) => (Math.abs(a.sc - b.sc) > 0.01 ? b.sc - a.sc : b.t - a.t))
+    .slice(0, CONTEXT_MAX)
+    .map(x => x.s);
+  const med = guardedMedian(rows.map(l => l.priceUsd!), estMid);
+  return med == null ? { rows: [], median: null } : { rows, median: med };
 }
 
 /** set size named in a design title ("pair of", "set of six", "Two Early LCW
