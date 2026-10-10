@@ -46,7 +46,6 @@ import type { AuctionLot } from '../app/types';
 import { parseCard, cardKey } from '../app/lib/cards';
 import { numericWatchRef, watchMaterialCoarse, isEditionLot, editionIdentityKey } from '../app/lib/identity';
 import { pokemonKey } from './sub-markets';
-import { servedSoldSample, inSampledGroup } from './lib/served-sample';
 
 /** sold-only entities need this much history to get a row (app/lib/entity/wire) */
 export { MIN_SOLD };
@@ -188,14 +187,11 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): BuiltEntiti
   const intern = new Map<string, string>();
   const I = (k: string) => { const h = intern.get(k); if (h) return h; intern.set(k, k); return k; };
   let soldRows = 0, unkeyed = 0;
-  // (r7, QA2 Q2) a result row links its lot only when the lot page can open
-  // it: sold cards / Pokémon outside the served sample live in the corpus
-  // alone, so their rows keep every figure but ship id '' (a plain row)
-  const sampled: { id: unknown; artist: unknown; status: unknown; realizedUsd: unknown; saleDate: unknown }[] = [];
-  input.eachSold(row => { if (inSampledGroup(row)) sampled.push({ id: row.id, artist: row.artist, status: row.status, realizedUsd: row.realizedUsd, saleDate: row.saleDate }); });
-  const served = servedSoldSample(sampled);
-  sampled.length = 0;
-  const linkId = (row: Lot) => (inSampledGroup(row) && !served.has(String(row.id)) ? '' : row.id);
+  // (r7) every result row keeps its lot link: sold cards / Pokémon outside
+  // the served sample still open — the lot page resolves them from the lots
+  // table (LotPage's PostgREST path; sync-lots-db upserts the whole corpus).
+  // Verified on prod: 40/40 bucket result ids from five player pages open.
+  const linkId = (row: Lot) => row.id;
   input.eachSold(row => {
     if (row.status !== 'sold' || !(row.priceUsd! > 0)) return;
     if (seen.has(row.id)) return;

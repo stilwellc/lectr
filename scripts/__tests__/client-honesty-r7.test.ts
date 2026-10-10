@@ -30,7 +30,7 @@ test('served sample: newest + top by price per group, deterministic on ties, unp
   assert.ok(!inSampledGroup({ artist: 'toString', status: 'sold' }));
 });
 
-test('entity results link only lots the lot page can open (QA2 Q2)', () => {
+test('entity results keep every lot link — the lots table opens corpus-only sales (QA2 Q2, verified 40/40 on prod)', () => {
   let n = 0;
   const card = (extra: Record<string, unknown>) => ({ id: `rea-${n++}`, artist: 'graded-cards', title: '1952 Topps #311 Mickey Mantle - PSA 8', status: 'sold', saleDate: '2026-06-01', priceUsd: 50_000, realizedUsd: 50_000, auctionHouse: 'REA', category: 'object', subCat: 'cards', ...extra }) as unknown as AuctionLot;
   const sold = Array.from({ length: 12 }, () => card({}));
@@ -43,7 +43,7 @@ test('entity results link only lots the lot page can open (QA2 Q2)', () => {
   const all = [...d!.top, ...d!.recent];
   const rec = all.find(r => r.p === 900_000);
   assert.ok(rec, 'the corpus-only sale still counts');
-  assert.equal(rec!.id, '', 'and renders as a plain row');
+  assert.ok(rec!.id.startsWith('rea-'), 'and keeps its link (LotPage resolves it from the lots table)');
   assert.ok(all.filter(r => r.p === 50_000).every(r => r.id.startsWith('rea-')));
 });
 
