@@ -40,6 +40,7 @@ import MarketSwitch from '../../components/MarketSwitch';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS, feedFromParams, feedToParams } from '../../components/FeedToolbar';
 import { useUrlState, useLastVisit, passesTriage } from '../../lib/feed-filters';
 import { byPriority, shortlist, reasonOf, forYou, spread } from '../../lib/priority';
+import { foldVariants, foldNote, foldQuery } from '../../lib/fold';
 import { useFollows, affinityOf } from '../../lib/follows';
 import { Colophon, daysWord, pickCall } from '../../components/Terminal';
 import Flick from '../../components/Flick';
@@ -247,7 +248,7 @@ function BidVelChip({ lot }: { lot: AuctionLot }) {
   );
 }
 
-function FeedRow({ lot, onOpen, tone, note }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down'; note?: string | null }) {
+function FeedRow({ lot, onOpen, tone, note, onNote }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down'; note?: string | null; onNote?: () => void }) {
   const est =
     lot.estimateLow || lot.estimateHigh
       ? (lot.estimateLow && lot.estimateHigh && formatPrice(lot.estimateLow) !== formatPrice(lot.estimateHigh)
@@ -278,7 +279,20 @@ function FeedRow({ lot, onOpen, tone, note }: { lot: AuctionLot; onOpen: () => v
       <span className="ray-feedrow-main">
         <span className="ray-feedrow-maker">{ARTIST_LABEL[lot.artist] || lot.artist}</span>
         <span className="ray-feedrow-title">{craftTitle(lot.title)}</span>
-        {note && <span className="ray-feedrow-title" style={{ color: 'var(--color-text-secondary)', fontSize: '0.86em' }}>{note}</span>}
+        {note && (onNote ? (
+          // the row is itself a button: the folded note presses as a link
+          // inside it (same type as the plain note — no new chrome)
+          <span
+            className="ray-feedrow-title"
+            role="link"
+            tabIndex={0}
+            style={{ color: 'var(--color-text-secondary)', fontSize: '0.86em', cursor: 'pointer' }}
+            onClick={e => { e.preventDefault(); e.stopPropagation(); onNote(); }}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onNote(); } }}
+          >
+            {note}
+          </span>
+        ) : <span className="ray-feedrow-title" style={{ color: 'var(--color-text-secondary)', fontSize: '0.86em' }}>{note}</span>)}
       </span>
       <span className="ray-feedrow-right">
         <b>{est}</b>
@@ -740,12 +754,53 @@ export default function TerminalHomePage() {
   // player, category, house) — signed in or not (app/lib/follows)
   const youTab = follows.length > 0 && feedFilters.tab === 'you';
   const topTab = !youTab && feedFilters.sort === 'priority' && (feedFilters.tab ?? 'top') !== 'all';
+  // Oct 9 — near-duplicates FOLD: the same card in several grades at one
+  // house (the Munson rookie ×11 at REA), or the same lot title at one house
+  // (wax packs ×5), shows once — its best-priority copy — with the others
+  // named on the reason line; pressing that line searches the feed for the
+  // whole group (app/lib/fold). Off when the reader asked for something by
+  // name (a text query or a maker): then every copy is the answer.
+  const foldOn = !feedFilters.query.trim() && !feedFilters.maker;
+  const fold = useMemo(() => (foldOn ? foldVariants(feedAll) : null), [feedAll, foldOn]);
   const feed = useMemo(
     () => (youTab
       ? forYou(feedAll, l => affinityOf(l, follows), Date.now(), 20)
-      : topTab ? shortlist(feedAll, Date.now(), 20) : feedAll),
-    [feedAll, topTab, youTab, follows]
+      : topTab ? shortlist(feedAll, Date.now(), 20) : fold ? fold.reps : feedAll),
+    [feedAll, topTab, youTab, follows, fold]
   );
+  // the reason line: the shortlist's "why it's here", then the folded copies
+  const alsoOf = (lot: AuctionLot): string | null => {
+    const g = fold?.group.get(lot.id);
+    return g ? foldNote(lot, g.members.filter(m => m.id !== lot.id), g.kind) : null;
+  };
+  const noteOf = (lot: AuctionLot): string | null =>
+    [topTab || youTab ? reasonOf(lot) : null, alsoOf(lot)].filter(Boolean).join(' · ') || null;
+  // pressing a folded note → the whole group, by the feed's own search (one
+  // stable callback per group member so memoized cards don't re-render)
+  const filtersRef = useRef(feedFilters);
+  filtersRef.current = feedFilters;
+  const foldOpeners = useMemo(() => {
+    const m = new Map<string, () => void>();
+    if (!fold) return m;
+    fold.group.forEach((g, id) => {
+      const q = foldQuery(g.members);
+      if (!q) return;
+      m.set(id, () => {
+        setFeedFilters({ ...filtersRef.current, query: q, tab: 'all' });
+        setVisibleUpcoming(pageSize);
+        document.getElementById('on-the-block')?.scrollIntoView({ behavior: 'smooth' });
+      });
+    });
+    return m;
+  }, [fold, setFeedFilters, pageSize]);
+  // lots (not cards) still to come below the fold of the page — a folded
+  // card carries its copies, so "remaining" stays a count of lots
+  const remainingLots = useMemo(() => {
+    if (!fold || topTab || youTab) return feed.length - visibleUpcoming;
+    let shown = 0;
+    for (const l of feed.slice(0, visibleUpcoming)) shown += fold.group.get(l.id)?.members.length ?? 1;
+    return feedAll.length - shown;
+  }, [fold, topTab, youTab, feed, feedAll, visibleUpcoming]);
 
 
   const feedKey = useMemo(() => {
@@ -1004,7 +1059,7 @@ export default function TerminalHomePage() {
                   belowIds={belowIds}
                   filters={feedFilters}
                   onChange={handleFilters}
-                  shown={feed.length}
+                  shown={fold && !topTab && !youTab ? feedAll.length : feed.length}
                   total={upcoming.length}
                   market={activeKey}
                   onMarketReset={() => setMarket('all')}
@@ -1090,6 +1145,16 @@ export default function TerminalHomePage() {
                                 >
                                   {craftTitle(lot.title)}
                                 </button>
+                                {(() => {
+                                  // folded copies — the Signal column's own sub-line type
+                                  const n = alsoOf(lot);
+                                  if (!n) return null;
+                                  const open = foldOpeners.get(lot.id);
+                                  const st = { display: 'block', color: 'var(--color-text-faint)', fontSize: 10.5 } as const;
+                                  return open
+                                    ? <button type="button" onClick={e => { e.stopPropagation(); open(); }} style={{ ...st, background: 'none', border: 0, padding: 0, fontFamily: 'inherit', textAlign: 'left', cursor: 'pointer' }}>{n}</button>
+                                    : <span style={st}>{n}</span>;
+                                })()}
                               </td>
                               <td>{lot.auctionHouse}</td>
                               <td className="t-cat">{lot.subCat ? subCatLabel(lot.subCat) : CAT_LABEL[lot.category] || '—'}</td>
@@ -1182,7 +1247,8 @@ export default function TerminalHomePage() {
                             lot={lot}
                             onOpen={() => setTableLot(lot)}
                             tone={feedTone(lot, belowIds, belowSignal.hasSig)}
-                            note={topTab || youTab ? reasonOf(lot) : null}
+                            note={noteOf(lot)}
+                            onNote={foldOpeners.get(lot.id)}
                           />
                         </div>
                       ) : (
@@ -1198,7 +1264,8 @@ export default function TerminalHomePage() {
                             saved={isSaved(lot.id)}
                             onToggleSave={toggle}
                             lastCrawl={lastCrawl || undefined}
-                            note={topTab || youTab ? reasonOf(lot) : null}
+                            note={noteOf(lot)}
+                            onNote={foldOpeners.get(lot.id)}
                           />
                         </div>
                       )
@@ -1214,7 +1281,7 @@ export default function TerminalHomePage() {
                 {visibleUpcoming < feed.length && (
                   <div style={{ display: 'flex', justifyContent: 'center', marginTop: 28 }}>
                     <button className="ray-show-more" onClick={() => setVisibleUpcoming(v => v + pageSize)}>
-                      Show more ({(feed.length - visibleUpcoming).toLocaleString()} remaining)
+                      Show more ({remainingLots.toLocaleString()} remaining)
                     </button>
                   </div>
                 )}
