@@ -35,11 +35,12 @@ import PastResults from '../../components/PastResults';
 import RayEntrance, { RayLoading } from '../../components/RayEntrance';
 import SettlementSlip from '../../components/SettlementSlip';
 import { sportOfLot } from '../../lib/submarkets';
-import { subCatLabel } from '../../lib/subcat-labels';
 import MarketSwitch from '../../components/MarketSwitch';
-import FeedToolbar, { FeedFilters, FEED_DEFAULTS, feedFromParams, feedToParams } from '../../components/FeedToolbar';
-import { useUrlState, useLastVisit, passesTriage } from '../../lib/feed-filters';
-import { byPriority, shortlist, reasonOf, forYou } from '../../lib/priority';
+import FeedToolbar, { FeedFilters, FEED_DEFAULTS, FEED_PARAM_KEYS, feedFromParams, feedToParams } from '../../components/FeedToolbar';
+import { useUrlState, useLastVisit, passesTriage, houseBaselines, memoryOf, restoreParams, readFeedMemory, writeFeedMemory } from '../../lib/feed-filters';
+import { byPriority, shortlist, reasonOf, forYou, spread } from '../../lib/priority';
+import { makerLineOf, subColumnOf } from '../../lib/lot-labels';
+import { foldVariants, foldNote, foldQuery } from '../../lib/fold';
 import { useFollows, affinityOf } from '../../lib/follows';
 import { Colophon, daysWord, pickCall } from '../../components/Terminal';
 import Flick from '../../components/Flick';
@@ -156,18 +157,9 @@ function openCommandK() {
 // app/utils.ts as `trueSaleDay`, shared with isLiveUpcoming so the feed, the
 // nav counts, /value and /[artist] all judge liveness on the same day string.
 
-// Ledger-table dressing: the category cell's short label, and the
-// days-to-hammer count (whole days from the reader's local day to the true
+// Ledger-table dressing: the days-to-hammer count (whole days from the reader's local day to the true
 // sale day — "In 2d" is a promise to the user, so it runs on the user's clock,
 // the same one the feed filter uses).
-const CAT_LABEL: Record<string, string> = {
-  original: 'Original',
-  print: 'Print',
-  photograph: 'Photo',
-  sculpture: 'Sculpture',
-  design: 'Design',
-  object: 'Object',
-};
 function daysToHammer(l: AuctionLot, todayDay: string): number | null {
   const day = trueSaleDay(l);
   if (!day) return null;
@@ -247,7 +239,7 @@ function BidVelChip({ lot }: { lot: AuctionLot }) {
   );
 }
 
-function FeedRow({ lot, onOpen, tone, note }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down'; note?: string | null }) {
+function FeedRow({ lot, onOpen, tone, note, onNote }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down'; note?: string | null; onNote?: () => void }) {
   const est =
     lot.estimateLow || lot.estimateHigh
       ? (lot.estimateLow && lot.estimateHigh && formatPrice(lot.estimateLow) !== formatPrice(lot.estimateHigh)
@@ -276,9 +268,22 @@ function FeedRow({ lot, onOpen, tone, note }: { lot: AuctionLot; onOpen: () => v
         )}
       </span>
       <span className="ray-feedrow-main">
-        <span className="ray-feedrow-maker">{ARTIST_LABEL[lot.artist] || lot.artist}</span>
+        <span className="ray-feedrow-maker">{makerLineOf(lot).name}</span>
         <span className="ray-feedrow-title">{craftTitle(lot.title)}</span>
-        {note && <span className="ray-feedrow-title" style={{ color: 'var(--color-text-secondary)', fontSize: '0.86em' }}>{note}</span>}
+        {note && (onNote ? (
+          // the row is itself a button: the folded note presses as a link
+          // inside it (same type as the plain note — no new chrome)
+          <span
+            className="ray-feedrow-title"
+            role="link"
+            tabIndex={0}
+            style={{ color: 'var(--color-text-secondary)', fontSize: '0.86em', cursor: 'pointer' }}
+            onClick={e => { e.preventDefault(); e.stopPropagation(); onNote(); }}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onNote(); } }}
+          >
+            {note}
+          </span>
+        ) : <span className="ray-feedrow-title" style={{ color: 'var(--color-text-secondary)', fontSize: '0.86em' }}>{note}</span>)}
       </span>
       <span className="ray-feedrow-right">
         <b>{est}</b>
@@ -388,6 +393,30 @@ export default function TerminalHomePage() {
   // Oct 8: the feed state lives in the URL (reload / share reopens the view)
   const [feedFilters, setFeedFilters] = useUrlState<FeedFilters>(FEED_DEFAULTS, feedFromParams, feedToParams);
   const prevVisitDay = useLastVisit();
+  // a house's first-crawl flood is not "new" (feed-filters houseBaselines),
+  // read off the whole loaded book so every market agrees
+  const baselines = useMemo(() => houseBaselines(allLots), [allLots]);
+  // Oct 9 — "open my feed the way I left it": a bare visit (no feed param in
+  // the URL) restores the reader's last triage + tab + sort on this device;
+  // a URL with any feed param wins untouched. Runs after useUrlState's own
+  // mount read (effects fire in order), so the restore lands in the URL too.
+  const [restoredView, setRestoredView] = useState(false);
+  useEffect(() => {
+    const here = new URLSearchParams(window.location.search);
+    if (FEED_PARAM_KEYS.some(k => here.has(k))) return;
+    const p = restoreParams(readFeedMemory(), activeKey);
+    if (!p) return;
+    setFeedFilters(feedFromParams(p));
+    setRestoredView(true);
+    // mount-only: the memory is read once per visit
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // every reader-made change is the new "way I left it"
+  const rememberFeed = useCallback((next: FeedFilters) => {
+    const p = new URLSearchParams();
+    feedToParams(next, p);
+    writeFeedMemory(memoryOf(p, activeKey));
+  }, [activeKey]);
   const { follows } = useFollows();
   const [tableLot, setTableLotRaw] = useState<AuctionLot | null>(null);
   // THE MODAL JOINS HISTORY (audit-navbugs defect 1): opening a lot pushes a
@@ -682,7 +711,7 @@ export default function TerminalHomePage() {
     if (f.saleDay) arr = arr.filter(l => l.saleDate?.slice(0, 10) === f.saleDay);
     if (f.belowOnly) arr = arr.filter(l => belowIds.has(l.id));
     // triage: closing window, clean category/sub, house, value floor, new
-    arr = arr.filter(l => passesTriage(l, f, { prevVisitDay }));
+    arr = arr.filter(l => passesTriage(l, f, { prevVisitDay, baselines }));
     if (q) {
       arr = arr.filter(l =>
         `${ARTIST_LABEL[l.artist] || l.artist} ${l.title} ${l.auctionHouse} ${l.saleName} ${l.medium || ''}`
@@ -693,10 +722,12 @@ export default function TerminalHomePage() {
     const est = (l: typeof arr[number]) => l.estimateHigh || l.estimateLow || l.currentBid || 0;
     const past = (l: AuctionLot) => !!l.resultsPending && trueSaleDay(l) !== '' && trueSaleDay(l) < crawlDay;
     if (f.sort === 'priority') {
-      // "Matters most" (app/lib/priority): size, measured edge, evidence,
-      // closing time — results-pending lots still sink to the end
+      // "Matters most" (app/lib/priority): size on each market's own scale,
+      // measured edge, evidence, closing time — then re-dealt so no one sale
+      // or player runs >3 deep in any 12 (a 3,489-lot REA night can't wall
+      // the first screens). Results-pending lots still sink to the end.
       const now = Date.now();
-      const live = arr.filter(l => !past(l)).sort(byPriority(now));
+      const live = spread(arr.filter(l => !past(l)).sort(byPriority(now)));
       arr = [...live, ...arr.filter(past)];
     } else if (f.sort === 'est-desc') arr = [...arr].sort((a, b) => est(b) - est(a));
     else if (f.sort === 'est-asc') arr = [...arr].sort((a, b) => est(a) - est(b));
@@ -729,7 +760,7 @@ export default function TerminalHomePage() {
       }
     }
     return arr;
-  }, [upcoming, feedFilters, belowSignal, belowIds, pageSize, crawlDay, prevVisitDay]);
+  }, [upcoming, feedFilters, belowSignal, belowIds, pageSize, crawlDay, prevVisitDay, baselines]);
 
   // The feed the reader sees. "What matters" (the default tab, Matters-most
   // order only) is the capped shortlist of whatever is filtered: ≥$2.5K,
@@ -738,28 +769,82 @@ export default function TerminalHomePage() {
   // player, category, house) — signed in or not (app/lib/follows)
   const youTab = follows.length > 0 && feedFilters.tab === 'you';
   const topTab = !youTab && feedFilters.sort === 'priority' && (feedFilters.tab ?? 'top') !== 'all';
+  // Oct 9 — near-duplicates FOLD: the same card in several grades at one
+  // house (the Munson rookie ×11 at REA), or the same lot title at one house
+  // (wax packs ×5), shows once — its best-priority copy — with the others
+  // named on the reason line; pressing that line searches the feed for the
+  // whole group (app/lib/fold). Off when the reader asked for something by
+  // name (a text query or a maker): then every copy is the answer.
+  const foldOn = !feedFilters.query.trim() && !feedFilters.maker;
+  const fold = useMemo(() => (foldOn ? foldVariants(feedAll) : null), [feedAll, foldOn]);
   const feed = useMemo(
     () => (youTab
       ? forYou(feedAll, l => affinityOf(l, follows), Date.now(), 20)
-      : topTab ? shortlist(feedAll, Date.now(), 20) : feedAll),
-    [feedAll, topTab, youTab, follows]
+      : topTab ? shortlist(feedAll, Date.now(), 20) : fold ? fold.reps : feedAll),
+    [feedAll, topTab, youTab, follows, fold]
   );
+  // the reason line: the shortlist's "why it's here", then the folded copies
+  const alsoOf = (lot: AuctionLot): string | null => {
+    const g = fold?.group.get(lot.id);
+    return g ? foldNote(lot, g.members.filter(m => m.id !== lot.id), g.kind) : null;
+  };
+  const noteOf = (lot: AuctionLot): string | null =>
+    [topTab || youTab ? reasonOf(lot) : null, alsoOf(lot)].filter(Boolean).join(' · ') || null;
+  // pressing a folded note → the whole group, by the feed's own search (one
+  // stable callback per group member so memoized cards don't re-render)
+  const filtersRef = useRef(feedFilters);
+  filtersRef.current = feedFilters;
+  const foldOpeners = useMemo(() => {
+    const m = new Map<string, () => void>();
+    if (!fold) return m;
+    fold.group.forEach((g, id) => {
+      const q = foldQuery(g.members);
+      if (!q) return;
+      m.set(id, () => {
+        setFeedFilters({ ...filtersRef.current, query: q, tab: 'all' });
+        setVisibleUpcoming(pageSize);
+        document.getElementById('on-the-block')?.scrollIntoView({ behavior: 'smooth' });
+      });
+    });
+    return m;
+  }, [fold, setFeedFilters, pageSize]);
+  // lots (not cards) still to come below the fold of the page — a folded
+  // card carries its copies, so "remaining" stays a count of lots
+  const remainingLots = useMemo(() => {
+    if (!fold || topTab || youTab) return feed.length - visibleUpcoming;
+    let shown = 0;
+    for (const l of feed.slice(0, visibleUpcoming)) shown += fold.group.get(l.id)?.members.length ?? 1;
+    return feedAll.length - shown;
+  }, [fold, topTab, youTab, feed, feedAll, visibleUpcoming]);
 
 
   const feedKey = useMemo(() => {
     const f = feedFilters;
-    return `${f.vertical}|${f.maker}|${f.sport}|${f.category}|${f.belowOnly}|${f.sort}|${f.saleDay ?? ''}|${f.win}|${f.cat}|${f.sub}|${f.house}|${f.minUsd}|${f.newOnly}|${f.tab}`;
+    return `${f.vertical}|${f.maker}|${f.sport}|${f.category}|${f.belowOnly}|${f.sort}|${f.saleDay ?? ''}|${f.win}|${f.cat}|${f.sub}|${f.house}|${f.minUsd}|${f.newOnly}|${f.fx.join(",")}|${f.tab}`;
   }, [feedFilters]);
   const handleFilters = (next: FeedFilters) => {
     // the shortlist only exists in Matters-most order: any other sort is "All lots"
     if (next.sort !== 'priority' && next.tab === 'top') next = { ...next, tab: 'all' };
     setFeedFilters(next);
+    rememberFeed(next);
     setVisibleUpcoming(pageSize);
   };
+  // the quiet way back: defaults, and the remembered view is forgotten
+  const resetView = () => {
+    setFeedFilters(FEED_DEFAULTS);
+    writeFeedMemory(null);
+    setRestoredView(false);
+    setVisibleUpcoming(pageSize);
+  };
+  const viewIsDefault = useMemo(() => {
+    const p = new URLSearchParams();
+    feedToParams(feedFilters, p);
+    return p.toString() === '';
+  }, [feedFilters]);
 
   // The below-market lens: biggest gap first, at the feed.
   const openBelowLens = () => {
-    setFeedFilters(f => ({ ...f, belowOnly: true, sort: 'gap-desc' }));
+    setFeedFilters(f => { const next: FeedFilters = { ...f, belowOnly: true, sort: 'gap-desc' }; rememberFeed(next); return next; });
     setVisibleUpcoming(pageSize);
     document.getElementById('on-the-block')?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -1002,7 +1087,7 @@ export default function TerminalHomePage() {
                   belowIds={belowIds}
                   filters={feedFilters}
                   onChange={handleFilters}
-                  shown={feed.length}
+                  shown={fold && !topTab && !youTab ? feedAll.length : feed.length}
                   total={upcoming.length}
                   market={activeKey}
                   onMarketReset={() => setMarket('all')}
@@ -1011,6 +1096,8 @@ export default function TerminalHomePage() {
                   pageSize={pageSize}
                   showToggle={!narrowView}
                   prevVisitDay={prevVisitDay}
+                  baselines={baselines}
+                  onResetView={restoredView && !viewIsDefault ? resetView : undefined}
                 />
 
                 {effectiveView === 'table' && feed.length > 0 ? (
@@ -1071,11 +1158,11 @@ export default function TerminalHomePage() {
                               </td>
                               <td>
                                 <Link
-                                  href={`/makers/${lot.artist}`}
+                                  href={makerLineOf(lot).href}
                                   className="t-artist"
                                   onClick={e => e.stopPropagation()}
                                 >
-                                  {ARTIST_LABEL[lot.artist] || lot.artist}
+                                  {makerLineOf(lot).name}
                                 </Link>
                                 {/* a REAL button (Enter + Space for free), row
                                     semantics intact for AT */}
@@ -1088,9 +1175,19 @@ export default function TerminalHomePage() {
                                 >
                                   {craftTitle(lot.title)}
                                 </button>
+                                {(() => {
+                                  // folded copies — the Signal column's own sub-line type
+                                  const n = alsoOf(lot);
+                                  if (!n) return null;
+                                  const open = foldOpeners.get(lot.id);
+                                  const st = { display: 'block', color: 'var(--color-text-faint)', fontSize: 10.5 } as const;
+                                  return open
+                                    ? <button type="button" onClick={e => { e.stopPropagation(); open(); }} style={{ ...st, background: 'none', border: 0, padding: 0, fontFamily: 'inherit', textAlign: 'left', cursor: 'pointer' }}>{n}</button>
+                                    : <span style={st}>{n}</span>;
+                                })()}
                               </td>
                               <td>{lot.auctionHouse}</td>
-                              <td className="t-cat">{lot.subCat ? subCatLabel(lot.subCat) : CAT_LABEL[lot.category] || '—'}</td>
+                              <td className="t-cat">{subColumnOf(lot)}</td>
                               <td className="t-date" title={saleWhenTitle(lot)}>{formatDate(lot.saleDate)}</td>
                               <td className="num t-days">
                                 {dth == null ? '—' : dth <= 0 ? 'today' : `${dth}d`}
@@ -1104,7 +1201,9 @@ export default function TerminalHomePage() {
                                   ? (formatPrice(lot.estimateLow) === formatPrice(lot.estimateHigh)
                                       ? formatPrice(lot.estimateLow)
                                       : `${formatPrice(lot.estimateLow)}–${formatPrice(lot.estimateHigh)}`)
-                                  : '—'}
+                                  // no estimate (Goldin, REA, NFL): the live bid is the only
+                                  // price on the lot — the same "$402 bid" face the cards print
+                                  : (lot.currentBid || 0) > 0 ? `${formatPrice(lot.currentBid as number)} bid` : '—'}
                               </td>
                               <td>
                                 {sig
@@ -1180,7 +1279,8 @@ export default function TerminalHomePage() {
                             lot={lot}
                             onOpen={() => setTableLot(lot)}
                             tone={feedTone(lot, belowIds, belowSignal.hasSig)}
-                            note={topTab || youTab ? reasonOf(lot) : null}
+                            note={noteOf(lot)}
+                            onNote={foldOpeners.get(lot.id)}
                           />
                         </div>
                       ) : (
@@ -1196,7 +1296,8 @@ export default function TerminalHomePage() {
                             saved={isSaved(lot.id)}
                             onToggleSave={toggle}
                             lastCrawl={lastCrawl || undefined}
-                            note={topTab || youTab ? reasonOf(lot) : null}
+                            note={noteOf(lot)}
+                            onNote={foldOpeners.get(lot.id)}
                           />
                         </div>
                       )
@@ -1212,7 +1313,7 @@ export default function TerminalHomePage() {
                 {visibleUpcoming < feed.length && (
                   <div style={{ display: 'flex', justifyContent: 'center', marginTop: 28 }}>
                     <button className="ray-show-more" onClick={() => setVisibleUpcoming(v => v + pageSize)}>
-                      Show more ({(feed.length - visibleUpcoming).toLocaleString()} remaining)
+                      Show more ({remainingLots.toLocaleString()} remaining)
                     </button>
                   </div>
                 )}

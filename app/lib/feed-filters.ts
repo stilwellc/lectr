@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { taxonOf, subMatches, type CatKey } from './taxonomy';
 import { prioStatic } from './priority';
+import { passesFacets } from './facets';
 import { localToday, trueSaleDay } from '../utils';
 
 export type CloseWindow = 'today' | '48h' | 'week';
@@ -27,9 +28,11 @@ export interface TriageFilters {
   minUsd: number | null;
   /** first seen after the reader's previous visit */
   newOnly: boolean;
+  /** in-category facets (app/lib/facets): Graded, Rookie, era, Film & TV… */
+  fx: string[];
 }
 
-export const TRIAGE_DEFAULTS: TriageFilters = { win: null, cat: null, sub: null, house: null, minUsd: null, newOnly: false };
+export const TRIAGE_DEFAULTS: TriageFilters = { win: null, cat: null, sub: null, house: null, minUsd: null, newOnly: false, fx: [] };
 
 export const WINDOWS: { key: CloseWindow; label: string }[] = [
   { key: 'today', label: 'Today' },
@@ -44,11 +47,88 @@ function addDays(iso: string, n: number): string {
 }
 
 type TriageLot = Parameters<typeof prioStatic>[0] & {
+  title?: string | null;
   auctionHouse?: string | null; firstSeen?: string | null; saleDate?: string | null; saleDateTime?: string | null;
 };
 
-/** Does one lot pass the triage filters? `prevVisitDay` comes from useLastVisit. */
-export function passesTriage(l: TriageLot, f: TriageFilters, opts: { today?: string; prevVisitDay?: string | null } = {}): boolean {
+// ── onboarding baselines ─────────────────────────────────────────────────────
+// A house's FIRST crawl stamps its whole live book with one firstSeen day (REA,
+// Oct 9: 3,489 lots "first seen today"). Lots a crawler discovers on day one
+// were not necessarily listed that day — they must not flood "New since last
+// visit". The rule, read off the book itself (no crawl metadata needed):
+//   a house's ONBOARDING DAY is its earliest firstSeen anywhere in the pool
+//   (live + whatever sold history is loaded) WHEN
+//     · that day is recent (≤ BASELINE_RECENT_DAYS before today) — the lens
+//       only cares while those lots could still read as "new", and a wrong
+//       guess (a house whose catalogs all land at once) can only hide one
+//       catalog for two days, never for good,
+//     · it holds > BASELINE_SHARE of the house's live, stamped lots — a house
+//       with a running book (Goldin) has older live lots, so its real new
+//       catalogs always count, and
+//     · it is a flood (≥ BASELINE_MIN lots) — a small house's first catalog
+//       (Rago's 13) is harmless and stays "new".
+// Lots without firstSeen (RR's 965 predate the stamp — ray-crawl W15 never
+// fabricates one) are never "new": an unknown arrival day is not today.
+export const BASELINE_SHARE = 0.6;
+export const BASELINE_MIN = 50;
+export const BASELINE_RECENT_DAYS = 2;
+export type HouseBaselines = ReadonlyMap<string, string>;
+type BaselineLot = { auctionHouse?: string | null; firstSeen?: string | null; status?: string | null };
+
+const baselineCache = new WeakMap<object, { today: string; map: HouseBaselines }>();
+/** house → onboarding day (YYYY-MM-DD). Cached per pool array + day, so every
+ *  call site can pass the page's whole pool without re-scanning it. */
+export function houseBaselines(lots: readonly BaselineLot[], today: string = localToday()): HouseBaselines {
+  const hit = baselineCache.get(lots);
+  if (hit && hit.today === today) return hit.map;
+  const earliest = new Map<string, string>();
+  const live = new Map<string, Map<string, number>>();
+  for (const l of lots) {
+    const h = l.auctionHouse;
+    const d = (l.firstSeen || '').slice(0, 10);
+    if (!h || !d) continue;
+    const e = earliest.get(h);
+    if (!e || d < e) earliest.set(h, d);
+    if (l.status && l.status !== 'upcoming') continue;
+    let byDay = live.get(h);
+    if (!byDay) live.set(h, (byDay = new Map()));
+    byDay.set(d, (byDay.get(d) || 0) + 1);
+  }
+  const cutoff = addDays(today, -BASELINE_RECENT_DAYS);
+  const map = new Map<string, string>();
+  earliest.forEach((day, h) => {
+    if (day < cutoff) return;
+    const byDay = live.get(h);
+    if (!byDay) return;
+    let total = 0;
+    byDay.forEach(n => { total += n; });
+    const n = byDay.get(day) || 0;
+    if (n >= BASELINE_MIN && n / total > BASELINE_SHARE) map.set(h, day);
+  });
+  baselineCache.set(lots, { today, map });
+  return map;
+}
+
+export interface NewLensOpts { today?: string; prevVisitDay?: string | null; baselines?: HouseBaselines | null }
+
+/** Is this lot "new" for the reader? firstSeen after their previous visit
+ *  (or today, on a first visit / a repeat visit the same day), and not part of
+ *  its house's onboarding flood. */
+export function isNewLot(l: { auctionHouse?: string | null; firstSeen?: string | null }, opts: NewLensOpts = {}): boolean {
+  const seen = (l.firstSeen || '').slice(0, 10);
+  if (!seen) return false;
+  const today = opts.today ?? localToday();
+  const since = opts.prevVisitDay;
+  // first visit ever (no previous day) or already here today → "new today"
+  if (!since || since >= today) { if (seen < today) return false; }
+  else if (seen <= since) return false;
+  if (l.auctionHouse && opts.baselines?.get(l.auctionHouse) === seen) return false;
+  return true;
+}
+
+/** Does one lot pass the triage filters? `prevVisitDay` comes from useLastVisit;
+ *  `baselines` from houseBaselines(the page's whole lot pool). */
+export function passesTriage(l: TriageLot, f: TriageFilters, opts: NewLensOpts = {}): boolean {
   if (f.win) {
     const today = opts.today ?? localToday();
     const day = trueSaleDay(l);
@@ -62,23 +142,17 @@ export function passesTriage(l: TriageLot, f: TriageFilters, opts: { today?: str
     if (f.sub && !subMatches(t.cat, f.sub, t.sub)) return false;
   }
   if (f.house && l.auctionHouse !== f.house) return false;
+  if (f.fx.length && !passesFacets(l, f.fx)) return false;
   if (f.minUsd) {
     const p = prioStatic(l);
     if (!p || p.a < f.minUsd) return false;
   }
-  if (f.newOnly) {
-    const seen = l.firstSeen || '';
-    const since = opts.prevVisitDay;
-    if (!seen) return false;
-    // first visit ever (no previous day) or already here today → "new today"
-    if (!since || since >= (opts.today ?? localToday())) { if (seen < (opts.today ?? localToday())) return false; }
-    else if (seen <= since) return false;
-  }
+  if (f.newOnly && !isNewLot(l, opts)) return false;
   return true;
 }
 
 export function isTriageActive(f: TriageFilters): boolean {
-  return f.win != null || f.cat != null || f.sub != null || f.house != null || f.minUsd != null || f.newOnly;
+  return f.win != null || f.cat != null || f.sub != null || f.house != null || f.minUsd != null || f.newOnly || f.fx.length > 0;
 }
 
 // ── URL codec ────────────────────────────────────────────────────────────────
@@ -92,6 +166,7 @@ export function triageToParams(f: TriageFilters, p: URLSearchParams): void {
   put('house', f.house);
   put('min', f.minUsd ? String(f.minUsd) : null);
   put('new', f.newOnly ? '1' : null);
+  put('fx', f.fx.length ? f.fx.join(',') : null);
 }
 
 export function triageFromParams(p: URLSearchParams): TriageFilters {
@@ -104,6 +179,7 @@ export function triageFromParams(p: URLSearchParams): TriageFilters {
     house: p.get('house') || null,
     minUsd: Number.isFinite(min) && min > 0 ? min : null,
     newOnly: p.get('new') === '1',
+    fx: (p.get('fx') || '').split(',').filter(Boolean),
   };
 }
 
@@ -164,4 +240,63 @@ export function useLastVisit(): string | null {
     } catch { /* storage blocked: no "new" lens, everything else works */ }
   }, []);
   return prev;
+}
+
+/** apply a patch; a new category drops facets that belonged to the old one */
+export function patchTriage<T extends TriageFilters>(f: T, patch: Partial<T>): T {
+  const next = { ...f, ...patch };
+  const moved = (k: string) => k in patch && (patch as Record<string, unknown>)[k] !== (f as Record<string, unknown>)[k];
+  if ((moved('cat') || moved('vertical')) && !('fx' in patch)) next.fx = [];
+  return next;
+}
+
+// ── feed memory ──────────────────────────────────────────────────────────────
+// "Open my feed the way I left it" (Oct 9): the home feed remembers the
+// reader's last triage + tab + sort per device. A bare visit to a lander
+// restores it; any feed param in the URL means the URL wins, untouched. A
+// different market restores only what applies there — the same rule the
+// market-flip effect uses (category / sub-category / facets are scoped to the
+// market they were picked in; window, house, floor, new, sort and tab travel).
+// Search text and the Hammer Week day are deliberately NOT remembered: a stale
+// query or a past day reopening on its own would read as a broken feed.
+const MEM_KEY = 'lectr-feed-memory';
+export const MEMORY_KEYS = ['win', 'cat', 'sub', 'house', 'min', 'new', 'fx', 'tab', 'sort', 'below'] as const;
+const MARKET_SCOPED = new Set<string>(['cat', 'sub', 'fx']);
+
+export interface FeedMemory { /** market the view was left on */ m: string; /** remembered params */ p: string }
+
+/** the remembered slice of a feed URL's params */
+export function memoryOf(params: URLSearchParams, market: string): FeedMemory {
+  const out = new URLSearchParams();
+  for (const k of MEMORY_KEYS) { const v = params.get(k); if (v) out.set(k, v); }
+  return { m: market, p: out.toString() };
+}
+
+/** the params to restore on `market`, or null when nothing applies */
+export function restoreParams(mem: FeedMemory | null | undefined, market: string): URLSearchParams | null {
+  if (!mem || typeof mem.p !== 'string' || typeof mem.m !== 'string') return null;
+  const src = new URLSearchParams(mem.p);
+  const out = new URLSearchParams();
+  for (const k of MEMORY_KEYS) {
+    const v = src.get(k);
+    if (!v) continue;
+    if (mem.m !== market && MARKET_SCOPED.has(k)) continue;
+    out.set(k, v);
+  }
+  return out.toString() ? out : null;
+}
+
+export function readFeedMemory(): FeedMemory | null {
+  try {
+    const v = JSON.parse(window.localStorage.getItem(MEM_KEY) || 'null');
+    return v && typeof v === 'object' ? (v as FeedMemory) : null;
+  } catch { return null; }
+}
+
+/** null (or an empty slice) forgets the view */
+export function writeFeedMemory(mem: FeedMemory | null): void {
+  try {
+    if (!mem || !mem.p) window.localStorage.removeItem(MEM_KEY);
+    else window.localStorage.setItem(MEM_KEY, JSON.stringify(mem));
+  } catch { /* storage blocked: the feed simply opens on defaults */ }
 }

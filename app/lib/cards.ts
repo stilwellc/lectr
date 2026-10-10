@@ -237,7 +237,13 @@ export function isComicOrMagazineTitle(title: string): boolean {
 // ("Complete Set" / "Team Set" alone can be a PRODUCT name — "Topps Complete
 // Set Chrome … #5 (#05/25)" — so a set word counts only with a count or an
 // "Including / Featuring / with" listing)
-const MULTI_CARD_RE = /\b(?:lots? of|set of|run of|group of|(?:complete|near[- ]complete|near|team|master|partial|starter)[- ]sets?\s*(?:\(\d|[:,-]?\s*(?:including|featuring|with)\b)|(?:collection|lot|group|set|stack|trio|quartet)\s*\(\d+\)|pair\b|\(\d+\)\s*$|\(\d+\)\s*[-–—])/i;
+// (Oct 9 labels audit, Pattern 9) a PAIR / TRIO / QUARTET is a lot when the
+// word closes the lot's name ("… Frank White Trio - PSA/DNA", "Trio: Early
+// Wynn, …", "… Hebner/Oliver PSA-Graded Pair", "Pair with Jim Kaat") — not when
+// it is the product or the card's own name ("Topps Pristine Pair Dual
+// Autographs #PPDA-TO", "NFL Gear Trio Materials", "Corsair Outfield Trio with
+// Roberto Clemente")
+const MULTI_CARD_RE = /\b(?:lots? of|set of|run of|group of|(?:complete|near[- ]complete|near|team|master|partial|starter)[- ]sets?\s*(?:\(\d|[:,-]?\s*(?:including|featuring|with)\b)|(?:collection|lot|group|set|stack|trio|quartet)\s*\(\d+\)|pair\b(?=\s*(?:$|[:(,;!\-–—]|with\b|of\b))|(?:trio|quartet)\b(?=\s*(?:$|[:(,;!\-–—]))|\(\d+\)\s*$|\(\d+\)\s*[-–—])/i;
 const LOT_NO_BEFORE_YEAR = /^\d{1,5}\s+(?=(?:19|20)\d{2}(?:-\d{2})?\b)/;
 /** (Oct 6, sports labeling wave) REA / LOTG / H&S lead a signed card with the
  *  word ("Signed 1958 Topps Football #62 Jim Brown Rookie PSA VG-EX 4 with MINT
@@ -580,9 +586,22 @@ export function isMultiCardTitle(title: string): boolean {
   if (MULTI_CARD_RE.test(t)) return true;
   const noParens = t.replace(/\([^)]*\)/g, ' ').replace(/#?\d+\s*\/\s*\d+/g, ' ');
   const nums = (noParens.match(/#\s?[A-Za-z]{0,4}\d/g) || []).length;
-  if (nums >= 2) return true;
+  // (Oct 9, Pattern 9) ONE slab whose own name carries a second number ("1959
+  // Fleer Ted Williams #71 Ted's Hitting Fundamentals #1 - PSA MINT 9", "#14
+  // Michael Jordan #HV14 … BGS 9.5", a "#504/#505" dual sticker): exactly one
+  // grade and nothing joining two cards between the numbers
+  if (nums >= 2) return !isOneSlab(t, noParens);
   if (!CARD_LOT_RE.test(t)) return false;
-  return nums === 0 || /\(\d[\d,]*\+?\)|\blots? of\b|\bcollection of\b|\bset of\b|\bgroup of\b/i.test(t);
+  // a card number with no digit ("Autograph Collection #E Endrick", "#AC-DWW")
+  // still names one card
+  const namedOne = /#[A-Za-z]/.test(noParens) && !/\b(?:complete|near[- ]complete|partial|master|starter|factory|base|rainbow) sets?\b|\bset of\b|\blots? of\b|\bgroup of\b/i.test(t);
+  return (nums === 0 && !namedOne) || /\(\d[\d,]*\+?\)|\blots? of\b|\bcollection of\b|\bset of\b|\bgroup of\b/i.test(t);
+}
+const SLAB_GRADE_RE = /\b(?:PSA|BGS|SGC|CGC|TAG)\b(?!\s*\/\s*DNA)[^0-9()#]{0,24}?\d{1,2}(?:\.\d)?(?![\d.])/gi;
+function isOneSlab(t: string, noParens: string): boolean {
+  if ((t.match(SLAB_GRADE_RE) || []).length !== 1) return false;
+  const first = noParens.indexOf('#'), last = noParens.lastIndexOf('#');
+  return !/,|&|\band\b|\bplus\b|\bwith\b|\bpair\b|\btrio\b/i.test(noParens.slice(first, last));
 }
 /** (Oct 8) parseCard's own `multi` read (the E98 "Set of 30" issue name masked)
  *  — the sports 'card-lots' subCat stamps exactly the lots the card keys abstain on */

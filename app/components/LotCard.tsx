@@ -4,8 +4,8 @@ import { useState, useMemo, useInsertionEffect, memo } from 'react';
 import Link from 'next/link';
 import CloseClock from './CloseClock';
 import { AuctionLot } from '../types';
-import { ARTIST_LABEL } from '../constants';
-import { houseColors, categoryLabels, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg, sizedImg, localToday } from '../utils';
+import { makerLineOf, labelLineOf } from '../lib/lot-labels';
+import { houseColors, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg, sizedImg, localToday } from '../utils';
 import ComparableModal from './ComparableModal';
 import Flick from './Flick';
 import { computeDeepSignal, FORM_LABEL, signalMagnitude } from '../lib/comps';
@@ -148,6 +148,7 @@ function LotCard({
   onToggleSave,
   lastCrawl,
   note,
+  onNote,
 }: {
   lot: AuctionLot;
   showArtist?: boolean;
@@ -158,6 +159,9 @@ function LotCard({
   lastCrawl?: string;
   /** optional one-line "why it's here" (the shortlist's reasonOf) */
   note?: string | null;
+  /** makes the note line itself pressable (the feed's folded grades: it
+   *  searches the feed for the whole group) — same type, no new chrome */
+  onNote?: () => void;
 }) {
   useLotCardStyles();
   const [modalOpen, setModalOpen] = useState(false);
@@ -203,7 +207,8 @@ function LotCard({
     setReminded(true);
     setTimeout(() => setReminded(false), 2500);
   }
-  const catLabel = categoryLabels[lot.category] || null;
+  // the clean sub + facet badges ("PSA 10 · Rookie", "Apollo · Signed · Flown") — app/lib/lot-labels
+  const catLabel = useMemo(() => labelLineOf(lot), [lot]);
   const isUpcoming = lot.status === 'upcoming';
   // A concluded lot that never sold — bought_in (failed to meet reserve) or an
   // unresolved result. It must NOT speak formatEstimate() in the price slot
@@ -220,7 +225,9 @@ function LotCard({
 
   // "Pablo Picasso / Pablo Picasso" — when the crafted title IS the maker
   // label and the maker line already renders, the title says nothing twice.
-  const makerLabel = lot.artist ? (ARTIST_LABEL[lot.artist] || lot.artist) : '';
+  // pseudo-makers ("Sports Cards", "Pokémon") give way to the card's player / Pokémon (app/lib/lot-labels)
+  const maker = lot.artist ? makerLineOf(lot) : null;
+  const makerLabel = maker ? maker.name : '';
   const titleText = craftTitle(lot.title);
   const titleDupesMaker = showArtist && !!lot.artist && titleText === makerLabel;
 
@@ -328,7 +335,7 @@ function LotCard({
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
           {showArtist && lot.artist && (
             <Link
-              href={`/makers/${lot.artist}`}
+              href={maker?.href ?? `/makers/${lot.artist}`}
               className="ray-lot-maker"
               onClick={e => e.stopPropagation()}
               style={{ fontSize: 14, letterSpacing: '-0.01em', color: 'var(--color-fg)', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}
@@ -356,12 +363,22 @@ function LotCard({
         <div style={{ fontSize: 12.5, color: 'var(--color-text-faint)', letterSpacing: '-0.01em', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {isNewToday && <span className="ray-newchip" style={{ marginRight: 6 }}>New today</span>}
           {lot.auctionHouse}
-          {catLabel && lot.category !== 'unknown' && lot.category !== 'object' ? ` · ${catLabel}` : ''}
+          {catLabel ? ` · ${catLabel}` : ''}
           {isPastPending
             ? ` · hammered ${formatDate(lot.saleDate)} · results pending`
             : isNoSale
             ? ` · bought in`
-            : <> · {isUpcoming ? 'hammers ' : ''}{formatDate(lot.saleDate)}{isUpcoming && lot.saleDateTime && <> · <CloseClock iso={lot.saleDateTime} windowHours={24} /></>}{isUpcoming && lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}</>}
+            : <> · {isUpcoming ? 'hammers ' : ''}{formatDate(lot.saleDate)}{isUpcoming && lot.saleDateTime && <CloseClock iso={lot.saleDateTime} windowHours={24} prefix=" · " />}{isUpcoming && lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}</>}
+          {/* the compact face carries the note on its meta line */}
+          {note && <> · {onNote ? (
+            <button
+              type="button"
+              onClick={e => { e.preventDefault(); e.stopPropagation(); onNote(); }}
+              style={{ position: 'relative', zIndex: 2, background: 'none', border: 0, padding: 0, font: 'inherit', color: 'inherit', letterSpacing: 'inherit', cursor: 'pointer' }}
+            >
+              {note}
+            </button>
+          ) : note}</>}
         </div>
       </div>
       <div style={{ flexShrink: 0, textAlign: 'right', zIndex: 'auto' }}>
@@ -534,7 +551,7 @@ function LotCard({
                 card action (the house URL stays on the card's primary action
                 only, never on the name) */}
             <Link
-              href={`/makers/${lot.artist}`}
+              href={maker?.href ?? `/makers/${lot.artist}`}
               className="ray-lot-maker"
               onClick={e => e.stopPropagation()}
               style={{
@@ -565,16 +582,24 @@ function LotCard({
         )}
         <div style={{ fontSize: 13.5, color: 'var(--color-text-faint)', letterSpacing: '-0.01em', marginBottom: 10 }}>
           {lot.auctionHouse}
-          {catLabel && lot.category !== 'unknown' && lot.category !== 'object' ? ` · ${catLabel}` : ''}
+          {catLabel ? ` · ${catLabel}` : ''}
           {isPastPending
             ? ` · hammered ${formatDate(lot.saleDate)} · results pending`
             : isNoSale
             ? ` · bought in`
-            : <> · {isUpcoming ? 'hammers ' : ''}{formatDate(lot.saleDate)}{isUpcoming && lot.saleDateTime && <> · <CloseClock iso={lot.saleDateTime} windowHours={24} /></>}{isUpcoming && lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}</>}
+            : <> · {isUpcoming ? 'hammers ' : ''}{formatDate(lot.saleDate)}{isUpcoming && lot.saleDateTime && <CloseClock iso={lot.saleDateTime} windowHours={24} prefix=" · " />}{isUpcoming && lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}</>}
         </div>
         {note && (
-          <div style={{ fontSize: 12.5, color: 'var(--color-text-secondary)', letterSpacing: '-0.01em', marginTop: -4, marginBottom: 10 }}>
-            {note}
+          <div style={{ fontSize: 12.5, color: 'var(--color-text-secondary)', letterSpacing: '-0.01em', marginTop: -4, marginBottom: 10, ...(onNote ? { position: 'relative' as const, zIndex: 2 } : null) }}>
+            {onNote ? (
+              <button
+                type="button"
+                onClick={e => { e.preventDefault(); e.stopPropagation(); onNote(); }}
+                style={{ background: 'none', border: 0, padding: 0, font: 'inherit', color: 'inherit', letterSpacing: 'inherit', textAlign: 'left', cursor: 'pointer' }}
+              >
+                {note}
+              </button>
+            ) : note}
           </div>
         )}
         <div style={{ marginTop: 'auto' }}>

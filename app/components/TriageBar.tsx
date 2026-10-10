@@ -11,8 +11,9 @@ import { useMemo } from 'react';
 import { taxonOf, SUBS, CAT_LABEL, type CatKey } from '../lib/taxonomy';
 import FollowChip from './FollowChip';
 import { catFollow, houseFollow } from '../lib/follows';
+import { facetCatOf, facetChips, toggleFacet } from '../lib/facets';
 import {
-  WINDOWS, VALUE_FLOORS, TRIAGE_DEFAULTS, isTriageActive, passesTriage, type TriageFilters,
+  WINDOWS, VALUE_FLOORS, TRIAGE_DEFAULTS, isTriageActive, passesTriage, patchTriage, type TriageFilters, type HouseBaselines,
 } from '../lib/feed-filters';
 
 type TriageLot = Parameters<typeof passesTriage>[0];
@@ -20,12 +21,15 @@ type TriageLot = Parameters<typeof passesTriage>[0];
 const fmtFloor = (n: number) => (n >= 1000 ? `$${n / 1000}K+` : `$${n}+`);
 
 export default function TriageBar({
-  lots, filters, onChange, prevVisitDay = null, shown, total, showSubs = true, label = 'Narrow the board',
+  lots, filters, onChange, prevVisitDay = null, baselines = null, shown, total, showSubs = true, label = 'Narrow the board',
 }: {
   lots: TriageLot[];
   filters: TriageFilters;
   onChange: (next: TriageFilters) => void;
   prevVisitDay?: string | null;
+  /** houses' onboarding days (feed-filters houseBaselines over the page's
+   *  whole book — this bar's `lots` may be a narrow lane pool) */
+  baselines?: HouseBaselines | null;
   /** optional "N of M" read-out */
   shown?: number;
   total?: number;
@@ -33,7 +37,7 @@ export default function TriageBar({
   showSubs?: boolean;
   label?: string;
 }) {
-  const set = (patch: Partial<TriageFilters>) => onChange({ ...filters, ...patch });
+  const set = (patch: Partial<TriageFilters>) => onChange(patchTriage(filters, patch));
 
   // Chips adapt to the pool: a pool spanning 3+ clean categories (the total
   // market) gets CATEGORY chips; inside one or two (a single market — sports
@@ -65,9 +69,17 @@ export default function TriageBar({
     return Array.from(c.entries()).sort((a, b) => b[1] - a[1]);
   }, [lots]);
   const newCount = useMemo(
-    () => lots.filter(l => passesTriage(l, { ...TRIAGE_DEFAULTS, newOnly: true }, { prevVisitDay })).length,
-    [lots, prevVisitDay]
+    () => lots.filter(l => passesTriage(l, { ...TRIAGE_DEFAULTS, newOnly: true }, { prevVisitDay, baselines })).length,
+    [lots, prevVisitDay, baselines]
   );
+  // in-category facets (Graded / Rookie / era, Film & TV / Music): counted over
+  // the pool as every OTHER filter already narrows it
+  const facets = useMemo(() => {
+    const fc = facetCatOf(filters.cat, lots);
+    if (!fc) return [];
+    const pool = lots.filter(l => passesTriage(l, { ...filters, fx: [] }, { prevVisitDay, baselines }));
+    return facetChips(fc, pool, filters.fx);
+  }, [lots, filters, prevVisitDay, baselines]);
   const subActive = (k: string) => filters.cat != null && `${filters.cat}:${filters.sub}` === k;
   const catActive = (cat: CatKey) => filters.cat === cat;
 
@@ -152,6 +164,19 @@ export default function TriageBar({
               onClick={() => (subActive(c.key) ? set({ sub: null }) : set({ cat: c.cat, sub: c.sub }))}>
               {c.label} <i>{c.n}</i>
             </button>
+          ))}
+        </div>
+      )}
+      {facets.length > 0 && (
+        <div className="ray-triagebar-row ray-triagebar-subs ray-markets-fade" aria-label="Refine">
+          {facets.map((c, i) => (
+            <span key={c.key} style={{ display: 'contents' }}>
+              {i > 0 && facets[i - 1].group !== c.group && <span className="ray-toolbar-divider" aria-hidden="true" />}
+              <button type="button" className="ray-toolbar-pill" data-active={filters.fx.includes(c.key)} aria-pressed={filters.fx.includes(c.key)}
+                onClick={() => set({ fx: toggleFacet(filters.fx, c.key) })}>
+                {c.label} <i>{c.n}</i>
+              </button>
+            </span>
           ))}
         </div>
       )}

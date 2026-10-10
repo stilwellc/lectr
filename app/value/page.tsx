@@ -54,10 +54,21 @@ import { signalWithPool, dealScore, signalMagnitude } from '../lib/comps';
 import { medianOr } from '../lib/stats';
 import { gapRead, sleeperRead, type GapRead, type SleeperRead } from '../lib/lanes';
 import TriageBar from '../components/TriageBar';
-import { useUrlState, useLastVisit, passesTriage, TRIAGE_DEFAULTS, triageFromParams, triageToParams, type TriageFilters } from '../lib/feed-filters';
-import { byPriority } from '../lib/priority';
+import { useUrlState, useLastVisit, passesTriage, isTriageActive, houseBaselines, TRIAGE_DEFAULTS, triageFromParams, triageToParams, type TriageFilters } from '../lib/feed-filters';
+import { byPriority, spread } from '../lib/priority';
 
 const ROWS_PAGE = 12;
+
+// the Flags board's order rides the URL like the triage row (?sort=odds |
+// closing; "Matters most" is the default and is omitted)
+type BoardOrder = 'priority' | 'odds' | 'closing';
+const decodeOrder = (p: URLSearchParams): BoardOrder => {
+  const s = p.get('sort');
+  return s === 'odds' || s === 'closing' ? s : 'priority';
+};
+const encodeOrder = (s: BoardOrder, p: URLSearchParams): void => {
+  if (s === 'priority') p.delete('sort'); else p.set('sort', s);
+};
 
 /* (The phase-2 sentinel that pulled the corpus as the reader approached the
    settled tape is gone: the tape reads the forward ledger via page-stats.json
@@ -701,11 +712,13 @@ export default function ValuePage() {
   // the board's orderings (Oct 8): "Matters most" (app/lib/priority — size,
   // measured edge, evidence, closing time) is the default; the engine's odds
   // (nearly flat on live flags, 47–54%) and hammer time remain one tap away
-  const [sortMode, setSortMode] = useState<'priority' | 'odds' | 'closing'>('priority');
+  const [sortMode, setSortMode] = useUrlState<BoardOrder>('priority', decodeOrder, encodeOrder);
   // the triage row (closing window, sub-category, house, value floor, new)
   // narrows all three lanes; it lives in the URL so a reload keeps the view
   const [triage, setTriage] = useUrlState<TriageFilters>(TRIAGE_DEFAULTS, triageFromParams, triageToParams);
   const prevVisitDay = useLastVisit();
+  // a house's first-crawl flood is not "new" — read off the whole book, not the lanes
+  const baselines = useMemo(() => houseBaselines(allLots), [allLots]);
 
   // ── INPUT CRAFT — j/k walks every board row on the page, enter opens
   // (native on the flags <button>, handled on the lane rows), s saves.
@@ -908,11 +921,18 @@ export default function ValuePage() {
     setSortMode('priority');
     // sub-categories are market-scoped; window/house/value/new travel
     setTriage(t => (t.cat || t.sub ? { ...t, cat: null, sub: null } : t));
-  }, [activeKey, setTriage]);
+  }, [activeKey, setTriage, setSortMode]);
   const inTriage = useCallback(
-    (l: AuctionLot) => passesTriage(l, triage, { prevVisitDay }),
-    [triage, prevVisitDay]
+    (l: AuctionLot) => passesTriage(l, triage, { prevVisitDay, baselines }),
+    [triage, prevVisitDay, baselines]
   );
+  // (Oct 9) the triage chips count the lots ON the lanes — counting the whole
+  // live book offered "Graded 833" over a board that held none of them
+  const laneLots = useMemo(() => {
+    const seen = new Map<string, (typeof deals)[number]['lot']>();
+    for (const x of [...deals, ...gapRows, ...sleeperRows]) if (!seen.has(x.lot.id)) seen.set(x.lot.id, x.lot);
+    return Array.from(seen.values());
+  }, [deals, gapRows, sleeperRows]);
   const dealsView = useMemo(() => deals.filter(d => inTriage(d.lot)), [deals, inTriage]);
   const gapRowsView = useMemo(() => gapRows.filter(r => inTriage(r.lot)), [gapRows, inTriage]);
   const sleeperRowsView = useMemo(() => sleeperRows.filter(r => inTriage(r.lot)), [sleeperRows, inTriage]);
@@ -925,7 +945,10 @@ export default function ValuePage() {
     const base = call ? dealsView.filter(d => d.lot.id !== call.lot.id) : dealsView;
     if (sortMode === 'priority') {
       const cmp = byPriority(Date.now());
-      return [...base].sort((a, b) => cmp(a.lot, b.lot));
+      const sorted = [...base].sort((a, b) => cmp(a.lot, b.lot));
+      // re-dealt like the home feed: ≤3 per sale or maker in any 12 rows
+      const byLot = new Map(sorted.map(d => [d.lot, d] as const));
+      return spread(sorted.map(d => d.lot)).map(l => byLot.get(l)!);
     }
     if (sortMode !== 'closing') return base;
     // hammer time: exact close first, day-only after, ties by odds order
@@ -2007,10 +2030,11 @@ export default function ValuePage() {
 
           <div className="rail ray-enter" style={{ marginTop: 8 }}>
             <TriageBar
-              lots={liveLots}
+              lots={laneLots}
               filters={triage}
               onChange={setTriage}
               prevVisitDay={prevVisitDay}
+              baselines={baselines}
               shown={dealsView.length + gapRowsView.length + sleeperRowsView.length}
               total={deals.length + gapRows.length + sleeperRows.length}
               label="Narrow the lanes"
@@ -2072,6 +2096,27 @@ export default function ValuePage() {
                     <Link href={activeKey === 'all' ? '/' : `/analytics/${activeKey}`} className="link-action" style={{ color: 'var(--color-fg)' }}>
                       {activeKey === 'all' ? 'Browse everything live' : `The ${activeLabel} research desk`} <span className="arrow"><Flick size={10} style={{ marginLeft: 5 }} /></span>
                     </Link>
+                  </div>
+                </div>
+              ) : gridDeals.length === 0 ? (
+                /* flags exist, the triage row cut them all: say so in the same
+                   frame, and give the one door back */
+                <div className="vd-empty ray-enter">
+                  <p>
+                    {!isTriageActive(triage)
+                      ? <>Today&rsquo;s call above is the only flag live in the {activeLabel} market.</>
+                      : dealsView.length > 0
+                        ? <>Only today&rsquo;s call above passes these filters — {deals.length.toLocaleString()} {deals.length === 1 ? 'flag is' : 'flags are'} live in the {activeLabel} market.</>
+                        : <>No flag passes these filters — {deals.length.toLocaleString()} {deals.length === 1 ? 'is' : 'are'} live in the {activeLabel} market.</>}
+                  </p>
+                  <div className="vd-empty-links">
+                    {isTriageActive(triage) && (
+                      <button type="button" className="link-action"
+                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--color-fg)' }}
+                        onClick={() => setTriage(TRIAGE_DEFAULTS)}>
+                        Clear the filters <span className="arrow"><Flick size={10} style={{ marginLeft: 5 }} /></span>
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : (

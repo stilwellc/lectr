@@ -11,7 +11,8 @@ import SaveSearch from './SaveSearch';
 import FollowChip from './FollowChip';
 import { catFollow, houseFollow } from '../lib/follows';
 import { taxonOf, SUBS, type CatKey } from '../lib/taxonomy';
-import { WINDOWS, VALUE_FLOORS, TRIAGE_DEFAULTS, isTriageActive, passesTriage, triageToParams, triageFromParams, type TriageFilters } from '../lib/feed-filters';
+import { WINDOWS, VALUE_FLOORS, TRIAGE_DEFAULTS, isTriageActive, passesTriage, patchTriage, triageToParams, triageFromParams, houseBaselines, type TriageFilters, type HouseBaselines } from '../lib/feed-filters';
+import { facetCatOf, facetChips, toggleFacet } from '../lib/facets';
 
 export type FeedSort = 'priority' | 'soonest' | 'gap-desc' | 'newest' | 'bids-desc' | 'est-desc' | 'est-asc';
 
@@ -65,6 +66,9 @@ export function feedToParams(f: FeedFilters, p: URLSearchParams): void {
   put('tab', f.tab && f.tab !== FEED_DEFAULTS.tab ? f.tab : null);
   triageToParams(f, p);
 }
+/** every query key the feed codec owns — any of them in the URL means the
+ *  URL governs the view (a remembered view is never layered on top) */
+export const FEED_PARAM_KEYS = ['q', 'v', 'mk', 'sp', 'below', 'sort', 'day', 'tab', 'win', 'cat', 'sub', 'house', 'min', 'new', 'fx'];
 export function feedFromParams(p: URLSearchParams): FeedFilters {
   const sort = p.get('sort') as FeedSort | null;
   const v = p.get('v');
@@ -109,6 +113,8 @@ export default function FeedToolbar({
   pageSize = 24,
   showToggle = true,
   prevVisitDay = null,
+  baselines: baselinesProp,
+  onResetView,
 }: {
   lots: AuctionLot[];          // the unfiltered upcoming pool (for counts)
   belowIds: Set<string>;
@@ -126,6 +132,12 @@ export default function FeedToolbar({
   showToggle?: boolean;
   /** the reader's previous visit day (feed-filters useLastVisit) — drives "New" */
   prevVisitDay?: string | null;
+  /** houses' onboarding days (feed-filters houseBaselines) — keeps a first
+   *  crawl's flood out of "New" */
+  baselines?: HouseBaselines;
+  /** set when the view was restored from the reader's last visit: a quiet
+   *  "Reset view" puts the feed back on the defaults and forgets it */
+  onResetView?: () => void;
 }) {
   // The below-market lens auto-ranks by gap (its smart default) — but it must
   // hand back whatever sort the reader had picked when the lens comes off,
@@ -149,8 +161,11 @@ export default function FeedToolbar({
   // inside a vertical → its full roster of makers (art keeps mediums instead:
   // 17 makers is a wall). Zero-count makers stay visible as disabled pills —
   // coverage honesty: "Rolex 0" tells the truth "vanished Rolex" hides.
+  // (Oct 9) only where the slugs ARE makers — design and watches. In sports,
+  // TCG, science and culture they are old category buckets ("Graded Cards 0",
+  // "Memorabilia 0") that the clean sub-category chips below already cover.
   const makers = useMemo(() => {
-    if (effectiveMarket === 'all' || effectiveMarket === 'art') return [] as [string, number][];
+    if (effectiveMarket !== 'design' && effectiveMarket !== 'watches') return [] as [string, number][];
     const c: Record<string, number> = {};
     lots.forEach(l => { c[l.artist] = (c[l.artist] || 0) + 1; });
     return Array.from(marketArtists(effectiveMarket))
@@ -163,7 +178,8 @@ export default function FeedToolbar({
     if (effectiveMarket !== 'sports') return [] as [string, number][];
     const c: Record<string, number> = {};
     lots.forEach(l => { const s = sportOfLot(l) || 'Other'; c[s] = (c[s] || 0) + 1; });
-    return Object.entries(c).sort((a, b) => b[1] - a[1]);
+    // "Other" is the cut nobody shops by — always last, never the lead chip
+    return Object.entries(c).sort((a, b) => (a[0] === 'Other' ? 1 : 0) - (b[0] === 'Other' ? 1 : 0) || b[1] - a[1]);
   }, [lots, effectiveMarket]);
 
   // inside a vertical → its CLEAN sub-categories (app/lib/taxonomy), the cut
@@ -194,11 +210,35 @@ export default function FeedToolbar({
     for (const l of marketPool) { const h = String(l.auctionHouse || ''); if (h) c.set(h, (c.get(h) || 0) + 1); }
     return Array.from(c.entries()).sort((a, b) => b[1] - a[1]);
   }, [marketPool]);
+  // a house's onboarding flood is not "new" (feed-filters houseBaselines) —
+  // the page passes baselines read off its whole book; this pool is the fallback
+  const baselines = useMemo(() => baselinesProp ?? houseBaselines(lots), [baselinesProp, lots]);
   const newCount = useMemo(
-    () => marketPool.filter(l => passesTriage(l, { ...TRIAGE_DEFAULTS, newOnly: true }, { prevVisitDay })).length,
-    [marketPool, prevVisitDay]
+    () => marketPool.filter(l => passesTriage(l, { ...TRIAGE_DEFAULTS, newOnly: true }, { prevVisitDay, baselines })).length,
+    [marketPool, prevVisitDay, baselines]
   );
   const newLabel = prevVisitDay ? 'New since last visit' : 'New today';
+  // in-category facets (Graded / Rookie / era, Film & TV / Music) — once the
+  // reader stands in one category; counted with every other filter applied
+  const facets = useMemo(() => {
+    const scoped = marketPool.filter(l => (!filters.maker || l.artist === filters.maker)
+      && (!filters.sport || (sportOfLot(l) || 'Other') === filters.sport));
+    const fc = facetCatOf(filters.cat, scoped);
+    if (!fc) return [];
+    const pool = scoped.filter(l => passesTriage(l, { ...filters, fx: [] }, { prevVisitDay, baselines }));
+    return facetChips(fc, pool, filters.fx);
+  }, [marketPool, filters, prevVisitDay, baselines]);
+  // the phone sheet WRAPS its chips, so a group divider would dangle at a
+  // line's edge — the sheet gets the same chips without them
+  const facetPillsOf = (dividers: boolean) => facets.map((c, i) => (
+    <span key={c.key} style={{ display: 'contents' }}>
+      {dividers && i > 0 && facets[i - 1].group !== c.group && <span className="ray-toolbar-divider" aria-hidden="true" />}
+      <button className="ray-toolbar-pill" data-active={filters.fx.includes(c.key)} aria-pressed={filters.fx.includes(c.key)}
+        onClick={() => set({ fx: toggleFacet(filters.fx, c.key) })}>
+        {c.label} <i>{c.n}</i>
+      </button>
+    </span>
+  ));
   const subActive = (k: string) => filters.cat != null && `${filters.cat}:${filters.sub}` === k;
   const toggleSub = (k: string) => {
     if (subActive(k)) { set({ cat: null, sub: null }); return; }
@@ -225,7 +265,7 @@ export default function FeedToolbar({
     [lots]
   );
 
-  const set = (patch: Partial<FeedFilters>) => onChange({ ...filters, ...patch });
+  const set = (patch: Partial<FeedFilters>) => onChange(patchTriage(filters, patch));
 
   // MOBILE (<768px): the desktop pill spread is honest work on a wide row and
   // pure noise on a phone. Under 768 the toolbar collapses to search + ONE
@@ -367,7 +407,8 @@ export default function FeedToolbar({
     (filters.win !== null ? 1 : 0) +
     (filters.house !== null ? 1 : 0) +
     (filters.minUsd !== null ? 1 : 0) +
-    (filters.newOnly ? 1 : 0);
+    (filters.newOnly ? 1 : 0) +
+    filters.fx.length;
   const sheetHasContent =
     showSortChrome || houses.length > 1 ||
     sports.length > 0 || makers.length > 0 || categories.length > 0 ||
@@ -494,6 +535,12 @@ export default function FeedToolbar({
                   </button>
                 ))}
               </div>
+            </>
+          )}
+          {facets.length > 0 && (
+            <>
+              <div className="ray-feedsheet-head">Narrow</div>
+              <div className="ray-feedsheet-chips">{facetPillsOf(false)}</div>
             </>
           )}
           <div className="ray-feedsheet-head">Closing</div>
@@ -874,6 +921,12 @@ export default function FeedToolbar({
         </div>
       )}
 
+      {!isMobile && facets.length > 0 && (
+        <div className="ray-toolbar-row ray-toolbar-row-filters ray-markets-fade" aria-label="Narrow">
+          {facetPillsOf(true)}
+        </div>
+      )}
+
       {/* Count + Clear live OUTSIDE the masked scroll row — the fade mask
           must never dissolve the one control that undoes a filter. */}
       <span className="ray-toolbar-count">
@@ -887,6 +940,11 @@ export default function FeedToolbar({
           </>
         ) : (
           <>{total.toLocaleString()} lots</>
+        )}
+        {onResetView && (
+          <button className="ray-toolbar-reset" onClick={onResetView} title="This view was restored from your last visit">
+            Reset view
+          </button>
         )}
       </span>
     </div>

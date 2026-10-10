@@ -27,7 +27,7 @@ import { Colophon } from '../components/Terminal';
 import Flick from '../components/Flick';
 import type { AuctionLot, MarketStats } from '../types';
 import TriageBar from '../components/TriageBar';
-import { useUrlState, useLastVisit, passesTriage, TRIAGE_DEFAULTS, triageFromParams, triageToParams, type TriageFilters } from '../lib/feed-filters';
+import { useUrlState, useLastVisit, passesTriage, houseBaselines, TRIAGE_DEFAULTS, triageFromParams, triageToParams, type TriageFilters } from '../lib/feed-filters';
 import { byPriority, priorityOf } from '../lib/priority';
 import { taxonOf, SUBS, CAT_LABEL, SPORTS, type CatKey } from '../lib/taxonomy';
 import { useFollows, catFollow } from '../lib/follows';
@@ -626,6 +626,8 @@ export default function MakersPage() {
   // house, value floor, new); the roster's sold history is untouched
   const [triage, setTriage] = useUrlState<TriageFilters>(TRIAGE_DEFAULTS, triageFromParams, triageToParams);
   const prevVisitDay = useLastVisit();
+  // a house's first-crawl flood is not "new" (feed-filters houseBaselines)
+  const baselines = useMemo(() => houseBaselines(allLots), [allLots]);
   // sub-categories are market-scoped: drop them on a real market flip (never on mount)
   const triageMarket = useRef(activeKey);
   useEffect(() => {
@@ -731,7 +733,7 @@ export default function MakersPage() {
     const today = localToday();
     for (const l of allLots) {
       if (!isLiveUpcoming(l, today)) continue;
-      if (!passesTriage(l, triage, { today, prevVisitDay })) continue;
+      if (!passesTriage(l, triage, { today, prevVisitDay, baselines })) continue;
       let e = m.get(l.artist);
       if (!e) m.set(l.artist, e = { lots: [], flags: 0 });
       e.lots.push(l);
@@ -741,7 +743,7 @@ export default function MakersPage() {
     const cmp = byPriority(Date.now());
     m.forEach(e => { e.lots.sort(cmp); });
     return m;
-  }, [allLots, triage, prevVisitDay]);
+  }, [allLots, triage, prevVisitDay, baselines]);
   // every live lot in the active market, for the triage row's counts
   const marketLive = useMemo(() => {
     const today = localToday();
@@ -807,7 +809,7 @@ export default function MakersPage() {
     const today = localToday();
     for (const l of allLots) {
       if (!isLiveUpcoming(l, today)) continue;
-      if (!passesTriage(l, triage, { today, prevVisitDay })) continue;
+      if (!passesTriage(l, triage, { today, prevVisitDay, baselines })) continue;
       const t = taxonOf(l);
       if (sportPick && (t.cat === 'sports-cards' || t.cat === 'sports-memorabilia') && t.sport !== sportPick) continue;
       const k = `${t.cat}:${t.sub}`;
@@ -816,7 +818,7 @@ export default function MakersPage() {
     const cmp = byPriority(Date.now());
     m.forEach(a => a.sort(cmp));
     return m;
-  }, [allLots, triage, prevVisitDay, sportPick]);
+  }, [allLots, triage, prevVisitDay, baselines, sportPick]);
 
   const subRows = useMemo<Row[]>(() => {
     if (!catStats) return [];
@@ -1219,6 +1221,7 @@ export default function MakersPage() {
               filters={triage}
               onChange={setTriage}
               prevVisitDay={prevVisitDay}
+              baselines={baselines}
               label="Narrow the live book"
             />
             {activeKey === 'sports' && subRows.length > 0 && (
@@ -1327,7 +1330,7 @@ export default function MakersPage() {
                     label="The directory"
                     body={<>
                       No maker matches the current filters in the {activeLabel} market.
-                      {' '}<button type="button" className="mk-reset" onClick={() => { setQ(''); setFLive(false); setFVerified(false); setFFlagged(false); setFFollowing(false); }}>Clear the filters</button>
+                      {' '}<button type="button" className="mk-reset" onClick={() => { setQ(''); setFLive(false); setFVerified(false); setFFlagged(false); setFFollowing(false); setTriage(TRIAGE_DEFAULTS); setSportPick(null); }}>Clear the filters</button>
                     </>}
                   />
                 </div>

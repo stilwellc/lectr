@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { taxonOf, SUBS, subMatches } from '../taxonomy';
-import { prioStatic, priorityOf, shortlist, urgencyOf, reasonOf } from '../priority';
+import { prioStatic, priorityOf, shortlist, urgencyOf, reasonOf, spread } from '../priority';
 
 const NOW = Date.parse('2026-10-08T12:00:00Z');
 const inHours = (h: number) => new Date(NOW + h * 3_600_000).toISOString();
@@ -65,7 +65,7 @@ test('priority: urgency windows and closed lots', () => {
   assert.equal(urgencyOf(NOW + 100 * 3_600_000, NOW), 0.25);
   assert.equal(urgencyOf(NOW + 400 * 3_600_000, NOW), 0);
   assert.equal(urgencyOf(NOW - 3_600_000, NOW), 0);
-  const p = priorityOf({ artist: 'andy-warhol', estimateLow: 1_000_000, estimateHigh: 1_000_000, saleDateTime: inHours(3), value: { confidence: 'high' } }, NOW);
+  const p = priorityOf({ artist: 'andy-warhol', estimateLow: 20_000_000, estimateHigh: 20_000_000, saleDateTime: inHours(3), value: { confidence: 'high' } }, NOW);
   assert.equal(p?.score, 40 + 20 + 15);
 });
 
@@ -116,4 +116,51 @@ test('taxonomy v2: new subs, culture routing, aliases', () => {
   assert.ok(subMatches('sports-memorabilia', 'tickets-programs', 'programs'));
   assert.ok(!subMatches('sports-memorabilia', 'tickets-programs', 'autographs'));
   for (const [cat, subs] of Object.entries(SUBS)) assert.equal(new Set(subs.map(x => x.key)).size, subs.length, `${cat} has duplicate keys`);
+});
+
+test('priority (Oct 9): each market on its own size scale', () => {
+  const card = prioStatic({ artist: 'sports-cards', currentBid: 40_000, bidCount: 12 })!;
+  const art = prioStatic({ artist: 'andy-warhol', estimateLow: 40_000, estimateHigh: 40_000 })!;
+  assert.ok(card.size > art.size, 'a $40K card is big for cards, a $40K Warhol is minor for fine art');
+  assert.equal(card.ev, 0.6, '8+ bids = the room agrees on a price');
+  assert.equal(prioStatic({ artist: 'sports-cards', currentBid: 500, bidCount: 1 })!.ev, 0.15);
+});
+
+test('priority (Oct 9): a bid past the estimate becomes the anchor and voids the edge', () => {
+  const p = prioStatic({ artist: 'mahatma-gandhi', subCat: 'autographs', estimateLow: 2000, estimateHigh: 3000, currentBid: 3960, currency: 'USD',
+    signal: { label: 'Below Market' }, value: { signal: { beatRatePct: 60 } } } as never)!;
+  assert.equal(p.a, 3960);
+  assert.equal(p.over, true);
+  assert.equal(p.edge, 0);
+});
+
+test('shortlist (Oct 9): one seat per card identity, one sale = house + close day', () => {
+  const jordan = (id: string, g: number) => ({ id, artist: 'sports-cards', auctionHouse: 'Goldin', saleDate: '2026-10-09',
+    title: `1986 Fleer #57 Michael Jordan Rookie Card - PSA ${g}`, saleDateTime: inHours(20), currentBid: 9000 + g, bidCount: 20 });
+  const out = shortlist([jordan('a', 9), jordan('b', 8), jordan('c', 7)], NOW, 20);
+  assert.deepEqual(out.map(l => l.id), ['a']);
+  const ch = (id: string, saleName: string, artist: string) => ({ id, artist, auctionHouse: "Christie's", saleDate: '2026-10-09', saleName,
+    saleDateTime: inHours(6), estimateLow: 5_000_000, estimateHigh: 5_000_000, title: id });
+  const other = (id: string) => ({ id: `o${id}`, artist: `maker-${id}`, auctionHouse: 'Phillips', saleDate: `2026-10-1${id}`,
+    saleDateTime: inHours(30 + Number(id) * 24), estimateLow: 300_000, estimateHigh: 300_000, title: `w${id}` });
+  const evening = shortlist([ch('1', 'Evening Sale', 'francis-bacon'), ch('2', 'London Sale 25228', 'andy-warhol'),
+    ch('3', 'Evening Sale', 'pablo-picasso'), ch('4', 'London Sale 25228', 'alexander-calder'), other('1'), other('2'), other('3')], NOW, 6);
+  assert.equal(evening.filter(l => l.auctionHouse === "Christie's").length, 3, 'two sale names, one evening: ≤3 seats while other sales can fill');
+  // a pool that IS one room (the reader narrowed to it) may fill past 3 once nothing else qualifies
+  assert.equal(shortlist([ch('1', 'Evening Sale', 'francis-bacon'), ch('2', 'London Sale 25228', 'andy-warhol'),
+    ch('3', 'Evening Sale', 'pablo-picasso'), ch('4', 'London Sale 25228', 'alexander-calder')], NOW, 20).length, 4);
+});
+
+test('spread (Oct 9): ≤3 per sale in any 12, order otherwise kept', () => {
+  const lots = Array.from({ length: 10 }, (_, i) => ({ id: `r${i}`, artist: `maker-${i}`, auctionHouse: 'REA', saleDate: '2026-10-18' }))
+    .concat([{ id: 'x', artist: 'other', auctionHouse: 'Goldin', saleDate: '2026-10-10' }]);
+  const out = spread(lots);
+  assert.deepEqual(out.slice(0, 4).map(l => l.id), ['r0', 'r1', 'r2', 'x']);
+  assert.equal(out.length, lots.length);
+});
+
+test('reasonOf (Oct 9): date-only sales name the day, not an hour', () => {
+  const d = new Date(NOW); const iso = (n: number) => new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate() + n)).toISOString().slice(0, 10);
+  assert.equal(reasonOf({ artist: 'jean-prouve', saleDate: iso(0), estimateLow: 30000, estimateHigh: 30000 }, NOW), 'Sells today');
+  assert.equal(reasonOf({ artist: 'jean-prouve', saleDate: iso(3), estimateLow: 30000, estimateHigh: 30000 }, NOW), 'Sells in 3 days');
 });

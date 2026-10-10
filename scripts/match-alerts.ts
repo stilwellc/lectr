@@ -20,9 +20,10 @@
 import fs from 'fs';
 import path from 'path';
 import { readCorpus, SERVED_DIR } from './corpus-io';
-import { marketOf } from '../app/constants';
 import { taxonOf, subMatches } from '../app/lib/taxonomy';
 import { priorityOf } from '../app/lib/priority';
+import { matchesSavedQuery, unmatchableReason } from '../app/lib/saved-query';
+import type { SavedQuery } from '../app/lib/alerts';
 
 const url = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '');
 const key = process.env.SUPABASE_SERVICE_KEY || '';
@@ -32,19 +33,8 @@ const key = process.env.SUPABASE_SERVICE_KEY || '';
 const FRESH_MS = (Number(process.env.FRESH_HOURS) || 40) * 3600 * 1000;
 const MAX_PER_SEARCH = 50;
 
-interface Query {
-  market?: string | null;
-  maker?: string | null;
-  sport?: string | null;
-  category?: string | null;
-  text?: string | null;
-  belowOnly?: boolean;
-  player?: string | null;
-  follow?: 'cat' | 'house';
-  cat?: string | null;
-  sub?: string | null;
-  house?: string | null;
-}
+/** a stored query — the one shape the client writes (app/lib/alerts SavedQuery) */
+type Query = SavedQuery;
 
 /** Category / house follows (Oct 8) cover hundreds of new lots a day, so they
  *  alert ONLY on lots that clear the anonymous shortlist bar (≥$2.5K anchor
@@ -67,23 +57,17 @@ export function followHits(q: Query, fresh: any[], now: number): any[] {
   return scored.sort((a, b) => b.s - a.s).slice(0, FOLLOW_CAP).map(x => x.l);
 }
 
-function matches(q: Query, lot: any): boolean {
-  // a FOLLOW: sports lots carry a build-stamped playerSlug; art/watch makers
-  // are the artist slug itself — a follow matches either, so "follow Jordan"
-  // and "follow KAWS" both work off the one field.
-  if (q.player && lot.playerSlug !== q.player && lot.artist !== q.player) return false;
-  if (q.maker && lot.artist !== q.maker) return false;
-  if (q.market && q.market !== 'all' && marketOf(String(lot.artist || '')) !== q.market) return false;
-  if (q.sport && (lot.sport || '') !== q.sport) return false;
-  if (q.category && lot.category !== q.category) return false;
-  if (q.belowOnly && !String(lot.value?.signal?.label || '').startsWith('below')) return false;
-  if (q.text) {
-    const hay = String(lot.title || '').toLowerCase();
-    for (const w of String(q.text).toLowerCase().split(/\s+/)) {
-      if (w && !hay.includes(w)) return false;
-    }
-  }
-  return true;
+/** Every alert a saved search earns tonight. Follows take the capped
+ *  shortlist branch; plain searches go through the shared matcher
+ *  (app/lib/saved-query — the same definition "Save this search" writes
+ *  with), and a query the matcher can't fully honor (an unknown field, a
+ *  malformed value, no criterion) earns NOTHING rather than everything. */
+export function hitsFor(q: Query, fresh: any[], now: number, log: (m: string) => void = () => {}): any[] {
+  if (q.follow) return q.follow === 'cat' || q.follow === 'house' ? followHits(q, fresh, now) : [];
+  const why = unmatchableReason(q as Record<string, unknown>);
+  if (why) { log(why); return []; }
+  const today = new Date(now).toISOString().slice(0, 10);
+  return fresh.filter(l => matchesSavedQuery(q as SavedQuery, l, today)).slice(0, MAX_PER_SEARCH);
 }
 
 /** the live book: upcoming.json's lots (eager, slim), else the corpus filtered.
@@ -163,9 +147,7 @@ async function main() {
   for (const s of searches) {
     if (s.query?._signal) continue; // synthetic signal searches belong to match-signal-alerts
     const q: Query = s.query || {};
-    const hits = q.follow
-      ? (q.follow === 'cat' || q.follow === 'house' ? followHits(q, fresh, now) : [])
-      : fresh.filter(l => matches(q, l)).slice(0, MAX_PER_SEARCH);
+    const hits = hitsFor(q, fresh, now, why => console.warn(`[match-alerts] search ${s.id} skipped — ${why}`));
     if (!hits.length) continue;
     const rows = hits.map(l => ({ user_id: s.user_id, search_id: s.id, lot_id: String(l.id) }));
     await rest('alerts?on_conflict=search_id,lot_id', {
@@ -183,4 +165,5 @@ async function main() {
   console.log(`[match-alerts] wrote ${written} alerts across ${searches.length} searches`);
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+// RAY_SKIP_MAIN lets a test import hitsFor without touching the network
+if (process.env.RAY_SKIP_MAIN !== '1') main().catch(e => { console.error(e); process.exit(1); });
