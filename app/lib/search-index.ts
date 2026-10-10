@@ -21,7 +21,7 @@ const BASE = '/data/ray';
 
 /* ── meta + the reference list ─────────────────────────────────────────── */
 
-export interface RefRow { maker: string; ref: string; n: number; med: number }
+export interface RefRow { maker: string; ref: string; n: number; med: number; /** the model line ('daytona'), when its sales name one */ line?: string | null }
 
 let metaP: Promise<SearchMeta | null> | null = null;
 export function loadSearchMeta(): Promise<SearchMeta | null> {
@@ -39,7 +39,7 @@ let refsP: Promise<RefRow[]> | null = null;
 export function loadRefList(): Promise<RefRow[]> {
   if (!refsP) {
     refsP = loadSearchMeta().then(async m => {
-      if (m?.refs?.length) return m.refs.map(([maker, ref, n, med]) => ({ maker, ref, n, med }));
+      if (m?.refs?.length) return m.refs.map(([maker, ref, n, med, line]) => ({ maker, ref, n, med, line: line ?? null }));
       const st = await loadPageStats();
       return (st?.refIndex || []).map(r => ({ maker: r.maker, ref: r.ref, n: r.n, med: r.med }));
     }).then(rows => { if (!rows.length) refsP = null; return rows; });
@@ -89,7 +89,9 @@ export function matchRefs(query: string, refs: RefRow[], label: (ref: string) =>
     // a reference prefix needs 3+ typed characters and a digit — '57' should
     // not list every 57xx, and 'ro' is a word, not a reference
     if (rc.length >= 3 && /\d/.test(rc) && k.startsWith(rc)) { hits.push({ row, how: 'prefix' }); continue; }
-    const lab = foldText(label(row.ref));
+    // the label, plus the line a reference belongs to ("rolex daytona" →
+    // Ref. 6263, Ref. 116520 … as well as the 'daytona' bucket)
+    const lab = foldText(label(row.ref) + (row.line ? ` ${label(row.line)} ${row.line}` : ''));
     if (rc.length >= 3 && restWords.every(w => lab.includes(w))) hits.push({ row, how: 'name' });
   }
   const rank = { exact: 0, prefix: 1, name: 2 } as const;

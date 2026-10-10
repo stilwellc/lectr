@@ -187,7 +187,7 @@ function WatchModule({ slug, label, marketData }: { slug: string; label: string;
               <Link key={r.key} href={`/ref/${slug}/${encodeRefPath(r.ref)}`} className="ns-ledger-row" style={{ textDecoration: 'none', color: 'inherit' }}>
                 <span className="nsp-lk">
                   <span className="t">{refLabel(r.ref)}</span>
-                  <span className="nsp-lsub">{r.n.toLocaleString()} sales · {r.houses.length} {r.houses.length === 1 ? 'house' : 'houses'}</span>
+                  <span className="nsp-lsub">{r.line ? `${refLabel(r.line)} · ` : ''}{r.n.toLocaleString()} sales · {r.houses.length} {r.houses.length === 1 ? 'house' : 'houses'}</span>
                 </span>
                 <span className="nsp-lval">
                   <span className="nsp-lsub" style={{ marginLeft: 0 }}>median, all sales</span>

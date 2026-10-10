@@ -168,9 +168,10 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
         kind: 'lot' as const,
       }));
     const refMatches: Item[] = refs.length
-      ? matchRefs(q, refs, refLabel, 4).map(h => ({
+      ? matchRefs(q, refs, refLabel, 6).map(h => ({
         label: `${ARTIST_LABEL[h.row.maker] || h.row.maker} ${refLabel(h.row.ref)}`,
-        hint: `reference · ${h.row.n.toLocaleString()} sold · median ${formatPrice(h.row.med)}`,
+        // a reference's model line rides its hint ("Daytona · reference …")
+        hint: `${h.row.line ? `${refLabel(h.row.line)} · ` : ''}reference · ${h.row.n.toLocaleString()} sold · median ${formatPrice(h.row.med)}`,
         path: refHref(h.row),
         kind: 'ref' as const,
       }))

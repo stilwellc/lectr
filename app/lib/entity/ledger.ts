@@ -26,6 +26,8 @@ import { completeQuarters, type EntityBundle } from '../../hooks/useEntities';
 import type { EntityDetail, EntityRecord, EntitySummary } from './model';
 import { entityPageOf } from './key';
 import { makerHref } from './retired';
+import { bestLotImage, imageHostTier } from '../img-host';
+import { makerLineOfWords } from '../watch-ref';
 import { rowKindOf, rowPolicy, KIND, type RowKind } from './kinds';
 import type { SortKey } from './view-state';
 
@@ -119,7 +121,11 @@ export function buildRow(id: string, b: EntityBundle, live: LiveEntry | undefine
     discipline: s.discipline,
     // a maker's face is its flagship (page-stats / the build's face rule);
     // a subject or sub row shows its best live lot
-    hero: kind === 'maker' ? s.face : (b.liveFace ?? lots.find(l => l.imageUrl)?.imageUrl ?? s.face ?? null),
+    // (a flagship on a host some browsers refuse — christies — yields to a
+    // live photo on a host that renders, when one exists: app/lib/img-host)
+    hero: kind === 'maker'
+      ? (s.face && imageHostTier(s.face) < 2 ? s.face : (pickRenderable(bestLotImage(lots), s.face) ?? null))
+      : (b.liveFace ?? bestLotImage(lots) ?? s.face ?? null),
     spark: sp,
     live: lots.length,
     flags: live?.flags ?? 0,
@@ -226,15 +232,28 @@ export function nameMatches(r: Pick<Row, 'label' | 'tag'>, words: readonly strin
   return true;
 }
 
+/** the model line a maker-row search names after the maker's own words
+ *  ("rolex daytona" → 'daytona'), or null */
+export function lineSearchOf(r: Pick<Row, 'id' | 'label' | 'tag'>, words: readonly string[]): string | null {
+  if (!r.id.startsWith('mk:') || words.length < 2) return null;
+  const rest = words.filter(w => !nameMatches(r, [w]));
+  if (!rest.length || rest.length === words.length) return null;
+  return makerLineOfWords(r.id.slice(3), rest);
+}
+
 /**
  * The row as a search shows it: whole when its name matches; rescoped to the
  * matching lots when only some lots do; null when neither.
  */
 export function searchRow(r: Row, words: readonly string[]): Row | null {
   if (!words.length || nameMatches(r, words)) return r;
-  if (!r.liveLots.length) return null;
+  // "rolex daytona": the maker's name plus one of its own model lines keeps
+  // the maker's row (its panel leads with that line's references), with only
+  // the live lots that name the line — none is an honest 0, not all of Rolex
+  const line = r.kind === 'maker' ? lineSearchOf(r, words) : null;
+  if (!line && !r.liveLots.length) return null;
   const lots = r.liveLots.filter(l => lotMatches(l, words));
-  if (!lots.length) return null;
+  if (!lots.length && !line) return null;
   let flags = 0;
   for (const l of lots) if (isFlagged(l)) flags++;
   return { ...r, liveLots: lots, live: lots.length, flags, topScore: mattersOf(lots), scoped: true };
@@ -247,6 +266,19 @@ export function flaggedRow(r: Row): Row | null {
   if (r.flags === r.live) return r;
   const lots = r.liveLots.filter(isFlagged);
   return { ...r, liveLots: lots, live: lots.length, topScore: mattersOf(lots), scoped: true };
+}
+
+/** the row under the Following lens: whole when the reader follows the name
+ *  itself; else narrowed to its live lots in a followed category (the lens's
+ *  lot count is then the sum of the rows); null when neither */
+export function followedRow(r: Row, nameFollowed: boolean, lotFollowed: (l: AuctionLot) => boolean): Row | null {
+  if (nameFollowed) return r;
+  const lots = r.liveLots.filter(lotFollowed);
+  if (!lots.length) return null;
+  if (lots.length === r.liveLots.length) return r;
+  let flags = 0;
+  for (const l of lots) if (isFlagged(l)) flags++;
+  return { ...r, liveLots: lots, live: lots.length, flags, topScore: mattersOf(lots), scoped: true };
 }
 
 /* ═════════ ORDER ═════════ */
@@ -310,3 +342,10 @@ export const fmtUsd = (n: number) =>
 
 /** a signed percent (true minus) */
 export const fmtPct = (p: number) => `${p >= 0 ? '+' : '−'}${Math.abs(Math.round(p))}%`;
+
+/** the live photo when it sits on a better host than the flagship, else the flagship */
+function pickRenderable(live: string | null, face: string | null): string | null {
+  if (!live) return face;
+  if (!face) return live;
+  return imageHostTier(live) < imageHostTier(face) ? live : face;
+}

@@ -10,6 +10,8 @@ import { useEffect, useState } from 'react';
 
 export interface RefEntry {
   key: string; maker: string; ref: string; n: number;
+  /** (Oct 10) the model line its sales name ('daytona'), when clear */
+  line?: string | null;
   medianUsd: number; ttmMedianUsd: number | null; beatHighPct: number | null;
   houses: string[];
   yearly: { y: number; med: number; n: number }[];

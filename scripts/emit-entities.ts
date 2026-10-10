@@ -38,6 +38,7 @@ import { lotSubjectOf } from '../app/lib/maker-subjects';
 import { taxonOf, CAT_LABEL, SPORTS, DOMAINS } from '../app/lib/taxonomy';
 import { classifyForm, formsForMarket } from '../app/lib/comps';
 import { bucketOf } from '../app/lib/page-data';
+import { betterFace } from '../app/lib/img-host';
 import { facetKeysFor, facetSplits } from '../app/lib/entity/facets';
 import { isLiveUpcoming } from '../app/utils';
 import { verifiedMovers } from '../app/preview/terminal/verified';
@@ -169,7 +170,9 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): BuiltEntiti
     vote(a.domains, ln.domain);
     vote(a.subs, ln.lens);
     const fv = faceValueOf(l);
-    if (fv != null && (!a.face || fv > a.face.val)) a.face = { url: l.imageUrl!, val: fv };
+    // host tier first (a christies face is a letter tile for some readers —
+    // app/lib/img-host), then value
+    if (fv != null && betterFace(a.face, { url: l.imageUrl!, val: fv })) a.face = { url: l.imageUrl!, val: fv };
   };
 
   const seen = new Set<string>();
@@ -262,7 +265,9 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): BuiltEntiti
     });
     if (f.sold) {
       const det: EntityDetail = {
-        quarters: f.quarters, yearly: f.yearly, houses: f.houses, cats: f.cats, top: f.top, recent: f.recent,
+        // (no `quarters` since Oct 10: no page read them — the trend rides
+        // the summary's spark)
+        yearly: f.yearly, houses: f.houses, cats: f.cats, top: f.top, recent: f.recent,
       };
       if (f.lensSplit) det.lensSplit = f.lensSplit;
       const fx = facetSplits(a.id, a.pts, input.today);
