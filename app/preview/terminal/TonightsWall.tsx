@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect } from 'react';
 import type { AuctionLot } from '../../types';
-import { ARTIST_LABEL } from '../../constants';
+import { makerLineOf, labelTagOf } from '../../lib/lot-labels';
 import { formatPrice, httpsImg, craftTitle, localToday } from '../../utils';
 import { useInView } from './hooks';
 import styles from './style.module.css';
@@ -153,9 +153,13 @@ export default function TonightsWall({
               />
             </span>
             <span className={styles.wallMeta}>
-              <span className={styles.wallMaker}>{ARTIST_LABEL[it.lot.artist] || it.lot.artist}</span>
+              <span className={styles.wallMaker}>{makerLineOf(it.lot).name}</span>
               <span className={styles.wallEst}>
                 {estLine(it.lot)}
+                {/* the label's lead word (app/lib/lot-labels) — five Rolexes
+                    read GMT / Chronograph / Diver instead of five "Rolex";
+                    the call tag takes the slot when it rides */}
+                {!it.call && `${estLine(it.lot) ? ' · ' : ''}${labelTagOf(it.lot)}`}
                 {it.call && <em className={styles.wallCallTag}>today&rsquo;s call</em>}
               </span>
               {it.flagged && it.pct != null && (

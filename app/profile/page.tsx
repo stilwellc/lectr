@@ -26,6 +26,7 @@ import { AwayMark, ReadsMark, WatchMark, RecordMark, CollectionMark, TapeMark, A
 import { CellGrid, Cell, ColorCell, FigPools, FigTape } from '../components/cells';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, median, overEstimatePct } from '../utils';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
+import { makerLineOf, labelLineOf, drillLabelOf } from '../lib/lot-labels';
 
 /* ============================================================
    MY PROFILE — THE COCKPIT (Aug 24 2026 rebuild). The page is
@@ -405,7 +406,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
           <div className="ck-mtitle">{name}</div>
           <div className="ck-mline">
             <span className="ck-msub">
-              {meta?.artist ? (ARTIST_LABEL[meta.artist] || meta.artist) : 'archive'}
+              {meta?.artist ? makerLineOf({ artist: meta.artist, title: meta.title }).name : 'archive'}
               {meta?.estMid != null && <> · est. {formatPrice(meta.estMid)} at save</>}
             </span>
             <span className="ck-mnum">
@@ -432,7 +433,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
     }
     return (
       <div className="ray-settled-cols ray-savedrow" style={{ display: 'grid' }}>
-        <span className="maker">{meta?.artist ? (ARTIST_LABEL[meta.artist] || meta.artist) : '—'}</span>
+        <span className="maker">{meta?.artist ? makerLineOf({ artist: meta.artist, title: meta.title }).name : '—'}</span>
         <span className="work">{name}<span style={{ color: 'var(--color-text-faint)' }}> · archive</span></span>
         <span className="num" style={{ color: meta?.estMid != null ? undefined : 'var(--color-text-faint)' }}
           title={meta?.estMid != null ? 'The estimate as it stood when you saved the lot' : 'No estimate published'}>
@@ -468,7 +469,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
           <div className="ck-mtitle">{craftTitle(lot.title)}</div>
         </Link>
         <div className="ck-mline">
-          <span className="ck-msub">{ARTIST_LABEL[lot.artist] || lot.artist}</span>
+          <span className="ck-msub">{makerLineOf(lot).name}</span>
           <span className="ck-mnum">
             {pending ? <span style={{ color: 'var(--color-text-faint)' }}>pending</span> : (
               <>
@@ -499,7 +500,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
     <div className="ray-settled-cols ray-savedrow" style={{ display: 'grid' }}>
       <span className="maker">
         <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-          {ARTIST_LABEL[lot.artist] || lot.artist}
+          {makerLineOf(lot).name}
         </Link>
       </span>
       <span className="work">
@@ -1104,7 +1105,9 @@ export default function SavedPage() {
     const counts = new Map<string, number>();
     for (const l of upcoming) {
       const d = drillRowFor(l, marketData);
-      if (d?.label) counts.set(d.label, (counts.get(d.label) || 0) + 1);
+      // the sub-market in the label vocabulary ("Vintage (1996–2003)", not "Vintage ≤'02")
+      const label = d?.label ? drillLabelOf(d.slug, d.label) : null;
+      if (label) counts.set(label, (counts.get(label) || 0) + 1);
     }
     return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([label]) => label);
   }, [upcoming, marketData]);
@@ -1389,7 +1392,7 @@ export default function SavedPage() {
                   <Link key={r.key} href={`/lot?id=${encodeURIComponent(r.lot.id)}`} className="ck-read" role="listitem" data-nav-row>
                     <span className="ck-tag" data-tone={r.tone === 'up' ? 'up' : r.tone === 'hot' ? 'hot' : undefined}>{r.tag}</span>
                     <span className="ck-read-title">{craftTitle(r.lot.title)}</span>
-                    <span className="ck-read-fact">{ARTIST_LABEL[r.lot.artist] || r.lot.artist} · {r.fact}</span>
+                    <span className="ck-read-fact">{makerLineOf(r.lot).name} · {r.fact}</span>
                   </Link>
                 ))}
               </div>
@@ -1455,7 +1458,7 @@ export default function SavedPage() {
                           {reason && <span className="ck-tag" data-tone={reason.tag === 'Below market' ? 'up' : reason.tag === 'Lands soon' ? 'hot' : undefined}>{reason.tag}</span>}
                         </span>
                         <span className="work">
-                          <span className="ck-workmaker">{ARTIST_LABEL[lot.artist] || lot.artist}</span>
+                          <span className="ck-workmaker">{makerLineOf(lot).name}</span>
                           <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>
                             {craftTitle(lot.title)}
                           </Link>
@@ -1499,7 +1502,7 @@ export default function SavedPage() {
                         <span className="ck-mtitle">{craftTitle(lot.title)}</span>
                         <span className="ck-msub">
                           {reason && <span className="ck-tag" data-tone={reason.tag === 'Below market' ? 'up' : reason.tag === 'Lands soon' ? 'hot' : undefined}>{reason.tag}</span>}
-                          {ARTIST_LABEL[lot.artist] || lot.artist}
+                          {makerLineOf(lot).name}
                           {formatEstimate(lot) ? <> · {formatEstimate(lot)}</> : null}
                         </span>
                       </span>
@@ -1700,7 +1703,7 @@ export default function SavedPage() {
                       return (
                         <Link key={row.slug} href={`/sub/${row.slug.replace(':', '/')}`} className="ray-coll-exposure-row">
                           <span style={{ fontSize: 13.5, fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {row.label} <Flick size={9} style={{ marginLeft: 2 }} />
+                            {drillLabelOf(row.slug, row.label)} <Flick size={9} style={{ marginLeft: 2 }} />
                           </span>
                           <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                             {n} {n === 1 ? 'piece' : 'pieces'} · {formatPrice(held)} held
@@ -1729,9 +1732,9 @@ export default function SavedPage() {
                             <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{craftTitle(lot.title)}</div>
                           </Link>
                           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-                            <span>{[ARTIST_LABEL[lot.artist] || lot.artist, lot.auctionHouse, lot.saleDate ? formatDate(lot.saleDate) : ''].filter(Boolean).join(' · ')}</span>
+                            <span>{[makerLineOf(lot).name, labelLineOf(lot), lot.auctionHouse, lot.saleDate ? formatDate(lot.saleDate) : ''].filter(Boolean).join(' · ')}</span>
                             {drill && drillSlug && (
-                              <Link href={`/sub/${drillSlug.replace(':', '/')}`} className="ray-coll-chip">{drill.label}</Link>
+                              <Link href={`/sub/${drillSlug.replace(':', '/')}`} className="ray-coll-chip">{drillLabelOf(drillSlug, drill.label)}</Link>
                             )}
                             <button type="button" className="ck-piece-editbtn"
                               aria-expanded={editPiece === lot.id}
@@ -1905,7 +1908,7 @@ export default function SavedPage() {
                           <>
                             <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>
                               was: {m.title}
-                              {m.artist && <>, {ARTIST_LABEL[m.artist] || m.artist}</>}
+                              {m.artist && <>, {makerLineOf({ artist: m.artist, title: m.title }).name}</>}
                             </span>
                             <span style={{ color: 'var(--color-text-faint)' }}>
                               {m.estMid != null && <> · est. {formatPrice(m.estMid)}</>}

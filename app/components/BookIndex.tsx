@@ -21,6 +21,7 @@ import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { loadPageStats, type PageStats } from '../lib/page-data';
 import { ARTIST_LABEL } from '../constants';
+import { makerLineOf } from '../lib/lot-labels';
 import { encodeRefPath } from '../ref/ref-path';
 import { craftTitle, formatDate, formatPrice, getUpcomingCounts, isLiveUpcoming, localToday, refLabel, trueSaleDay, houseColors } from '../utils';
 import { signalMagnitude, dealScore } from '../lib/comps';
@@ -87,7 +88,7 @@ export default function BookIndex({ kind }: { kind: Kind }) {
                 <span className="lectr-lot-comp-t">
                   <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{craftTitle(l.title)}</span>
                   <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
-                    {ARTIST_LABEL[l.artist] || l.artist} · <span style={{ color: houseColors[l.auctionHouse] || 'inherit', fontWeight: 600 }}>{l.auctionHouse}</span> · hammers {formatDate(trueSaleDay(l))}
+                    {makerLineOf(l).name} · <span style={{ color: houseColors[l.auctionHouse] || 'inherit', fontWeight: 600 }}>{l.auctionHouse}</span> · hammers {formatDate(trueSaleDay(l))}
                   </span>
                 </span>
                 <span className="lectr-lot-comp-p" style={{ color: 'var(--color-up)' }}>{signalMagnitude('Below Market', l.signal!.pct)}</span>

@@ -4,7 +4,8 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AuctionLot, TopSaleRow } from '../../types';
 import { formatDate, formatPrice, houseColors, craftTitle, overEstimatePct, toneOf, fmtSignedPct } from '../../utils';
-import { ARTIST_LABEL, Market } from '../../constants';
+import { Market } from '../../constants';
+import { makerLineOf } from '../../lib/lot-labels';
 import type { MarketSeriesJson } from '../../hooks/useRayData';
 import { SalesMark } from '../marks';
 
@@ -215,7 +216,7 @@ export default function TopSales({ allLots, market, series }: Props) {
                       fontWeight: 400,
                       marginBottom: 3,
                     }}>
-                      {ARTIST_LABEL[lot.artist] || lot.artist}
+                      {makerLineOf(lot).name}
                     </div>
                     {/* canonical in-app lot permalink — /lot?id= resolves any
                         corpus lot client-side; the house link lives on the

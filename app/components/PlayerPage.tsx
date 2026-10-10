@@ -23,6 +23,7 @@ import { closeCut, formatPrice, formatDate, getUpcomingCounts } from '../utils';
 import FollowButton from './FollowButton';
 import HeroChart, { type HeroLine } from '../preview/terminal/HeroChart';
 import type { AuctionLot } from '../types';
+import { labelLineOf } from '../lib/lot-labels';
 import { signedPct } from './SubMarketDirectory';
 import '../northstar-pages.css';
 
@@ -297,7 +298,7 @@ export default function PlayerPage({ playerSlug }: { playerSlug: string }) {
                   <span className="lectr-lot-comp-t">
                     <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{l.title}</span>
                     <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
-                      {CAT_LABEL[l.artist] || l.artist} · hammers {formatDate(l.saleDate)}
+                      {labelLineOf(l)} · hammers {formatDate(l.saleDate)}
                     </span>
                   </span>
                   <span className="lectr-lot-comp-p">

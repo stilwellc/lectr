@@ -5,6 +5,7 @@ import { useDialogFocus } from './useDialogFocus';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { ARTISTS, ARTIST_LABEL, MARKETS } from '../constants';
+import { makerLineOf, labelLineOf, labelTagOf, searchTextOf, drillLabelOf } from '../lib/lot-labels';
 import { useMarket, MARKET_PATH } from '../lib/market';
 import { useRayData } from '../hooks/useRayData';
 import { craftTitle, formatPrice, formatDate, refLabel } from '../utils';
@@ -104,7 +105,7 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
       // one-word query like "daytona" land somewhere real instead of
       // "Nothing matches": the model family IS the entry.
       ...Object.values(marketData?.drills || {}).flat().map(d => ({
-        label: d.label,
+        label: drillLabelOf(d.slug, d.label),
         hint: `sub-market · ${d.vertical} · ${d.lots.toLocaleString()} lots tracked`,
         path: `/sub/${d.slug.replace(':', '/')}`,
         kind: 'sub' as const,
@@ -148,11 +149,17 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
     const itemMatches = items.filter(i => hits(`${i.label} ${i.hint}`));
     // Search the live lots too — a collector arrives with a work in mind.
     const lotMatches: Item[] = upcomingLots
-      .filter(l => hits(`${craftTitle(l.title)} ${ARTIST_LABEL[l.artist] || l.artist}`))
+      // the label vocabulary is searchable too ("psa 10", "rookie", "apollo",
+      // a player) — app/lib/lot-labels, memoised per lot
+      .filter(l => hits(`${craftTitle(l.title)} ${searchTextOf(l)}`))
+      // the whole phrase on the printed label ("psa 10" on a PSA 10 slab)
+      // outranks the words scattered through a title ("PSA/DNA … 8 x 10")
+      .map(l => ({ l, r: `${makerLineOf(l).name} ${labelLineOf(l)}`.toLowerCase().includes(needle) ? 0 : searchTextOf(l).includes(needle) ? 1 : 2 }))
+      .sort((a, b) => a.r - b.r)
       .slice(0, 6)
-      .map(l => ({
+      .map(({ l }) => ({
         label: craftTitle(l.title),
-        hint: `${ARTIST_LABEL[l.artist] || l.artist} · on the block`,
+        hint: [makerLineOf(l).name, labelTagOf(l), 'on the block'].filter(Boolean).join(' · '),
         // The lot permalink — /lot?id=<id> resolves any lot client-side (see
         // app/lot/page.tsx). Was the maker lander (/<artist>#on-the-block),
         // which dropped the collector onto the feed instead of the lot.
