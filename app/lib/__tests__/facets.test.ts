@@ -33,8 +33,13 @@ test('entertainment domain facet', () => {
   assert.ok(lotFacets({ artist: 'music-memorabilia', subCat: 'instruments', title: 'y' }).has('music'));
 });
 
-test('toggle: one era at a time, graded xor raw, others AND', () => {
-  assert.deepEqual(toggleFacet(['era-prewar', 'rookie'], 'era-modern'), ['rookie', 'era-modern']);
+test('toggle: eras OR together, graded xor raw, kinds AND', () => {
+  // Oct 9: one any-of set (era, grade, complication…) multi-selects and ORs
+  assert.deepEqual(toggleFacet(['era-prewar', 'rookie'], 'era-modern'), ['era-prewar', 'rookie', 'era-modern']);
+  assert.ok(passesFacets(card('2018 Topps Chrome #1 Ohtani Rookie - PSA 10'), ['era-prewar', 'era-modern']));
+  assert.ok(!passesFacets(card('2018 Topps Chrome #1 Ohtani Rookie - PSA 10'), ['era-prewar', 'era-vintage']));
+  assert.ok(passesFacets(card('2018 Topps Chrome #1 Ohtani Rookie - PSA 10'), ['graded', 'psa', 'g9', 'g10']));
+  assert.ok(!passesFacets(card('2018 Topps Chrome #1 Ohtani Rookie - PSA 10'), ['graded', 'psa', 'g9', 'g95']));
   assert.deepEqual(toggleFacet(['graded'], 'raw'), ['raw']);
   assert.deepEqual(toggleFacet(['graded', 'rookie'], 'rookie'), ['graded']);
   assert.ok(passesFacets(card('2018 Topps Chrome #1 Ohtani Rookie - PSA 10'), ['graded', 'rookie']));
@@ -107,7 +112,7 @@ test('toggle: Raw / un-picking Graded / switching grader clears the children', (
   assert.deepEqual(toggleFacet(['graded', 'psa', 'g10', 'rookie'], 'raw'), ['rookie', 'raw']);
   assert.deepEqual(toggleFacet(['graded', 'psa', 'g10'], 'graded'), []);
   assert.deepEqual(toggleFacet(['graded', 'psa', 'g10'], 'psa'), ['graded']);
-  assert.deepEqual(toggleFacet(['graded', 'psa', 'g10'], 'g9'), ['graded', 'psa', 'g9']);
+  assert.deepEqual(toggleFacet(['graded', 'psa', 'g10'], 'g9'), ['graded', 'psa', 'g10', 'g9']);
   assert.deepEqual(toggleFacet(['graded', 'psa'], 'bgs'), ['graded', 'bgs']);
   assert.deepEqual(toggleFacet(['film-tv', 'fr-starwars'], 'music'), ['music']);
 });
