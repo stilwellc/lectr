@@ -253,7 +253,11 @@ export function shortlist<T extends ShortlistLot>(lots: T[], nowMs: number = Dat
   }
   rows.sort((x, y) => (y.s - x.s) || (x.close - y.close) || (y.a - x.a));
   const out = fill(rows, n, { cat: 5, sale: 3, who: 2 });
-  return out.length < n ? fill(rows, n, { cat: 8, sale: 3, who: 2 }, out) : out;
+  if (out.length < n) fill(rows, n, { cat: 8, sale: 3, who: 2 }, out);
+  // a reader narrowed to one market (PSA cards: ~all Goldin) asked for that
+  // room — once every other sale is spent, its best lots may take more seats
+  if (out.length < n) fill(rows, n, { cat: Infinity, sale: 8, who: 2 }, out);
+  return out;
 }
 
 /**

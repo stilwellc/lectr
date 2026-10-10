@@ -141,9 +141,14 @@ test('shortlist (Oct 9): one seat per card identity, one sale = house + close da
   assert.deepEqual(out.map(l => l.id), ['a']);
   const ch = (id: string, saleName: string, artist: string) => ({ id, artist, auctionHouse: "Christie's", saleDate: '2026-10-09', saleName,
     saleDateTime: inHours(6), estimateLow: 5_000_000, estimateHigh: 5_000_000, title: id });
+  const other = (id: string) => ({ id: `o${id}`, artist: `maker-${id}`, auctionHouse: 'Phillips', saleDate: `2026-10-1${id}`,
+    saleDateTime: inHours(30 + Number(id) * 24), estimateLow: 300_000, estimateHigh: 300_000, title: `w${id}` });
   const evening = shortlist([ch('1', 'Evening Sale', 'francis-bacon'), ch('2', 'London Sale 25228', 'andy-warhol'),
-    ch('3', 'Evening Sale', 'pablo-picasso'), ch('4', 'London Sale 25228', 'alexander-calder')], NOW, 20);
-  assert.equal(evening.length, 3, 'two sale names, one evening: ≤3 seats');
+    ch('3', 'Evening Sale', 'pablo-picasso'), ch('4', 'London Sale 25228', 'alexander-calder'), other('1'), other('2'), other('3')], NOW, 6);
+  assert.equal(evening.filter(l => l.auctionHouse === "Christie's").length, 3, 'two sale names, one evening: ≤3 seats while other sales can fill');
+  // a pool that IS one room (the reader narrowed to it) may fill past 3 once nothing else qualifies
+  assert.equal(shortlist([ch('1', 'Evening Sale', 'francis-bacon'), ch('2', 'London Sale 25228', 'andy-warhol'),
+    ch('3', 'Evening Sale', 'pablo-picasso'), ch('4', 'London Sale 25228', 'alexander-calder')], NOW, 20).length, 4);
 });
 
 test('spread (Oct 9): ≤3 per sale in any 12, order otherwise kept', () => {
