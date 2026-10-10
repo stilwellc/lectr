@@ -44,14 +44,16 @@ test('results-pending lots past their close are closed, never live', () => {
   assert.equal(closeWord(lot, new Date(2026, 9, 3, 12).getTime()), 'closed');
 });
 
-test('isLiveUpcoming: a lot past its close never counts as live', () => {
+test('isLiveUpcoming: a timed lot leaves the book once its live window has run (house-tz liveUntilMs)', () => {
   const close = Date.parse('2026-10-05T15:00:00.000Z');
   const timed = { status: 'upcoming', saleDate: '2026-10-05', saleDateTime: '2026-10-05T15:00:00.000Z' };
   assert.equal(isLiveUpcoming(timed, '2026-10-05', 1, close - 1), true);
-  assert.equal(isLiveUpcoming(timed, '2026-10-05', 1, close), false);
-  // results pending past the day's end: closed, the grace never resurrects it
+  // extended bidding: still live a moment after the stamped close, gone a day later
+  assert.equal(isLiveUpcoming(timed, '2026-10-06', 1, close + 24 * 3600e3), false);
+  // results pending keeps its one-day grace (it wears the results-pending state)
   const pending = { status: 'upcoming', saleDate: '2026-10-04', resultsPending: true };
-  assert.equal(isLiveUpcoming(pending, '2026-10-05', 1, new Date(2026, 9, 5, 9).getTime()), false);
+  assert.equal(isLiveUpcoming(pending, '2026-10-05', 1, new Date(2026, 9, 5, 9).getTime()), true);
+  assert.equal(isLiveUpcoming(pending, '2026-10-07', 1, new Date(2026, 9, 7, 9).getTime()), false);
   // a day-only lot is live through its own day
   const dayOnly = { status: 'upcoming', saleDate: '2026-10-05' };
   assert.equal(isLiveUpcoming(dayOnly, '2026-10-05', 1, new Date(2026, 9, 5, 22).getTime()), true);

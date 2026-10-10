@@ -36,7 +36,7 @@ export function headline(p: Post): string {
     case 'call': return `${p.lot.auctionHouse} says ${p.estimate || money(p.askUsd)}. The record says ${money(p.expected ?? p.med)}.`;
     case 'receipt': return `Called ${money(p.row.p)}. Hammered ${money(p.row.r)}.`;
     case 'index': return `${marketLabel(p.market)}, ${signed(p.changePct, 1)} over ${({ '1Y': 'one year', '3Y': 'three years', '5Y': 'five years' } as Record<string, string>)[p.horizon] || p.horizon}.`;
-    case 'record': return `${p.n.toLocaleString()} calls, replayed against the hammer.`;
+    case 'record': return `${p.n.toLocaleString()} calls, replayed against the estimate, all-in.`;
     case 'board': return `${p.liveCount} lots on the block are forecast to hammer above their estimate.`;
     case 'abstain': return `We can't publish a ${p.horizon} number for ${marketLabel(p.market)}.`;
   }
@@ -165,7 +165,7 @@ export function writeCopy(p: Post): Copy {
     case 'record': {
       const x = [
         `The record, replayed.`,
-        `${p.n.toLocaleString()} lots we flagged below their comparables, scored against what they actually hammered for. Median ${signed(p.flaggedMedianPct)} over estimate. Lots we did not flag: ${signed(p.unflaggedMedianPct)}.`,
+        `${p.n.toLocaleString()} lots we flagged below their comparables, scored all-in (hammer + premium) vs the estimate, bought-ins as misses. Median ${signed(p.flaggedMedianPct)} all-in, ${signed(p.flaggedHammerMedianPct)} at the hammer. Not flagged: ${signed(p.unflaggedMedianPct)}.`,
         `${p.failToSellPct}% of flagged lots failed to sell. That number is on the page too.`,
       ].join('\n\n');
       return {
@@ -174,13 +174,13 @@ export function writeCopy(p: Post): Copy {
         ig: [
           `The record, replayed.`,
           ``,
-          `${p.n.toLocaleString()} lots we flagged below their comparables, scored against what they actually hammered for. Median ${signed(p.flaggedMedianPct)} over estimate. Lots we did not flag: ${signed(p.unflaggedMedianPct)}. ${p.failToSellPct}% of flagged lots failed to sell.`,
+          `${p.n.toLocaleString()} lots we flagged below their comparables, scored all-in (hammer plus buyer's premium) against the estimate, bought-in lots counted as misses. Median ${signed(p.flaggedMedianPct)} over estimate all-in, ${signed(p.flaggedHammerMedianPct)} at the hammer. Lots we did not flag: ${signed(p.unflaggedMedianPct)}. ${p.failToSellPct}% of flagged lots failed to sell.`,
           ``,
           `By year and by market at lectr.bid/receipts`,
           ``,
           NO_ADVICE,
         ].join('\n'),
-        alt: `The replayed record: ${p.n.toLocaleString()} flagged lots, median ${signed(p.flaggedMedianPct)} over estimate versus ${signed(p.unflaggedMedianPct)} unflagged.`,
+        alt: `The replayed record: ${p.n.toLocaleString()} flagged lots, median ${signed(p.flaggedMedianPct)} over estimate all-in versus ${signed(p.unflaggedMedianPct)} unflagged.`,
       };
     }
   }

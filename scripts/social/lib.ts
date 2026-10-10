@@ -100,7 +100,7 @@ export interface Data {
   market: { repeatSale?: Record<string, RepeatSale>; hedonic?: Record<string, Hedonic> } | null;
   backtest: {
     generatedAt: string;
-    flagged: { n: number; medianPerfPct: number; beatHighPct: number; failToSellPct: number };
+    flagged: { n: number; medianPerfPct: number; beatHighPct: number; failToSellPct: number; hammerMedianPct?: number | null; hammerBeatPct?: number | null };
     unflagged: { n: number; medianPerfPct: number };
   } | null;
 }
@@ -407,8 +407,10 @@ export interface RecordPost {
   key: string;
   n: number;
   flaggedMedianPct: number;
+  flaggedHammerMedianPct: number;
   unflaggedMedianPct: number;
   beatHighPct: number;
+  hammerBeatPct: number;
   failToSellPct: number;
   asOf: string;
   url: string;
@@ -424,8 +426,10 @@ export function pickRecord(d: Data, exclude: Set<string>): RecordPost | null {
     key,
     n: b.flagged.n,
     flaggedMedianPct: b.flagged.medianPerfPct,
+    flaggedHammerMedianPct: b.flagged.hammerMedianPct ?? 0,
     unflaggedMedianPct: b.unflagged.medianPerfPct,
     beatHighPct: b.flagged.beatHighPct,
+    hammerBeatPct: b.flagged.hammerBeatPct ?? 0,
     failToSellPct: b.flagged.failToSellPct,
     asOf: b.generatedAt,
     url: `${SITE}/receipts`,

@@ -1261,7 +1261,7 @@ export default function ValuePage() {
           k: 'The record',
           v: fmtSignedPct(scoped.medPct),
           tone: toneOf(scoped.medPct) === 'up' ? 'up' : undefined,
-          sub: <>{activeLabel} flags realized vs estimate, all-in · n&nbsp;{scoped.n.toLocaleString()}</>,
+          sub: <>{activeLabel} flags realized vs estimate, all-in, bought-ins counted · n&nbsp;{scoped.n.toLocaleString()}</>,
         });
       } else out.push(backtest.flagged.n >= 100 ? (backtest.flagged.hammerMedianPct != null ? {
         // (wave 3) lead with the HAMMER — the basis the Flags are called on
@@ -1273,7 +1273,7 @@ export default function ValuePage() {
         k: 'The record',
         v: fmtSignedPct(backtest.flagged.medianPerfPct),
         tone: toneOf(backtest.flagged.medianPerfPct) === 'up' ? 'up' : undefined,
-        sub: <>realized vs estimate, all-in · n&nbsp;{backtest.flagged.n.toLocaleString()}</>,
+        sub: <>realized vs estimate, all-in, bought-ins counted · n&nbsp;{backtest.flagged.n.toLocaleString()}</>,
       }) : {
         k: 'The record',
         v: '—',

@@ -346,7 +346,7 @@ export default function ReceiptsPage() {
           </section>
         </RayEntrance>
       )}
-      <Colophon record={F ? { n: F.n, medianPerfPct: F.medianPerfPct } : null} />
+      <Colophon record={F ? { n: F.n, medianPerfPct: F.medianPerfPct, hammerMedianPct: F.hammerMedianPct ?? null } : null} />
     </div>
   );
 }

@@ -33,8 +33,8 @@ export default function MethodologyNote({ trigger = 'How lectr calls it' }: { tr
             <p className="ray-method-lede">
               <b style={{ color: 'var(--color-fg)' }}>The Demand Index</b> is how the
               typical sale performs against its own estimate over the trailing twelve
-              months. +30% means the median lot sold all-in (premium included) for
-              30% over the estimate midpoint, which the houses quote on hammer;
+              months. +30% means the median lot hammered (premium excluded, the basis
+              the houses quote estimates on) 30% over the estimate midpoint;
               0% means the market pays exactly what the houses ask; below
               zero, lots are clearing under estimate. Because every sale is measured
               against its own ask, a $900 print and a $3M canvas count equally —
