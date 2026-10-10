@@ -1,5 +1,6 @@
 import type { MarketData } from '../../hooks/useRayData';
 import { ARTIST_LABEL, ARTIST_MARKET, type Market } from '../../constants';
+import { retiredTarget } from '../../lib/entity/retired';
 
 /* ============================================================
    VERIFIED MOVERS — the ONLY price-movement reads the hedonic
@@ -44,6 +45,10 @@ export function verifiedMovers(market: MarketData | null, scope?: Market): Verif
   if (!mi) return [];
   const out: VerifiedMover[] = [];
   for (const [slug, r] of Object.entries(mi)) {
+    // (r7) a RETIRED pseudo-maker (app/lib/entity/retired — Space Exploration,
+    // Graded Cards …) is a category, not a maker: its hedonic index is no
+    // maker's read, and it has no page to link — never a verified mover
+    if (retiredTarget(slug)) continue;
     const mkt = ARTIST_MARKET[slug];
     if (scope && scope !== 'all' && mkt !== scope) continue;
     // the longest horizon whose CI resolves the sign

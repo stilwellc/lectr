@@ -237,7 +237,8 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): BuiltEntiti
       } else discipline = subTag;
     }
     if (a.live) live.set(a.id, { n: a.live, photo: a.livePhoto });
-    const slugFollow = ref.kind === 'maker' || ref.kind === 'player' ? ref.slug : null;
+    // (r7) a subject / set follows by its own id (app/lib/follows entityFollow)
+    const slugFollow = ref.kind === 'maker' || ref.kind === 'player' ? ref.slug : ref.kind === 'subject' || ref.kind === 'set' ? a.id : null;
     summaries.push({
       id: a.id,
       kind: ref.kind,
