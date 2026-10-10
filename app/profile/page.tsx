@@ -23,9 +23,14 @@ import Masthead, { Accent } from '../components/Masthead';
 import AlertsInbox from '../components/AlertsInbox';
 import Flick from '../components/Flick';
 import CloseClock from '../components/CloseClock';
-import { AwayMark, ReadsMark, WatchMark, RecordMark, CollectionMark, TapeMark, ArchiveMark, HorizonMark } from '../components/marks';
+import { AwayMark, ReadsMark, WatchMark, RecordMark, CollectionMark, TapeMark, ArchiveMark, HorizonMark, RankMark } from '../components/marks';
+import { FeedRow, belowSignalOf, feedTone } from '../components/LotBrowser';
+import ComparableModal from '../components/ComparableModal';
+import { useLotModal } from '../lib/use-lot-modal';
+import { recommend, recNote, type Taste } from '../lib/recs';
+import { useTaste } from '../lib/use-recs';
 import { CellGrid, Cell, ColorCell, FigPools, FigTape } from '../components/cells';
-import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, median, overEstimatePct } from '../utils';
+import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, median, overEstimatePct, isOnBlock } from '../utils';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
 import { makerLineOf, labelLineOf, drillLabelOf } from '../lib/lot-labels';
 
@@ -375,6 +380,113 @@ function LedgerGate({ onState }: { onState: (s: { ledger: Map<string, LedgerEntr
   return null;
 }
 
+/* ══ LOTS YOU MAY LIKE — the desk's recommender (app/lib/recs). Every lot
+   on the block scored against what this reader saved, owns, follows and
+   searched; each pick prints its reason on the note line the feed's cards
+   and rows already carry. Desktop = the feed's cards, phone = the feed's
+   rows. The same taste drives home's For-you tab, so the two agree. A
+   reader with nothing to go on is told so — never shown fake picks. ══ */
+const RECS_MAX = 24;
+function RecsRoom({ book, compLots, taste, ready, lastCrawl, isSaved, onToggleSave, signedOut = false }: {
+  book: AuctionLot[]; compLots: AuctionLot[]; taste: Taste; ready: boolean; lastCrawl?: string;
+  isSaved: (id: string) => boolean; onToggleSave: (id: string, lot?: AuctionLot) => void; signedOut?: boolean;
+}) {
+  // the block (isOnBlock — every live count's pool), re-cut per book
+  const pool = useMemo(() => {
+    const today = localToday(), now = Date.now();
+    return book.filter(l => l.status === 'upcoming' && isOnBlock(l, today, now));
+  }, [book]);
+  const recs = useMemo(() => (ready && taste.seeds.length ? recommend(pool, taste, { n: RECS_MAX }) : []), [ready, pool, taste]);
+  const below = useMemo(() => belowSignalOf(recs.map(r => r.lot), compLots), [recs, compLots]);
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)');
+    const on = () => setNarrow(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  // two full rows of the desk's card grid (3 across at the rail's width)
+  const page = 6;
+  const [shown, setShown] = useState<number | null>(null);
+  const visible = shown ?? page;
+  const [openLot, setOpenLot] = useLotModal<AuctionLot>();
+
+  if (!ready) return null;
+  const c = taste.counts;
+  const from = [
+    c.saved ? `${c.saved} ${c.saved === 1 ? 'save' : 'saves'}` : null,
+    c.owned ? `${c.owned} owned` : null,
+    c.follows ? `${c.follows} ${c.follows === 1 ? 'follow' : 'follows'}` : null,
+    c.searches ? `${c.searches} saved ${c.searches === 1 ? 'search' : 'searches'}` : null,
+  ].filter(Boolean).join(', ');
+  const cold = taste.seeds.length === 0;
+
+  return (
+    <section id="for-you" className="ray-saved-section rail ray-enter" aria-label="Lots you may like">
+      <div className="ns-plate" style={{ paddingTop: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px 14px', flexWrap: 'wrap', marginBottom: cold ? 4 : 16 }}>
+          <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><RankMark size={17} /></span>Lots you may like</h2>
+          {!cold && (
+            <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+              {recs.length > 0 ? <>{recs.length} picked</> : <>nothing ties yet</>} from {pool.length.toLocaleString()} live lots · read from your {from}
+            </span>
+          )}
+          <HelpChip name="Lots you may like">
+            Every lot on the block is read against what you <b>own</b>, <b>save</b>, <b>follow</b> and <b>search</b> — in
+            that order of weight, recent saves louder than old ones. A lot qualifies only through a real tie: the same
+            maker, player, Pokémon or subject; the same card in another grade; the same franchise or model line; or,
+            inside one category, the same era, grader or language at a price like yours. Then the strongest ties that
+            matter most and close soonest lead, spread so no one name or sale fills the list. Lots on your desk never
+            come back here. The line under each lot says why it is here; the picks re-read with every crawl and every
+            save.
+          </HelpChip>
+        </div>
+
+        {cold ? (
+          <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: '10px 0 0', maxWidth: 640, lineHeight: 1.55 }}>
+            Nothing to go on yet, so nothing is picked.{' '}
+            {signedOut
+              ? <>Follow a maker, player, category or house — no account needed — and lots like them land here; sign in and the lots you save shape it too.</>
+              : <>Save a lot, mark one you won, or follow a maker, player, category or house, and lots like them land here.</>}
+            {' '}<Link href="/makers" className="ck-away-link">Find something to follow</Link>
+          </p>
+        ) : recs.length === 0 ? (
+          <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: 0, maxWidth: 640, lineHeight: 1.55 }}>
+            Nothing on the block ties to your desk right now — no live lot shares a name, card, franchise or close
+            enough cut with what you hold. New lots land with every crawl.
+          </p>
+        ) : narrow ? (
+          <div>
+            {recs.slice(0, visible).map(r => (
+              <FeedRow key={r.lot.id} lot={r.lot} onOpen={() => setOpenLot(r.lot)}
+                tone={feedTone(r.lot, below.ids, below.hasSig)} note={recNote(r, { short: true })} />
+            ))}
+          </div>
+        ) : (
+          <div className="ray-saved-grid">
+            {recs.slice(0, visible).map((r, i) => (
+              <div key={r.lot.id} className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms` } as React.CSSProperties}>
+                <LotCard lot={r.lot} showArtist allLots={compLots} saved={isSaved(r.lot.id)} onToggleSave={onToggleSave}
+                  lastCrawl={lastCrawl} note={recNote(r)} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {visible < recs.length && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 28 }}>
+            <button className="ray-show-more" onClick={() => setShown(Math.min(recs.length, visible + page))}>
+              Show more ({recs.length - visible} more {recs.length - visible === 1 ? 'pick' : 'picks'})
+            </button>
+          </div>
+        )}
+      </div>
+      {openLot && <ComparableModal lot={openLot} allLots={compLots} onClose={() => setOpenLot(null)} />}
+    </section>
+  );
+}
+
 type SavedView = 'ledger' | 'cards';
 const SAVEDVIEW_KEY = 'lectr-savedview';
 
@@ -550,6 +662,9 @@ export default function SavedPage() {
   const { allLots, lastCrawl, loading, fullLoaded, fullError, fromCache, market: marketData } =
     useFullLotsOnDemand(deskNeedsCorpus);
   const { unseen: unseenAlerts } = useAlerts();
+  // the reader's taste — saves resolve against whatever book has landed,
+  // else their own snapshot (app/lib/use-recs)
+  const { taste: recTaste, ready: tasteReady } = useTaste(allLots);
 
   const [savedView, setSavedView] = useState<SavedView>('ledger');
   useEffect(() => {
@@ -1140,6 +1255,14 @@ export default function SavedPage() {
   // phase-2 failed but SOME saves resolved eagerly — never silently thin the desk
   const partialLoadFailed = fullError && !fullLoaded && savedIds.length > 0;
 
+  // the room waits for every save to resolve (or the corpus to answer), so a
+  // settled watch reads as its row, not its snapshot — no reshuffle on arrival
+  const recsReady = !loading && tasteReady && (!deskNeedsCorpus || fullLoaded || fullError || savedLots.length >= savedIds.length);
+  const recsRoom = (signedOut = false) => (
+    <RecsRoom book={allLots} compLots={allLots} taste={recTaste} ready={recsReady} lastCrawl={lastCrawl || undefined}
+      isSaved={isSaved} onToggleSave={toggle} signedOut={signedOut} />
+  );
+
   // the one settled count every surface prints (Settled head, the cell room)
   const settledCount = sold.length + soldOrphans.length;
 
@@ -1169,6 +1292,7 @@ export default function SavedPage() {
           </Link>
         </div>
       </section>
+      {recsRoom()}
       <AlertsInbox />
     </>
   );
@@ -1214,6 +1338,7 @@ export default function SavedPage() {
               Free · one tap · nothing else on lectr is gated.
             </p>
           </div>
+          {recsRoom(true)}
         </RayEntrance>
       ) : loading || !authReady || !savedReady ? (
         <RayLoading />
@@ -1266,7 +1391,7 @@ export default function SavedPage() {
                 <>
                   {summary.next && (
                     <>Next hammer {hammerWord(daysUntil(summary.next.saleDate))}
-                      {summary.next.saleDateTime && <> · <CloseClock iso={summary.next.saleDateTime} windowHours={24} /></>}
+                      {summary.next.saleDateTime && <CloseClock iso={summary.next.saleDateTime} windowHours={24} prefix=" · " />}
                       {' '}·{' '}
                     </>
                   )}
@@ -1395,6 +1520,9 @@ export default function SavedPage() {
               </div>
             )}
           </section>
+
+          {/* ══ 2c · LOTS YOU MAY LIKE — picked from the desk itself ══ */}
+          {recsRoom()}
 
           {/* ══ 3 · WATCHING — the room, action-first, brief fused in ══ */}
           {upcoming.length > 0 && (

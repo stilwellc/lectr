@@ -405,6 +405,11 @@ export function reasonOf(l: ScoreLot, nowMs: number = Date.now()): string | null
 }
 
 /**
+ * RETIRED from the feed Oct 10 2026: home's For-you tab now reads the one
+ * recommender (app/lib/recs — saves, owned, follows and searches), the same
+ * list the profile's "Lots you may like" room shows. Kept as the offline
+ * evaluation's baseline (scripts/recs-eval.ts).
+ *
  * The signed-in / following reader's shortlist ("For you"): only lots touching
  * something they follow, closing within 7 days, ranked
  *   35·Affinity + 20·Size + 20·Edge⁺ − 10·Edge⁻ + 15·Evidence + 10·Urgency

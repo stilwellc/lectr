@@ -105,7 +105,14 @@ export function useFollows() {
     writeLocal(cur.some(x => same(x, f)) ? cur.filter(x => !same(x, f)) : [...cur, f]);
   }, [user, cloud, save, remove]);
 
-  return { follows, isFollowing, toggle, signedIn: !!user };
+  // the plain saved searches (not follows) ride the same fetch — the
+  // recommender reads them as the weakest taste signal (app/lib/recs)
+  const searchesPlain = useMemo(
+    () => (user ? searches.filter(s => !followOf(s.query || {})) : []),
+    [user, searches]
+  );
+
+  return { follows, isFollowing, toggle, signedIn: !!user, searches: searchesPlain, ready: !user || ready };
 }
 
 /**
