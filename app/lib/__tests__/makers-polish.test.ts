@@ -16,33 +16,32 @@ const SBY = 'https://sothebys-com.brightspotcdn.com/dims4/default/x/resize/421x4
 const PHI = 'https://dist.phillips.com/auction-assets/NY030726/239452_001.jpg';
 const WRI = 'https://www.wright20.com/items/index/220/129_1.jpg';
 
-test('image host tiers: safe CDNs, UA-sensitive hosts, christies last', () => {
+test('image host tiers: safe CDNs, UA-sensitive hosts (christies renders for readers), dead hosts last', () => {
   assert.equal(imageHostTier(SBY), 0);
   assert.equal(imageHostTier(PHI), 0);
   assert.equal(imageHostTier('https://images2.bonhams.com/image?src=a.jpg'), 0);
   assert.equal(imageHostTier('https://d2tt46f3mh26nl.cloudfront.net/public/Lots/a@1x'), 0);
   assert.equal(imageHostTier(WRI), 1);
-  assert.equal(imageHostTier(CHR), 2);
-  assert.equal(imageHostTier('https://apim.christies.com/private-sales-images/a.jpg'), 2);
+  assert.equal(imageHostTier(CHR), 1);
   assert.equal(imageHostTier('https://www.julienslive.com/images/lot/1/1_xl.jpg'), 2);
   assert.equal(imageHostTier(null), 2);
   assert.equal(imageHostTier('not a url'), 2);
 });
 
-test('a face is chosen by host tier first, then value', () => {
-  // a $195M christies photo loses to a $1M Sotheby's one
-  assert.equal(betterFace({ url: CHR, val: 195e6 }, { url: SBY, val: 1e6 }), true);
-  assert.equal(betterFace({ url: SBY, val: 1e6 }, { url: CHR, val: 195e6 }), false);
-  // same tier: the pricier lot
+test('a face: a dead host never wins; among live hosts the most valuable picture', () => {
+  // the $195M Christie's Marilyn keeps Warhol's face (it renders for readers)
+  assert.equal(betterFace({ url: CHR, val: 195e6 }, { url: SBY, val: 1e6 }), false);
+  assert.equal(betterFace({ url: SBY, val: 1e6 }, { url: CHR, val: 195e6 }), true);
+  const JUL = 'https://www.julienslive.com/images/lot/1/1_xl.jpg';
+  assert.equal(betterFace({ url: JUL, val: 9e6 }, { url: SBY, val: 1e3 }), true);
   assert.equal(betterFace({ url: SBY, val: 1e6 }, { url: PHI, val: 2e6 }), true);
-  assert.equal(betterFace({ url: SBY, val: 3e6 }, { url: PHI, val: 2e6 }), false);
   assert.equal(betterFace(null, { url: CHR, val: 1 }), true);
 });
 
-test('the live-lot fallback skips christies when another photo exists', () => {
-  assert.equal(bestLotImage([{ imageUrl: CHR }, { imageUrl: null }, { imageUrl: WRI }, { imageUrl: SBY }]), SBY);
-  assert.equal(bestLotImage([{ imageUrl: CHR }, { imageUrl: WRI }]), WRI);
-  assert.equal(bestLotImage([{ imageUrl: CHR }]), CHR);
+test('the live-lot fallback: first live-host photo, a dead host only when alone', () => {
+  const JUL = 'https://www.julienslive.com/images/lot/1/1_xl.jpg';
+  assert.equal(bestLotImage([{ imageUrl: JUL }, { imageUrl: null }, { imageUrl: CHR }, { imageUrl: SBY }]), CHR);
+  assert.equal(bestLotImage([{ imageUrl: JUL }]), JUL);
   assert.equal(bestLotImage([{ imageUrl: null }]), null);
 });
 

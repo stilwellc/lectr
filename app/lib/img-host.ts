@@ -8,21 +8,23 @@
  *           archives (DigitalOcean spaces), Huggins & Scott (cloudinary),
  *           Bidsquare, iSynApp (vafloc02), the BidAmerica houses, Bruun.
  *   OK    — renders for a real browser but refuses headless / bot UAs
- *           (Wright, LAMA, Lelands): fine for readers, fragile for previews.
- *   LAST  — christies.com (Akamai: refuses headless UAs outright and is the
- *           host PlateImg's ORB note was written about), Julien's (301 to an
- *           HTML page) and Propstore (404): a face here is a letter tile for
- *           some readers, so it is chosen only when nothing else exists.
+ *           (christies.com, Wright, LAMA, Lelands): fine for readers —
+ *           measured: all 14 Christie's art faces render in real Chrome on
+ *           prod; only headless captures show letter tiles (the "headless UA
+ *           false alarm"), so they keep their flagship faces.
+ *   LAST  — Julien's (301 to an HTML page) and Propstore (404): dead even in
+ *           a real browser, chosen only when nothing else exists.
  *
- * Faces are picked by host tier first, then by value (scripts/emit-entities
- * faceValueOf + betterFace) — the build and the client's live-lot fallback
- * share this one table.
+ * Faces: a dead host never beats a live one; among live hosts (SAFE and OK
+ * both render for readers) the most valuable picture wins (scripts/emit-
+ * entities faceValueOf + betterFace) — the build and the client's live-lot
+ * fallback share this one table.
  */
 
 export type HostTier = 0 | 1 | 2;
 
 const SAFE = /(^|\.)(brightspotcdn\.com|phillips\.com|bonhams\.com|cloudfront\.net|rrauction\.com|digitaloceanspaces\.com|cloudinary\.com|bidsquare\.com|amazonaws\.com|loveofthegameauctions\.com|memorylaneinc\.com|bruun-rasmussen\.dk)$/i;
-const LAST = /(^|\.)(christies\.com|julienslive\.com|propstoreauction\.com)$/i;
+const LAST = /(^|\.)(julienslive\.com|propstoreauction\.com)$/i;
 
 /** 0 = renders everywhere, 1 = unknown / UA-sensitive, 2 = often a dead tile */
 export function imageHostTier(url: string | null | undefined): HostTier {
@@ -37,21 +39,20 @@ export function imageHostTier(url: string | null | undefined): HostTier {
 /** is `cand` (url + value) a better face than `cur`? host tier first, then value */
 export function betterFace(cur: { url: string; val: number } | null | undefined, cand: { url: string; val: number }): boolean {
   if (!cur) return true;
-  const a = imageHostTier(cand.url), b = imageHostTier(cur.url);
-  if (a !== b) return a < b;
+  const a = imageHostTier(cand.url) === 2, b = imageHostTier(cur.url) === 2;
+  if (a !== b) return !a;
   return cand.val > cur.val;
 }
 
-/** the first image among `lots` on the best host tier (order = the caller's
- *  relevance order). A christies photo is used only when no other lot has one. */
+/** the first live-host image among `lots` (order = the caller's relevance
+ *  order); a dead-host photo (Julien's, Propstore) only when no other exists. */
 export function bestLotImage<T extends { imageUrl?: string | null }>(lots: readonly T[]): string | null {
-  let best: string | null = null;
-  let tier = 3;
+  let dead: string | null = null;
   for (const l of lots) {
     const u = l.imageUrl;
     if (!u) continue;
-    const t = imageHostTier(u);
-    if (t < tier) { best = u; tier = t; if (t === 0) break; }
+    if (imageHostTier(u) !== 2) return u;
+    dead ??= u;
   }
-  return best;
+  return dead;
 }
