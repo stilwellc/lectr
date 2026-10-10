@@ -1106,7 +1106,9 @@ export default function TerminalHomePage() {
                                   ? (formatPrice(lot.estimateLow) === formatPrice(lot.estimateHigh)
                                       ? formatPrice(lot.estimateLow)
                                       : `${formatPrice(lot.estimateLow)}–${formatPrice(lot.estimateHigh)}`)
-                                  : '—'}
+                                  // no estimate (Goldin, REA, NFL): the live bid is the only
+                                  // price on the lot — the same "$402 bid" face the cards print
+                                  : (lot.currentBid || 0) > 0 ? `${formatPrice(lot.currentBid as number)} bid` : '—'}
                               </td>
                               <td>
                                 {sig
