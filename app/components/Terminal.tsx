@@ -259,7 +259,7 @@ export function CallPlate({
         <div className={`lectr-cpc-grid${imgOk ? '' : ' lectr-cpc-noimg'}`}>
           <div className="lectr-cpc-main">
             <div className="ray-call-artist">{makerName}</div>
-            <div className="ray-call-title">{craftTitle(lot.title)}</div>
+            <div className="ray-call-title">{craftTitle(lot.title, lot.auctionHouse)}</div>
             {band && <div className="lectr-cp-band">{band}</div>}
             <div className="lectr-cp-leaders">
               <LeaderRow k="Ask" v={formatEstimate(lot)} />
@@ -372,7 +372,7 @@ export function CallPlate({
         {/* the certificate */}
         <div className="lectr-cp-cert">
           <div className="ray-deckcall-maker">{makerName}</div>
-          <div className="ray-deckcall-title">{craftTitle(lot.title)}</div>
+          <div className="ray-deckcall-title">{craftTitle(lot.title, lot.auctionHouse)}</div>
 
           {/* wide plate: the call as dotted-leader rows */}
           <div className="lectr-cp-leaders">

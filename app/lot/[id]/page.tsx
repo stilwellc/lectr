@@ -27,7 +27,7 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
   if (!lot) return { title: 'Lot' };
 
   const maker = ARTIST_LABEL[lot.artist] || lot.artist;
-  const title = splitTitle(lot.title).short;
+  const title = splitTitle(lot.title, lot.auctionHouse).short;
   const sig = lot.signal;
   const est = lot.estimateLow && lot.estimateHigh
     ? `${formatPrice(lot.estimateLow)}–${formatPrice(lot.estimateHigh)} est.`

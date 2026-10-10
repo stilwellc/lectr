@@ -527,7 +527,7 @@ export default function LotPage({ lotId, initialLot }: {
 
   // set the tab title on the query route (the static set gets real metadata)
   useEffect(() => {
-    if (lot) document.title = `${splitTitle(lot.title).short} — lectr`;
+    if (lot) document.title = `${splitTitle(lot.title, lot.auctionHouse).short} — lectr`;
   }, [lot]);
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
@@ -746,10 +746,10 @@ export default function LotPage({ lotId, initialLot }: {
 
   // ── the catalogue page ────────────────────────────────────────────────
   const makerName = ARTIST_LABEL[lot.artist] || lot.artist;
-  const titleParts = splitTitle(lot.title);
+  const titleParts = splitTitle(lot.title, lot.auctionHouse);
   const marketKey = ARTIST_MARKET[lot.artist];
   const marketLabel = MARKETS.find(m => m.key === marketKey)?.label || null;
-  const monogram = (makerName.trim().charAt(0) || craftTitle(lot.title).charAt(0) || '?').toUpperCase();
+  const monogram = (makerName.trim().charAt(0) || craftTitle(lot.title, lot.auctionHouse).charAt(0) || '?').toUpperCase();
   const imgOk = !!lot.imageUrl && !imgFailed;
   const saved = isSaved(lot.id);
   const isSold = lot.status === 'sold' || lot.status === 'bought_in';
@@ -804,7 +804,7 @@ export default function LotPage({ lotId, initialLot }: {
               <div className="ray-plate-img">
                 <img
                   src={httpsImg(lot.imageUrl)}
-                  alt={craftTitle(lot.title)}
+                  alt={craftTitle(lot.title, lot.auctionHouse)}
                   referrerPolicy="no-referrer"
                   onError={() => setImgFailed(true)}
                   // cache hits never fire onError — complete with zero

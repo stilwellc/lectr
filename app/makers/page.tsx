@@ -532,7 +532,7 @@ const MakerRowItem = React.memo(function MakerRowItem({
                       )}
                     </span>
                     <span className="mkx-lot-main">
-                      <span className="mkx-lot-title">{craftTitle(l.title)}</span>
+                      <span className="mkx-lot-title">{craftTitle(l.title, l.auctionHouse)}</span>
                       <span className="mkx-lot-sub">
                         {l.auctionHouse}
                         {l.signal?.label === 'Below Market' && <span className="mkx-lot-flag"> · flagged below market</span>}

@@ -191,7 +191,7 @@ export default function RefPage({ refKey }: { refKey: string }) {
               {onBlock.slice(0, 6).map(l => (
                 <Link key={l.id} href={`/lot?id=${encodeURIComponent(l.id)}`} className="lectr-lot-comp">
                   <span className="lectr-lot-comp-t">
-                    <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{craftTitle(l.title)}</span>
+                    <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{craftTitle(l.title, l.auctionHouse)}</span>
                     <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
                       <span style={{ color: houseColors[l.auctionHouse] || 'var(--color-text-faint)', fontWeight: 500 }}>{l.auctionHouse}</span>
                       {' · hammers '}{formatDate(l.saleDate)}

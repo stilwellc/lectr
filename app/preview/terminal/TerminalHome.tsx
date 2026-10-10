@@ -40,6 +40,7 @@ import FeedToolbar, { FeedFilters, FEED_DEFAULTS, FEED_PARAM_KEYS, feedFromParam
 import { useUrlState, useLastVisit, passesTriage, houseBaselines, memoryOf, restoreParams, readFeedMemory, writeFeedMemory } from '../../lib/feed-filters';
 import { byPriority, shortlist, reasonOf, forYou, spread } from '../../lib/priority';
 import { makerLineOf, subColumnOf } from '../../lib/lot-labels';
+import { usePlayerDossiers } from '../../lib/use-player-dossiers';
 import { foldVariants, foldNote, foldQuery } from '../../lib/fold';
 import { useFollows, affinityOf } from '../../lib/follows';
 import { Colophon, daysWord, pickCall } from '../../components/Terminal';
@@ -249,7 +250,7 @@ function FeedRow({ lot, onOpen, tone, note, onNote }: { lot: AuctionLot; onOpen:
         ? `bid ${formatPrice(lot.currentBid)}`
         : '—';
   return (
-    <button type="button" className="ray-feedrow" onClick={onOpen} aria-label={`Comps for ${craftTitle(lot.title)}`}>
+    <button type="button" className="ray-feedrow" onClick={onOpen} aria-label={`Comps for ${craftTitle(lot.title, lot.auctionHouse)}`}>
       <span className="ray-feedrow-thumb" data-tone={tone} aria-hidden>
         {(lot.title || '?').charAt(0)}
         {lot.imageUrl && (
@@ -269,7 +270,7 @@ function FeedRow({ lot, onOpen, tone, note, onNote }: { lot: AuctionLot; onOpen:
       </span>
       <span className="ray-feedrow-main">
         <span className="ray-feedrow-maker">{makerLineOf(lot).name}</span>
-        <span className="ray-feedrow-title">{craftTitle(lot.title)}</span>
+        <span className="ray-feedrow-title">{craftTitle(lot.title, lot.auctionHouse)}</span>
         {note && (onNote ? (
           // the row is itself a button: the folded note presses as a link
           // inside it (same type as the plain note — no new chrome)
@@ -327,6 +328,7 @@ const VERTICAL_COUNT = MARKETS.length - 1;
 
 export default function TerminalHomePage() {
   const ray = useRayData();
+  usePlayerDossiers(); // athlete names on memorabilia rows link to /player once the dossier index lands
   const { allLots, statsByArtist, demand, realized, bidComp, recentSold, backtest, market: marketData, lastCrawl, loading, error, fromCache } = ray;
   const { market, setMarket } = useMarket();
   const marketMeta = MARKETS.find(m => m.key === market)!;
@@ -1170,10 +1172,10 @@ export default function TerminalHomePage() {
                                   type="button"
                                   className="t-title"
                                   onClick={e => { e.stopPropagation(); setTableLot(lot); }}
-                                  aria-label={`Comps for ${craftTitle(lot.title)}`}
+                                  aria-label={`Comps for ${craftTitle(lot.title, lot.auctionHouse)}`}
                                   style={{ display: 'block', width: '100%', background: 'none', border: 0, padding: 0, font: 'inherit', textAlign: 'left', cursor: 'pointer' }}
                                 >
-                                  {craftTitle(lot.title)}
+                                  {craftTitle(lot.title, lot.auctionHouse)}
                                 </button>
                                 {(() => {
                                   // folded copies — the Signal column's own sub-line type

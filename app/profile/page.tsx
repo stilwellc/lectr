@@ -465,7 +465,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
     return (
       <div className="ray-settled-mrow">
         <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-          <div className="ck-mtitle">{craftTitle(lot.title)}</div>
+          <div className="ck-mtitle">{craftTitle(lot.title, lot.auctionHouse)}</div>
         </Link>
         <div className="ck-mline">
           <span className="ck-msub">{ARTIST_LABEL[lot.artist] || lot.artist}</span>
@@ -490,7 +490,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
               {owned ? 'Owned' : 'I won it'}
             </button>
           )}
-          <button className="ray-own-x" title="Remove this watch from your desk" aria-label={`Remove watch: ${craftTitle(lot.title)}`} onClick={() => onRemove(savedId)}>×</button>
+          <button className="ray-own-x" title="Remove this watch from your desk" aria-label={`Remove watch: ${craftTitle(lot.title, lot.auctionHouse)}`} onClick={() => onRemove(savedId)}>×</button>
         </div>
       </div>
     );
@@ -504,7 +504,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
       </span>
       <span className="work">
         <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-          {craftTitle(lot.title)}
+          {craftTitle(lot.title, lot.auctionHouse)}
         </Link>
       </span>
       <span className="num">{formatEstimate(lot) || '—'}</span>
@@ -523,7 +523,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
             {owned ? 'Owned' : 'I won it'}
           </button>
         )}
-        <button className="ray-own-x" title="Remove this watch from your desk" aria-label={`Remove watch: ${craftTitle(lot.title)}`} onClick={() => onRemove(savedId)}>×</button>
+        <button className="ray-own-x" title="Remove this watch from your desk" aria-label={`Remove watch: ${craftTitle(lot.title, lot.auctionHouse)}`} onClick={() => onRemove(savedId)}>×</button>
       </span>
     </div>
   );
@@ -1457,7 +1457,7 @@ export default function SavedPage() {
                         <span className="work">
                           <span className="ck-workmaker">{ARTIST_LABEL[lot.artist] || lot.artist}</span>
                           <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>
-                            {craftTitle(lot.title)}
+                            {craftTitle(lot.title, lot.auctionHouse)}
                           </Link>
                         </span>
                         <span className="num">{formatEstimate(lot) || '—'}</span>
@@ -1496,7 +1496,7 @@ export default function SavedPage() {
                   return (
                     <Link key={lot.id} href={`/lot?id=${encodeURIComponent(lot.id)}`} className="ck-mrow" data-nav-row>
                       <span className="ck-mrow-main">
-                        <span className="ck-mtitle">{craftTitle(lot.title)}</span>
+                        <span className="ck-mtitle">{craftTitle(lot.title, lot.auctionHouse)}</span>
                         <span className="ck-msub">
                           {reason && <span className="ck-tag" data-tone={reason.tag === 'Below market' ? 'up' : reason.tag === 'Lands soon' ? 'hot' : undefined}>{reason.tag}</span>}
                           {ARTIST_LABEL[lot.artist] || lot.artist}
@@ -1726,7 +1726,7 @@ export default function SavedPage() {
                       <div className="ns-ledger-row" style={{ gap: 12 }}>
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                            <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{craftTitle(lot.title)}</div>
+                            <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{craftTitle(lot.title, lot.auctionHouse)}</div>
                           </Link>
                           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                             <span>{[ARTIST_LABEL[lot.artist] || lot.artist, lot.auctionHouse, lot.saleDate ? formatDate(lot.saleDate) : ''].filter(Boolean).join(' · ')}</span>
@@ -1735,7 +1735,7 @@ export default function SavedPage() {
                             )}
                             <button type="button" className="ck-piece-editbtn"
                               aria-expanded={editPiece === lot.id}
-                              aria-label={`Edit cost basis and note for ${craftTitle(lot.title)}`}
+                              aria-label={`Edit cost basis and note for ${craftTitle(lot.title, lot.auctionHouse)}`}
                               onClick={() => setEditPiece(p => (p === lot.id ? null : lot.id))}>
                               {paidIsOverride || note ? 'edit' : 'set what you paid'}
                             </button>

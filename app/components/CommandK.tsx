@@ -148,10 +148,10 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
     const itemMatches = items.filter(i => hits(`${i.label} ${i.hint}`));
     // Search the live lots too — a collector arrives with a work in mind.
     const lotMatches: Item[] = upcomingLots
-      .filter(l => hits(`${craftTitle(l.title)} ${ARTIST_LABEL[l.artist] || l.artist}`))
+      .filter(l => hits(`${craftTitle(l.title, l.auctionHouse)} ${ARTIST_LABEL[l.artist] || l.artist}`))
       .slice(0, 6)
       .map(l => ({
-        label: craftTitle(l.title),
+        label: craftTitle(l.title, l.auctionHouse),
         hint: `${ARTIST_LABEL[l.artist] || l.artist} · on the block`,
         // The lot permalink — /lot?id=<id> resolves any lot client-side (see
         // app/lot/page.tsx). Was the maker lander (/<artist>#on-the-block),
