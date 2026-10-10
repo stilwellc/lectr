@@ -995,9 +995,9 @@ export default function ComparableModal({
 
             {/* "Pablo Picasso / Pablo Picasso" — skip the title when it
                 merely repeats the maker line above it */}
-            {craftTitle(lot.title) !== (ARTIST_LABEL[lot.artist] || lot.artist) && (
+            {craftTitle(lot.title, lot.auctionHouse) !== (ARTIST_LABEL[lot.artist] || lot.artist) && (
               <h2 className="nsp-modal-title">
-                {craftTitle(lot.title)}
+                {craftTitle(lot.title, lot.auctionHouse)}
               </h2>
             )}
 

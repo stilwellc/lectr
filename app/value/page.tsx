@@ -319,7 +319,7 @@ function GapAnnex({ rows, receipts, activeKey, play, isSaved, onToggleSave }: {
               {ARTIST_LABEL[lot.artist] || lot.artist}
               {g.shelf === 'forming' && <span className="vd-lane-tag">early</span>}
             </span>
-            <span className="ray-value-row-title" style={{ display: 'block' }}>{craftTitle(lot.title)}</span>
+            <span className="ray-value-row-title" style={{ display: 'block' }}>{craftTitle(lot.title, lot.auctionHouse)}</span>
           </span>
           <span className="vd-cell vd-cell-strong">
             −{Math.round(g.depth * 100)}%
@@ -508,7 +508,7 @@ function SleepersAnnex({ rows, queued, receipts, activeLabel, play, isSaved, onT
                   </span>
                   <span style={{ minWidth: 0 }}>
                     <span className="ray-value-row-maker" style={{ display: 'block' }}>{ARTIST_LABEL[lot.artist] || lot.artist}</span>
-                    <span className="ray-value-row-title" style={{ display: 'block' }}>{craftTitle(lot.title)}</span>
+                    <span className="ray-value-row-title" style={{ display: 'block' }}>{craftTitle(lot.title, lot.auctionHouse)}</span>
                   </span>
                   <span className="vd-cell">{q.estMid ? formatPrice(q.estMid) : '—'}</span>
                   <span className="vd-cell vd-cell-strong">
@@ -2155,7 +2155,7 @@ export default function ValuePage() {
                         {ARTIST_LABEL[d.lot.artist] || d.lot.artist}
                       </span>
                       <span className="ray-value-row-title" style={{ display: 'block' }}>
-                        {craftTitle(d.lot.title)}
+                        {craftTitle(d.lot.title, d.lot.auctionHouse)}
                       </span>
                       {/* its own line: inside the nowrap/ellipsis title the date was the first thing cut */}
                       <span className="ray-value-mobdate">

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import CloseClock from './CloseClock';
 import { AuctionLot } from '../types';
 import { makerLineOf, labelLineOf } from '../lib/lot-labels';
+import { usePlayerDossiers } from '../lib/use-player-dossiers';
 import { houseColors, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg, sizedImg, localToday } from '../utils';
 import ComparableModal from './ComparableModal';
 import Flick from './Flick';
@@ -226,9 +227,10 @@ function LotCard({
   // "Pablo Picasso / Pablo Picasso" — when the crafted title IS the maker
   // label and the maker line already renders, the title says nothing twice.
   // pseudo-makers ("Sports Cards", "Pokémon") give way to the card's player / Pokémon (app/lib/lot-labels)
+  usePlayerDossiers();
   const maker = lot.artist ? makerLineOf(lot) : null;
   const makerLabel = maker ? maker.name : '';
-  const titleText = craftTitle(lot.title);
+  const titleText = craftTitle(lot.title, lot.auctionHouse);
   const titleDupesMaker = showArtist && !!lot.artist && titleText === makerLabel;
 
   const buySignal = useMemo(() => {

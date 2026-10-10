@@ -190,7 +190,7 @@ export default function TopSales({ allLots, market, series }: Props) {
           </thead>
           <tbody>
             {shown.map((lot, i) => {
-              const ct = craftTitle(lot.title);
+              const ct = craftTitle(lot.title, lot.auctionHouse);
               const title = ct.length > 50 ? ct.slice(0, 47) + '…' : ct;
               // precomputed at build — overEstimatePct's basis: the all-in
               // published price vs the estimate mid (null when the lot

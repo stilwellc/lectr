@@ -85,7 +85,7 @@ export default function BookIndex({ kind }: { kind: Kind }) {
             flagged.length ? flagged.map(l => (
               <Link key={l.id} href={`/lot/${encodeURIComponent(l.id)}`} className="lectr-lot-comp">
                 <span className="lectr-lot-comp-t">
-                  <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{craftTitle(l.title)}</span>
+                  <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{craftTitle(l.title, l.auctionHouse)}</span>
                   <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
                     {ARTIST_LABEL[l.artist] || l.artist} · <span style={{ color: houseColors[l.auctionHouse] || 'inherit', fontWeight: 600 }}>{l.auctionHouse}</span> · hammers {formatDate(trueSaleDay(l))}
                   </span>
