@@ -23,7 +23,7 @@ import LotBrowser from '../components/LotBrowser';
 import { FEED_DEFAULTS, type FeedFilters } from '../components/FeedToolbar';
 import { useLastVisit, passesTriage, houseBaselines, isTriageActive, TRIAGE_DEFAULTS, type TriageFilters } from '../lib/feed-filters';
 import { taxonOf, SUBS, SPORTS, MARKET_CATS, type CatKey } from '../lib/taxonomy';
-import { useFollows, catFollow } from '../lib/follows';
+import { useFollows, catFollow, affinityOf } from '../lib/follows';
 import { isFlagged } from '../lib/flags';
 import { makerId, makerSlugOf, subId, subPartsOf } from '../lib/entity/model';
 import { NAME_HEAD, COLLECTION_CATS, COLLECTION_MARKETS, SUBJECT_MARKETS } from '../lib/entity/kinds';
@@ -35,7 +35,7 @@ import {
   useMakersView, viewSearch, DEFAULT_COLS, COMPARE_MAX, COL_KEYS, LOT_ORDERS,
   type SortKey, type LiveSort, type RowsBy, type LotOrder, type ViewBody, type MakersView,
 } from '../lib/entity/view-state';
-import { buildRow, sortRows, searchRow, flaggedRow, needleOf, lotMatches, fmtPct, type Row } from '../lib/entity/ledger';
+import { buildRow, sortRows, searchRow, flaggedRow, followedRow, needleOf, lotMatches, fmtPct, type Row } from '../lib/entity/ledger';
 import EntityRow, { COLS, colSpec, gridTemplateOf } from '../components/entity/EntityRow';
 import CompareTray from '../components/entity/CompareTray';
 import './makers.css';
@@ -152,9 +152,20 @@ export default function MakersPage() {
       const p = (sr.query as { player?: string }).player;
       if (p) s.add(p);
     }
-    for (const f of allFollows) if (f.kind === 'cat' && f.key.includes(':')) s.add(`cs:${f.key}`);
+    // the reader's follows — signed out too (useFollows keeps them on this
+    // device): makers/players by slug, sub-categories as their cs: row key
+    for (const f of allFollows) {
+      if (f.kind === 'maker') s.add(f.key);
+      else if (f.kind === 'cat' && f.key.includes(':')) s.add(`cs:${f.key}`);
+    }
     return s;
   }, [searches, allFollows]);
+  // THE FOLLOWING LENS reads entities, not houses: a followed maker / player
+  // (1), sub-category (0.8) or whole category (0.6) — app/lib/follows
+  // affinityOf; a followed house is a feed preference, not a name on this page
+  const entityFollows = useMemo(() => allFollows.filter(f => f.kind !== 'house'), [allFollows]);
+  const followsOn = entityFollows.length > 0;
+  const lotFollowed = useCallback((l: AuctionLot) => affinityOf(l, entityFollows) > 0, [entityFollows]);
 
   const [capState, setCapState] = useState<{ k: string; caps: Partial<Record<Market, number>> }>({ k: '', caps: {} });
   const prevVisitDay = useLastVisit();
@@ -277,11 +288,13 @@ export default function MakersPage() {
       if (fVerified && !r.verified) continue;
       // a filtered book shows only the rows with a live lot passing it
       if (filtersOn && r.live === 0) continue;
-      if (fFollowing && !(r.follow && followedSet.has(r.follow))) continue;
+      // a followed name whole — or a name narrowed to its live lots in a
+      // followed category
+      if (fFollowing) { r = followedRow(r, !!r.follow && followedSet.has(r.follow), lotFollowed); if (!r) continue; }
       out.push(r);
     }
     return sortRows(out, sort);
-  }, [rows, inMarket, words, dFl, fLive, fVerified, filtersOn, fFollowing, followedSet, sort]);
+  }, [rows, inMarket, words, dFl, fLive, fVerified, filtersOn, fFollowing, followedSet, lotFollowed, sort]);
 
   const cutKey = JSON.stringify([dTriage, dSport, dQ, dFl, sort, shownBy, activeKey, fLive, fVerified, fFollowing]);
   const caps = capState.k === cutKey ? capState.caps : NO_CAPS;
@@ -322,10 +335,26 @@ export default function MakersPage() {
 
   // ── THE LOTS — the market's live book under the same filters + search ──
   const lkSet = useMemo(() => new Set(lk), [lk]);
-  const lotsPool = useMemo<AuctionLot[]>(() => {
+  const lotsBase = useMemo<AuctionLot[]>(() => {
     const base = lkSet.size ? pool.all.filter(l => lotInScope(l, lkSet)) : pool.marketPool;
     return words.length ? base.filter(l => lotMatches(l, words)) : base;
   }, [lkSet, pool.all, pool.marketPool, words]);
+  // the Following lens narrows the lots to what the reader follows
+  const lotsPool = useMemo<AuctionLot[]>(() => (fFollowing ? lotsBase.filter(lotFollowed) : lotsBase),
+    [lotsBase, fFollowing, lotFollowed]);
+  // the lens's own count: the lots it would show under every other filter
+  const followCount = useMemo(() => {
+    if (!followsOn) return 0;
+    const o = { today: localToday(), prevVisitDay, baselines };
+    let n = 0;
+    for (const l of lotsBase) {
+      if (!lotFollowed(l)) continue;
+      if (dFl && !isFlagged(l)) continue;
+      if (!passesTriage(l, dTriage, o)) continue;
+      n++;
+    }
+    return n;
+  }, [followsOn, lotsBase, lotFollowed, dFl, dTriage, prevVisitDay, baselines]);
   // the counts the body switch, the lenses and the search row print — the
   // same predicates LotBrowser's pass applies (triage, flagged), so a count
   // is exactly the list it opens
@@ -617,6 +646,13 @@ export default function MakersPage() {
           {prevVisitDay ? 'New since last visit' : 'New today'} <i>{lensCounts.fresh.toLocaleString()}</i>
         </button>
       )}
+      {(followsOn || fFollowing) && (
+        <button type="button" className="ray-toolbar-pill" data-active={fFollowing} aria-pressed={fFollowing}
+          title="Only the makers, players and categories you follow — with New since last visit, what's new for them"
+          onClick={() => set(v => ({ fw: !v.fw }))}>
+          Following <i>{followCount.toLocaleString()}</i>
+        </button>
+      )}
       <span className="ray-toolbar-divider" aria-hidden="true" />
     </>
   );
@@ -699,7 +735,7 @@ export default function MakersPage() {
               <span className="mk-bar-rule" aria-hidden />
               {vw === 'names' && (
                 <div className="mk-display">
-                  <button type="button" className="mk-chip" data-on={showDisplay || fLive || fVerified || fFollowing || undefined} onClick={() => setShowDisplay(x => !x)} aria-expanded={showDisplay}>
+                  <button type="button" className="mk-chip" data-on={showDisplay || fLive || fVerified || undefined} onClick={() => setShowDisplay(x => !x)} aria-expanded={showDisplay}>
                     Display
                   </button>
                   {showDisplay && (
@@ -723,14 +759,15 @@ export default function MakersPage() {
                           );
                         })}
                         <div className="mk-display-head kicker mk-display-sep">Rows</div>
-                        {([['on', 'Only on the block', fLive], ['vi', 'Only verified indexes', fVerified], ...(authEnabled ? [['fw', 'Only followed', fFollowing]] : [])] as ['on' | 'vi' | 'fw', string, boolean][]).map(([k, label, on]) => (
+                        {/* (Only followed moved to the Following lens — signed out too) */}
+                        {([['on', 'Only on the block', fLive], ['vi', 'Only verified indexes', fVerified]] as ['on' | 'vi', string, boolean][]).map(([k, label, on]) => (
                           <button key={k} type="button" role="menuitemcheckbox" aria-checked={on} className="mk-display-item" data-on={on || undefined}
-                            onClick={() => { if (k === 'fw' && !user) { openLogin(); return; } set(x => ({ [k]: !x[k] })); }}>
+                            onClick={() => set(x => ({ [k]: !x[k] }))}>
                             <span className="mk-display-check" aria-hidden>{on ? '✓' : ''}</span>
                             {label}
                           </button>
                         ))}
-                        <button type="button" className="mk-display-reset" onClick={() => set({ cols: DEFAULT_COLS, on: false, vi: false, fw: false })}>Reset</button>
+                        <button type="button" className="mk-display-reset" onClick={() => set({ cols: DEFAULT_COLS, on: false, vi: false })}>Reset</button>
                       </div>
                     </>
                   )}

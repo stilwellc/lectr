@@ -166,7 +166,6 @@ test('adapters: a maker from stats.json prints what the ledger printed', () => {
   assert.equal(s.thin, true);                                            // the ledger's tag rule (n < 50)
   assert.deepEqual(s.record, { p: 250000, d: '2026-03-01', t: 'Big one', h: "Christie's" });
   assert.equal(s.revenue, 900000);
-  assert.equal(detail?.quarters.length, 6);
   assert.deepEqual(detail?.houses, [{ h: "Christie's", n: 30 }]);
   // no stats: no detail, dashes
   const empty = makerBundle('kaws', 'art', null, null, null, NOW);

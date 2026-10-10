@@ -36,6 +36,7 @@ import { fitGradeLadder } from './lib/grade-ladder';
 import { markPhase } from './lib/mem-trace';
 import { servedLastCrawl } from './lib/served-stamp';
 import { taxonOf } from '../app/lib/taxonomy';
+import { refLineOf } from '../app/lib/watch-ref';
 import { sportOf, overEstimatePct } from '../app/utils';
 import type { MarketAnalytics } from '../app/types';
 
@@ -763,10 +764,15 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     const withEst = ls.filter(l => ((l as AuctionLot & { estHighUsd?: number }).estHighUsd || 0) > 0);
     const cut = Date.now() - 365 * 864e5;
     const ttm = ls.filter(l => (l as AuctionLot & { _saleMs?: number })._saleMs! > cut).map(l => l.realizedUsd!);
+    const ref = key.slice(key.indexOf(':') + 1);
+    // the model line its own catalogues name (Rolex 6263 → daytona) — so a
+    // "rolex daytona" search finds the Daytona references (Oct 10)
+    const line = /\d/.test(ref) ? refLineOf(ls.map(l => l.title), ls[0].artist) : null;
     refsOut.push({
       key,
       maker: ls[0].artist,
-      ref: key.slice(key.indexOf(':') + 1),
+      ref,
+      ...(line ? { line } : {}),
       n: ls.length,
       medianUsd: Math.round(median(prices)),
       ttmMedianUsd: ttm.length >= 5 ? Math.round(median(ttm)) : null,
