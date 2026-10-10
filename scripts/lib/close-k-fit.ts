@@ -4,9 +4,10 @@
  * build-upcoming (never in serverless): the corpus is already in memory.
  *
  * OBSERVATIONS — one (lot, days out, live bid, hammer) per bid sighting:
- *  1. bidHistory on SOLD corpus lots. Only Goldin keeps it through settlement
- *     (ray-crawl carries it; the sports-crawl houses replace the row with the
- *     settled record, so their history dies at the close). Snapshots append
+ *  1. bidHistory on SOLD corpus lots. Goldin keeps it through settlement
+ *     (ray-crawl carries it); since Oct 9 the sports-crawl houses carry it too
+ *     (sports-crawl withSettledHistory: the settled record inherits the live
+ *     row's trail, compacted to first + last 12). Snapshots append
  *     only when {bid, count} changes; date-only stamps read as 12:00Z (the
  *     hour the served book lands).
  *  2. THE CLOSE-K SNAPSHOT ARCHIVE — every night build-upcoming writes a tiny
@@ -14,8 +15,8 @@
  *     room; ~100KB gz) to data/closek/tonight.json.gz, and the nightly ships
  *     it write-once to R2 closek/snaps/. Before assemble the newest
  *     SNAP_PULL_N are pulled back to data/closek/snaps/ and joined here to
- *     the sold rows by id. This is the ONLY history for Hake's, Memory Lane,
- *     NFL, REA and RR.
+ *     the sold rows by id. This is the ONLY history for RR, and for any
+ *     sports-crawl lot that settled before the Oct 9 carry.
  *
  * FIT — per room × days bucket × bid band:
  *  - each lot counts ONCE per cell (the mean of its log hammer/bid there), so
