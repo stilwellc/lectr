@@ -1654,6 +1654,8 @@ const EDITION_STRONG = /\bedition of \d+\b|\bfrom (?:an|the) edition\b|\bnumbere
 const ORIGINAL_STRONG = /\b(?:oil|acrylic|tempera|alkyd|enamel|synthetic polymer)\b[^.;]{0,60}\bon\s+(?:canvas|linen|panel|board|masonite|cardboard|paper)\b|\b(?:silkscreen|screen ?print) inks?\b[^.;]{0,60}\bon (?:canvas|linen)\b|\bmixed media on (?:canvas|panel|board)\b|\bhand[- ]painted\b|\bunique\b/i;
 const OIL_CANVAS = /\b(?:oil|acrylic|tempera|synthetic polymer)\b[^.;]{0,30}\bon\s+(?:canvas|panel|board|linen|masonite)\b/i;
 const EDITION_ANY = /\bedition of \d+|\bnumbered edition\b|\blimited edition\b/i;
+/** paint or screen ink ON a (primed) canvas / linen — a painting, whatever the process */
+const PAINTED_CANVAS = /\b(?:silkscreen|screen ?print(?:ing)?) inks?\b[^.;]{0,60}\bon (?:primed |unprimed )?(?:canvas|linen)\b|\b(?:acrylic|oil|synthetic polymer)(?: paint)?\b[^.;]{0,60}\bon (?:primed |unprimed )?(?:canvas|linen)\b/i;
 
 /** bare "37/150" edition fraction — mixed-number sizes ("31 1/2") excluded */
 function bareEditionFraction(s: string): boolean {
@@ -1715,6 +1717,16 @@ export function normalizeArtCategory(lots: Lot[]): { o2p: number; p2o: number } 
         o2p++;
       }
     } else if (l.category === 'print') {
+      // (Oct 10, makers audit) a PAINTED canvas is unique even when the medium
+      // names the screen — Warhol's "silkscreen ink and graphite on primed
+      // canvas" ($85M White Disaster) and "acrylic and screenprint on canvas"
+      // read PRINT_PROCESS and stayed editions (6 rows, all uniques by hand)
+      if (PAINTED_CANVAS.test(s) && !EDITION_ANY.test(s)) {
+        l.category = 'original';
+        (l as Lot & { catReclass?: string }).catReclass = 'p2o';
+        p2o++;
+        continue;
+      }
       if (PRINT_PROCESS.test(s) || PLATE_FROM.test(s) || EDITION_ANY.test(s)) continue;
       if (OIL_CANVAS.test(s)) {
         l.category = 'original';

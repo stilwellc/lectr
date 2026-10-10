@@ -133,6 +133,50 @@ export function rosterNoun(market: Market, n = 2): string {
   }
 }
 
+/** The discipline tag a maker row prints under its name ("Pop art",
+ *  "Watchmaker"). One copy for the build (scripts/emit-entities) and the
+ *  client (app/makers DISCIPLINE mirrors it until the entity kinds registry
+ *  takes it over). */
+export const MAKER_DISCIPLINE: Record<string, string> = {
+  'george-condo': 'Contemporary painting',
+  'futura-2000': 'Street art',
+  'kaws': 'Street & pop',
+  'andy-warhol': 'Pop art',
+  'tom-sachs': 'Sculpture & bricolage',
+  'barry-mcgee': 'Street art',
+  'keith-haring': 'Pop & street',
+  'peter-saul': 'Pop surrealism',
+  'ed-ruscha': 'Pop & conceptual',
+  'r-crumb': 'Underground comix',
+  'raymond-pettibon': 'Drawing',
+  'henri-matisse': 'Modern master',
+  'pablo-picasso': 'Modern master',
+  'fab-5-freddy': 'Street art',
+  'francesco-clemente': 'Neo-expressionism',
+  'eddie-martinez': 'Contemporary painting',
+  'kenny-scharf': 'Street & pop',
+  'jean-michel-basquiat': 'Neo-expressionism',
+  'roy-lichtenstein': 'Pop art',
+  'francis-bacon': 'Figurative master',
+  'alexander-calder': 'Sculpture & mobiles',
+  'rashid-johnson': 'Contemporary',
+  'jeff-koons': 'Sculpture & editions',
+  'george-nakashima': 'Studio furniture',
+  'charles-eames': 'Mid-century modern',
+  'jean-prouve': 'Modernist metalwork',
+  'pierre-jeanneret': 'Chandigarh modernism',
+  'rolex': 'Watchmaker',
+  'patek-philippe': 'Watchmaker',
+  'audemars-piguet': 'Watchmaker',
+  'omega': 'Watchmaker',
+  'cartier': 'Watchmaker & jeweler',
+  'meteorites': 'Natural history',
+  'fossils': 'Natural history',
+  'space-exploration': 'Space history',
+  'scientific-instruments': 'Instruments',
+  'science-tech': 'Technology',
+};
+
 export function marketOf(slug: string): Market {
   return ARTIST_MARKET[slug] || 'art';
 }

@@ -398,7 +398,8 @@ jobs:
         run: npx tsx scripts/lib/extract/run.ts
       # ── SINGLE LOAD (Oct 2026 scale pass): the corpus is parsed ONCE. This
       # one step was five (assemble · build-upcoming · emit-page-stats ·
-      # emit-search-index · validate-engine), each re-reading the full corpus
+      # emit-search-index · validate-engine; + emit-entities since Oct 10),
+      # each re-reading the full corpus
       # with its own 8-12GB heap; they now run as phases of one process over
       # one in-memory copy (scripts/assemble.ts --single-load), with outputs
       # byte-identical to the five steps (scripts/ci/equivalence.ts). Failure
@@ -423,13 +424,22 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh pull-closek 75
-      - name: Assemble + engine + eager payload + engine gate + page data + search (one corpus load)
+      # THE ENTITY FILES (makers overhaul, Oct 10 2026): the single load also
+      # writes pages/entities-<market>.json + pages/entity-<bb>.json from the
+      # full corpus (scripts/emit-entities.ts, phase 2b of runDownstream) —
+      # NOT advisory like page data: a failure exits the step 1 after every
+      # output is written, and the check below fails the job if any entity
+      # file is missing or stamped with another night's crawl, so the push
+      # never ships makers pages over a stale entity set.
+      - name: Assemble + engine + eager payload + engine gate + entities + page data + search (one corpus load)
         run: |
           mkdir -p data/qa
           npx tsx scripts/assemble.ts --single-load
         env:
           NODE_OPTIONS: --max-old-space-size=4096
           RAY_SENTINEL_WARN_ONLY: ${{ github.event.inputs.sentinel_warn_only == 'true' && '1' || '' }}
+      - name: Check the entity files (must pass)
+        run: npx tsx scripts/emit-entities.ts --check
       - name: Upload engine validation report
         if: always()
         uses: actions/upload-artifact@v7
