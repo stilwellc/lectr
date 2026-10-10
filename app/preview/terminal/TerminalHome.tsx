@@ -41,6 +41,7 @@ import { closeIsTimed } from '../../lib/house-tz';
 import { makerLineOf } from '../../lib/lot-labels';
 import { usePlayerDossiers } from '../../lib/use-player-dossiers';
 import { useFollows } from '../../lib/follows';
+import { useTaste } from '../../lib/use-recs';
 import { Colophon, daysWord, pickCall } from '../../components/Terminal';
 import Flick from '../../components/Flick';
 import Greeting from '../../components/Greeting';
@@ -246,6 +247,9 @@ export default function TerminalHomePage() {
     writeFeedMemory(memoryOf(p, activeKey));
   }, [activeKey]);
   const { follows } = useFollows();
+  // the reader's taste — the SAME recommender the profile's "Lots you may
+  // like" room reads (app/lib/use-recs), so the two lists agree
+  const { taste, hasSignals } = useTaste(allLots);
   // the comps modal, joined to history (app/lib/use-lot-modal) — shared by
   // the feed, Tonight's Wall and the verified board
   const [tableLot, setTableLot] = useLotModal<AuctionLot>();
@@ -651,6 +655,7 @@ export default function TerminalHomePage() {
                   onMarketReset={() => setMarket('all')}
                   belowSignal={belowSignal}
                   follows={follows}
+                  taste={hasSignals ? taste : null}
                   isSaved={isSaved}
                   onToggleSave={toggle}
                   lastCrawl={lastCrawl}

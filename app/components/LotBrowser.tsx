@@ -25,10 +25,11 @@ import { signalMagnitude } from '../lib/comps';
 import ComparableModal from './ComparableModal';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './FeedToolbar';
 import { houseBaselines, type HouseBaselines } from '../lib/feed-filters';
-import { shortlist, reasonOf, forYou } from '../lib/priority';
+import { shortlist, reasonOf } from '../lib/priority';
 import { makerLineOf, labelTagOf, subColumnOf } from '../lib/lot-labels';
 import { foldVariants, foldNote, foldQuery, crossSibs, crossNote } from '../lib/fold';
-import { affinityOf, type Follow } from '../lib/follows';
+import type { Follow } from '../lib/follows';
+import { recommend, recNote, type Taste } from '../lib/recs';
 import { feedPass } from '../lib/lot-browser';
 import { isFlagged, FLAG_SIGNAL } from '../lib/flags';
 import { useLotModal } from '../lib/use-lot-modal';
@@ -72,7 +73,7 @@ function daysToHammer(l: AuctionLot, todayDay: string): number | null {
 // estimate (below/above comparable market), 3. the live-bid read (bid below/
 // above recent comps — the Goldin book, where most of the coverage lives).
 // 'at market' / 'in line' stay quiet on purpose.
-function feedTone(lot: AuctionLot, belowIds: Set<string>, hasSig: Set<string>): 'up' | 'down' | undefined {
+export function feedTone(lot: AuctionLot, belowIds: Set<string>, hasSig: Set<string>): 'up' | 'down' | undefined {
   if (belowIds.has(lot.id)) return 'up';
   if (hasSig.has(lot.id)) return 'down';
   const vs = lot.value?.signal?.label;
@@ -136,7 +137,7 @@ function BidVelChip({ lot }: { lot: AuctionLot }) {
   );
 }
 
-function FeedRow({ lot, onOpen, tone, note, onNote }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down'; note?: string | null; onNote?: () => void }) {
+export function FeedRow({ lot, onOpen, tone, note, onNote }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down'; note?: string | null; onNote?: () => void }) {
   const est =
     lot.estimateLow || lot.estimateHigh
       ? (lot.estimateLow && lot.estimateHigh && formatPrice(lot.estimateLow) !== formatPrice(lot.estimateHigh)
@@ -235,8 +236,11 @@ export interface LotBrowserProps {
   onMarketReset?: () => void;
   /** precomputed below-market pass (home shares it with the wall/hero) */
   belowSignal?: BelowSignal;
-  /** the reader's follows — enables the "For you" tab (home) */
+  /** the reader's follows — named on the "For you" tab */
   follows?: Follow[];
+  /** the reader's taste (app/lib/use-recs) — enables the "For you" tab: the
+   *  same recommender as the profile's "Lots you may like" room */
+  taste?: Taste | null;
   /** scoped to one maker's book: the maker lens hides, a saved search
    *  carries the maker; `named` = a real maker (art/design/watches), whose
    *  shortlist can't diversify across makers. `subj` = one subject's book
@@ -276,6 +280,7 @@ export default function LotBrowser({
   onMarketReset,
   belowSignal: belowSignalProp,
   follows = [],
+  taste = null,
   scope = null,
   savedIds,
   isSaved: isSavedProp,
@@ -413,7 +418,8 @@ export default function LotBrowser({
   // player, category, house) — signed in or not (app/lib/follows)
   // (a feed scoped to one subject row by ?subj= is one "who" as well)
   const whoCap = scope?.named || scope?.subj || feedFilters.subj ? Infinity : undefined;
-  const youTab = follows.length > 0 && feedFilters.tab === 'you';
+  const youAvail = !!taste && taste.seeds.length > 0;
+  const youTab = youAvail && feedFilters.tab === 'you';
   const wantTop = !youTab && feedFilters.sort === 'priority' && (feedFilters.tab ?? 'top') !== 'all';
   const top = useMemo(
     () => (wantTop || scoped ? shortlist(feedAll, Date.now(), 20, { who: whoCap }) : null),
@@ -431,11 +437,18 @@ export default function LotBrowser({
   // name (a text query or a maker): then every copy is the answer.
   const foldOn = !feedFilters.query.trim() && (scoped || !feedFilters.maker);
   const fold = useMemo(() => (foldOn ? foldVariants(feedAll) : null), [feedAll, foldOn]);
+  // "For you" — the ONE recommender (app/lib/recs), over whatever the
+  // toolbar filtered; each pick keeps its reason for the note line
+  const youRecs = useMemo(
+    () => (youTab && taste ? recommend(feedAll, taste, { n: 20 }) : null),
+    [youTab, taste, feedAll]
+  );
+  const youNote = useMemo(() => new Map((youRecs ?? []).map(r => [r.lot.id, { full: recNote(r), short: recNote(r, { short: true }) }])), [youRecs]);
   const feed = useMemo(
     () => (youTab
-      ? forYou(feedAll, l => affinityOf(l, follows), Date.now(), 20)
+      ? (youRecs ?? []).map(r => r.lot)
       : topTab ? (top ?? []) : fold ? fold.reps : feedAll),
-    [feedAll, topTab, top, youTab, follows, fold]
+    [feedAll, topTab, top, youTab, youRecs, fold]
   );
   // the reason line: the shortlist's "why it's here", then the folded copies
   // at this house ("Also PSA 8, PSA 6"), then the same card live at another
@@ -452,8 +465,9 @@ export default function LotBrowser({
       elsewhere.size ? crossNote(lot, Array.from(elsewhere.values())) : null,
     ].filter(Boolean).join(' · ') || null;
   };
-  const noteOf = (lot: AuctionLot): string | null =>
-    [topTab || youTab ? reasonOf(lot) : null, alsoOf(lot)].filter(Boolean).join(' · ') || null;
+  // `short` = a one-line phone row: the For-you reason leads with its fact
+  const noteOf = (lot: AuctionLot, short = false): string | null =>
+    [youTab ? (short ? youNote.get(lot.id)?.short : youNote.get(lot.id)?.full) ?? null : topTab ? reasonOf(lot) : null, alsoOf(lot)].filter(Boolean).join(' · ') || null;
   // pressing a folded note → the whole group, by the feed's own search (one
   // stable callback per group member so memoized cards don't re-render)
   const filtersRef = useRef(feedFilters);
@@ -527,14 +541,14 @@ export default function LotBrowser({
             What matters {topTab && <i>{feed.length}</i>}
           </button>
         )}
-        {follows.length > 0 && (
+        {youAvail && (
           <button
             role="tab"
             aria-selected={youTab}
             className="ray-toolbar-pill"
             data-active={youTab}
             onClick={() => handleFilters({ ...feedFilters, sort: 'priority', tab: 'you' })}
-            title={`Ranked for what you follow: ${follows.map(f => f.label).join(', ')}`}
+            title={follows.length ? `Picked from your desk and what you follow: ${follows.map(f => f.label).join(', ')}` : 'Picked from the lots on your desk'}
           >
             For you {youTab && <i>{feed.length}</i>}
           </button>
@@ -647,8 +661,9 @@ export default function LotBrowser({
                         {craftTitle(lot.title, lot.auctionHouse)}
                       </button>
                       {(() => {
-                        // folded copies — the Signal column's own sub-line type
-                        const n = alsoOf(lot);
+                        // folded copies — the Signal column's own sub-line type;
+                        // on For you the pick's reason leads it (the cards' note)
+                        const n = youTab ? noteOf(lot, true) : alsoOf(lot);
                         if (!n) return null;
                         const open = foldOpeners.get(lot.id);
                         const st = { display: 'block', color: 'var(--color-text-faint)', fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' } as const;
@@ -711,7 +726,7 @@ export default function LotBrowser({
             <Flick size={28} draw style={{ color: 'var(--color-text-faint)' }} />
             {youTab ? (
               <>
-                <p>Nothing you follow closes this week{follows.length ? ` (${follows.map(f => f.label).slice(0, 3).join(', ')}${follows.length > 3 ? '…' : ''})` : ''}.</p>
+                <p>Nothing on the block matches your desk{follows.length ? ` or what you follow (${follows.map(f => f.label).slice(0, 3).join(', ')}${follows.length > 3 ? '…' : ''})` : ''}{feedAll.length < countOf(onBlock) ? ' inside these lenses' : ''}.</p>
                 <button className="ray-toolbar-reset" onClick={() => handleFilters({ ...feedFilters, tab: 'top' })}>
                   See what matters across the board
                 </button>
@@ -750,7 +765,7 @@ export default function LotBrowser({
                   lot={lot}
                   onOpen={() => setTableLot(lot)}
                   tone={feedTone(lot, belowIds, belowSignal.hasSig)}
-                  note={noteOf(lot)}
+                  note={noteOf(lot, true)}
                   onNote={foldOpeners.get(lot.id)}
                 />
               </div>
