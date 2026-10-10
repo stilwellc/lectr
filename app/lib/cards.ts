@@ -8,6 +8,8 @@
  * Honesty rule: a field that doesn't parse is null — never guessed.
  */
 
+import { leadYearOf } from './lead-year';
+
 export interface CardId {
   player: string | null;      // "LeBron James"
   playerSlug: string | null;  // "lebron-james"
@@ -453,18 +455,18 @@ export function parseCard(title: string): CardId {
   // 2-digit range ("34-36 Diamond Stars") are the YEAR, not the set's first
   // word: both read as "1986-87" / "1934-36"
   const y4 = ty.match(/^(19\d{2}|20\d{2})(?:-((?:19|20)\d{2}|\d{2}))?\b/);
-  const y2 = !y4 && ty.match(/^'?(\d{2})(?:-(\d{2}))?\b/);
+  // (Oct 9) a 2-digit lead widens by the ONE shared rule (lead-year.ts — the
+  // display's expandLeadYear reads the same): "11 T206" is 1911, not 2011;
+  // "92 … Cabinet" 1892; "24 Topps" 2024; an uncertain century → no year
+  const y2 = !y4 && !lotPre ? leadYearOf(ty, { yearLed: true }) : null;
   if (y4) out.year = y4[2] ? `${y4[1]}-${y4[2].slice(-2)}` : y4[1];
-  else if (y2) {
-    const n = parseInt(y2[1], 10);
-    out.year = (n > 40 ? `19${y2[1]}` : `20${y2[1]}`) + (y2[2] ? `-${y2[2]}` : '');
-  }
+  else if (y2) out.year = y2.year;
 
   // card number: the first # group NOT inside parens (serials live in parens)
   const noParens = t.replace(/\([^)]*\)/g, ' ');
   const no = noParens.match(/#([A-Za-z0-9/.-]+)/);
   if (no) out.cardNo = no[1].toUpperCase();
-  const yrRaw = lotPre + (y4 ? y4[0] : y2 ? y2[0] : '');
+  const yrRaw = lotPre + (y4 ? y4[0] : y2 ? y2.raw : '');
   // (sports wave) the '#'-less Goldin number form — never on a catalog card
   // (its numbers are backs / series, "350-460/30")
   const bare = !no && out.year && !CATALOG_RE.test(t) && !isMultiCardTitle(t) ? bareNumberIdentity(noParens.slice(yrRaw.length)) : null;

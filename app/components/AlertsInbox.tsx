@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAlerts, useSavedSearches } from '../lib/alerts';
 import { supabase } from '../lib/supabase';
 import { craftTitle, formatDate, formatPrice, fmtSignedPct, httpsImg } from '../utils';
-import { ARTIST_LABEL } from '../constants';
+import { makerLineOf } from '../lib/lot-labels';
 
 interface SlimLot {
   id: string;
@@ -205,7 +205,7 @@ export default function AlertsInbox() {
                     )}
                     <span className="lectr-inbox-title">{lot ? craftTitle(lot.title || a.lot_id) : a.lot_id}</span>
                     <span className="lectr-inbox-meta" style={{ marginLeft: 'auto', flex: 'none' }}>
-                      {lot?.artist ? `${ARTIST_LABEL[lot.artist] || lot.artist} · ` : ''}
+                      {lot?.artist ? `${makerLineOf({ ...lot, artist: lot.artist }).name} · ` : ''}
                       {est ? `est. ${formatPrice(est)}` : 'no estimate'}
                       {lot?.saleDate ? ` · ${formatDate(lot.saleDate)}` : ''}
                       {/* measured comp signal only — the lamp is Below Market

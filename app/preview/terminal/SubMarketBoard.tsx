@@ -4,7 +4,8 @@ import { useEffect, useId, useMemo, useState, useRef } from 'react';
 import Link from 'next/link';
 import { AnimatePresence, LazyMotion, domAnimation, m } from 'framer-motion';
 import type { MarketData, SubMarketRead } from '../../hooks/useRayData';
-import { ARTIST_LABEL, type Market } from '../../constants';
+import { type Market } from '../../constants';
+import { makerLineOf } from '../../lib/lot-labels';
 import { median as statsMedian } from '../../lib/stats';
 import type { AuctionLot } from '../../types';
 import { formatPrice, httpsImg } from '../../utils';
@@ -394,7 +395,7 @@ function Chapter({ no, label }: { no: string; label: string }) {
    and the method as fine print. The whole plate opens the comparables. ── */
 function EngineHero({ h, onOpen }: { h: EngineHeroData; onOpen?: (lot: AuctionLot) => void }) {
   const { lot, signal } = h;
-  const makerName = ARTIST_LABEL[lot.artist] || lot.artist.replace(/-/g, ' ');
+  const makerName = makerLineOf(lot).name;
   const estLo = lot.estimateLow ?? lot.estimateHigh ?? null;
   const estHi = lot.estimateHigh ?? lot.estimateLow ?? null;
   const askText = estLo != null
