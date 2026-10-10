@@ -26,7 +26,7 @@ import ComparableModal from './ComparableModal';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './FeedToolbar';
 import { houseBaselines, type HouseBaselines } from '../lib/feed-filters';
 import { shortlist, reasonOf, forYou } from '../lib/priority';
-import { makerLineOf, subColumnOf } from '../lib/lot-labels';
+import { makerLineOf, labelTagOf, subColumnOf } from '../lib/lot-labels';
 import { foldVariants, foldNote, foldQuery, crossSibs, crossNote } from '../lib/fold';
 import { affinityOf, type Follow } from '../lib/follows';
 import { feedPass } from '../lib/lot-browser';
@@ -141,6 +141,9 @@ function FeedRow({ lot, onOpen, tone, note, onNote }: { lot: AuctionLot; onOpen:
       : lot.currentBid
         ? `bid ${formatPrice(lot.currentBid)}`
         : '—';
+  // the label's lead word (its lead badge, else the sub) — the full line
+  // ellipsized the maker away at 390px
+  const label = labelTagOf(lot);
   return (
     <button type="button" className="ray-feedrow" onClick={onOpen} aria-label={`Comps for ${craftTitle(lot.title, lot.auctionHouse)}`}>
       <span className="ray-feedrow-thumb" data-tone={tone} aria-hidden>
@@ -161,7 +164,12 @@ function FeedRow({ lot, onOpen, tone, note, onNote }: { lot: AuctionLot; onOpen:
         )}
       </span>
       <span className="ray-feedrow-main">
-        <span className="ray-feedrow-maker">{makerLineOf(lot).name}</span>
+        <span className="ray-feedrow-maker">
+          {makerLineOf(lot).name}
+          {/* the label rides the maker line's spare width in the title tier's
+              ink (the words LotCard prints) — never a new line */}
+          {label && <span style={{ fontWeight: 400, fontSize: '12.5px', color: 'var(--color-text-muted)' }}> · {label}</span>}
+        </span>
         <span className="ray-feedrow-title">{craftTitle(lot.title, lot.auctionHouse)}</span>
         {note && (onNote ? (
           // the row is itself a button: the folded note presses as a link

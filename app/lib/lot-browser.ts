@@ -5,7 +5,8 @@
  * machinery, plus the deep-link that carries a /makers triage view onto a
  * maker page's lot browser.
  */
-import { ARTIST_LABEL, marketArtists } from '../constants';
+import { marketArtists } from '../constants';
+import { searchTextOf } from './lot-labels';
 import type { AuctionLot } from '../types';
 import { trueSaleDay } from '../utils';
 import { dealScore } from './comps';
@@ -69,11 +70,10 @@ export function feedPass(upcoming: AuctionLot[], f: FeedFilters, o: FeedPassOpts
   // triage: closing window, clean category/sub, house, value floor, new
   arr = arr.filter(l => passesTriage(l, f, { prevVisitDay: o.prevVisitDay, baselines: o.baselines }));
   if (q) {
-    arr = arr.filter(l =>
-      `${ARTIST_LABEL[l.artist] || l.artist} ${l.title} ${l.auctionHouse} ${l.saleName} ${l.medium || ''}`
-        .toLowerCase()
-        .includes(q)
-    );
+    // the haystack carries the printed label vocabulary — the player, "PSA
+    // 10", "Signed", "Rookie", "Apollo" (app/lib/lot-labels searchTextOf,
+    // memoised per lot: 10K lots a keystroke)
+    arr = arr.filter(l => searchTextOf(l).includes(q));
   }
   const est = (l: AuctionLot) => l.estimateHigh || l.estimateLow || l.currentBid || 0;
   const past = (l: AuctionLot) => !!l.resultsPending && trueSaleDay(l) !== '' && trueSaleDay(l) < o.crawlDay;

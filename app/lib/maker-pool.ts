@@ -17,7 +17,8 @@
  *   order        byPriority — what matters most first (app/lib/priority).
  */
 import { isLiveUpcoming, localToday } from '../utils';
-import { ARTIST_LABEL, type Market } from '../constants';
+import { type Market } from '../constants';
+import { searchTextOf } from './lot-labels';
 import { passesTriage, triageToParams, TRIAGE_DEFAULTS, type TriageFilters, type NewLensOpts } from './feed-filters';
 import { byPriority } from './priority';
 
@@ -39,16 +40,15 @@ export function makerLiveLots<L extends PoolLot>(
     .sort(byPriority(Date.now()));
 }
 
-type FeedLot = { artist: string; title?: string | null; auctionHouse?: string | null; saleName?: string | null; medium?: string | null };
+type FeedLot = Parameters<typeof searchTextOf>[0];
 
 /** the home feed's text search, verbatim (TerminalHome feedAll): a lowercase
- *  substring over maker label · title · house · sale · medium */
+ *  substring over the label vocabulary + maker · title · house · sale
+ *  (app/lib/lot-labels searchTextOf) */
 export function feedQueryMatches(l: FeedLot, q: string): boolean {
   const needle = q.trim().toLowerCase();
   if (!needle) return true;
-  return `${ARTIST_LABEL[l.artist] || l.artist} ${l.title} ${l.auctionHouse} ${l.saleName} ${l.medium || ''}`
-    .toLowerCase()
-    .includes(needle);
+  return searchTextOf(l).includes(needle);
 }
 
 /** the home feed (every lot, not the top tab) searched for `q` inside the

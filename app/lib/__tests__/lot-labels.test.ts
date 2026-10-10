@@ -28,3 +28,27 @@ test('label line: quiet subs give way to badges; loud subs lead', () => {
   const ent = { artist: 'movie-tv', subCat: 'worn-personal', drill: 'hollywood', title: 'Production-Used Command Battle Droid Head Prop from Star Wars' };
   assert.ok(labelLineOf(ent).startsWith('Props'));
 });
+
+import { labelTagOf, catSubLineOf, searchTextOf, drillLabelOf } from '../lot-labels';
+
+test('tag / cat·sub line: the lead badge or the sub; Other subs drop on the lot page', () => {
+  assert.equal(labelTagOf({ artist: 'rolex', subCat: 'wristwatches', title: 'A fine and rare platinum chronograph wristwatch' }), 'Chronograph');
+  assert.equal(labelTagOf({ artist: 'andy-warhol', subCat: 'prints', title: 'Mao, 1972' }), 'Prints & Multiples');
+  assert.equal(catSubLineOf({ artist: 'pokemon', subCat: 'pokemon-cards', drill: 'vintage', title: '1997 Pokemon Japanese Promo #1 Trophy Pikachu - PSA 8' }), 'Pokémon & TCG · Vintage (1996–2003)');
+  assert.equal(catSubLineOf({ artist: 'roy-lichtenstein', subCat: 'other', title: 'Cow Triptych' }), 'Fine Art');
+});
+
+test('search text: the printed label vocabulary is searchable (player, grade, Rookie)', () => {
+  const card = { artist: 'graded-cards', title: '1960 Topps #148 Carl Yastrzemski Rookie PSA MINT 9', auctionHouse: 'REA' };
+  const h = searchTextOf(card);
+  for (const w of ['carl yastrzemski', 'psa 9', 'rookie', 'sports cards', 'rea']) assert.ok(h.includes(w), w);
+  assert.equal(searchTextOf(card), h);
+});
+
+test('drill label: one-sub drills print the sub; sport × kind reads Sport · Kind; the rest stand', () => {
+  assert.equal(drillLabelOf('pokemon-era:vintage', "Vintage ≤'02"), 'Vintage (1996–2003)');
+  assert.equal(drillLabelOf('cards:football', 'Football · cards'), 'Football · Cards');
+  assert.equal(drillLabelOf('memorabilia:olympics', 'Olympics · memorabilia'), 'Olympics · Memorabilia');
+  assert.equal(drillLabelOf('rolex:daytona', 'Daytona · Rolex'), 'Daytona · Rolex');
+  assert.equal(drillLabelOf('cards-era:modern', 'Modern cards (2000+)'), 'Modern cards (2000+)');
+});

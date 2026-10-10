@@ -19,7 +19,7 @@
 
 import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { ARTIST_LABEL, MARKETS, ROSTER, marketArtists, type Market } from '../../constants';
+import { MARKETS, ROSTER, marketArtists, type Market } from '../../constants';
 import { useMarket } from '../../lib/market';
 import { useRayData, useSoldArchive, retryArchiveLoad, triggerFullLoad, retryFullLoad } from '../../hooks/useRayData';
 import { loadPageStats, type PageStats } from '../../lib/page-data';
@@ -38,6 +38,7 @@ import MarketSwitch from '../../components/MarketSwitch';
 import { FeedFilters, FEED_DEFAULTS, FEED_PARAM_KEYS, feedFromParams, feedToParams } from '../../components/FeedToolbar';
 import { useUrlState, useLastVisit, houseBaselines, memoryOf, restoreParams, readFeedMemory, writeFeedMemory } from '../../lib/feed-filters';
 import { closeIsTimed } from '../../lib/house-tz';
+import { makerLineOf } from '../../lib/lot-labels';
 import { usePlayerDossiers } from '../../lib/use-player-dossiers';
 import { useFollows } from '../../lib/follows';
 import { Colophon, daysWord, pickCall } from '../../components/Terminal';
@@ -727,7 +728,7 @@ export default function TerminalHomePage() {
                     span={2}
                     stat={gapMultiple(todaysCall.pct)}
                     label="Today's call"
-                    body={`${ARTIST_LABEL[todaysCall.lot.artist] || todaysCall.lot.artist} · ${craftTitle(todaysCall.lot.title)}`}
+                    body={`${makerLineOf(todaysCall.lot).name} · ${craftTitle(todaysCall.lot.title, todaysCall.lot.auctionHouse)}`}
                     href={`/lot/${todaysCall.lot.id}`}
                   />
                 ) : (

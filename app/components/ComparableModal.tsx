@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { AuctionLot } from '../types';
-import { ARTIST_LABEL, marketOf } from '../constants';
-import { houseColors, categoryLabels, categoryColors, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText } from '../utils';
+import { marketOf } from '../constants';
+import { makerLineOf, labelLineOf, drillLabelOf } from '../lib/lot-labels';
+import { houseColors, categoryColors, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText } from '../utils';
 import { areComparable, signalWithPool, isSportsScienceObject, soldCompBand, FORM_LABEL, signalMagnitude } from '../lib/comps';
 import { drillRowFor, drillSlugFor } from '../lib/submarkets';
 import { signedPct, dirOf } from './SubMarketDirectory';
@@ -142,7 +143,7 @@ function LotValueBlock({ lot, allLots, market, backtest }: { lot: AuctionLot; al
         return (
           <div style={{ fontSize: 12, marginTop: 6 }}>
             <a href={`/sub/${dslug.slug.replace(':', '/')}`} style={{ color: 'var(--color-text-muted)', textDecoration: 'none' }}>
-              Sub-market · <b style={{ color: 'var(--color-fg)', fontWeight: 500 }}>{drow.label}</b>
+              Sub-market · <b style={{ color: 'var(--color-fg)', fontWeight: 500 }}>{drillLabelOf(drow.slug, drow.label)}</b>
               {pct != null && drow.readType === 'index' && drow.index && (
                 <> · <span style={{ color: tone, fontFamily: 'var(--font-mono), monospace' }}>{signedPct(pct)}</span> {drow.index.horizon} verified</>
               )}
@@ -701,8 +702,11 @@ export default function ComparableModal({
   }, [compStats, comparables]);
 
   const houseColor = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
-  const catLabel = categoryLabels[lot.category] || null;
+  // the home feed's label line (app/lib/lot-labels): "Pokémon · Vintage ·
+  // PSA 10", "Wristwatches · GMT" — never the medium enum's "Object"
+  const catLabel = labelLineOf(lot) || null;
   const catColor = categoryColors[lot.category] || 'var(--color-text-faint)';
+  const maker = makerLineOf(lot);
 
   // Portal to <body>: the card grid animates with transforms, and a transformed
   // ancestor traps fixed/z-indexed descendants beneath the sticky toolbar.
@@ -953,9 +957,8 @@ export default function ComparableModal({
               }}>
                 {lot.auctionHouse}
               </span>
-              {/* 'object' is suppressed exactly as LotCard suppresses it —
-                  an "Object" chip names nothing */}
-              {catLabel && lot.category !== 'unknown' && lot.category !== 'object' && (
+              {/* the label line, as LotCard prints it */}
+              {catLabel && (
                 <>
                   <span style={{ color: 'var(--color-text-faint)', fontSize: 12.5 }}>&middot;</span>
                   <span style={{
@@ -964,6 +967,10 @@ export default function ComparableModal({
                     textTransform: 'none',
                     color: catColor,
                     fontWeight: 500,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    minWidth: 0,
                   }}>
                     {catLabel}
                   </span>
@@ -976,7 +983,7 @@ export default function ComparableModal({
                 duplicates until the house is named: one opens lectr's lot
                 page, the other leaves for the auctioneer. */}
             <Link
-              href={`/makers/${lot.artist}`}
+              href={maker.href}
               className="comp-modal-maker"
               onClick={e => e.stopPropagation()}
               style={{
@@ -990,12 +997,12 @@ export default function ComparableModal({
                 alignSelf: 'flex-start',
               }}
             >
-              {ARTIST_LABEL[lot.artist] || lot.artist}
+              {maker.name}
             </Link>
 
             {/* "Pablo Picasso / Pablo Picasso" — skip the title when it
                 merely repeats the maker line above it */}
-            {craftTitle(lot.title, lot.auctionHouse) !== (ARTIST_LABEL[lot.artist] || lot.artist) && (
+            {craftTitle(lot.title, lot.auctionHouse) !== maker.name && (
               <h2 className="nsp-modal-title">
                 {craftTitle(lot.title, lot.auctionHouse)}
               </h2>
