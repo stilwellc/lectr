@@ -93,14 +93,16 @@ function read(l: SubjectLot): LotSubject | null {
   if (CARD_MAKERS.has(l.artist)) {
     const g = cardGroupOf(l);
     if (g) return groupRow(g.name, g.kind);
-    if (pm) return null;
+    // (r6) a slot run that is not a person falls through to the pipeline stamp below (rosterCardPlayerOf)
     // (r5) a card with no number to key (pre-war, oddball issues: "1928 Exhibits Frank Frisch") —
     // the pipeline-stamped athlete, when the title spells that exact name
     const pn = l.playerName?.trim();
     const t = String(l.title || '');
     // …and the only name on it: never a multi-signed piece or a "Jordan/Bird/Magic" run
     const solo = pn && !/\b(?:Multi-Signed|Dual-Signed|Triple|Trio|Quad)\b/.test(t) && !t.includes(`${pn}/`) && !t.includes(`/${pn}`);
-    const pslug = solo && nameTokensOk(pn.split(' ')) && t.includes(pn) ? playerSlugOf(pn) : null;
+    // (r6) a nickname the title quotes / parenthesises is part of the spelling ("Roberto (Bob) Clemente", 'Larry "Yogi" Berra')
+    const spelled = !!pn && (t.includes(pn) || t.replace(/[()"“”]/g, '').replace(/\s+/g, ' ').includes(pn));
+    const pslug = solo && nameTokensOk(pn.split(' ')) && spelled ? playerSlugOf(pn) : null;
     if (pslug) return { key: `p:${pslug}`, name: pn!, kind: 'player', playerSlug: pslug };
   }
   if (l.artist === 'pokemon') {

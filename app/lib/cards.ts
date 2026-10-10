@@ -75,8 +75,15 @@ const E98_SET_OF_30_RE = /["“]?\bset of 30\b["”]?/i;
 const maskE98 = (t: string, by: string) => (/\bE98\b/.test(t) ? t.replace(E98_SET_OF_30_RE, by) : t);
 const CATALOG_RE = /\b((?:[TEDMNRWH]|PC|WG)-?\d{1,3}(?:-\d{1,2})?)\b/;
 const CATALOG_MULTI_RE = /\(\d[\d,+]*\)|\b(?:collection|lots?|pair|trio|quartet|group|sets?|run|folders?|team card|uncut|panel|sheet|album|box|pack|wrapper|display|banner|poster|proof|lithograph|premium|cabinets?|and|with)\b|&|\//i;
-const CATALOG_GRADE_CUT_RE = /\s(?:-|–|—)\s|\b(?:PSA|SGC|BVG|BGS|GAI|CGC|KSA|GMA|Beckett|Graded|Authentic)\b|\(|!|,/;
-const POSE_WORDS = new Set(('portrait batting bat bats fielding throwing pitching catching hands hand glove arms arm cap front follow-through follow leaning horizontal sliding kneeling bare closed open mouth finger dark light white red green blue brown orange yellow gold pink pastel background no name error variation southern leaguer back shows near ground over head up down on off shoulder chest waist knees ready to hit left right looking facing ball sleeves sweater').split(' '));
+const CATALOG_GRADE_CUT_RE = /\s(?:-|–|—)\s|\b(?:PSA|SGC|BVG|BGS|GAI|CGC|KSA|GMA|Beckett|Graded|Authentic)\b|\(|!|,|;/;
+// (r6) one card's own '/', '&' and 'with' that are not a second subject: the
+// T206 back + print run ("Piedmont/350", "Sweet Caporal 350/30", "150/25",
+// "350-460/25"), a slab qualifier ("Authentic/Altered"), an issuer's "&"
+// ("Dockman & Sons", "S & S", "G&B Chewing Gum") and a pose's "with" ("Willie
+// Keeler, With Bat", "Johnny Evers with Bat") — 116 live T206 / E92 singles
+// read as lots and named no one
+const CATALOG_ONE_CARD_MASK_RE = /\b(?:[A-Za-z]+\s*)?\/\s*\d{2,3}(?:-\d{2,3})?(?:\/\d{2,3})?\b|\b\d{3}(?:-\d{3})?\s*\/\s*\d{2,3}\b|\b(?:authentic|altered)\s*\/\s*(?:altered|miscut|trimmed|evidence of trimming)\b|&\s*sons?\b|\b[A-Z]\s?&\s?[A-Z]\b|\bwith (?:bat|glove|ball|cap|trophy|offer|ad|stats)\b/gi;
+const POSE_WORDS = new Set(('portrait batting bat bats fielding throwing pitching catching hands hand glove arms arm cap front follow-through follow leaning horizontal sliding kneeling bare closed open mouth finger dark light white red green blue brown orange yellow gold pink pastel background no name error variation southern leaguer back shows near ground over head up down on off shoulder chest waist knees ready to hit left right looking facing ball sleeves sweater with without holding').split(' '));
 const TEAM_WORDS = new Set(('boston brooklyn chicago cincinnati cleveland detroit new york philadelphia pittsburgh st. st louis washington baltimore buffalo providence newark jersey toronto montreal kansas city minneapolis milwaukee indianapolis louisville columbus rochester atlanta nashville memphis birmingham mobile montgomery chattanooga little rock orleans shreveport portsmouth nationals americans national american league nl al sox cubs giants phillies').split(' '));
 const BACK_WORDS = /^(?:polar|bear|sovereign|piedmont|sweet|caporal|old|mill|hindu|tolstoi|drum|uzit|lenox|broad|leaf|broadleaf|cycle|carolina|brights|beauty|hassan|ty|cobb|el|principe|gales|\d{3})$/;
 const ISSUE_WORDS = new Set(('border borders background tobacco cigarettes cigarette candy caramel caramels bakery bread gum baking co. co bros. bros company anonymous series type cards card old judge mill sweet caporal hassan mecca fatima piedmont polar bear ramly obak coupon turkey cabinets postcards postcard sepia strip champions prize fighters cracker sporting news supplements supplement exhibits exhibit tango eggs brand standard general clement fleischmann close creole hess california goodwin duke kimball allen ginter honest long cut plug dixie lids pins pin silks silk blankets felts life zeenut world wide goudey chicle diamond stars portraits action big chewing helmar stamps stamp swamp garter chips contentnea photo cycle sovereign beauty broad hindu tolstoi uzit drum lenox carolina brights mono rochester dockman sons publications kashin pastel').split(' '));
@@ -97,7 +104,7 @@ function catalogIdentity(t: string): { player: string; code: string; pose: strin
   if (s.includes('#')) return null;
   const cm = s.match(CATALOG_RE);
   if (!cm) return null;
-  if (CATALOG_MULTI_RE.test(s.replace(/\b(?:white|gold) borders?\b/gi, ' ').replace(/"[^"]*"/g, ' ').replace(GRADE_SLASH_RE, ' '))) return null;
+  if (CATALOG_MULTI_RE.test(s.replace(/\b(?:white|gold) borders?\b/gi, ' ').replace(/"[^"]*"/g, ' ').replace(GRADE_SLASH_RE, ' ').replace(CATALOG_ONE_CARD_MASK_RE, ' '))) return null;
   const code = cm[1].toLowerCase().replace(/^([a-z]+)-/, '$1');
   // quoted sub-brands ("Set of 30", "Series 6") separate the issue from the name
   const rest = s.slice((cm.index || 0) + cm[0].length).replace(/"[^"]*"/g, ' | ');
@@ -757,7 +764,9 @@ const SIGNED_NOT_A_PERSON = /\b(?:university|college|state|united|city|fc|club|n
  *  set; a title naming two different known players is a multi-player piece
  *  (no player). Only with `known`. */
 /** two-word places card parses mint as "players" ("San Francisco Giants") */
-const PLACE_SLUGS = new Set(['san-francisco', 'new-york', 'los-angeles', 'st-louis', 'kansas-city', 'new-jersey', 'tampa-bay', 'green-bay', 'san-diego', 'new-england', 'new-orleans', 'golden-state', 'oklahoma-city', 'san-antonio', 'las-vegas', 'salt-lake', 'el-paso', 'santa-clara', 'notre-dame', 'ohio-state', 'penn-state', 'north-carolina', 'south-carolina', 'west-virginia', 'hall-fame', 'all-star']);
+const PLACE_SLUGS = new Set(['san-francisco', 'new-york', 'los-angeles', 'st-louis', 'kansas-city', 'new-jersey', 'tampa-bay', 'green-bay', 'san-diego', 'new-england', 'new-orleans', 'golden-state', 'oklahoma-city', 'san-antonio', 'las-vegas', 'salt-lake', 'el-paso', 'santa-clara', 'notre-dame', 'ohio-state', 'penn-state', 'north-carolina', 'south-carolina', 'west-virginia', 'hall-fame', 'all-star',
+  // (r6) issue names a card parse minted as players (D311 Pacific Coast Biscuit, R305 Tattoo Orbit)
+  'coast-biscuit', 'tattoo-orbit']);
 function knownPlayerIn(title: string, known?: ReadonlySet<string>): { player: string | null; playerSlug: string | null } {
   const none = { player: null, playerSlug: null };
   if (!known || !title) return none;
@@ -783,6 +792,75 @@ function knownPlayerIn(title: string, known?: ReadonlySet<string>): { player: st
   const name = run.split(' ').map(w => (w === w.toUpperCase() || w === w.toLowerCase() ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w)).join(' ');
   return { player: name, playerSlug: slug };
 }
+
+/** (r6) the card's player off the corpus ROSTER, for single cards the slot
+ *  readers can't name. Two shapes:
+ *  - NUMBERLESS pre-war / oddball issues whose brand runs straight into the
+ *    player ("1954 Red Heart Stan Musial", "1925 Exhibits Lou Gehrig Rookie
+ *    Card", "1952 Berk Ross Mickey Mantle", "1933 Worch Cigars Rogers
+ *    Hornsby") — the issue's words look exactly like a name ("Berk Ross",
+ *    "Red Heart"), so no shape rule is safe;
+ *  - NUMBERED cards whose slot run is not a person ("#50 Jackie Robinson
+ *    Inaugural Bowman Card", "#32 Signed Babe Ruth", "#250 Period-Signed Joe
+ *    DiMaggio", "Ted Williams #10 1938-Gunning as a Pastime").
+ *  The ONE known player (knownPlayerSet — the corpus's card-parsed roster)
+ *  named before the grade is the card's subject; a slot read that already IS
+ *  a known player is left alone (null here). Abstains on anything that reads
+ *  as two subjects (folders, '/', '&', 'and', 'with') or a lot / sealed /
+ *  checklist / leaders card / multi-signed piece. Pipeline-only (build-market
+ *  stamps the live lot's playerName; the /makers roster files it under that
+ *  player). */
+export function rosterCardPlayerOf(title: string, known?: ReadonlySet<string>): { player: string | null; playerSlug: string | null } {
+  const none = { player: null, playerSlug: null };
+  if (!known || !title) return none;
+  // the slot read build-market stamps: a KNOWN player there is never
+  // overridden — unless it is a known name's run-on (the roster carries
+  // "Jackie Robinson Inaugural Bowman" too: 3+ words whose first two are known)
+  const slot = parseCard(title.trim());
+  if (slot.playerSlug && known.has(slot.playerSlug) && !isRunOn(slot.player, known)) return none;
+  // a provenance / rarity lead hides the year ("Extremely Rare 1903 E107 …", "Newly Discovered 1933 …")
+  const t = title.trim().replace(NUMBERLESS_LEAD_RE, '');
+  const c = t === title.trim() ? slot : parseCard(t);
+  if (c.multi || c.notCard || !c.year) return none;
+  if (c.playerSlug && known.has(c.playerSlug) && !isRunOn(c.player, known)) return { player: c.player, playerSlug: c.playerSlug };
+  // the card's own name zone: up to the grade / dash / ';' (commas and parens
+  // stay — "1951 Wheaties, Hand Cut Stan Musial", "Hans (Honus) Wagner")
+  const cut = t.search(NUMBERLESS_CUT_RE);
+  const head = (cut >= 0 ? t.slice(0, cut) : t).replace(/\(#?\d*\s*\/\s*\d+\)|\(#\d+\)/g, ' ')
+    .replace(CATALOG_ONE_CARD_MASK_RE, ' ').replace(NUMBERLESS_ONE_SUBJECT_RE, ' ');
+  if (NUMBERLESS_ABSTAIN_RE.test(head)) return none;
+  // a nickname in quotes / parens is either the name ("Hans (Honus) Wagner",
+  // '"Babe" Ruth') or decoration (Larry "Yogi" Berra) — the roster decides
+  const nick = /([A-Z][a-z.]+)\s+[("“]([A-Z][A-Za-z]+)[)"”]\s+(?=[A-Z])/;
+  let a = knownPlayerIn(head.replace(nick, '$2 '), known);
+  if (!a.player) a = knownPlayerIn(head.replace(nick, '$1 '), known);
+  if (!a.player) return none;
+  // a slot read that IS a name (an unknown rookie: "Topps X Bob Ross … #93D
+  // Caden Dana") keeps it — the roster name must sit inside it ("Harry Kane
+  // Diamond", "Period-Signed Joe DiMaggio") or share its surname ("Ruth
+  // Holding"), unless the slot read is plainly not a name ("The Early Years")
+  if (slot.player && !SLOT_NOT_A_NAME_RE.test(slot.player)) {
+    const sp = slot.player.toLowerCase().replace(/['’]s?\b/g, '');
+    const words = sp.split(/[\s-]+/);
+    const fw = a.player.toLowerCase().replace(/['’]s?\b/g, '').split(/\s+/);
+    if (!sp.includes(fw.join(' ')) && !words.includes(fw[fw.length - 1])) return none;
+  }
+  // "Gil Hodges' Winning Homer" names Gil Hodges
+  return { player: a.player.replace(/['’]s?$/, ''), playerSlug: a.playerSlug };
+}
+function isRunOn(name: string | null, known: ReadonlySet<string>): boolean {
+  const w = (name || '').trim().split(/\s+/);
+  if (w.length < 3) return false;
+  const two = playerSlugOf(w.slice(0, 2).join(' '));
+  return !!two && known.has(two) && !/^(?:Jr\.?|Sr\.?|II|III|IV)$/.test(w[2]);
+}
+const SLOT_NOT_A_NAME_RE = /^(?:The|A|An|Let['’]s|Extremely|Very|Rare|Scarce|Unique|Newly)\b|[!?\d]/;
+const NUMBERLESS_LEAD_RE = /^(?:(?:(?:extremely|very|ultra)\s+)?(?:rare|scarce|unique|newly discovered|important|historic|exceptional|extraordinary|remarkable|spectacular|high[- ]grade|beautiful|incredible|stunning)|["“][^"”]{1,40}["”])\s+(?=(?:c\.\s*|circa\s+)?(?:18|19|20)\d{2}\b)/i;
+const NUMBERLESS_CUT_RE = /\s(?:-|–|—)\s|\b(?:PSA|SGC|BVG|BGS|GAI|CGC|CSG|KSA|GMA|Beckett|Graded|Authentic)\b|;|!/;
+/** issue words that carry a '&' / "Pack" / "Team" without a second subject */
+const NUMBERLESS_ONE_SUBJECT_RE = /\bw\/\s|\ballen\s*&\s*ginter\b|\bwhitehead\s*&\s*hoag\b|&\s*co\b\.?|\bpicture packs?\b|\bteam issue\b/gi;
+/** two subjects, a lot / sealed product / checklist, a multi-signed piece */
+const NUMBERLESS_ABSTAIN_RE = /\/|&|\b(?:and|with|vs\.?|folders?|double|triple|team|teams|checklist|leaders|world series|highlights?|record breaker|super stars|all[- ]stars?|rookies|unopened|box|pack|packs|sealed|lots?|collection|featuring|including|includes|possible|uncut|sheet|panel|strip|multi[- ]signed|dual[- ]signed|team[- ]signed|composite|\d+[- ]on[- ]\d+)\b/i;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Relic-card detector — "is this title a trading CARD?" (shared by the crawler's
