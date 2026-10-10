@@ -16,7 +16,7 @@ import { emitR2Index, orderRows } from '../emit-r2-index';
 import { handleApi } from '../../functions/_lib/api';
 import { Store, resetStoreMemo, type R2BucketLike } from '../../functions/_lib/store';
 import { decodeSummary } from '../../app/lib/api';
-import { signalWithPool, soldCompBand, cultureReferenceBand, appraiseLot, areComparable } from '../../app/lib/comps';
+import { signalWithPool, soldCompBand, cultureReferenceBand, appraiseLot, areComparable, contextComps } from '../../app/lib/comps';
 import { TABLE_MAX_PAGES, TABLE_PAGE, type Loc, type SummaryJson } from '../../functions/_lib/format';
 
 // ── fake R2 over a directory ────────────────────────────────────────────────
@@ -207,8 +207,12 @@ test('comps: watch reference, sports band over main+archive, culture band, prove
   // a sold art lot with no call and no band → the modal's context rows
   const plain = main.find(l => l.title === 'Femme assise, oil on canvas')!;
   const jp = await body(await call(`/api/comps?lot=${plain.id}`));
-  const ctxWant = main.filter(l => l.artist === plain.artist && l.status === 'sold' && l.priceUsd && l.id !== plain.id && areComparable(plain, l)).length;
-  assert.equal(jp.ctx.length, Math.min(15, ctxWant));
+  // the ctx rows ARE comps.contextComps (one read, modal + API): a gated pool
+  // under the pool floor (here: one comparable) is no pool — never a 1-row "median"
+  const ctxGated = main.filter(l => l.artist === plain.artist && l.status === 'sold' && l.priceUsd && l.id !== plain.id && areComparable(plain, l)).length;
+  assert.ok(ctxGated > 0 && ctxGated < 3, 'fixture: a thin gated pool');
+  assert.equal(jp.ctx.length, contextComps(plain, main).rows.length);
+  assert.equal(jp.ctx.length, 0);
 
   // sold before the window: an honest "not precomputed", never "no comps"
   const jo = await body(await call(`/api/comps?lot=${old.id}`));
