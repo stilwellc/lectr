@@ -7,7 +7,8 @@ import { AuctionLot } from '../types';
 import { marketOf } from '../constants';
 import { makerLineOf, labelLineOf, drillLabelOf } from '../lib/lot-labels';
 import { houseColors, categoryColors, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText } from '../utils';
-import { areComparable, signalWithPool, isSportsScienceObject, soldCompBand, FORM_LABEL, signalMagnitude } from '../lib/comps';
+import { areComparable, isSportsScienceObject, FORM_LABEL, signalMagnitude, type Form } from '../lib/comps';
+import type { SoldComp } from '../types';
 import { drillRowFor, drillSlugFor } from '../lib/submarkets';
 import { signedPct, dirOf } from './SubMarketDirectory';
 import { loadCompEvidence, evRowsToLots } from '../lib/comp-evidence';
@@ -559,7 +560,7 @@ export default function ComparableModal({
           basis: ev.n || pool.length,
           med: ev.compMedianUsd ?? ev.compValueUsd,
           kind: 'form' as 'form' | 'edition',
-          form: ((lot as { formKey?: string }).formKey || 'unknown') as ReturnType<typeof signalWithPool> extends { signal: { form: infer F } } | null ? F : never,
+          form: ((lot as { formKey?: string }).formKey || 'unknown') as Form,
           confidence: (ev.confidence === 'high' ? 'high' : ev.confidence === 'medium' ? 'medium' : 'low') as 'high' | 'medium' | 'low',
         },
         pool,
@@ -620,10 +621,10 @@ export default function ComparableModal({
   // No call, and this is a Goldin sports/science object → a descriptive
   // realized band (median, range, n) — NEVER a below/above-market call.
   // Goldin publishes no estimates, so there is nothing to call against.
-  const band = useMemo(
-    () => (called ? null : isSportsScienceObject(lot) ? soldCompBand(lot, bandPoolLots) : null),
-    [called, lot, bandPoolLots]
-  );
+  // (Oct 6 2026, wave 4) the modal computes no realized band of its own —
+  // the client soldCompBand over the loaded slice is gone; the lot page's
+  // build-time pack carries the band
+  const band = null as SoldComp | null;
 
   // No frozen engine call and no realized band yet, while the phase-2 corpus
   // is still downloading: the client read is running against a truncated pool,

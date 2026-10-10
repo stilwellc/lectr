@@ -159,7 +159,7 @@ test('version + one lot + many lots', async () => {
   assert.equal((await call(`/api/lots?ids=${Array.from({ length: 13 }, (_, i) => `x${i}`).join(',')}`)).status, 400);
 });
 
-test('comps: an uncalled lot gets NO fallback read (wave 3) — context rows + appraisal only', async () => {
+test('comps: an uncalled lot gets NO fallback read (wave 3) and no appraisal (wave 4) — context rows only', async () => {
   const book = main.filter(l => l.artist === 'pablo-picasso');
   // the client read WOULD call this lot — the API must not ship it
   assert.ok(signalWithPool(anchor, book), 'fixture must be readable client-side');
@@ -169,7 +169,10 @@ test('comps: an uncalled lot gets NO fallback read (wave 3) — context rows + a
   const j = await body(r);
   assert.equal(j.pack.c ?? null, null, 'no comp call without an engine call');
   assert.equal(j.pack.sig ?? null, null, 'no directional signal without an engine call');
-  assert.equal(j.pack.ap.value, appraiseLot(anchor, book)!.value);
+  // (wave 4) a lot the engine declined carries no client appraisal either
+  assert.ok(appraiseLot(anchor, book), 'fixture must be appraisable client-side');
+  assert.equal(j.pack.ap ?? null, null, 'no appraisal without an engine value');
+  assert.equal(j.pack.a ?? null, null);
   assert.ok(j.ctx.length > 0, 'the context list renders instead');
 });
 

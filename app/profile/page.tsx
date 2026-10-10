@@ -12,7 +12,8 @@ import { useCollectionSnapshots } from '../lib/snapshots';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon, daysUntil as daysUntilOrNull } from '../components/Terminal';
 import LotCard, { lotSignal, formatEstimate, LiveStamp } from '../components/LotCard';
-import { appraiseLot, dealScore, soldCompBand, isSportsScienceObject, scienceReferenceBand, cultureReferenceBand, makerReferenceBand } from '../lib/comps';
+import { dealScore, scienceReferenceBand, cultureReferenceBand, makerReferenceBand } from '../lib/comps';
+import { lotVerdict } from '../lib/verdict';
 import { drillRowFor, drillSlugFor, type DrillRow } from '../lib/submarkets';
 import { sleeperRead } from '../lib/lanes';
 import HeroChart from '../preview/terminal/HeroChart';
@@ -260,7 +261,9 @@ function RowDossier({ lot, meta, sig, allLots, fullLoaded, onRemove }: {
   lot: AuctionLot; meta: SavedMeta | undefined; sig: LiveSignal | null;
   allLots: AuctionLot[]; fullLoaded: boolean; onRemove: () => void;
 }) {
-  const appr = useMemo(() => (fullLoaded ? appraiseLot(lot, allLots) : null), [fullLoaded, lot, allLots]);
+  // (Oct 6 2026, wave 4) the ENGINE's appraisal (lot.value, ×5-sane) — never
+  // a client appraisal over the loaded slice
+  const appr = useMemo(() => { const vd = lotVerdict(lot); return vd ? { value: vd.expectedAllIn, n: vd.compN } : null; }, [lot]);
   const call = signalCallOf(meta);
   const days = daysUntil(lot.saleDate);
   const hasEst = (lot.estimateLow || 0) > 0 || (lot.estimateHigh || 0) > 0;
@@ -740,10 +743,11 @@ export default function SavedPage() {
         const m = metaFor(l.id);
         // YOUR number first: the recorded cost basis beats the hammer price
         const paid = m?.paidUsd ?? (l.priceUsd || null);
-        const appr = appraiseLot(l, allLots);
-        const band = !appr && isSportsScienceObject(l) ? soldCompBand(l, allLots) : null;
-        const appraised = appr?.value ?? band?.median ?? null;
-        const basis = appr ? `${appr.n} comps` : band ? `${band.n} realized comps` : null;
+        // (Oct 6 2026, wave 4) the ENGINE's appraisal only (lot.value,
+        // ×5-sane) — no client appraisal / realized band
+        const vd = lotVerdict(l);
+        const appraised = vd ? vd.expectedAllIn : null;
+        const basis = vd ? `${vd.compN} comps` : null;
         let refRange: string | null = null;
         if (appraised == null && fullLoaded) {
           const mkt = ARTIST_MARKET[l.artist];
@@ -928,16 +932,9 @@ export default function SavedPage() {
             fact: <>{l.cardComps.n} {l.cardComps.n === 1 ? 'sale' : 'sales'}, same card &amp; grade · {formatPrice(l.cardComps.med)} median</>,
           });
           found++;
-        } else {
-          const a = appraiseLot(l, allLots);
-          if (a && a.kind === 'edition' && a.n >= 3) {
-            rows.push({
-              key: `dc-${claim(l).id}`, tag: 'Direct comps', lot: l,
-              fact: <>{a.n} same-edition comps · {formatPrice(a.value)} median</>,
-            });
-            found++;
-          }
         }
+        // (Oct 6 2026, wave 4) the client same-edition appraisal row is gone:
+        // only the build's same-card comps seat a 'Direct comps' row
         if (found >= 2) break;
       }
     }

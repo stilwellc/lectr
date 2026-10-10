@@ -71,7 +71,7 @@ test('status.json parses defensively; absent houses fall back to lastSeen', () =
   assert.deepEqual(staleHouses(map, ['Wright', "Hake's"], now).map(s => s.house), ["Hake's"]);
 });
 
-test('the verdict headline is the expected HAMMER vs the estimate, max bid = floor after premium', () => {
+test('the verdict headline is the expected HAMMER vs the estimate, max bid = the engine max bid only', () => {
   const lot = {
     id: 'wright-415133', artist: 'pablo-picasso', auctionHouse: 'Wright', status: 'upcoming',
     estimateLow: 5000, estimateHigh: 5000,
@@ -82,8 +82,11 @@ test('the verdict headline is the expected HAMMER vs the estimate, max bid = flo
   const v = lotVerdict(lot)!;
   assert.equal(v.expected, 6548);           // 8185 all-in ÷ Wright's 1.25
   assert.equal(v.vsEstPct, 31);
-  assert.equal(v.maxBid, 4007);             // the 5009 floor ÷ 1.25
-  assert.equal(v.bandLo, v.maxBid);         // max bid IS the low edge of the range
+  assert.equal(v.bandLo, 4007);             // the 5009 low ÷ 1.25
+  // (wave 4) no engine max bid on the value → none printed (the page used
+  // to derive one from the floor); with it, exactly the engine's
+  assert.equal(v.maxBid, null);
+  assert.equal(lotVerdict({ ...lot, value: { ...lot.value!, maxBidUsd: 4500 } } as AuctionLot)!.maxBid, 4500);
   assert.equal(v.flagged, true);
   assert.equal(fmtUsd(v.expected), '$6.5K');
   // a data-fault ratio never resurrects as a forecast

@@ -74,8 +74,7 @@ function saneValue(lot: AuctionLot): NonNullable<AuctionLot['value']> | null {
 }
 
 /** THE VALUE FLOOR a reader may bid against — lanes.valueFloor, the ONE floor
- *  rule (value.low only at non-low confidence, else 0.85 × the exact-card
- *  median at n ≥ 3). */
+ *  rule (value.low only at non-low confidence). */
 export function lotFloor(lot: AuctionLot): number | null {
   return valueFloor(lot)?.floor ?? null;
 }
@@ -84,15 +83,17 @@ export function lotFloor(lot: AuctionLot): number | null {
  *  value.maxBidUsd (MAXBID_Q of hammers landed at or under it; floored at
  *  the live bid) wherever the floor rule certifies the value — the page used
  *  to print maxHammerFor(value.low), the band's all-in low edge, ~20% under
- *  the engine's max bid. A card-median floor (no engine max bid) keeps the
- *  hammer that lands exactly on it. null = no certified floor. */
+ *  the engine's max bid. null = no certified floor or no engine max bid. */
 export function lotMaxBid(lot: AuctionLot): { hammer: number; allIn: number } | null {
+  // (Oct 6 2026, wave 4) THE ENGINE'S MAX BID ONLY: value.maxBidUsd (floored
+  // at the live bid by the build), on a value the floor rule certifies. The
+  // page used to derive one from a 0.85 × card-median floor (175 live lots,
+  // 84 of them under the bid already on the lot) and from maxHammerFor(low)
+  // on values the ×5 sanity rejects — numbers the engine never made.
   const fl = valueFloor(lot);
-  if (!fl) return null;
+  if (!fl || fl.src !== 'value.low') return null;
   const v = saneValue(lot) as (NonNullable<AuctionLot['value']> & { maxBidUsd?: number }) | null;
-  const hammer = fl.src === 'value.low' && v && (v.maxBidUsd || 0) > 0
-    ? v.maxBidUsd!
-    : maxHammerFor(fl.floor, lot);
+  const hammer = v?.maxBidUsd || 0;
   if (!(hammer > 0)) return null;
   return { hammer, allIn: Math.round(hammer * lotAllInFactor(lot, hammer)) };
 }

@@ -16,7 +16,6 @@ import { calibrationOnEngineBasis } from '../build-market';
 import { setEngineFlags, ENGINE_FLAGS_CURRENT, ENGINE_FLAGS_WAVE3, ENGINE_FLAGS_HOUSE_GATE, ENGINE_FLAGS_COMP_PURITY, ENGINE_VERSION, estimateValueEx, blendPredict, EXACT_W, type Comp } from '../../app/lib/value';
 import { buildIdf, type Match } from '../../app/lib/similarity';
 import { lotMaxBid, lotProjectedClose, cardCompsHammer, lotVerdict } from '../../app/lib/verdict';
-import { maxHammerFor } from '../../app/lib/premiums';
 import type { AuctionLot } from '../../app/types';
 
 type Row = BacktestState['calObs'][number];
@@ -75,7 +74,10 @@ test('lot read figures (verdict.ts): max bid = the engine max bid, projection on
   assert.ok(lotMaxBid(l)!.allIn > 950);
   assert.equal(lotMaxBid({ ...l, value: { ...val!, confidence: 'low' } } as AuctionLot), null, 'no certified floor → no max bid');
   const card = { ...base, cardComps: { med: 1000, n: 3 } } as unknown as AuctionLot;
-  assert.equal(lotMaxBid(card)!.hammer, maxHammerFor(850, card), 'a card-median floor keeps the hammer on it');
+  // (wave 4) the card median is no floor and no max bid — only the engine's
+  assert.equal(lotMaxBid(card), null, 'a card median makes no max bid');
+  const insane = { ...l, value: { ...val!, compRatio: 9 } } as AuctionLot;
+  assert.equal(lotMaxBid(insane), null, 'a value the ×5 sanity rejects makes no max bid');
   assert.equal(lotProjectedClose({ ...l, bidProj: { g: 1.5, allIn: 2000 } } as AuctionLot), null, 'an unvalidated cell never prints');
   assert.equal(lotProjectedClose({ ...l, bidProj: { g: 1.5, allIn: 2000, ok: true } } as AuctionLot), 2000);
   const cc = { ...base, currentBid: 275, value: { compValueUsd: 458, estimateUsd: 458, low: 400, high: 520, confidence: 'medium', basis: 'card-comp', expectedHammerUsd: 375, vsBid: null } } as unknown as AuctionLot;
