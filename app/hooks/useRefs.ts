@@ -18,10 +18,13 @@ export interface RefEntry {
 
 let refsCache: RefEntry[] | null = null;
 
-export function useRefs(): { refs: RefEntry[] | null; failed: boolean; retry: () => void } {
+/** `enabled` = false defers the fetch (the search palette only pulls refs
+    once a reference-shaped query is typed) */
+export function useRefs(enabled = true): { refs: RefEntry[] | null; failed: boolean; retry: () => void } {
   const [state, setState] = useState<{ refs: RefEntry[] | null; failed: boolean }>({ refs: refsCache, failed: false });
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
+    if (!enabled) return;
     if (refsCache) return;
     let dead = false;
     fetch('/data/ray/refs.json')
@@ -29,9 +32,10 @@ export function useRefs(): { refs: RefEntry[] | null; failed: boolean; retry: ()
       .then(j => { refsCache = j.refs || []; if (!dead) setState({ refs: refsCache, failed: false }); })
       .catch(() => { if (!dead) setState({ refs: null, failed: true }); });
     return () => { dead = true; };
-  }, [attempt]);
+  }, [attempt, enabled]);
   const retry = () => { setState({ refs: refsCache, failed: false }); setAttempt(a => a + 1); };
-  return { ...state, retry };
+  // a cache filled by another mount after this one first rendered
+  return { ...state, refs: state.refs ?? refsCache, retry };
 }
 
 /** the refs for one maker, sorted by sample size (the deepest first) */

@@ -987,6 +987,24 @@ export default function LotPage({ lotId, initialLot }: {
                     : sig.label === 'Below Market' ? 'comps over ask' : 'comps under ask'}
                   {' · '}{confidenceMeter(sig.confidence).word} confidence
                 </span>
+                {/* the engine's buyer fields (hammer basis, same as the
+                    estimate) — one secondary line, only the fields served */}
+                {(() => {
+                  const ev = lot.value as { expectedHammerUsd?: number; bandLowUsd?: number; bandHighUsd?: number; maxBidUsd?: number } | null | undefined;
+                  const pos = (n?: number) => (typeof n === 'number' && n > 0 ? n : null);
+                  const xh = pos(ev?.expectedHammerUsd), lo = pos(ev?.bandLowUsd), hi = pos(ev?.bandHighUsd), mb = pos(ev?.maxBidUsd);
+                  const parts = [
+                    xh ? `expected hammer ${formatPrice(xh)}` : null,
+                    lo && hi ? `likely ${formatPrice(lo)}–${formatPrice(hi)}` : null,
+                    mb ? `max bid ${formatPrice(mb)}` : null,
+                  ].filter((x): x is string => !!x);
+                  // each figure keeps its words together — a wrap lands on a separator
+                  return parts.length ? (
+                    <span className="ns-cell-body">
+                      {parts.map((t, i) => <span key={t}>{i > 0 && ' · '}<span style={{ whiteSpace: 'nowrap' }}>{t}</span></span>)}
+                    </span>
+                  ) : null;
+                })()}
               </div>
             )}
 

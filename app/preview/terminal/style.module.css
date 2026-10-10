@@ -2824,6 +2824,10 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 :global(html[data-lectr-light]) .hcRule { stroke: rgba(28, 25, 23, 0.06); stroke-dasharray: none; }
 :global(html[data-lectr-light]) .hcRuleZero { stroke: rgba(28, 25, 23, 0.22); }
 :global(html[data-lectr-light]) .hcTick { fill: #8E877D; }
+/* WCAG AA (Oct 6 2026): the phone tape's short tags + horizon slot read
+   3.5:1 in --tt-faint on the porcelain — a step deeper, same warm grey */
+:global(html[data-lectr-light]) .mtTagShort,
+:global(html[data-lectr-light]) .mtHz { color: #7A736A; }
 
 /* ══════════════════════════════════════════════════════════════════════
    NORTH STAR (Aug 29) — the split-hero masthead + section-head organs.

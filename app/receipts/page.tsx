@@ -237,7 +237,9 @@ export default function ReceiptsPage() {
                           {formatPrice(r.p)}<span className="rcp-kind">{({ card: 'comps', vsbid: 'proj', gap: 'gap', quiet: 'quiet' } as const)[r.k] || r.k}</span>
                         </span>
                         <span className="rcp-num" style={{ fontWeight: 600 }}>{formatPrice(r.r)}</span>
-                        <span className="rcp-num" style={{ color: delta > 0 ? 'var(--color-up)' : delta < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 600 }}>
+                        {/* prediction error, not a market move — green/red
+                            mean market up/down, so a miss prints in muted ink */}
+                        <span className="rcp-num" style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>
                           {fmtSignedPct(delta)}
                         </span>
                       </Link>

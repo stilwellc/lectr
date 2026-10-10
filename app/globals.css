@@ -4080,6 +4080,21 @@ html[data-lectr-light] .ray-paper .glass .ray-figcap-no::before,
 html[data-lectr-light] .ray-paper .glass-quiet .ray-figcap-no::before { color: var(--gold-ink-text); }
 html[data-lectr-light] .ray-band .glass .ray-figcap-body,
 html[data-lectr-light] .ray-band .glass-quiet .ray-figcap-body { color: #6B655D; }
+/* WCAG AA (Oct 6 2026) — colour values only, same hue families:
+   the white card's faint ink is the root light faint again (the vault's
+   #8C8A7D read 3.5:1 on white); the about deck's gold a hair deeper on its
+   #F5F3F1 ground (4.4 → 4.6:1); the paper banner's up-green and the
+   analytics heat cells' ink deepened just past 4.5:1 on their tints */
+html[data-lectr-light] .ray-band .glass,
+html[data-lectr-light] .ray-band .glass-quiet { --color-text-faint: #726C63; }
+html[data-lectr-light] .deck-scope { --color-butter: #8C691D; }
+html[data-lectr-light] .ray-engine-stats b.up { color: #1B6C44; }
+html[data-lectr-light] .ray-hm-cell[data-dir="up"] .num,
+html[data-lectr-light] .ray-ss-cell[data-dir="up"] .ray-ss-pct { color: #0D6939; }
+html[data-lectr-light] .ray-hm-cell[data-dir="up"] .n,
+html[data-lectr-light] .ray-hm-cell[data-dir="down"] .n,
+html[data-lectr-light] .ray-ss-cell[data-dir="up"] .ray-ss-n,
+html[data-lectr-light] .ray-ss-cell[data-dir="down"] .ray-ss-n { color: #5E5952; }
 html[data-lectr-light] .ray-band .glass .ray-figcap,
 html[data-lectr-light] .ray-band .glass-quiet .ray-figcap { border-top-color: rgba(28, 25, 23, 0.10); }
 html[data-lectr-light] .ray-band .glass .rcp-fig,
