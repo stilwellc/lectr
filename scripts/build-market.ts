@@ -22,6 +22,7 @@ import { buildMakerIndicesParallel } from './lib/maker-pool';
 import { buildCompCandidateIndex, compCandidates, type CompCandidateIndex, resolveComps, estimateValueEx, setCalibration, setTimeIndex, setHouseBias, setEngineFlags, getEngineFlags, noEstGateOf, buyerFields, vsBidRead, floorAtBid, pullTowardBid, isNewReleaseCard, vsBidLive, VSBID_WINDOW_DAYS, quantile, knownKey, ENGINE_VERSION, ENGINE_FLAGS_CANDIDATE, CARD_THIN, type ValueResult, type AbstainReason } from '../app/lib/value';
 import { fitCardCalibration, cardGate, CARD_GATE, CARD_BAND_WIDE_Q, type CardResidual, type CardCalibration } from '../app/lib/cards-gate';
 import { inferHammerUsd } from '../app/lib/premiums';
+import { playerRowTag } from '../app/lib/player-rows';
 import { pokemonKey } from './sub-markets';
 import { mergeCardExtract, pokemonKeyFromExtract, llmConditionFlag, sameObjectFilter, flushExtractQueue } from './lib/extract/apply';
 import { buildMarketSeries, buildTimeIndex, buildHouseBias, type MarketSeries } from '../app/lib/indices';
@@ -937,12 +938,16 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
       for (const l of cardLots) { const y = +l.saleDate!.slice(0, 4); (byYear.get(y) || byYear.set(y, []).get(y)!).push(l.realizedUsd!); }
       const yearly = Array.from(byYear.entries()).filter(([, v]) => v.length >= 5).sort((a, b) => a[0] - b[0])
         .map(([y, v]) => ({ y, med: Math.round(median(v)), n: v.length }));
-      // the marquee object results (top game-used/trophy hammers — the wider market)
-      const objects = ls.filter(l => l.artist !== 'sports-cards')
+      // the marquee object results (top game-used/trophy/ticket hammers — the
+      // wider market). Oct 10: cards are excluded by TITLE too (app/lib/
+      // player-rows — graded-cards and card-shaped "autographs" rows made
+      // Mantle's list five slabs out of six), and every row carries its id so
+      // the dossier can link it to its lot page.
+      const objects = ls.filter(l => !playerRowTag(l.title, l.artist).card)
         .sort((a, b) => (b.realizedUsd! - a.realizedUsd!)).slice(0, 6)
         .map(l => ({ id: l.id, d: l.saleDate, p: Math.round(l.realizedUsd!), t: (l.title || '').slice(0, 80), cat: l.artist }));
       const recent = ls.slice(-8).reverse()
-        .map(l => ({ d: l.saleDate, p: Math.round(l.realizedUsd!), t: (l.title || '').slice(0, 80), cat: l.artist }));
+        .map(l => ({ id: l.id, d: l.saleDate, p: Math.round(l.realizedUsd!), t: (l.title || '').slice(0, 80), cat: l.artist }));
       // sport: majority vote over the lots' stamped sport field
       const sportVotes = new Map<string, number>();
       for (const l of ls) { const s = (l as AuctionLot & { sport?: string | null }).sport; if (s) sportVotes.set(s, (sportVotes.get(s) || 0) + 1); }
