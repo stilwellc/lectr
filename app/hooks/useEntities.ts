@@ -301,6 +301,12 @@ export interface Entities {
   playersReady: boolean;
   /** the athletes with a /player dossier (page-stats playerIndex) */
   dossiers: ReadonlySet<string>;
+  /** every summary the entities file holds for this market (main, + the
+   *  tail once asked for) — the ledger's sold-only names; null on the
+   *  adapter path (no file) */
+  file: Map<string, EntityBundle> | null;
+  /** the sold-only tail has arrived (or the file has none / wasn't asked) */
+  tailReady: boolean;
 }
 
 const NO_SET: ReadonlySet<string> = new Set();
@@ -353,9 +359,11 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
     if (!file || !file.tailN || !mainMap) return false;
     if (wantTail) return true;
     let miss = false;
-    namesAll?.forEach((_, id) => { if (!miss && !mainMap.has(id) && !id.startsWith('~:')) miss = true; });
+    // only this market's live names (namesAll spans every market — a TCG
+    // name is never in the sports file, and must not pull its tail)
+    namesAll?.forEach((g, id) => { if (!miss && (market === 'all' || g.market === market) && !mainMap.has(id) && !id.startsWith('~:')) miss = true; });
     return miss;
-  }, [file, mainMap, wantTail, namesAll]);
+  }, [file, mainMap, wantTail, namesAll, market]);
   const loadTail = useMemo(() => (tailNeeded ? () => loadEntitiesTail(market) : null), [tailNeeded, market]);
   const tailFile = useLoad(loadTail);
   const fileMap = useMemo(() => {
@@ -434,7 +442,8 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
   }, [namesAll, players, dossiers, fileMap]);
   const playersReady = !needPlayers || players !== undefined;
 
-  return { source, makers, subs, names, subsReady, playersReady, dossiers };
+  const tailReady = !tailNeeded || tailFile !== undefined;
+  return { source, makers, subs, names, subsReady, playersReady, dossiers, file: fileMap, tailReady };
 }
 const loadPageStatsFn = () => loadPageStats();
 

@@ -7,7 +7,7 @@
  * (the page's live pool for the current market) so a chip never offers an
  * empty cut.
  */
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { taxonOf, subChipsOf, CAT_LABEL, type CatKey, type SubChip } from '../lib/taxonomy';
 import FollowChip from './FollowChip';
 import { catFollow, houseFollow } from '../lib/follows';
@@ -22,6 +22,7 @@ const fmtFloor = (n: number) => (n >= 1000 ? `$${n / 1000}K+` : `$${n}+`);
 
 export default function TriageBar({
   lots, filters, countFilters, onChange, prevVisitDay = null, baselines = null, shown, total, showSubs = true, label = 'Narrow the board', cats: onlyCats,
+  lead, omit,
 }: {
   lots: TriageLot[];
   filters: TriageFilters;
@@ -43,6 +44,11 @@ export default function TriageBar({
   /** offer chips only for these categories (a market's own) — a stray lot
    *  filed in another category still counts, it just gets no chip */
   cats?: readonly CatKey[];
+  /** chips the page prints at the head of the first row (/makers' quick
+   *  lenses: Closing tonight · Flagged · New since last visit) */
+  lead?: ReactNode;
+  /** first-row chips the page's `lead` already offers */
+  omit?: readonly ('today' | 'new')[];
 }) {
   const set = (patch: Partial<TriageFilters>) => onChange(patchTriage(filters, patch));
   const cf = countFilters ?? filters;
@@ -129,13 +135,14 @@ export default function TriageBar({
         }
       ` }} />
       <div className="ray-triagebar-row">
-        {WINDOWS.map(w => (
+        {lead}
+        {WINDOWS.filter(w => !(w.key === 'today' && omit?.includes('today'))).map(w => (
           <button key={w.key} type="button" className="ray-toolbar-pill" data-active={filters.win === w.key} aria-pressed={filters.win === w.key}
             onClick={() => set({ win: filters.win === w.key ? null : w.key })}>
             {w.label}
           </button>
         ))}
-        {newCount > 0 && (
+        {newCount > 0 && !omit?.includes('new') && (
           <button type="button" className="ray-toolbar-pill" data-active={filters.newOnly} aria-pressed={filters.newOnly}
             onClick={() => set({ newOnly: !filters.newOnly })}>
             {prevVisitDay ? 'New since last visit' : 'New today'} <i>{newCount}</i>

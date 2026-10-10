@@ -258,6 +258,9 @@ export interface LotBrowserProps {
   /** remember how far the reader paged (Show more) for this view, per tab
    *  session — Back from a lot reopens the same rows (sessionStorage) */
   persistKey?: string;
+  /** the rows only: no view tabs, no toolbar — the caller owns every filter
+   *  (the /makers lots body: its search, lenses and triage drive `filters`) */
+  bare?: boolean;
 }
 
 export default function LotBrowser({
@@ -281,6 +284,7 @@ export default function LotBrowser({
   onOpenLot,
   anchorId,
   persistKey,
+  bare = false,
 }: LotBrowserProps) {
   const crawlDay = (lastCrawl || new Date().toISOString()).slice(0, 10);
   const savedSet = useMemo(() => new Set(savedIds ?? []), [savedIds]);
@@ -352,7 +356,8 @@ export default function LotBrowser({
     mq.addEventListener('change', apply);
     return () => mq.removeEventListener('change', apply);
   }, []);
-  const effectiveView: 'grid' | 'table' = narrowView ? 'grid' : feedView;
+  // a bare browser sits inside a ledger: the table on desktop, always
+  const effectiveView: 'grid' | 'table' = narrowView ? 'grid' : bare ? 'table' : feedView;
 
   // Which houses publish a live bid book at all — measured, not hardcoded.
   const housesWithBids = useMemo(() => {
@@ -486,6 +491,7 @@ export default function LotBrowser({
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: GRID_CSS }} />
+      {!bare && <>
       <div className="ray-toolbar-row" role="tablist" aria-label="Feed view" style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
         {topAvailable && (
           <button
@@ -540,6 +546,7 @@ export default function LotBrowser({
         scopeMaker={scope?.maker ?? null}
         scopeSubj={scope?.subj ?? null}
       />
+      </>}
 
       {effectiveView === 'table' && feed.length > 0 ? (
         <div key={feedKey} className="ray-feed-rekey ray-feedtable-scroll" style={{ overflowX: 'auto' }}>
