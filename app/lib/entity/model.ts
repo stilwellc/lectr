@@ -93,8 +93,6 @@ export interface EntityResultRow { id: string; img: string | null; p: number; d:
 
 /** per-entity detail (pages/entity-<bb>.json; fail-soft from the same old files) */
 export interface EntityDetail {
-  /** quarterly medians, complete quarters (null med = a thin quarter, a gap) */
-  quarters: { q: string; med: number | null; n: number; high: number }[];
   /** every year with a sale; the current year is marked partial */
   yearly: { y: number; med: number | null; n: number; partial?: true }[];
   houses: { h: string; n: number }[];

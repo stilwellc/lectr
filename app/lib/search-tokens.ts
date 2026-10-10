@@ -66,7 +66,8 @@ export interface SearchMeta {
   split: string[];
   /** tokens too common to carry postings (they match via the doc's own text) */
   common: string[];
-  /** [maker, ref, n, median USD] — every reference with a dossier */
-  refs: [string, string, number, number][];
+  /** [maker, ref, n, median USD, model line?] — every reference with a
+   *  dossier; the 5th slot (Oct 10) is its line when its titles name one */
+  refs: ([string, string, number, number] | [string, string, number, number, string])[];
   generatedAt: string;
 }

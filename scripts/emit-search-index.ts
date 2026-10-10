@@ -131,7 +131,7 @@ export function emitSearchIndex(): void {
   log(`${post.size.toLocaleString()} tokens in ${shards.size} shards (${split.size} split), ${(tBytes / 1048576).toFixed(1)}MB (largest t-${tMaxK} ${(tMax / 1024).toFixed(0)}KB) · ${common.length} common`);
 
   // ── 4 · reference ledgers + the palette's ref list ────────────────────────
-  interface RefRow { key: string; maker: string; ref: string; n: number; medianUsd: number }
+  interface RefRow { key: string; maker: string; ref: string; n: number; medianUsd: number; line?: string | null }
   let refs: RefRow[] = [];
   try { refs = readJson<{ refs: RefRow[] }>('refs.json').refs || []; } catch { refs = []; }
   const refKeys = new Set(refs.map(r => r.key));
@@ -160,7 +160,8 @@ export function emitSearchIndex(): void {
     shards: Array.from(shards.keys()).sort(),
     split: Array.from(split).sort(),
     common: common.sort(),
-    refs: refs.map(r => [r.maker, r.ref, r.n, Math.round(r.medianUsd)]),
+    // a 5th slot: the reference's model line (refs.json `line`), when it has one
+    refs: refs.map(r => (r.line ? [r.maker, r.ref, r.n, Math.round(r.medianUsd), r.line] : [r.maker, r.ref, r.n, Math.round(r.medianUsd)])),
     generatedAt: new Date().toISOString(),
   };
   fs.writeFileSync(path.join(SERVED_DIR, 'search-meta.json'), JSON.stringify(meta));
