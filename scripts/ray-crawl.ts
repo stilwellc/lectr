@@ -24,7 +24,6 @@ import type {
 import { RESULT_PENDING_MS } from './lib/skip-set';
 import { artCategoryFix, type ClassifyLot } from './lib/classify';
 import { ARTIST_MARKET } from '../app/constants';
-import { saleDayOf } from './lib/sale-day';
 
 // v2 foundation — the single, deterministic normalization layer. Every FUTURE
 // row is born v2 by stamping these (native money fact + dated USD, persisted
@@ -42,6 +41,7 @@ import {
 import { ARTISTS, type ArtistConfig } from './lib/houses/artists';
 import { crawlBonhams } from './lib/houses/bonhams';
 import { crawlChristies, crawlChristiesAuctions } from './lib/houses/christies';
+import { enrichChristiesCloseTimes } from './lib/houses/christies-close';
 import { DELAY_MS, HEALTH, INCREMENTAL_MODE_REASON, UA, runPool, sleep, stampMoney } from './lib/houses/common';
 import { enrichLots } from './lib/houses/enrich';
 import { crawlGoldin, goldinCompletedAuctions, goldinFeedComplete, goldinStatusOk } from './lib/houses/goldin';
@@ -586,6 +586,18 @@ async function main() {
   }
   for (const id of Array.from(badIds)) lotMap.delete(id);
 
+  // ── Christie's online-sale TRUE closes + rescue (onlineonly) ──
+  // www.christies.com is STALE for online ("First Open") sales — it reports live
+  // lots as over with years-old dates. The real per-lot close lives on
+  // onlineonly (the SSO url each online lot carries). Every non-sold Christie's
+  // lot with an onlineonly url — existing corpus rows included, since the legacy
+  // id format is not re-produced each crawl — gets its own end_date stamped as
+  // saleDateTime + closeKind 'online'; a future close revives a wrongly-closed
+  // lot to upcoming. Runs BEFORE the sanitize net so that net adjudicates on the
+  // true date. Unreachable → keeps its state (never dropped). See
+  // scripts/lib/houses/christies-close.ts + docs/christies-onlineonly-dates.md.
+  await enrichChristiesCloseTimes(lotMap.values(), { nowMs });
+
   // ── GLOBAL status-sanitize + results-pending net (house-agnostic) ──
   // EVERY house has the same failure mode: a sale closes, the house has not
   // posted hammers yet, and the lot lands in a state that (a) hides it from both
@@ -633,57 +645,6 @@ async function main() {
   }
   if (heldPending) console.log(`[Ray] Held ${heldPending} just-closed lots visible as results-pending (all houses)`);
   if (demoted) console.log(`[Ray] Sanitized ${demoted} invalid rows (sold-no-price / stale-upcoming → bought_in)`);
-
-  // ── Christie's online-sale TRUE dates + rescue (onlineonly) ──
-  // www.christies.com is STALE for online ("First Open") sales — it reports live
-  // lots as over with years-old dates, so they get stranded as bought_in. The
-  // real close lives on onlineonly (the SSO url each lot carries). Fetch it for
-  // EVERY non-sold Christie's lot with an onlineonly url — existing corpus rows
-  // included, since the legacy id format is not re-produced each crawl — stamp
-  // the true end_date, and revive future-dated lots to 'upcoming'. Best-effort:
-  // an unreachable lot keeps its state (never dropped). This un-strands live lots
-  // that the stale www data wrongly closed (e.g. saved Tom Sachs).
-  {
-    const targets = Array.from(lotMap.values()).filter(l =>
-      l.auctionHouse === "Christie's" && l.status !== 'sold' && !!l.url && /onlineonly\.christies\.com/.test(l.url));
-    const CONC = 6, CAP = 1500;
-    // Wall-clock budget (same pattern as ENRICH_TIME_BUDGET_MS): a stalled
-    // onlineonly host timing out every 20s fetch would walk this rescue past
-    // the workflow's 60-min kill. Unreached lots keep their state — never drop.
-    const BUDGET_MS = 8 * 60_000;
-    const start = Date.now();
-    const slice = targets.slice(0, CAP);
-    let dated = 0, revived = 0;
-    for (let i = 0; i < slice.length; i += CONC) {
-      if (Date.now() - start > BUDGET_MS) {
-        console.log(`  [Christie's] onlineonly budget exhausted at ${i}/${slice.length} — stopping early so the crawl still writes`);
-        break;
-      }
-      await Promise.all(slice.slice(i, i + CONC).map(async lot => {
-        try {
-          const r = await fetch(lot.url, { headers: { 'User-Agent': UA }, redirect: 'follow', signal: AbortSignal.timeout(20000) });
-          if (!r.ok) return;
-          const h = await r.text();
-          const raw = (h.match(/"end_date":"([0-9T:.\-]+Z)"/) || [])[1];
-          if (!raw) return;
-          const d = new Date(raw);
-          if (isNaN(d.getTime())) return;
-          const iso = d.toISOString();
-          // the sale-location calendar day (lib/sale-day), not the UTC day
-          lot.saleDate = saleDayOf("Christie's", iso, { saleName: lot.saleName, currency: (lot as AuctionLot & { nativeCurrency?: string }).nativeCurrency }) || iso.slice(0, 10);
-          (lot as AuctionLot & { saleDateTime?: string }).saleDateTime = iso;
-          dated++;
-          if (d.getTime() > Date.now()) {
-            if (lot.status !== 'upcoming') revived++;
-            lot.status = 'upcoming';
-            (lot as AuctionLot & { resultsPending?: boolean }).resultsPending = false;
-          }
-        } catch { /* unreachable → keep state; never drop */ }
-      }));
-      await sleep(120);
-    }
-    if (slice.length) console.log(`  [Christie's] onlineonly: dated ${dated}/${slice.length}, revived ${revived} wrongly-closed lots to upcoming`);
-  }
 
   if (goldinRan) console.log(`[Ray] Goldin: promoted ${goldinPromoted} closed lots to final hammer (last-bid + premium)`);
   if (reconciledWithdrawn || reconciledUnknown) {
