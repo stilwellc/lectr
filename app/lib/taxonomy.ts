@@ -350,9 +350,15 @@ function sportOf(drill: string | null | undefined): string | undefined {
 
 /** an entertainment taxon for a culture / sports / science lot whose title
  *  says film or music */
+/** (r7 data fix) a toy is no prop: Hake's files carded / loose action figures under
+ *  'worn-personal', which read as Props & Wardrobe — Star Wars' "props" median was Han Solo
+ *  action figures at $150. A production / screen piece keeps its sub. */
+const TOY_RE = /\b(?:action figures?|carded figures?|figurines?|toys?|playsets?|die-?cast|vinyl figures?|funko|plush|model kits?)\b/i;
+const toyless = (sub: string, title: string | null | undefined): string =>
+  sub === 'props-costumes' && title && TOY_RE.test(title) && !SHOWBIZ_WORD_RE.test(title) ? 'other' : sub;
 function entertainmentOf(title: string, sub: string, domain: string | undefined): Taxon {
   const o = cultureObjectOf(title);
-  const t: Taxon = { cat: 'entertainment', sub: o ? CULTURE_OBJECT_SUB[o] : sub };
+  const t: Taxon = { cat: 'entertainment', sub: o ? CULTURE_OBJECT_SUB[o] : toyless(sub, title) };
   if (domain) t.domain = domain;
   return t;
 }
@@ -443,7 +449,7 @@ function taxonOfRaw(l: LotLike): Taxon {
     // (Oct 9, Pattern 11) the Capone family / the mob filed as entertainment
     if (title && isCrimeTitle(title) && !isShowbizTitle(title)) return { cat: 'historical', sub: 'crime' };
     const domain = ENT_DOMAIN[d] || artistDomain;
-    const t: Taxon = { cat: 'entertainment', sub: entSub() };
+    const t: Taxon = { cat: 'entertainment', sub: toyless(entSub(), title) };
     if (domain) t.domain = domain;
     return t;
   }

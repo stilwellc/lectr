@@ -60,7 +60,11 @@ pioneers moonwalkers commanders icons heroes winners
 `.trim().split(/\s+/));
 
 const NAME_TOKEN = /^(?:[A-ZÀ-Ý][a-zà-ÿ'’]*(?:[A-Z][a-zà-ÿ'’]+)?(?:-[A-ZÀ-Ý][a-zà-ÿ'’]+)?\.?|[A-Z]\.|[A-Z]\.[A-Z]\.|Jr\.?|Sr\.?|II|III|IV|de|van|von|da|del|la|le)$/;
-const LETTERED = /^(?:JJ|CJ|AJ|TJ|DJ|PJ|RJ|OG|KJ|BJ|CC|JT|JD|JR|DK|JP|TK|AJ|JK|DJ)$/;
+const LETTERED = /^(?:JJ|CJ|AJ|TJ|DJ|PJ|RJ|OG|KJ|BJ|CC|JT|JD|JR|DK|JP|TK|AJ|JK|DJ|OJ|YA|TY)$/;
+/** (r7 data fix) surnames that are also object words — a real name only as the LAST token after
+ *  a given name ("LaMelo Ball", "Breece Hall", "Warren Moon", "Harry Lord", "Dylan Crews"):
+ *  700+ LaMelo Ball sales filed under no one */
+const SURNAME_WORD = new Set(['ball', 'hall', 'moon', 'lord', 'crews', 'cross']);
 const SUFFIX = /^(?:Jr\.?|Sr\.?|II|III|IV)$/;
 const PARTICLE = /^(?:de|van|von|da|del|la|le)$/;
 const INITIAL = /^[A-Z]\.(?:[A-Z]\.)?$/;
@@ -89,9 +93,14 @@ export function nameTokensOk(toks: string[]): boolean {
     const bare = t.replace(/[.'’]+$/g, '').toLowerCase();
     // "Red Schoendienst", "Red Grange" — the nickname, never "Red Sox" (sox is not a name)
     const nick = i === 0 && bare === 'red' && toks.length === 2;
-    if (!nick && (NOT_NAME.has(bare) || bare.split('-').some(p => NOT_NAME.has(p)))) return false;
+    // (r7) a surname that is also an object word, last after a given name; "St." inside a name
+    // ("Amon-Ra St. Brown") — never a leading "St. Louis"
+    const surname = i > 0 && i === toks.length - 1 && SURNAME_WORD.has(bare);
+    const saint = i > 0 && i < toks.length - 1 && t === 'St.';
+    if (!nick && !surname && !saint && (NOT_NAME.has(bare) || bare.split('-').some(p => NOT_NAME.has(p)))) return false;
     if (i === 0 && CITY_FIRST.has(bare)) return false;
-    if (!SUFFIX.test(t) && !PARTICLE.test(t) && !INITIAL.test(t)) words++;
+    // (r7) a leading double initial is the given name ("Y.A. Tittle", "R.A. Dickey")
+    if (!SUFFIX.test(t) && !PARTICLE.test(t) && !saint && (!INITIAL.test(t) || (i === 0 && /^[A-Z]\.[A-Z]\.$/.test(t)))) words++;
   }
   return words >= 2;
 }
@@ -209,6 +218,8 @@ const FILM_FROM_BARE = new RegExp(`${FROM}((?:The |A )?[A-Z0-9][\\w'’.&:,-]*(?
 const FILM_LEAD_BARE = /^([A-Z][\w'’.&-]*(?: [A-Z0-9][\w'’.&-]*){0,4}?(?:: [A-Z][\w'’.&-]*(?: [A-Z0-9][\w'’.&-]*){0,3}| (?:II|III|IV|V|VI|VII|\d)))\s+(?:Screen|Production)[- ](?:Used|Worn|Made)\b/;
 const NOT_FILM = /\b(?:Various|Collection|Estate|Personal|Archive|Studios?|Productions|LOA|COA|OOA|LOP|Auction)\b/;
 const SCREEN_WORD = /\b(?:Screen|Production|Prop|Props|Costume|Stunt|Hero|Set Decoration|Maquette|Puppet|Wardrobe)\b/i;
+/** an animation / production MEDIUM a title glues after the film's name (stripped from the film) */
+const FILM_MEDIUM_TAIL = /(?:\s+(?:Original|Production|Animation|Hand[- ]Painted|Concept|Key|Master|Publicity|Story|Color|Model|Layout|Background|Cels?|Drawings?|Set-?[Uu]ps?|Sketch(?:es)?|Storyboards?|Sheets?))*\s+(?:Cels?|Drawings?|Backgrounds?|Set-?[Uu]ps?|Sketch(?:es)?|Storyboards?|Layouts?|Model Sheets?|Animation Art)$/;
 
 /** the film/series a screen-used or production piece comes from */
 export function filmOf(title: string): string | null {
@@ -218,7 +229,9 @@ export function filmOf(title: string): string | null {
   if (years.size > 1) return null;
   let m = t.match(FILM_FROM) || t.match(FILM_LEAD);
   if (!m && SCREEN_WORD.test(t)) m = t.match(FILM_FROM_BARE) || t.match(FILM_LEAD_BARE);
-  const f = m?.[1]?.trim().replace(/[\s,:–-]+$/, '') ?? null;
+  // (r7 data fix) the medium is not the film: "Snow White and the Seven Dwarfs Production
+  // Drawing" / "… Production Cel" / "… (1937)" are ONE film (they were three entities)
+  const f = m?.[1]?.trim().replace(/[\s,:–-]+$/, '').replace(FILM_MEDIUM_TAIL, '').replace(/[\s,:–-]+$/, '') ?? null;
   if (!f) return null;
   const words = f.split(' ');
   if (words.length > 8 || f.length < 2 || (words.length === 1 && f.length <= 3 && !/^\d+$/.test(f))) return null;

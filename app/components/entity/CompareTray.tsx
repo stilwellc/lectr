@@ -71,7 +71,11 @@ export default function CompareTray({ picked, search, onRemove, onClear, onSeeLo
                 <div className="mkc-trend">
                   {r.spark ? <Spark values={r.spark} w={180} h={40} /> : <span className="mkc-none">No quarterly trend — under 3 sales a quarter</span>}
                   <span className="mkc-cap">
-                    {r.spark ? <>12 complete quarters{lq ? <> · last {lq.q.replace('-', ' ')} {formatPrice(lq.v)}</> : null}</> : null}
+                    {r.spark ? (r.bundle.s.sparkBasis === 'matched'
+                      // (r7) a same-items line: its height is scaled to the typical sale, so a
+                      // quarter's dollar figure is not a sale anyone made — the basis is said instead
+                      ? <>12 complete quarters · same items, chained</>
+                      : <>12 complete quarters{lq ? <> · last {lq.q.replace('-', ' ')} {formatPrice(lq.v)}</> : null}</>) : null}
                     {r.yoy ? <> · YoY <b data-dir={yoyDir(r.yoy)} title={yoyTitle(r.yoy)}>{fmtPct(r.yoy.pct)}</b> <span title={yoyTitle(r.yoy)}>{r.yoy.basis === 'matched' ? `${r.yoy.n.toLocaleString()} matched` : `n ${r.yoy.n.toLocaleString()}`}</span></> : null}
                   </span>
                 </div>

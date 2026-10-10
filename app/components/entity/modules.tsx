@@ -55,6 +55,24 @@ function MedCell({ med, n }: { med: number | null; n: number }) {
   );
 }
 
+/** a long ledger shows its first CAP rows and a "Show all N" line (round 7:
+ *  the page scans first — nothing is dropped, one tap opens the rest). A
+ *  ledger only CAP + 1 long shows whole: a toggle for one row costs more
+ *  than the row. */
+const CAP = 5;
+function capRows<T>(rows: T[], open: boolean): T[] {
+  return open || rows.length <= CAP + 1 ? rows : rows.slice(0, CAP);
+}
+function ShowAll({ total, open, onToggle, noun }: { total: number; open: boolean; onToggle: () => void; noun: string }) {
+  if (total <= CAP + 1) return null;
+  return (
+    <button type="button" className="nsp-more" aria-expanded={open} onClick={onToggle}
+      style={{ display: 'block', background: 'none', border: 0, padding: 0, cursor: 'pointer' }}>
+      {open ? (noun ? `Show fewer ${noun}` : 'Show fewer') : `Show all ${total.toLocaleString()}${noun ? ` ${noun}` : ''}`}
+    </button>
+  );
+}
+
 /* ── §3 THE KIND MODULE ────────────────────────────────────────────── */
 
 /** a split row under this many sales all-time, with no 12-month median, folds into the note */
@@ -65,10 +83,12 @@ export interface SplitRow { key: string; label: string; n: number; med: number |
 /** a split ledger: one row per lens / facet — sales all-time, the trailing
  *  year's median with its n, and the live lots in that cut (a tap narrows the
  *  live book above to them) */
-function SplitLedger({ rows, onLive }: { rows: SplitRow[]; onLive?: (key: string) => void }) {
+function SplitLedger({ rows, onLive, noun = '' }: { rows: SplitRow[]; onLive?: (key: string) => void; noun?: string }) {
+  const [open, setOpen] = useState(false);
   return (
+    <>
     <div className="nsp-ledger">
-      {rows.map(r => (
+      {capRows(rows, open).map(r => (
         <div key={r.key} className="ns-ledger-row">
           <span className="nsp-lk">
             {r.href ? <Link href={r.href} className="t" style={{ textDecoration: 'none' }}>{r.label}</Link> : <span className="t">{r.label}</span>}
@@ -84,17 +104,19 @@ function SplitLedger({ rows, onLive }: { rows: SplitRow[]; onLive?: (key: string
         </div>
       ))}
     </div>
+    <ShowAll total={rows.length} open={open} onToggle={() => setOpen(o => !o)} noun={noun} />
+    </>
   );
 }
 
-const MODULE_HEAD: Record<string, { kicker: string; title: string }> = {
-  art: { kicker: 'By medium', title: 'What sells, medium by medium' },
-  design: { kicker: 'By form', title: 'What sells, form by form' },
-  player: { kicker: 'By category', title: 'Cards and the physical record' },
-  pokemon: { kicker: 'By era', title: 'Era, grade and language' },
-  set: { kicker: 'By era', title: 'What sells from the set' },
-  mission: { kicker: 'By object', title: 'What sells from the mission' },
-  subject: { kicker: 'By object', title: 'What kind of object sells' },
+const MODULE_HEAD: Record<string, { kicker: string; title: string; noun: string }> = {
+  art: { kicker: 'By medium', title: 'What sells, medium by medium', noun: 'media' },
+  design: { kicker: 'By form', title: 'What sells, form by form', noun: 'forms' },
+  player: { kicker: 'By category', title: 'Cards and the physical record', noun: 'categories' },
+  pokemon: { kicker: 'By era', title: 'Era, grade and language', noun: 'eras' },
+  set: { kicker: 'By era', title: 'What sells from the set', noun: 'eras' },
+  mission: { kicker: 'By object', title: 'What sells from the mission', noun: 'kinds' },
+  subject: { kicker: 'By object', title: 'What kind of object sells', noun: 'kinds' },
 };
 
 export function KindModule({ id, kind, subKind, market, slug, label, detail, marketData, liveByLens, onLive, sportKey }: {
@@ -127,7 +149,7 @@ export function KindModule({ id, kind, subKind, market, slug, label, detail, mar
   return (
     <section className="nsp-section ns-plate" aria-label={head.kicker}>
       <SectionHead kicker={head.kicker} title={head.title} ctx="sales all-time · median of the past 12 months, n beside it" />
-      {rows.length >= 2 && <SplitLedger rows={shown} onLive={onLive} />}
+      {rows.length >= 2 && <SplitLedger rows={shown} onLive={onLive} noun={head.noun} />}
       {rows.length >= 2 && folded.length > 0 && (
         <p className="nsp-note">Also {folded.map(r => `${r.label} (${r.n.toLocaleString()} ${r.n === 1 ? 'sale' : 'sales'})`).join(', ')} — too few in the past 12 months to typify.</p>
       )}
@@ -156,12 +178,14 @@ function WatchModule({ slug, label, marketData }: { slug: string; label: string;
     .sort((a, b) => b.lots - a.lots), [marketData, slug]);
   const { refs, failed, retry } = useRefs();
   const rows = useMemo(() => refsForMaker(refs, slug).filter(r => /\d/.test(r.ref)).slice(0, 8), [refs, slug]);
+  const [famOpen, setFamOpen] = useState(false);
+  const [refOpen, setRefOpen] = useState(false);
   return (
     <section className="nsp-section ns-plate" aria-label="Model families and references">
       <SectionHead kicker="By family" title={`${label}'s model families`} ctx="typical = median of the past 12 months · read = the family's strongest measured read" />
       {families.length ? (
         <div className="nsp-ledger">
-          {families.map(r => (
+          {capRows(families, famOpen).map(r => (
             <Link key={r.slug} href={`/sub/${r.slug.replace(':', '/')}`} className="ns-ledger-row" style={{ textDecoration: 'none', color: 'inherit' }}>
               <span className="nsp-lk">
                 <span className="t">{r.label.replace(new RegExp(`\\s*·?\\s*${label}$`), '')}</span>
@@ -175,6 +199,7 @@ function WatchModule({ slug, label, marketData }: { slug: string; label: string;
           ))}
         </div>
       ) : <p className="nsp-note">No model family is tracked for {label} yet.</p>}
+      <ShowAll total={families.length} open={famOpen} onToggle={() => setFamOpen(o => !o)} noun="families" />
       <div style={{ marginTop: 22 }}>
         <span className="ns-kicker">References</span>
         {failed ? (
@@ -183,7 +208,7 @@ function WatchModule({ slug, label, marketData }: { slug: string; label: string;
           <p className="nsp-note">Loading the reference book&hellip;</p>
         ) : rows.length ? (
           <div className="nsp-ledger">
-            {rows.map(r => (
+            {capRows(rows, refOpen).map(r => (
               <Link key={r.key} href={`/ref/${slug}/${encodeRefPath(r.ref)}`} className="ns-ledger-row" style={{ textDecoration: 'none', color: 'inherit' }}>
                 <span className="nsp-lk">
                   <span className="t">{refLabel(r.ref)}</span>
@@ -197,6 +222,7 @@ function WatchModule({ slug, label, marketData }: { slug: string; label: string;
             ))}
           </div>
         ) : <p className="nsp-note">No reference with a number on it has enough sales yet.</p>}
+        {rows.length ? <ShowAll total={rows.length} open={refOpen} onToggle={() => setRefOpen(o => !o)} noun="references" /> : null}
       </div>
     </section>
   );
@@ -266,7 +292,7 @@ export function YearlyLine({ detail, name, defaultLens }: { detail: EntityDetail
         ctx={`${lensLabel} · a year needs 5+ sales · gaps left open`}
       />
       {lenses.length > 1 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }} role="group" aria-label="Which sales the line reads">
+        <div className="nsp-pills" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }} role="group" aria-label="Which sales the line reads">
           <button type="button" className="ray-toolbar-pill" data-active={lens === 'all'} aria-pressed={lens === 'all'} onClick={() => setLens('all')}>Every sale</button>
           {lenses.map(l => (
             <button key={l.key} type="button" className="ray-toolbar-pill" data-active={lens === l.key} aria-pressed={lens === l.key} onClick={() => setLens(l.key)}>
@@ -315,12 +341,15 @@ function ResultRow({ row }: { row: EntityResultRow }) {
 }
 
 const RESULT_ROWS = 6;
+/** the rows a results view opens with; the rest of its RESULT_ROWS one tap away */
+const RESULT_FIRST = 4;
 const LENS_PILL_N = 100;
 
 export function Results({ detail, sold, onEvery }: { detail: EntityDetail; sold: number | null; onEvery?: (() => void) | null }) {
   // a lens earns its own "Top" pill with real depth (≥ LENS_PILL_N sales), three at most
   const lenses = (detail.lensSplit || []).filter(l => l.top.length > 0 && l.n >= LENS_PILL_N).slice(0, 3);
   const [view, setView] = useState<string>('recent');
+  const [open, setOpen] = useState(false);
   const rows = (view === 'recent' ? detail.recent : view === 'top' ? detail.top : (lenses.find(l => l.key === view)?.top || [])).slice(0, RESULT_ROWS);
   if (!detail.recent.length && !detail.top.length) return null;
   const sorted = view === 'recent'
@@ -333,7 +362,7 @@ export function Results({ detail, sold, onEvery }: { detail: EntityDetail; sold:
         title={view === 'recent' ? 'Latest sales' : view === 'top' ? 'Top results' : `Top results · ${shortLens(view, lenses.find(l => l.key === view)?.label || '')}`}
         ctx="realized, buyer’s premium included"
       />
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }} role="group" aria-label="Which results">
+      <div className="nsp-pills" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }} role="group" aria-label="Which results">
         <button type="button" className="ray-toolbar-pill" data-active={view === 'recent'} aria-pressed={view === 'recent'} onClick={() => setView('recent')}>Latest</button>
         <button type="button" className="ray-toolbar-pill" data-active={view === 'top'} aria-pressed={view === 'top'} onClick={() => setView('top')}>Top</button>
         {lenses.length > 1 && lenses.map(l => (
@@ -343,8 +372,14 @@ export function Results({ detail, sold, onEvery }: { detail: EntityDetail; sold:
         ))}
       </div>
       <div className="nsp-rows">
-        {sorted.map((r, i) => <ResultRow key={`${r.id}-${i}`} row={r} />)}
+        {(open ? sorted : sorted.slice(0, RESULT_FIRST)).map((r, i) => <ResultRow key={`${r.id}-${i}`} row={r} />)}
       </div>
+      {!open && sorted.length > RESULT_FIRST ? (
+        <button type="button" className="nsp-more" aria-expanded={false} onClick={() => setOpen(true)}
+          style={{ display: 'block', background: 'none', border: 0, padding: 0, cursor: 'pointer' }}>
+          Show all {sorted.length} {view === 'recent' ? 'latest sales' : 'top results'}
+        </button>
+      ) : null}
       {onEvery && sold && sold > sorted.length ? (
         <button type="button" className="ray-show-more" style={{ marginTop: 14, padding: '7px 20px' }} onClick={onEvery}>
           Every result, {sold.toLocaleString()}
