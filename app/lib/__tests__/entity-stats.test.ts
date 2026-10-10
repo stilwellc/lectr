@@ -99,15 +99,17 @@ test('entity stats (P3): yoy is like for like — a crawl that adds cheap items 
   assert.deepEqual(f.yoy, { pct: 20, n: 25, basis: 'matched' });
 });
 
-test('entity stats (P3): too few pairs falls to the median only on a stable intake', () => {
+test('entity stats (P3): too few pairs — a keyed lens abstains; an unkeyed one reads the median only on a stable intake', () => {
   const pairs = (n: number): SoldPoint[] => Array.from({ length: n }, (_, i) => [pt(100, '2025-01-10', undefined, { k: `c${i}` }), pt(130, '2026-01-10', undefined, { k: `c${i}` })]).flat();
-  // 19 pairs (< MIN_YOY_PAIRS), equal intake: the pooled median, labeled
-  assert.deepEqual(entityFigures(pairs(19), TODAY, L).yoy, { pct: 30, n: 19, basis: 'median' });
+  const unique = (n: number, p: number, d: string): SoldPoint[] => Array.from({ length: n }, () => pt(p, d));
+  // 19 pairs (< MIN_YOY_PAIRS) on a keyed lens (cards): no pooled-median stand-in
+  assert.equal(entityFigures(pairs(19), TODAY, L).yoy, null);
+  // unique works, equal intake: the pooled median, labeled
+  assert.deepEqual(entityFigures([...unique(19, 100, '2025-01-10'), ...unique(19, 130, '2026-01-10')], TODAY, L).yoy, { pct: 30, n: 19, basis: 'median' });
   // the same, but the current year sold 2× as many: no read
-  const grown = [...pairs(19), ...Array.from({ length: 19 }, () => pt(130, '2026-02-10'))];
-  assert.equal(entityFigures(grown, TODAY, L).yoy, null);
+  assert.equal(entityFigures([...unique(19, 100, '2025-01-10'), ...unique(38, 130, '2026-01-10')], TODAY, L).yoy, null);
   // 20 pairs: matched, whatever the intake did
-  assert.deepEqual(entityFigures([...pairs(20), ...Array.from({ length: 60 }, () => pt(5, '2026-02-10'))], TODAY, L).yoy, { pct: 30, n: 20, basis: 'matched' });
+  assert.deepEqual(entityFigures([...pairs(20), ...unique(60, 5, '2026-02-10')], TODAY, L).yoy, { pct: 30, n: 20, basis: 'matched' });
 });
 
 test('entity stats: results are ordered (top by price, recent by date) and houses by count', () => {

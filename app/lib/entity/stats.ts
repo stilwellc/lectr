@@ -129,6 +129,9 @@ export const MIN_YOY_PAIRS = 20;
  *  ratio of each other — past it the median reads what the crawl added (a
  *  4× card / Pokémon intake in 2026), not what prices did */
 export const YOY_COVERAGE_MAX = 1.5;
+/** a lens where at least this share of the two years' sales carry an
+ *  identity reads matched or not at all (never the pooled median) */
+export const YOY_KEYED_SHARE = 0.5;
 
 /**
  * yoy — the lens's last 4 complete quarters against the 4 before, like with
@@ -138,9 +141,10 @@ export const YOY_COVERAGE_MAX = 1.5;
  *            is the median of those ratios, n = the identities paired. Same
  *            card at the same grade, same reference, same edition — the
  *            crawl adding more cheap (or dear) things cannot move it.
- *   median   the pooled median against the pooled median — only when both
- *            years clear MIN_YOY_N AND their counts are within
- *            YOY_COVERAGE_MAX of each other (a stable intake).
+ *   median   the pooled median against the pooled median — only for a lens
+ *            whose sales mostly carry NO identity (unique works, most
+ *            memorabilia), when both years clear MIN_YOY_N AND their counts
+ *            are within YOY_COVERAGE_MAX of each other (a stable intake).
  * Neither → null (no read beats a coverage artefact).
  */
 export type Yoy = { pct: number; n: number; basis: 'matched' | 'median' };
@@ -169,6 +173,13 @@ export function yoyOf(scoped: readonly SoldPoint[], today: string): Yoy | null {
     ratios.sort((a, b) => a - b);
     return { pct: pct(medianSorted(ratios)), n: ratios.length, basis: 'matched' };
   }
+  // an identity-keyed lens (cards, Pokémon, references, editions) that cannot
+  // pair: its pooled median is a different basket each year (a rookie's
+  // prospect cards then, his flagship cards now) — no read
+  let keyed = 0;
+  pk.forEach(ps => { keyed += ps.length; });
+  ck.forEach(ps => { keyed += ps.length; });
+  if (keyed >= YOY_KEYED_SHARE * (prev.length + cur.length)) return null;
   if (prev.length >= MIN_YOY_N && cur.length >= MIN_YOY_N) {
     const hi = Math.max(prev.length, cur.length), lo = Math.min(prev.length, cur.length);
     if (hi / lo > YOY_COVERAGE_MAX) return null;

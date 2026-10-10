@@ -291,7 +291,11 @@ export const MOVERS_MIN_N = 60;
 /** …or, for a like-for-like read (basis 'matched'), on this many identities
  *  sold in both years (its n counts pairs, not sales) */
 export const MOVERS_MIN_PAIRS = 30;
-const moverTier = (r: Row) => (r.yoy ? (r.yoy.n >= (r.yoy.basis === 'matched' ? MOVERS_MIN_PAIRS : MOVERS_MIN_N) ? 0 : 1) : 2);
+// like-for-like reads lead (the same items in both years), then pooled
+// medians on a well-supported sample, then thinner gated reads, then none
+const moverTier = (r: Row) => (!r.yoy ? 3
+  : r.yoy.basis === 'matched' ? (r.yoy.n >= MOVERS_MIN_PAIRS ? 0 : 2)
+    : r.yoy.n >= MOVERS_MIN_N ? 1 : 2);
 
 /** the ledger's comparator; `thin` sinks under supported rows (always for
  *  the sold-history reads, as the tie-break otherwise) */

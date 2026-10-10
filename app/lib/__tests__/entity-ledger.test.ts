@@ -126,10 +126,11 @@ test('order: thin rows sink; Movers ranks gated moves by size, either way', () =
   // a gated read on a small sample ranks after the well-supported ones
   const small = mk('pl:e', { label: 'E', yoy: { pct: 4204, n: 16, basis: 'median' } });
   assert.deepEqual(sortRows([...rows, small], 'movers').map(r => r.label), ['B', 'D', 'E', 'C', 'A']);
-  // (P3) a matched read is well supported on its PAIRS (n counts identities)
+  // (P3) like-for-like reads lead, well supported on their PAIRS (n counts
+  // identities); a thin matched read sorts with the thin gated reads
   const matched = mk('pl:f', { label: 'F', yoy: { pct: 45, n: 40, basis: 'matched' } });
   const fewPairs = mk('pl:g', { label: 'G', yoy: { pct: 90, n: 22, basis: 'matched' } });
-  assert.deepEqual(sortRows([...rows, matched, fewPairs], 'movers').map(r => r.label), ['F', 'B', 'D', 'G', 'C', 'A']);
+  assert.deepEqual(sortRows([...rows, matched, fewPairs, small], 'movers').map(r => r.label), ['F', 'B', 'D', 'E', 'G', 'C', 'A']);
   assert.deepEqual(sortRows([...rows], 'name').map(r => r.label), ['A', 'B', 'C', 'D']);
   // Matters / Live: thin only breaks a tie
   const t = [mk('pl:x', { label: 'X', live: 5, topScore: 3, thin: true }), mk('pl:y', { label: 'Y', live: 5, topScore: 3, thin: false }), mk('pl:z', { label: 'Z', live: 9, topScore: 9, thin: true })];
