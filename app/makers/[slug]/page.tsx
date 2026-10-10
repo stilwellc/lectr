@@ -24,6 +24,7 @@ import UpcomingLots from '../../components/UpcomingLots';
 import PastResults from '../../components/PastResults';
 import RayEntrance, { RayLoading } from '../../components/RayEntrance';
 import { Colophon } from '../../components/Terminal';
+import { isFlagged, isAppraised } from '../../lib/flags';
 
 // P1-10: both charts are client-only; without a placeholder the page jumps
 // by a full chart well when the module lands. The skeletons match the wells
@@ -260,9 +261,9 @@ function ValueEnginePresence({ upcoming }: { upcoming: AuctionLot[] }) {
     let total = 0;
     for (const l of upcoming) {
       // only lots the engine actually appraised count toward the denominator
-      if (!l.value || l.value.signal === undefined) continue;
+      if (!isAppraised(l)) continue;
       total += 1;
-      if (l.value.signal && l.value.signal.label === 'below comparable market') flagged += 1;
+      if (isFlagged(l)) flagged += 1;
     }
     return { flagged, total };
   }, [upcoming]);

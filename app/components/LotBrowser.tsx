@@ -30,6 +30,7 @@ import { makerLineOf, labelTagOf, subColumnOf } from '../lib/lot-labels';
 import { foldVariants, foldNote, foldQuery, crossSibs, crossNote } from '../lib/fold';
 import { affinityOf, type Follow } from '../lib/follows';
 import { feedPass } from '../lib/lot-browser';
+import { isFlagged, FLAG_SIGNAL } from '../lib/flags';
 import { useLotModal } from '../lib/use-lot-modal';
 import { cameBack } from '../lib/use-back-scroll';
 import Flick from './Flick';
@@ -46,7 +47,9 @@ export function belowSignalOf(upcoming: AuctionLot[], compLots: AuctionLot[]): B
   upcoming.forEach(l => {
     const s = lotSignal(l, compLots);
     if (s) hasSig.add(l.id);
-    if (s && s.label === 'Below Market') { ids.add(l.id); pct.set(l.id, s.pct); }
+    // the flag itself is the one published predicate (app/lib/flags) — the
+    // comp read only supplies its magnitude
+    if (isFlagged(l)) { ids.add(l.id); if (s && s.label === FLAG_SIGNAL) pct.set(l.id, s.pct); }
   });
   return { ids, pct, hasSig };
 }
