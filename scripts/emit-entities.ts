@@ -2,10 +2,13 @@
  * emit-entities.ts — the entity payloads every /makers row, dossier and
  * entity page reads (makers overhaul, Oct 10 2026; mk-overhaul/CONTRACT.md).
  *
- *   pages/entities-<market>.json   { generatedAt, lastCrawl, entities: EntitySummary[] }
- *                                  for all · art · design · watches · sports ·
- *                                  tcg · science · culture — every entity with
- *                                  ≥1 live lot OR ≥ MIN_SOLD sold
+ *   pages/entities-<market>.json   the v2 WIRE (app/lib/entity/wire — columnar,
+ *                                  slim, derived fields dropped) for all · art ·
+ *                                  design · watches · sports · tcg · science ·
+ *                                  culture — every entity with ≥1 live lot OR
+ *                                  ≥ MIN_SOLD sold, tiered: makers + live +
+ *                                  the top MAIN_SOLD_ONLY sold-only here,
+ *   pages/entities-<market>-tail.json  the rest (fetched only on a miss)
  *   pages/entity-<bb>.json         256 buckets (app/lib/page-data bucketOf):
  *                                  { _: { lastCrawl }, [id]: EntityDetail }
  *
@@ -23,22 +26,24 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import { SERVED_DIR } from './corpus-io';
 import { servedLastCrawl } from './lib/served-stamp';
 import { MARKETS, MAKER_MARKETS, MAKER_DISCIPLINE, ARTIST_LABEL, marketOf } from '../app/constants';
+import { MIN_SOLD, LENS_LABELS, BUDGET_MARKET_BR, BUDGET_ALL_BR, encodeEntities, tierEntities, isEntitiesWire } from '../app/lib/entity/wire';
 import { entityKeyOf, parseEntityId, entityPageOf, subEntityLabel } from '../app/lib/entity/key';
 import { entityFigures, completeQuarters, SPARK_QUARTERS, THIN_SOLD12M, type SoldPoint, type Labels } from '../app/lib/entity/stats';
 import type { EntitySummary, EntityDetail } from '../app/lib/entity/model';
 import { lotSubjectOf } from '../app/lib/maker-subjects';
-import { taxonOf, subLabel, CAT_LABEL, SPORTS, DOMAINS, type CatKey } from '../app/lib/taxonomy';
+import { taxonOf, CAT_LABEL, SPORTS, DOMAINS } from '../app/lib/taxonomy';
 import { classifyForm, formsForMarket } from '../app/lib/comps';
 import { bucketOf } from '../app/lib/page-data';
 import { isLiveUpcoming } from '../app/utils';
 import { verifiedMovers } from '../app/preview/terminal/verified';
 import type { AuctionLot } from '../app/types';
 
-/** sold-only entities need this much history to get a row */
-export const MIN_SOLD = 10;
+/** sold-only entities need this much history to get a row (app/lib/entity/wire) */
+export { MIN_SOLD };
 
 type Lot = AuctionLot & { description?: string | null; ek?: string | null };
 
@@ -60,22 +65,15 @@ export function lensesOf(l: Lot): { lens: string; coarse: string; sport?: string
   return { lens, coarse: MAKER_MARKETS.has(marketOf(l.artist)) ? lens : t.cat, sport: t.sport, domain: t.domain };
 }
 
-/** one market's categories read without their category prefix */
-const SOLO_CAT_MARKET = new Set<CatKey>(['tcg', 'space-science', 'fine-art', 'design', 'watches']);
-export const LABELS: Labels = {
-  lens: k => {
-    const i = k.indexOf(':');
-    const cat = k.slice(0, i) as CatKey, sub = k.slice(i + 1);
-    const s = subLabel(cat, sub);
-    return SOLO_CAT_MARKET.has(cat) ? s : `${CAT_LABEL[cat] || cat} · ${s}`;
-  },
-  coarse: k => (k.includes(':') ? LABELS.lens(k) : CAT_LABEL[k as CatKey] || k),
-};
+/** the lens labels (one copy, shared with the client's decoder) */
+export const LABELS: Labels = LENS_LABELS;
 
 interface Acc {
   id: string;
   pts: SoldPoint[];
   live: number;
+  /** some live lot carries a photo (the row's hero is then the live photo) */
+  livePhoto: boolean;
   names: Map<string, number>;
   sports: Map<string, number>;
   domains: Map<string, number>;
@@ -116,18 +114,31 @@ export interface EntitiesInput {
 export interface EntitiesReport {
   entities: number;
   perMarket: Record<string, number>;
+  /** raw bytes per file (main + tail) */
   files: Record<string, number>;
+  /** brotli bytes per file (brotliBytes) */
+  filesBr: Record<string, number>;
+  /** main files over their budget (wire BUDGET_*) — the nightly warns */
+  overBudget: string[];
   bucketsBytes: number;
   soldRows: number;
   unkeyed: number;
 }
 
 /** build every summary + detail (pure — no I/O) */
-export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): { summaries: EntitySummary[]; details: Map<string, EntityDetail>; soldRows: number; unkeyed: number } {
+export interface BuiltEntities {
+  summaries: EntitySummary[];
+  details: Map<string, EntityDetail>;
+  /** per summary id: its live lot count + whether one carries a photo */
+  live: Map<string, { n: number; photo: boolean }>;
+  soldRows: number;
+  unkeyed: number;
+}
+export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): BuiltEntities {
   const accs = new Map<string, Acc>();
   const acc = (id: string): Acc => {
     let a = accs.get(id);
-    if (!a) accs.set(id, a = { id, pts: [], live: 0, names: new Map(), sports: new Map(), domains: new Map(), subs: new Map(), face: null });
+    if (!a) accs.set(id, a = { id, pts: [], live: 0, livePhoto: false, names: new Map(), sports: new Map(), domains: new Map(), subs: new Map(), face: null });
     return a;
   };
   const note = (a: Acc, l: Lot, ln: ReturnType<typeof lensesOf>) => {
@@ -166,6 +177,7 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): { summaries
     if (!id) continue;
     const a = acc(id);
     a.live++;
+    if (l.imageUrl) a.livePhoto = true;
     note(a, l, lensesOf(l));
   }
 
@@ -174,6 +186,7 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): { summaries
 
   const summaries: EntitySummary[] = [];
   const details = new Map<string, EntityDetail>();
+  const live = new Map<string, { n: number; photo: boolean }>();
   accs.forEach(a => {
     if (!(a.live >= 1 || a.pts.length >= MIN_SOLD)) return;
     const ref = parseEntityId(a.id);
@@ -198,6 +211,7 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): { summaries
         discipline = (domain && DOMAINS.find(x => x.key === domain)?.label) || subTag;
       } else discipline = subTag;
     }
+    if (a.live) live.set(a.id, { n: a.live, photo: a.livePhoto });
     const slugFollow = ref.kind === 'maker' || ref.kind === 'player' ? ref.slug : null;
     summaries.push({
       id: a.id,
@@ -233,24 +247,52 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): { summaries
     }
   });
   summaries.sort((x, y) => (y.sold || 0) - (x.sold || 0) || (x.label < y.label ? -1 : x.label > y.label ? 1 : 0));
-  return { summaries, details, soldRows, unkeyed };
+  return { summaries, details, live, soldRows, unkeyed };
+}
+
+/** the brotli size the CDN serves (Cloudflare's on-the-fly level sits near
+ *  quality 3–4; quality 3 is the conservative read) */
+export const brotliBytes = (body: string): number =>
+  zlib.brotliCompressSync(Buffer.from(body), { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 3 } }).length;
+
+/** one market file's main + tail bodies (pure) */
+export function entityFileBodies(ents: readonly EntitySummary[], live: BuiltEntities['live'], meta: { generatedAt: string; lastCrawl: string; sparkQ: string[] }): { main: string; tail: string; mainN: number; tailN: number } {
+  const { main, tail } = tierEntities(ents, id => live.get(id)?.n ?? 0);
+  // the face ships for a maker (its hero), and for a live entity none of
+  // whose live lots carries a photo — every other row shows its live photo
+  const keepFace = (e: EntitySummary) => e.kind === 'maker' || (!!live.get(e.id) && !live.get(e.id)!.photo);
+  const base = { ...meta, keepFace };
+  return {
+    main: JSON.stringify(encodeEntities(main, { ...base, tier: 'main', tailN: tail.length })),
+    tail: JSON.stringify(encodeEntities(tail, { ...base, tier: 'tail', tailN: 0 })),
+    mainN: main.length,
+    tailN: tail.length,
+  };
 }
 
 /** build + write every entity file under `outDir` */
 export function emitEntities(input: EntitiesInput): EntitiesReport {
   const t0 = Date.now();
-  const { summaries, details, soldRows, unkeyed } = buildEntities(input);
+  const { summaries, details, live, soldRows, unkeyed } = buildEntities(input);
   fs.mkdirSync(input.outDir, { recursive: true });
   for (const f of fs.readdirSync(input.outDir)) if (/^entit(?:y|ies)-.*\.json$/.test(f)) fs.unlinkSync(path.join(input.outDir, f));
   const generatedAt = new Date().toISOString();
   const files: Record<string, number> = {};
+  const filesBr: Record<string, number> = {};
   const perMarket: Record<string, number> = {};
+  const overBudget: string[] = [];
+  // sparkQ: the complete quarters every spark covers (one window per build)
+  const meta = { generatedAt, lastCrawl: input.lastCrawl, sparkQ: completeQuarters(input.today, SPARK_QUARTERS) };
   for (const m of MARKETS) {
     const ents = m.key === 'all' ? summaries : summaries.filter(e => e.market === m.key);
-    // sparkQ: the complete quarters every spark covers (one window per build)
-    const body = JSON.stringify({ generatedAt, lastCrawl: input.lastCrawl, sparkQ: completeQuarters(input.today, SPARK_QUARTERS), entities: ents });
-    fs.writeFileSync(path.join(input.outDir, `entities-${m.key}.json`), body);
-    files[`entities-${m.key}.json`] = body.length;
+    const b = entityFileBodies(ents, live, meta);
+    for (const [f, body] of [[`entities-${m.key}.json`, b.main], [`entities-${m.key}-tail.json`, b.tail]] as const) {
+      fs.writeFileSync(path.join(input.outDir, f), body);
+      files[f] = body.length;
+      filesBr[f] = brotliBytes(body);
+    }
+    const budget = m.key === 'all' ? BUDGET_ALL_BR : BUDGET_MARKET_BR;
+    if (filesBr[`entities-${m.key}.json`] > budget) overBudget.push(`entities-${m.key}.json ${(filesBr[`entities-${m.key}.json`] / 1024).toFixed(0)}KB br > ${(budget / 1024).toFixed(0)}KB`);
     perMarket[m.key] = ents.length;
   }
   const buckets: Record<string, Record<string, unknown>> = {};
@@ -262,8 +304,10 @@ export function emitEntities(input: EntitiesInput): EntitiesReport {
     fs.writeFileSync(path.join(input.outDir, `entity-${b}.json`), body);
     bucketsBytes += body.length;
   }
+  console.log(`[entities] files (KB brotli main / tail): ${MARKETS.map(m => `${m.key} ${(filesBr[`entities-${m.key}.json`] / 1024).toFixed(1)}/${(filesBr[`entities-${m.key}-tail.json`] / 1024).toFixed(1)}`).join(' · ')}`);
+  if (overBudget.length) console.warn(`::warning::[entities] over the size budget: ${overBudget.join('; ')}`);
   console.log(`[entities] ${summaries.length} entities (${Object.entries(perMarket).map(([k, n]) => `${k}:${n}`).join(' ')}) from ${soldRows.toLocaleString()} sold rows (${unkeyed} not by their maker) · details ${details.size} in 256 buckets ${(bucketsBytes / 1048576).toFixed(1)}MB raw · ${((Date.now() - t0) / 1000).toFixed(0)}s`);
-  return { entities: summaries.length, perMarket, files, bucketsBytes, soldRows, unkeyed };
+  return { entities: summaries.length, perMarket, files, filesBr, overBudget, bucketsBytes, soldRows, unkeyed };
 }
 
 /** slugs whose sold history ships to the served book only as a sample */
@@ -312,10 +356,13 @@ export function checkEntityFiles(dir: string = SERVED_DIR): string[] {
     try { return JSON.parse(fs.readFileSync(path.join(pages, f), 'utf8')); } catch { bad.push(`${f} missing or unparseable`); return null; }
   };
   for (const m of MARKETS) {
-    const j = read(`entities-${m.key}.json`) as { lastCrawl?: string; entities?: unknown[] } | null;
-    if (!j) continue;
-    if (j.lastCrawl !== crawl) bad.push(`entities-${m.key}.json lastCrawl ${j.lastCrawl} ≠ meta ${crawl}`);
-    if (!Array.isArray(j.entities) || (m.key !== 'all' && MAKER_MARKETS.has(m.key) && !j.entities.length)) bad.push(`entities-${m.key}.json has no entities`);
+    for (const f of [`entities-${m.key}.json`, `entities-${m.key}-tail.json`]) {
+      const j = read(f);
+      if (!j) continue;
+      if (!isEntitiesWire(j)) { bad.push(`${f} is not the v2 entities wire`); continue; }
+      if (j.lastCrawl !== crawl) bad.push(`${f} lastCrawl ${j.lastCrawl} ≠ meta ${crawl}`);
+      if (j.tier === 'main' && m.key !== 'all' && MAKER_MARKETS.has(m.key) && !j.c.id.length) bad.push(`${f} has no entities`);
+    }
   }
   for (let i = 0; i < 256; i++) {
     const b = i.toString(16).padStart(2, '0');
@@ -331,7 +378,7 @@ if (require.main === module) {
     if (process.argv.includes('--check')) {
       const bad = checkEntityFiles(dir);
       if (bad.length) { console.error(`[entities] CHECK FAILED (${bad.length}):\n  ${bad.slice(0, 20).join('\n  ')}`); process.exit(1); }
-      console.log('[entities] check: 8 market files + 256 buckets present, stamped with tonight\'s crawl');
+      console.log('[entities] check: 8 market files + 8 tails + 256 buckets present, stamped with tonight\'s crawl');
     } else {
       emitEntities({ ...servedEntitiesInput(dir), today: process.env.RAY_ENTITY_TODAY || buildDay(), outDir: path.join(dir, 'pages') });
     }

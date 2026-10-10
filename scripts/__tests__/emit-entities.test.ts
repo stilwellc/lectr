@@ -88,7 +88,7 @@ test('emit-entities: writes 8 market files + 256 stamped buckets, and the nightl
   assert.deepEqual(checkEntityFiles(dir), []);
   // another night's meta: every file is flagged
   fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify({ lastCrawl: '2026-10-10T12:00:00.000Z' }));
-  assert.equal(checkEntityFiles(dir).length, 8 + 256);
+  assert.equal(checkEntityFiles(dir).length, 16 + 256);
   fs.rmSync(path.join(dir, 'pages', 'entities-art.json'));
   assert.ok(checkEntityFiles(dir).some(s => s.startsWith('entities-art.json missing')));
   fs.rmSync(dir, { recursive: true, force: true });

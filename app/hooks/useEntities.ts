@@ -5,7 +5,11 @@
  *
  * SOURCE ORDER, per id:
  *   1. pages/entities-<market>.json (the nightly's one-stats-function
- *      summaries — scripts/emit-entities, data agent);
+ *      summaries — scripts/emit-entities, data agent), on the slim v2 wire
+ *      (app/lib/entity/wire decodes it; a v1 file still reads as-is). The
+ *      main file holds makers + every live entity + the top sold-only; the
+ *      rest sit in entities-<market>-tail.json, fetched only when a row
+ *      needs an id the main file lacks (or a caller asks: opts.tail);
  *   2. FAIL-SOFT ADAPTERS over today's files, so the site never breaks on a
  *      data build that predates the entities files:
  *        mk:  stats.json (+ market.json verified movers, page-stats faces)
@@ -33,6 +37,7 @@ import {
   DISCIPLINE, COLLECTION_CATS, PLAYER_CAT, REST_TAG, FR_DOMAIN, pageHrefOf, followKeyOf, KIND,
 } from '../lib/entity/kinds';
 import type { NameEntry } from '../lib/entity/live';
+import { decodeEntities, isEntitiesWire } from '../lib/entity/wire';
 
 /** a summary + its detail when the source already holds it (the adapters do) */
 export interface EntityBundle {
@@ -63,19 +68,36 @@ async function getJson<T>(url: string): Promise<T | null> {
   } catch { return null; }
 }
 const verOf = (v?: string) => (v ? `?v=${encodeURIComponent(v)}` : '');
-const entitiesP = new Map<string, Promise<EntitiesFile | null>>();
+/** a decoded entities file (main or tail) */
+export type LoadedEntities = EntitiesFile & { tier?: 'main' | 'tail'; tailN?: number };
+/** the v2 wire decoded; a v1 file (summaries inline) as-is; else null */
+export function readEntitiesFile(j: unknown): LoadedEntities | null {
+  if (isEntitiesWire(j)) return decodeEntities(j);
+  return j && Array.isArray((j as EntitiesFile).entities) ? (j as EntitiesFile) : null;
+}
+const entitiesP = new Map<string, Promise<LoadedEntities | null>>();
 /** a data build without entities files carries no entity-<bb> buckets either */
 let entitiesMissing = false;
-export function loadEntities(market: Market, ver?: string): Promise<EntitiesFile | null> {
+export function loadEntities(market: Market, ver?: string): Promise<LoadedEntities | null> {
   let p = entitiesP.get(market);
   if (!p) {
-    p = getJson<EntitiesFile>(`${BASE}/pages/entities-${market}.json${verOf(ver)}`)
-      .then(f => {
-        const ok = f && Array.isArray(f.entities) ? f : null;
+    p = getJson<unknown>(`${BASE}/pages/entities-${market}.json${verOf(ver)}`)
+      .then(j => {
+        const ok = readEntitiesFile(j);
         if (!ok) entitiesMissing = true;
         return ok;
       });
     entitiesP.set(market, p);
+  }
+  return p;
+}
+const tailP = new Map<string, Promise<LoadedEntities | null>>();
+/** the sold-only long tail (lazy: a row needs an id the main file lacks) */
+export function loadEntitiesTail(market: Market, ver?: string): Promise<LoadedEntities | null> {
+  let p = tailP.get(market);
+  if (!p) {
+    p = getJson<unknown>(`${BASE}/pages/entities-${market}-tail.json${verOf(ver)}`).then(readEntitiesFile);
+    tailP.set(market, p);
   }
   return p;
 }
@@ -98,7 +120,7 @@ export function loadEntityDetail(id: string, ver?: string): Promise<EntityDetail
   return p.then(m => (m && m[id]) || null);
 }
 /** test seam: forget every cached fetch */
-export function _resetEntityCaches() { entitiesP.clear(); catP = null; playersP = null; detailP.clear(); entitiesMissing = false; }
+export function _resetEntityCaches() { entitiesP.clear(); tailP.clear(); catP = null; playersP = null; detailP.clear(); entitiesMissing = false; }
 
 /** a promise's value as state (undefined = pending, null = absent).
  *  `keep`: while a NEW loader is pending, return the last one's value (a
@@ -293,6 +315,10 @@ export interface UseEntitiesOpts {
   players?: boolean;
   /** the sports sport pick (cat-stats per-sport rows) */
   sport?: string | null;
+  /** fetch the sold-only tail now (a reader searching / paging past the
+   *  main list for sold-only entities). A row whose id the main file lacks
+   *  fetches it regardless. */
+  tail?: boolean;
 }
 
 /**
@@ -300,7 +326,7 @@ export interface UseEntitiesOpts {
  * `market`, keyed by entity id.
  */
 export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entities {
-  const { namesAll, subs: wantSubs = false, players: wantPlayers = false, sport = null } = opts;
+  const { namesAll, subs: wantSubs = false, players: wantPlayers = false, sport = null, tail: wantTail = false } = opts;
   const { statsByArtist, market: marketData, lastCrawl } = useRayData();
 
   // 1. the nightly's file (absent on an older data build → the adapters).
@@ -310,7 +336,7 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
   // file's would then replace
   const loadFile = useMemo(() => () => loadEntities(market), [market]);
   const file = useLoad(loadFile, true);
-  const fileMap = useMemo(() => {
+  const mainMap = useMemo(() => {
     if (!file) return null;
     if (file.lastCrawl && lastCrawl && file.lastCrawl !== lastCrawl) {
       // the coherence stamp: one crawl's summaries over another crawl's book
@@ -321,6 +347,24 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
     for (const s of file.entities) m.set(s.id, { s, detail: null, sparkQ });
     return m;
   }, [file, lastCrawl, market]);
+  // the tail: only when asked, or when a live group's id is not in the main
+  // file (the build's book and the reader's can differ by a crawl)
+  const tailNeeded = useMemo(() => {
+    if (!file || !file.tailN || !mainMap) return false;
+    if (wantTail) return true;
+    let miss = false;
+    namesAll?.forEach((_, id) => { if (!miss && !mainMap.has(id) && !id.startsWith('~:')) miss = true; });
+    return miss;
+  }, [file, mainMap, wantTail, namesAll]);
+  const loadTail = useMemo(() => (tailNeeded ? () => loadEntitiesTail(market) : null), [tailNeeded, market]);
+  const tailFile = useLoad(loadTail);
+  const fileMap = useMemo(() => {
+    if (!mainMap || !tailFile || !tailNeeded) return mainMap;
+    const m = new Map(mainMap);
+    const sparkQ = tailFile.sparkQ ?? file?.sparkQ ?? null;
+    for (const s of tailFile.entities) if (!m.has(s.id)) m.set(s.id, { s, detail: null, sparkQ });
+    return m;
+  }, [mainMap, tailFile, tailNeeded, file]);
   const source: Entities['source'] = file === undefined ? 'pending' : file ? 'entities' : 'adapter';
 
   // page-stats: maker faces + the athletes with a dossier

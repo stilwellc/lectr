@@ -32,10 +32,10 @@ export interface EntityRecord {
   p: number;
   /** ISO day */
   d: string;
-  /** title */
-  t: string;
-  /** house */
-  h: string;
+  /** title — absent on the slim wire (the detail bucket's top[0] carries it: recordOf) */
+  t?: string;
+  /** house — absent on the slim wire, as the title */
+  h?: string;
   id?: string;
   img?: string | null;
 }
@@ -79,6 +79,15 @@ export interface EntitySummary extends EntityRef {
   medLens?: string | null;
 }
 
+/** the record with its title / house / image: the summary's [price, day]
+ *  matched to the detail's top results (the record is top[0] on a sale tie
+ *  broken by the newest day — matched on price + day, never assumed) */
+export function recordOf(rec: EntityRecord | null, detail: { top?: EntityResultRow[] } | null): EntityRecord | null {
+  if (!rec || (rec.t && rec.h)) return rec;
+  const hit = detail?.top?.find(r => Math.round(r.p) === Math.round(rec.p) && r.d === rec.d);
+  return hit ? { ...rec, t: rec.t || hit.t, h: rec.h || hit.h, id: rec.id ?? hit.id, img: rec.img ?? hit.img } : rec;
+}
+
 /** one result row (top / recent / a lens's top) */
 export interface EntityResultRow { id: string; img: string | null; p: number; d: string; t: string; h: string; cat: string }
 
@@ -96,6 +105,7 @@ export interface EntityDetail {
   lensSplit?: { key: string; label: string; n: number; n12: number; med: number | null; yearly: { y: number; med: number | null; n: number; partial?: true }[]; top: EntityResultRow[] }[];
 }
 
+/** a decoded entities file (app/lib/entity/wire decodes the v2 wire into this) */
 export interface EntitiesFile {
   generatedAt: string;
   lastCrawl: string;

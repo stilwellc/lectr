@@ -425,7 +425,8 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh pull-closek 75
       # THE ENTITY FILES (makers overhaul, Oct 10 2026): the single load also
-      # writes pages/entities-<market>.json + pages/entity-<bb>.json from the
+      # writes pages/entities-<market>[-tail].json (slim v2 wire, app/lib/entity/wire;
+      # warns over the brotli budget) + pages/entity-<bb>.json from the
       # full corpus (scripts/emit-entities.ts, phase 2b of runDownstream) —
       # ADVISORY like page data: a failed emit warns but never holds back the
       # night's book — the client fails soft to stats.json/players.json; the

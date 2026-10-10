@@ -31,7 +31,7 @@ import { makerLineOf, labelLineOf, searchTextOf } from '../lib/lot-labels';
 import { feedQueryMatches, feedSearchHref } from '../lib/maker-pool';
 import { useFollows, catFollow } from '../lib/follows';
 import { isFlagged } from '../lib/flags';
-import { makerId, makerSlugOf, subId, subPartsOf, type EntityDetail, type EntityRecord } from '../lib/entity/model';
+import { makerId, makerSlugOf, subId, subPartsOf, recordOf, type EntityDetail, type EntityRecord } from '../lib/entity/model';
 import {
   BID_MARKETS, NAME_HEAD, COLLECTION_CATS, COLLECTION_MARKETS, SUBJECT_MARKETS, rowKindOf, rowPolicy, type RowKind,
 } from '../lib/entity/kinds';
@@ -702,6 +702,9 @@ function DossierSold({ r }: { r: Row }) {
   const det = r.detail ?? detail;
   const hist = useMemo(() => histOf(det), [det]);
   const houses = det?.houses?.length ? det.houses.slice().sort((a, b) => b.n - a.n).slice(0, 3) : null;
+  // the slim summary carries the record's price + day; its title + house
+  // come from the detail's top results
+  const rec = useMemo(() => recordOf(r.record, det), [r.record, det]);
   return (
     <>
       {hist.length >= 4 ? (
@@ -716,8 +719,8 @@ function DossierSold({ r }: { r: Row }) {
       {(!inline || det) && <div className="mkx-grid">
         <div>
           <span className="kicker">The record</span>
-          {r.record ? (
-            <p><b>{formatPrice(r.record.p)}</b>{r.record.t ? <> · {r.record.t.length > 44 ? `${r.record.t.slice(0, 44)}…` : r.record.t}</> : null}{r.record.h ? <> · {r.record.h}</> : null}{r.record.d ? <> · {formatDate(r.record.d)}</> : null}</p>
+          {rec ? (
+            <p><b>{formatPrice(rec.p)}</b>{rec.t ? <> · {rec.t.length > 44 ? `${rec.t.slice(0, 44)}…` : rec.t}</> : null}{rec.h ? <> · {rec.h}</> : null}{rec.d ? <> · {formatDate(rec.d)}</> : null}</p>
           ) : <p>—</p>}
         </div>
         <div>
