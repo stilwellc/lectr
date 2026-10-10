@@ -65,6 +65,10 @@ export interface EntitySummary extends EntityRef {
   /** complete quarters only (never the partial current quarter); null = thin quarter (n<3) */
   spark: (number | null)[] | null;
   sparkN: number[] | null;
+  /** (r7) 'matched' = the same items' price level, chained (cards, Pokémon,
+   *  references, editions — app/lib/entity/stats sameItemSpark); 'median' =
+   *  the quarterly median sale; absent on an older payload (= median) */
+  sparkBasis?: 'median' | 'matched' | null;
   /** like for like (app/lib/entity/stats yoyOf): 'matched' = the median of
    *  per-identity ratios, n = identities sold in both years; 'median' = pooled
    *  medians, only on a stable intake, n = the smaller year. lo/hi = its 90%

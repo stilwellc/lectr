@@ -25,7 +25,7 @@
  * subject.ts, subject-groups.ts and lot-labels.ts — never duplicated here.
  */
 import { marketOf, MAKER_MARKETS, ARTIST_LABEL, type Market } from '../../constants';
-import { isMisattributed } from '../attribution';
+import { isMisattributed, isWorkByArtist } from '../attribution';
 import { lotSubjectOf } from '../maker-subjects';
 import { taxonOf, subLabel, CAT_LABEL, type CatKey } from '../taxonomy';
 import type { EntityKind } from './model';
@@ -62,6 +62,11 @@ function read(l: KeyLot): string | null {
   }
   const s = lotSubjectOf(l);
   if (s) {
+    // (r7 data fix) a tracked artist's OWN work on a collectibles desk (RR's signed Warhol
+    // screenprints, Picasso sketches) is the maker's, never a second "person" entity; the
+    // artist's autographs and ephemera stay the person subject (app/lib/attribution isWorkByArtist)
+    const mk = s.kind === 'person' ? artistMakerOf(s.playerSlug) : null;
+    if (mk && isWorkByArtist(String(l.title || '')) && !isMisattributed(mk, String(l.title || ''), String(l.description || ''))) return `mk:${mk}`;
     if (s.kind === 'player' && s.playerSlug) return `pl:${s.playerSlug}`;
     if (s.kind === 'set') return `st:${market}|${s.key}`;
     return `sj:${market}|${s.key}`;
@@ -69,6 +74,14 @@ function read(l: KeyLot): string | null {
   const t = taxonOf(l);
   const sub = t.cat === 'space-science' && t.sub === 'science' && SCIENCE_COLLECTIONS.has(artist) ? artist : t.sub;
   return `cs:${t.cat}:${sub}`;
+}
+
+/** the art / design maker a person subject's slug names (the maker slug IS the person's
+ *  name slug: 'andy-warhol', 'pablo-picasso'), or null */
+export function artistMakerOf(personSlug: string | null | undefined): string | null {
+  if (!personSlug || !ARTIST_LABEL[personSlug]) return null;
+  const m = marketOf(personSlug);
+  return m === 'art' || m === 'design' ? personSlug : null;
 }
 
 const SUBKIND: Record<string, string> = {

@@ -77,6 +77,10 @@ export interface EntityFigures {
   record: { p: number; d: string; t: string; h: string; id: string; img: string | null } | null;
   spark: (number | null)[] | null;
   sparkN: number[] | null;
+  /** (r7) what the spark reads: 'median' = the lens's quarterly median sale;
+   *  'matched' = an identity-keyed lens (cards, Pokémon, references,
+   *  editions) — the same items' price level, chained (sameItemSpark) */
+  sparkBasis: 'median' | 'matched' | null;
   sparkQ: string[];
   yoy: Yoy | null;
   quarters: { q: string; med: number | null; n: number; high: number }[];
@@ -252,6 +256,85 @@ export function yoyOf(scoped: readonly SoldPoint[], today: string): Yoy | null {
   return move(strong.lo, strong.hi) ? yoy(r.d, r.lo, r.hi, lo, 'median') : null;
 }
 
+/**
+ * (r7 data fix) THE SAME-ITEMS SPARK. A lens whose sales mostly carry an
+ * identity (a card at a grade, a Pokémon card, a watch reference, a print
+ * edition — YOY_KEYED_SHARE) drew its trend as the pooled quarterly median,
+ * which swings with what sold: Jordan's last quarter read $7,375 against
+ * $1,098 the quarter before at n≈500 — a Goldin Elite sale vs a Weekly one,
+ * not a price move, beside an honest matched YoY. This reads the same items
+ * instead: a repeat-sales index (Bailey–Muth–Nourse) — every identity's
+ * median price per quarter, consecutive sold quarters paired into log
+ * ratios, least squares for one level per quarter (the first anchored at 0).
+ * A quarter prints only when at least MIN_Q_N repeat-sold identities price it
+ * (the pooled spark's own gate);
+ * the levels are then scaled so the newest four printed quarters average the
+ * lens's typical sale — the line's SHAPE is the same items, its height the
+ * dollars a reader already sees beside it. null = too few repeat sales.
+ */
+export function sameItemSpark(scoped: readonly SoldPoint[], quarters: readonly string[], anchor: number | null): { v: (number | null)[]; n: number[] } | null {
+  const qi = new Map(quarters.map((q, i) => [q, i] as const));
+  const byK = new Map<string, Map<number, number[]>>();
+  for (const r of scoped) {
+    if (!r.k || !(r.p > 0)) continue;
+    const i = qi.get(quarterOf(r.d));
+    if (i === undefined) continue;
+    let m = byK.get(r.k);
+    if (!m) byK.set(r.k, m = new Map());
+    (m.get(i) || m.set(i, []).get(i)!).push(r.p);
+  }
+  const Q = quarters.length;
+  const pairs: { a: number; b: number; y: number }[] = [];
+  const touch = new Array<number>(Q).fill(0);
+  byK.forEach(m => {
+    if (m.size < 2) return;
+    const qs = Array.from(m.keys()).sort((x, y) => x - y);
+    const lv = qs.map(i => Math.log(medianSorted(m.get(i)!.slice().sort((x, y) => x - y))));
+    for (const i of qs) touch[i]++;
+    for (let j = 1; j < qs.length; j++) pairs.push({ a: qs[j - 1], b: qs[j], y: lv[j] - lv[j - 1] });
+  });
+  if (pairs.length < MIN_YOY_PAIRS) return null;
+  // normal equations for β_1..β_{Q-1} (β_0 = 0); a whisper of ridge keeps an
+  // uncovered quarter solvable — it never prints (touch < MIN_YOY_PAIRS)
+  const P = Q - 1;
+  const A = Array.from({ length: P }, () => new Array<number>(P).fill(0));
+  const B = new Array<number>(P).fill(0);
+  for (const { a, b, y } of pairs) {
+    const ia = a - 1, ib = b - 1;
+    if (ib >= 0) { A[ib][ib] += 1; B[ib] += y; }
+    if (ia >= 0) { A[ia][ia] += 1; B[ia] -= y; }
+    if (ia >= 0 && ib >= 0) { A[ia][ib] -= 1; A[ib][ia] -= 1; }
+  }
+  for (let i = 0; i < P; i++) A[i][i] += 1e-6;
+  // Gaussian elimination (P ≤ 11)
+  for (let c = 0; c < P; c++) {
+    let piv = c;
+    for (let r = c + 1; r < P; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]]; [B[c], B[piv]] = [B[piv], B[c]];
+    for (let r = c + 1; r < P; r++) {
+      const f = A[r][c] / A[c][c];
+      if (!f) continue;
+      for (let k = c; k < P; k++) A[r][k] -= f * A[c][k];
+      B[r] -= f * B[c];
+    }
+  }
+  const beta = new Array<number>(P).fill(0);
+  for (let r = P - 1; r >= 0; r--) {
+    let acc = B[r];
+    for (let k = r + 1; k < P; k++) acc -= A[r][k] * beta[k];
+    beta[r] = acc / A[r][r];
+  }
+  const lvl = [0, ...beta];
+  const ok = lvl.map((_, i) => touch[i] >= MIN_Q_N);
+  const printed = lvl.map((b, i) => (ok[i] ? b : null)).filter((b): b is number => b != null);
+  if (printed.length < MIN_SPARK_POINTS) return null;
+  // the newest four printed quarters average the typical sale
+  const recent = printed.slice(-4);
+  const base = recent.reduce((x, y) => x + y, 0) / recent.length;
+  const scale = anchor && anchor > 0 ? anchor : Math.exp(medianSorted(scoped.map(r => Math.log(r.p)).sort((x, y) => x - y)));
+  return { v: lvl.map((b, i) => (ok[i] ? Math.round(scale * Math.exp(b - base)) : null)), n: touch };
+}
+
 export const TITLE_MAX = 120;
 const resultRow = (r: SoldPoint, labels: Labels) => ({ id: r.id, img: r.img, p: Math.round(r.p), d: r.d, t: r.t.slice(0, TITLE_MAX), h: r.h, cat: labels.lens(r.lens) });
 
@@ -260,7 +343,14 @@ const resultRow = (r: SoldPoint, labels: Labels) => ({ id: r.id, img: r.img, p: 
  * calendar day (YYYY-MM-DD) — pass it explicitly so the build and a test
  * agree on the window.
  */
-export function entityFigures(rows: readonly SoldPoint[], today: string, labels: Labels): EntityFigures {
+export interface FigureOpts {
+  /** (r7) the lens the entity's LIVE book is mostly in (≥ half its live lots) —
+   *  the median reads it when it has a 12-month median of its own, so the
+   *  typical sale names what is on the block (Star Wars: 59 of 76 live lots
+   *  are props; the median read 11 "other memorabilia" sales) */
+  liveLens?: string | null;
+}
+export function entityFigures(rows: readonly SoldPoint[], today: string, labels: Labels, opts: FigureOpts = {}): EntityFigures {
   const pts = rows.filter(r => r.p > 0 && isSaleDay(r.d) && r.d <= today);
   const from12 = dayMinus(today, 365);
   const in12 = (r: SoldPoint) => r.d > from12 && r.d <= today;
@@ -277,7 +367,8 @@ export function entityFigures(rows: readonly SoldPoint[], today: string, labels:
     m.forEach((c, k) => { if (c > n || (c === n && best !== null && k < best)) { n = c; best = k; } });
     return best;
   };
-  const lens = pick(count(last12.length ? last12 : pts, r => r.lens));
+  let lens: string | null = pick(count(last12.length ? last12 : pts, r => r.lens));
+  if (opts.liveLens && opts.liveLens !== lens && last12.filter(r => r.lens === opts.liveLens).length >= MIN_MED_N) lens = opts.liveLens;
   const scoped = lens ? pts.filter(r => r.lens === lens) : [];
   const scoped12 = scoped.filter(in12).map(r => r.p);
 
@@ -285,8 +376,17 @@ export function entityFigures(rows: readonly SoldPoint[], today: string, labels:
   const spQ = completeQuarters(today, SPARK_QUARTERS);
   const byQ = new Map<string, number[]>();
   for (const r of scoped) { const q = quarterOf(r.d); (byQ.get(q) || byQ.set(q, []).get(q)!).push(r.p); }
-  const sparkN = spQ.map(q => byQ.get(q)?.length || 0);
-  const sparkV = spQ.map(q => gated(byQ.get(q) || [], MIN_Q_N));
+  // (r7) an identity-keyed lens draws the same items, chained (sameItemSpark) —
+  // never the pooled median that swings with the mix when the items can chain
+  const spSet = new Set(spQ);
+  const inWin = scoped.filter(r => spSet.has(quarterOf(r.d)));
+  const keyedLens = inWin.length > 0 && inWin.filter(r => r.k).length >= YOY_KEYED_SHARE * inWin.length;
+  const same = keyedLens ? sameItemSpark(scoped, spQ, gated(scoped12, MIN_MED_N)) : null;
+  let sparkN = spQ.map(q => byQ.get(q)?.length || 0);
+  let sparkV: (number | null)[] = spQ.map(q => gated(byQ.get(q) || [], MIN_Q_N));
+  // …and where too few items repeat to chain, the quarterly median stands — said as such
+  // (sparkBasis 'median'; the row and the compare tray name the basis)
+  if (same) { sparkV = same.v; sparkN = same.n; }
   const sparkOk = sparkV.filter(v => v != null).length >= MIN_SPARK_POINTS;
 
   const yoy = yoyOf(scoped, today);
@@ -336,6 +436,7 @@ export function entityFigures(rows: readonly SoldPoint[], today: string, labels:
     record: rec ? { p: Math.round(rec.p), d: rec.d, t: rec.t.slice(0, TITLE_MAX), h: rec.h, id: rec.id, img: rec.img } : null,
     spark: sparkOk ? sparkV : null,
     sparkN: sparkOk ? sparkN : null,
+    sparkBasis: sparkOk ? (same ? 'matched' : 'median') : null,
     sparkQ: spQ,
     yoy,
     quarters,

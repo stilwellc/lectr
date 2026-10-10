@@ -94,7 +94,7 @@ export function teamCardOf(title: string): string | null {
 // ── sports sealed wax / set lots → product line + year ────────────────
 const CARD_BRAND = /^(?:Topps|Bowman|Fleer|Upper Deck|Donruss|Panini|Score|Leaf|SkyBox|Skybox|NBA Hoops|Hoops|Pro Set|O-Pee-Chee|OPC|Stadium Club|Goudey|Play Ball|Playoff|Pacific|Star Co\.?|Star(?! Wars| Trek)|Pinnacle|Select|Collector's Choice|Ultra|Flair|Finest|Sage|Press Pass|Classic|Kellogg's|Hostess|Post|Berk Ross|Bazooka|Parkhurst|Sportflics|Leaf|SP|Metal|Bowman's Best|Prizm|Optic|Mosaic|Contenders|Prestige|Absolute|Chronicles|Obsidian|Spectra|Revolution|Certified|Elite|Zenith|Immaculate|National Treasures|Flawless|Exquisite|Signature Rookies|Action Packed|Collector's Edge|Wild Card|Front Row|Diamond Kings|Red Man|Exhibits|Dan Dee|Jello|Nabisco|Wheaties|Scoops)\b/;
 /** where a product line ends: the sealed / set form */
-const PRODUCT_END = /\s(?:-\s|\(|High[- ]Grade|Factory[- ]Sealed|Factory Set|Unopened|Opened|Sealed|Hobby|Retail|Blaster|Mega|Jumbo|Rack|Cello|Wax|Vending|Fat Pack|Hanger|Value|Box|Boxes|Pack|Packs|Case|Tin|Complete|Near|Partial|Master|Starter|Team Set|Set|Sets|Lot|Collection|Pair|Trio|PSA-Graded|BGS-Graded|SGC-Graded|CGC-Graded|Graded|Uncut|Break|Display|Bag|Bundle)\b/;
+const PRODUCT_END = /\s(?:-\s|\(|(?:PSA|SGC|BGS|CGC|GAI|KSA|Beckett)\b|High[- ]Grade|Factory[- ]Sealed|Factory Set|Unopened|Opened|Sealed|Hobby|Retail|Blaster|Mega|Jumbo|Rack|Cello|Wax|Vending|Fat Pack|Hanger|Value|Box|Boxes|Pack|Packs|Case|Tin|Complete|Near|Partial|Master|Starter|Team Set|Set|Sets|Lot|Collection|Pair|Trio|PSA-Graded|BGS-Graded|SGC-Graded|CGC-Graded|Graded|Uncut|Break|Display|Bag|Bundle)\b/;
 
 /**
  * "97 Upper Deck SP Basketball Factory-Sealed Hobby Box (30 Packs)" →
@@ -114,6 +114,16 @@ export function productLineOf(title: string): string | null {
   // a single card ("#327 Patrick Mahomes"), a featured player, a size — never a product line
   if (/#|\bFeaturing\b|\bwith\b|\d+x\d+/i.test(line)) return null;
   line = line.replace(/[-\s]+(?:Series|Ser\.)\s*(?:\d|One|Two|Three|I{1,3})$/, '').replace(/[\s,:-]+$/, '');
+  // (r7 data fix) a print run inside the set is the set: "1952 Topps Low-Number", "… High Numbers",
+  // "1960 Topps Second Series", "2022 Topps Series 1 Baseball" are 1952 / 1960 / 2022 Topps (they
+  // were 46 set ids). A different product ("Update", "Heritage", "Chrome") keeps its name.
+  line = line.replace(/[-\s]+(?:Low|High|Semi-High)[- ]Numbers?\b/gi, '')
+    .replace(/[-\s]+(?:First|Second|Third|Fourth|Fifth|Sixth|Seventh|1st|2nd|3rd|[4-7]th|High|Low)[- ]Series\b/gi, '')
+    .replace(/[-\s]+Series[- ](?:\d|One|Two|Three|I{1,3})\b/gi, '')
+    // …and baseball is the default sport of an unnamed line: "1952 Topps Baseball" IS "1952 Topps"
+    // (every other sport keeps its word — "1986 Fleer Basketball" is not "1986 Fleer")
+    .replace(/\s+Baseball\b/g, '')
+    .replace(/\s+/g, ' ').replace(/[\s,:-]+$/, '').trim();
   const words = line.split(' ');
   if (words.length > 5) return null;
   return `${season} ${line}`;
