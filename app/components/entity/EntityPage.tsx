@@ -153,6 +153,8 @@ export default function EntityPage({ id }: { id: string }) {
   }, [setFilters, anchorId]);
 
   const [every, setEvery] = useState(false);
+  // the record photo's frame goes with a dead hotlink (no empty bordered box)
+  const [recImgDeadSrc, setRecImgDeadSrc] = useState<string | null>(null);
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
   const houseCount = sources.length || new Set(allLots.map(l => l.auctionHouse)).size;
@@ -187,6 +189,8 @@ export default function EntityPage({ id }: { id: string }) {
   // from the detail's top results (model recordOf — matched, never assumed)
   const rec = recordOf(summary?.record ?? null, detail);
   const recImg = httpsImg(rec?.img ?? null);
+  const recImgDead = !!recImg && recImgDeadSrc === recImg;
+  const onRecImgDead = () => setRecImgDeadSrc(recImg ?? null);
   const recTitle = rec?.t || '';
   const recId = rec?.id || null;
   const houses = detail?.houses ?? [];
@@ -233,7 +237,7 @@ export default function EntityPage({ id }: { id: string }) {
             <div className="v">{pending ? '—' : summary?.med12m != null ? formatPrice(summary.med12m) : '—'}</div>
             <div className="s">
               {pending ? ' ' : summary?.med12m != null
-                ? `${summary.medScope ? `${summary.medScope.toLowerCase()} · ` : ''}12-mo median · n=${(summary.med12mN ?? 0).toLocaleString()}`
+                ? `${summary.medScope ? `${summary.medScope.toLowerCase()} · ` : ''}12-mo median${summary.med12mN ? ` · n=${summary.med12mN.toLocaleString()}` : ''}`
                 : 'fewer than 5 sales in the past 12 months'}
             </div>
           </div>
@@ -241,9 +245,9 @@ export default function EntityPage({ id }: { id: string }) {
             <div>
               <div className="k">Record</div>
               <div className="v" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                {recImg ? (
+                {recImg && !recImgDead ? (
                   <span className="lectr-lot-comp-thumb" aria-hidden style={{ width: 32, height: 32 }}>
-                    <PlateImg src={sizedImg(recImg, 120)} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                    <PlateImg src={sizedImg(recImg, 120)} alt="" loading="lazy" referrerPolicy="no-referrer" onDead={onRecImgDead} />
                   </span>
                 ) : null}
                 {recId ? <Link href={`/lot?id=${encodeURIComponent(recId)}`} style={{ color: 'inherit', textDecoration: 'none' }}>{formatPrice(rec.p)}</Link> : formatPrice(rec.p)}
