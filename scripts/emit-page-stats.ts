@@ -146,7 +146,16 @@ export async function emitPageStats(opts: PageStatsOpts = {}): Promise<void> {
   {
     const bySlug = new Map<string, AuctionLot[]>();
     for (const a of ARTISTS) bySlug.set(a.slug, []);
-    for (const l of allLots) bySlug.get(l.artist)?.push(l);
+    // (r5) a maker's sold history is only the maker's: appropriation ("STURTEVANT
+    // (1924-2014) Warhol Flowers"), "after"/school-of/manner-of and other-artist-
+    // first rows never ride the shard, even when a stale corpus row still carries
+    // the slug (app/lib/attribution notByMaker — the corpus scrub drops them too)
+    let notBy = 0;
+    for (const l of allLots) {
+      if (isMisattributed(l.artist, l.title || '', (l as { description?: string }).description || '')) { notBy++; continue; }
+      bySlug.get(l.artist)?.push(l);
+    }
+    if (notBy) log(`maker shards: ${notBy} misattributed rows kept off their maker's page`);
     // the archive tier rides only the makers whose page mounts it (sports +
     // science — /makers/[slug] isArchiveMaker), MAIN WINS on a shared id
     // (useSoldArchive's allLotsWithArchive merge)

@@ -15,12 +15,16 @@
  * links to their /player dossier only when the dossier exists (page-stats
  * playerIndex, registered below) and the pipeline stamped the lot to them;
  * every other subject keeps the maker link.
+ *
+ * (r5) Collective subjects read the same way (app/lib/subject-groups): a
+ * team-signed piece names its team-season, sealed wax / set lots their
+ * product line + year, sealed Pokémon their set, an instrument its maker.
  */
 import { ARTIST_LABEL } from '../constants';
 import { parseCard, cardLadderKey, playerSlugOf } from './cards';
 import { taxonOf, subLabel, CAT_LABEL, SPORTS, type CatKey } from './taxonomy';
 import { cardBadgesOf } from './facets';
-import { subjectOf } from './subject';
+import { subjectOf, cardGroupOf } from './subject';
 
 const CARD_MAKERS = new Set(['sports-cards', 'graded-cards']);
 const POKE_NAME = /#[\w-]+\s+(.+?)(?:\s+-\s|\s*$)/;
@@ -60,7 +64,7 @@ export function makerLineOf(lot: NamedLot): MakerLine {
   if (title && CARD_MAKERS.has(lot.artist) && taxonOf(lot).cat === 'sports-cards') {
     const id = parseCard(title);
     // a player only off a parsed card identity — never a guessed name from a memorabilia title
-    if (!id.notCard && !id.multi && id.player && id.playerSlug && cardLadderKey(id) && PERSON.test(id.player) && !CARD_WORD.test(id.player)) {
+    if (!id.notCard && !id.multi && id.player && id.playerSlug && cardLadderKey(id) && PERSON.test(id.player) && !CARD_WORD.test(id.player.replace(/^Red (?=[A-Z][a-z])/, ''))) {
       out = { name: id.player, href: `/player?id=${encodeURIComponent(id.playerSlug)}` };
     }
   } else if (title && lot.artist === 'pokemon') {
@@ -74,6 +78,12 @@ export function makerLineOf(lot: NamedLot): MakerLine {
       const dossier = !!slug && lot.playerSlug === slug && dossiers.has(slug);
       out = { name: sub.name, href: dossier ? `/player?id=${encodeURIComponent(slug!)}` : fallback.href };
     }
+  }
+  // (r5) a set / sealed / team-card lot with no player or Pokémon: its set or team
+  // ("1986 Fleer Basketball", "Base Set", "Boston Red Sox") — the same name its /makers row carries
+  if (out === fallback && title && (CARD_MAKERS.has(lot.artist) || lot.artist === 'pokemon')) {
+    const g = cardGroupOf(lot);
+    if (g) out = { name: g.name, href: fallback.href };
   }
   memo.set(lot as object, { v: dossierVer, line: out });
   return out;

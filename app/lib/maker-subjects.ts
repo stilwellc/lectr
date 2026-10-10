@@ -17,23 +17,29 @@
  *   film      the film a screen-used piece comes from (subject.filmOf) — a
  *             Star Wars / Harry Potter / Marvel film files under its franchise
  *   franchise an entertainment lot with no person or film but a franchise facet
- *   mission   the one space mission a lot names (subject.missionOf)
+ *   mission   the one space mission a lot names (subject.missionOf), or (r5)
+ *             its program when no numbered mission reads ("Apollo")
+ *   team      (r5) a team-signed piece's team-season, a team card's team
+ *   set       (r5) sealed wax / set lots: product line + year ("1986 Fleer
+ *             Basketball"); sealed Pokémon / set lots: the set ("Base Set")
+ *   brand     (r5) an instrument's maker ("Gibson")
  *
  * No reader → null: the page files the lot under its market's "everything
  * else" row so every live lot is still counted exactly once.
  */
 import { marketOf, ARTIST_LABEL, type Market } from '../constants';
 import { makerLineOf } from './lot-labels';
-import { subjectOf, nameTokensOk } from './subject';
+import { subjectOf, nameTokensOk, cardGroupOf } from './subject';
 
 const CARD_MAKERS = new Set(['sports-cards', 'graded-cards']);
-import { playerSlugOf } from './cards';
+import { playerSlugOf, parseCard, cardLadderKey } from './cards';
 import { lotFacets, FACET_LABEL } from './facets';
 
-export type SubjectKind = 'player' | 'pokemon' | 'person' | 'film' | 'franchise' | 'mission';
+export type SubjectKind = 'player' | 'pokemon' | 'person' | 'film' | 'franchise' | 'mission' | 'team' | 'set' | 'brand';
 
 export interface LotSubject {
-  /** stable within a market: `p:<player-slug>`, `k:<pokemon>`, `f:<film>`, `fr:<facet>`, `m:<mission>` */
+  /** stable within a market: `p:<player-slug>`, `k:<pokemon>`, `f:<film>`, `fr:<facet>`, `m:<mission>`,
+   *  `t:<team>`, `s:<set>`, `b:<brand>` */
   key: string;
   name: string;
   kind: SubjectKind;
@@ -79,15 +85,49 @@ function read(l: SubjectLot): LotSubject | null {
     // the card parser can run a name on into the caption ("Mickey Mantle
     // Boasting Near-Perfect", "AL Home Run Leaders") — a row needs a person
     if (nameTokensOk(line.name.split(' '))) return { key: `p:${slug}`, name: line.name, kind: 'player', playerSlug: slug };
-    if (CARD_MAKERS.has(l.artist)) return null;
+    // (r5) the run-on's first two words when they ARE a name ("Duke Snider Play Brings", "Roger Clemens Pre-Rookie")
+    const two = line.name.split(' ').slice(0, 2);
+    const twoSlug = two.length === 2 && nameTokensOk(two) ? playerSlugOf(two.join(' ')) : null;
+    if (twoSlug) return { key: `p:${twoSlug}`, name: two.join(' '), kind: 'player', playerSlug: twoSlug };
+  }
+  if (CARD_MAKERS.has(l.artist)) {
+    const g = cardGroupOf(l);
+    if (g) return groupRow(g.name, g.kind);
+    if (pm) return null;
+    // (r5) a card with no number to key (pre-war, oddball issues: "1928 Exhibits Frank Frisch") —
+    // the pipeline-stamped athlete, when the title spells that exact name
+    const pn = l.playerName?.trim();
+    const t = String(l.title || '');
+    // …and the only name on it: never a multi-signed piece or a "Jordan/Bird/Magic" run
+    const solo = pn && !/\b(?:Multi-Signed|Dual-Signed|Triple|Trio|Quad)\b/.test(t) && !t.includes(`${pn}/`) && !t.includes(`/${pn}`);
+    const pslug = solo && nameTokensOk(pn.split(' ')) && t.includes(pn) ? playerSlugOf(pn) : null;
+    if (pslug) return { key: `p:${pslug}`, name: pn!, kind: 'player', playerSlug: pslug };
   }
   if (l.artist === 'pokemon') {
+    // the maker line carries a sealed lot's set too (r5) — that is a set row, not a Pokémon
+    const g = cardGroupOf(l);
+    if (g && line.name === g.name) return groupRow(g.name, g.kind);
     return line.name && line.name !== fallback ? { key: `k:${norm(line.name)}`, name: line.name, kind: 'pokemon', playerSlug: null } : null;
   }
+  // (r5) a signed card catalogued under Autographs ("Signed 1989 Score #645 Randy Johnson Rookie") — the card's player
+  if (l.artist === 'autographs' && /^Signed (?:18|19|20)\d{2}\b/.test(String(l.title || ''))) {
+    const id = parseCard(String(l.title).slice(7));
+    if (!id.multi && !id.notCard && id.player && cardLadderKey(id) && nameTokensOk(id.player.split(' '))) {
+      const slug = playerSlugOf(id.player);
+      if (slug) return { key: `p:${slug}`, name: id.player, kind: 'player', playerSlug: slug };
+    }
+  }
   const s = subjectOf(l);
-  if (s?.kind === 'mission') return { key: `m:${norm(s.name)}`, name: s.name, kind: 'mission', playerSlug: null };
+  if (s?.kind === 'mission' || s?.kind === 'program') return { key: `m:${norm(s.name)}`, name: s.name, kind: 'mission', playerSlug: null };
+  if (s?.kind === 'team' || s?.kind === 'set' || s?.kind === 'brand') return groupRow(s.name, s.kind);
   if (s?.kind === 'person') {
-    const slug = playerSlugOf(s.name);
+    // (r5) an act read off the title IS its franchise facet ("The Beatles" / fr-beatles,
+    // "The Rolling Stones" / "Rolling Stones") — one row, the facet's
+    const bare = (x: string) => norm(x).replace(/^the-/, '');
+    const act = franchiseOf(l);
+    if (act && !SOLO_ACT[act] && FACET_LABEL[act] && bare(FACET_LABEL[act]) === bare(s.name)) return { key: `fr:${act}`, name: FACET_LABEL[act], kind: 'franchise', playerSlug: null };
+    // "The Clash Signed…" and "Clash Band-Signed…" are one act — the row key drops a leading "The"
+    const slug = marketOf(l.artist) === 'culture' && /^The [A-Z]/.test(s.name) ? playerSlugOf(s.name.slice(4)) : playerSlugOf(s.name);
     if (!slug) return null;
     // sports memorabilia names an athlete — the same row as their cards
     return { key: `p:${slug}`, name: s.name, kind: marketOf(l.artist) === 'sports' ? 'player' : 'person', playerSlug: slug };
@@ -104,6 +144,10 @@ function read(l: SubjectLot): LotSubject | null {
     return { key: `fr:${fr}`, name: FACET_LABEL[fr], kind: 'franchise', playerSlug: null };
   }
   return null;
+}
+function groupRow(name: string, kind: 'team' | 'set' | 'brand' | string): LotSubject {
+  const k = kind === 'team' ? 'team' : kind === 'brand' ? 'brand' : 'set';
+  return { key: `${k[0]}:${norm(name)}`, name, kind: k, playerSlug: null };
 }
 const SOLO_ACT: Record<string, string> = { 'fr-mj': 'Michael Jackson', 'fr-elvis': 'Elvis Presley' };
 
