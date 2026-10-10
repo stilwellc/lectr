@@ -175,6 +175,31 @@ export function isTriageActive(f: TriageFilters): boolean {
   return f.win != null || f.cat != null || f.sub != null || f.house != null || f.minUsd != null || f.maxUsd != null || f.newOnly || f.fx.length > 0;
 }
 
+// ── the way back ─────────────────────────────────────────────────────────────
+export type RelaxKey = 'win' | 'sub' | 'cat' | 'house' | 'value' | 'new' | 'fx';
+/** When the reader's filters cut a list to nothing: each active filter as a
+ *  one-tap undo, with how many of `lots` that undo alone brings back (the same
+ *  passesTriage rule the list runs). Undos that bring nothing back are left
+ *  out; a picked sub-category relaxes to its category before the category
+ *  itself goes. Order: window, category, house, value, new, refinements. */
+export function relaxTriage(lots: readonly TriageLot[], f: TriageFilters, opts: NewLensOpts = {}): { k: RelaxKey; next: TriageFilters; n: number }[] {
+  const out: { k: RelaxKey; next: TriageFilters; n: number }[] = [];
+  const offer = (k: RelaxKey, patch: Partial<TriageFilters>) => {
+    const next = { ...f, ...patch };
+    let n = 0;
+    for (const l of lots) if (passesTriage(l, next, opts)) n++;
+    if (n > 0) out.push({ k, next, n });
+  };
+  if (f.win) offer('win', { win: null });
+  if (f.cat && f.sub) offer('sub', { sub: null });
+  else if (f.cat) offer('cat', { cat: null, sub: null, fx: [] });
+  if (f.house) offer('house', { house: null });
+  if (f.minUsd || f.maxUsd) offer('value', { minUsd: null, maxUsd: null });
+  if (f.newOnly) offer('new', { newOnly: false });
+  if (f.fx.length) offer('fx', { fx: [] });
+  return out;
+}
+
 // ── URL codec ────────────────────────────────────────────────────────────────
 // Short keys; anything absent = default. Pages may encode extra keys of their
 // own (sort, tab, q…) through the same params object.
