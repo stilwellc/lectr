@@ -58,6 +58,47 @@ test('grade ladder: PSA 9 / PSA 10 / other slabs / raw, medians n-gated on the t
   assert.strictEqual(by['graded-other'].med12m, null); // n=1 never prints a median
 });
 
+test('grade ladder (r7): PSA 8 apart from the 7–8.5 chip bucket; BGS / CGC rungs only where n allows a median', () => {
+  const id = 'sj:tcg|k:charizard';
+  const rows: SoldPoint[] = [];
+  for (let i = 0; i < 5; i++) rows.push(pt(700 + i, '2026-05-01', '1999 Pokemon Base Set Holo #4 Charizard - PSA NM-MT 8', id));
+  rows.push(pt(650, '2026-05-01', '1999 Pokemon Base Set Holo #4 Charizard - PSA NM-MT+ 8.5', id)); // not PSA 8
+  for (let i = 0; i < 5; i++) rows.push(pt(3000 + i, '2026-06-01', '1999 Pokemon Base Set Holo #4 Charizard - BGS 9.5', id));
+  for (let i = 0; i < 2; i++) rows.push(pt(9000 + i, '2026-06-01', '1999 Pokemon Base Set Holo #4 Charizard - CGC 10', id)); // under the gate
+  const grade = facetSplits(id, rows, '2026-10-09')!.find(x => x.key === 'grade')!;
+  const by = Object.fromEntries(grade.rows.map(r => [r.key, r]));
+  assert.strictEqual(by['psa-8'].n12, 5);
+  assert.strictEqual(by['psa-8'].med12m, 702);
+  assert.strictEqual(by['bgs-9.5'].n12, 5);
+  assert.strictEqual(by['bgs-9.5'].med12m, 3002);
+  // the CGC 10 rung cannot print a median: left off, folded into the other slabs (with the PSA 8.5)
+  assert.strictEqual(by['cgc-10'], undefined);
+  assert.strictEqual(by['graded-other'].n, 3);
+  // every graded point sits in exactly one rung
+  assert.strictEqual(grade.rows.reduce((s, r) => s + r.n, 0), rows.length);
+});
+
+test('grade ladder (r7): an athlete reads it over their cards only — memorabilia never picks the lens', () => {
+  const id = 'pl:mickey-mantle';
+  assert.deepStrictEqual(facetGroupsOf(id), ['grade']);
+  const card = (p: number, t: string) => pt(p, '2026-04-01', t, id, 'sports-cards:singles', 'graded-cards');
+  const rows: SoldPoint[] = [];
+  for (let i = 0; i < 5; i++) rows.push(card(20000 + i, '1952 Topps #311 Mickey Mantle PSA 8'));
+  for (let i = 0; i < 5; i++) rows.push(card(90000 + i, '1952 Topps #311 Mickey Mantle PSA 9'));
+  rows.push(card(400, '1952 Topps #311 Mickey Mantle'));
+  // more memorabilia than cards in the year — the ladder still reads the cards
+  for (let i = 0; i < 20; i++) rows.push(pt(500, '2026-04-01', 'Mickey Mantle Signed Baseball', id, 'sports-memorabilia:autographs', 'autographs'));
+  // the athlete's points carry only the ladder's keys
+  assert.ok(rows[0].fx!.every(k => ['graded', 'psa', 'g7', 'gn:8'].includes(k)), rows[0].fx!.join());
+  const grade = facetSplits(id, rows, '2026-10-09')!.find(x => x.key === 'grade')!;
+  const by = Object.fromEntries(grade.rows.map(r => [r.key, r]));
+  assert.strictEqual(grade.scope, undefined); // one lens among the graded points
+  assert.strictEqual(by['psa-8'].med12m, 20002);
+  assert.strictEqual(by['psa-9'].med12m, 90002);
+  assert.strictEqual(by.raw.n, 1);
+  assert.strictEqual(by.raw.med12m, null);
+});
+
 test('a facet split reads ONE lens when the entity spans several', () => {
   const id = 'sj:tcg|k:charizard';
   const rows: SoldPoint[] = [];

@@ -143,7 +143,8 @@ const DEMO_MAKER =
     const m = makerIdx[s];
     return m && Object.values(m.horizons || {}).some((h) => h?.publishable);
   })
-  ?? Object.entries(makerIdx).find(([, m]) => Object.values(m.horizons || {}).some((h) => h?.publishable))?.[0]
+  // (r7) a named maker only — a retired category slug (space-exploration) has no maker page
+  ?? namedIdx.find(([, m]) => Object.values(m.horizons || {}).some((h) => h?.publishable))?.[0]
   ?? null;
 const DEMO_REF = (refs as { refs?: { key: string; n: number }[] }).refs
   ?.slice().sort((a, b) => b.n - a.n)[0]?.key ?? null;

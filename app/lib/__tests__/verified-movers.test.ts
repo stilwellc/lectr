@@ -7,6 +7,16 @@ const hz = (changePct: number | null, publishable: boolean) => ({ changePct, ciL
 const series = [{ period: '1991-Q4', value: 100, ciLo: 100, ciHi: 100, n: 24 }, { period: '2026-Q3', value: 309, ciLo: 250, ciHi: 380, n: 212 }];
 const market = (mi: Record<string, unknown>) => ({ makerIndex: mi } as unknown as MarketData);
 
+test('verified movers (r7): a retired pseudo-maker (a category) never reaches the verified list', () => {
+  const m = market({
+    'space-exploration': { series, coverageMakerLots: 3000, horizons: { '1Y': hz(null, false), '3Y': hz(41, true), MAX: hz(90, true) } },
+    'graded-cards': { series, coverageMakerLots: 3000, horizons: { '3Y': hz(12, true) } },
+    rolex: { series, coverageMakerLots: 9000, horizons: { '3Y': hz(27.4, true) } },
+  });
+  assert.deepEqual(verifiedMovers(m).map(x => x.slug), ['rolex']);
+  assert.deepEqual(verifiedMovers(m, 'science').map(x => x.slug), []);
+});
+
 test('verified movers (P3): the full-span read publishes when no fixed horizon does, labeled with its span', () => {
   const m = market({
     'patek-philippe': { series, coverageMakerLots: 20570, horizons: { '1Y': hz(null, false), '3Y': hz(null, false), '5Y': hz(null, false), MAX: hz(209, true) } },

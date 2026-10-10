@@ -23,10 +23,10 @@ import LotBrowser from '../components/LotBrowser';
 import { FEED_DEFAULTS, type FeedFilters } from '../components/FeedToolbar';
 import { useLastVisit, passesTriage, houseBaselines, isTriageActive, TRIAGE_DEFAULTS, type TriageFilters } from '../lib/feed-filters';
 import { taxonOf, SUBS, SPORTS, MARKET_CATS, type CatKey } from '../lib/taxonomy';
-import { useFollows, catFollow, affinityOf } from '../lib/follows';
+import { useFollows, catFollow, entityFollow, affinityOf } from '../lib/follows';
 import { isFlagged } from '../lib/flags';
 import { makerId, makerSlugOf, subId, subPartsOf } from '../lib/entity/model';
-import { NAME_HEAD, COLLECTION_CATS, COLLECTION_MARKETS, SUBJECT_MARKETS } from '../lib/entity/kinds';
+import { NAME_HEAD, COLLECTION_CATS, COLLECTION_MARKETS, SUBJECT_MARKETS, isEntityFollowKey } from '../lib/entity/kinds';
 import { useLivePool, entityIdOf, nameBucketOf, catIdOf, type LiveEntry } from '../lib/entity/live';
 import { useEntities, subBundle, prefetchSubs, loadEntities, loadEntitiesTail, type EntityBundle } from '../hooks/useEntities';
 import { parseEntityId } from '../lib/entity/key';
@@ -157,6 +157,8 @@ export default function MakersPage() {
     for (const f of allFollows) {
       if (f.kind === 'maker') s.add(f.key);
       else if (f.kind === 'cat' && f.key.includes(':')) s.add(`cs:${f.key}`);
+      // (r7) a followed Pokémon / film / mission / set: its row key IS its entity id
+      else if (f.kind === 'entity') s.add(f.key);
     }
     return s;
   }, [searches, allFollows]);
@@ -450,6 +452,8 @@ export default function MakersPage() {
   const onToggleFollow = useCallback((key: string, label: string) => {
     const sp = subPartsOf(key);
     if (sp) { void toggleCatFollow(catFollow(sp.cat as CatKey, sp.sub)); return; }
+    // (r7) a subject / set row follows its entity id — signed out too (useFollows)
+    if (isEntityFollowKey(key)) { void toggleCatFollow(entityFollow(key, label)); return; }
     if (!user) { openLogin(); return; }
     const existing = searches.find(s => (s.query as { player?: string }).player === key);
     if (existing) void removeSearch(existing.id);

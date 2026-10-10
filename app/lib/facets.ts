@@ -317,6 +317,13 @@ export function lotFacets(l: FacetLot): ReadonlySet<string> {
   return read(l).keys;
 }
 
+/** (r7) a graded card's exact numeric grade (the chips bucket 7–8.5 as one;
+ *  the entity grade ladder needs PSA 8 apart) — null off a numbered slab */
+export function lotGradeNum(l: FacetLot): number | null {
+  const r = read(l);
+  return r.keys.has('graded') ? r.id?.gradeNum ?? null : null;
+}
+
 /** AND across the selected facets — except keys of one any-of set, which OR
  *  (the lot needs one of them) */
 export function passesFacets(l: FacetLot, fx: readonly string[]): boolean {

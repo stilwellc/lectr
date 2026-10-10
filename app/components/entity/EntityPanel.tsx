@@ -19,7 +19,7 @@ import { reasonOf } from '../../lib/priority';
 import { makerLineOf, labelLineOf } from '../../lib/lot-labels';
 import { subLabelOf } from '../../lib/taxonomy';
 import { liveBookHref } from '../../lib/lot-browser';
-import { recordOf } from '../../lib/entity/model';
+import { recordOf, type EntityDetail } from '../../lib/entity/model';
 import type { RowKind } from '../../lib/entity/kinds';
 import type { LiveSort } from '../../lib/entity/view-state';
 import { useEntity } from '../../hooks/useEntities';
@@ -39,6 +39,42 @@ function liveRefOf(l: AuctionLot, maker: string): string | null {
 }
 
 export const PANEL_REFS = 5;
+
+/** (r7) the grade ladder's core rungs — printed with their n even when thin
+ *  (a gap is a gap); the BGS / CGC rungs ship only where the build's n gate
+ *  printed a median (app/lib/entity/facets) */
+const LADDER_CORE = new Set(['raw', 'psa-8', 'psa-9', 'psa-10']);
+
+/** a Pokémon / set / athlete's 12-month median per grade, off the detail
+ *  bucket's grade facet — one house-row each, the bar the median's share of
+ *  the top rung */
+export function gradeLadderOf(det: EntityDetail | null | undefined) {
+  const g = det?.facets?.find(x => x.key === 'grade');
+  if (!g) return null;
+  const rows = g.rows.filter(r => r.key !== 'graded-other' && (r.med12m != null || (LADDER_CORE.has(r.key) && r.n12 > 0)));
+  if (rows.filter(r => r.med12m != null).length < 2) return null;
+  return { rows, scope: g.scope ?? null, top: Math.max(...rows.map(r => r.med12m ?? 0)) };
+}
+
+function PanelLadder({ det }: { det: EntityDetail }) {
+  const lad = gradeLadderOf(det);
+  if (!lad) return null;
+  const scope = lad.scope ? det.cats.find(c => c.key === lad.scope)?.label ?? null : null;
+  return (
+    <div>
+      <span className="kicker" title={`Median of the past 12 months per grade, n beside it${scope ? ` — ${scope} only` : ''}`}>By grade · 12 mo</span>
+      <div className="mkx-houses">
+        {lad.rows.map(r => (
+          <div key={r.key} className="mkx-house" title={`${r.label}: ${r.n12.toLocaleString()} sold in 12 mo${r.med12m != null ? ` · median ${formatPrice(r.med12m)}` : ' — under 5, no median'}`}>
+            <span className="mkx-house-name">{r.label} · n {r.n12.toLocaleString()}</span>
+            <span className="mkx-house-track" aria-hidden><span style={{ width: `${r.med12m != null ? Math.max(2, Math.round((r.med12m / Math.max(1, lad.top)) * 100)) : 0}%` }} /></span>
+            <span className="mkx-house-n">{r.med12m != null ? fmtUsd(r.med12m) : '—'}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** a watch maker's panel: its references (refs.json, true reference numbers
  *  only), live first — a search naming a model line ("rolex daytona") leads
@@ -233,6 +269,7 @@ export default function EntityPanel({
             ) : <p>{det ? '—' : '…'}</p>}
           </div>
           {r.kind === 'maker' && r.market === 'watches' && open && <PanelRefs r={r} search={search} />}
+          {(r.kind === 'player' || ((r.kind === 'subject' || r.kind === 'set') && r.market === 'tcg')) && det && <PanelLadder det={det} />}
         </div>
       )}
 

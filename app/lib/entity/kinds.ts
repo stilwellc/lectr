@@ -81,14 +81,19 @@ export function rowKindOf(id: string): RowKind | null {
 
 /** what follow toggles for a row: a maker's slug, a sub row's category
  *  follow key (`cs:<cat>:<sub>`), an athlete's /player slug when a dossier
- *  exists — else nothing (no follow plumbing for that subject yet) */
+ *  exists, a subject / set's own entity id (`sj:` / `st:` — app/lib/follows
+ *  entityFollow: matched on the lot's build-stamped `ek`, r7) — else nothing
+ *  (the remainder row) */
 export function followKeyOf(id: string, opts: { playerDossier?: boolean } = {}): string | null {
   const k = rowKindOf(id);
   if (k === 'maker') return makerSlugOf(id);
   if (k === 'sub') return id;
   if (k === 'player') return opts.playerDossier ? id.slice(3) : null;
+  if (k === 'subject' || k === 'set') return id;
   return null;
 }
+/** a follow key that IS an entity id (a subject / set) — stored as an entity follow */
+export const isEntityFollowKey = (key: string) => key.startsWith('sj:') || key.startsWith('st:');
 
 /** where a row's "Open the dossier" / "+N more" lead (before the /makers
  *  triage view is carried along — lot-browser liveBookHref) */

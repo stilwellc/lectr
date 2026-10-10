@@ -194,7 +194,7 @@ export function decodeEntities(w: EntitiesWire): EntitiesFile & { tier: 'main' |
       yoy: y ? yoyOfCell(y) : null,
       verified: w.vf[id] ?? null,
       thin: c.s12[i] < THIN_SOLD12M,
-      caps: { compare: !!spark, follow: p.kind === 'maker' || p.kind === 'player' ? p.slug : null, dossier: sold >= MIN_SOLD },
+      caps: { compare: !!spark, follow: p.kind === 'maker' || p.kind === 'player' ? p.slug : p.kind === 'subject' || p.kind === 'set' ? id : null, dossier: sold >= MIN_SOLD },
       medLens: mlI >= 0 ? w.ml[mlI] : null,
     });
   }

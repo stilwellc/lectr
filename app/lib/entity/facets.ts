@@ -13,7 +13,7 @@
  * detail. Medians follow app/lib/entity/stats: the trailing 365 days, printed
  * only at n ≥ MIN_MED_N, the n always beside it.
  */
-import { lotFacets, type FacetLot } from '../facets';
+import { lotFacets, lotGradeNum, type FacetLot } from '../facets';
 import { MIN_MED_N, dayMinus, isSaleDay, type SoldPoint } from './stats';
 import { medianSorted } from '../stats';
 
@@ -26,29 +26,63 @@ export interface FacetGroup {
   scope?: string;
 }
 
-/** which facet groups an entity carries, by id (null = none) */
+/** which facet groups an entity carries, by id (null = none). (r7) an
+ *  athlete reads the grade ladder over their graded / raw cards. */
 export function facetGroupsOf(id: string): FacetGroup['key'][] | null {
   if (id.startsWith('sj:tcg|') || id.startsWith('st:tcg|')) return ['grade', 'lang'];
   if (id.startsWith('sj:science|')) return ['object'];
+  if (id.startsWith('pl:')) return ['grade'];
   return null;
 }
+
+/** the keys the grade ladder reads (an athlete's points carry only these —
+ *  the nightly holds every player's sold cards in memory) */
+const GRADE_FX = new Set(['raw', 'graded', 'psa', 'bgs', 'cgc', 'sgc', 'tag', 'g10', 'g95', 'g9', 'g7', 'g6', 'gauth']);
+/** a graded point's exact grade key ('gn:8', 'gn:9.5') — the chips bucket 7–8.5 as one */
+const gradeKey = (n: number) => `gn:${n}`;
 
 /** the facet keys one sold lot carries, for an entity that reads facets
  *  (undefined: the entity reads none — the point carries nothing) */
 export function facetKeysFor(id: string, l: FacetLot): string[] | undefined {
-  if (!facetGroupsOf(id)) return undefined;
-  return Array.from(lotFacets(l));
+  const groups = facetGroupsOf(id);
+  if (!groups) return undefined;
+  const keys = Array.from(lotFacets(l));
+  if (!groups.includes('grade')) return keys;
+  const g = lotGradeNum(l);
+  const out = id.startsWith('pl:') ? keys.filter(k => GRADE_FX.has(k)) : keys;
+  if (g != null) out.push(gradeKey(g));
+  return out;
 }
+/** a point carries a grade read (raw or a slab) */
+const hasGradeFx = (fx: readonly string[] | undefined) => !!fx && (fx.includes('raw') || fx.includes('graded'));
 
-interface RowDef { key: string; label: string; test: (fx: ReadonlySet<string>) => boolean }
+interface RowDef {
+  key: string; label: string; test: (fx: ReadonlySet<string>) => boolean;
+  /** (r7) printed only where its n allows a median — a BGS / CGC rung that
+   *  sold under MIN_MED_N times in the trailing year is left off, not shown thin */
+  optional?: true;
+}
+/** one grader at one exact grade ('gn:' keys: facetKeysFor) */
+const at = (co: string, n: number) => (s: ReadonlySet<string>) => s.has(co) && s.has(gradeKey(n));
+/** the ladder's named rungs — "Other graded" is every slab none of them takes */
+const GRADE_RUNGS: RowDef[] = [
+  { key: 'raw', label: 'Raw', test: s => s.has('raw') },
+  { key: 'psa-8', label: 'PSA 8', test: at('psa', 8) },
+  // a point stamped before the exact-grade key (no 'gn:') still reads PSA 9 / 10 off the chip buckets
+  { key: 'psa-9', label: 'PSA 9', test: s => s.has('psa') && s.has('g9') },
+  { key: 'psa-10', label: 'PSA 10', test: s => s.has('psa') && s.has('g10') },
+  { key: 'bgs-9.5', label: 'BGS 9.5', test: at('bgs', 9.5), optional: true },
+  { key: 'bgs-10', label: 'BGS 10', test: at('bgs', 10), optional: true },
+  { key: 'cgc-9.5', label: 'CGC 9.5', test: at('cgc', 9.5), optional: true },
+  { key: 'cgc-10', label: 'CGC 10', test: at('cgc', 10), optional: true },
+  { key: 'sgc-10', label: 'SGC 10', test: at('sgc', 10), optional: true },
+];
 const GROUP_DEF: Record<FacetGroup['key'], { label: string; rows: RowDef[] }> = {
   grade: {
     label: 'By grade',
     rows: [
-      { key: 'raw', label: 'Raw', test: s => s.has('raw') },
-      { key: 'psa-9', label: 'PSA 9', test: s => s.has('psa') && s.has('g9') },
-      { key: 'psa-10', label: 'PSA 10', test: s => s.has('psa') && s.has('g10') },
-      { key: 'graded-other', label: 'Other graded', test: s => s.has('graded') && !(s.has('psa') && (s.has('g9') || s.has('g10'))) },
+      ...GRADE_RUNGS,
+      { key: 'graded-other', label: 'Other graded', test: s => s.has('graded') && !GRADE_RUNGS.some(d => d.key !== 'raw' && d.test(s)) },
     ],
   },
   lang: {
@@ -76,7 +110,9 @@ const med = (ps: number[]) => Math.round(medianSorted(ps.slice().sort((a, b) => 
 export function facetSplits(id: string, rows: readonly SoldPoint[], today: string): FacetGroup[] | null {
   const groups = facetGroupsOf(id);
   if (!groups) return null;
-  const all = rows.filter(r => r.p > 0 && isSaleDay(r.d) && r.d <= today && r.fx);
+  // (r7) an athlete's ladder reads only the points that carry a grade (cards,
+  // raw or slabbed) — their memorabilia never picks the ladder's lens
+  const all = rows.filter(r => r.p > 0 && isSaleDay(r.d) && r.d <= today && r.fx && (!id.startsWith('pl:') || hasGradeFx(r.fx)));
   const from12 = dayMinus(today, 365);
   // one lens: the dominant one over the trailing year, else all-time (ties: the key)
   const lensN = new Map<string, number>();
@@ -97,10 +133,22 @@ export function facetSplits(id: string, rows: readonly SoldPoint[], today: strin
       acc[i].n++;
       if (r.d > from12) acc[i].p12.push(r.p);
     }
-    const fr: FacetRow[] = def.rows.map((d, i) => ({
-      key: d.key, label: d.label, n: acc[i].n, n12: acc[i].p12.length,
-      med12m: acc[i].p12.length >= MIN_MED_N ? med(acc[i].p12) : null,
-    }));
+    // a rung the build cannot split (optional, under the median gate) folds
+    // back into "Other graded" so the ladder still sums to its lens
+    const fr: FacetRow[] = [];
+    let foldN = 0;
+    const foldP: number[] = [];
+    def.rows.forEach((d, i) => {
+      const row = { key: d.key, label: d.label, n: acc[i].n, n12: acc[i].p12.length, med12m: acc[i].p12.length >= MIN_MED_N ? med(acc[i].p12) : null };
+      if (d.optional && row.med12m == null) { foldN += row.n; foldP.push(...acc[i].p12); return; }
+      if (d.key === 'graded-other' && (foldN || foldP.length)) {
+        row.n += foldN;
+        const ps = acc[i].p12.concat(foldP);
+        row.n12 = ps.length;
+        row.med12m = ps.length >= MIN_MED_N ? med(ps) : null;
+      }
+      fr.push(row);
+    });
     if (fr.filter(r => r.n > 0).length >= 2) out.push({ key: g, label: def.label, rows: fr, ...(multi && scope ? { scope } : {}) });
   }
   return out.length ? out : null;
