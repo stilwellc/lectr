@@ -41,9 +41,13 @@ export const WINDOWS: { key: CloseWindow; label: string }[] = [
   { key: '48h', label: '48 hours' },
   { key: 'week', label: 'This week' },
 ];
-export const VALUE_FLOORS = [1000, 5000, 25000, 100000];
-/** the ceilings ("Under $X") — the same rungs, read from the other side */
-export const VALUE_CEILINGS = [1000, 5000, 25000, 100000];
+/** the value rungs (Oct 10: + $10K, $50K, $250K). The URL carries any
+ *  positive number (min=/max=), so links made on the old 4-rung ladder still
+ *  open exactly as they were. */
+export const VALUE_FLOORS = [1000, 5000, 10000, 25000, 50000, 100000, 250000];
+/** the ceilings ("Under $X") — the same rungs read from the other side; no
+ *  "Under $250K" (that is nearly the whole book, not a filter) */
+export const VALUE_CEILINGS = [1000, 5000, 10000, 25000, 50000, 100000];
 export const fmtCeiling = (n: number) => (n >= 1000 ? `Under $${n / 1000}K` : `Under $${n}`);
 /** the toolbar's ONE value select (floors, then ceilings): its current option
  *  ('min:5000' / 'max:5000' / '') and the patch an option applies — picking

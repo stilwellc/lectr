@@ -313,3 +313,41 @@ export function vetReference(maker: string, ref: string, title?: string | null):
   if (lab && lab.replace(/\D.*$/, '') === core) return true;
   return !NON_REF_LABEL.test(t.slice(Math.max(0, at - 24), at));
 }
+
+/** The model line a title names (brand-scoped for the five makers), or null —
+ *  the same reader readWatchKey falls back to, exported for the reference
+ *  line below. */
+export function readWatchLine(title: string | null | undefined, maker?: string): string | null {
+  return modelLine(prep(title, false), maker);
+}
+
+/** (Oct 10) the model line a REFERENCE belongs to, read off its own sales'
+ *  titles: "Daytona" for Rolex 6263 because its catalogues say so. Majority
+ *  vote among the titles that name a line, and only when the vote is real —
+ *  ≥ REF_LINE_MIN titles name it and it is ≥ REF_LINE_SHARE of those that
+ *  name any line. Lets "rolex daytona" find the Daytona references, not only
+ *  the 'daytona' model-name bucket. null = no clear line (never a guess). */
+export const REF_LINE_MIN = 3;
+export const REF_LINE_SHARE = 0.6;
+export function refLineOf(titles: readonly (string | null | undefined)[], maker: string): string | null {
+  const c = new Map<string, number>();
+  let named = 0;
+  for (const t of titles) {
+    const k = readWatchLine(t, maker);
+    if (!k) continue;
+    named++;
+    c.set(k, (c.get(k) || 0) + 1);
+  }
+  let best: string | null = null, bn = 0;
+  c.forEach((n, k) => { if (n > bn) { best = k; bn = n; } });
+  return best && bn >= REF_LINE_MIN && bn / named >= REF_LINE_SHARE ? best : null;
+}
+
+/** (Oct 10) the words a reader typed after a watch maker's name, read as one
+ *  of that maker's own model lines ("daytona", "royal oak", "gmt-master ii"
+ *  → 'gmtmasterii'), or null */
+export function makerLineOfWords(maker: string, words: readonly string[]): string | null {
+  if (!words.length || !MAKER_LINES[maker]) return null;
+  const k = modelKeyOf(fold(words.join(' ').toLowerCase()));
+  return MAKER_LINES[maker].has(k) ? k : null;
+}

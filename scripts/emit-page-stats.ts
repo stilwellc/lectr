@@ -34,6 +34,7 @@ import {
 import { isMisattributed } from '../app/lib/attribution';
 import { entityKeyOf } from '../app/lib/entity/key';
 import { faceValueOf } from './emit-entities';
+import { betterFace } from '../app/lib/img-host';
 import { overEstimatePct } from '../app/utils';
 import { bucketOf, markFallbackProjections, type PageStats, type LotPack, type PackRow, type SettledCallRow } from '../app/lib/page-data';
 import type { AuctionLot } from '../app/types';
@@ -133,7 +134,7 @@ export async function emitPageStats(opts: PageStatsOpts = {}): Promise<void> {
     const val = faceValueOf(l);
     if (val == null) continue;
     const cur = makerFaces[l.artist];
-    if (!cur || val > cur.val) makerFaces[l.artist] = { url: l.imageUrl!, val };
+    if (betterFace(cur, { url: l.imageUrl!, val })) makerFaces[l.artist] = { url: l.imageUrl!, val };
   }
   // maker rows: the served row minus crawl bookkeeping no page reads
   // (artist is implied by the file — the client restores it)

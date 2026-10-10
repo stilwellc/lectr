@@ -39,6 +39,7 @@ import {
 import type { NameEntry } from '../lib/entity/live';
 import { parseEntityId } from '../lib/entity/key';
 import { decodeEntities, isEntitiesWire } from '../lib/entity/wire';
+import { bestLotImage } from '../lib/img-host';
 
 /** a summary + its detail when the source already holds it (the adapters do) */
 export interface EntityBundle {
@@ -161,7 +162,7 @@ export function completeQuarters<T extends { date: string | number }>(hist: read
   return hist.filter(p => String(p.date) !== cur);
 }
 
-const EMPTY_DETAIL: EntityDetail = { quarters: [], yearly: [], houses: [], cats: [], top: [], recent: [] };
+const EMPTY_DETAIL: EntityDetail = { yearly: [], houses: [], cats: [], top: [], recent: [] };
 
 /* ═════════ FAIL-SOFT ADAPTERS (pure) ═════════ */
 
@@ -204,7 +205,6 @@ export function makerBundle(slug: string, market: Market, st: MarketStats | null
   };
   const detail: EntityDetail | null = st ? {
     ...EMPTY_DETAIL,
-    quarters: (st.priceHistory || []).map(p => ({ q: String(p.date), med: p.medianPrice || p.avgPrice, n: p.totalSales || 0, high: p.highPrice || 0 })),
     houses: (st.houseDistribution || []).map(h => ({ h: String(h.house), n: h.count })),
   } : null;
   return { s, detail };
@@ -213,8 +213,7 @@ export function makerBundle(slug: string, market: Market, st: MarketStats | null
 /** a clean sub-category from cat-stats.json (per sport under a sport pick) */
 export function subBundle(cat: CatKey, sub: string, label: string, market: Market, st: CatStat | null, sport: string | null, now = Date.now()): EntityBundle {
   const id = subId(cat, sub);
-  const quarters = (st?.q || []).map(([q, med, n]) => ({ q, med, n, high: 0 }));
-  const meds = completeQuarters(quarters.map(x => ({ date: x.q, med: x.med })), now).map(h => h.med).filter(v => v > 0);
+  const meds = completeQuarters((st?.q || []).map(([date, med]) => ({ date, med })), now).map(h => h.med).filter(v => v > 0);
   const sportsCat = cat === 'sports-cards' || cat === 'sports-memorabilia';
   const s: EntitySummary = {
     id, kind: 'sub', market, label,
@@ -232,7 +231,7 @@ export function subBundle(cat: CatKey, sub: string, label: string, market: Marke
     caps: { compare: KIND.sub.compare, follow: followKeyOf(id), dossier: true },
     revenue: st?.revenue ?? 0,
   };
-  return { s, detail: st ? { ...EMPTY_DETAIL, quarters } : null };
+  return { s, detail: st ? { ...EMPTY_DETAIL } : null };
 }
 
 function topKey(m: Map<string, number>): string | null {
@@ -279,7 +278,7 @@ export function nameBundle(id: string, g: NameEntry, players: Map<string, Player
     label: s0 ? g.name : 'Other lots',
     subKind: s0?.kind ?? null,
     discipline,
-    face: g.lots.find(l => l.imageUrl)?.imageUrl || null,
+    face: bestLotImage(g.lots),
     page,
     sold: pr ? pr.n : null,
     sold12m: null,
@@ -377,6 +376,21 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
     namesAll?.forEach((g, id) => { if (!miss && (market === 'all' || g.market === market) && !mainMap.has(id) && !id.startsWith('~:')) miss = true; });
     return miss;
   }, [file, mainMap, wantTail, namesAll, market]);
+  // the first keystroke used to pay the tail's fetch + parse + decode
+  // (/makers 40→58ms blocking, Oct 10): warm it on idle after first paint so
+  // a search finds it already decoded. The promise cache makes this the very
+  // fetch the search would have made — never a second one.
+  useEffect(() => {
+    if (!file || !file.tailN) return;
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (h: number) => void };
+    const run = () => { void loadEntitiesTail(market); };
+    if (w.requestIdleCallback) {
+      const h = w.requestIdleCallback(run, { timeout: 4000 });
+      return () => w.cancelIdleCallback?.(h);
+    }
+    const t = window.setTimeout(run, 1500);
+    return () => window.clearTimeout(t);
+  }, [file, market]);
   const loadTail = useMemo(() => (tailNeeded ? () => loadEntitiesTail(market) : null), [tailNeeded, market]);
   const tailFile = useLoad(loadTail);
   const fileMap = useMemo(() => {
@@ -398,19 +412,29 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
     if (marketData) for (const v of verifiedMovers(marketData)) m.set(v.slug, v);
     return m;
   }, [marketData]);
+  // per-id bundle caches: a recompute (the sold-only tail joining on the first
+  // keystroke) hands back the SAME bundle for every unchanged entity, so the
+  // ledger's row cache hits and only the new rows are built (Oct 10)
+  const [makerKeep] = useState(() => new Map<string, { f: EntityBundle | undefined; st: unknown; v: unknown; face: unknown; out: EntityBundle }>());
+  const [nameKeep] = useState(() => new Map<string, { f: EntityBundle | undefined; g: NameEntry; pl: unknown; ds: unknown; out: EntityBundle }>());
   const makers = useMemo(() => {
     const m = new Map<string, EntityBundle>();
     for (const a of ARTISTS) {
       const id = makerId(a.slug);
       const fromFile = fileMap?.get(id);
+      const st = statsByArtist[a.slug] || null, v = verifiedBySlug.get(a.slug) || null, face = pageStats?.makerFaces?.[a.slug]?.url || null;
+      const hit = makerKeep.get(id);
+      if (hit && hit.f === fromFile && hit.st === st && hit.v === v && hit.face === face) { m.set(id, hit.out); continue; }
       const ad = makerBundle(a.slug, a.market as Market, statsByArtist[a.slug] || null,
         verifiedBySlug.get(a.slug) || null, pageStats?.makerFaces?.[a.slug]?.url || null);
       // the file's summary, with what it doesn't carry yet ("Settled $", a
       // face where the build found none) from the same files as before
-      m.set(id, fromFile ? { ...fromFile, s: { ...fromFile.s, revenue: fromFile.s.revenue ?? ad.s.revenue, face: fromFile.s.face ?? ad.s.face } } : ad);
+      const out = fromFile ? { ...fromFile, s: { ...fromFile.s, revenue: fromFile.s.revenue ?? ad.s.revenue, face: fromFile.s.face ?? ad.s.face } } : ad;
+      makerKeep.set(id, { f: fromFile, st, v, face, out });
+      m.set(id, out);
     }
     return m;
-  }, [statsByArtist, verifiedBySlug, pageStats, fileMap]);
+  }, [statsByArtist, verifiedBySlug, pageStats, fileMap, makerKeep]);
 
   // 2b. subs — By category is the CATEGORY's figures (cat-stats: every lot
   // in the sub, named or not). The entities file's cs: summaries are the
@@ -448,11 +472,16 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
     if (!namesAll) return m;
     namesAll.forEach((g, id) => {
       const fromFile = fileMap?.get(id);
-      const liveFace = g.lots.find(l => l.imageUrl)?.imageUrl || null;
-      m.set(id, fromFile ? { ...fromFile, liveFace } : { ...nameBundle(id, g, players ?? null, dossiers), liveFace });
+      const hit = nameKeep.get(id);
+      if (hit && hit.f === fromFile && hit.g === g && (fromFile || (hit.pl === players && hit.ds === dossiers))) { m.set(id, hit.out); return; }
+      // the best live photo on a host every browser renders (app/lib/img-host)
+      const liveFace = bestLotImage(g.lots);
+      const out = fromFile ? { ...fromFile, liveFace } : { ...nameBundle(id, g, players ?? null, dossiers), liveFace };
+      nameKeep.set(id, { f: fromFile, g, pl: players, ds: dossiers, out });
+      m.set(id, out);
     });
     return m;
-  }, [namesAll, players, dossiers, fileMap]);
+  }, [namesAll, players, dossiers, fileMap, nameKeep]);
   const playersReady = !needPlayers || players !== undefined;
 
   const tailReady = !tailNeeded || tailFile !== undefined;
@@ -500,7 +529,7 @@ export function useEntity(id: string | null, enabled = true, known?: EntityBundl
         const rows = await loadCatStats();
         const body = id.slice(3);
         const st = rows?.[body] || null;
-        return st ? { ...EMPTY_DETAIL, quarters: st.q.map(([q, med, n]) => ({ q, med, n, high: 0 })) } : null;
+        return st ? { ...EMPTY_DETAIL } : null;
       }
       if (k === 'player') {
         const pl = await loadPlayers();

@@ -10,7 +10,7 @@ import React, { useMemo } from 'react';
 import Link from 'next/link';
 import { ARTIST_LABEL } from '../../constants';
 import type { AuctionLot } from '../../types';
-import { formatDate, formatPrice, craftTitle, httpsImg, sizedImg, trueSaleDay } from '../../utils';
+import { formatDate, formatPrice, craftTitle, httpsImg, sizedImg, trueSaleDay, refLabel } from '../../utils';
 import { formatEstimate } from '../LotCard';
 import CloseClock from '../CloseClock';
 import Flick from '../Flick';
@@ -23,7 +23,68 @@ import { recordOf } from '../../lib/entity/model';
 import type { RowKind } from '../../lib/entity/kinds';
 import type { LiveSort } from '../../lib/entity/view-state';
 import { useEntity } from '../../hooks/useEntities';
-import { fmtUsd, type Row } from '../../lib/entity/ledger';
+import { fmtUsd, lineSearchOf, needleOf, type Row } from '../../lib/entity/ledger';
+import { useRefs, refsForMaker } from '../../hooks/useRefs';
+import { readWatchKey, splitWatchRef } from '../../lib/watch-ref';
+import { refHref } from '../../lib/search-index';
+
+/** a live watch lot's reference key (the same reader the comps use): the
+ *  stored reference, else a reference its title prints. Model-name keys
+ *  ('daytona') are not references. */
+function liveRefOf(l: AuctionLot, maker: string): string | null {
+  const stored = (l as AuctionLot & { reference?: string | null }).reference;
+  if (stored && /\d/.test(stored)) return splitWatchRef(maker, stored.toLowerCase()).core;
+  const k = readWatchKey(l.title, maker);
+  return k && k.kind === 'ref' ? k.key : null;
+}
+
+export const PANEL_REFS = 5;
+
+/** a watch maker's panel: its references (refs.json, true reference numbers
+ *  only), live first — a search naming a model line ("rolex daytona") leads
+ *  with that line's references — each into its /ref dossier */
+function PanelRefs({ r, search }: { r: Row; search: string }) {
+  const maker = r.id.slice(3);
+  const { refs, failed } = useRefs();
+  const line = useMemo(() => {
+    let q = '';
+    try { q = new URLSearchParams(search).get('q') || ''; } catch { q = ''; }
+    return lineSearchOf(r, needleOf(q));
+  }, [r, search]);
+  const rows = useMemo(() => {
+    const live = new Map<string, number>();
+    for (const l of r.liveLots) { const k = liveRefOf(l, maker); if (k) live.set(k, (live.get(k) || 0) + 1); }
+    const all = refsForMaker(refs, maker).filter(x => /\d/.test(x.ref));
+    const inLine = line ? all.filter(x => x.line === line) : [];
+    const pool = inLine.length ? inLine : all;
+    return pool
+      .map(x => ({ x, live: live.get(x.ref) || 0 }))
+      .sort((a, b) => b.live - a.live || b.x.n - a.x.n)
+      .slice(0, PANEL_REFS);
+  }, [refs, maker, r.liveLots, line]);
+  const top = rows.reduce((m, y) => Math.max(m, y.x.n), 1);
+  return (
+    <div>
+      <span className="kicker" title="Reference numbers with a dossier: live lots first, then the deepest sold books">
+        {line && rows.some(y => y.x.line === line) ? `${refLabel(line)} references` : 'References'} · sold
+      </span>
+      {rows.length ? (
+        <div className="mkx-houses">
+          {rows.map(({ x, live }) => (
+            <Link key={x.key} href={refHref(x)} className="mkx-house" style={{ textDecoration: 'none', color: 'inherit' }}
+              title={`${refLabel(x.ref)}${x.line ? ` · ${refLabel(x.line)}` : ''} · ${x.n.toLocaleString()} sold · median ${formatPrice(x.medianUsd)}${live ? ` · ${live} live` : ''}`}>
+              <span className="mkx-house-name">
+                {refLabel(x.ref)}{x.line && !line ? <> · {refLabel(x.line)}</> : null}{live ? <> · <b>{live} live</b></> : null}
+              </span>
+              <span className="mkx-house-track" aria-hidden><span style={{ width: `${Math.round((x.n / top) * 100)}%` }} /></span>
+              <span className="mkx-house-n">{x.n.toLocaleString()}</span>
+            </Link>
+          ))}
+        </div>
+      ) : <p>{failed ? 'The reference book didn’t load' : refs ? '—' : '…'}</p>}
+    </div>
+  );
+}
 
 /** a live lot's quiet line under its title — the home feed's label line,
  *  then the house. Under a sub row the sub is the row's own name, so the
@@ -171,6 +232,7 @@ export default function EntityPanel({
               </div>
             ) : <p>{det ? '—' : '…'}</p>}
           </div>
+          {r.kind === 'maker' && r.market === 'watches' && open && <PanelRefs r={r} search={search} />}
         </div>
       )}
 
