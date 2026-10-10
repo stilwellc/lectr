@@ -236,7 +236,7 @@ function fill<T extends ShortlistLot>(rows: { l: T; s: number }[], n: number, ca
  * (≤5 per category, ≤3 per sale, ≤2 per maker or player, one per object or
  * card identity) so one mass close or one house can't fill the board. Seats
  * the caps leave empty go to the next-best lots under looser caps — never to
- * filler below SEAT_MIN.
+ * filler below SEAT_MIN (only the category cap loosens; one sale never gets a 4th seat).
  */
 export function shortlist<T extends ShortlistLot>(lots: T[], nowMs: number = Date.now(), n = 20): T[] {
   const rows: { l: T; s: number; close: number; a: number }[] = [];
@@ -253,7 +253,7 @@ export function shortlist<T extends ShortlistLot>(lots: T[], nowMs: number = Dat
   }
   rows.sort((x, y) => (y.s - x.s) || (x.close - y.close) || (y.a - x.a));
   const out = fill(rows, n, { cat: 5, sale: 3, who: 2 });
-  return out.length < n ? fill(rows, n, { cat: 8, sale: 5, who: 2 }, out) : out;
+  return out.length < n ? fill(rows, n, { cat: 8, sale: 3, who: 2 }, out) : out;
 }
 
 /**
@@ -298,7 +298,15 @@ export function reasonOf(l: ScoreLot, nowMs: number = Date.now()): string | null
   if (!p) return null;
   const parts: string[] = [];
   const close = closeMsOf(l);
-  if (close != null) {
+  if (close != null && !l.saleDateTime && l.saleDate) {
+    // date-only sale (RR, Phillips, Wright…): the hour is unknown — say the day, never invent "in 8h"
+    const t = new Date(nowMs);
+    const today = Date.UTC(t.getFullYear(), t.getMonth(), t.getDate());
+    const d = Math.round((Date.parse(`${l.saleDate.slice(0, 10)}T00:00:00Z`) - today) / 864e5);
+    if (d === 0) parts.push('Sells today');
+    else if (d === 1) parts.push('Sells tomorrow');
+    else if (d > 1 && d < 7) parts.push(`Sells in ${d} days`);
+  } else if (close != null) {
     const h = (close - nowMs) / 3_600_000;
     if (h > 0 && h < 1) parts.push('Closes within the hour');
     else if (h > 0 && h < 24) parts.push(`Closes in ${Math.round(h)}h`);
