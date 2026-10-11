@@ -1,0 +1,84 @@
+/* YOUR EDGE (#edge) — layout only; every color, size and curve is a page
+   token (app/globals.css). Prefix pe-. */
+
+.pe-muted { color: var(--color-text-muted); }
+.pe-faint { color: var(--color-text-faint); }
+.pe-num { text-align: right; font-variant-numeric: tabular-nums; }
+.pe-hit { color: var(--color-text-secondary); }
+
+/* calibration table: dotted spec-ledger rows */
+.pe-table { margin-top: 24px; }
+.pe-thead, .pe-trow {
+  display: grid;
+  grid-template-columns: minmax(110px, 1.2fr) 64px 1fr 1fr minmax(170px, 1.8fr);
+  gap: 14px;
+  align-items: baseline;
+  padding: 9px 2px;
+  font-size: var(--text-ui);
+  border-top: 1px dotted var(--color-border-mid);
+}
+.pe-thead { border-top: none; padding-bottom: 6px; }
+.pe-trow[data-all] { border-top: 1px solid var(--hairline); font-weight: 500; }
+.pe-trow .pe-mk { color: var(--color-fg); }
+.pe-trow .pe-bias { font-size: var(--text-caption); }
+
+/* best / worst */
+.pe-calls { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 24px; }
+.pe-call-title { color: inherit; text-decoration: none; font-weight: 500; }
+.pe-call-title:hover { text-decoration: underline; }
+.pe-call-sub { font-size: var(--text-caption); margin-top: 3px; }
+.pe-call-line { font-size: var(--text-ui); margin-top: 8px; line-height: 1.5; }
+
+/* the monthly series */
+.pe-months { margin-top: 26px; }
+.pe-mgrid, .pe-mcap { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+.pe-mgrid { height: 84px; margin-top: 10px; border-bottom: 1px solid var(--hairline); }
+.pe-mgrid .pe-mcol { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
+.pe-mbar { display: block; width: 100%; max-width: 48px; background: var(--color-border-mid); border-radius: 2px 2px 0 0; }
+.pe-mgap { display: block; width: 100%; max-width: 48px; height: 1px; border-top: 1px dotted var(--color-border-mid); }
+.pe-mcap { margin-top: 6px; }
+.pe-mcap .pe-mcol { display: grid; gap: 2px; justify-items: center; text-align: center; font-size: var(--text-caption); }
+.pe-mlabel { color: var(--color-fg); }
+.pe-mn { color: var(--color-text-muted); font-size: var(--text-label); }
+.pe-mmed { font-variant-numeric: tabular-nums; min-height: 1.2em; }
+
+/* receipts */
+.pe-receipts { margin-top: 26px; }
+.pe-rrow { font-size: var(--text-ui); }
+.pe-rmain { display: grid; gap: 2px; min-width: 0; }
+.pe-rtitle { color: inherit; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pe-rtitle:hover { text-decoration: underline; }
+.pe-rsub { font-size: var(--text-caption); }
+.pe-rnums { display: flex; gap: 12px; flex: none; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* the desk card */
+.pe-card { margin-top: 30px; display: grid; grid-template-columns: minmax(0, 560px) minmax(220px, 1fr); gap: 18px 28px; align-items: start; }
+.pe-card-frame {
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  overflow: hidden;
+  aspect-ratio: 1200 / 630;
+  background: var(--color-bg-deep);
+  display: flex; align-items: center; justify-content: center;
+}
+.pe-card-img { display: block; width: 100%; height: 100%; }
+.pe-card-wait { font-size: var(--text-caption); }
+.pe-card-side { display: grid; gap: 10px; justify-items: start; }
+.pe-card-dek { margin: 0; font-size: var(--text-caption); line-height: 1.55; color: var(--color-text-muted); max-width: 360px; }
+.pe-card-side .ray-show-more:disabled { opacity: 0.5; cursor: default; }
+
+@media (max-width: 900px) {
+  .pe-calls, .pe-card { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .pe-thead { display: none; }
+  .pe-trow { grid-template-columns: repeat(3, 1fr); gap: 6px 10px; padding: 10px 2px; }
+  .pe-trow .pe-mk { grid-column: 1 / -1; font-weight: 500; }
+  .pe-trow .pe-bias { grid-column: 1 / -1; }
+  .pe-trow > span[data-k]::before { content: attr(data-k); display: block; font-size: var(--text-label); color: var(--color-text-muted); }
+  .pe-trow .pe-num { text-align: left; }
+  .pe-rrow { flex-direction: column; align-items: stretch; }
+  .pe-rnums { white-space: normal; flex-wrap: wrap; gap: 6px 12px; }
+  .pe-rtitle { white-space: normal; }
+  .pe-mgrid, .pe-mcap { gap: 6px; }
+}
