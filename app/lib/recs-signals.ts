@@ -31,6 +31,7 @@ import { entityKeyOf } from './entity/key';
 import { parseCard } from './cards';
 import { taxonOf } from './taxonomy';
 import { storageFailed, deviceKV } from './safe-storage';
+import { notePickAction, clearPicks } from './pick-log';
 
 export const SIGNALS_KEY = 'lectr-signals';
 export const SIGNALS_VERSION = 1;
@@ -211,6 +212,8 @@ export function recordSignal(
   if (extra.dwell != null) e.dwell = Math.max(e.dwell ?? 0, Math.round(extra.dwell));
   st.ev.push(e);
   write(st, kv);
+  // a pick lectr showed, opened (app/lib/pick-log) — the live store only
+  if ((k === 'lot' || k === 'comps') && kv === defaultKV()) notePickAction(key, 'o');
 }
 
 /** a page's dwell, reported when the reader leaves it (no new visit) */
@@ -248,6 +251,7 @@ export function markLot(k: MarkKind, lot: RecLot, kv: KV | null = defaultKV(), n
   if (k === 'less') m.keys = quietKeysOf(lot);
   st.marks.push(m);
   write(st, kv, true);
+  if (kv === defaultKV()) { notePickAction(lot.id, k === 'more' ? 'm' : 'x'); notePickAction(lot.id, k === 'more' ? 'x' : 'm', false); }
   return prev;
 }
 
@@ -257,6 +261,10 @@ export function unmarkLot(id: string, restore: SignalMark | null = null, kv: KV 
   st.marks = st.marks.filter(m => m.id !== id);
   if (restore) st.marks.push(restore);
   write(st, kv, true);
+  if (kv === defaultKV()) {
+    notePickAction(id, 'm', restore?.k === 'more');
+    notePickAction(id, 'x', restore?.k === 'less');
+  }
 }
 
 export function markOf(id: string, store: SignalStore): MarkKind | null {
@@ -266,6 +274,8 @@ export function markOf(id: string, store: SignalStore): MarkKind | null {
 /** "Clear what lectr learned on this device" */
 export function clearSignals(kv: KV | null = defaultKV()): void {
   try { kv?.removeItem(SIGNALS_KEY); } catch { /* nothing to clear */ }
+  // the picks lectr showed (and how they did) are part of what it kept here
+  if (kv === defaultKV()) clearPicks();
   notify(true);
 }
 
