@@ -74,6 +74,17 @@
  * facts; a price band is printed only on a lot inside it. A reader with no
  * seeds gets NO picks (cold start is said, not faked). Pure: no React, no
  * storage — the eval script and the tests run it over the real book.
+ *
+ * (W28, Oct 11) A REASON MUST BE TRUE, checked by recs-eval §4 over 22
+ * personas: "Like your X prints" groups the desk's X's of the same MEDIUM (a
+ * Polaroid set filed under Prints is a photograph) under the name the desk's
+ * lots share; a catalogue that opens on another artist ("VIK MUNIZ (B. 1961)
+ * Andy Warhol…") is not the maker's; a learned band wider than ×20 is never
+ * printed; mixed money units each carry a sign ("$520–$130K"); another
+ * maker's watch is "family" only near the anchor's prices (or in a stated
+ * range); "screen used" asks for a used object. Fewer picks beat filler.
+ * The scoring is memoized per (pool, taste, minute) — the deal and the
+ * return loop's strips share one pass.
  */
 import { taxonOf, subMatches, subLabel, SPORTS, MARKET_CATS, type CatKey } from './taxonomy';
 import { lotFacets, FACET_LABEL } from './facets';
@@ -210,6 +221,14 @@ export interface Feat {
   /** log10 of the hammer-basis price anchor */
   logA: number | null;
   house: string | null;
+  /** (W28) a fine-art lot's MEDIUM when its title says it is not what its
+   *  sub files it as: 'photo' (a Polaroid set filed under Prints & Multiples),
+   *  'poster' (an offset poster) — else null (the sub stands) */
+  medium?: 'photo' | 'poster' | null;
+  /** (W28) the catalogue names ANOTHER artist first ("VIK MUNIZ (B. 1961)
+   *  Andy Warhol (Pictures of Ink)" — Muniz's work, Warhol its subject): the
+   *  lot's maker slug is its subject, so no maker tie or follow reads it */
+  byOther?: boolean;
 }
 
 export interface Seed {
@@ -285,6 +304,28 @@ const featMemo = new WeakMap<object, { day: number; f: Feat }>();
 
 const normTitle = (t: string | null | undefined) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
+/* (W28) a fine-art title that says what the object really is. A Polaroid
+ * set or a gelatin silver print under "Prints & Multiples" is a photograph:
+ * "Like your Andy Warhol prints" over Warhol's 10 Sports Polaroids told a
+ * screenprint collector something false. (Title words only; the
+ * sub stands when the title says nothing.) */
+const ART_PHOTO = /\b(?:polaroids?|gelatin silver|chromogenic|c-print|platinum(?:\/palladium)? print|dye[- ]transfer|photographs?)\b/i;
+const ART_POSTER = /\b(?:posters?|offset lithograph|signed in (?:the )?print)\b/i;
+function artMediumOf(title: string): 'photo' | 'poster' | null {
+  return ART_PHOTO.test(title) ? 'photo' : ART_POSTER.test(title) ? 'poster' : null;
+}
+const foldName = (x: string) => x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z]+/g, '');
+/** the catalogue opens on another artist's name and dates — "VIK MUNIZ (B. 1961)
+ *  Andy Warhol (Pictures of Ink)", "JOHN DOE (1901-1980) …" — that is not
+ *  the lot's maker slug (a subject lifted into the maker slot) */
+export function byOtherArtist(l: Pick<RecLot, 'title' | 'artist'>): boolean {
+  const m = String(l.title || '').match(/^([A-Z][A-Z .'’-]{3,}?)\s*\((?:B\.\s*\d{4}|\d{4}\s*[-–]\s*\d{4})/);
+  if (!m) return false;
+  const who = foldName(m[1]);
+  const maker = foldName(ARTIST_LABEL[l.artist] || l.artist);
+  return who.length >= 4 && !maker.includes(who.slice(0, Math.min(6, who.length))) && !who.includes(maker.slice(0, 6));
+}
+
 function ekOf(l: RecLot): string | null {
   return l.ek !== undefined ? l.ek ?? null : entityKeyOf(l);
 }
@@ -323,7 +364,10 @@ export function featOf(l: RecLot, nowMs: number, estFallback?: number | null): F
   const hit = featMemo.get(l as object);
   if (hit && hit.day === day) return hit.f;
   const t = taxonOf(l);
-  const ek = ekOf(l);
+  const byOther = t.cat === 'fine-art' && byOtherArtist(l);
+  const ek0 = ekOf(l);
+  // another artist's work about this maker is not this maker's (no tie, no follow)
+  const ek = byOther && ek0?.startsWith('mk:') ? null : ek0;
   let card: string | null = null;
   if (CARD_CATS.has(t.cat) && l.title) card = cardIdentityKey(parseCard(l.title), t.cat);
   const fx = new Set<string>();
@@ -333,6 +377,7 @@ export function featOf(l: RecLot, nowMs: number, estFallback?: number | null): F
     cat: t.cat, sub: t.sub, ek, named: !!ek && !ek.startsWith('cs:'),
     card, drill: DRILL_CATS.has(t.cat) && l.drill ? l.drill : null, sport: t.sport ?? null, fx,
     logA: a ? Math.log10(a) : null, house: l.auctionHouse || null,
+    medium: t.cat === 'fine-art' ? artMediumOf(String(l.title || '')) : null, byOther,
   };
   featMemo.set(l as object, { day, f });
   return f;
@@ -541,7 +586,7 @@ export function statedBandOf(p: StatedPriceInput | null | undefined): StatedBand
   let hi = p.maxUsd != null && p.maxUsd > 0 ? p.maxUsd : null;
   if (lo != null && hi != null && lo >= hi) hi = null;
   if (lo == null && hi == null) return null;
-  const text = lo != null && hi != null ? `${usdWord(lo)}–${fmtK(hi)}` : lo != null ? `${usdWord(lo)} and up` : `under ${usdWord(hi!)}`;
+  const text = lo != null && hi != null ? rangeWords(fmtK(lo), fmtK(hi)) : lo != null ? `${usdWord(lo)} and up` : `under ${usdWord(hi!)}`;
   const say = lo != null && hi != null ? `in your ${text} range` : lo != null ? `in your ${usdWord(lo)}-and-up range` : `under your ${usdWord(hi!)} cap`;
   return { lo: lo != null ? Math.log10(lo) : null, hi: hi != null ? Math.log10(hi) : null, text, say };
 }
@@ -605,7 +650,8 @@ export function lotSim(c: Feat, s: Feat, entityTie = REC_TUNE.entityTie): SimPar
   }
   if (c.sport && s.sport && c.sport !== s.sport) return out;
   let v = 0.1;
-  if (c.sub === s.sub) { v += 0.12; out.sub = true; }
+  // a photograph filed under Prints is not another print (W28)
+  if (c.sub === s.sub && (c.medium ?? null) === (s.medium ?? null)) { v += 0.12; out.sub = true; }
   if (c.named && c.ek === s.ek) { v += entityTie; out.entity = true; }
   if (c.card && c.card === s.card) { v += 0.12; out.card = true; }
   let inter = 0;
@@ -672,6 +718,10 @@ const termMemo = new Map<string, ((l: RecLot, f: Feat) => boolean) | null>();
 export function termMatcherOf(term: string): ((l: RecLot, f: Feat) => boolean) | null {
   const key = term.trim().toLowerCase();
   if (termMemo.has(key)) return termMemo.get(key)!;
+  // "screen used", "game worn", "production made": the reader asked for the
+  // USED object — a trading card of the film is no answer (W28: a 1977 Topps
+  // Star Wars card for "star wars screen used")
+  const usedAsk = /\b(?:screen|production|game|stage)[- ]?(?:used|worn|made)\b|\bhero prop\b/.test(key);
   const ws = words(key).filter(w => !TERM_DROP.has(w));
   const graders: string[] = [], grades: number[] = [], years: string[] = [], facets: { fx?: string; re?: RegExp }[] = [], text: string[] = [];
   for (let i = 0; i < ws.length; i++) {
@@ -682,6 +732,7 @@ export function termMatcherOf(term: string): ((l: RecLot, f: Feat) => boolean) |
     if (/^\d+$/.test(w)) continue;
     text.push(w);
   }
+  if (usedAsk) facets.push({ re: /\b(?:screen|production|game|stage|set)[- ]?(?:used|worn|made|matched)\b|\bhero prop\b|\bprop\b|\bcostume\b|\bwardrobe\b/i });
   const anchorable = text.some(w => !TERM_COMMON.has(w)) || text.length >= 2 || graders.length + grades.length + years.length + facets.length >= 2;
   let fn: ((l: RecLot, f: Feat) => boolean) | null = null;
   if (anchorable && (text.length || graders.length + grades.length + years.length + facets.length >= 2)) {
@@ -717,6 +768,7 @@ export function termMatcherOf(term: string): ((l: RecLot, f: Feat) => boolean) |
 /** a follow's reach on one lot (the follows.affinityOf ladder, × 0.8) */
 function followSim(l: RecLot, f: Feat, fo: Follow): number {
   if (fo.kind === 'maker') {
+    if (f.byOther) return 0;
     return l.artist === fo.key || l.playerSlug === fo.key || f.ek === `pl:${fo.key}` || f.ek === `mk:${fo.key}` ? 0.8 : 0;
   }
   if (fo.kind === 'entity') return f.ek === fo.key ? 0.8 : 0;
@@ -756,10 +808,13 @@ export interface Rec<L extends RecLot = RecLot> {
 
 /** the suffix a below-market pick carries — the engine's read, said as one */
 export const ENGINE_NOTE = 'engine reads below market';
-/** a category's learned band in the house's money voice ("$200–900") */
+/** a category's learned band in the house's money voice ("$200–900") — null
+ *  when there is none, or when it spans more than ×BAND_SAY_MAX (a band that
+ *  wide is not a range anyone would call theirs) */
 export function bandOfCat(bands: ReadonlyMap<CatKey, PriceBand> | undefined, cat: CatKey): string | null {
   const b = bands?.get(cat);
-  return b ? bandText(Math.pow(10, b.lo), Math.pow(10, b.hi)) : null;
+  if (!b || Math.pow(10, b.hi - b.lo) > BAND_SAY_MAX) return null;
+  return bandText(Math.pow(10, b.lo), Math.pow(10, b.hi));
 }
 
 /** the most of the deal's seats one seed may fill while others have lots */
@@ -844,19 +899,30 @@ const fmtK = (n: number) => {
   if (n >= 1e3) return `${(n / 1e3).toFixed(1).replace(/\.0$/, '')}K`;
   return `${Math.round(n)}`;
 };
-/** "$20K–40K", "$800–1.2K" → a band in the house's money voice */
+/** "$20K–40K", "$800–$1.2K" → a band in the house's money voice: one unit
+ *  shares its sign; mixed units each carry their own (W28: "$520–130K" read
+ *  as $520 to $130 thousand… or 520 thousand) */
 export function bandText(lo: number, hi: number): string {
   const r = (x: number) => { const p = Math.pow(10, Math.floor(Math.log10(Math.max(x, 1))) - 1); return Math.round(x / p) * p; };
   const a = r(lo), b = r(hi);
   if (a === b) return `$${fmtK(a)}`;
-  return `$${fmtK(a)}–${fmtK(b)}`;
+  return rangeWords(fmtK(a), fmtK(b));
 }
+/** "$20K–40K" (one unit) / "$520–$130K" (mixed units) */
+function rangeWords(a: string, b: string): string {
+  const unit = (x: string) => x.match(/[KM]$/)?.[0] ?? '';
+  return unit(a) === unit(b) ? `$${a}–${b}` : `$${a}–$${b}`;
+}
+/** a learned band wider than this (hi ÷ lo) says nothing about a budget — it
+ *  still scores, it is never PRINTED ("in your $400–100K range", W28) */
+export const BAND_SAY_MAX = 20;
 
 const NOUN: Partial<Record<CatKey, string>> = {
   'sports-cards': 'cards', tcg: 'cards', watches: 'watches', design: 'pieces',
   'sports-memorabilia': 'pieces', entertainment: 'pieces', historical: 'pieces', 'space-science': 'pieces',
 };
-function nounOf(cat: CatKey, sub: string): string {
+function nounOf(cat: CatKey, sub: string, medium?: Feat['medium']): string {
+  if (cat === 'fine-art' && medium) return medium === 'photo' ? 'photographs' : 'posters';
   if (cat === 'fine-art') return sub === 'prints' ? 'prints' : sub === 'unique' ? 'works' : sub === 'ceramics' ? 'ceramics' : sub === 'sculpture' ? 'sculpture' : 'works';
   return NOUN[cat] || 'pieces';
 }
@@ -889,6 +955,18 @@ function entityName(f: Feat, l: RecLot): string {
   }
   // (Oct 11) a pseudo-maker lot with no subject has no maker line - the desk label names the group
   return name || ARTIST_LABEL[l.artist] || l.artist;
+}
+
+/** what a desk group of one entity is called: the name its own lots agree on,
+ *  else the entity's own name (a Pokémon's key, a maker's label) */
+function groupName(group: readonly Seed[], f: Feat, l: RecLot): string {
+  const whos = Array.from(new Set(group.map(x => x.who).filter((x): x is string => !!x)));
+  if (whos.length === 1) return whos[0];
+  const ek = f.ek ?? '';
+  if (ek.startsWith('mk:') && ARTIST_LABEL[ek.slice(3)]) return ARTIST_LABEL[ek.slice(3)];
+  const k = ek.match(/\|k:([a-z0-9-]+)$/);
+  if (k) return k[1].split('-').map(w => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(' ');
+  return entityName(f, l);
 }
 
 const FX_WORD: Record<string, string> = {
@@ -995,15 +1073,21 @@ function ladderAnchors(taste: Taste, members: Map<Seed, Feat[]>): LadderAnchor[]
 }
 
 /** the best rung one candidate reaches on one anchor (0 = none) */
-function ladderTier(c: Feat, a: LadderAnchor): LadderTier | 0 {
+function ladderTier(c: Feat, a: LadderAnchor, stated = false): LadderTier | 0 {
   if (c.cat !== a.cat) return 0;
   if (c.sport && a.sport && c.sport !== a.sport) return 0;
   const price = c.logA != null && a.logA != null ? Math.exp(-((c.logA - a.logA) ** 2) / (2 * PRICE_SIGMA * PRICE_SIGMA)) : null;
   if (a.fam && familyOf(c) === a.fam) {
     // another PERSON is a family only inside the same sub and outside a
     // franchise (a Star Wars signer's next pick is Star Wars — lotSim's
-    // tie — never Houdini because both are people who signed photos)
-    if (!a.fam.endsWith('|p') || (c.sub === a.sub && !a.fr)) return 2;
+    // tie — never Houdini because both are people who signed photos);
+    // another MAKER of the same category · sub is a family only near the
+    // anchor's prices (W28: a $300 quartz Cartier was "another maker's
+    // watch" for a $10K–80K Patek / Rolex desk) — or, when the reader stated
+    // a range, inside it (the caller gates that: a $50K-and-up Patek reader
+    // whose Patek lots on the block run $2K still wants the $60K Daytona)
+    if (a.fam.startsWith('mk|')) { if (stated || price == null || price >= 0.3) return 2; }
+    else if (!a.fam.endsWith('|p') || (c.sub === a.sub && !a.fr)) return 2;
   }
   // memorabilia, entertainment and historical lots are about WHO or WHAT:
   // only the family rung reaches them (a shared "signed" or the same price
@@ -1058,8 +1142,46 @@ const tuneOf = (opts: RecOpts): RecTune => (opts.tune ? { ...REC_TUNE, ...opts.t
  * Real ties far outside a stated range come last of all.
  */
 export function scoreLots<L extends RecLot>(pool: readonly L[], taste: Taste, opts: RecOpts = {}): ScoredRow<L>[] {
-  const nowMs = opts.nowMs ?? Date.now();
   if (!taste.seeds.length) return [];
+  const core = scoreCoreMemo(pool, taste, opts);
+  // the ladder opens only when the real ties run short of what this deal needs
+  if (core.inRange.length >= Math.max(LADDER_NEED, (opts.n ?? 0) * 2) || !core.anchored) return [...core.inRange, ...core.outside];
+  // in range, then the rungs, then the real ties far outside the stated range
+  return [...core.inRange, ...core.ladder(), ...core.outside];
+}
+
+/** one scoring of a pool for a taste: the real ties (in range / far outside a
+ *  stated range) and, built only when a deal asks for it, the fallback ladder */
+interface ScoreCore<L extends RecLot> { inRange: ScoredRow<L>[]; outside: ScoredRow<L>[]; anchored: boolean; ladder: () => ScoredRow<L>[] }
+
+/* (W28) THE SCORING IS MEMOIZED per (pool, taste) — the profile scores the
+ * same taste twice per page (the deal, n=24, and the return loop's strips,
+ * n=60), which put a second full pass between the reader and Top 3. Keyed by
+ * the pool and taste OBJECTS (a new book or a changed taste is a new key) and
+ * the clock to the minute (a deal and its strips cut in one render agree; a
+ * tab left open re-scores as the block moves). A caller-supplied `onBlock`
+ * gate is a closure — never memoized. Rows are shared: callers read them. */
+const coreMemo = new WeakMap<object, WeakMap<Taste, Map<string, ScoreCore<RecLot>>>>();
+function scoreCoreMemo<L extends RecLot>(pool: readonly L[], taste: Taste, opts: RecOpts): ScoreCore<L> {
+  const nowMs = opts.nowMs ?? Date.now();
+  if (opts.onBlock) return scoreCore(pool, taste, { ...opts, nowMs });
+  let byTaste = coreMemo.get(pool);
+  if (!byTaste) coreMemo.set(pool, (byTaste = new WeakMap()));
+  let m = byTaste.get(taste);
+  if (!m) byTaste.set(taste, (m = new Map()));
+  const key = `${Math.floor(nowMs / 60_000)}|${opts.maxDays ?? ''}|${opts.tune ? JSON.stringify(opts.tune) : ''}`;
+  let c = m.get(key) as ScoreCore<L> | undefined;
+  if (!c) {
+    // one clock per key: a tab open for days keeps only the current minute
+    m.clear();
+    c = scoreCore(pool, taste, { ...opts, nowMs });
+    m.set(key, c as unknown as ScoreCore<RecLot>);
+  }
+  return c;
+}
+
+function scoreCore<L extends RecLot>(pool: readonly L[], taste: Taste, opts: RecOpts): ScoreCore<L> {
+  const nowMs = opts.nowMs ?? Date.now();
   const T = tuneOf(opts);
   const lotSeeds = taste.seeds.filter(s => s.f);
   const followSeeds = taste.seeds.filter(s => s.follow);
@@ -1096,6 +1218,7 @@ export function scoreLots<L extends RecLot>(pool: readonly L[], taste: Taste, op
       if (!hit) { const ek = ekOf(l); hit = fo.kind === 'maker' ? ek === `pl:${fo.key}` || ek === `mk:${fo.key}` : ek === fo.key; }
       if (!hit) continue;
       o.f ??= featOf(l, nowMs);
+      if (fo.kind === 'maker' && o.f.byOther) continue;
       if (deskTwin(l, o.f)) continue;
       let m = members.get(s); if (!m) members.set(s, (m = [])); m.push(o.f);
     }
@@ -1153,8 +1276,9 @@ export function scoreLots<L extends RecLot>(pool: readonly L[], taste: Taste, op
     const f = o.f ?? featOf(l, nowMs);
     o.f = f;
     if (deskTwin(l, f)) continue;
-    // a category-level tie needs the lot to BE that kind of object
-    const kind = kindFits({ ...l, ek: f.ek });
+    // a category-level tie needs the lot to BE that kind of object (and a
+    // photograph or a poster filed under Prints is not a print)
+    const kind = kindFits({ ...l, ek: f.ek }) && !(f.cat === 'fine-art' && f.sub === 'prints' && f.medium);
     const contribs: Contrib[] = [];
     for (const s of lotSeeds) {
       // a lot you only looked at never explains itself
@@ -1205,52 +1329,54 @@ export function scoreLots<L extends RecLot>(pool: readonly L[], taste: Taste, op
   rows.sort(order);
   const inRange = rows.filter(r => !r.out);
   const outside = rows.filter(r => r.out);
-  if (inRange.length >= Math.max(LADDER_NEED, (opts.n ?? 0) * 2) || !anchors.length) return [...inRange, ...outside];
+  let built: Row[] | null = null;
+  return { inRange, outside, anchored: anchors.length > 0, ladder: () => (built ??= buildLadder()) };
 
   // THE LADDER — only when the real ties run short; rung by rung, each
   // rung's rows after every row above it (a family stranger never outranks
   // the name you follow); inside a stated range only
-  const have = new Set(rows.map(r => r.l));
-  const rungs: Record<LadderTier, Row[]> = { 2: [], 3: [], 4: [] };
-  const anchorCats = new Set(anchors.map(a => a.cat));
-  for (const o of open) {
-    const { l, close } = o;
-    if (have.has(l) || !anchorCats.has(o.cat)) continue;
-    const f = o.f ?? featOf(l, nowMs);
-    if (!o.f && deskTwin(l, f)) continue;
-    if (!kindFits({ ...l, ek: f.ek })) continue;
-    if (taste.stated && f.logA != null && !statedFit(f.logA, taste.stated).inside) continue;
-    let bestTier: LadderTier | 0 = 0, bestC = 0, bestA: LadderAnchor | null = null;
-    for (const a of anchors) {
-      // a looked-at lot never stands in as its own kin
-      if (a.seed.kind === 'signal' && a.seed.lotId === l.id) continue;
-      const t = ladderTier(f, a);
-      if (!t) continue;
-      // inside a rung, the anchor's price level leads (a $420K Kobe is a
-      // stranger to a $96 Ewing rookie, however alike the family)
-      const near = f.logA != null && a.logA != null ? Math.exp(-((f.logA - a.logA) ** 2) / (2 * 0.5 * 0.5)) : 0.5;
-      const c = a.seed.w * LADDER_SIM[t] * (0.6 + 0.4 * near);
-      if (!bestTier || t < bestTier || (t === bestTier && c > bestC)) { bestTier = t; bestC = c; bestA = a; }
+  function buildLadder(): Row[] {
+    const have = new Set(rows.map(r => r.l));
+    const rungs: Record<LadderTier, Row[]> = { 2: [], 3: [], 4: [] };
+    const anchorCats = new Set(anchors.map(a => a.cat));
+    for (const o of open) {
+      const { l, close } = o;
+      if (have.has(l) || !anchorCats.has(o.cat)) continue;
+      const f = o.f ?? featOf(l, nowMs);
+      if (!o.f && deskTwin(l, f)) continue;
+      if (!kindFits({ ...l, ek: f.ek }) || (f.cat === 'fine-art' && f.sub === 'prints' && f.medium)) continue;
+      if (taste.stated && f.logA != null && !statedFit(f.logA, taste.stated).inside) continue;
+      let bestTier: LadderTier | 0 = 0, bestC = 0, bestA: LadderAnchor | null = null;
+      for (const a of anchors) {
+        // a looked-at lot never stands in as its own kin
+        if (a.seed.kind === 'signal' && a.seed.lotId === l.id) continue;
+        const t = ladderTier(f, a, !!taste.stated);
+        if (!t) continue;
+        // inside a rung, the anchor's price level leads (a $420K Kobe is a
+        // stranger to a $96 Ewing rookie, however alike the family)
+        const near = f.logA != null && a.logA != null ? Math.exp(-((f.logA - a.logA) ** 2) / (2 * 0.5 * 0.5)) : 0.5;
+        const c = a.seed.w * LADDER_SIM[t] * (0.6 + 0.4 * near);
+        if (!bestTier || t < bestTier || (t === bestTier && c > bestC)) { bestTier = t; bestC = c; bestA = a; }
+      }
+      if (!bestTier || !bestA) continue;
+      const fin = finish(l, f, bestC, close);
+      if (fin.score <= 0) continue;
+      rungs[bestTier].push({ l, score: fin.score, taste: bestC, best: { seed: bestA.seed, c: bestC, ladder: { tier: bestTier, anchor: bestA } }, f, flagged: fin.flagged, inBand: fin.inBand, inStated: fin.inStated });
     }
-    if (!bestTier || !bestA) continue;
-    const fin = finish(l, f, bestC, close);
-    if (fin.score <= 0) continue;
-    rungs[bestTier].push({ l, score: fin.score, taste: bestC, best: { seed: bestA.seed, c: bestC, ladder: { tier: bestTier, anchor: bestA } }, f, flagged: fin.flagged, inBand: fin.inBand, inStated: fin.inStated });
+    // each rung sits strictly below the one above: rescale into the gap
+    let ceil = inRange.length ? inRange[inRange.length - 1].score : Infinity;
+    const ladder: Row[] = [];
+    for (const t of [2, 3, 4] as LadderTier[]) {
+      const r = rungs[t].sort(order);
+      if (!r.length) continue;
+      const top = r[0].score;
+      const k = Number.isFinite(ceil) && top >= ceil ? (ceil * 0.98) / top : 1;
+      for (const x of r) x.score *= k;
+      ceil = r[r.length - 1].score;
+      ladder.push(...r);
+    }
+    return ladder;
   }
-  // each rung sits strictly below the one above: rescale into the gap
-  let ceil = inRange.length ? inRange[inRange.length - 1].score : Infinity;
-  const ladder: Row[] = [];
-  for (const t of [2, 3, 4] as LadderTier[]) {
-    const r = rungs[t].sort(order);
-    if (!r.length) continue;
-    const top = r[0].score;
-    const k = Number.isFinite(ceil) && top >= ceil ? (ceil * 0.98) / top : 1;
-    for (const x of r) x.score *= k;
-    ceil = r[r.length - 1].score;
-    ladder.push(...r);
-  }
-  // in range, then the rungs, then the real ties far outside the stated range
-  return [...inRange, ...ladder, ...outside];
 }
 
 /** a tie to a NAME — the same maker / player / subject / card as a seed, or
@@ -1520,17 +1646,21 @@ function explain(l: RecLot, f: Feat, best: { seed: Seed; parts?: SimParts; ladde
   // several things on the desk share this lot's named entity and kind →
   // speak about the group ("Like your Andy Warhol prints · $20K–40K")
   if (f.named) {
-    const group = lotSeeds.filter(x => x.f!.ek === f.ek && x.f!.cat === f.cat && (x.f!.sub === f.sub || f.cat === 'sports-cards'));
+    // the group is the desk's lots of this name AND this kind: a Warhol
+    // Polaroid set is not "like your Andy Warhol prints"
+    const group = lotSeeds.filter(x => x.f!.ek === f.ek && x.f!.cat === f.cat && (x.f!.sub === f.sub || f.cat === 'sports-cards') && (x.f!.medium ?? null) === (f.medium ?? null));
     if (group.length >= 2) {
-      const name = entityName(f, l);
+      // the name the DESK's lots carry ("Charizard"), never this lot's
+      // variant ("Like your Charizard V cards" over a desk of Charizard ex)
+      const name = groupName(group, f, l);
       const prices = group.map(x => x.f!.logA).filter((x): x is number => x != null).map(x => Math.pow(10, x));
       let band = '';
       if (prices.length >= 2 && f.logA != null) {
         const lo = Math.min(...prices), hi = Math.max(...prices);
         const a = Math.pow(10, f.logA);
-        if (hi / lo <= 20) band = bandSuffix(a, lo, hi);
+        if (hi / lo <= BAND_SAY_MAX) band = bandSuffix(a, lo, hi);
       }
-      return { reason: `Like your ${name} ${nounOf(f.cat, f.sub)}${band}`, why };
+      return { reason: `Like your ${name} ${nounOf(f.cat, f.sub, f.medium)}${band}`, why };
     }
   }
   // a franchise the desk keeps returning to speaks as the group, whoever
@@ -1579,7 +1709,9 @@ function familyWord(a: LadderAnchor): string {
 function ladderReason(l: RecLot, f: Feat, hit: LadderHit, s: Seed): { reason: string; why: string[]; short: string } {
   const a = hit.anchor;
   // an on-device signal anchors as what the reader did, never as a follow or a save
-  const src = s.kind === 'signal' ? `you ${s.verb} ${s.label}` : s.follow ? `you follow ${s.label}` : `you ${s.kind === 'owned' ? 'own' : s.live ? 'saved' : 'watched'} ${s.label}`;
+  // an art / design / watch save's title rarely names its maker — say whose it was
+  const what = s.f?.ek?.startsWith('mk:') && s.who && !s.label.toLowerCase().includes(s.who.toLowerCase()) ? `${s.who} · ${s.label}` : s.label;
+  const src = s.kind === 'signal' ? `you ${s.verb} ${what}` : s.follow ? `you follow ${s.label}` : `you ${s.kind === 'owned' ? 'own' : s.live ? 'saved' : 'watched'} ${what}`;
   const whose = s.follow || s.kind === 'signal' ? s.label : 'your save';
   const sport = f.sport ? SPORT_WORD[f.sport] : null;
   const noun = f.cat === 'sports-cards' ? `${sport && sport !== 'other sports' ? `${sport} ` : ''}cards`
@@ -1609,14 +1741,14 @@ function cutReason(f: Feat, p: SimParts, lotSeeds: Seed[]): string | null {
   const noun = f.cat === 'sports-cards' ? `${sport && sport !== 'other sports' ? `${sport} ` : ''}cards`
     : f.cat === 'tcg' ? 'Pokémon cards'
     : f.cat === 'space-science' ? `${subLabel(f.cat, f.sub)} pieces`
-    : nounOf(f.cat, f.sub);
-  // the band of the saves that share this cut (same sub and sport)
-  const group = lotSeeds.filter(x => x.f!.cat === f.cat && x.f!.sub === f.sub && (x.f!.sport ?? null) === (f.sport ?? null));
+    : nounOf(f.cat, f.sub, f.medium);
+  // the band of the saves that share this cut (same sub, medium and sport)
+  const group = lotSeeds.filter(x => x.f!.cat === f.cat && x.f!.sub === f.sub && (x.f!.medium ?? null) === (f.medium ?? null) && (x.f!.sport ?? null) === (f.sport ?? null));
   const prices = group.map(x => x.f!.logA).filter((x): x is number => x != null).map(x => Math.pow(10, x));
   let band = '';
   if (prices.length >= 2 && f.logA != null) {
     const lo = Math.min(...prices), hi = Math.max(...prices), a = Math.pow(10, f.logA);
-    if (hi / lo <= 40) band = bandSuffix(a, lo, hi);
+    if (hi / lo <= BAND_SAY_MAX) band = bandSuffix(a, lo, hi);
   }
   if (p.weak) return `More ${noun} in your range${band}`;
   if (!words.length) return null;
