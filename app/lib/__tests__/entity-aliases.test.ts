@@ -73,10 +73,8 @@ test('aliases: a static dossier opens on its live book like the query route', ()
 /* ── no stragglers: a /player?id= or /entity?id= href is spelled only in
    app/lib/entity/aliases.ts. Comments and tests are free to name them. ── */
 const ROOT = path.resolve(__dirname, '..', '..', '..');
-// owned by another running agent this wave (do-not-edit list): its one
-// dossier link still resolves — /player?id= forwards to /p/ client-side
-// (AliasCanonical) — and moves to playerHrefOf when the file frees up
-const KNOWN: Record<string, number> = { 'app/components/LotPage.tsx': 1 };
+// no file is exempt (the lot page's dossier link moved to playerHrefOf, W11)
+const KNOWN: Record<string, number> = {};
 
 function walk(dir: string, out: string[]): void {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

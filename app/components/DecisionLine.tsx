@@ -29,6 +29,17 @@ function Part({ text, title, tone }: { text: string; title?: string; tone?: 'up'
   );
 }
 
+/** whether DecisionLine renders anything for this decision and these host
+ *  options — a host wrapping the line (the lot page's decision block) asks
+ *  first, so an empty line never leaves an empty frame. A line with no
+ *  figure on it (only the close time the host already prints) is not a
+ *  decision. */
+export function decisionLineShows(d: Decision, { estimate = true, when = true }: { estimate?: boolean; when?: boolean } = {}): boolean {
+  const showClose = !!d.close && (estimate || d.close.kind !== 'est' || d.close.oneSided);
+  const texts = decisionParts(d, { when, close: showClose });
+  return !!texts.length && (!!(d.close && showClose) || !!d.worth || d.abstained);
+}
+
 export default function DecisionLine({ lot, when = true, estimate = true, nowMs, className, style }: {
   lot: AuctionLot;
   /** false: leave a two-sided house estimate out (a host that already prints
@@ -46,10 +57,7 @@ export default function DecisionLine({ lot, when = true, estimate = true, nowMs,
   // a one-sided estimate is never what the host printed (formatEstimate
   // leads with the bid there) — the line names it
   const showClose = !!d.close && (estimate || d.close.kind !== 'est' || d.close.oneSided);
-  const texts = decisionParts(d, { when, close: showClose });
-  // a line with no figure on it (only the close time the host already
-  // prints) is not a decision — nothing renders
-  if (!texts.length || (!(d.close && showClose) && !d.worth && !d.abstained)) return null;
+  if (!decisionLineShows(d, { estimate, when })) return null;
   const parts: React.ReactNode[] = [];
   if (d.close && showClose) parts.push(<Part key="c" text={d.close.text} title={d.close.title} />);
   if (d.worth) parts.push(<Part key="w" text={d.worth.text} title={d.worth.title} />);
