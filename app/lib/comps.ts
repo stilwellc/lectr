@@ -1086,7 +1086,10 @@ export function guardedMedian(prices: readonly number[], estMid: number | null):
  *    $100–500K  ×1.38 → ×1.30 · 10.4% → 2.9% · cov 94.0% → 89.7%
  *    <$100K     ×1.44 → ×1.40 · 10.5% → 7.0% · cov 91.1% → 87.6%
  *  (guards alone, no tier band: ≥$500K 6.7% wild at 85.8% cov — the band
- *  both purifies and RESCUES pools the ×5 guard would kill). */
+ *  both purifies and RESCUES pools the ×5 guard would kill). The estimate
+ *  only GATES here (band + guard); the ranking never rewards a comp for
+ *  having sold near it (comp-score.ts, W15 — the read had echoed the
+ *  estimate on 61.7% of holdout lots). */
 export const CONTEXT_MAX = 15;
 export function contextComps(lot: AuctionLot, allLots: AuctionLot[]): { rows: AuctionLot[]; median: number | null } {
   const gate = comparableTo(lot);

@@ -23,6 +23,16 @@ test('SGC legacy 100-point grades read as the 10-point grade', () => {
   // a legacy 10 only beside POOR; a modern SGC 10 stays 10
   assert.equal(parseCard('1909 E95 Philadelphia Caramel Ty Cobb SGC POOR 10').gradeNum, 1);
   assert.equal(parseCard('2018 Topps Chrome #150 Ronald Acuna Jr. Rookie Card - SGC GEM MINT 10').gradeNum, 10);
+  // (W15) the word after the number, and a pre-1980 card's bare "SGC 10"
+  assert.equal(parseCard('1911 T205 Gold Borders Ty Cobb - SGC 10 Poor 1').gradeNum, 1);
+  assert.equal(parseCard('1951 Bowman Baseball #253 Mickey Mantle Rookie SGC 10').gradeNum, 1);
+  assert.equal(key('1951 Bowman Baseball #253 Mickey Mantle Rookie SGC 10'), key('1951 Bowman #253 Mickey Mantle Rookie Card - SGC PR 1'));
+  assert.equal(parseCard('1909-1911 T206 White Border Bill Cranston Southern Leaguer SGC 10 - Old Mill Back').gradeNum, 1);
+  // a worded vintage gem and a modern bare 10 stay 10
+  assert.equal(parseCard('1974 Topps #20 Nolan Ryan SGC 10 GEM MINT POP 1').gradeNum, 10);
+  assert.equal(parseCard('1959 Fleer Ted Williams #25 - SGC 98 GEM 10').gradeNum, 10);
+  assert.equal(parseCard('2020 Topps Chrome #1 Mike Trout SGC 10').gradeNum, 10);
+  assert.equal(parseCard('1970 Topps #700 Frank Robinson - SGC GM 10 - MBA Silver Diamond Certified - Pop 1').gradeNum, 10);
   // the REA "SGC 60" and the H&S "SGC EX 5" sale of one card share a key
   assert.equal(key('1954 Bowman #66 Ted Williams SGC EX 60'), key('1954 Bowman #66 Ted Williams SGC EX 5'));
   assert.equal(parseCard('1934 Goudey #35 Ernie Lombardi w/ auto – SGC AUT').gradeTag, 'A');
