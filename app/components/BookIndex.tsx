@@ -28,6 +28,7 @@ import { signalMagnitude, dealScore } from '../lib/comps';
 import { OPEN_CK_EVENT } from './CommandK';
 import '../northstar-pages.css';
 import { makerHref } from '../lib/entity/retired';
+import { playerHrefOf } from '../lib/entity/aliases';
 
 type Kind = 'lot' | 'ref' | 'player';
 
@@ -113,7 +114,7 @@ export default function BookIndex({ kind }: { kind: Kind }) {
             ))
           ) : (
             players.map(p => (
-              <Link key={p.slug} href={`/player?id=${encodeURIComponent(p.slug)}`} className="lectr-lot-comp">
+              <Link key={p.slug} href={playerHrefOf(p.slug)} className="lectr-lot-comp">
                 <span className="lectr-lot-comp-t"><span className="lectr-lot-comp-title" style={{ display: 'block' }}>{p.name === p.name.toUpperCase() ? p.name.toLowerCase().replace(/(^|[\s'-])([a-z])/g, (_, a: string, b: string) => a + b.toUpperCase()) : p.name}</span>
                   <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>{p.sport ? `${p.sport} · ` : ''}{p.n.toLocaleString()} sales on the book</span></span>
               </Link>

@@ -170,7 +170,7 @@ export function liveBookHref(base: string, search: string, opts: { land?: boolea
   const isMaker = path.startsWith('/makers/');
   // a player dossier's live book is a lot browser too — the reader came for
   // the rest of the book, so it opens on "All lots" like a maker page's
-  const isBook = isMaker || path === '/player' || path === '/entity';
+  const isBook = isMaker || path === '/player' || path === '/entity' || /^\/[pe]\/[^/]+$/.test(path);
   if (isBook && land && !own.has('tab')) out.set('tab', 'all');
   const q = out.toString();
   const hash = !land ? '' : isMaker ? '#upcoming' : '#on-the-block';

@@ -30,6 +30,7 @@
  */
 import { marketOf, ARTIST_LABEL, type Market } from '../constants';
 import { makerLineOf, catalogMakerLineOf } from './lot-labels';
+import { playerSlugOfHref } from './entity/aliases';
 import { subjectOf, nameTokensOk, cardGroupOf, leadOf } from './subject';
 
 const CARD_MAKERS = new Set(['sports-cards', 'graded-cards']);
@@ -114,7 +115,8 @@ function read(l: SubjectLot): LotSubject | null {
   // /player link there depends on which dossiers the page registered, and the
   // row key must not (the build stamps it as `ek` with no registry) — people
   // on memorabilia read through subjectOf below, to the same `p:<slug>` key
-  const pm = CARD_MAKERS.has(l.artist) ? line.href.match(/^\/player\?id=(.+)$/) : null;
+  // (W12) the dossier href is the query route or its static alias (/p/<slug>) — either names the player
+  const pm = CARD_MAKERS.has(l.artist) ? playerSlugOfHref(line.href) : null;
   // (r7) a subset / leaders card the parser read as a name is no one's — not even its first two words
   if (pm && !NOT_PERSON_RUN.test(line.name)) {
     // the card parser can run a name on into the caption ("Mickey Mantle
