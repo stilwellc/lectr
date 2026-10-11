@@ -86,6 +86,7 @@ import { makerLineOf } from './lot-labels';
 import { craftTitle, isClosedPending } from '../utils';
 import { ARTIST_LABEL, MARKETS } from '../constants';
 import { isFlagged } from './flags';
+import { lotIdTwins } from './id-aliases';
 import { kindFits } from './object-kind';
 import type { Follow } from './follows';
 import type { SavedQuery } from './alerts';
@@ -346,6 +347,9 @@ export function idAliases(id: string): string[] {
       if (h !== fam[1]) out.push(`${h}-${fam[2]}`, `${h}-${fam[2]}~`);
     }
   }
+  // (W16) the same Christie's object under the other crawler's id — the
+  // build keeps ONE (christies-<n>), a save may be keyed under either
+  out.push(...lotIdTwins(id));
   return out;
 }
 

@@ -289,6 +289,9 @@ const STRIP = new Set([
   // buyerPremium/_pid/_pname/_card/photoMatched are pipeline-only. subCat/
   // drill/sport STAY — the feed lens, cat cell, and lot certificate read them.
   'premiumPrice', 'archived', 'auctionId', 'buyerPremium', '_pid', '_pname', '_card', 'photoMatched',
+  // (W16) the ids a collapsed lot was also carried under — served as ONE map
+  // (id-aliases.json, build-market), never per row
+  'idAliases',
   // advisory LLM extraction (scripts/lib/extract) — corpus-only pipeline input
   'llm',
   // the engine's cached IDF-vector norm (similarity.buildVectors). Its vector
