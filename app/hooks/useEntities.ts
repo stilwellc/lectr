@@ -118,12 +118,21 @@ export function loadPlayers(): Promise<Map<string, PlayerRec> | null> {
   return playersP;
 }
 const detailP = new Map<string, Promise<Record<string, EntityDetail> | null>>();
+/** buckets whose fetch failed (404, network, an HTML page) — so a caller can
+ *  tell "this entity has no detail" from "the detail could not be read" */
+const failedBuckets = new Set<string>();
 export function loadEntityDetail(id: string, ver?: string): Promise<EntityDetail | null> {
   const b = bucketOf(id);
   let p = detailP.get(b);
-  if (!p) { p = getJson<Record<string, EntityDetail>>(`${BASE}/pages/entity-${b}.json${verOf(ver)}`); detailP.set(b, p); }
+  if (!p) {
+    p = getJson<Record<string, EntityDetail>>(`${BASE}/pages/entity-${b}.json${verOf(ver)}`)
+      .then(m => { if (!m) failedBuckets.add(b); return m; });
+    detailP.set(b, p);
+  }
   return p.then(m => (m && m[id]) || null);
 }
+/** true when `id`'s detail bucket was fetched and failed (not merely absent) */
+export function entityDetailFailed(id: string): boolean { return failedBuckets.has(bucketOf(id)); }
 /** one entity's summary from its market's entities file (null: absent) */
 export async function loadEntitySummary(id: string): Promise<EntitySummary | null> {
   const p = parseEntityId(id);
@@ -136,7 +145,7 @@ export async function loadEntitySummary(id: string): Promise<EntitySummary | nul
   return t?.entities.find(e => e.id === id) ?? null;
 }
 /** test seam: forget every cached fetch */
-export function _resetEntityCaches() { entitiesP.clear(); tailP.clear(); catP = null; playersP = null; detailP.clear(); entitiesMissing = false; }
+export function _resetEntityCaches() { entitiesP.clear(); tailP.clear(); catP = null; playersP = null; detailP.clear(); failedBuckets.clear(); entitiesMissing = false; }
 
 /** a promise's value as state (undefined = pending, null = absent).
  *  `keep`: while a NEW loader is pending, return the last one's value (a

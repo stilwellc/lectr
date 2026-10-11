@@ -25,6 +25,7 @@ import { displayMakerOf } from '../lib/maker-subjects';
 import { HorizonMark } from '../components/marks';
 import { craftTitle, fmtSignedPct } from '../utils';
 import { RoomHead } from './head';
+import { useStalled } from './stall';
 
 /** the log, read on mount (null until then — no hydration mismatch), again
  *  on a clear here or a write in another tab */
@@ -213,6 +214,9 @@ export default function PickOutcomes({ book }: { book: readonly AuctionLot[] }) 
   const wantLedger = !!picks && needsLedger(picks, rowOf, now);
   const [ledger, setLedger] = useState<LedgerState>({ ledger: new Map(), loaded: false, error: false });
   const onLedger = useCallback((s: LedgerState) => setLedger(s), []);
+  // the sold record has a deadline: past it the room stops saying "Reading…"
+  // and says the record is slow (it still lands in place when it answers)
+  const ledgerSlow = useStalled(wantLedger && !ledger.loaded && !ledger.error);
 
   const outs = useMemo(() => (picks ? resolvePicks(picks, {
     rowOf,
@@ -234,7 +238,7 @@ export default function PickOutcomes({ book }: { book: readonly AuctionLot[] }) 
 
   const gate = wantLedger ? <LedgerGate onState={onLedger} /> : null;
   if (!picks || (!closed.length && !pending.length)) return gate;
-  const waiting = wantLedger && !ledger.loaded && !ledger.error;
+  const waiting = wantLedger && !ledger.loaded && !ledger.error && !ledgerSlow;
 
   return (
     <section id="pick-outcomes" className="ck-subroom rail ray-enter" aria-label="How your picks did">
@@ -260,6 +264,7 @@ export default function PickOutcomes({ book }: { book: readonly AuctionLot[] }) 
               : <>No pick has a final result in the past {OUTCOME_WINDOW_DAYS} days yet.</>}
         </p>
         {ledger.error && <p className="ck-sig-note">Couldn&apos;t load lectr&rsquo;s sold record — some results may be missing.</p>}
+        {ledgerSlow && <p className="ck-sig-note">lectr&rsquo;s sold record is slow to arrive — results for the picks that closed land here when it answers.</p>}
         <OutcomeGroup label="You saved" rows={saved} />
         <OutcomeGroup label="You passed" rows={passed} />
         {pending.length > 0 && (

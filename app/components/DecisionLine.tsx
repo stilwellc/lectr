@@ -33,14 +33,14 @@ function Part({ text, title, tone }: { text: string; title?: string; tone?: 'up'
  *  options — a host wrapping the line (the lot page's decision block) asks
  *  first, so an empty line never leaves an empty frame. A line with no
  *  figure on it (only the close time the host already prints) is not a
- *  decision. */
-export function decisionLineShows(d: Decision, { estimate = true, when = true }: { estimate?: boolean; when?: boolean } = {}): boolean {
+ *  decision. `abstain: 'quiet'`: an abstention alone is no line either. */
+export function decisionLineShows(d: Decision, { estimate = true, when = true, abstain = 'say' }: { estimate?: boolean; when?: boolean; abstain?: 'say' | 'quiet' } = {}): boolean {
   const showClose = !!d.close && (estimate || d.close.kind !== 'est' || d.close.oneSided);
   const texts = decisionParts(d, { when, close: showClose });
-  return !!texts.length && (!!(d.close && showClose) || !!d.worth || d.abstained);
+  return !!texts.length && (!!(d.close && showClose) || !!d.worth || (d.abstained && abstain === 'say'));
 }
 
-export default function DecisionLine({ lot, when = true, estimate = true, nowMs, className, style }: {
+export default function DecisionLine({ lot, when = true, estimate = true, abstain = 'say', nowMs, className, style }: {
   lot: AuctionLot;
   /** false: leave a two-sided house estimate out (a host that already prints
    *  it — the card, the feed row, the Watching ledger); a projection and a
@@ -48,6 +48,10 @@ export default function DecisionLine({ lot, when = true, estimate = true, nowMs,
   estimate?: boolean;
   /** false: leave the close out (a surface that prints its own Hammers column) */
   when?: boolean;
+  /** an engine that abstained: 'say' prints "no engine read"; 'quiet'
+   *  prints nothing for it (a list that explains abstention once, in its
+   *  how-to-read — a row never implies a value either way) */
+  abstain?: 'say' | 'quiet';
   /** the clock (tests, frozen captures); default: now */
   nowMs?: number;
   className?: string;
@@ -57,11 +61,12 @@ export default function DecisionLine({ lot, when = true, estimate = true, nowMs,
   // a one-sided estimate is never what the host printed (formatEstimate
   // leads with the bid there) — the line names it
   const showClose = !!d.close && (estimate || d.close.kind !== 'est' || d.close.oneSided);
-  if (!decisionLineShows(d, { estimate, when })) return null;
+  const sayAbstain = d.abstained && abstain === 'say';
+  if (!decisionLineShows(d, { estimate, when, abstain })) return null;
   const parts: React.ReactNode[] = [];
   if (d.close && showClose) parts.push(<Part key="c" text={d.close.text} title={d.close.title} />);
   if (d.worth) parts.push(<Part key="w" text={d.worth.text} title={d.worth.title} />);
-  else if (d.abstained) parts.push(<Part key="w" text="no engine read" title="The engine abstained on this lot — no max bid" />);
+  else if (sayAbstain) parts.push(<Part key="w" text="no engine read" title="The engine abstained on this lot — no max bid" />);
   if (d.gap) parts.push(<Part key="g" text={d.gap.text} tone={d.gap.dir === 'room' ? 'up' : 'down'} />);
   if (d.when && when) parts.push(<Part key="t" text={d.when.text} />);
   return (

@@ -16,6 +16,13 @@
  * useEntities cache — a page that already read it pays nothing) plus one
  * detail bucket per name, at most MAX_READ names.
  *
+ * FAIL SOFT: each name's read has a deadline (stall.READ_DEADLINE_MS). A
+ * summary file or detail bucket that 404s, fails or never answers turns
+ * that row into live-only facts with a line saying the sold side did not
+ * load — never "Reading sold history…" forever, never "No sold history on
+ * file" (a claim about the name) for what was a failed fetch. A read that
+ * lands after its deadline still fills the row in.
+ *
  * MODES: 'week' (the last seven days; records over thirty) or 'since' (since
  * the reader's previous visit — the site's one last-visit clock). The toggle
  * shows only when a previous visit exists.
@@ -25,7 +32,8 @@ import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import { useFollows } from '../lib/follows';
 import { useLastVisit, houseBaselines } from '../lib/feed-filters';
-import { loadEntitySummary, loadEntityDetail } from '../hooks/useEntities';
+import { loadEntitySummary, loadEntityDetail, loadEntities, entityDetailFailed } from '../hooks/useEntities';
+import { parseEntityId } from '../lib/entity/key';
 import { useRayData } from '../hooks/useRayData';
 import { pageHrefOf } from '../lib/entity/kinds';
 import type { EntitySummary, EntityDetail } from '../lib/entity/model';
@@ -36,6 +44,7 @@ import {
 import { MoversMark } from '../components/marks';
 import { localToday } from '../utils';
 import { RoomHead } from './head';
+import { withTimeout, READ_DEADLINE_MS } from './stall';
 
 export type MarketMode = 'week' | 'since';
 
@@ -46,9 +55,39 @@ const usd = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
 const pctText = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n).toFixed(1)}%`;
 const BASIS: Record<Move['basis'], string> = { matched: 'matched', median: 'median sale', index: 'index' };
 
-type Sold = { s: EntitySummary | null; d: EntityDetail | null };
+/** the sold side of one name. `sFail` / `dFail`: the summary (YoY) or the
+ *  detail (records, recent sales) could not be read — it 404'd, failed, or
+ *  missed the deadline — as opposed to the name simply having none */
+type Sold = { s: EntitySummary | null; d: EntityDetail | null; sFail: boolean; dFail: boolean;
+  /** a part missed the deadline (still in flight — it may yet land) */
+  slow: boolean };
 
-/** the sold side for `ids`, read once the section is near (undefined = not yet) */
+const SLOW = Symbol('slow');
+
+async function readSold(id: string, ver: string | undefined): Promise<{ now: Sold; late: Promise<Sold> | null }> {
+  const market = parseEntityId(id)?.market;
+  const fileP = market ? loadEntities(market).catch(() => null) : Promise.resolve(null);
+  const sP = loadEntitySummary(id).catch(() => null);
+  const dP = loadEntityDetail(id, ver).catch(() => null);
+  const settle = (s: EntitySummary | null, d: EntityDetail | null, file: unknown, sSlow: boolean, dSlow: boolean): Sold => ({
+    s, d,
+    // no summary AND its market's file never decoded: a failed read, not "none on file"
+    sFail: sSlow || (!s && market != null && file === null),
+    dFail: dSlow || (!d && entityDetailFailed(id)),
+    slow: sSlow || dSlow,
+  });
+  const [s, d, file] = await Promise.all([
+    withTimeout(sP, READ_DEADLINE_MS, SLOW), withTimeout(dP, READ_DEADLINE_MS, SLOW), withTimeout(fileP, READ_DEADLINE_MS, SLOW),
+  ]);
+  const now = settle(s === SLOW ? null : s, d === SLOW ? null : d, file === SLOW ? undefined : file, s === SLOW, d === SLOW);
+  const late = s === SLOW || d === SLOW
+    ? Promise.all([sP, dP, fileP]).then(([s2, d2, f2]) => settle(s2, d2, f2, false, false))
+    : null;
+  return { now, late };
+}
+
+/** the sold side for `ids`, read once the section is near (undefined = not
+ *  yet). Every name settles by the deadline; a late read fills in after. */
 function useSoldSide(ids: readonly string[], enabled: boolean, ver?: string): Map<string, Sold> | undefined {
   const key = ids.join('\n');
   const [got, setGot] = useState<{ key: string; m: Map<string, Sold> } | null>(null);
@@ -56,10 +95,15 @@ function useSoldSide(ids: readonly string[], enabled: boolean, ver?: string): Ma
     if (!enabled || !key) return;
     let on = true;
     const list = key.split('\n');
-    Promise.all(list.map(async id => {
-      const [s, d] = await Promise.all([loadEntitySummary(id).catch(() => null), loadEntityDetail(id, ver).catch(() => null)]);
-      return [id, { s, d }] as const;
-    })).then(rows => { if (on) setGot({ key, m: new Map(rows) }); });
+    Promise.all(list.map(async id => [id, await readSold(id, ver)] as const)).then(rows => {
+      if (!on) return;
+      setGot({ key, m: new Map(rows.map(([id, r]) => [id, r.now])) });
+      for (const [id, r] of rows) {
+        r.late?.then(v => {
+          if (on) setGot(g => (g && g.key === key ? { key, m: new Map(g.m).set(id, v) } : g));
+        });
+      }
+    });
     return () => { on = false; };
   }, [key, enabled, ver]);
   if (!key) return new Map();
@@ -100,7 +144,9 @@ function MoveFact({ m }: { m: Move }) {
   );
 }
 
-type Digest = NameDigest & { s: EntitySummary | null; capped: boolean };
+type Digest = NameDigest & { s: EntitySummary | null; capped: boolean;
+  /** the sold side (or part of it) could not be read */
+  sFail: boolean; dFail: boolean; slow: boolean };
 
 function Row({ d, mode, sinceDay }: { d: Digest; mode: MarketMode; sinceDay: string | null }) {
   const { name, move, record, biggest, live } = d;
@@ -129,6 +175,9 @@ function Row({ d, mode, sinceDay }: { d: Digest; mode: MarketMode; sinceDay: str
   }
   if (!name.id || d.capped) sold.push(<span key="scope">{d.capped ? 'Live lots only here' : `${name.follow.kind === 'cat' ? 'Category' : 'Collection'} · live lots only`}</span>);
   else if (!d.read) sold.push(<span key="ld">Reading sold history…</span>);
+  else if (d.sFail && d.dFail) sold.push(<span key="fail">Sold history didn&rsquo;t load · live lots only</span>);
+  else if (d.dFail) sold.push(<span key="fail">Records and recent sales didn&rsquo;t load</span>);
+  else if (d.sFail) sold.push(<span key="fail">Year-over-year didn&rsquo;t load</span>);
   else if (!d.s) sold.push(<span key="none">No sold history on file</span>);
 
   const liveBits: React.ReactNode[] = [];
@@ -208,6 +257,9 @@ export default function YourMarket({ book, owned = [], mode: modeProp, since: si
       out.push({
         name: n,
         s,
+        sFail: !!got?.sFail,
+        dFail: !!got?.dFail,
+        slow: !!got?.slow,
         capped: !!n.id && !readSet.has(n.id),
         move: moveOf(s?.yoy),
         record: recordIn(d, recordFrom, from),
@@ -224,8 +276,11 @@ export default function YourMarket({ book, owned = [], mode: modeProp, since: si
   if (!ready || names.length === 0) return null;
 
   const loading = sold === undefined && readIds.length > 0;
-  const quiet = loading ? [] : digests.filter(isQuiet);
-  const rows = digests.filter(d => loading || !isQuiet(d));
+  // a name whose sold side failed is never "quiet" — nothing is known of it
+  const failed = (d: Digest) => d.sFail || d.dFail;
+  const quiet = loading ? [] : digests.filter(d => !failed(d) && isQuiet(d));
+  const rows = digests.filter(d => loading || failed(d) || !isQuiet(d));
+  const failedNames = loading ? [] : digests.filter(failed);
   const shown = all ? rows : rows.slice(0, ROWS_SHOWN);
   const t = digestTotals(digests);
   const when = mode === 'since' && sinceDay ? `since ${dayWord(sinceDay)}` : 'this week';
@@ -274,6 +329,12 @@ export default function YourMarket({ book, owned = [], mode: modeProp, since: si
         {quiet.length > 0 && (
           <p className="ck-sig-note">
             Quiet {when}: {quiet.map(d => d.name.label).join(', ')} — no record, no published move, nothing live.
+          </p>
+        )}
+        {failedNames.length > 0 && (
+          <p className="ck-sig-note">
+            Sold history didn&rsquo;t fully load for {failedNames.length === 1 ? 'one name' : `${failedNames.length} names`} — {failedNames.length === 1 ? 'its row says' : 'each row says'} what
+            is missing{failedNames.some(d => d.slow) ? '; a slow read fills in when it lands' : ''}.
           </p>
         )}
         {unread > 0 && (

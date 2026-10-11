@@ -27,6 +27,7 @@ import ComparableModal from '../components/ComparableModal';
 import { FeedRow, belowSignalOf, feedTone } from '../components/LotBrowser';
 import { CollectionMark } from '../components/marks';
 import { RoomHead } from './head';
+import { withTimeout, READ_DEADLINE_MS } from './stall';
 import { useGridCols } from './grid';
 
 const KIND_LABEL: Record<PickKind, string> = { upgrade: 'Upgrades', set: 'Sets', series: 'Series', maker: 'More by' };
@@ -76,7 +77,8 @@ export default function ForYourCollection({ book, pool, compLots, ready, lastCra
     if (!want) return;
     let live = true;
     const ids = want.split(',');
-    Promise.all(ids.map(id => loadEntityDetail(id, lastCrawl).then(d => {
+    // (deadline) a bucket that never answers reads as no ladder, never a wait
+    Promise.all(ids.map(id => withTimeout(loadEntityDetail(id, lastCrawl), READ_DEADLINE_MS, null).then(d => {
       const g = d?.facets?.find(f => f.key === 'grade' && f.basis === 'matched');
       return [id, g ? { basis: 'matched' as const, cards: g.cards, rows: g.rows } : null] as const;
     }).catch(() => [id, null] as const))).then(rows => {
