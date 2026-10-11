@@ -54,11 +54,23 @@ export const houseColorsHex: Record<'dark' | 'light', Record<string, string>> = 
  * One pass: strip the redundant maker prefix, sentence-case the shouting,
  * trim the tail. The data stays untouched — this is presentation craft.
  */
-const MAKER_PREFIX = /^(rolex|patek philippe|audemars piguet|omega|cartier|vacheron constantin|jaeger[- ]lecoultre)\s*[.,:]\s*/i;
+const MAKER_PREFIX = /^(rolex|patek philippe|audemars piguet|omega|cartier|vacheron constantin|jaeger[- ]lecoultre)\s*[.,:|]\s*/i;
 // design/maker name(s) that lead a catalogue title and duplicate the maker line
 const DESIGN_MAKER_PREFIX = /^(charles (?:&|and) ray eames|charles eames|ray eames|george nakashima|pierre jeanneret|jean prouv[eé]|le corbusier)\s*[.,:]\s*/i;
-// "Charles Eames, Ray Eames: <title>" — a comma-joined name duo ending in a colon
-const DUO_PREFIX = /^[A-ZÀ-Ý][\wÀ-ÿ.'-]+(?:\s+[A-ZÀ-Ý][\wÀ-ÿ.'-]+){0,3}(?:,\s*[A-ZÀ-Ý][\wÀ-ÿ.'-]+(?:\s+[A-ZÀ-Ý][\wÀ-ÿ.'-]+){0,3})+\s*:\s+/;
+// "Charles Eames, Ray Eames: <title>" — a comma-joined name duo ending in a
+// colon, optionally "…, a.o.:" (and others). (W21) never a "Calatrava, Ref:
+// 2452" — a model and its reference label are no duo of names.
+const DUO_PREFIX = /^[A-ZÀ-Ý][\wÀ-ÿ.'-]+(?:\s+[A-ZÀ-Ý][\wÀ-ÿ.'-]+){0,3}(?:,\s*[A-ZÀ-Ý][\wÀ-ÿ.'-]+(?:\s+[A-ZÀ-Ý][\wÀ-ÿ.'-]+){0,3})+(?:,\s*a\.\s?o\.)?\s*:\s+/;
+const DUO_NOT_A_NAME = /(?:^|[\s,])(?:ref|reference|no|model|lot|circa|cal|calibre|caliber)\.?\s*:/i;
+// (W21) a SHOUTED maker with life dates leading the title ("JEAN PROUVÉ
+// (1901-1984) Pair of 'Métropole' Chairs") — the maker line names them
+const DATED_MAKER_PREFIX = /^[A-ZÀ-Ý][A-ZÀ-Ý'’.\- ]{2,40}\s*\((?:b\.\s*\d{4}|\d{4}\s*[-–]\s*\d{4})\)\s*[.,:;]?\s*(?=\S.{7})/;
+// (W21) a house's boilerplate riding the title (NFL Auction appends its
+// site tagline to every lot)
+const HOUSE_TAGLINE = /\s*\|\s*the official auction site of the national football league\s*$/i;
+// (W21) a Sotheby's Asia title carries its Chinese translation as pipe
+// segments — the English one is the title
+const CJK = /[぀-ヿ㐀-鿿가-힯]/;
 const HTML_TAG = /<\/?[a-z][^>]*>/gi;
 const ENTITY: Record<string, string> = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&apos;': "'", '&nbsp;': ' ', '&mdash;': '—', '&ndash;': '–', '&hellip;': '…' };
 
@@ -100,32 +112,91 @@ export function expandLeadYear(t: string, house?: string | null): string {
   return `${ly.year} ${t.slice(m[0].length)}`;
 }
 
+/** (W21) names a shouting title must not lose to the lower-casing: the watch
+ *  and design houses' own names and their model lines ("PATEK PHILIPPE |
+ *  AQUANAUT" read "Patek philippe | aquanaut"; "…NAUTILUS MODEL" read
+ *  "nautilus model"; "…JEWELRY BOX GEORGE NAKASHIMA" read "george nakashima") */
+const PROPER_NAMES = [
+  'Patek Philippe', 'Audemars Piguet', 'Vacheron Constantin', 'Jaeger-LeCoultre', 'Rolex', 'Omega', 'Cartier', 'Tudor', 'Breguet', 'Van Cleef & Arpels', 'Tiffany', 'Bulgari', 'Hermès',
+  'Nautilus', 'Aquanaut', 'Calatrava', 'Gondolo', 'Ellipse', 'Royal Oak Offshore', 'Royal Oak', 'Jules Audemars', 'Daytona', 'Submariner', 'Datejust', 'Day-Date', 'GMT-Master',
+  'Sea-Dweller', 'Explorer', 'Milgauss', 'Speedmaster', 'Seamaster', 'Constellation', 'Santos', 'Tank', 'Panthère', 'Pasha', 'Crash', 'Reverso', 'Overseas', 'Patrimony',
+  'George Nakashima', 'Charles Eames', 'Ray Eames', 'Jean Prouvé', 'Pierre Jeanneret', 'Le Corbusier', 'Charlotte Perriand', 'Herman Miller', 'Knoll', 'Vitra',
+];
+const PROPER_RE = new RegExp(`\\b(?:${PROPER_NAMES.map(n => n.replace(/[.*+?^${}()|[\]\\&]/g, m => (m === '&' ? '&' : `\\${m}`))).join('|')})(?![\\w-])`, 'gi');
+const PROPER_BY_LOWER = new Map(PROPER_NAMES.map(n => [n.toLowerCase(), n]));
+const SMALL_WORDS = new Set(['a', 'an', 'and', 'as', 'at', 'by', 'de', 'for', 'from', 'in', 'of', 'on', 'or', 'the', 'to', 'vs', 'vs.', 'with', 'w/']);
+
+/** one SHOUTED word, lower-cased with what must stay: a token carrying a digit
+ *  (a reference "5712G-001", a grade "A7.5"), an initialism ("G.I.", "U.S.A."),
+ *  a short all-consonant code ("PSA", "JSA", "CAS", "LC") */
+const ACRONYMS = new Set('PVD DLC GMT UTC ETA PSA DNA JSA BGS SGC CGC COA LOA LOP OOA NFL NBA MLB NHL WNBA USA UK USSR NASA RIAA NCAA HOF MVP WWI WWII TV DVD VHS LP EP CD GU AFA CAS TMNT UFC WWE WWF FBI CIA JFK RFK MGM RKO BBC CBS NBC ABC HBO AMC UCLA USC LSU BYU TCU SMU NYPD LAPD PGA LPGA FIFA UEFA PMG CBCS'.split(' '));
+function quietWord(w: string): string {
+  if (w.includes('/') && !/\d/.test(w)) return w.split('/').map(quietWord).join('/');
+  if (/^[A-Z]{2,5}-[A-Z]/.test(w) && ACRONYMS.has(w.split('-')[0])) return w.split('-').map((p, i) => (i ? quietWord(p) : p)).join('-');
+  if (/^\d+(?:ST|ND|RD|TH)\b/.test(w)) return w.replace(/(ST|ND|RD|TH)/, x => x.toLowerCase());
+  if (/\d/.test(w)) return w;
+  const bare = w.replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, '');
+  if (ACRONYMS.has(bare) || /^[IVX]{2,5}$/.test(bare)) return w;
+  if (/^(?:[A-Z]\.){2,}[A-Z]?\.?$/.test(w.replace(/[(),;:"'“”‘’]/g, ''))) return w;
+  const core = w.replace(/[^A-Za-z]/g, '');
+  if (core.length >= 2 && core.length <= 4 && !/[AEIOUY]/.test(core)) return w;
+  return w.toLowerCase();
+}
+
+/** a SHOUTING title made readable: prose ("A SPORTY AND ATTRACTIVE …
+ *  WRISTWATCH") reads in sentence case; a name-led headline ("FINE BABE RUTH
+ *  PROFESSIONAL MODEL BASEBALL BAT", "G.I. JOE (1989) - SGT. SLAUGHTER")
+ *  reads in title case, so the people it names keep their capitals. A new
+ *  clause after " - ", " | " or a sentence stop opens with a capital. */
+function unshout(t: string): string {
+  const prose = /^an?\s/i.test(t);
+  let out = t.split(/(\s+)/).map((w, i) => {
+    if (/^\s+$/.test(w)) return w;
+    const q = quietWord(w);
+    if (prose || q === w || /\d/.test(q) || /^\(?b\.$/.test(q)) return q;
+    if (i > 0 && SMALL_WORDS.has(q)) return q;
+    // a French elision keeps its article ("d'Azur"); a hyphen opens a new word ("Multi-Signed")
+    const elided = q.match(/^([^a-z]*)([dl])['’]([a-z])(.*)$/);
+    if (elided) return `${elided[1]}${elided[2]}'${elided[3].toUpperCase()}${elided[4]}`;
+    return q.replace(/^([^a-z]*)([a-z])/, (_, a, b) => a + b.toUpperCase()).replace(/-([a-z])/g, (_, b) => `-${b.toUpperCase()}`);
+  }).join('');
+  out = out.replace(/(^|[.!?]\s+|\s[-–—|]\s+|\(\s*(?=[a-z]{2}))([a-z])/g, (_, a, b) => a + b.toUpperCase());
+  return out.replace(PROPER_RE, m => PROPER_BY_LOWER.get(m.toLowerCase()) ?? m);
+}
+
+/** a title in capitals (more than 70% of 9+ letters) */
+export function isShouting(t: string): boolean {
+  const letters = t.replace(/[^a-zA-Z]/g, '');
+  return letters.length > 8 && t.replace(/[^A-Z]/g, '').length / letters.length > 0.7;
+}
+/** a shouting title in the case craftTitle prints it in (names keep capitals) */
+export function unshoutTitle(t: string): string {
+  return unshout(t);
+}
+
 export function craftTitle(raw: string, house?: string | null): string {
   let t = tidyTitle(raw);
+  t = t.replace(HOUSE_TAGLINE, '');
+  if (CJK.test(t) && t.includes('|')) {
+    const segs = t.split(/\s*\|\s*/);
+    if (!CJK.test(segs[0])) t = segs.filter(s => !CJK.test(s)).join(' | ');
+  }
   t = t.replace(/^[·•]\s*/, '');                  // a leading catalogue bullet  '· Femme nue'
   t = t.replace(/^\[(.+?)\]$/, '$1').trim();          // unwrap a fully-bracketed title  [Apollo 14] → Apollo 14
   t = t.replace(/^\[[^\]]{1,40}\]\s*/, '').trim();     // drop a leading [collection tag]
   t = t.replace(/\s*\(\d{1,3}\)\s*$/, '');             // drop trailing catalogue quantity  "…chairs (7)"
   t = t.replace(MAKER_PREFIX, '');
+  // the duo first: "Charles Eames, Ray Eames: …" must not lose only its first name
+  const duo = t.match(DUO_PREFIX);
+  if (duo && !DUO_NOT_A_NAME.test(duo[0])) t = t.slice(duo[0].length);
   t = t.replace(DESIGN_MAKER_PREFIX, '');              // "George Nakashima: Conoid" → "Conoid"
-  t = t.replace(DUO_PREFIX, '');                       // "Charles Eames, Ray Eames: …" → "…"
-  const letters = t.replace(/[^a-zA-Z]/g, '');
-  if (letters.length > 8) {
-    const shouting = t.replace(/[^A-Z]/g, '').length / letters.length > 0.7;
-    if (shouting) {
-      t = t.toLowerCase().replace(/(^|[.!?]\s+)([a-z])/g, (_, a, b) => a + b.toUpperCase());
-    }
-  }
-  t = t.replace(/\s*[.,;]+\s*$/, '');
+  t = t.replace(DATED_MAKER_PREFIX, '');               // "JEAN PROUVÉ (1901-1984) Pair of …" → "Pair of …"
+  if (isShouting(t)) t = unshout(t);
+  t = deglue(t.replace(/\s*[.,;|]+\s*$/, ''));
   t = expandLeadYear(t, house);
   return t ? t.charAt(0).toUpperCase() + t.slice(1) : '';
 }
 
-/** Re-space words a crawler glued together when it stripped a <br> with ''
- *  ("Conoid Chair 1966American black walnut", "aquatint1937on Montval"). Only
- *  the unambiguous shapes: a 4-digit year fused to a capitalised word, and a
- *  year fused between two lowercase words. References like "126720vtnr" or
- *  "5059R" never match (no 3+-letter lowercase word on the left). */
 /** A title the BUILD truncated at a fixed length (refs/players rows ship
  *  title.slice(0, 80)) ends mid-word with no mark. Close it at the last
  *  whole word with an ellipsis — never a silent mid-word cut. */
@@ -135,38 +206,98 @@ export function closeCut(t: string, cap = 80): string {
   return `${(sp > cap * 0.5 ? t.slice(0, sp) : t).replace(/[\s,;:.—–-]+$/, '')}…`;
 }
 
+/** Re-space words a crawler glued together when it stripped a <br> with ''
+ *  ("Conoid Chair 1966American black walnut", "aquatint1937on Montval"). Only
+ *  the unambiguous shapes: a 4-digit year fused to a capitalised word, and a
+ *  year fused between two lowercase words. References like "126720vtnr" or
+ *  "5059R" never match (no 3+-letter lowercase word on the left).
+ *  (W21) + Bonhams' Wright-family rows, where every field is glued: a word
+ *  fused to the year ("Q Bench1966American"), the "designed" field ("Ottoman
+ *  designed 1956for Herman Miller"), the dimensions ("hickoryheight 29in"). */
 export function deglue(raw: string): string {
   return raw
+    .replace(/([a-z]{2,})((?:1[5-9]|20)\d{2})(?=[A-Z][a-z]{2,}|\s|,|$)/g, '$1 $2')
     .replace(/\b((?:1[5-9]|20)\d{2})([A-Z][a-z]{2,})/g, '$1 $2')
     .replace(/([a-z]{3,})((?:1[5-9]|20)\d{2})([a-z]{2,})/g, '$1 $2 $3')
-    .replace(/([a-z]{3,})((?:1[5-9]|20)\d{2})\b/g, '$1 $2');
+    .replace(/([a-z]{3,})((?:1[5-9]|20)\d{2})\b/g, '$1 $2')
+    .replace(/\b((?:1[5-9]|20)\d{2})(for|by|in)\b/g, '$1 $2')
+    .replace(/([a-z]{3,})(designed|produced|executed|manufactured)(?= (?:\d|circa|c\.))/g, '$1 $2')
+    .replace(/([a-z]{3,})(circa)(?= \d)/g, '$1 $2')
+    .replace(/([a-z]{3,})(height|width|depth|diameter|length)(?= (?:of [a-z ]+)?\d)/g, '$1 $2');
+}
+
+/** a word that ends in "." without ending a sentence: a catalogue's labels
+ *  ("ref.", "No.", "cal.", "Bl.", "approx.", "a.o.") and initials ("John F.") */
+const ABBREV_BEFORE = /(?:\b(?:ref|réf|refs|no|nos|nr|lv|cal|bl|ba|approx|ca|circa|c|cf|fig|figs|pl|pls|vol|vols|op|ed|eds|inc|co|corp|ltd|jr|sr|dr|mr|mrs|ms|st|mt|ft|sgt|lt|col|capt|gen|gov|pres|rev|vs|est|illus|pp|p|nb|a\.o|i\.e|e\.g|u\.s|s|t|d|f)|\b[A-Z]|\.[a-z])\.$/i;
+/** the depth of open brackets / quotes before index i (a break inside "(after,
+ *  Studies of the Human Body …)" is no break) */
+function openAt(t: string, i: number): boolean {
+  let p = 0, sq = 0, dq = 0;
+  for (let k = 0; k < i; k++) {
+    const c = t[k];
+    if (c === '(' || c === '[') p++;
+    else if ((c === ')' || c === ']') && p > 0) p--;
+    else if (c === '“') dq++;
+    else if (c === '”' && dq > 0) dq--;
+    else if (c === '"') dq = dq ? 0 : 1;
+  }
+  return p > 0 || dq > 0 || sq > 0;
 }
 
 /** A lot title for DISPLAY: the short title the h1 carries, and the catalogue
  *  description some houses (Bonhams) pour into the same field. Split rules, in
  *  order, applied only to titles past 64 chars:
+ *   0. (W21) a " | " field break (Sotheby's "Daytona, Reference 6265 | A yellow
+ *      gold … wristwatch | Circa 1987") — the first field is the title;
  *   1. a year inside the first 60 chars followed by more prose → the title
- *      ends at the year ("Conoid Chair, 1966" | "American black walnut, …");
- *   2. the first "; " / " — " / ". " break after 16 chars;
- *   3. the first ", " break after 24 chars;
+ *      ends at the year ("Conoid Chair, 1966" | "American black walnut, …") —
+ *      never a reference / model / catalogue number ("Ref. 1567", "No. 1675");
+ *   2. the first "; " / " — " / ". " break after 16 chars — never after an
+ *      abbreviation ("ref. 2486", "Model No. 150", "(Bl. 1330", "Approx.");
+ *   3. the first ", " break after 30 chars;
+ *   (2–3 never break inside an open bracket or quote)
  *   4. past 140 chars, a word-boundary cut at 120 WITH an ellipsis (never mid-word,
  *      never silent) — the full text rides in `rest`.
  *  Short titles pass through untouched. */
 export function splitTitle(raw: string, house?: string | null): { short: string; rest: string | null } {
   const t = deglue(craftTitle(raw, house));
   if (t.length <= 64) return { short: t, rest: null };
-  const tidy = (s: string) => s.replace(/^[\s,;:.—–-]+/, '').trim();
-  const y = t.slice(0, 60).match(/^(.{6,}?)[\s,]+((?:1[5-9]|20)\d{2}(?:[–-]\d{2,4})?)(?=[\s,.;]+\S)/);
-  if (y) {
-    const rest = tidy(t.slice(y[0].length));
-    if (rest.length > 12) return { short: `${y[1].replace(/[\s,]+$/, '')}, ${y[2]}`, rest };
+  const tidy = (s: string) => s.replace(/^[\s,;:.|—–-]+/, '').trim();
+  const pipe = t.indexOf(' | ');
+  if (pipe >= 6 && pipe <= 90) {
+    const rest = tidy(t.slice(pipe + 3));
+    if (rest.length > 12) return { short: t.slice(0, pipe).trim(), rest };
   }
-  for (const [re, min] of [[/;\s|\s—\s|\.\s/g, 16], [/,\s/g, 24]] as const) {
+  const y = t.slice(0, 60).match(/^(.{6,}?)[\s,]+((?:1[5-9]|20)\d{2}(?:[–-]\d{2,4})?)(?=[\s,.;]+\S)/);
+  // the year closes the title only where the catalogue's next field starts:
+  // a comma / stop after it, or the materials line ("1966 American black
+  // walnut", "1956 for Herman Miller") — never mid-phrase ("Limited Edition
+  // 2004 UMG iPod", "Hall of Fame 2001 Inductees Multi-Signed Poster")
+  const yNext = y ? t.slice(y[0].length).replace(/^\s+/, '') : '';
+  const yField = !!y && (/^[,.;]/.test(t.slice(y[1].length + y[0].slice(y[1].length).indexOf(y[2]) + y[2].length)) || /^(?:[a-z]|(?:American|French|Italian|Danish|Swedish|Norwegian|Finnish|English|British|German|Dutch|Brazilian|Japanese|Indian|Swiss|East Indian) [a-z])/.test(yNext));
+  if (y && yField && !/\b(?:ref(?:erence)?|réf|no|nos|nr|model|cal(?:ibre)?|op|vol|lot|edition|number|#)\.?:?$/i.test(y[1].trim()) && !openAt(t, y[1].length)) {
+    const rest = tidy(t.slice(y[0].length));
+    if (rest.length > 12) {
+      const lead = y[1].replace(/[\s,]+$/, '').replace(/\s+(?:designed|produced|executed|manufactured|made)(?=(?:\s+(?:circa|c\.|ca\.))?$)/i, '');
+      // "…ca. 1940" keeps its circa with the year ("…, ca. 1940", never "…ca., 1940")
+      const circa = lead.match(/^(.*?)[\s,]+(circa|ca\.|c\.)$/i);
+      return { short: circa ? `${circa[1]}, ${circa[2]} ${y[2]}` : `${lead}, ${y[2]}`, rest };
+    }
+  }
+  for (const [re, min] of [[/;\s|\s—\s|\.\s/g, 16], [/,\s/g, 30]] as const) {
     re.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = re.exec(t))) {
       if (m.index < min) continue;
       if (m.index > 90) break;
+      if (m[0].startsWith('.') && ABBREV_BEFORE.test(t.slice(Math.max(0, m.index - 12), m.index + 1))) continue;
+      if (openAt(t, m.index)) continue;
+      // a list of names ("John Glenn, Charles Conrad, and Gordon Cooper (3)
+      // Signed Photographs", "Robert Plant, Jimmy Page, Led Zeppelin Type I…")
+      // runs on to the object it names; a "SURNAME, Forename (1900–1949)."
+      // heading is no title on its own
+      if (m[0] === ', ' && /[A-Z][\w.'’-]+$/.test(t.slice(0, m.index)) && /^(?:and |& )?[A-Z][a-z]/.test(t.slice(m.index + 2))) continue;
+      if (/\(\d{4}\s*[–-]\s*\d{4}\)$/.test(t.slice(0, m.index))) continue;
       const rest = tidy(t.slice(m.index + m[0].length));
       if (rest.length > 12) return { short: t.slice(0, m.index).trim(), rest };
       break;
