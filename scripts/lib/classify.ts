@@ -224,6 +224,25 @@ export function sportsObjectKind(title: string | null | undefined, catchAll: 'sp
 // Non-sport TCG (Yu-Gi-Oh / One Piece / Union Arena …) and comics have no home.
 export const NON_SPORT_TCG_RE = /\b(yu-?gi-?oh!?|one piece|union arena|dragon ball|digimon|magic:? the gathering|\bmtg\b|weiss schwarz|lorcana|flesh and blood|jujutsu kaisen|naruto|my hero academia|demon slayer|star wars unlimited|black lotus|mox (?:sapphire|ruby|pearl|jet|emerald))\b/i;
 
+/** (Oct 11 2026) a graded CARD the object ladder misreads off a "Canvas",
+ *  "Framed", "Wrapper Redemption" or "Jersey Number" word: a card brand AND a
+ *  card-slab grade, and no game-used phrase ("2010 Topps Chrome Wrapper
+ *  Redemption Refractor #223 Lou Gehrig – PSA MINT 9", "2022 Upper Deck UD
+ *  Canvas C115 Morgan Barron – PSA GEM MT 10"). */
+export function isSlabbedBrandCard(title: string | null | undefined): boolean {
+  const t = String(title || '');
+  return CARD_BRAND_RE.test(t) && SLAB_GRADE_RE.test(t) && !GAME_USED_RE.test(t);
+}
+
+/** THE Goldin sport verdict — the reclass ladder (goldin-sport-noncard) and
+ *  corpus-normalize's relic-card reroute both read it, so neither can undo
+ *  the other (they fought over 615 rows on every pass until Oct 11 2026). */
+export function goldinSportVerdict(title: string | null | undefined): string {
+  const k = goldinSportKind(title);
+  if (k === 'sports-cards' || k === DROP || k === 'game-used' || k === 'unopened-wax' || k === 'autographs') return k;
+  return isSlabbedBrandCard(title) ? 'sports-cards' : k;
+}
+
 const POP_PIECE_RE = /\b(animation (?:cel|cell)s?|production cel|looney tunes|warner bros|hanna[- ]barbera|disney|mondo|pearl jam|grateful dead|phish|gig poster)\b/i;
 export function goldinSportKind(title: string | null | undefined): string {
   const t = String(title || '');
@@ -262,13 +281,18 @@ export function isMassToyOrComic(title: string | null | undefined): boolean {
 }
 
 /** A sports expansion house's 'pop-memorabilia' lot → its real home. */
+/** original card / sticker artwork or an animation cel — a unique piece, never a card */
+const ORIGINAL_CARD_ART_RE = /original (?:card )?art(?:work)?|\bcels?\b/i;
 export function sportsHousePopKind(title: string | null | undefined): string | null {
   const t = String(title || '');
   // (wave 2) a roster athlete is sports too, unless the object reads non-sport
   // (an autograph-album page is an autograph, not a record album)
   const sport = SPORT_WORD_RE.test(t) || (!!athleteIn(t) && !NON_SPORT_RE.test(t.replace(/\b(?:autograph(?:ed)? )?album pages?\b/gi, ' ')));
   if (!sport && isMassToyOrComic(t)) return DROP;
-  if (!sport && NON_SPORT_RE.test(t)) return isCardTitle(t) || /non[- ]sport/i.test(t) ? DROP : null; // genuine pop item stays culture
+  // genuine pop item stays culture — and ORIGINAL card artwork is a unique
+  // piece, not a card: the same exemption sportsHouseCardLotKind gives it
+  // (graded-cards → pop-memorabilia), or the two rules evict on the next pass
+  if (!sport && NON_SPORT_RE.test(t)) return (isCardTitle(t) || /non[- ]sport/i.test(t)) && !ORIGINAL_CARD_ART_RE.test(t) ? DROP : null;
   if (/\b(?:tickets?|stubs?)\b/i.test(t)) return 'tickets-passes';
   if (isCardTitle(t)) return 'graded-cards';
   return sportsObjectKind(t, 'memorabilia');
@@ -284,11 +308,15 @@ const NON_CARD_SPORT_SLUGS = new Set(['autographs', 'memorabilia', 'game-used', 
 /** pro-model bats and graded GU stay game-used — the trade treats them as gamers */
 const PRO_MODEL_RE = /\b(?:pro(?:fessional)?[- ]model|\bgu \d)\b/i;
 
+const CARD_MACHINE_RE = /\b(?:vending|gumball|arcade|penny|exhibit) machines?\b|\bvending machines?\b|\b(?:card )?dispensers?\b/i;
 export function expansionSportsKind(l: ClassifyLot): string | null {
   if (!SPORTS_EXPANSION_HOUSES.has(l.auctionHouse || '') || !NON_CARD_SPORT_SLUGS.has(l.artist)) return null;
   const t = String(l.title || '');
   if (COMIC_RE.test(t) && !SPORT_WORD_RE.test(t)) return DROP;
-  if (!SEALED_RE.test(t) && isCardTitle(t)) return 'graded-cards';
+  // (Oct 11 2026) a card VENDING MACHINE / dispenser is the machine, not a
+  // card: sealed-names-no-product files it memorabilia, and with the ladder
+  // run to a fixed point this rule must not then call it a card
+  if (!SEALED_RE.test(t) && isCardTitle(t) && !CARD_MACHINE_RE.test(t)) return 'graded-cards';
   if (l.artist === 'game-used' && !GAME_USED_RE.test(t) && !(PRO_MODEL_RE.test(t) && !SIGNED_RE.test(t))) {
     return sportsObjectKind(t, 'memorabilia');
   }
@@ -318,7 +346,7 @@ export function sportsHouseCardLotKind(l: ClassifyLot): string | null {
   if (l.artist === 'graded-cards' && !sport && NON_SPORT_CARD_RE.test(t)) {
     if (/pok[eé]mon/i.test(t) && !NON_SPORT_TCG_RE.test(t)) return 'pokemon';
     const cardish = /\bcards?\b|\bsets?\b|\bpsa\b|\bsgc\b|\bbgs\b|\bcgc\b|\bgraded\b|\buncut\b|\bstickers?\b|\bwrappers?\b|#\s?\d|\b(?:collection|lot|run|hoard|shoebox|grouping|treasure chest)\b|\(\d[\d,+]*\)|\brecords?\b|\b45 ?rpm\b/i.test(t) || leadsWithSetCode(t) || COMIC_RE.test(t) || NON_SPORT_TCG_RE.test(t);
-    return cardish && !/original (?:card )?art(?:work)?|\bcels?\b/i.test(t) ? DROP : 'pop-memorabilia';
+    return cardish && !ORIGINAL_CARD_ART_RE.test(t) ? DROP : 'pop-memorabilia';
   }
   if ((l.artist === 'memorabilia' || l.artist === 'autographs' || l.artist === 'programs-publications') && CARD_LOT_RE.test(t) && !CARD_LOT_NOT_RE.test(t) && !NON_SPORT_CARD_RE.test(t)) return 'graded-cards';
   return null;
@@ -827,6 +855,103 @@ const FR_PAPER_MEDIUM_RE = /\b(?:gouache|fusain|aquarelle|encre de chine|huile|a
 
 /** (wave 5) a title naming the suite / series / portfolio the sheet comes from */
 const FROM_SET_TITLE_RE = /,\s*from\s+(?!the\s+(?:collection|estate|property)|a\s+private|an?\s+important)(?:the\s+)?[A-Z'"«“]|\(from (?:the )?[^)]*\b(?:series|portfolio|suite)\)/;
+
+// ── UNIQUE MEDIUM vs PRINT PROCESS (Oct 11 2026 data hygiene) ──
+// artCategoryFix (the reclass ladder) and normalizeArtCategory (corpus-
+// normalize) read the medium line with different regexes, and on 42 published
+// art rows they disagreed: the ladder filed a row original, normalize filed it
+// straight back to print, every pass. ~30 were uniques sold as prints (Calder's
+// "gouache on paper, 29 3/8 x 43 1/8 in." — the inch fraction read as an
+// edition "3/8"; Pettibon's ink, Basquiat's oilstick, Warhol's "synthetic
+// polymer paint and silkscreen ink on canvas"); 12 were real prints the ladder
+// called paintings because they sit on canvas (Haring's "Screenprint in colors
+// on canvas" wedding invitation, Calder's silkscreen wallpaper). ONE verdict,
+// read by both, from title + medium only:
+//   · a hand medium (gouache, ink, oilstick, oil, acrylic / synthetic polymer
+//     paint, pastel, watercolor, crayon, tempera) → original, even beside a
+//     print process ("acrylic and silkscreen ink on canvas") — unless the line
+//     carries edition evidence, or the hand work is colouring on a print
+//     ("lithograph, hand-coloured", "etching heightened with watercolour");
+//   · "silkscreen ink(s)" is the houses' language for a unique screen work
+//     (Warhol's canvases and works on paper) — a hand medium;
+//   · a print process / edition / "from the … series" with no hand medium → print;
+//   · neither → no verdict (the older rules decide).
+// Ink, crayon and pencil in a SIGNATURE line ("signed and numbered in ink"),
+// a print's ink colour ("screenprint in gold ink"), pigment / inkjet inks, an
+// acrylic SUBSTRATE ("on acrylic") and inch fractions in a size never count.
+const MEDIUM_PROCESS_SRC = String.raw`(?:screen ?print\w*|silk ?screen\w*|s[ée]rigraph\w*|lithograph\w*|etching\w*|aquatint\w*|woodcut\w*|wood engraving\w*|linocut\w*|linogravure\w*|drypoint\w*|engravings?|gicl[ée]e\w*|offset|pochoir\w*|photogravure\w*|h[ée]liogravure\w*|mezzotint\w*|intaglio|eau-forte|eaux-fortes|aquatinte\w*|gravure\w*|pointe[- ]s[èe]che|inkjet|pigment print\w*)`;
+const MEDIUM_PRINT_PROCESS_RE = new RegExp(String.raw`(?<![\wÀ-ÿ-])${MEDIUM_PROCESS_SRC}(?![\wÀ-ÿ-])`, 'i');
+const NOT_LETTER = String.raw`(?![\wÀ-ÿ-])`;
+/** paint media — unique wherever the medium line names them */
+const MEDIUM_PAINT_RE = new RegExp(String.raw`(?<![\wÀ-ÿ'’-])(?:oil(?: paint)?|oils|acrylics?(?: paint)?|synthetic polymer|gouache|tempera|oil ?sticks?|oil paint stick|huile|acrylique)${NOT_LETTER}`, 'i');
+/** colouring media — a drawing on their own, hand-colouring beside a print
+ *  process ("offset lithograph and watercolor", "lithograph with crayon") */
+const MEDIUM_COLOUR_RE = new RegExp(String.raw`(?<![\wÀ-ÿ'’-])(?:watercolou?rs?|aquarelle|pastels?)${NOT_LETTER}`, 'i');
+const MEDIUM_SUPPORT_SRC = String.raw`(?:on|sur)\s+(?:\w+\s+)?(?:canvas|linen|panel|board|paper|card|masonite|wood|metal|aluminum|cardboard|vellum|toile|papier|panneau|carton)${NOT_LETTER}`;
+/** drawing media — unique only when they sit ON a support with no print process between ("ink on paper", not "crayon eau-forte sur papier") */
+const MEDIUM_DRAW_RE = new RegExp(String.raw`(?<![\wÀ-ÿ'’-])(?:inks?|india ink|encre(?: de chine)?|fusain|charcoal)${NOT_LETTER}(?:(?!${MEDIUM_PROCESS_SRC})[^.;|]){0,40}?\b${MEDIUM_SUPPORT_SRC}`, 'i');
+const MEDIUM_CRAYON_RE = new RegExp(String.raw`(?<![\wÀ-ÿ'’-])crayons?${NOT_LETTER}(?:(?!${MEDIUM_PROCESS_SRC})[^.;|]){0,40}?\b${MEDIUM_SUPPORT_SRC}`, 'i');
+/** the title names a paint medium on a support ("Snail Shell, 1970, gouache on paper") — a bare title word ("Watercolor Study") proves nothing */
+const TITLE_PAINT_RE = new RegExp(`${MEDIUM_PAINT_RE.source}[^.;|]{0,60}?\\b${MEDIUM_SUPPORT_SRC}`, 'i');
+const TITLE_COLOUR_RE = new RegExp(`${MEDIUM_COLOUR_RE.source}[^.;|]{0,60}?\\b${MEDIUM_SUPPORT_SRC}`, 'i');
+/** "silkscreen ink(s)" — the houses' words for Warhol's unique screen works
+ *  (canvases AND works on paper); "screenprint ink" is unique only on canvas
+ *  (a portfolio sheet is "screenprint ink on paper": Marilyn, Mao, Ali) */
+const MEDIUM_SILKSCREEN_INK_RE = /\bsilk ?screen(?:ed)? inks?\b|\bscreen ?print(?:ing)? inks?\b[^.;|]{0,60}\bon (?:primed |unprimed )?(?:canvas|linen)\b|\bencres? s[ée]rigraphiques?\b/i;
+const MEDIUM_HAND_ON_PRINT_RE = /\bhand[- ]?colou?r\w*|\bhighlighted (?:by hand|with)|\bheightened (?:by hand |with)|\bwith (?:hand[- ])?additions\b|\bhand[- ]finished\b|\brehauss\w*|\bréhauss\w*|\brinc[ée](?![\wÀ-ÿ])|\baquarell[ée]e?s?(?![\wÀ-ÿ])|\bcolori[ée]e?s? (?:à la main|au pochoir)/i;
+const MEDIUM_EDITION_RE = /\bedition of \d+|\bnumbered edition\b|\blimited edition\b|\bfrom (?:an|the) edition\b|\bnumbered\b[^.;|]{0,24}\d{1,3}\s*\/\s*\d{1,4}|\b(?:artist|printer)'?s proof\b|\btrial proof\b|\bbon [aà] tirer\b|\bhors commerce\b|\b[ae]\.?\s?p\.?\s+\d{1,2}\s*\/\s*\d{1,3}\b|\b[ée]dition (?:de|à) \d+|\bfeldman\b|\bschellmann\b|\bf\.?\s?(?:&|and)\s?s\.?\s?(?:ii|iv|\d)/i;
+/** normalizeArtCategory's ", from <Series>" title test */
+const FROM_SERIES_TITLE_RE = /,\s*from\s+(?!the\s+(?:collection|estate|property)|a\s+private|an?\s+important)(?:the\s+)?[A-Z'"«“]/;
+const MEDIUM_NOISE: RegExp[] = [
+  // a signature / numbering line's tool ("signed and numbered in pencil", "signée au crayon")
+  /\b(?:signed|inscribed|dated|numbered|titled|annotated|stamped|dedicated|initial(?:l)?ed|monogrammed)\b[^.;|]{0,80}?\bin (?:(?:black|red|blue|white|green|gold|silver|brown|grey|gray|colou?red)\s+)?(?:felt[- ]tip |ballpoint |fibre[- ]tip |fiber[- ]tip )?(?:pen(?: and ink)?|pencil|ink|crayon|marker|oil ?stick|paint|graphite|china marker)s?\b/gi,
+  /\b(?:sign[ée]e?s?|dat[ée]e?s?|num[ée]rot[ée]e?s?|d[ée]dicac[ée]e?s?|annot[ée]e?s?)\b[^.;|]{0,60}?\b(?:au|à l.|en) (?:crayon|feutre|stylo|pinceau|encre)\w*/gi,
+  // a print's ink colour: "screenprint in gold ink", "lithograph printed in black and red inks"
+  /\b((?:screen ?print|silk ?screen|s[ée]rigraph|lithograph|etching|woodcut|linocut|offset|aquatint|printed)\w*)\b[^.;|]{0,50}?\binks?\b/gi,
+  // inkjet / pigment inks, oil-based inks
+  /\b(?:archival |ultrachrome |inkjet |pigment(?:ed)? |pigment-based |giclee |giclée )+inks?\b/gi,
+  /\boil[- ]based\b/gi,
+  // a SUBSTRATE named for a medium: acrylic sheet / box, Arches Aquarelle / watercolour / acrylic paper
+  /\b(?:on|in|mounted (?:on|to)|face-?mounted to) (?:an? )?acrylic(?: glass| sheet| block| box| case| frame| panel)?\b|\bacrylic (?:glass|sheet|block|box|case|frame|vitrine|display)\b/gi,
+  /\b(?:opaque |clear )?(?:acrylic|aquarelle|watercolou?r|pastel) (?:paper|papier|board)\b|\b(?:arches|papier) aquarelle\b|\blanaquarelle(?: watercolou?r)?\b|\b(?:mirrored |mirror-polished )?acrylic (?:disks?|discs?|mirrors?)\b/gi,
+  // pastel / watercolour as a colour word
+  /\bin (?:soft |muted )?(?:pastel|watercolou?r) (?:colou?rs?|tones?|shades?)\b|\bpastel[- ](?:colou?red|tones?|shades?)\b/gi,
+];
+/** a mixed-number size ("29 3/8 x 43 1/8 in.", "16.7/8", "29-1/2") is not an edition */
+const SIZE_FRACTION_RE = /\b\d{1,4}(?:\s+|[.-])\d{1,2}\s*\/\s*(?:2|4|8|16|32)\b/g;
+function bareEditionMark(s: string): boolean {
+  const re = /(^|[^\d\s/]|\s)(\d{1,3})\s*\/\s*(\d{1,4})\b/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s))) {
+    const before = s.slice(Math.max(0, m.index - 4), m.index + m[1].length);
+    if (/\d[\s.-]?$/.test(before)) continue;
+    const num = parseInt(m[2], 10), den = parseInt(m[3], 10);
+    if (den >= 8 && num <= den && den <= 3000) return true;
+  }
+  return false;
+}
+
+/** The one print-vs-original verdict both category rules read (see above):
+ *  'original' — a hand medium and no edition / print-colouring evidence;
+ *  'print' — a print process (or a ", from <Series>" title) and no hand medium;
+ *  null — no medium evidence either way (the older rules decide). */
+export function artMediumVerdict(title: string | null | undefined, medium: string | null | undefined): 'original' | 'print' | null {
+  const raw = `${String(title || '')} | ${String(medium || '')}`.replace(SIZE_FRACTION_RE, ' ').replace(ESTATE_NO_RE, ' ');
+  const silkInk = MEDIUM_SILKSCREEN_INK_RE.test(raw);
+  let x = raw;
+  for (const re of MEDIUM_NOISE) x = x.replace(re, (_s, p1) => (typeof p1 === 'string' ? ` ${p1} ` : ' '));
+  const cut = x.indexOf(' | ');
+  const tx = cut >= 0 ? x.slice(0, cut) : x, mx = cut >= 0 ? x.slice(cut + 3) : '';
+  const strong = silkInk || MEDIUM_PAINT_RE.test(mx) || MEDIUM_DRAW_RE.test(mx) || TITLE_PAINT_RE.test(tx) || MEDIUM_DRAW_RE.test(tx);
+  const colour = MEDIUM_COLOUR_RE.test(mx) || TITLE_COLOUR_RE.test(tx) || MEDIUM_CRAYON_RE.test(mx) || MEDIUM_CRAYON_RE.test(tx);
+  const process = MEDIUM_PRINT_PROCESS_RE.test(x);
+  const edition = MEDIUM_EDITION_RE.test(x) || bareEditionMark(x);
+  const onPrint = MEDIUM_HAND_ON_PRINT_RE.test(x);
+  // watercolour / pastel / crayon beside a print process is hand-colouring
+  if (strong || (colour && !process)) return edition || onPrint ? (process ? 'print' : null) : 'original';
+  if (process || FROM_SERIES_TITLE_RE.test(String(title || ''))) return 'print';
+  return null;
+}
 const artText = (l: ClassifyLot) => `${l.title || ''} | ${l.medium || ''} | ${(l.description || '').slice(0, 600)}`;
 
 /** (wave 2) class 10 · ceramics / sculpture with no medium text: a Picasso
@@ -964,6 +1089,12 @@ export function artCategoryFix(l: ClassifyLot): string | null {
     // aluminum, Calder's standing works, Picasso's Madoura plates)
     // (a boxed "Package Painting" is still a painting)
     if (deep && !catRef && !/\bon (?:paper|canvas|linen|board|panel)\b|\bsur (?:papier|toile)\b/i.test(s) && !/\bpaintings?\b/i.test(l.title || '')) return 'sculpture';
+  }
+  // print ↔ original: THE shared verdict (normalizeArtCategory reads it too —
+  // the two rules fought over 42 rows until Oct 11 2026)
+  if (cat === 'print' || cat === 'original') {
+    const v = artMediumVerdict(l.title, l.medium);
+    if (v) return v === cat ? null : v;
   }
   if (cat === 'original') return null;
   if ((UNIQUE_MEDIUM_RE.test(s) || FR_PAPER_MEDIUM_RE.test(s)) && !printWord) return 'original';
@@ -1298,7 +1429,7 @@ export const RECLASS_RULES: ReclassRule[] = [
     cls: 'goldin-sport-noncard',
     apply: l => {
       if (l.auctionHouse !== 'Goldin' || l.artist !== 'sports-cards') return null;
-      const k = goldinSportKind(l.title);
+      const k = goldinSportVerdict(l.title);
       return k === 'sports-cards' ? null : k;
     },
   },
@@ -1396,13 +1527,27 @@ export const RECAT_RULES: ReclassRule[] = [
  *  whether the lot must be evicted; mutates artist (+ makerSlug when set). */
 export function reclassifyLot(l: ClassifyLot & { makerSlug?: string | null }): { fired: string[]; drop: boolean } {
   const fired: string[] = [];
-  for (const r of RECLASS_RULES) {
-    const to = r.apply(l);
-    if (to == null || to === l.artist) continue;
-    fired.push(r.cls);
-    if (to === DROP) return { fired, drop: true };
-    l.artist = to;
-    if (l.makerSlug) l.makerSlug = to;
+  // FIXED POINT (Oct 11 2026 idempotency): a later rule can move a row onto a
+  // slug an EARLIER rule handles — graded-cards → pop-memorabilia (card-lots-
+  // nonsport) then pop-memorabilia → evicted (sports-house-pop-memorabilia);
+  // memorabilia → autographs (signed-flat) then autographs → culture (non-
+  // athlete). One pass over the ladder left that second move to the NEXT
+  // normalize, so normalize(normalize(x)) ≠ normalize(x). Re-run the ladder
+  // until a round moves nothing net. A within-round A→B→A pair (sale-name-
+  // gates ↔ culture-leaks) ends where it started and stops the loop.
+  const seen = new Set<string>([l.artist]);
+  for (let round = 0; round < 6; round++) {
+    const start = l.artist;
+    for (const r of RECLASS_RULES) {
+      const to = r.apply(l);
+      if (to == null || to === l.artist) continue;
+      fired.push(r.cls);
+      if (to === DROP) return { fired, drop: true };
+      l.artist = to;
+      if (l.makerSlug) l.makerSlug = to;
+    }
+    if (l.artist === start || seen.has(l.artist)) break;
+    seen.add(l.artist);
   }
   for (const r of RECAT_RULES) {
     const to = r.apply(l);

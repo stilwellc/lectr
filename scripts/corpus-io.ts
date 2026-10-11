@@ -282,6 +282,8 @@ const STRIP = new Set([
   'estLowUsd','estHighUsd','realizedUsd',
   // nightly bid snapshots (corpus-only raw material for bid momentum)
   'bidHistory',
+  // the enrichment attempt record (lib/houses/enrich attempt policy)
+  'enrichTries',
   // measured client-unread (serving audit Jul 31 2026, ~30MB raw): the client
   // renders priceUsd (premiumPrice is a duplicate alias), archived/auctionId/
   // buyerPremium/_pid/_pname/_card/photoMatched are pipeline-only. subCat/

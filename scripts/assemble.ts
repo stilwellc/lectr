@@ -502,7 +502,7 @@ async function runDownstream(corpus: Record<string, unknown>[]): Promise<void> {
   // every entity figure from the FULL corpus (the population stats.json and
   // players.json read, corpus-only cards + Pokémon included), keyed by the
   // one entityKeyOf the eager lots were just stamped with. Before the value
-  // book (it normalizes rows in place). NOT advisory: a night without entity
+  // book (its key builders touch rows in place). NOT advisory: a night without entity
   // files fails the run after every other output is written (the push below
   // never ships a payload whose makers pages would read last night's rows).
   let entitiesFailed = false;
@@ -530,9 +530,10 @@ async function runDownstream(corpus: Record<string, unknown>[]): Promise<void> {
   } catch (e) { console.error('[validate] FAILED:', (e as Error).message); }
   markPhase('engine gate');
   // 3b · the Starling value book (was: its own step, a second full-corpus load
-  // on a 10GB heap). LAST consumer of the corpus rows: buildValueBook
-  // normalizes them in place exactly as the standalone read did, and nothing
-  // below reads them (page data took copies above). Written locally with a
+  // on a 10GB heap). LAST consumer of the corpus rows: buildValueBook reads
+  // them as published (no re-normalize since Oct 11 2026 — it only undid
+  // build-market's better player ids) and its key builders touch rows in
+  // place; nothing below reads them (page data took copies above). Written locally with a
   // marker naming the corpus files just persisted; the nightly's push step
   // (scripts/emit-value-book.ts, which holds the R2 token) ships this file
   // instead of rebuilding. Advisory — a failure here just means the push step

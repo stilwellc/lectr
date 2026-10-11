@@ -11,6 +11,7 @@ import { ARTIST_LABEL, MAKER_DISCIPLINE, type Market } from '../../constants';
 import type { CatKey } from '../taxonomy';
 import { SUBJECT_MARKETS, subjectFeedHref } from '../maker-subjects';
 import { kindOfId, makerSlugOf, subPartsOf, subjectPartsOf, type EntityKind } from './model';
+import { playerHrefOf } from './aliases';
 
 /* ── the curated disciplines (a roster maker's tag) — one copy, shared with
    the build (scripts/emit-entities) ── */
@@ -106,7 +107,7 @@ export function pageHrefOf(id: string, opts: { playerDossier?: boolean } = {}): 
   }
   if (k === 'player') {
     const slug = id.slice(3);
-    return opts.playerDossier ? `/player?id=${encodeURIComponent(slug)}` : subjectFeedHref('sports', `p:${slug}`);
+    return opts.playerDossier ? playerHrefOf(slug) : subjectFeedHref('sports', `p:${slug}`);
   }
   if (k === 'subject' || k === 'set') {
     const p = subjectPartsOf(id)!;

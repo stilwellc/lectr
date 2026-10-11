@@ -5,22 +5,21 @@ import { useSearchParams } from 'next/navigation';
 import EntityPage from '../components/entity/EntityPage';
 import BookIndex from '../components/BookIndex';
 import AliasCanonical from '../components/AliasCanonical';
+import { aliasOf } from '../lib/entity/aliases';
 
 /**
  * The player-dossier permalink — /player?id=<slug> (e.g. /player?id=
  * michael-jordan). Since the makers overhaul (P2, Oct 10 2026) it is the one
  * entity page (components/entity/EntityPage) for the athlete's id `pl:<slug>`.
+ * A player with a static alias (/p/<slug>, W12) is forwarded to it.
  */
 function PlayerFromQuery() {
   const params = useSearchParams();
   const id = (params.get('id') || '').trim().toLowerCase();
   if (!id) return <BookIndex kind="player" />;
-  return (
-    <>
-      <AliasCanonical id={`pl:${id}`} />
-      <EntityPage key={id} id={`pl:${id}`} />
-    </>
-  );
+  // a player with a static page (/p/<slug>) is forwarded there: hold the frame, not a dossier that remounts
+  if (aliasOf(`pl:${id}`)) return <><AliasCanonical id={`pl:${id}`} /><div className="rail" aria-busy="true" style={{ paddingTop: 28, paddingBottom: 40, minHeight: '60vh' }} /></>;
+  return <EntityPage key={id} id={`pl:${id}`} />;
 }
 
 export default function PlayerQueryPage() {

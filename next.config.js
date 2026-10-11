@@ -13,9 +13,43 @@ const dataVersion = (() => {
   } catch { return ''; }
 })();
 
+// FIRST-SCREEN VERSION (perf wave W13, Oct 11 2026): the content hash of the
+// first-screen payloads scripts/emit-first-screen.ts wrote just before this
+// build (public/data/ray/first/index.json). The client fetches a payload only
+// at this hash and discards any other, so a page never paints from a payload
+// another deploy built. '' (no payloads) = every page waits for the book.
+const fsVersion = (() => {
+  try {
+    const idx = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'public', 'data', 'ray', 'first', 'index.json'), 'utf8'));
+    return typeof idx.ver === 'string' ? idx.ver : '';
+  } catch { return ''; }
+})();
+
+// STATIC ENTITY ALIASES (W12, Oct 11 2026): the /p/<player>, /e/<name> pages
+// this build prerenders (app/lib/seo-entities — TS, so scripts/entity-aliases
+// prints them) inlined into the bundle, so every in-app entity link
+// (app/lib/entity/aliases) lands on the page with its own share card, the
+// same on the prerendered HTML and after hydration. Computed once: the value
+// is parked in process.env so build workers that reload this config inherit
+// it. '[]' when it cannot be read — links stay on their query routes.
+const entityAliases = (() => {
+  if (process.env.NEXT_PUBLIC_ENTITY_ALIASES) return process.env.NEXT_PUBLIC_ENTITY_ALIASES;
+  let out = '[]';
+  try {
+    out = require('child_process').execFileSync(
+      process.execPath, ['--import', 'tsx', require('path').join(__dirname, 'scripts', 'entity-aliases.ts')],
+      { cwd: __dirname, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], timeout: 60000 },
+    ).trim() || '[]';
+  } catch (e) {
+    console.warn('[next.config] entity aliases unavailable — entity links use their query routes:', e && e.message);
+  }
+  process.env.NEXT_PUBLIC_ENTITY_ALIASES = out;
+  return out;
+})();
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  env: { NEXT_PUBLIC_DATA_VERSION: dataVersion },
+  env: { NEXT_PUBLIC_DATA_VERSION: dataVersion, NEXT_PUBLIC_FS_VERSION: fsVersion, NEXT_PUBLIC_ENTITY_ALIASES: entityAliases },
   // Pure static export — the whole site prerenders to files (Cloudflare Pages
   // hosting; no server anywhere, which is what the Vercel fair-use block
   // taught us the hard way).

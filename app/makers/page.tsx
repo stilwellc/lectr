@@ -5,7 +5,9 @@ import { ARTISTS, MARKETS, MAKER_MARKETS, rosterNoun, type Market } from '../con
 import { useMarket } from '../lib/market';
 import MarketSwitch from '../components/MarketSwitch';
 import MarketIcon from '../components/MarketIcon';
-import { useRayData } from '../hooks/useRayData';
+import { useRayDataFirst, useHouseBaselines } from '../hooks/useRayData';
+import { usePathname } from 'next/navigation';
+import { fsKeyOf } from '../lib/first-screen';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { useSavedSearches } from '../lib/alerts';
 import ArtistNav from '../components/ArtistNav';
@@ -20,7 +22,7 @@ import type { AuctionLot } from '../types';
 import TriageBar from '../components/TriageBar';
 import LotBrowser from '../components/LotBrowser';
 import { FEED_DEFAULTS, type FeedFilters } from '../components/FeedToolbar';
-import { useLastVisit, passesTriage, houseBaselines, isTriageActive, TRIAGE_DEFAULTS, type TriageFilters } from '../lib/feed-filters';
+import { useLastVisit, passesTriage, isTriageActive, TRIAGE_DEFAULTS, type TriageFilters } from '../lib/feed-filters';
 import { taxonOf, SUBS, SPORTS, MARKET_CATS, type CatKey } from '../lib/taxonomy';
 import { useFollows, catFollow, entityFollow, makerFollow, affinityOf } from '../lib/follows';
 import { isFlagged } from '../lib/flags';
@@ -58,6 +60,7 @@ import './makers.css';
  */
 
 /** rows per group before "Show more" */
+const NO_NAV_COUNTS: Record<string, number> = {};
 const CAP_ONE = 40;
 const CAP_ALL = 8;
 const CAP_STEP = 40;
@@ -131,12 +134,19 @@ function useForeignPicks(ids: readonly string[], active: Market): Map<string, En
 }
 
 export default function MakersPage() {
-  const { allLots, lastCrawl, loading, fromCache, demand } = useRayData();
+  // (perf W13) the maker rows paint from the roster's first-screen slice —
+  // every live lot of every maker-market maker (app/lib/first-screen), so a
+  // maker row's live, flags and order are the book's own — then the whole
+  // book replaces it. On the total market the collection rows (players,
+  // Pokémon, films …) and every count over the whole book wait (`partial`).
+  const ray = useRayDataFirst(fsKeyOf(usePathname()));
+  const { allLots, lastCrawl, loading, fromCache, demand, partial } = ray;
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const activeLabel = activeKey === 'all' ? 'full' : activeKey === 'tcg' ? 'TCG' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
   const { savedIds, isSaved, toggle: toggleSave } = useSavedLots();
-  const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
+  // the nav's per-maker live counts read the whole book: none while partial
+  const upcomingCounts = useMemo(() => (partial ? NO_NAV_COUNTS : getUpcomingCounts(allLots)), [allLots, partial]);
 
   // ── THE VIEW — one URL codec (app/lib/entity/view-state) ──
   const [view, setView, hydrated] = useMakersView(activeKey);
@@ -171,7 +181,7 @@ export default function MakersPage() {
 
   const [capState, setCapState] = useState<{ k: string; caps: Partial<Record<Market, number>> }>({ k: '', caps: {} });
   const prevVisitDay = useLastVisit();
-  const baselines = useMemo(() => houseBaselines(allLots), [allLots]);
+  const baselines = useHouseBaselines(ray);
   const setTriage = useCallback((next: TriageFilters | ((prev: TriageFilters) => TriageFilters)) =>
     setView(v => ({ triage: typeof next === 'function' ? next(v.triage) : next })), [setView]);
   // sub-categories are market-scoped: drop them on a real market flip (never on mount)
@@ -220,7 +230,13 @@ export default function MakersPage() {
     tail: wantTail,
   });
   const shownBy: RowsBy = rowsBy === 'cat' && !entities.subsReady ? 'name' : rowsBy;
-  const booting = loading || entities.source === 'pending';
+  // a maker market's slice IS its whole live book (every count exact); the
+  // total market's is not: there the first screen is the default ledger only
+  // (a search, a lens, the lots body, a tray wait for the book)
+  const countsPending = partial && activeKey === 'all';
+  const fsDefault = vw === 'names' && !q && !fLive && !fVerified && !fFlagged && !fFollowing
+    && !sportPick && compare.length === 0 && sort === 'matters' && !isTriageActive(triage);
+  const booting = loading || entities.source === 'pending' || (countsPending && !fsDefault);
   const filtersOn = isTriageActive(dTriage) || !!dSport;
 
   // ── THE ROWS — one row-model path for every kind ──
@@ -691,18 +707,18 @@ export default function MakersPage() {
   const lensLead = (
     <>
       <button type="button" className="ray-toolbar-pill" data-active={triage.win === 'today'} aria-pressed={triage.win === 'today'}
-        aria-disabled={lensCounts.tonight === 0 && triage.win !== 'today' ? true : undefined}
+        aria-disabled={lensCounts.tonight === 0 && !countsPending && triage.win !== 'today' ? true : undefined}
         title="Lots whose sale closes today, on your calendar"
         onClick={() => lens(v => ({ triage: { ...v.triage, win: v.triage.win === 'today' ? null : 'today' } }), triage.win !== 'today')}>
-        Closing tonight <i>{lensCounts.tonight.toLocaleString()}</i>
+        Closing tonight <i>{countsPending ? '—' : lensCounts.tonight.toLocaleString()}</i>
       </button>
       <button type="button" className="ray-toolbar-pill" data-active={fFlagged} aria-pressed={fFlagged}
-        aria-disabled={lensCounts.flagged === 0 && !fFlagged ? true : undefined}
+        aria-disabled={lensCounts.flagged === 0 && !countsPending && !fFlagged ? true : undefined}
         title="Live lots the engine prices below their comparables"
         onClick={() => lens(v => ({ fl: !v.fl }), !fFlagged)}>
-        Flagged <i>{lensCounts.flagged.toLocaleString()}</i>
+        Flagged <i>{countsPending ? '—' : lensCounts.flagged.toLocaleString()}</i>
       </button>
-      {(lensCounts.fresh > 0 || triage.newOnly) && (
+      {((lensCounts.fresh > 0 && !countsPending) || triage.newOnly) && (
         <button type="button" className="ray-toolbar-pill" data-active={triage.newOnly} aria-pressed={triage.newOnly}
           onClick={() => lens(v => ({ triage: { ...v.triage, newOnly: !v.triage.newOnly } }), !triage.newOnly)}>
           {prevVisitDay ? 'New since last visit' : 'New today'} <i>{lensCounts.fresh.toLocaleString()}</i>
@@ -764,9 +780,9 @@ export default function MakersPage() {
             <header className="mk-head">
               <h1 className="mk-h1">Every maker, one <Accent>ledger</Accent></h1>
               <p className="mk-read">
-                <b>{totalLive.toLocaleString()}</b> live{filtersOn ? <> of {marketLiveAll.length.toLocaleString()}</> : null}
-                {totalFlags > 0 && <> · <b>{totalFlags.toLocaleString()}</b> flagged</>}
-                {' '}· <b>{rosterTotal.toLocaleString()}</b> {namesNoun}
+                <b>{countsPending ? '—' : totalLive.toLocaleString()}</b> live{filtersOn ? <> of {marketLiveAll.length.toLocaleString()}</> : null}
+                {(totalFlags > 0 || countsPending) && <> · <b>{countsPending ? '—' : totalFlags.toLocaleString()}</b> flagged</>}
+                {' '}· <b>{countsPending ? '—' : rosterTotal.toLocaleString()}</b> {namesNoun}
                 {v && (
                   <span className="mk-vread" title={`The strongest CI-verified move on the ${activeLabel} book · 95% CI ${Math.round(v.ciLoPct)}% to ${Math.round(v.ciHiPct)}% · n ${v.n.toLocaleString()}`}>
                     {' '}· verified {v.horizon}{' '}
@@ -800,7 +816,7 @@ export default function MakersPage() {
                 {([['names', `${bodyNoun}`, shownTotal], ['lots', 'Lots', lensCounts.shown]] as [ViewBody, string, number][]).map(([k, label, n]) => (
                   <button key={k} type="button" role="tab" className="ray-seg-btn" data-active={vw === k} aria-selected={vw === k}
                     onClick={() => setBody(k)}>
-                    {label} <span className="mk-seg-n">{n.toLocaleString()}</span>
+                    {label} <span className="mk-seg-n">{countsPending ? '—' : n.toLocaleString()}</span>
                   </button>
                 ))}
               </div>
@@ -891,6 +907,7 @@ export default function MakersPage() {
               label="Narrow the live lots"
               lead={lensLead}
               omit={['today', 'new']}
+              pending={countsPending}
             />
             {activeKey === 'sports' && (
               <div className="ray-triagebar-row ray-triagebar-subs ray-markets-fade mk-sports" role="group" aria-label="Sport">
@@ -946,6 +963,7 @@ export default function MakersPage() {
                   baselines={baselines}
                   anchorId="mk-lots"
                   persistKey={`/makers/lots/${activeKey}`}
+                  slice={partial ? 'comps' : null}
                 />}
               </div>
             ) : (
@@ -980,7 +998,7 @@ export default function MakersPage() {
                       </>}
                     />
                   </div>
-                ) : groups.map(g => (
+                ) : (countsPending ? groups.filter(g => MAKER_MARKETS.has(g.key)) : groups).map(g => (
                   <div key={g.key} id={`mk-${g.key}`} className="mk-group" data-solo={activeKey !== 'all' || undefined}>
                     <div className="mk-group-head">
                       <span className="mk-group-mark" aria-hidden><MarketIcon market={g.key} size={15} /></span>
@@ -1024,6 +1042,8 @@ export default function MakersPage() {
                     </div>
                   </div>
                 ))}
+                {/* the collection markets' rows are names over the whole book */}
+                {countsPending && <RayLoading />}
               </div>
             )}
           </section>

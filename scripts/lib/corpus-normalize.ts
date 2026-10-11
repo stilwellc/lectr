@@ -18,7 +18,8 @@ import { parseSignerName, SIGNER_PARSER_VERSION } from './autograph-signer';
 import { leadsWithSetCode } from './set-codes';
 import { attachExtractions, fillWatchReferencesFromExtract } from './extract/apply';
 import { segmentOf } from '../corpus-io';
-import { reclassifyLot, isSpaceLeadTitle } from './classify';
+import { repairChristiesWrongSaleRows } from './christies-sale-repair';
+import { reclassifyLot, isSpaceLeadTitle, goldinSportVerdict, artMediumVerdict } from './classify';
 import { cultureObjectAt, WORN_RE } from '../../app/lib/taxonomy';
 import { saleDayOf, SALE_DAY_HOUSES } from './sale-day';
 import { seasonToDate } from './sports-crawl';
@@ -220,6 +221,14 @@ export function rerouteRelicCards(lots: Lot[]): { total: number; examples: strin
   for (const l of lots) {
     if (!SPORTS_OBJECT_SLUGS.has(l.artist)) continue;
     if (!looksLikeCard(l.title || '')) continue;
+    // (Oct 11 2026 idempotency) a Goldin row reads THE Goldin verdict the
+    // reclass ladder's goldin-sport-noncard rule reads (classify
+    // goldinSportVerdict): looksLikeCard takes any "(#1/1)" serial for a card,
+    // so 615 rows — LeBron's photo-matched game-used sneakers, framed Upper
+    // Deck floor-piece displays, PiggyBanx 1/1 art pieces — went sports-cards →
+    // object in the ladder and straight back here on EVERY pass (the nightly's
+    // "580 relic cards" line). One verdict, no fight.
+    if ((l as { auctionHouse?: string }).auctionHouse === 'Goldin' && goldinSportVerdict(l.title) !== 'sports-cards') continue;
     l.artist = 'sports-cards';
     l.makerSlug = 'sports-cards';
     total++;
@@ -282,7 +291,12 @@ export function enrichWatchReferences(lots: Lot[]): number {
     // — only for a WATCH lot: a Patek "lithograph depicting a ref. 5098p"
     // or an AP cufflink must not join the reference's pool
     const desc = (l as Lot & { description?: string | null }).description;
-    const watchLot = !l.formKey || DESC_REF_FORMS.has(String(l.formKey));
+    // the form restampIdentityKeys stamps at the END of this pass — not the
+    // row's stale formKey (an "object-edition" Patek wristwatch read no
+    // description ref on pass 1, restamped to wristwatch, then filled it on
+    // pass 2: Oct 11 2026 idempotency)
+    const form = classifyForm({ title: l.title, medium: l.medium, category: l.category });
+    const watchLot = !form || DESC_REF_FORMS.has(String(form));
     // (Oct 6, pricing wave 7) the house's structured reference field
     // (Phillips wReferenceNo) beats the free-text description — OFF until it
     // measures better (USE_HOUSE_REFERENCE)
@@ -1141,10 +1155,27 @@ export function rerouteSetCodeCards(lots: Lot[]): number {
  *  with no parsed player keep only an athlete — the roster, or a player the
  *  card parser reads across the corpus (`known`: a "Darrelle Revis Patch Card
  *  Collection (11)" lot keeps Revis). */
+/** A stamped player slug that names a known athlete the title actually
+ *  prints ("babe-ruth" on "FINE BABE RUTH PROFESSIONAL MODEL BAT"). Such a
+ *  stamp is what build-market's athlete test (app/lib/player-name) leaves on
+ *  the published row; a title parser's longer, non-athlete read of the same
+ *  words ("fine-babe-ruth", "lamine-yamal-diamond") must not overwrite it —
+ *  that overwrite is why re-normalizing the PUBLISHED corpus (the value book)
+ *  changed 7.8k identities (Oct 11 2026 idempotency audit). */
+export function isTitledAthleteSlug(slug: string | null | undefined, title: string | null | undefined, known?: ReadonlySet<string>): boolean {
+  if (!slug) return false;
+  if (!ATHLETES.has(slug.replace(/-/g, ' ')) && !known?.has(slug)) return false;
+  const t = ` ${String(title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ')} `;
+  return slug.split('-').every(w => t.includes(` ${w} `));
+}
+
 export function restampCardPlayer(w: { title?: string | null; playerName?: string | null; playerSlug?: string | null }, known?: ReadonlySet<string>): string | null {
   const c = parseCard(String(w.title || ''));
   if (c.player && c.playerSlug) {
-    if ((w.playerSlug || playerSlugOf(w.playerName || null)) === c.playerSlug) return null;
+    const cur = w.playerSlug || playerSlugOf(w.playerName || null);
+    if (cur === c.playerSlug) return null;
+    // a titled athlete stamp beats a parse that is not an athlete
+    if (isTitledAthleteSlug(cur, w.title, known) && !ATHLETES.has(c.playerSlug.replace(/-/g, ' ')) && !known?.has(c.playerSlug)) return null;
     w.playerName = c.player; w.playerSlug = c.playerSlug;
     return 'card-player-restamped';
   }
@@ -1160,8 +1191,13 @@ export function reclassifyCorpus(lots: Lot[]): { byClass: Record<string, number>
   let stalePlayers = 0;
   let knownCardPlayers: Set<string> | null = null;
   for (let i = 0; i < lots.length; i++) {
+    const fromArtist = lots[i].artist, fromCat = lots[i].category;
     const r = reclassifyLot(lots[i] as Lot & { saleName?: string | null; description?: string | null });
-    for (const c of r.fired) byClass[c] = (byClass[c] || 0) + 1;
+    // count NET moves only: a ladder pair that moves a row and moves it back
+    // in the same pass (sale-name-gates ↔ culture-leaks on 2,538 RR space
+    // lots) fired twice and changed nothing — the log read it as 5k moves on
+    // an already-normalized corpus (Oct 11 2026 idempotency audit)
+    if (r.drop || lots[i].artist !== fromArtist || lots[i].category !== fromCat) for (const c of r.fired) byClass[c] = (byClass[c] || 0) + 1;
     if (r.drop) { drop.add(i); continue; }
     // (wave 2) a player is a SPORTS identity: a row that is not (or no longer)
     // in the sports market sheds the crawl-time playerName/playerSlug it carried
@@ -1448,6 +1484,10 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   if (rrUrls) console.log(`[normalize] rrauction url backfill: ${rrUrls} lots derived from id (lot-detail/<lotId>)`);
   const deadSso = nullDeadChristiesSsoUrls(ls);
   if (deadSso) console.log(`[normalize] christie's dead www /sso urls nulled: ${deadSso}`);
+  // (Oct 11 2026) rows the suffix-stripped sale URLs stored under the wrong
+  // sale → their real (legacy) sale's name; idempotent (lib/christies-sale-repair)
+  const wrongSale = repairChristiesWrongSaleRows(ls as never);
+  if (wrongSale.total) console.log(`[normalize] christie's wrong-sale rows relabelled: ${wrongSale.total} (${Object.entries(wrongSale.bySlug).map(([k, v]) => `${k}=${v}`).join(' ')})`);
   const rrStubs = dropRRStubRows(ls);
   const mirrorDupes = dedupeWrightFamilyMirrors(ls);
   // the Sep 27 dedupe family (next to the Wright mirrors — same compaction):
@@ -1712,8 +1752,27 @@ export function normalizeArtCategory(lots: Lot[]): { o2p: number; p2o: number } 
   for (const l of lots) {
     if (!ART_CAT_MAKERS.has(l.artist)) continue; // scope guard: art makers ONLY
     const s = `${l.title || ''}  ${l.medium || ''}`;
+    // THE shared print ↔ original verdict (classify artMediumVerdict) — the
+    // reclass ladder's artCategoryFix reads the same one, so the two can no
+    // longer file a row original and back to print on every pass
+    if (l.category === 'original' || l.category === 'print') {
+      const v = artMediumVerdict(l.title, l.medium);
+      if (v) {
+        if (v !== l.category) {
+          (l as Lot & { catReclass?: string }).catReclass = v === 'print' ? 'o2p' : 'p2o';
+          if (v === 'print') o2p++; else p2o++;
+          l.category = v;
+        }
+        continue;
+      }
+    }
     if (l.category === 'original') {
       if (ORIGINAL_STRONG.test(s)) continue; // never touch explicit unique mediums
+      // the exact guard the print branch flips ON (Oct 11 2026 idempotency):
+      // "silkscreen ink and graphite on primed canvas" missed ORIGINAL_STRONG
+      // (no "primed"), so PRINT_PROCESS sent it back to print and the $85M
+      // White Disaster alternated print ↔ original on every normalize pass
+      if (PAINTED_CANVAS.test(s) && !EDITION_ANY.test(s)) continue;
       if (PRINT_PROCESS.test(s) || PLATE_FROM.test(s) || FROM_SERIES.test(l.title || '')
         || EDITION_STRONG.test(s) || bareEditionFraction(s)) {
         l.category = 'print';
@@ -1833,8 +1892,10 @@ export function recoverPlayerSlugs(lots: Lot[]): { stamped: number; total: numbe
     } else {
       const slug = recoverPlayerSlug(l.title || '');
       const cur = (l as Lot & { playerSlug?: string | null }).playerSlug ?? null;
-      // overwrite policy: existing stamps are the measured garbage class
-      if (slug && slug !== cur) { (l as Lot & { playerSlug?: string | null }).playerSlug = slug; stamped++; }
+      // overwrite policy: existing stamps are the measured garbage class —
+      // EXCEPT a known athlete the title prints (build-market's athlete-tested
+      // stamp: "lou-gehrig", not the parser's "important-lou-gehrig")
+      if (slug && slug !== cur && !isTitledAthleteSlug(cur, l.title)) { (l as Lot & { playerSlug?: string | null }).playerSlug = slug; stamped++; }
       cover = !!(slug || cur);
     }
     // DRIFT CANARY denominator: only the sources the parser was measured on —
