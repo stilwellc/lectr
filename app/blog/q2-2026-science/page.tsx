@@ -1,14 +1,19 @@
 import type { Metadata } from 'next';
+import JsonLd from '../../components/JsonLd';
+import { postMeta, postLd } from '../posts';
 import QuarterInsight, { P, H, B } from '../../components/blog/QuarterInsight';
 import { PullQuote } from '../../components/blog/Editorial';
 
-export const metadata: Metadata = {
+const POST = {
   title: 'Q2 2026 science market in review — instruments and space, between the seasons',
   description: 'A pair of George IV globes on top of the cleaned instrument tape, an Aldrin-shot Apollo 11 photograph leading the space lots, and demand — not a fabricated return — doing the talking. Space and fossils run hot, meteorites soft. Science’s Q2, honestly reported off a de-polluted tape.',
 };
+export const metadata: Metadata = postMeta('q2-2026-science', POST);
 
 export default function Q2Science() {
   return (
+    <>
+      <JsonLd data={postLd('q2-2026-science', POST)} />
     <QuarterInsight
       market="science"
       date="July 16, 2026"
@@ -106,5 +111,6 @@ export default function Q2Science() {
         real summer sales, will have something grounded to say about fossil and meteorite price levels.
       </P>
     </QuarterInsight>
+    </>
   );
 }

@@ -3,6 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import SubPage from '../../SubPage';
 import { subCatLabel } from '../../../lib/subcat-labels';
+import { MARKETS } from '../../../constants';
+import JsonLd from '../../../components/JsonLd';
+import { seoMeta, datasetLd, breadcrumbLd } from '../../../lib/seo';
 
 /**
  * The STATIC sub-market dossier — /sub/<group>/<part>, the path form of the
@@ -80,13 +83,15 @@ export async function generateMetadata(props: { params: Promise<{ a: string; b: 
   const canonical = `/sub/${params.a}/${params.b}`;
   // absolute: the root '%s — lectr' template would double the brand suffix
   const title = `${label} — sub-market · lectr`;
-  return {
-    title: { absolute: title },
+  const market = MARKETS.some(m => m.key === row?.vertical && m.key !== 'all') ? row!.vertical! : null;
+  return seoMeta({
+    title,
+    absolute: true,
     description,
-    alternates: { canonical },
-    openGraph: { title, description },
-    twitter: { title, description },
-  };
+    path: canonical,
+    image: market ? `/og/m/${market}.png` : undefined,
+    imageAlt: `${label} — a tracked sub-market on lectr`,
+  });
 }
 
 export default async function StaticSubPage(props: { params: Promise<{ a: string; b: string }> }) {
@@ -94,5 +99,23 @@ export default async function StaticSubPage(props: { params: Promise<{ a: string
   const slug = `${params.a}:${params.b}`;
   // key: navigating between sub dossiers must remount (fresh chart/series
   // state) — same doctrine as the query route it replaces.
-  return <SubPage key={slug} slug={slug} />;
+  const row = findRow(params.a, params.b);
+  const label = row?.label || subCatLabel(params.b);
+  const path = `/sub/${params.a}/${params.b}`;
+  const market = MARKETS.find(m => m.key === row?.vertical && m.key !== 'all');
+  return (
+    <>
+      <JsonLd data={[
+        datasetLd({
+          path,
+          name: `${label} — auction results${market ? ` (${market.label.toLowerCase()})` : ''}`,
+          description: `Settled auction results for ${label}${market ? `, a ${market.label.toLowerCase()} sub-market` : ''}: ${READ_SENTENCE[row?.readType || ''] || 'its strongest honest read'}, the record and the coverage behind it — read nightly by lectr.`,
+          keywords: [label, market?.label, 'auction results', 'hammer prices'].filter((k): k is string => !!k),
+          measured: ['hammer price (USD)', 'sale date', 'auction house'],
+        }),
+        breadcrumbLd([['lectr', '/'], ['Sub-markets', '/sub'], [label, path]]),
+      ]} />
+      <SubPage key={slug} slug={slug} />
+    </>
+  );
 }

@@ -1,4 +1,5 @@
 import { MARKETS } from '../../constants';
+import { seoMeta } from '../../lib/seo';
 
 /**
  * /value/<market> — the buy-signal desk with the market pinned in the URL
@@ -19,11 +20,13 @@ export function generateStaticParams() {
 export async function generateMetadata(props: { params: Promise<{ market: string }> }) {
   const params = await props.params;
   const label = MARKETS.find(m => m.key === params.market)?.label || params.market;
-  return {
+  return seoMeta({
     title: `${label} buy signals`,
     description: `${label} lots trading below where their comparable sales clear — each call replayed against what the lot actually hammered for.`,
-    alternates: { canonical: `/value/${params.market}` },
-  };
+    path: `/value/${params.market}`,
+    image: `/og/m/${params.market}.png`,
+    imageAlt: `${label} — the market on lectr: settled results and lots on the block`,
+  });
 }
 
 import Base from '../page';

@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import EntityPage from '../components/entity/EntityPage';
 import BookIndex from '../components/BookIndex';
+import AliasCanonical from '../components/AliasCanonical';
 
 /**
  * The player-dossier permalink — /player?id=<slug> (e.g. /player?id=
@@ -14,7 +15,12 @@ function PlayerFromQuery() {
   const params = useSearchParams();
   const id = (params.get('id') || '').trim().toLowerCase();
   if (!id) return <BookIndex kind="player" />;
-  return <EntityPage key={id} id={`pl:${id}`} />;
+  return (
+    <>
+      <AliasCanonical id={`pl:${id}`} />
+      <EntityPage key={id} id={`pl:${id}`} />
+    </>
+  );
 }
 
 export default function PlayerQueryPage() {

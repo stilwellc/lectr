@@ -4,12 +4,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDialogFocus } from './useDialogFocus';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { ARTISTS, ARTIST_LABEL, MARKETS } from '../constants';
-import { makerLineOf, labelLineOf, labelTagOf, searchTextOf, drillLabelOf } from '../lib/lot-labels';
+import { ARTISTS, MARKETS } from '../constants';
+import { drillLabelOf } from '../lib/lot-labels';
 import { useMarket, MARKET_PATH } from '../lib/market';
 import { useRayData } from '../hooks/useRayData';
-import { craftTitle, formatPrice, formatDate, refLabel } from '../utils';
-import { loadRefList, matchRefs, refHref, searchSold, type RefRow, type SoldHit } from '../lib/search-index';
+import { refLabel } from '../utils';
+import { loadRefList, searchSoldEx, type RefRow, type SoldResult } from '../lib/search-index';
+import {
+  buildPaletteIndex, rankPalette, soldQueryOf, categoryItems, warmPaletteLots,
+  type PaletteItem, type PaletteEntity, type PaletteSection,
+} from '../lib/palette-search';
 import ArtistAvatar from './ArtistAvatar';
 import { makerHref, retiredTarget } from '../lib/entity/retired';
 import { loadEntities } from '../hooks/useEntities';
@@ -18,14 +22,7 @@ import { pageHrefOf } from '../lib/entity/kinds';
 import { isOnBlock, localToday } from '../utils';
 import { recordSignal } from '../lib/recs-signals';
 
-interface Item {
-  label: string;
-  hint: string;
-  path: string;
-  kind: 'section' | 'market' | 'maker' | 'entity' | 'sub' | 'lot' | 'ref' | 'sold';
-  /** name rank inside the merged maker + entity results (sold, all time) */
-  weight?: number;
-}
+type Item = PaletteItem;
 
 /** the roster makers — every ARTISTS slug that is a real maker page (the
  *  retired pseudo-makers live on as /sub slices and feeds, never as names) */
@@ -57,7 +54,7 @@ const SUBKIND_NOUN: Record<string, string> = {
   player: 'player', pokemon: 'Pokémon', film: 'film', mission: 'mission', person: 'person',
   team: 'team', brand: 'brand', franchise: 'franchise', band: 'band', set: 'set',
 };
-interface EntityHit { id: string; label: string; fl: string; hint: string; path: string; sold: number }
+interface EntityHit extends PaletteEntity { market: string }
 
 /** Any surface can open the palette by dispatching this window event —
  *  the nav's Find-a-maker pill and the Terminal's search affordance use it. */
@@ -95,7 +92,9 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
   // promising the corpus. Refs load when the palette opens; sold hits are
   // fetched per keystroke (debounced; shards are module-cached).
   const [refs, setRefs] = useState<RefRow[]>([]);
-  const [sold, setSold] = useState<SoldHit[]>([]);
+  // the archive's answer, tagged with the query it answers (a stale answer
+  // never renders under a newer query)
+  const [sold, setSold] = useState<(SoldResult & { q: string }) | null>(null);
   useEffect(() => { if (open && !refs.length) loadRefList().then(setRefs).catch(() => {}); }, [open, refs.length]);
   // THE NAMES (Oct 10): players, Pokémon, films, missions, sets — the entity
   // summaries (pages/entities-all.json, module-cached by useEntities). Loaded
@@ -112,7 +111,7 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
         const noun = SUBKIND_NOUN[e.subKind || e.kind] || e.kind;
         const mk = MARKETS.find(m => m.key === e.market)?.short;
         out.push({
-          id: e.id, label: e.label, fl: fold(e.label),
+          id: e.id, label: e.label, market: e.market,
           // a player's sport; everyone else their market (a Pokémon's
           // "discipline" is its median's era, not the name's)
           hint: [noun, e.kind === 'player' && e.discipline ? e.discipline : mk].filter(Boolean).join(' · '),
@@ -136,13 +135,7 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
     }
     return m;
   }, [open, ents, allLots]);
-  useEffect(() => {
-    const needle = q.trim();
-    if (!open || needle.length < 3) { setSold([]); return; }
-    let live = true;
-    const t = setTimeout(() => { searchSold(q, 6).then(h => { if (live) setSold(h); }).catch(() => {}); }, 180);
-    return () => { live = false; clearTimeout(t); };
-  }, [q, open]);
+
 
   const items = useMemo<Item[]>(() => {
     // "On the block" is scoped to the current lander — the count says only
@@ -189,6 +182,9 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
         path: `/sub/${d.slug.replace(':', '/')}`,
         kind: 'sub' as const,
       })),
+      // the retired category pages (Meteorites, Graded Cards, Film & TV …),
+      // search-only, linking where each category lives now
+      ...categoryItems(upcomingCounts),
     ];
   }, [upcomingCounts, savedCount, market, homePath, marketData]);
 
@@ -210,90 +206,55 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
     return [...sections, ...grouped];
   }, [items]);
 
-  // Search covers the LIVE BOOK only (upcoming lots), client-side below — a
-  // collector searches for something they can still bid on, not the sold
-  // archive. The sold history lives in R2, never mirrored to Supabase, so
-  // there is no DB search tier to maintain.
+  // SEARCH (W3, Oct 11 2026) — app/lib/palette-search ranks every source
+  // into sections: Go to · Names · On the block · References · Sold archive.
+  // The index (names, typo vocabulary) builds when the palette opens; the
+  // live book's search text builds in the first idle slot after.
+  const index = useMemo(() => {
+    if (!open) return null;
+    const mk = new Map((ents || []).map(e => [e.id, e.market]));
+    return buildPaletteIndex({
+      items, ents: ents || [], entMarket: id => mk.get(id),
+      liveByEntity, upcomingLots, refs, refLabel,
+    });
+  }, [open, items, ents, liveByEntity, upcomingLots, refs]);
+  useEffect(() => {
+    if (!index) return;
+    const w = window as Window & { requestIdleCallback?: (cb: () => void) => number; cancelIdleCallback?: (h: number) => void };
+    if (w.requestIdleCallback) { const h = w.requestIdleCallback(() => warmPaletteLots(index)); return () => w.cancelIdleCallback?.(h); }
+    const t = setTimeout(() => warmPaletteLots(index), 200);
+    return () => clearTimeout(t);
+  }, [index]);
+  // the sold archive, per keystroke (debounced; shards + blocks are module-cached)
+  const soldQ = index && q.trim().length >= 3 ? soldQueryOf(q, index) : '';
+  useEffect(() => {
+    if (!open || !soldQ.trim()) { setSold(null); return; }
+    let live = true;
+    const t = setTimeout(() => {
+      searchSoldEx(soldQ, 5)
+        .then(r => { if (live) setSold({ ...r, q: soldQ }); })
+        .catch(() => { if (live) setSold({ hits: [], total: null, fixed: {}, q: soldQ }); });
+    }, 200);
+    return () => { live = false; clearTimeout(t); };
+  }, [soldQ, open]);
+  const soldNow = sold && sold.q === soldQ ? sold : null;
+  const soldPending = !!soldQ.trim() && !soldNow;
 
-  const filtered = useMemo(() => {
-    const needle = fold(q.trim());
-    if (!needle) return browseItems;
-    // Tokenized AND-match, not contiguous substring: collectors type
-    // "rolex daytona" / "nakashima table" — words that never sit adjacent in
-    // a label or title — and a substring match dead-ends them at "Nothing
-    // matches" while each word alone works.
-    const words = needle.split(/\s+/);
-    const hits = (hay: string) => { const h = fold(hay); return words.every(w => h.includes(w)); };
-    // NAMES — the roster makers and the entities (players, Pokémon, films,
-    // missions, sets) in one ranking: how well the name matches first, then
-    // how much of it has sold (a curated maker outranks any entity at a tie)
-    const named: { it: Item; t: number }[] = [];
-    for (const i of items) {
-      if (i.kind !== 'maker') continue;
-      const t = nameTier(i.label, i.hint, needle);
-      if (t != null) named.push({ it: { ...i, weight: Infinity }, t });
-    }
-    for (const e of ents || []) {
-      if (!words.every(w => e.fl.includes(w) || e.hint.toLowerCase().includes(w))) continue;
-      const t = nameTier(e.label, e.hint, needle);
-      if (t == null) continue;
-      const live = liveByEntity.get(e.id) || 0;
-      named.push({
-        it: {
-          label: e.label,
-          hint: [e.hint, live ? `${live} live` : e.sold ? `${e.sold.toLocaleString()} sold` : null].filter(Boolean).join(' · '),
-          path: e.path, kind: 'entity', weight: e.sold + live,
-        },
-        t,
-      });
-    }
-    named.sort((a, b) => a.t - b.t || (b.it.weight! - a.it.weight!));
-    const nameMatches = named.slice(0, 8).map(x => x.it);
-    const itemMatches = items.filter(i => i.kind !== 'maker' && hits(`${i.label} ${i.hint}`));
-    const rooms = itemMatches.filter(i => i.kind === 'section' || i.kind === 'market');
-    const subs = itemMatches.filter(i => i.kind === 'sub');
-    // Search the live lots too — a collector arrives with a work in mind.
-    const lotMatches: Item[] = upcomingLots
-      // the label vocabulary is searchable too ("psa 10", "rookie", "apollo",
-      // a player) — app/lib/lot-labels, memoised per lot
-      .filter(l => hits(`${craftTitle(l.title, l.auctionHouse)} ${searchTextOf(l)}`))
-      // the whole phrase on the printed label ("psa 10" on a PSA 10 slab)
-      // outranks the words scattered through a title ("PSA/DNA … 8 x 10")
-      .map(l => ({ l, r: `${makerLineOf(l).name} ${labelLineOf(l)}`.toLowerCase().includes(needle) ? 0 : searchTextOf(l).includes(needle) ? 1 : 2 }))
-      .sort((a, b) => a.r - b.r)
-      .slice(0, 6)
-      .map(({ l }) => ({
-        label: craftTitle(l.title, l.auctionHouse),
-        hint: [makerLineOf(l).name, labelTagOf(l), 'on the block'].filter(Boolean).join(' · '),
-        // The lot permalink — /lot?id=<id> resolves any lot client-side (see
-        // app/lot/page.tsx). Was the maker lander (/<artist>#on-the-block),
-        // which dropped the collector onto the feed instead of the lot.
-        path: `/lot?id=${encodeURIComponent(l.id)}`,
-        kind: 'lot' as const,
-      }));
-    const refMatches: Item[] = refs.length
-      ? matchRefs(q, refs, refLabel, 6).map(h => ({
-        label: `${ARTIST_LABEL[h.row.maker] || h.row.maker} ${refLabel(h.row.ref)}`,
-        // a reference's model line rides its hint ("Daytona · reference …")
-        hint: `${h.row.line ? `${refLabel(h.row.line)} · ` : ''}reference · ${h.row.n.toLocaleString()} sold · median ${formatPrice(h.row.med)}`,
-        path: refHref(h.row),
-        kind: 'ref' as const,
-      }))
-      : [];
-    const soldMatches: Item[] = sold.map(h => ({
-      label: craftTitle(h.title),
-      hint: `${ARTIST_LABEL[h.maker] || h.maker} · sold ${formatPrice(h.price)} · ${h.house} · ${formatDate(h.date)}`,
-      path: `/lot?id=${encodeURIComponent(h.id)}`,
-      kind: 'sold' as const,
-    }));
-    return [...rooms, ...nameMatches, ...subs, ...refMatches, ...lotMatches, ...soldMatches];
-  }, [items, browseItems, q, upcomingLots, refs, sold, ents, liveByEntity]);
-  // While searching, only the first 12 are rendered — keyboard nav + Enter
-  // must index into the SAME list, or the highlight vanishes and Enter fires
-  // an unseen item. The empty-query browse renders the whole grouped roster
-  // (the list scrolls, and the active row is kept in view).
+  const sections = useMemo<PaletteSection[]>(() => {
+    if (!index || !q.trim()) return [];
+    return rankPalette(q, index, soldNow?.hits || [], soldNow?.total ?? null).sections;
+  }, [index, q, soldNow]);
+
   const browsing = q.trim() === '';
-  const shown = browsing ? filtered : filtered.slice(0, 16);
+  // keyboard nav + Enter index into the SAME flat list that renders
+  const shown = useMemo(() => (browsing ? browseItems : sections.flatMap(s => s.rows)), [browsing, browseItems, sections]);
+  // where each section starts in `shown` (PageDown / PageUp jump between them)
+  const starts = useMemo(() => {
+    const out: number[] = [];
+    let at = 0;
+    for (const s of sections) { out.push(at); at += s.rows.length; }
+    return out;
+  }, [sections]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -330,9 +291,12 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
   // the browse roster overflows the list viewport — keep the keyboard
   // highlight visible as the arrows walk it
   useEffect(() => {
-    listRef.current
-      ?.querySelector('[data-active="true"]')
-      ?.scrollIntoView({ block: 'nearest' });
+    const el = listRef.current?.querySelector('[data-active="true"]');
+    // a section's first row brings its header along
+    const grp = el?.parentElement;
+    const head = grp?.getAttribute('role') === 'group' && grp.children[1] === el ? grp.children[0] : null;
+    head?.scrollIntoView({ block: 'nearest' });
+    el?.scrollIntoView({ block: 'nearest' });
   }, [idx]);
 
   function go(item: Item) {
@@ -340,6 +304,28 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
     if (q.trim().length >= 3) recordSignal('search', q);
     setOpen(false);
     router.push(item.path);
+  }
+
+  function renderRow(item: Item, i: number, className: string, style?: React.CSSProperties) {
+    return (
+      <button
+        key={`${item.kind}-${item.label}-${item.path}`}
+        id={`ray-ck-opt-${i}`}
+        role="option"
+        aria-selected={i === idx}
+        className={className}
+        data-active={i === idx}
+        onMouseEnter={() => setIdx(i)}
+        onClick={() => go(item)}
+        style={style}
+      >
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
+          {(item.kind === 'maker' || item.kind === 'entity') && <ArtistAvatar label={item.label} size={20} />}
+          {item.label}
+        </span>
+        <span className="ray-ck-hint">{item.hint}</span>
+      </button>
+    );
   }
 
   if (!open || typeof document === 'undefined') return null;
@@ -361,6 +347,11 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
           onChange={e => setQ(e.target.value)}
           placeholder="Search a maker, a player, a reference, a live lot, or the sold archive…"
           aria-label="Search"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          enterKeyHint="go"
           role="combobox"
           aria-expanded="true"
           aria-controls="ray-ck-listbox"
@@ -368,38 +359,39 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
           onKeyDown={e => {
             if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(i + 1, shown.length - 1)); }
             else if (e.key === 'ArrowUp') { e.preventDefault(); setIdx(i => Math.max(i - 1, 0)); }
-            else if (e.key === 'Enter' && shown[idx]) go(shown[idx]);
+            // PageDown / PageUp: the next / previous section's first row
+            else if (e.key === 'PageDown' && starts.length) { e.preventDefault(); setIdx(i => starts.find(s => s > i) ?? i); }
+            else if (e.key === 'PageUp' && starts.length) { e.preventDefault(); setIdx(i => [...starts].reverse().find(s => s < i) ?? 0); }
+            else if (e.key === 'Enter' && shown[idx]) { e.preventDefault(); go(shown[idx]); }
           }}
         />
         <div className="ray-ck-list" role="listbox" id="ray-ck-listbox" ref={listRef}>
-          {filtered.length === 0 ? (
-            <div className="ray-ck-empty">Nothing matches.</div>
-          ) : (
+          {shown.length === 0 ? (
+            <div className="ray-ck-empty">{soldPending ? 'Searching the sold archive…' : 'Nothing matches.'}</div>
+          ) : browsing ? (
             shown.map((item, i) => {
               // browse mode renders each market row as a microcap group header
               // — still a real option (it opens the lander), still in the
               // keyboard order, just set in the certificate's label voice
-              const isHeader = browsing && item.kind === 'market';
-              return (
-                <button
-                  key={`${item.kind}-${item.label}-${item.path}`}
-                  id={`ray-ck-opt-${i}`}
-                  role="option"
-                  aria-selected={i === idx}
-                  className={isHeader ? 'ray-ck-item kicker' : 'ray-ck-item'}
-                  data-active={i === idx}
-                  onMouseEnter={() => setIdx(i)}
-                  onClick={() => go(item)}
-                  style={isHeader ? { marginTop: 6 } : undefined}
-                >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
-                    {(item.kind === 'maker' || item.kind === 'entity') && <ArtistAvatar label={item.label} size={20} />}
-                    {item.label}
-                  </span>
-                  <span className="ray-ck-hint">{item.hint}</span>
-                </button>
-              );
+              const isHeader = item.kind === 'market';
+              return renderRow(item, i, isHeader ? 'ray-ck-item kicker' : 'ray-ck-item', isHeader ? { marginTop: 6 } : undefined);
             })
+          ) : (
+            sections.map((sec, si) => (
+              <div key={sec.key} role="group" aria-labelledby={`ray-ck-sec-${sec.key}`}>
+                <div id={`ray-ck-sec-${sec.key}`} className="kicker" style={{ padding: si ? '12px 14px 4px' : '6px 14px 4px' }}>
+                  {sec.title}
+                  {sec.count != null && sec.count > sec.rows.length ? ` · ${sec.count.toLocaleString()}` : ''}
+                  {sec.key === 'sold' && soldNow && Object.keys(soldNow.fixed).length
+                    ? ` · read as ${Object.values(soldNow.fixed).map(w => `“${w}”`).join(' ')}`
+                    : ''}
+                </div>
+                {sec.rows.map((item, ri) => renderRow(item, starts[si] + ri, 'ray-ck-item'))}
+              </div>
+            ))
+          )}
+          {!browsing && shown.length > 0 && soldPending && (
+            <div className="kicker" style={{ padding: '12px 14px 6px' }}>Searching the sold archive…</div>
           )}
         </div>
       </div>

@@ -10,7 +10,7 @@ import { useMarket } from '../lib/market';
 import MarketSwitch from '../components/MarketSwitch';
 import { Colophon, pickCall, CallPlate, daysUntil } from '../components/Terminal';
 import { useRayData, triggerFullLoad, retryFullLoad } from '../hooks/useRayData';
-import { loadLotPack, loadPageStats, markFallbackProjections, type LotPack, type PageStats, type SettledCallRow } from '../lib/page-data';
+import { loadLotPack, loadPageStats, markFallbackProjections, type LotPack, type PageStats, type SettledCallRow, type FlagOutcomes } from '../lib/page-data';
 import type { Backtest } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
@@ -55,11 +55,11 @@ import { dealScore, signalMagnitude, estUsdBand } from '../lib/comps';
 import { lotFace, FACE_LABEL, fmtFace } from '../lib/lot-face';
 import { recordLead, recordScope, RECORD_MIN_N } from '../lib/record-lead';
 import { medianOr } from '../lib/stats';
-import { gapRead, sleeperRead, valueFloor, type GapRead, type SleeperRead } from '../lib/lanes';
+import { gapRead, sleeperRead, valueFloor, GAP_CELL_GATE, type GapRead, type SleeperRead } from '../lib/lanes';
 import TriageBar from '../components/TriageBar';
 import { useUrlState, useLastVisit, passesTriage, isTriageActive, houseBaselines, TRIAGE_DEFAULTS, triageFromParams, triageToParams, WINDOWS, fmtCeiling, relaxTriage, type TriageFilters, type RelaxKey } from '../lib/feed-filters';
 import { CAT_LABEL, SUBS, MARKET_CATS } from '../lib/taxonomy';
-import { byPriority, spread } from '../lib/priority';
+import { byPriority, spread, projectedCloseOf } from '../lib/priority';
 import { makerLineOf, labelLineOf } from '../lib/lot-labels';
 
 /** the row's label line (app/lib/lot-labels — the home feed's words), riding
@@ -218,7 +218,7 @@ const GLOSSARY: Record<string, string> = {
   'odds': 'The share of historical calls at this comp-ratio that beat the high estimate — read from the calibration curve, refit nightly.',
   'floor': 'The engine’s conservative lower bound: the appraisal low at medium-or-better confidence, else 0.85× the card-comps median at three-plus sales.',
   'forming': '3.5–8 days from the close — the projection is still tightening, so the bar is 15 points harder than at the wire.',
-  'wire': 'Closing inside 3.5 days — near enough that the close-curve projection has its full accuracy.',
+  'wire': 'Closing inside 3.5 days — near enough that the projected close has the least room left to move.',
   'graded': 'A call grades when its lot hammers: the realized price is measured against the number the engine put on the tape before the outcome was known.',
   'verified fair': 'The engine’s own appraisal sits within 0.75–1.3× the estimate midpoint — fairness is measured, never inferred from a missing signal.',
   'forward tape': 'The append-only ledger of calls stamped before their outcomes. Each lane publishes its record only after 20 graded calls.',
@@ -290,15 +290,18 @@ function WitnessTrack({ at }: { at: number }) {
    WIRE (≤3.5d, depth ≥25%) and FORMING (3.5–8d, ≥40%). A PROJECTION product:
    neutral ink, every entry logs to the forward tape, publishes at 20 graded.
    Same ledger grammar as the Flags board — sibling boards, one language. ── */
-function GapAnnex({ rows, total, measured, receipts, activeKey, play, isSaved, onToggleSave }: {
+function GapAnnex({ rows, total, measured, validated, receipts, activeKey, play, isSaved, onToggleSave }: {
   rows: { lot: AuctionLot; g: GapRead }[];
   /** the lane before the reader's filters (an empty view must say WHICH
    *  empty it is: filtered out, or no lot clears the bar tonight) */
   total: number;
-  /** no-estimate live lots in scope whose projection is validated on the
-   *  graded tape and carries a floor — the lane's measurable inventory */
+  /** no-estimate live lots in scope carrying a projected close and a floor
+   *  — the lane's measurable inventory (before the cell gate) */
   measured: number;
-  receipts: { record: { gap?: { n: number; graded: number } } } | null;
+  /** of those, the projections whose cell is validated on the graded tape
+   *  (gapOk) — the only ones that may seat a row */
+  validated: number;
+  receipts: { record: { gap?: { n: number; graded: number; medRatio?: number | null; floorHit?: number | null } } } | null;
   activeKey: string;
   play: boolean;
   isSaved: (id: string) => boolean;
@@ -383,7 +386,7 @@ function GapAnnex({ rows, total, measured, receipts, activeKey, play, isSaved, o
               </div>
               <div>
                 <span className="kicker">The projection</span>
-                <p>close-day growth curve fitted from Goldin bid histories · current bid {(lot.currentBid || 0) > 0 ? formatPrice(lot.currentBid!) : 'none'}</p>
+                <p>the live bid × its room&rsquo;s measured close multiple — the projected close the lot page prints · current bid {(lot.currentBid || 0) > 0 ? formatPrice(lot.currentBid!) : 'none'}</p>
               </div>
               <div>
                 <span className="kicker">The tape</span>
@@ -391,7 +394,7 @@ function GapAnnex({ rows, total, measured, receipts, activeKey, play, isSaved, o
               </div>
             </div>
             {/* the close on the curve's 8-day fitted window */}
-            <div className="vd-curve" aria-label={`Closes in ${g.daysOut.toFixed(1)} days — the curve is fitted to 8`}>
+            <div className="vd-curve" aria-label={`Closes in ${g.daysOut.toFixed(1)} days — the lane reads to 8`}>
               <span className="vd-curve-rail" aria-hidden>
                 <span className="vd-curve-wire" style={{ width: `${(3.5 / 8) * 100}%` }} />
                 <span className="vd-curve-dot" style={{ left: `${Math.min(100, (g.daysOut / 8) * 100)}%` }} />
@@ -399,7 +402,7 @@ function GapAnnex({ rows, total, measured, receipts, activeKey, play, isSaved, o
               <span className="vd-curve-labels" aria-hidden>
                 <span>now</span>
                 <span style={{ position: 'absolute', left: `${(3.5 / 8) * 100}%`, transform: 'translateX(-50%)' }}>wire ≤3.5d</span>
-                <span>8d · curve edge</span>
+                <span>8d · lane edge</span>
               </span>
               <span className="vd-curve-read">closes in {g.daysOut < 1 ? `${Math.round(g.daysOut * 24)}h` : `${g.daysOut.toFixed(1)}d`} · {g.shelf === 'wire' ? 'at the wire' : 'forming'}{lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}</span>
             </div>
@@ -429,8 +432,8 @@ function GapAnnex({ rows, total, measured, receipts, activeKey, play, isSaved, o
         play={play}
         tag={<>projected close vs floor · no-estimate books · record accruing</>}
         help={
-          <>These lots post no estimate, so the engine projects the close from Goldin bid-history
-          curves instead. A lot prints when the projection sits at least 25% under
+          <>These lots post no estimate, so the engine projects the close instead — the live
+          bid times its room&rsquo;s measured close multiple. A lot prints when the projection sits at least 25% under
           its <Term k="floor">floor</Term> — at the <Term k="wire">wire</Term> inside
           3.5 days, or <Term k="forming">forming</Term> at a harder bar. Every entry logs to
           the <Term k="forward tape">forward tape</Term> and is <Term k="graded">graded</Term> at
@@ -442,7 +445,10 @@ function GapAnnex({ rows, total, measured, receipts, activeKey, play, isSaved, o
           <p className="vd-lane-empty">
             {total > 0
               ? <>No Gap row passes these filters — {total.toLocaleString()} {total === 1 ? 'is' : 'are'} on the lane.</>
-              : <>0 at the wire tonight · {measured.toLocaleString()} no-estimate {measured === 1 ? 'lot carries' : 'lots carry'} a tape-validated projection; none clears the bar of 25% under its floor inside 3.5 days.</>}
+              : validated > 0
+                ? <>0 at the wire tonight · {validated.toLocaleString()} no-estimate {validated === 1 ? 'lot carries' : 'lots carry'} a tape-validated projection; none clears the bar of 25% under its floor inside 3.5 days.</>
+                /* the cell gate cut everything: abstain OUT LOUD, with why */
+                : <>The Gap abstains tonight · {measured.toLocaleString()} no-estimate {measured === 1 ? 'lot carries' : 'lots carry'} a projected close and a floor inside 8 days, but the lane now reads a new projection (Oct 11 — the projected close each lot page prints), and no house × days-out cell has yet held it across {GAP_CELL_GATE.minN} graded calls landing {GAP_CELL_GATE.lo}–{GAP_CELL_GATE.hi}× — so no row seats until one does.</>}
           </p>
         </div>
       ) : (
@@ -472,10 +478,14 @@ function GapAnnex({ rows, total, measured, receipts, activeKey, play, isSaved, o
       </div>
       )}
       <div className="vd-annex-meter">
-        {gapRec
+        {gapRec && gapRec.graded >= 20 && gapRec.medRatio != null
+          /* published (≥20 graded): the record itself — and it is why rows
+             now seat only in validated cells */
+          ? <>forward tape: {gapRec.n.toLocaleString()} logged · {gapRec.graded.toLocaleString()} <Term k="graded">graded</Term> · closes landed at a median {gapRec.medRatio.toFixed(2)}× the projection logged{gapRec.floorHit != null ? <>, {gapRec.floorHit}% at or over the floor</> : null} · calls before Oct 11 logged the retired growth curve</>
+          : gapRec
           ? <>forward tape: {gapRec.n.toLocaleString()} logged · {gapRec.graded} <Term k="graded">graded</Term> · publishes at 20 graded</>
           : <>forward tape: — · publishes at 20 <Term k="graded">graded</Term></>}
-        {' '}· curve fitted from goldin bid histories · estimate-house books abstain{activeKey === 'tcg' || activeKey === 'all' ? <> · tcg: no comp basis yet</> : null}
+        {' '}· estimate-house books abstain{activeKey === 'tcg' || activeKey === 'all' ? <> · tcg: no comp basis yet</> : null}
       </div>
     </section>
   );
@@ -489,7 +499,7 @@ function SleepersAnnex({ rows, total, queued, receipts, activeLabel, play, isSav
   /** the lane before the reader's filters */
   total: number;
   queued: number;
-  receipts: { record: { quiet?: { n: number; graded: number } } } | null;
+  receipts: { record: { quiet?: { n: number; graded: number; medRatio?: number | null; underPct?: number | null } } } | null;
   activeLabel: string;
   play: boolean;
   isSaved: (id: string) => boolean;
@@ -520,13 +530,19 @@ function SleepersAnnex({ rows, total, queued, receipts, activeLabel, play, isSav
             <span />
             <span className="kicker">Lot</span>
             <span className="kicker" style={{ textAlign: 'right' }}>Estimate</span>
-            <span className="kicker" style={{ textAlign: 'right' }}>Appraised</span>
+            <span className="kicker" style={{ textAlign: 'right' }}>{FACE_LABEL.value}</span>
             <span className="kicker" style={{ textAlign: 'right' }}>The room</span>
             <span className="kicker" style={{ textAlign: 'right' }}>Closes</span>
           </div>
           {rows.slice(0, 6).map(({ lot, q }) => {
             const isOpen = open === lot.id;
-            const ratio = q.estMid ? q.cvu / q.estMid : null;
+            // ONE LOT, ONE NUMBER: the row's value figure is lib/lot-face's —
+            // the lot page's "lectr value" (expected hammer, the estimate's
+            // own basis); the witness ratio is the fairness test's own
+            const face = lotFace(lot);
+            const val = face.value?.text ?? formatPrice(q.cvu);
+            const est = estimateOnly(lot);
+            const ratio = q.ratio;
             return (
               <div key={lot.id} className="vd-lane-item" data-open={isOpen || undefined}>
                 <div
@@ -548,9 +564,9 @@ function SleepersAnnex({ rows, total, queued, receipts, activeLabel, play, isSav
                     <span className="ray-value-row-maker" style={{ display: 'block' }}>{makerLineOf(lot).name}<LabelSuffix lot={lot} /></span>
                     <span className="ray-value-row-title" style={{ display: 'block' }}>{craftTitle(lot.title, lot.auctionHouse)}</span>
                   </span>
-                  <span className="vd-cell">{q.estMid ? formatPrice(q.estMid) : '—'}</span>
+                  <span className="vd-cell">{q.estMid ? est : '—'}</span>
                   <span className="vd-cell vd-cell-strong">
-                    {formatPrice(q.cvu)}
+                    {val}
                     {ratio != null && <WitnessTrack at={((ratio - 0.75) / (1.3 - 0.75)) * 100} />}
                   </span>
                   <span className="vd-cell">0 bids{q.entry != null ? ` · opens ${formatPrice(q.entry)}` : ''}</span>
@@ -559,19 +575,21 @@ function SleepersAnnex({ rows, total, queued, receipts, activeLabel, play, isSav
                       ? <span className="vd-breathe" style={{ color: 'var(--color-fg)', fontWeight: 600 }}><CloseClock iso={lot.saleDateTime} windowHours={24} /></span>
                       : formatDate(q.closes)}
                   </span>
+                  {/* phone stack: short lines, so the title keeps the room */}
                   <span className="vd-lane-mob">
-                    <span className="vd-cell-strong" style={{ display: 'block' }}>appraised {formatPrice(q.cvu)}</span>
-                    <span style={{ display: 'block' }}>{q.estMid ? `est ${formatPrice(q.estMid)} · ` : ''}0 bids{q.entry != null ? ` · opens ${formatPrice(q.entry)}` : ''}</span>
-                    <span style={{ display: 'block' }}>closes {formatDate(q.closes)}</span>
+                    <span className="vd-cell-strong" style={{ display: 'block' }}>{FACE_LABEL.value} {val}</span>
+                    <span style={{ display: 'block' }}>{q.estMid ? `${est} est.` : '0 bids'}</span>
+                    <span style={{ display: 'block' }}>{q.estMid ? '0 bids · ' : ''}{formatDate(q.closes).replace(/, \d{4}$/, '')}</span>
                   </span>
                 </div>
                 <div className="vd-lane-detail">
                   <div className="vd-lane-detail-in">
                     <p className="vd-detail-lead">
-                      {q.anchor === 'fair-est'
-                        ? <>Appraised <b>{formatPrice(q.cvu)}</b> against a <b>{formatPrice(q.estMid!)}</b> estimate
-                            midpoint — <b>{ratio!.toFixed(2)}×</b>, inside the 0.75–1.3× at-market window.</>
-                        : <>No estimate posted — the lane stands on the engine&rsquo;s <b>{formatPrice(q.cvu)}</b> appraisal
+                      {q.anchor === 'fair-est' && ratio != null
+                        ? <>{FACE_LABEL.value} <b>{val}</b> {FACE_LABEL.valueSub} against a <b>{est}</b> estimate.
+                            Fair, measured: {q.poolMed ? <>the comps median <b>{formatPrice(q.poolMed)}</b> all-in</> : <>the appraisal, all-in,</>} sits
+                            at <b>{ratio.toFixed(2)}×</b> the estimate midpoint grossed to all-in — inside the 0.75–1.3× at-market window.</>
+                        : <>No estimate posted — the lane stands on the engine&rsquo;s appraisal, {FACE_LABEL.value} <b>{val}</b> {FACE_LABEL.valueSub},
                             at high or medium confidence.</>}
                     </p>
                     <div className="vd-detail-grid">
@@ -621,7 +639,10 @@ function SleepersAnnex({ rows, total, queued, receipts, activeLabel, play, isSav
         </div>
       )}
       <div className="vd-annex-meter">
-        {rec
+        {rec && rec.medRatio != null && rec.graded >= 20
+          /* published (≥20 graded): print the record, not the gate */
+          ? <>forward tape: {rec.n.toLocaleString()} logged · {rec.graded} graded · hammer vs appraisal {fmtSignedPct(Math.round((rec.medRatio - 1) * 100))} median{rec.underPct != null ? <> · {rec.underPct}% cleared at or below it</> : null} · both all-in</>
+          : rec
           ? <>forward tape: {rec.n.toLocaleString()} logged · {rec.graded} graded · publishes at 20 graded · graded vs appraisal, both all-in</>
           : <>forward tape: — · publishes at 20 graded · graded vs appraisal, both all-in</>}
       </div>
@@ -878,16 +899,24 @@ export default function ValuePage() {
     }).length;
   }, [liveLots]);
 
-  // the Gap's measurable inventory in scope: no-estimate live lots whose
-  // projected close passed the graded-tape cell check (gapOk) and carry a
-  // floor by THE floor rule (lanes.valueFloor) — the empty lane's honest
-  // denominator, never a statistic of its own
-  const gapPool = useMemo(() => liveLots.filter(l => {
-    if (l.gapOk !== true) return false;
-    const est = estUsdBand(l);
-    if (est.low != null || est.high != null) return false;
-    return valueFloor(l) != null;
-  }), [liveLots]);
+  // the Gap's measurable inventory in scope: no-estimate live lots closing
+  // inside the 8-day window with THE projected close (priority.projectedCloseOf)
+  // and a floor by THE floor rule (lanes.valueFloor) — the empty lane's honest
+  // denominator, never a statistic of its own. (Oct 11) counted BEFORE the
+  // cell gate (gapOk), so a lane the gate cuts entirely abstains out loud
+  // instead of vanishing while the dial still counts it
+  const gapPool = useMemo(() => {
+    const now = Date.now();
+    return liveLots.filter(l => {
+      const ms = closeAt(l);
+      if (ms == null || ms <= now || (ms - now) / 86400000 > 8) return false;
+      const pc = projectedCloseOf(l as Parameters<typeof projectedCloseOf>[0], now);
+      if (!pc || !(pc.allIn > 0)) return false;
+      const est = estUsdBand(l);
+      if (est.low != null || est.high != null) return false;
+      return valueFloor(l) != null;
+    });
+  }, [liveLots]);
 
   // NEXT HAMMER — book-wide (survives a zero-flag scope): the soonest close
   // still strictly ahead (the results-pending grace window must never print
@@ -940,6 +969,17 @@ export default function ValuePage() {
       .filter(r => !r.fb && r.r > 0 && (activeKey === 'all' || r.m === activeKey || mktSet.has(r.a)))
       .slice(0, 6);
   }, [pageStats, activeKey, receipts, mktSet]);
+
+  // THE FLAGS, GRADED (Oct 11): did the flags that hammered beat the
+  // estimate? The live accuracy ledger grades every flagged lot on the last
+  // value served before its sale (hammer vs the house-adjusted high, a
+  // bought-in counted as a miss) — the build slices it per market into
+  // page-stats. null = an older data build (the block steps aside).
+  const flagGraded = useMemo<FlagOutcomes | null>(() => {
+    const fo = pageStats?.flagOutcomes;
+    if (!fo) return null;
+    return fo[activeKey] || { asOf: fo.all?.asOf || '', days: fo.all?.days || 30, n: 0, hits: 0, rows: [] };
+  }, [pageStats, activeKey]);
 
   // the tape grouped by lot, first-seen order (each call keeps its own line)
   const settledByLot = useMemo(() => {
@@ -996,7 +1036,9 @@ export default function ValuePage() {
   const sleeperRowsView = useMemo(() => sleeperRows.filter(r => inTriage(r.lot)), [sleeperRows, inTriage]);
   // the Gap's measurable inventory under the reader's filters (fine art has
   // none — the lane steps aside instead of quoting the sports book's count)
-  const gapMeasured = useMemo(() => gapPool.filter(inTriage).length, [gapPool, inTriage]);
+  const gapMeasuredLots = useMemo(() => gapPool.filter(inTriage), [gapPool, inTriage]);
+  const gapMeasured = gapMeasuredLots.length;
+  const gapValidated = useMemo(() => gapMeasuredLots.filter(l => l.gapOk === true).length, [gapMeasuredLots]);
   useEffect(() => { setShown(ROWS_PAGE); }, [triage]);
 
   // Today's call: the strongest deal Ray can STAND BEHIND — highest
@@ -1679,6 +1721,14 @@ export default function ValuePage() {
           .vd-lane-mob { display: none; }
         }
         .vd-lane-empty { font-size: 13px; color: var(--color-text-muted); margin: 0; padding: 22px 16px; }
+        /* phones: the lane rows take the Flags board's phone composition —
+           the WORK first in ink, its maker/bucket on the muted line */
+        @media (max-width: 768px) {
+          .vd-lane-row { gap: 10px; padding: 10px 12px; }
+          .vd-lane-row > span:nth-child(2) { display: flex !important; flex-direction: column; }
+          .vd-lane-row .ray-value-row-title { order: -1; font-size: 13.5px; font-weight: 600; color: var(--color-fg); }
+          .vd-lane-row .ray-value-row-maker { font-size: 12px; font-weight: 400; color: var(--color-text-muted); }
+        }
 
         /* doubled selector outguns the global '.ray-value-row-maker span'
            display:block descendant rule — the tag must stay an inline chip */
@@ -2344,7 +2394,7 @@ export default function ValuePage() {
           </section>
 
           {/* ── ROOM 2c · THE GAP ── */}
-          <GapAnnex rows={gapRowsView} total={gapRows.length} measured={gapMeasured} receipts={receipts} activeKey={activeKey} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />
+          <GapAnnex rows={gapRowsView} total={gapRows.length} measured={gapMeasured} validated={gapValidated} receipts={receipts} activeKey={activeKey} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />
 
           {/* ── ROOM 2d · THE SLEEPERS ── */}
           <SleepersAnnex rows={sleeperRowsView} total={sleeperRows.length} queued={sleeperQueue} receipts={receipts} activeLabel={activeLabel} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />
@@ -2496,6 +2546,51 @@ export default function ValuePage() {
           {/* settled tape — calls logged before the hammer, then graded (the
               forward ledger; no corpus, no sentinel — page-stats.json) */}
           <section id="tape" className="rail ray-enter vd-room ns-plate" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))', paddingBottom: 'var(--space-4)' }}>
+              {/* THE FLAGS, GRADED — the live answer to "did the last flags
+                  beat the estimate?", lot by lot (hammer basis, graded on the
+                  last value served before the sale; counts = the window) */}
+              {flagGraded && (
+                <div id="graded" className="vd-room" style={{ marginBottom: 26 }}>
+                  <div className="vd-sect-head">
+                    <span className="vd-sect-mark" aria-hidden><FlagsMark size={16} /></span>
+                    <span className="ns-kicker">The Flags, graded</span>
+                    <span className="vd-pulse-rule" aria-hidden />
+                    <span className="vd-sect-cap">
+                      {flagGraded.n > 0
+                        ? <>{flagGraded.hits} of {flagGraded.n} {flagGraded.n === 1 ? 'flag' : 'flags'} hammered above the high · last {flagGraded.days} days · graded on the last value served before the sale</>
+                        : <>graded nightly on the last value served before the sale</>}
+                    </span>
+                  </div>
+                  {flagGraded.rows.length > 0 ? flagGraded.rows.map(r => {
+                    const delta = r.ham > 0 && r.top > 0 ? Math.round((r.ham / r.top - 1) * 100) : null;
+                    return (
+                      <Link key={r.id} href={`/lot/${encodeURIComponent(r.id)}`} className="vd-tape-row">
+                        <span style={{ minWidth: 0 }}>
+                          <span className="vd-tape-title" style={{ display: 'block', color: 'var(--color-fg)', fontWeight: 600 }}>{r.t ? craftTitle(r.t) : r.id}</span>
+                          <span className="vd-tape-maker" style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>{r.a ? (ARTIST_LABEL[r.a] || r.a) : ''}{r.h ? `${r.a ? ' · ' : ''}${r.h}` : ''}</span>
+                        </span>
+                        <span className="vd-tape-cells">
+                          <span className="vd-tape-real">{r.ham > 0 ? <>hammered {fmtFace(r.ham)}</> : <>bought in</>}{r.sd ? ` · ${formatDate(r.sd)}` : ''}</span>
+                          <span className="vd-tape-vs">
+                            high {fmtFace(r.top)} · {r.ham > 0 && delta != null
+                              ? <><span data-tone={r.hit ? 'up' : 'down'}>{fmtSignedPct(delta)}</span> {r.hit ? 'beat it' : 'short of it'}</>
+                              : <span data-tone="down">a counted miss</span>}
+                          </span>
+                        </span>
+                      </Link>
+                    );
+                  }) : (
+                    <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>
+                      No {activeLabel === 'collectible' ? '' : `${activeLabel} `}flag has settled in the last {flagGraded.days} days — each one grades here the night its lot hammers.
+                    </p>
+                  )}
+                  {flagGraded.rows.length > 0 && (
+                    <div className="vd-annex-meter">
+                      {flagGraded.n > flagGraded.rows.length ? <>the {flagGraded.rows.length} newest of {flagGraded.n} graded · </> : null}hammer basis · &ldquo;high&rdquo; is the house-adjusted top the odds are fit to · a bought-in lot is a miss
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="vd-sect-head">
                 <span className="vd-sect-mark" aria-hidden><TapeMark size={16} /></span>
                 <span className="ns-kicker">Settled calls</span>
