@@ -30,6 +30,7 @@ import type { Follow } from './follows';
 import { entityKeyOf } from './entity/key';
 import { parseCard } from './cards';
 import { taxonOf } from './taxonomy';
+import { storageFailed, deviceKV } from './safe-storage';
 
 export const SIGNALS_KEY = 'lectr-signals';
 export const SIGNALS_VERSION = 1;
@@ -82,14 +83,37 @@ export interface KV { getItem(k: string): string | null; setItem(k: string, v: s
 
 const empty = (): SignalStore => ({ v: SIGNALS_VERSION, ev: [], marks: [] });
 
+/** the browser's storage through safe-storage: blocked or full storage
+ *  reads empty and keeps this page's writes in memory (never a throw on read) */
 function defaultKV(): KV | null {
-  try { return typeof window !== 'undefined' && window.localStorage ? window.localStorage : null; } catch { return null; }
+  return typeof window !== 'undefined' ? deviceKV : null;
 }
 
 const isNum = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
 const KINDS = new Set<string>(['lot', 'comps', 'entity', 'search']);
 
-/** read + validate; anything malformed is dropped, a foreign version starts over */
+const SNAP_STR = ['status', 'subCat', 'drill', 'auctionHouse', 'saleDate', 'saleDateTime', 'currency', 'playerSlug', 'playerName', 'formKey'] as const;
+const SNAP_NUM = ['estimateLow', 'estimateHigh', 'currentBid', 'priceUsd'] as const;
+
+/** a stored lot snapshot, checked field by field: an object whose id and
+ *  title are strings (else no snapshot); every other field kept only when it
+ *  has its own type — a snapshot is fed to the recommender and printed */
+export function cleanSnap(x: unknown): LotSnap | undefined {
+  if (!x || typeof x !== 'object') return undefined;
+  const o = x as Record<string, unknown>;
+  if (typeof o.id !== 'string' || !o.id || typeof o.title !== 'string') return undefined;
+  const s: LotSnap = { id: o.id, title: o.title.slice(0, 400), artist: typeof o.artist === 'string' ? o.artist : '' };
+  const w = s as Record<string, unknown>;
+  for (const k of SNAP_STR) if (typeof o[k] === 'string') w[k] = o[k];
+  for (const k of SNAP_NUM) if (isNum(o[k])) w[k] = o[k];
+  if (typeof o.ek === 'string' || o.ek === null) w.ek = o.ek;
+  return s;
+}
+
+const str = (x: unknown, max: number): string | undefined => (typeof x === 'string' && x ? x.slice(0, max) : undefined);
+
+/** read + validate; anything malformed is dropped (field by field, entry by
+ *  entry — never the page), a foreign version starts over */
 export function readSignals(kv: KV | null = defaultKV(), nowMs = Date.now()): SignalStore {
   if (!kv) return empty();
   let raw: string | null = null;
@@ -100,24 +124,49 @@ export function readSignals(kv: KV | null = defaultKV(), nowMs = Date.now()): Si
   if (!j || typeof j !== 'object' || (j as SignalStore).v !== SIGNALS_VERSION) return empty();
   const o = j as Partial<SignalStore>;
   const cutoff = nowMs - MAX_AGE_DAYS * 864e5;
-  const ev = (Array.isArray(o.ev) ? o.ev : []).filter((e): e is SignalEvent =>
-    !!e && typeof e === 'object' && KINDS.has((e as SignalEvent).k) && typeof (e as SignalEvent).id === 'string'
-    && isNum((e as SignalEvent).t) && (e as SignalEvent).t >= cutoff)
-    .map(e => ({ ...e, n: isNum(e.n) && e.n > 0 ? Math.min(e.n, 99) : 1, t0: isNum(e.t0) ? e.t0 : e.t }));
-  const marks = (Array.isArray(o.marks) ? o.marks : []).filter((m): m is SignalMark =>
-    !!m && typeof m === 'object' && ((m as SignalMark).k === 'more' || (m as SignalMark).k === 'less')
-    && typeof (m as SignalMark).id === 'string' && isNum((m as SignalMark).t));
+  const ev: SignalEvent[] = [];
+  for (const x of Array.isArray(o.ev) ? o.ev : []) {
+    if (!x || typeof x !== 'object') continue;
+    const e = x as unknown as Record<string, unknown>;
+    if (typeof e.k !== 'string' || !KINDS.has(e.k) || typeof e.id !== 'string' || !e.id || !isNum(e.t) || e.t < cutoff) continue;
+    const out: SignalEvent = { k: e.k as SignalKind, id: e.id.slice(0, 200), t: e.t, t0: isNum(e.t0) ? e.t0 : e.t, n: isNum(e.n) && e.n > 0 ? Math.min(Math.round(e.n), 99) : 1 };
+    if (isNum(e.dwell) && e.dwell > 0) out.dwell = e.dwell;
+    const label = str(e.label, 80);
+    if (label) out.label = label;
+    const lot = cleanSnap(e.lot);
+    if (lot) out.lot = lot;
+    ev.push(out);
+  }
+  const marks: SignalMark[] = [];
+  for (const x of Array.isArray(o.marks) ? o.marks : []) {
+    if (!x || typeof x !== 'object') continue;
+    const m = x as unknown as Record<string, unknown>;
+    if ((m.k !== 'more' && m.k !== 'less') || typeof m.id !== 'string' || !m.id || !isNum(m.t)) continue;
+    const out: SignalMark = { k: m.k, id: m.id, t: m.t };
+    if (Array.isArray(m.keys)) out.keys = m.keys.filter((k): k is string => typeof k === 'string' && !!k).slice(0, 8);
+    const lot = cleanSnap(m.lot);
+    if (lot) out.lot = lot;
+    marks.push(out);
+  }
   return { v: SIGNALS_VERSION, ev: ev.slice(-MAX_EVENTS), marks: marks.slice(-MAX_MARKS) };
 }
 
 function write(store: SignalStore, kv: KV | null, live = false): boolean {
-  if (!kv) return false;
+  if (!kv) { if (live) storageFailed(); return false; }
   const out: SignalStore = { v: SIGNALS_VERSION, ev: store.ev.slice(-MAX_EVENTS), marks: store.marks.slice(-MAX_MARKS) };
   try {
     kv.setItem(SIGNALS_KEY, JSON.stringify(out));
   } catch {
     // full quota: halve the memory once and try again, else give up quietly
-    try { out.ev = out.ev.slice(-Math.floor(MAX_EVENTS / 2)); kv.setItem(SIGNALS_KEY, JSON.stringify(out)); } catch { return false; }
+    try { out.ev = out.ev.slice(-Math.floor(MAX_EVENTS / 2)); kv.setItem(SIGNALS_KEY, JSON.stringify(out)); } catch {
+      // a mark / undo the reader pressed did not stick: say so (a quiet
+      // visit that could not be learned is not worth a word). The default
+      // handle (safe-storage) still holds it for this page, so the list
+      // re-reads and the pressed state shows — it just won't survive a reload.
+      if (live) storageFailed();
+      notify(live);
+      return false;
+    }
   }
   notify(live);
   return true;

@@ -31,6 +31,7 @@ import { loadEntities, type LoadedEntities } from '../hooks/useEntities';
 import { VALUE_FLOORS, VALUE_CEILINGS, fmtCeiling } from '../lib/feed-filters';
 import { FEEDSHEET_CSS } from './FeedToolbar';
 import { useDialogFocus } from './useDialogFocus';
+import { useBackClose } from '../lib/use-lot-modal';
 import ArtistAvatar from './ArtistAvatar';
 
 const STEP_LABEL: Record<QsStep, string> = { markets: 'Markets', names: 'Names', price: 'Price' };
@@ -148,6 +149,8 @@ function QsSheet({ book, onClose }: { book: readonly AuctionLot[]; onClose: () =
   const ref = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
   useDialogFocus(true, ref, { initial: 'container' });
+  // Back closes the sheet, never the page (R4 P2-3)
+  useBackClose(onClose);
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', key);

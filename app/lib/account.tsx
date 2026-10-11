@@ -6,6 +6,7 @@ import type { User } from '@supabase/supabase-js';
 import { supabase, authEnabled } from './supabase';
 import type { AuctionLot } from '../types';
 import { craftTitle } from '../utils';
+import { STORAGE_FAILED_EVENT, storageSet } from './safe-storage';
 
 /**
  * The account layer. ONE responsibility beyond auth: saved lots are scoped to a
@@ -121,7 +122,7 @@ function readStored(): SavedEntry[] {
   } catch { return []; }
 }
 function writeStored(entries: SavedEntry[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(entries)); } catch { /* private mode */ }
+  storageSet(STORAGE_KEY, JSON.stringify(entries), { announce: true }); // blocked / full → the toast says so
 }
 function rowToEntry(r: Record<string, unknown>): SavedEntry {
   return {
@@ -217,6 +218,14 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
     noticeTimer.current = setTimeout(() => setNotice(null), 3400);
   }, []);
+  // a follow / mark / interest the reader pressed that the browser refused
+  // to keep (site data blocked, or storage full) — say so, once per burst,
+  // rather than a control that silently does nothing (app/lib/safe-storage)
+  useEffect(() => {
+    const onFail = () => flash('Couldn’t keep that on this device — this browser is blocking or out of site storage. It lasts until you leave this page.');
+    window.addEventListener(STORAGE_FAILED_EVENT, onFail);
+    return () => window.removeEventListener(STORAGE_FAILED_EVENT, onFail);
+  }, [flash]);
 
   // ── auth session ──
   useEffect(() => {
@@ -326,7 +335,10 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
         if (raw) {
           localStorage.removeItem('lectr-pending-save');
           const pend = JSON.parse(raw) as SavedEntry;
-          if (pend?.id && !loaded.some(e => e.id === pend.id)) {
+          // device data is untrusted: only a well-formed entry is replayed
+          if (pend && typeof pend === 'object' && typeof pend.id === 'string' && pend.id
+            && (pend.title == null || typeof pend.title === 'string') && (pend.artist == null || typeof pend.artist === 'string')
+            && !loaded.some(e => e.id === pend.id)) {
             setEntries(prev => (prev.some(p => p.id === pend.id) ? prev : [...prev, pend]));
             upsertSaved(user.id, [pend], { onConflict: 'user_id,lot_id' })
               .then(({ error: e2 }) => { if (e2) console.error('[account] pending-save replay failed:', e2.message); });

@@ -285,10 +285,14 @@ const LV_SESSION = 'lectr-visit-session';
 export function useLastVisit(): string | null {
   const [prev, setPrev] = useState<string | null>(null);
   useEffect(() => {
+    // THE one last-visit clock (home's "New since", the profile's Today band
+    // and its while-you-were-away line all read it). A stored value that is
+    // not a YYYY-MM-DD day (hand-edited, an older format) reads as none.
+    const day = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
     try {
-      const stored = window.localStorage.getItem(LV_KEY);
+      const stored = day(window.localStorage.getItem(LV_KEY));
       const inSession = window.sessionStorage.getItem(LV_SESSION);
-      if (inSession) { setPrev(inSession === '-' ? null : inSession); return; }
+      if (inSession) { setPrev(day(inSession)); return; }
       window.sessionStorage.setItem(LV_SESSION, stored || '-');
       window.localStorage.setItem(LV_KEY, localToday());
       setPrev(stored);

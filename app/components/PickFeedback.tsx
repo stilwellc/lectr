@@ -105,8 +105,9 @@ export function LearnedOnDevice({ learned, style }: { learned: boolean; style?: 
       {cleared && !learned
         ? <>Cleared. Picks now read only what you save, own, follow and search.</>
         : <>
-            The lots and pages you open here, what you type in search, and your More like this / Not for me
-            marks shape these picks. They stay in this browser and are never sent to lectr.{' '}
+            The lots and pages you open here, what you search, and your More like this / Not for me marks shape
+            these picks. That record is kept in this browser and never uploaded — opening a page or running a search
+            is still an ordinary request to lectr, like any page view.{' '}
             <button type="button" className="ray-toolbar-reset" onClick={() => { clearSignals(); setCleared(true); }}>
               Clear what lectr learned on this device
             </button>

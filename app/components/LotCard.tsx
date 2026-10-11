@@ -8,6 +8,7 @@ import { makerLineOf, labelLineOf } from '../lib/lot-labels';
 import { usePlayerDossiers } from '../lib/use-player-dossiers';
 import { houseColors, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg, sizedImg, localToday, isClosedPending } from '../utils';
 import ComparableModal from './ComparableModal';
+import { useBackClose } from '../lib/use-lot-modal';
 import Flick from './Flick';
 import { computeDeepSignal, FORM_LABEL, signalMagnitude } from '../lib/comps';
 import { safeHref } from '../lib/safe-href';
@@ -679,7 +680,7 @@ function LotCard({
     <>
       {noImage ? rowContent : cardContent}
       {modalOpen && (
-        <ComparableModal
+        <BackClosableModal
           lot={lot}
           allLots={allLots}
           onClose={() => setModalOpen(false)}
@@ -707,4 +708,12 @@ export function crawlIsFresh(stamp: string | undefined | null, nowMs = Date.now(
   if (stamp.length <= 10) return false;
   const t = Date.parse(stamp);
   return !isNaN(t) && nowMs - t < 86_400_000 && nowMs >= t;
+}
+
+/** the card's own comps modal, joined to history while it is open: Back
+ *  closes it instead of leaving the page (R4 P2-3 — the feed's rows already
+ *  did this through useLotModal; a card opens its own) */
+function BackClosableModal(props: React.ComponentProps<typeof ComparableModal>) {
+  useBackClose(props.onClose);
+  return <ComparableModal {...props} />;
 }

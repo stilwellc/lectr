@@ -14,8 +14,9 @@
  * `getPricePref()` is the tiny getter for anything else that wants it.
  */
 import { useEffect, useMemo, useState } from 'react';
-import type { Market } from '../constants';
+import { MARKETS, type Market } from '../constants';
 import { prioStatic } from './priority';
+import { storageFailed, deviceKV } from './safe-storage';
 
 export interface PricePref {
   /** at least (hammer-basis USD) — one of feed-filters VALUE_FLOORS */
@@ -36,8 +37,10 @@ export const NO_INTERESTS: Interests = { v: 1, markets: [], minUsd: null, maxUsd
 
 type Store = Pick<Storage, 'getItem' | 'setItem'>;
 function store(): Store | null {
-  try { return typeof window !== 'undefined' ? window.localStorage : null; } catch { return null; }
+  return typeof window !== 'undefined' ? deviceKV : null;
 }
+
+const MARKET_KEYS = new Set<string>(MARKETS.map(m => m.key).filter(k => k !== 'all'));
 
 const pos = (n: unknown): number | null => (typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : null);
 
@@ -46,13 +49,13 @@ export function parseInterests(raw: string | null | undefined): Interests {
   if (!raw) return NO_INTERESTS;
   try {
     const o = JSON.parse(raw) as Partial<Interests>;
-    if (!o || typeof o !== 'object') return NO_INTERESTS;
+    if (!o || typeof o !== 'object' || Array.isArray(o)) return NO_INTERESTS;
     const minUsd = pos(o.minUsd);
     let maxUsd = pos(o.maxUsd);
     // an inverted range is no range on that side
     if (minUsd != null && maxUsd != null && minUsd >= maxUsd) maxUsd = null;
-    const markets = Array.isArray(o.markets) ? o.markets.filter((m): m is Market => typeof m === 'string' && m !== 'all') : [];
-    return { v: 1, markets: Array.from(new Set(markets)), minUsd, maxUsd, at: typeof o.at === 'string' ? o.at : null };
+    const markets = Array.isArray(o.markets) ? o.markets.filter((m): m is Market => typeof m === 'string' && MARKET_KEYS.has(m)) : [];
+    return { v: 1, markets: Array.from(new Set(markets)), minUsd, maxUsd, at: typeof o.at === 'string' && !isNaN(Date.parse(o.at)) ? o.at : null };
   } catch { return NO_INTERESTS; }
 }
 
@@ -62,8 +65,8 @@ export function readInterests(s: Store | null = store()): Interests {
 
 export function writeInterests(next: Omit<Interests, 'v'>, s: Store | null = store()): Interests {
   const v = parseInterests(JSON.stringify({ ...next, v: 1 }));
-  try { s?.setItem(INTERESTS_KEY, JSON.stringify(v)); } catch { /* storage blocked */ }
-  if (typeof window !== 'undefined') window.dispatchEvent(new Event(INTERESTS_KEY));
+  try { s?.setItem(INTERESTS_KEY, JSON.stringify(v)); } catch { storageFailed(); /* blocked / full: say so */ }
+  try { if (typeof window !== 'undefined') window.dispatchEvent(new Event(INTERESTS_KEY)); } catch { /* no window */ }
   return v;
 }
 
