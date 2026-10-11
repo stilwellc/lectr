@@ -10,6 +10,7 @@ import { DelegatedTrackers } from './components/retention/trackers';
 import RayDataPreloads from './components/RayDataPreloads';
 import JsonLd from './components/JsonLd';
 import { siteLd } from './lib/seo';
+import ServiceWorker from './components/ServiceWorker';
 
 // One voice. Inter carries everything — display numerals, labels, body —
 // with tabular figures for anything that counts money.
@@ -124,6 +125,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <JsonLd data={siteLd(`Auction intelligence for the collectibles market — ${ROSTER_PHRASE} tracked across major houses, crawled nightly.`)} />
         {/* anonymous product-event counts (outbound + pick opens) — renders nothing */}
         <DelegatedTrackers />
+        {/* registers public/sw.js (the last-seen-book cache + push) after
+            load; prints the offline line when the book is a saved copy */}
+        <ServiceWorker />
       </body>
     </html>
   );
