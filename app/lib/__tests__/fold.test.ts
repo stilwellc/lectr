@@ -69,7 +69,7 @@ test('notes: grade list, then the rest; title groups count copies', () => {
   const f = foldVariants(lots, NOW);
   const [rep] = f.reps;
   assert.equal(rep.id, lots[0].id);
-  assert.equal(foldNote(rep, f.siblings.get(rep.id)!, 'card'), 'Also PSA 9, BGS 9 · 2 more grades');
+  assert.equal(foldNote(rep, f.siblings.get(rep.id)!, 'card'), '+4 more PSA 9, BGS 9 and 2 other grades');
   assert.equal(foldNote(rep, [lots[1], lots[1]], 'title'), '+2 more of this lot');
   assert.equal(foldNote(rep, [], 'card'), null);
   assert.equal(gradeLabel(parseCard('2025 Pokemon Japanese Mega Dream #246 Mega Dragonite ex - CGC PRISTINE 10')), 'CGC 10 Pristine');
