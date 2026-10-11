@@ -13,9 +13,31 @@ const dataVersion = (() => {
   } catch { return ''; }
 })();
 
+// STATIC ENTITY ALIASES (W12, Oct 11 2026): the /p/<player>, /e/<name> pages
+// this build prerenders (app/lib/seo-entities — TS, so scripts/entity-aliases
+// prints them) inlined into the bundle, so every in-app entity link
+// (app/lib/entity/aliases) lands on the page with its own share card, the
+// same on the prerendered HTML and after hydration. Computed once: the value
+// is parked in process.env so build workers that reload this config inherit
+// it. '[]' when it cannot be read — links stay on their query routes.
+const entityAliases = (() => {
+  if (process.env.NEXT_PUBLIC_ENTITY_ALIASES) return process.env.NEXT_PUBLIC_ENTITY_ALIASES;
+  let out = '[]';
+  try {
+    out = require('child_process').execFileSync(
+      process.execPath, ['--import', 'tsx', require('path').join(__dirname, 'scripts', 'entity-aliases.ts')],
+      { cwd: __dirname, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], timeout: 60000 },
+    ).trim() || '[]';
+  } catch (e) {
+    console.warn('[next.config] entity aliases unavailable — entity links use their query routes:', e && e.message);
+  }
+  process.env.NEXT_PUBLIC_ENTITY_ALIASES = out;
+  return out;
+})();
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  env: { NEXT_PUBLIC_DATA_VERSION: dataVersion },
+  env: { NEXT_PUBLIC_DATA_VERSION: dataVersion, NEXT_PUBLIC_ENTITY_ALIASES: entityAliases },
   // Pure static export — the whole site prerenders to files (Cloudflare Pages
   // hosting; no server anywhere, which is what the Vercel fair-use block
   // taught us the hard way).

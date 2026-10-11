@@ -28,6 +28,7 @@ import { marketOf, MAKER_MARKETS, ARTIST_LABEL, type Market } from '../../consta
 import { isMisattributed } from '../attribution';
 import { lotSubjectOf } from '../maker-subjects';
 import { publicFigureCanon, publicFigureHome } from '../player-name';
+import { entityHrefOf } from './aliases';
 import { playerSlugOf } from '../cards';
 import { taxonOf, subLabel, CAT_LABEL, type CatKey } from '../taxonomy';
 import type { EntityKind } from './model';
@@ -163,6 +164,7 @@ export function entityPageOf(id: string): string | null {
   const p = parseEntityId(id);
   if (!p) return null;
   if (p.kind === 'maker') return `/makers/${p.slug}`;
-  if (p.kind === 'player') return `/player?id=${encodeURIComponent(p.slug!)}`;
-  return `/entity?id=${encodeURIComponent(id)}`;
+  // a player / subject / set / collection: its static alias (/p, /e) when
+  // the deploy ships one, else its query route (./aliases)
+  return entityHrefOf(id);
 }

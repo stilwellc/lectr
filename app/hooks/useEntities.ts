@@ -38,6 +38,7 @@ import {
 } from '../lib/entity/kinds';
 import type { NameEntry } from '../lib/entity/live';
 import { parseEntityId } from '../lib/entity/key';
+import { playerHrefOf } from '../lib/entity/aliases';
 import { MIN_MED_N } from '../lib/entity/stats';
 import { decodeEntities, isEntitiesWire, ledgerNamesBy } from '../lib/entity/wire';
 import { bestLotImage } from '../lib/img-host';
@@ -271,7 +272,7 @@ export function nameBundle(id: string, g: NameEntry, players: Map<string, Player
   const dossier = isPlayer && dossiers.has(s0!.playerSlug!);
   const kind = kindOfId(id) ?? 'subject';
   const page = rest ? subjectFeedHref(g.market, '~')
-    : dossier ? `/player?id=${encodeURIComponent(s0!.playerSlug!)}`
+    : dossier ? playerHrefOf(s0!.playerSlug!)
     : (() => { const p = subjectPartsOf(id); return p ? subjectFeedHref(p.market, p.key) : pageHrefOf(id); })();
 
   const s: EntitySummary = {
