@@ -900,11 +900,29 @@ async function main() {
   } catch (e) {
     console.error('[Ray] buildUpcoming failed (crawl data intact):', e);
   }
-  try {
-    const { buildBacktest } = await import('./build-backtest');
-    buildBacktest(DATA_DIR, allLots);
-  } catch (e) {
-    console.error('[Ray] buildBacktest failed (crawl data intact):', e);
+  // SEGMENTED LEG (Oct 11 2026, W6 pipeline pass): a house leg ships ONLY its
+  // segment — the backtest.json + state a full replay writes here never leave
+  // the runner (assemble and the nightly's backtest jobs build the record).
+  // The replay's sole effect on the rows is prepare()'s vector stamp
+  // (`_v`/`_vn` on every lot, and `_vn` survives assemble's lean read), so
+  // the leg stamps exactly that and skips the replay: byte-identical segment,
+  // 2-5 min off Christie's / Sotheby's (scripts/ci/crawl-tail-equivalence.ts
+  // proves the rows identical). The monolith (no RAY_HOUSE) is unchanged.
+  if (CRAWL_HOUSE) {
+    try {
+      const { stampVectors } = await import('./backtest-core');
+      stampVectors(allLots);
+      console.log(`[Ray] segment leg: engine vectors stamped on ${allLots.length} lots (backtest replay skipped — its record is not shipped by a house leg)`);
+    } catch (e) {
+      console.error('[Ray] stampVectors failed (crawl data intact):', e);
+    }
+  } else {
+    try {
+      const { buildBacktest } = await import('./build-backtest');
+      buildBacktest(DATA_DIR, allLots);
+    } catch (e) {
+      console.error('[Ray] buildBacktest failed (crawl data intact):', e);
+    }
   }
 
   // (imageHash removed: different houses photograph the same object differently,

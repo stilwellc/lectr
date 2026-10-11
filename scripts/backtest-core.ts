@@ -50,7 +50,7 @@
  *    record carry ENGINE_VERSION; the summary reports the share of rows scored
  *    on the current version so drift is visible instead of silent.
  */
-import { buildIdf, buildVectors } from '../app/lib/similarity';
+import { buildIdf, buildVectors, type IdfTable } from '../app/lib/similarity';
 import { resolveComps, estimateValue, setCalibration, setTimeIndex, setHouseBias, getEngineFlags, houseFactorOf, adjustedTop, estKindOf as estKindOfLot, BAND_TOP_RATIO, knownKey, FALLBACK_GATE, APPLY_NOEST_BIAS, MAXBID_Q, VB_MARKET, VB_TIER, ODDS_FLOOR, ENGINE_VERSION, quantile, type EngineCalibration, type TimeIndex, type HouseBias } from '../app/lib/value';
 import { makeTimeIndexer, makeHouseBiasIndexer } from '../app/lib/indices';
 import { gateCell, type CardGateCell } from '../app/lib/cards-gate';
@@ -324,13 +324,24 @@ export function identityKeyOf(l: L): string | null {
   return isEditionLot(l) ? editionIdentityKey(l) : null;
 }
 
-export function prepare(allLots: AuctionLot[], log: (m: string) => void, elapsed: () => string): Prepared {
+/** The ONLY in-place mutation prepare() makes to the lots: the IDF table over
+ *  the priced sold rows, and `_v`/`_vn` attached to EVERY lot from it.
+ *  Exported so a caller that needs the stamps but not the replay (the
+ *  segmented crawl leg, scripts/ray-crawl.ts) writes byte-identical rows
+ *  without paying for a backtest whose record it would discard. */
+export function stampVectors(allLots: AuctionLot[]): { sold: L[]; tbl: IdfTable } {
   const lots = allLots as L[];
   // compExclude-stamped lots (data contract: junk price, duplicate listing)
   // are never a comp and never a target
   const sold = lots.filter(l => l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate && l.titleTokens && l.titleTokens.length && !isCompExcluded(l));
   const tbl = buildIdf(sold);
   buildVectors(lots as AuctionLot[], tbl); // attach _v/_vn to every lot (priors need it)
+  return { sold, tbl };
+}
+
+export function prepare(allLots: AuctionLot[], log: (m: string) => void, elapsed: () => string): Prepared {
+  const lots = allLots as L[];
+  const { sold, tbl } = stampVectors(allLots);
 
   // same-maker sold, sorted by the day each sale became KNOWN (knownKey: a
   // month-precision sale is known once its month ends) — comp pools are
