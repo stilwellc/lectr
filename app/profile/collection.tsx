@@ -19,6 +19,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { AuctionLot } from '../types';
 import { useAccount } from '../lib/account';
 import { idAliases } from '../lib/recs';
+import { useAfterPaint } from './stall';
 import { collectionPicks, type HeldInput, type MatchedLadder, type PickKind } from '../lib/collection-picks';
 import { loadEntityDetail } from '../hooks/useEntities';
 import { useLotModal } from '../lib/use-lot-modal';
@@ -64,12 +65,14 @@ export default function ForYourCollection({ book, pool, compLots, ready, lastCra
   onCount?: (n: number) => void;
 }) {
   const { held, ready: heldReady } = useHeld(book);
+  // below the fold: read a frame after the picks above it have painted
+  const dealt = useAfterPaint(ready);
   const nowDay = new Date().toISOString().slice(0, 10);
   const [ladders, setLadders] = useState<Map<string, MatchedLadder | null>>(() => new Map());
   const result = useMemo(
-    () => (ready && heldReady && held.length ? collectionPicks(held, pool, { ladders }) : null),
+    () => (dealt && heldReady && held.length ? collectionPicks(held, pool, { ladders }) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ready, heldReady, held, pool, ladders, nowDay],
+    [dealt, heldReady, held, pool, ladders, nowDay],
   );
   // the matched grade ladders an upgrade names — loaded once each
   const want = (result?.ladderIds ?? []).filter(id => !ladders.has(id)).join(',');

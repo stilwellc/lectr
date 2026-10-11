@@ -72,6 +72,9 @@ function closeTag(l: AuctionLot): string {
 const whoOf = (l: AuctionLot): string | null => displayMakerOf(l)?.name ?? null;
 const lead = (l: AuctionLot, rest: React.ReactNode): React.ReactNode => {
   const who = whoOf(l);
+  // a reason that already names the maker ("Same maker · you own Patek
+  // Philippe") is not prefixed with it a second time
+  if (who && typeof rest === 'string' && rest.toLowerCase().includes(who.toLowerCase())) return rest;
   return who ? <>{who} · {rest}</> : rest;
 };
 
@@ -91,7 +94,10 @@ function useNarrow(): boolean {
   return n;
 }
 
-function ReadRow({ r, wrap = false }: { r: Row; wrap?: boolean }) {
+/* (W19) every row's fact wraps — the reason / the read is the row's
+   honesty payload and was cut mid-word at 1440 ("Patek Philippe · Same
+   maker · you…", "Michael Jordan · 8 sales,…"); the title keeps its one line */
+function ReadRow({ r, wrap = true }: { r: Row; wrap?: boolean }) {
   return (
     <Link href={`/lot?id=${encodeURIComponent(r.lot.id)}`} className="ck-read" role="listitem" data-nav-row
       data-decision={r.decision ? '' : undefined}
@@ -118,7 +124,26 @@ function Head({ label }: { label: string }) {
   );
 }
 
-export default function TodayBand({ loop, closingWatches, reads, away, top = [], phoneRows = PER_COL }: {
+/** the picks strip's seat while the deal is pending: its head and three
+ *  rows in the shape of what lands (tag · title · reason, decision line
+ *  under), so nothing below jumps when the picks arrive */
+function TopSeat() {
+  return (
+    <div className="ck-reads" aria-hidden data-loading="">
+      <Head label={`Top ${TOP_N} for you`} />
+      {Array.from({ length: TOP_N }, (_, i) => (
+        <div key={i} className="ck-read" style={{ flexWrap: 'wrap', alignItems: 'center', rowGap: 8 }}>
+          <i className="ray-sk" style={{ width: 56, height: 16, flex: 'none' }} />
+          <i className="ray-sk" style={{ width: '32%', height: 12, flex: 'none' }} />
+          <i className="ray-sk" style={{ flex: '1 1 0', minWidth: 40, height: 12 }} />
+          <i className="ray-sk" style={{ flex: '1 1 100%', maxWidth: '62%', height: 11 }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function TodayBand({ loop, closingWatches, reads, away, top = [], topLoading = false, phoneRows = PER_COL }: {
   loop: ReturnLoop | null;
   /** live watches that hammer today, soonest first */
   closingWatches: AuctionLot[];
@@ -127,6 +152,8 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
   away: React.ReactNode | null;
   /** the picks strip (topPicksOf) — empty: no strip */
   top?: readonly Rec<AuctionLot>[];
+  /** the picks strip is coming (the deal is pending): hold its seat */
+  topLoading?: boolean;
   /** rows a phone opens on (a desk with live watches opens on 2, so its
    *  own Watching room starts in the first screen) */
   phoneRows?: number;
@@ -176,7 +203,7 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
   // the picks strip is never folded (it is why the band carries it) and
   // never counted in "+N more today"
   const total = closing.length + fresh.length + rest.length;
-  if (!total && !picks.length && !away && !loop) return null;
+  if (!total && !picks.length && !away && !loop && !topLoading) return null;
 
   const since = loop?.since && loop.since < localToday() ? loop.since : null;
   const newLabel = since ? `New since your last visit · ${dayWord(since)}` : 'New today in your picks';
@@ -203,7 +230,7 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
       <Head label={picksLabel} />
       {picks.map(r => <ReadRow key={r.key} r={r} wrap />)}
     </div>
-  ) : null;
+  ) : topLoading ? <TopSeat /> : null;
   const closingList = shown.closing.length > 0 ? (
     <div className="ck-reads" role="list" aria-label="Closing tonight">
       <Head label="Closing tonight" />

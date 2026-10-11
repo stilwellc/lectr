@@ -377,6 +377,13 @@ interface Held {
   who: string | null;
 }
 
+/** the row's entity key: the book's build stamp (`ek`, the same entityKeyOf)
+ *  when the row carries one, else read here */
+function stampedEk(l: AuctionLot): string | null {
+  const ek = (l as { ek?: string | null }).ek;
+  return ek !== undefined ? ek : entityKeyOf(l);
+}
+
 function readHeld(h: HeldInput, bySlug: ReadonlyMap<string, string>): Held | null {
   const lot = h.lot ?? null;
   const title = String(lot?.title || h.title || '');
@@ -389,7 +396,7 @@ function readHeld(h: HeldInput, bySlug: ReadonlyMap<string, string>): Held | nul
   const series = isPrintish(shape, t.cat) ? seriesOf({ artist, title }) : null;
   let edition: string | null = null;
   if (t.cat === 'fine-art') { try { edition = editionIdentityKey({ ...shape, artist, title }); } catch { edition = null; } }
-  const ek = entityKeyOf(shape);
+  const ek = stampedEk(shape);
   const named = !!ek && !ek.startsWith('cs:');
   let who: string | null = null;
   if (named) { try { who = makerLineOf(shape).name || null; } catch { who = null; } }
@@ -497,7 +504,9 @@ function readPool(pool: readonly AuctionLot[], nowMs: number): { bySlug: Map<str
     if (l.status !== 'upcoming' || !l.title) continue;
     const t = taxonOf(l);
     const card = readCard(l.title, t.cat, l, bySlug);
-    const ekRaw = entityKeyOf(l);
+    // the book stamps each row's entity key (ek) at build — the same
+    // entityKeyOf, read once there instead of ~10k times per desk here
+    const ekRaw = stampedEk(l);
     const p = priorityOf(l, nowMs);
     cands.push({
       lot: l, cat: t.cat, card,
