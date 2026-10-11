@@ -77,3 +77,21 @@ test('the tier band is art/design only — a watch pool is untouched', () => {
   assert.ok(ap, 'estimate-less watch comps still read');
   assert.equal(ap!.n, 5);
 });
+
+test('context: the ranking never pulls toward the estimate (W15 — the read echoed it)', () => {
+  // "Pique": a print with no medium / dims on file, est. $5.75–8.05K. Before
+  // W15 the comps that sold nearest $6.9K won (1998–99 sales at exactly
+  // $6.9K) and the context median repeated the estimate.
+  const pl = (o: Partial<AuctionLot>) => lot({ artist: 'pablo-picasso', formKey: 'print', medium: null as unknown as string, ...o });
+  const anchor = pl({ id: 'pique', title: 'Pique', status: 'upcoming', saleDate: '2026-10-20', estimateLow: 5_750, estimateHigh: 8_050 });
+  const echo = Array.from({ length: 15 }, (_, i) => pl({ title: `Old plate ${i}`, saleDate: '1999-05-03', estimateLow: 5_000, estimateHigh: 7_000, priceUsd: 6_900 }));
+  const recent = Array.from({ length: 15 }, (_, i) => pl({ title: `Recent plate ${i}`, saleDate: `2026-0${1 + (i % 9)}-15`, estimateLow: 4_000, estimateHigh: 8_000, priceUsd: 8_000 + i * 400 }));
+  const ctx = contextComps(anchor, [anchor, ...echo, ...recent]);
+  assert.equal(ctx.rows.length, 15);
+  assert.ok(ctx.rows.every(r => r.title.startsWith('Recent')), 'recent sales outrank old ones priced at the estimate');
+  assert.notEqual(ctx.median, 6_900);
+  // the same work (title overlap) outranks recency alone
+  const same = Array.from({ length: 3 }, (_, i) => pl({ title: 'Pique', saleDate: '2015-06-01', estimateLow: 5_000, estimateHigh: 7_000, priceUsd: 9_000 + i * 100 }));
+  const ctx2 = contextComps(anchor, [anchor, ...recent, ...same]);
+  assert.ok(ctx2.rows.slice(0, 3).every(r => r.title === 'Pique'));
+});

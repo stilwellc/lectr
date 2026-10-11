@@ -203,6 +203,7 @@ export default function FeedToolbar({
   scopeMaker = null,
   scopeSubj = null,
   countLabel = null,
+  pending = false,
 }: {
   lots: AuctionLot[];          // the unfiltered upcoming pool (for counts)
   belowIds: Set<string>;
@@ -237,6 +238,10 @@ export default function FeedToolbar({
   /** a player dossier's lot browser: the pool IS this subject (no saved
    *  search — the dossier's Follow is the alert) */
   scopeSubj?: string | null;
+  /** (perf W13) `lots` is a first-screen slice, not the live book: every
+   *  count prints '—', the refine rows wait, and the sheet / category menu
+   *  (whose chips are counts) open once the book lands */
+  pending?: boolean;
 }) {
   // The below-market lens auto-ranks by gap (its smart default) — but it must
   // hand back whatever sort the reader had picked when the lens comes off,
@@ -437,6 +442,7 @@ export default function FeedToolbar({
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const sheetReturnRef = useRef<HTMLElement | null>(null);
   const openSheet = (e: ReactMouseEvent<HTMLButtonElement>) => {
+    if (pending) return;
     sheetReturnRef.current = e.currentTarget;
     setSheetOpen(true);
   };
@@ -472,6 +478,7 @@ export default function FeedToolbar({
   const catMenuRef = useRef<HTMLDivElement | null>(null);
   useDialogFocus(catOpen, catMenuRef, { initial: 'first', restoreTo: catTriggerRef });
   const openCat = () => {
+    if (pending) return;
     const r = catTriggerRef.current?.getBoundingClientRect();
     if (r) setCatPos({ top: r.bottom + 6, left: Math.min(r.left, window.innerWidth - 240) });
     setCatOpen(true);
@@ -872,7 +879,7 @@ ${FEEDSHEET_CSS}
           portal menu can never be clipped (v1 rendered it inside the masked
           scroll row — invisible; the trigger also scrolled away on mobile). */}
       <div className="ray-toolbar-row ray-toolbar-row-lead" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        {belowCount > 0 && (
+        {(belowCount > 0 || pending) && (
           <>
             <button
               className="ray-toolbar-pill ray-toolbar-pill-signal"
@@ -890,13 +897,13 @@ ${FEEDSHEET_CSS}
                 }
               }}
             >
-              ● Below market <i>{belowCount}</i>
+              ● Below market <i>{pending ? '—' : belowCount}</i>
             </button>
             <span className="ray-toolbar-divider" aria-hidden="true" />
           </>
         )}
 
-        {market === 'all' && verticals.length > 0 && filters.vertical == null && (
+        {market === 'all' && (verticals.length > 0 || pending) && filters.vertical == null && (
           <button
             ref={catTriggerRef}
             className="ray-toolbar-pill ray-cat-pill-primary"
@@ -957,13 +964,13 @@ ${FEEDSHEET_CSS}
                 {w.label}
               </button>
             ))}
-            {newCount > 0 && (
+            {newCount > 0 && !pending && (
               <button className="ray-toolbar-pill" data-active={filters.newOnly} aria-pressed={filters.newOnly}
                 onClick={() => set({ newOnly: !filters.newOnly })}>
                 {newLabel} <i>{newCount}</i>
               </button>
             )}
-            {houses.length > 1 && (
+            {houses.length > 1 && !pending && (
               <select className="ray-toolbar-pill ray-toolbar-select" aria-label="Auction house" data-active={filters.house != null}
                 value={filters.house ?? ''} onChange={e => set({ house: e.target.value || null })}>
                 <option value="">All houses</option>
@@ -1001,7 +1008,7 @@ ${FEEDSHEET_CSS}
     <div className="ray-toolbar-tail">
       {/* REFINE ROW — only once a category exists (top pills or the chooser):
           sports / makers / mediums scroll behind the fade as before. */}
-      {!isMobile && (sports.length > 0 || makers.length > 0 || categories.length > 0) && (
+      {!isMobile && !pending && (sports.length > 0 || makers.length > 0 || categories.length > 0) && (
         <div className="ray-toolbar-row ray-toolbar-row-filters ray-markets-fade">
         {sports.map(([sport, n]) => (
           <button
@@ -1034,7 +1041,7 @@ ${FEEDSHEET_CSS}
         </div>
       )}
 
-      {!isMobile && facets.length > 0 && (
+      {!isMobile && !pending && facets.length > 0 && (
         <div className="ray-toolbar-row ray-toolbar-row-filters ray-markets-fade" role="group" aria-label="Narrow">
           {facetPillsOf(true)}
         </div>
@@ -1046,7 +1053,7 @@ ${FEEDSHEET_CSS}
         {/* ONE persistent polite region (a region that mounts with its text
             is never announced): the count a filter change lands on */}
         <span role="status" aria-live="polite">
-          {isFiltered ? <>{shown.toLocaleString()} of {total.toLocaleString()}</> : (countLabel ?? <>{total.toLocaleString()} lots</>)}
+          {isFiltered ? <>{shown.toLocaleString()} of {total.toLocaleString()}</> : (countLabel ?? <>{pending ? '—' : total.toLocaleString()} lots</>)}
         </span>
         {isFiltered ? (
           <>

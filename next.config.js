@@ -13,6 +13,18 @@ const dataVersion = (() => {
   } catch { return ''; }
 })();
 
+// FIRST-SCREEN VERSION (perf wave W13, Oct 11 2026): the content hash of the
+// first-screen payloads scripts/emit-first-screen.ts wrote just before this
+// build (public/data/ray/first/index.json). The client fetches a payload only
+// at this hash and discards any other, so a page never paints from a payload
+// another deploy built. '' (no payloads) = every page waits for the book.
+const fsVersion = (() => {
+  try {
+    const idx = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'public', 'data', 'ray', 'first', 'index.json'), 'utf8'));
+    return typeof idx.ver === 'string' ? idx.ver : '';
+  } catch { return ''; }
+})();
+
 // STATIC ENTITY ALIASES (W12, Oct 11 2026): the /p/<player>, /e/<name> pages
 // this build prerenders (app/lib/seo-entities — TS, so scripts/entity-aliases
 // prints them) inlined into the bundle, so every in-app entity link
@@ -37,7 +49,7 @@ const entityAliases = (() => {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  env: { NEXT_PUBLIC_DATA_VERSION: dataVersion, NEXT_PUBLIC_ENTITY_ALIASES: entityAliases },
+  env: { NEXT_PUBLIC_DATA_VERSION: dataVersion, NEXT_PUBLIC_FS_VERSION: fsVersion, NEXT_PUBLIC_ENTITY_ALIASES: entityAliases },
   // Pure static export — the whole site prerenders to files (Cloudflare Pages
   // hosting; no server anywhere, which is what the Vercel fair-use block
   // taught us the hard way).

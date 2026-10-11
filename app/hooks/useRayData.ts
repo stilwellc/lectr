@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { AuctionLot, MarketStats, RealizedPoint, BidCompetitionPoint } from '../types';
-import { normalizeCloseStamp } from '../lib/house-tz';
 import { setCloseK } from '../lib/close-k';
-import { floorAtBid } from '../lib/value';
+import { prepareEagerLots, type CloseBoardJson } from '../lib/eager-book';
 import { completeQuarters } from '../lib/maker-hero';
 import { mergeCorpusOverEager, settleCorpusRow } from '../lib/live-pool';
+import { fetchFirstScreen, type FirstScreenPayload } from '../lib/first-screen';
+import { baselinesFromStats, houseBaselines, type BaselineStats, type HouseBaselines } from '../lib/feed-filters';
+import { localToday } from '../utils';
 
 // Stable empty-array identity for pre-load fallbacks — a fresh `[]` each render
 // would defeat downstream memoization (e.g. useSoldArchive's allLotsWithArchive).
@@ -327,6 +329,9 @@ function loadRayData(): Promise<RayPayload> {
   if (inflight) return inflight;
 
   inflight = (async () => {
+    // a route painting its first screen holds the book back until that paint
+    // lands (or the payload misses) — the slice gets the phone's bandwidth
+    if (phase1Gate) await phase1Gate;
     // ── phase 1: the small eager payload — stats + meta + upcoming (w/ signals)
     const [statsR, metaR, upR, btR, mkR, cbR, rcR, ckR] = await Promise.allSettled([
       fetchJson('/data/ray/stats.json'),
@@ -379,61 +384,12 @@ function loadRayData(): Promise<RayPayload> {
           lots?: AuctionLot[];
         })
       : null;
-    // CLOSE STAMPS (Oct 9, app/lib/house-tz) — the same normalization the
-    // build applies, so a payload built before it ships reads honestly too: a
-    // Christie's local-midnight DAY stamp is dropped (no "12:00 AM" countdown),
-    // an RR lot carries its published 7:00 PM ET close. Idempotent.
-    if (up?.lots) for (const l of up.lots) normalizeCloseStamp(l);
-
-    // ── CLOSE-BOARD OVERLAY — intraday bid refresh for lots closing <24h.
-    // Overrides currentBid/bidCount so every surface reads close-fresh — the
-    // projected close is read off the bid at view time (priority.projectedCloseOf),
-    // so a fresh bid is a fresh projection (Oct 11 2026: no served projection).
-    const cb = cbR.status === 'fulfilled' ? (cbR.value as {
-      generatedAt?: string;
-      bids?: Record<string, { b: number; n: number }>;
-    }) : null;
+    // close stamps + the close-board's intraday bid overlay — ONE function
+    // (app/lib/eager-book) shared with the first-screen payloads, so a lot
+    // prints the same bid whichever payload painted it first
+    const cb = cbR.status === 'fulfilled' ? (cbR.value as CloseBoardJson) : null;
     const upGen = (up as { generatedAt?: string } | null)?.generatedAt;
-    // ACCEPT RULE (Sep 2 2026). The overlay used to be applied only when its
-    // generatedAt beat upcoming.json's — but close-board reads PROD's
-    // upcoming.json while the nightly rebuilds a newer base, so for up to ~4h
-    // after every push the whole overlay was discarded even though its bids
-    // were captured hours after the base's crawl. Now a lot takes the overlay
-    // when (a) the overlay as a whole is newer, OR (b) the entry carries its
-    // own timestamp `t` newer than the base, OR (c) the entry's bid is
-    // STRICTLY NEWER INFORMATION — a higher current bid or a higher bid
-    // count (both are monotone on a live lot, so "higher" ⇒ "later"). A bid
-    // that is strictly newer is never discarded; an older overlay can never
-    // LOWER a bid the base already knows.
-    const overlayNewer = !!cb?.bids && (!upGen || !cb.generatedAt || cb.generatedAt > upGen);
-    if (cb?.bids && up?.lots) {
-      for (const l of up.lots) {
-        const o = cb.bids[String((l as { id?: string }).id)] as (typeof cb.bids)[string] & { t?: string } | undefined;
-        if (!o) continue;
-        const lw = l as AuctionLot;
-        const baseBid = lw.currentBid ?? 0;
-        const baseN = lw.bidCount ?? 0;
-        const entryNewer = overlayNewer
-          || (!!o.t && (!upGen || o.t > upGen))
-          || o.b > baseBid
-          || o.n > baseN;
-        if (!entryNewer) continue;
-        if (o.b > 0 && o.b >= baseBid) {
-          lw.currentBid = o.b;
-          // (Oct 6 2026, wave 4) the engine's value is floored at the bid on
-          // the lot (value.floorAtBid, applied at build) — an intraday bid
-          // above last night's re-floors it, or the page prints an expected
-          // hammer under the bid it shows
-          if (o.b > baseBid && lw.value && lw.value.compValueUsd > 0) lw.value = floorAtBid(lw.value as unknown as Parameters<typeof floorAtBid>[0], lw, Date.now()) as unknown as typeof lw.value;
-        }
-        if (o.n > 0 && o.n >= baseN) lw.bidCount = o.n;
-        // the lot's bid state is now INTRADAY-fresh — stamp the overlay's
-        // generatedAt so surfaces can say "LIVE · refreshed Nh ago" instead
-        // of letting close-day bids read as last night's numbers
-        const stamp = o.t || cb.generatedAt;
-        if (stamp) lw.overlayAt = stamp;
-      }
-    }
+    const overlayAt = prepareEagerLots(up?.lots, cb, upGen);
 
     // statsData may be null (a transient stats.json failure) — parseStats
     // handles it; requiring it here forced the full-corpus fallback (152MB)
@@ -452,7 +408,7 @@ function loadRayData(): Promise<RayPayload> {
         market,
         receipts,
         lastCrawl: metaData.lastCrawl || '',
-        overlayAt: cb?.generatedAt || undefined,
+        overlayAt,
         sources: metaData.sources || [],
         totalLots: metaData.totalLots,
         totalSold: metaData.totalSold,
@@ -461,6 +417,11 @@ function loadRayData(): Promise<RayPayload> {
         error: null,
       };
       notify(core);
+      if (process.env.NODE_ENV !== 'production' && fsShown) {
+        const shown = fsShown;
+        fsShown = null;
+        import('../lib/first-screen-select').then(m => m.verifyFirstScreen(shown.key, shown.lots, core.allLots)).catch(() => {});
+      }
 
       // ── phase 2: stream the full history behind the paint; re-attach the
       // precomputed signals so upcoming cards never flicker to a recompute.
@@ -745,6 +706,148 @@ export function useSoldLedger(): LedgerState {
     return () => { active = false; ledgerListeners.delete(listener); };
   }, []);
   return state;
+}
+
+// ── PHASE 0: THE FIRST SCREEN (perf wave W13, Oct 11 2026) ─────────────────
+// A route with a first-screen payload (app/lib/first-screen) paints from a
+// slice of the book's own rows — tens of KB instead of ~1.6MB — while phase 1
+// waits behind a gate, so on a slow phone the slice and the page's code get
+// the whole pipe. The gate opens once the first screen has painted (the page
+// hook releases it from an effect), when the payload misses, or after
+// FS_GATE_MS whatever happens. Phase 1 then loads exactly as before and its
+// notify REPLACES the slice for every subscriber.
+const FS_GATE_MS = 6000;
+let phase1Gate: Promise<void> | null = null;
+let openGate: (() => void) | null = null;
+/** let phase 1 start (idempotent; a no-op when no first screen armed it) */
+export function releasePhase1() {
+  if (openGate) { openGate(); openGate = null; }
+}
+export type FirstScreenData = RayData & {
+  /** this view is a first-screen slice: rows and their own numbers are the
+   *  book's, but any count over the whole live book is not known yet — print
+   *  it as loading ('—'), never as the slice's count */
+  partial: boolean;
+  /** the whole book's house baselines (a slice must not derive its own) */
+  baselineStats: BaselineStats | null;
+};
+type FsPayload = RayPayload & { baselineStats: BaselineStats };
+const fsReady = new Map<string, FsPayload | null>();
+const fsPending = new Map<string, Promise<FsPayload | null>>();
+/** the slice a page actually painted (the development cross-check reads it) */
+let fsShown: { key: string; lots: AuctionLot[] } | null = null;
+
+function payloadToRay(p: FirstScreenPayload): FsPayload {
+  if (p.closeK) setCloseK(p.closeK);
+  const lots = p.lots;
+  const overlayAt = prepareEagerLots(lots, p.closeBoard, p.upGen);
+  const up = p.up || {};
+  return {
+    statsByArtist: {},
+    allLots: lots,
+    tape: {},
+    demand: (up.demand as DemandByMarket | undefined) || {},
+    realized: (up.realized as RealizedByMarket | undefined) || {},
+    bidComp: (up.bidComp as BidCompByMarket | undefined) || {},
+    recentSold: {},
+    backtest: (p.backtest as Backtest | null | undefined) ?? null,
+    market: (p.market as unknown as MarketData | null | undefined) ?? null,
+    receipts: (p.receipts as unknown as ReceiptsData | null | undefined) ?? null,
+    lastCrawl: p.meta.lastCrawl || '',
+    overlayAt,
+    sources: p.meta.sources || [],
+    totalLots: p.meta.totalLots,
+    totalSold: p.meta.totalSold,
+    fullLoaded: false,
+    fullError: false,
+    error: null,
+    baselineStats: p.baselines,
+  };
+}
+
+/** start a route's first screen (called while the page renders, before any
+ *  effect can start phase 1). Never arms once phase 1 is running or done. */
+function armFirstScreen(key: string): Promise<FsPayload | null> | null {
+  if (cached || (inflight && !phase1Gate)) return null;
+  if (!phase1Gate) {
+    phase1Gate = new Promise<void>(res => { openGate = res; });
+    setTimeout(releasePhase1, FS_GATE_MS);
+  }
+  let p = fsPending.get(key);
+  if (!p) {
+    p = fetchFirstScreen(key).then(j => {
+      const r = j ? payloadToRay(j) : null;
+      fsReady.set(key, r);
+      if (!r) releasePhase1();
+      return r;
+    });
+    fsPending.set(key, p);
+  }
+  return p;
+}
+
+/**
+ * useRayData() for a route that can paint its FIRST SCREEN from a slice
+ * (`key` from app/lib/first-screen fsKeyOf; null = no slice, plain
+ * useRayData). Until phase 1 lands it returns the slice with
+ * `partial: true` and `loading: false`; from then on, the whole book.
+ * Only the page that asked sees the slice — every other useRayData()
+ * consumer keeps its loading state until the book lands.
+ */
+export function useRayDataFirst(key: string | null): FirstScreenData {
+  // armed DURING render: a child's effect may start phase 1 before ours runs
+  const pending = key ? armFirstScreen(key) : null;
+  const base = useRayDataImpl(true);
+  const [fs, setFs] = useState<FsPayload | null>(() => (key ? fsReady.get(key) ?? null : null));
+  useEffect(() => {
+    if (!pending || fs) return;
+    let on = true;
+    pending.then(r => { if (on && r) setFs(r); });
+    return () => { on = false; };
+  }, [pending, fs]);
+  const partial = base.loading && !!fs;
+  // the first screen is on screen: let the book come
+  useEffect(() => {
+    if (!partial || !fs || !key) return;
+    if (!fsShown || fsShown.key !== key) fsShown = { key, lots: fs.allLots };
+    const raf = requestAnimationFrame(() => { setTimeout(releasePhase1, 0); });
+    return () => cancelAnimationFrame(raf);
+  }, [partial, fs, key]);
+  if (!partial || !fs) return { ...base, partial: false, baselineStats: null };
+  return {
+    statsByArtist: fs.statsByArtist,
+    allLots: fs.allLots,
+    tape: fs.tape,
+    demand: completeDemand(fs.demand),
+    realized: fs.realized,
+    bidComp: fs.bidComp,
+    recentSold: fs.recentSold,
+    backtest: fs.backtest,
+    market: fs.market,
+    receipts: fs.receipts,
+    lastCrawl: fs.lastCrawl,
+    overlayAt: fs.overlayAt,
+    sources: fs.sources,
+    totalLots: fs.totalLots,
+    totalSold: fs.totalSold,
+    loading: false,
+    fullLoaded: false,
+    fullError: false,
+    error: null,
+    fromCache: false,
+    partial: true,
+    baselineStats: fs.baselineStats,
+  };
+}
+
+/** the house baselines a page passes its feed: the whole book's — from the
+ *  slice's shipped stats while partial, else off the loaded book */
+export function useHouseBaselines(ray: Pick<FirstScreenData, 'allLots' | 'partial' | 'baselineStats'>): HouseBaselines {
+  const { allLots, partial, baselineStats } = ray;
+  return useMemo(
+    () => (partial && baselineStats ? baselinesFromStats(baselineStats, localToday()) : houseBaselines(allLots)),
+    [allLots, partial, baselineStats],
+  );
 }
 
 export function useRayData(): RayData {

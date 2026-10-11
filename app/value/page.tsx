@@ -9,7 +9,9 @@ import { ARTIST_LABEL, MARKETS, marketArtists } from '../constants';
 import { useMarket } from '../lib/market';
 import MarketSwitch from '../components/MarketSwitch';
 import { Colophon, pickCall, CallPlate, daysUntil } from '../components/Terminal';
-import { useRayData, triggerFullLoad, retryFullLoad } from '../hooks/useRayData';
+import { useRayDataFirst, useHouseBaselines, triggerFullLoad, retryFullLoad } from '../hooks/useRayData';
+import { usePathname } from 'next/navigation';
+import { fsKeyOf } from '../lib/first-screen';
 import { loadLotPack, loadPageStats, markFallbackProjections, type LotPack, type PageStats, type SettledCallRow, type FlagOutcomes } from '../lib/page-data';
 import type { Backtest } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
@@ -57,7 +59,7 @@ import { recordLead, recordScope, RECORD_MIN_N } from '../lib/record-lead';
 import { medianOr } from '../lib/stats';
 import { gapRead, sleeperRead, valueFloor, GAP_CELL_GATE, type GapRead, type SleeperRead } from '../lib/lanes';
 import TriageBar from '../components/TriageBar';
-import { useUrlState, useLastVisit, passesTriage, isTriageActive, houseBaselines, TRIAGE_DEFAULTS, triageFromParams, triageToParams, WINDOWS, fmtCeiling, relaxTriage, type TriageFilters, type RelaxKey } from '../lib/feed-filters';
+import { useUrlState, useLastVisit, passesTriage, isTriageActive, TRIAGE_DEFAULTS, triageFromParams, triageToParams, WINDOWS, fmtCeiling, relaxTriage, type TriageFilters, type RelaxKey } from '../lib/feed-filters';
 import { CAT_LABEL, SUBS, MARKET_CATS } from '../lib/taxonomy';
 import { byPriority, spread, projectedCloseOf } from '../lib/priority';
 import { makerLineOf, labelLineOf } from '../lib/lot-labels';
@@ -140,7 +142,7 @@ type PulseRead =
   | { kind: 'plain'; text: React.ReactNode };
 
 function MarketPulse({ ray, activeKey, activeLabel, play }: {
-  ray: ReturnType<typeof useRayData>;
+  ray: ReturnType<typeof useRayDataFirst>;
   activeKey: string;
   activeLabel: string;
   play: boolean;
@@ -709,8 +711,13 @@ function OutcomeDistribution({ backtest }: { backtest: Backtest }) {
 export default function ValuePage() {
   // useRayData + sentinel: the cockpit/board/record all paint from phase 1;
   // the corpus loads only on approach to the settled tape or on modal open.
-  const ray = useRayData();
-  const { allLots, backtest, lastCrawl, loading, fullLoaded, fullError, fromCache, receipts } = ray;
+  // (perf W13) the cockpit, the call, the Flags and the Sleepers paint from
+  // the desk's first-screen slice (app/lib/first-screen: every Below-Market
+  // flag, every dead-room appraised lot, every gapOk lot — the exact rows
+  // those lanes read); the whole book replaces it. Counts over the whole
+  // live book ("of N live") print '—' until then (`partial`).
+  const ray = useRayDataFirst(fsKeyOf(usePathname()));
+  const { allLots, backtest, lastCrawl, loading, fullLoaded, fullError, fromCache, receipts, partial } = ray;
   const { market, setMarket } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const activeLabel = activeKey === 'all' ? 'collectible' : activeKey === 'tcg' ? 'TCG' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
@@ -779,7 +786,7 @@ export default function ValuePage() {
   const [triage, setTriage] = useUrlState<TriageFilters>(TRIAGE_DEFAULTS, triageFromParams, triageToParams);
   const prevVisitDay = useLastVisit();
   // a house's first-crawl flood is not "new" — read off the whole book, not the lanes
-  const baselines = useMemo(() => houseBaselines(allLots), [allLots]);
+  const baselines = useHouseBaselines(ray);
 
   // ── INPUT CRAFT — j/k walks every board row on the page, enter opens
   // (native on the flags <button>, handled on the lane rows), s saves.
@@ -962,13 +969,13 @@ export default function ValuePage() {
   const settled = useMemo<SettledCallRow[] | null>(() => {
     const pre = pageStats?.settled?.[activeKey];
     if (pre) return pre;
-    if (pageStats === undefined) return null;               // still answering
+    if (pageStats === undefined || partial) return null;    // still answering
     // an older data build: the same rule over the eager receipts tape
     const rows = (receipts?.rows || []) as unknown as SettledCallRow[];
     return markFallbackProjections(rows)
       .filter(r => !r.fb && r.r > 0 && (activeKey === 'all' || r.m === activeKey || mktSet.has(r.a)))
       .slice(0, 6);
-  }, [pageStats, activeKey, receipts, mktSet]);
+  }, [pageStats, activeKey, receipts, mktSet, partial]);
 
   // THE FLAGS, GRADED (Oct 11): did the flags that hammered beat the
   // estimate? The live accuracy ledger grades every flagged lot on the last
@@ -1006,7 +1013,8 @@ export default function ValuePage() {
   }, [backtest]);
   const tiers = (backtest as (Backtest & { flaggedTiers?: Record<string, { n: number; medianPerfPct: number }> }) | null)?.flaggedTiers;
 
-  const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
+  // the nav's per-maker live counts read the whole book: none while partial
+  const upcomingCounts = useMemo(() => (partial ? {} : getUpcomingCounts(allLots)), [allLots, partial]);
 
   // A market flip starts the rows over at the first page.
   // only on a real market FLIP — never on mount, or a shared ?cat= link
@@ -1252,7 +1260,7 @@ export default function ValuePage() {
       {
         k: 'Flags live',
         v: <CountUp to={deals.length} format={v => Math.round(v).toLocaleString()} animate={!fromCache} />,
-        sub: hasFlags ? <>of {liveLots.length.toLocaleString()} live in the book</> : <>abstaining — a blank beats a wrong number</>,
+        sub: hasFlags ? <>of {partial ? '—' : liveLots.length.toLocaleString()} live in the book</> : <>abstaining — a blank beats a wrong number</>,
       },
       {
         k: 'Median gap',
@@ -1272,7 +1280,10 @@ export default function ValuePage() {
         });
       }
     }
-    if (nextHammer) {
+    if (partial) {
+      // the soonest close over the whole live book: not known from a slice
+      out.push({ k: 'Next hammer', v: <span style={{ fontSize: 21 }}>—</span>, sub: '—' });
+    } else if (nextHammer) {
       const day = trueSaleDay(nextHammer);
       const dU = daysUntil(day);
       const closeMs = nextHammer.saleDateTime ? Date.parse(nextHammer.saleDateTime) - Date.now() : null;
@@ -1312,7 +1323,7 @@ export default function ValuePage() {
       });
     }
     return out;
-  }, [deals.length, hasFlags, liveLots.length, summary.medianGap, nextHammer, backtest, coverage, activeKey, activeLabel, fromCache, gapRows, sleeperRows.length, sleeperQueue]);
+  }, [deals.length, hasFlags, liveLots.length, summary.medianGap, nextHammer, backtest, coverage, activeKey, activeLabel, fromCache, gapRows, sleeperRows.length, sleeperQueue, partial]);
 
   return (
     <div className="ray-mobnav-pad terminal-shell" style={{
@@ -2088,6 +2099,7 @@ export default function ValuePage() {
                         · {formatPrice(summary.totalEst)} at estimate · {summary.artists} makers
                         {summary.soonest && <> · <span style={{ whiteSpace: 'nowrap' }}>first hammer {formatDate(trueSaleDay(summary.soonest.lot))}</span></>}
                       </>
+                    : partial ? <>The engine abstains rather than force a thin call · — live lots read in scope</>
                     : <>The engine abstains rather than force a thin call · {appraisedCount > 0 ? <>{appraisedCount.toLocaleString()} live lots read in scope</> : <>{liveLots.length.toLocaleString()} live lots in scope, none read yet</>}{nextHammer && <> · next hammer {formatDate(trueSaleDay(nextHammer))}</>}</>}
                 />
               </div>
@@ -2206,7 +2218,7 @@ export default function ValuePage() {
                    stated, the doors stay open, no apology, no coral */
                 <div className="vd-empty ray-enter">
                   <p>
-                    The engine abstains in the {activeLabel} market tonight — {appraisedCount > 0
+                    The engine abstains in the {activeLabel} market tonight — {partial ? <>— live lots read</> : appraisedCount > 0
                       ? <>{appraisedCount.toLocaleString()} live lots read, none clears the 1.3× flag bar</>
                       : <>none of its {liveLots.length.toLocaleString()} live lots carries a comps read yet</>}. A blank beats a wrong number.
                   </p>
@@ -2393,12 +2405,15 @@ export default function ValuePage() {
             )}
           </section>
 
-          {/* ── ROOM 2c · THE GAP ── */}
-          <GapAnnex rows={gapRowsView} total={gapRows.length} measured={gapMeasured} validated={gapValidated} receipts={receipts} activeKey={activeKey} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />
+          {/* ── ROOM 2c · THE GAP ── (its measurable inventory counts the whole
+              live book: the lane waits for it) */}
+          {!partial && <GapAnnex rows={gapRowsView} total={gapRows.length} measured={gapMeasured} validated={gapValidated} receipts={receipts} activeKey={activeKey} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />}
 
           {/* ── ROOM 2d · THE SLEEPERS ── */}
           <SleepersAnnex rows={sleeperRowsView} total={sleeperRows.length} queued={sleeperQueue} receipts={receipts} activeLabel={activeLabel} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />
 
+          {partial && <RayLoading />}
+          {!partial && (<>
           {/* ════ HOW THE DESK READS (Oct 9 r6: after the lanes — the explainer
               no longer stands between a reader and the board) — the cell grammar: split
               head (quiet kicker, light headline) over three patent-figure
@@ -2665,7 +2680,9 @@ export default function ValuePage() {
             </div>
           </section>
 
-          {modalLot && (
+          </>)}
+
+          {modalLot && !partial && (
             <ComparableModal
               lot={modalLot}
               allLots={marketLots}
