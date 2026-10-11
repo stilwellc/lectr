@@ -17,6 +17,7 @@ import { drillRowFor, drillSlugFor } from '../lib/submarkets';
 import { signedPct, dirOf } from './SubMarketDirectory';
 import { loadCompEvidence, evRowsToLots } from '../lib/comp-evidence';
 import { safeHref } from '../lib/safe-href';
+import { useLearnVisit } from '../lib/recs-signals';
 import { medianSorted } from '../lib/stats';
 import { calibratedBand, bandPathOf, type BandCalibration } from '../lib/value-band';
 import type { MarketData, Backtest } from '../hooks/useRayData';
@@ -348,6 +349,9 @@ export default function ComparableModal({
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+  // on-device memory (app/lib/recs-signals): opening comps leans "Lots you
+  // may like" toward this lot's kind — never sent anywhere
+  useLearnVisit('comps', lot.id, () => ({ lot }));
 
   // Opening comps is a full-corpus interaction: the sold pool the modal maps
   // (poolIds → allLots) lives in the phase-2 history. On the lean home lander

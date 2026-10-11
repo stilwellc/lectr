@@ -8,7 +8,6 @@ import MarketIcon from '../components/MarketIcon';
 import { useRayData } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { useSavedSearches } from '../lib/alerts';
-import { useAuth } from '../lib/account';
 import ArtistNav from '../components/ArtistNav';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import { formatDate, getUpcomingCounts, localToday } from '../utils';
@@ -23,7 +22,7 @@ import LotBrowser from '../components/LotBrowser';
 import { FEED_DEFAULTS, type FeedFilters } from '../components/FeedToolbar';
 import { useLastVisit, passesTriage, houseBaselines, isTriageActive, TRIAGE_DEFAULTS, type TriageFilters } from '../lib/feed-filters';
 import { taxonOf, SUBS, SPORTS, MARKET_CATS, type CatKey } from '../lib/taxonomy';
-import { useFollows, catFollow, entityFollow, affinityOf } from '../lib/follows';
+import { useFollows, catFollow, entityFollow, makerFollow, affinityOf } from '../lib/follows';
 import { isFlagged } from '../lib/flags';
 import { makerId, makerSlugOf, subId, subPartsOf } from '../lib/entity/model';
 import { NAME_HEAD, COLLECTION_CATS, COLLECTION_MARKETS, SUBJECT_MARKETS, isEntityFollowKey } from '../lib/entity/kinds';
@@ -145,8 +144,7 @@ export default function MakersPage() {
   const search = useMemo(() => viewSearch(view), [view]);
 
   // follows ride the saved-search plumbing (FollowButton's exact semantics)
-  const { authEnabled, user, openLogin } = useAuth();
-  const { searches, save: saveSearch, remove: removeSearch } = useSavedSearches();
+  const { searches } = useSavedSearches();
   const { follows: allFollows, toggle: toggleCatFollow } = useFollows();
   const followedSet = useMemo(() => {
     const s = new Set<string>();
@@ -483,11 +481,10 @@ export default function MakersPage() {
     if (sp) { void toggleCatFollow(catFollow(sp.cat as CatKey, sp.sub)); return; }
     // (r7) a subject / set row follows its entity id — signed out too (useFollows)
     if (isEntityFollowKey(key)) { void toggleCatFollow(entityFollow(key, label)); return; }
-    if (!user) { openLogin('follow'); return; }
-    const existing = searches.find(s => (s.query as { player?: string }).player === key);
-    if (existing) void removeSearch(existing.id);
-    else void saveSearch(`Following ${label}`, { player: key, playerName: label });
-  }, [user, openLogin, searches, removeSearch, saveSearch, toggleCatFollow]);
+    // (Oct 11) a maker / player too: on the device signed out, the account's
+    // { player } row signed in — useFollows carries one into the other
+    void toggleCatFollow(makerFollow(key, label));
+  }, [toggleCatFollow]);
   const listTop = useRef<HTMLDivElement | null>(null);
   const toBody = useCallback(() => {
     // the body swaps under the reader: bring its top under the sticky bar
@@ -564,7 +561,7 @@ export default function MakersPage() {
           e.preventDefault();
           onToggleCompare(row.id);
         } else {
-          if (!authEnabled || !row.follow) return;
+          if (!row.follow) return;
           e.preventDefault();
           onToggleFollow(row.follow, row.label);
         }
@@ -581,7 +578,7 @@ export default function MakersPage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onToggleCompare, onToggleFollow, authEnabled]);
+  }, [onToggleCompare, onToggleFollow]);
 
   // ── FLIP — board-relative, same-id-set only, forced reflow before reset ──
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -741,8 +738,7 @@ export default function MakersPage() {
         label="Nothing followed yet"
         body={<>
           The Following lens shows only the names you follow, with what&rsquo;s new for them since your last visit.
-          {' '}Follow a Pokémon, film, set, team or category with the + on its row &mdash; no account needed
-          {authEnabled && !user ? <>; <button type="button" className="mk-reset" onClick={() => openLogin('follow')}>sign in</button> to follow makers and players too</> : null}.
+          {' '}Follow a maker, player, Pokémon, film, set, team or category with the + on its row &mdash; no account needed.
           {' '}<button type="button" className="mk-reset" onClick={() => set({ fw: false })}>See every name</button>
         </>}
       />
@@ -1009,7 +1005,7 @@ export default function MakersPage() {
                         <EntityRow
                           key={r.id}
                           r={r} soldMax={g.soldMax} isOpen={open === r.id} cols={cols}
-                          isSel={compare.includes(r.id)} isFollowed={!!r.follow && followedSet.has(r.follow)} authEnabled={authEnabled}
+                          isSel={compare.includes(r.id)} isFollowed={!!r.follow && followedSet.has(r.follow)} authEnabled /* (Oct 11) every follow works signed out — on the device */
                           liveSort={open === r.id ? view.ls : 'matters'} search={open === r.id ? search : ''}
                           onToggleOpen={onToggleOpen} onToggleCompare={onToggleCompare} onToggleFollow={onToggleFollow}
                           onLiveSort={onLiveSort} onSeeLots={onSeeLots}

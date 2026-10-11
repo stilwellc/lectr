@@ -20,16 +20,27 @@ import HeroChart from '../preview/terminal/HeroChart';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import CountUp from '../components/CountUp';
 import Masthead, { Accent } from '../components/Masthead';
-import AlertsInbox from '../components/AlertsInbox';
 import Flick from '../components/Flick';
 import CloseClock from '../components/CloseClock';
-import { AwayMark, ReadsMark, WatchMark, RecordMark, CollectionMark, TapeMark, ArchiveMark, HorizonMark, RankMark } from '../components/marks';
+import { WatchMark, RecordMark, CollectionMark, TapeMark, ArchiveMark, HorizonMark, RankMark, SignalMark } from '../components/marks';
 import { FeedRow, belowSignalOf, feedTone } from '../components/LotBrowser';
+import { useReturnLoop, type ReturnLoop } from '../components/PickStrips';
+import { useLastVisit, houseBaselines } from '../lib/feed-filters';
 import ComparableModal from '../components/ComparableModal';
 import { useLotModal } from '../lib/use-lot-modal';
-import { recommend, recNote, recDepth, type Taste } from '../lib/recs';
+import { recommend, recNote, recDepth, type Taste, type Rec } from '../lib/recs';
+import { closeMsOf } from '../lib/priority';
+import { useFollows } from '../lib/follows';
 import { useTaste } from '../lib/use-recs';
-import { CellGrid, Cell, ColorCell, FigPools, FigTape } from '../components/cells';
+import { PickFeedback, UndoSeat, usePickFeedback, withUndoSeat } from '../components/PickFeedback';
+import QuickStart from '../components/QuickStart';
+import { usePricePref, priceText } from '../lib/interests';
+import { CellGrid, Cell, ColorCell } from '../components/cells';
+import { HelpChip } from './help';
+import { PillRail, GutterIndex, useHashLanding, type RailItem } from './rail';
+import TodayBand from './today';
+import YourSignals from './signals';
+import PickMenu from './pickmenu';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, median, overEstimatePct, isOnBlock } from '../utils';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
 import { makerLineOf, labelLineOf, drillLabelOf } from '../lib/lot-labels';
@@ -160,18 +171,6 @@ function Term({ k, children }: { k: keyof typeof GLOSSARY; children: React.React
   );
 }
 
-/** the "?" chip + how-to-read strip. The strip is a full-width flex child,
-    so inside the flex-wrap room heads it lands on its own line. */
-function HelpChip({ name, children }: { name: string; children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button type="button" className="ck-helpbtn" aria-expanded={open}
-        aria-label={`How to read ${name}`} onClick={() => setOpen(v => !v)}>?</button>
-      {open && <div className="ck-help">{children}</div>}
-    </>
-  );
-}
 
 /** the at-save call rendered honestly: legacy saves lost direction → neutral */
 function CallCell({ meta }: { meta: SavedMeta | undefined }) {
@@ -385,12 +384,12 @@ function LedgerGate({ onState }: { onState: (s: { ledger: Map<string, LedgerEntr
    searched; each pick prints its reason on the note line the feed's cards
    and rows already carry. Desktop = the feed's cards, phone = the feed's
    rows. The same taste drives home's For-you tab, so the two agree. A
-   reader with nothing to go on is told so — never shown fake picks. ══ */
+   reader with nothing to go on is told so — never shown fake picks.
+   (Oct 11 redesign) the deal is computed once at the page (useDeal) so the
+   Today band, the rail's count and this room read the same picks. ══ */
 const RECS_MAX = 24;
-function RecsRoom({ book, compLots, taste, ready, lastCrawl, isSaved, onToggleSave, signedOut = false }: {
-  book: AuctionLot[]; compLots: AuctionLot[]; taste: Taste; ready: boolean; lastCrawl?: string;
-  isSaved: (id: string) => boolean; onToggleSave: (id: string, lot?: AuctionLot) => void; signedOut?: boolean;
-}) {
+interface Deal { pool: AuctionLot[]; recs: Rec<AuctionLot>[]; loop: ReturnLoop | null }
+function useDeal(book: AuctionLot[], taste: Taste, ready: boolean): Deal {
   // the block (isOnBlock — every live count's pool), re-cut per book
   const pool = useMemo(() => {
     const today = localToday(), now = Date.now();
@@ -398,6 +397,23 @@ function RecsRoom({ book, compLots, taste, ready, lastCrawl, isSaved, onToggleSa
   }, [book]);
   // (r9) a narrow taste (one followed maker) deals deeper — Show more walks it
   const recs = useMemo(() => (ready && taste.seeds.length ? recommend(pool, taste, { n: Math.max(RECS_MAX, recDepth(taste)) }) : []), [ready, pool, taste]);
+  // THE RETURN LOOP — what is new in your picks since you were last here,
+  // and what of them closes tonight (app/components/PickStrips → Today band)
+  const prevVisitDay = useLastVisit();
+  const baselines = useMemo(() => houseBaselines(book), [book]);
+  const loop = useReturnLoop(pool, taste, { ready, prevVisitDay, baselines });
+  return { pool, recs, loop };
+}
+
+function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onToggleSave, signedOut = false }: {
+  book: AuctionLot[]; deal: Deal; compLots: AuctionLot[]; taste: Taste; ready: boolean; lastCrawl?: string;
+  isSaved: (id: string) => boolean; onToggleSave: (id: string, lot?: AuctionLot) => void; signedOut?: boolean;
+}) {
+  const { pool, recs } = deal;
+  // (Oct 11) the reader's stated price range (quick start, app/lib/interests)
+  // rides inside the taste as a strong band (recs' statedFit) — named here only
+  const pricePref = usePricePref();
+  const [editing, setEditing] = useState(false);
   const below = useMemo(() => belowSignalOf(recs.map(r => r.lot), compLots), [recs, compLots]);
   const [narrow, setNarrow] = useState(false);
   useEffect(() => {
@@ -412,76 +428,115 @@ function RecsRoom({ book, compLots, taste, ready, lastCrawl, isSaved, onToggleSa
   const [shown, setShown] = useState<number | null>(null);
   const visible = shown ?? page;
   const [openLot, setOpenLot] = useLotModal<AuctionLot>();
+  // "More like this / Not for me" — this device only (app/lib/recs-signals)
+  const fb = usePickFeedback();
 
-  if (!ready) return null;
   const c = taste.counts;
   const from = [
     c.saved ? `${c.saved} ${c.saved === 1 ? 'save' : 'saves'}` : null,
     c.owned ? `${c.owned} owned` : null,
     c.follows ? `${c.follows} ${c.follows === 1 ? 'follow' : 'follows'}` : null,
     c.searches ? `${c.searches} saved ${c.searches === 1 ? 'search' : 'searches'}` : null,
+    c.signals ? `${c.signals} ${c.signals === 1 ? 'look' : 'looks'} here` : null,
   ].filter(Boolean).join(', ');
-  const cold = taste.seeds.length === 0;
+  const cold = ready && taste.seeds.length === 0;
+  // a pick you just asked "More like this" of keeps its seat: the list re-reads
+  // at once and the new kin would otherwise push it off the screen under
+  // your finger (the lit pill must stay where you pressed it)
+  const lastShown = useRef<Rec<AuctionLot>[]>([]);
+  const shownList = useMemo(() => {
+    const base = recs.slice(0, visible);
+    const keep = lastShown.current.map((r, i) => ({ r, i })).filter(x => fb.marks.get(x.r.lot.id) === 'more');
+    if (!keep.length) return base;
+    const out = base.filter(r => !keep.some(k => k.r.lot.id === r.lot.id));
+    for (const k of keep) out.splice(Math.min(k.i, out.length), 0, recs.find(x => x.lot.id === k.r.lot.id) ?? k.r);
+    return out.slice(0, Math.max(visible, keep.length));
+  }, [recs, visible, fb.marks]);
+  useEffect(() => { lastShown.current = shownList; }, [shownList]);
+  const seats = withUndoSeat(shownList, fb.undo);
 
   return (
-    <section id="for-you" className="ray-saved-section rail ray-enter" aria-label="Lots you may like">
+    <section id="for-you" className="ray-saved-section rail ray-enter ck-foryou" aria-label="Lots you may like">
       <div className="ns-plate" style={{ paddingTop: 18 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px 14px', flexWrap: 'wrap', marginBottom: cold ? 4 : 16 }}>
+        <div className="ck-room-head" style={{ marginBottom: cold ? 4 : 16 }}>
           <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><RankMark size={17} /></span>Lots you may like</h2>
-          {!cold && (
-            <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-              {recs.length > 0 ? <>{recs.length} picked</> : <>nothing ties yet</>} from {pool.length.toLocaleString()} live lots · read from your {from}
-            </span>
-          )}
           <HelpChip name="Lots you may like">
             Every lot on the block is read against what you <b>own</b>, <b>save</b>, <b>follow</b> and <b>search</b> — in
             that order of weight, recent saves louder than old ones. A lot qualifies only through a real tie: the same
             maker, player, Pokémon or subject; the same card in another grade; the same franchise or model line; or,
             inside one category, the same era, grader or language at a price like yours. Then the strongest ties that
-            matter most and close soonest lead, spread so no one name or sale fills the list. Lots on your desk never
-            come back here. The line under each lot says why it is here; the picks re-read with every crawl and every
-            save.
+            matter most and close soonest lead, spread so no one name, sale or single signal fills the list. Lots at the
+            prices you save and own — or the range you set in Tune — lead lots far from them, and a lot the engine reads
+            below market is lifted and says so. When a name you follow has only a few lots live, the list goes on to its
+            nearest kin — another Pokémon, another player of the same sport and era — and each such pick says that is why
+            it is here. Lots on your desk never come back here. The line under each lot says why it is here; the picks
+            re-read with every crawl and every save. Below all of that, what you open and search on this device leans the
+            list a little, and More like this / Not for me steer it at once — kept in this browser only, never sent.
+            Everything that tunes the list is under <a href="#signals" className="ck-away-link">Your signals</a>.
           </HelpChip>
+          {ready && !cold && !editing && (
+            <button type="button" className="ray-toolbar-pill ck-tune" aria-haspopup="dialog" onClick={() => setEditing(true)}>Tune</button>
+          )}
+          {ready && !cold && (
+            <span className="ck-room-sub ck-room-subline">
+              {recs.length > 0 ? <>{recs.length} picked</> : <>nothing ties yet</>}<span className="ck-wide"> from {pool.length.toLocaleString()} live lots</span>
+              {pricePref ? <> · {priceText(pricePref)}</> : null} · <span className="ck-wide">tuning </span>from {from}
+            </span>
+          )}
         </div>
 
-        {cold ? (
-          <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: '10px 0 0', maxWidth: 640, lineHeight: 1.55 }}>
-            Nothing to go on yet, so nothing is picked.{' '}
-            {signedOut
-              ? <>Follow a category, a house, or a Pokémon, film or other subject — no account needed — and lots like them land here; sign in to follow makers and players, and the lots you save shape it too.</>
-              : <>Save a lot, mark one you won, or follow a maker, player, category or house, and lots like them land here.</>}
-            {' '}<Link href="/makers" className="ck-away-link">Find something to follow</Link>
-          </p>
-        ) : recs.length === 0 ? (
-          <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: 0, maxWidth: 640, lineHeight: 1.55 }}>
-            Nothing on the block ties to your desk right now — no live lot shares a name, card, franchise or close
-            enough cut with what you hold. New lots land with every crawl.
-          </p>
+        {!ready ? (
+          <p className="ck-sig-note" aria-busy="true">Reading the block against your desk…</p>
+        ) : cold ? (
+          <QuickStart book={book} mode="cold" surface="profile" />
+        ) : editing ? (
+          <div style={{ marginBottom: 20 }}>
+            <QuickStart book={book} mode="edit" surface="profile" onClose={() => setEditing(false)} />
+          </div>
+        ) : null}
+        {!ready || cold ? null : recs.length === 0 ? (
+          <div>
+            <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: 0, maxWidth: 640, lineHeight: 1.55 }}>
+              Nothing on the block ties to your desk right now — no live lot shares a name, card, franchise or close
+              enough cut with what you hold. New lots land with every crawl.
+            </p>
+            {!editing && <button type="button" className="ray-toolbar-pill" style={{ marginTop: 14 }} onClick={() => setEditing(true)}>Add a follow</button>}
+          </div>
         ) : narrow ? (
           <div>
-            {recs.slice(0, visible).map(r => (
-              <FeedRow key={r.lot.id} lot={r.lot} onOpen={() => setOpenLot(r.lot)}
-                tone={feedTone(r.lot, below.ids, below.hasSig)} note={recNote(r, { short: true })} />
-            ))}
+            {seats.map((r, i) => ('undoSeat' in r
+              ? <UndoSeat key={`undo-${r.undoSeat.id}`} undo={r.undoSeat} onUndo={fb.undoIt} row />
+              : (
+                <div key={r.lot.id} className="ck-pickrow" data-pick>
+                  <FeedRow lot={r.lot} onOpen={() => setOpenLot(r.lot)}
+                    tone={feedTone(r.lot, below.ids, below.hasSig)} note={recNote(r, { short: true })} />
+                  <PickMenu lot={r.lot} mark={fb.marks.get(r.lot.id)} onMark={fb.mark} at={i} />
+                </div>
+              )))}
           </div>
         ) : (
           <div className="ray-saved-grid">
-            {recs.slice(0, visible).map((r, i) => (
-              <div key={r.lot.id} className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms` } as React.CSSProperties}>
+            {seats.map((r, i) => ('undoSeat' in r
+              ? <UndoSeat key={`undo-${r.undoSeat.id}`} undo={r.undoSeat} onUndo={fb.undoIt} />
+              : (
+              // the card fills its row; the pick's feedback rides under it
+              <div key={r.lot.id} data-pick className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms`, display: 'grid', gridTemplateRows: 'minmax(0, 1fr) auto' } as React.CSSProperties}>
                 <LotCard lot={r.lot} showArtist allLots={compLots} saved={isSaved(r.lot.id)} onToggleSave={onToggleSave}
                   lastCrawl={lastCrawl} note={recNote(r)} />
+                <PickFeedback lot={r.lot} mark={fb.marks.get(r.lot.id)} onMark={fb.mark} at={i} />
               </div>
-            ))}
+            )))}
           </div>
         )}
 
-        {visible < recs.length && (
+        {ready && visible < recs.length && (
           <div style={{ display: 'flex', justifyContent: 'center', marginTop: 28 }}>
             <button className="ray-show-more" onClick={() => setShown(Math.min(recs.length, visible + page))}>
               Show more ({recs.length - visible} more {recs.length - visible === 1 ? 'pick' : 'picks'})
             </button>
           </div>
         )}
+        {signedOut && null}
       </div>
       {openLot && <ComparableModal lot={openLot} allLots={compLots} onClose={() => setOpenLot(null)} />}
     </section>
@@ -1259,87 +1314,187 @@ export default function SavedPage() {
   // the room waits for every save to resolve (or the corpus to answer), so a
   // settled watch reads as its row, not its snapshot — no reshuffle on arrival
   const recsReady = !loading && tasteReady && (!deskNeedsCorpus || fullLoaded || fullError || savedLots.length >= savedIds.length);
+  // ONE deal per page: the Today band, the rail's count and the room agree
+  const deal = useDeal(allLots, recTaste, recsReady);
   const recsRoom = (signedOut = false) => (
-    <RecsRoom book={allLots} compLots={allLots} taste={recTaste} ready={recsReady} lastCrawl={lastCrawl || undefined}
+    <RecsRoom book={allLots} deal={deal} compLots={allLots} taste={recTaste} ready={recsReady} lastCrawl={lastCrawl || undefined}
       isSaved={isSaved} onToggleSave={toggle} signedOut={signedOut} />
   );
 
   // the one settled count every surface prints (Settled head, the cell room)
   const settledCount = sold.length + soldOrphans.length;
 
+  const hasDeskDetails = summary.totalEst > 0 || changes.moved > 0 || changes.newBids > 0 || taste.length > 0 || !!tenure || !!user;
+  const [deskDetails, setDeskDetails] = useState(false);
   const deskKicker = givenName ? `${givenName}’s desk` : 'My desk';
+
+  // dev-only preview of the signed-out page (local mode has no auth); the
+  // NODE_ENV check folds away in production builds
+  const [previewOut, setPreviewOut] = useState(false);
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    try { setPreviewOut(new URLSearchParams(window.location.search).get('preview') === 'signedout'); } catch { /* ignore */ }
+  }, []);
+  const signedOutView = (authEnabled && authReady && !user) || previewOut;
+
+  /* ── TODAY: watches that hammer today, soonest first ── */
+  const closingWatches = useMemo(() => upcoming
+    .filter(l => daysUntil(l.saleDate) === 0)
+    .sort((a, b) => (closeMsOf(a) ?? Infinity) - (closeMsOf(b) ?? Infinity)), [upcoming]);
+  /* ── the while-you-were-away facts, as the Today band's header line ── */
+  const awayLine = (sinceLast || unseenAlerts > 0 || summary.closesToday > 0 || unclaimedWins > 0) ? (
+    <>
+      {sinceLast && (
+        <>
+          {sinceLast.n} watched {sinceLast.n === 1 ? 'lot' : 'lots'} settled
+          {sinceLast.med != null && (
+            <> · your {sinceLast.n === 1 ? 'call went' : 'calls went'}{' '}
+              <b style={{ color: sinceLast.med > 0 ? 'var(--color-up)' : sinceLast.med < 0 ? 'var(--color-down-text)' : 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>
+                {fmtSignedPct(Math.round(sinceLast.med))}
+              </b>{' '}
+              vs estimate
+            </>
+          )}
+        </>
+      )}
+      {unseenAlerts > 0 && (
+        <>{sinceLast ? ' · ' : ''}<a href="#inbox" className="ck-away-link">{unseenAlerts} new {unseenAlerts === 1 ? 'match' : 'matches'} in your inbox</a></>
+      )}
+      {summary.closesToday > 0 && (
+        <>{(sinceLast || unseenAlerts > 0) ? ' · ' : ''}{summary.closesToday} {summary.closesToday === 1 ? 'watch closes' : 'watches close'} today</>
+      )}
+      {unclaimedWins > 0 && (
+        <>{(sinceLast || unseenAlerts > 0 || summary.closesToday > 0) ? ' · ' : ''}<a href="#settled" className="ck-away-link">{unclaimedWins} settled {unclaimedWins === 1 ? 'win' : 'wins'} unclaimed — won any?</a></>
+      )}
+      {sinceLast && <> · <a href="#settled" className="ck-away-go">See what happened <Flick size={9} /></a></>}
+    </>
+  ) : null;
+
+  /* ── THE RAIL — one item per section that renders; counts replace the
+     old gauge line's duplicate figures ── */
+  const { follows: myFollows } = useFollows();
+  const historyCount = settledCount + other.length + goneOrphans.length;
+  const hasRecordRoom = !!(record && record.med != null) || collection.rows.length > 0 || settledCount > 0;
+  const deskView = !signedOutView && !(savedLots.length === 0 && orphanIds.length === 0);
+  const railItems: RailItem[] = useMemo(() => {
+    const r: RailItem[] = [];
+    r.push({ id: 'for-you', label: 'For you', mark: <RankMark size={15} />, count: deal.recs.length || undefined });
+    if (deskView && upcoming.length > 0) r.push({ id: 'watching', label: 'Watching', mark: <WatchMark size={15} />, count: upcoming.length });
+    r.push({ id: 'signals', label: 'Signals', mark: <SignalMark size={15} />, count: myFollows.length || undefined, dot: unseenAlerts > 0 });
+    if (deskView && hasRecordRoom) {
+      const med = record && record.med != null ? Math.round(record.med) : null;
+      r.push({ id: 'record', label: 'Record', mark: <RecordMark size={15} />, count: med != null ? fmtSignedPct(med) : undefined, tone: med != null && med > 0 ? 'up' : med != null && med < 0 ? 'down' : undefined });
+    }
+    if (deskView && collection.rows.length > 0) r.push({ id: 'collection', label: 'Collection', mark: <CollectionMark size={15} />, count: formatPrice(collection.totalAppraised) });
+    if (deskView && (historyCount > 0 || orphanIds.length > 0)) r.push({ id: 'history', label: 'History', mark: <TapeMark size={15} />, count: historyCount || undefined });
+    return r;
+  }, [deal.recs.length, deskView, upcoming.length, myFollows.length, unseenAlerts, hasRecordRoom, record, collection, historyCount, orphanIds.length]);
+
+  useHashLanding(recsReady && !loading && authReady && savedReady && (!deskNeedsCorpus || fullLoaded || !!fullError));
+
+  /* ── ACCOUNT — who is signed in, where the desk lives, sign out ── */
+  const accountStrip = (
+    <section id="account" className="rail ck-account" aria-label="Account">
+      <div className="ck-account-in">
+        <span className="kicker">Account</span>
+        {authEnabled && user ? (
+          <span>
+            {user.email || 'Signed in'} · your desk syncs to your account ·{' '}
+            <button type="button" className="ck-warn-btn ck-account-btn" onClick={() => signOut()}>Sign out</button>
+          </span>
+        ) : signedOutView ? (
+          <span>
+            Not signed in — follows, interests and what this device learned stay in this browser ·{' '}
+            <button type="button" className="ck-warn-btn ck-account-btn" onClick={() => signInWithGoogle()}>Sign in with Google</button>
+          </span>
+        ) : (
+          <span>Saved on this device</span>
+        )}
+        <a href="#on-device" className="ck-away-link">Clear on-device signals</a>
+      </div>
+    </section>
+  );
+
+  // the ghost desk — what this page becomes, before it has data
+  const ghost = (
+    <div className="ck-ghost" aria-hidden>
+      <div className="ck-ghost-row"><span className="kicker">Watching</span><span>your live lots · signals + bids tracked to the hammer</span></div>
+      <div className="ck-ghost-row"><span className="kicker">Your record</span><span>every settled watch judged vs its estimate — your eye, measured</span></div>
+      <div className="ck-ghost-row"><span className="kicker">Collection</span><span>the pieces you own, appraised against the live market nightly</span></div>
+    </div>
+  );
 
   const emptyState = (
     <>
-      <section className="rail ray-enter" style={{ paddingTop: 24 }}>
+      <section id="desk" className="rail ray-enter ck-desk" style={{ paddingTop: 24 }}>
         <Masthead
           kicker={deskKicker}
           serial={lastCrawl || undefined}
           title={<>Your desk at <Accent>the auction</Accent>.</>}
           sub="Bookmark a lot anywhere on lectr and it tracks here to the hammer — comps, signals, your record once it settles, your collection when you win."
         />
-        {/* the ghost desk — what this page becomes, before it has data */}
-        <div className="ck-ghost ray-enter" aria-hidden>
-          <div className="ck-ghost-row"><span className="kicker">Watching</span><span>your live lots · signals + bids tracked to the hammer</span></div>
-          <div className="ck-ghost-row"><span className="kicker">Your record</span><span>every settled watch judged vs its estimate — your eye, measured</span></div>
-          <div className="ck-ghost-row"><span className="kicker">Collection</span><span>the pieces you own, appraised against the live market nightly</span></div>
-        </div>
-        <div className="ray-enter" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', padding: '26px 0 64px' }}>
-          <Link href="/value" className="ray-call-btn ray-call-btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
-            Start with today&rsquo;s below-market lots
-          </Link>
-          <Link href="/" className="ray-call-btn ray-call-btn-quiet" style={{ textDecoration: 'none', display: 'inline-block' }}>
-            Browse the markets
-          </Link>
+      </section>
+      <PillRail items={railItems} />
+      <TodayBand loop={deal.loop} closingWatches={[]} reads={[]} away={unseenAlerts > 0 ? awayLine : null} />
+      {recsRoom()}
+      <YourSignals book={allLots} signedOut={false} />
+      <section className="rail ray-enter" style={{ paddingTop: 34 }}>
+        <div className="ns-plate" style={{ paddingTop: 18 }}>
+          <h2 className="ray-h2" style={{ margin: 0 }}>What else this page becomes</h2>
+          {ghost}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', padding: '26px 0 24px' }}>
+            <Link href="/value" className="ray-call-btn ray-call-btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
+              Start with today&rsquo;s below-market lots
+            </Link>
+            <Link href="/" className="ray-call-btn ray-call-btn-quiet" style={{ textDecoration: 'none', display: 'inline-block' }}>
+              Browse the markets
+            </Link>
+          </div>
         </div>
       </section>
-      {recsRoom()}
-      <AlertsInbox />
+      {accountStrip}
     </>
   );
 
   return (
-    <div className="terminal-shell" style={{ minHeight: '100vh', fontFamily: 'var(--font-sans), sans-serif' }}>
+    <div className="terminal-shell ck-page" style={{ minHeight: '100vh', fontFamily: 'var(--font-sans), sans-serif' }}>
       <ArtistNav activeSlug="saved" savedCount={badgeCount} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
+      {/* the left-gutter index (≥1160px) — fixed, so it sits outside the
+          entrance wrapper's transforms */}
+      {!(loading || !authReady || !savedReady) || signedOutView ? <GutterIndex items={railItems} /> : null}
 
-      {authEnabled && authReady && user && (
-        <div className="rail" style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 14 }}>
-          <button
-            className="ray-call-btn ray-call-btn-quiet"
-            style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', fontSize: 12.5, padding: '4px 0', minHeight: 44 }}
-            onClick={() => signOut()}
-          >
-            {user.email || 'account'} · Sign out
-          </button>
-        </div>
-      )}
-
-      {authEnabled && authReady && !user ? (
+      {signedOutView ? (
         <RayEntrance animate>
-          <section className="rail ray-enter" style={{ paddingTop: 24 }}>
+          <section id="desk" className="rail ray-enter ck-desk" style={{ paddingTop: 24 }}>
             <Masthead
               kicker="My desk"
               title={<>Your desk at <Accent>the auction</Accent>.</>}
-              sub="Watch lots to the hammer, keep your track record, and hold your collection against the engine’s live appraisal. Private to you, synced everywhere."
+              sub="Tell lectr what you collect and live lots tied to it land below — no account needed."
             />
           </section>
+          <PillRail items={railItems} />
+          <TodayBand loop={deal.loop} closingWatches={[]} reads={[]} away={null} />
+          {recsRoom(true)}
+          {/* the slim sign-in line — after value, never before it */}
           <section className="rail ray-enter">
-            {/* the ghost desk — the signed-out visitor sees what this becomes */}
-            <div className="ck-ghost" aria-hidden>
-              <div className="ck-ghost-row"><span className="kicker">Watching</span><span>your live lots · signals + bids tracked to the hammer</span></div>
-              <div className="ck-ghost-row"><span className="kicker">Your record</span><span>every settled watch judged vs its estimate — your eye, measured</span></div>
-              <div className="ck-ghost-row"><span className="kicker">Collection</span><span>the pieces you own, appraised against the live market nightly</span></div>
+            <div className="ck-signin">
+              <button className="ray-call-btn ray-call-btn-primary" style={{ border: 'none', cursor: 'pointer' }} onClick={() => signInWithGoogle()}>
+                Sign in with Google
+              </button>
+              <span>to keep this everywhere — your follows carry over. Free · one tap · nothing else on lectr is gated.</span>
             </div>
           </section>
-          <div className="rail ray-enter" style={{ paddingBlock: '26px 72px' }}>
-            <button className="ray-call-btn ray-call-btn-primary" style={{ border: 'none', cursor: 'pointer' }} onClick={() => signInWithGoogle()}>
-              Sign in with Google
-            </button>
-            <p style={{ fontSize: 12.5, color: 'var(--color-text-faint)', margin: '14px 0 0' }}>
-              Free · one tap · nothing else on lectr is gated.
-            </p>
-          </div>
-          {recsRoom(true)}
+          <YourSignals book={allLots} signedOut />
+          <section className="rail ray-enter" style={{ paddingTop: 34, paddingBottom: 8 }}>
+            <div className="ns-plate" style={{ paddingTop: 18 }}>
+              <div className="ns-split" style={{ marginBottom: 6 }}>
+                <h2 className="ray-h2" style={{ margin: 0 }}>What else this page becomes</h2>
+                <p>Watch lots to the hammer, keep your track record, and hold your collection against the engine&rsquo;s live appraisal. Private to you, synced everywhere.</p>
+              </div>
+              {ghost}
+            </div>
+          </section>
+          {accountStrip}
         </RayEntrance>
       ) : loading || !authReady || !savedReady ? (
         <RayLoading />
@@ -1362,7 +1517,9 @@ export default function SavedPage() {
         <RayEntrance animate={!fromCache}>{emptyState}</RayEntrance>
       ) : (
         <RayEntrance animate={!fromCache}>
-          <section className="rail ray-enter" style={{ paddingTop: 24 }}>
+          {/* ══ 0 · THE MASTHEAD — compressed: title + one sub-line; the rest
+              of the old sub-line lives in Desk details ══ */}
+          <section id="desk" className="rail ray-enter ck-desk" style={{ paddingTop: 24 }}>
             <Masthead
               kicker={deskKicker}
               serial={lastCrawl || undefined}
@@ -1396,9 +1553,6 @@ export default function SavedPage() {
                       {' '}·{' '}
                     </>
                   )}
-                  {summary.totalEst > 0 && (
-                    <>at estimate midpoint · {summary.priced} of {upcoming.length} lots priced · </>
-                  )}
                   {upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}
                   {summary.flagged > 0 && (
                     <>
@@ -1409,18 +1563,34 @@ export default function SavedPage() {
                       </b>
                     </>
                   )}
+                  {hasDeskDetails && (
+                    <>
+                      {' '}·{' '}
+                      <button type="button" className="ck-deskdetails-btn" aria-expanded={deskDetails} aria-controls="desk-details"
+                        onClick={() => setDeskDetails(v => !v)}>Desk details</button>
+                    </>
+                  )}
+                </>
+              }
+            />
+            {/* the rest of the old sub-line — coverage, moves, taste, tenure */}
+            {hasDeskDetails && deskDetails && (
+              <div className="ck-deskdetails" id="desk-details">
+                <p>
+                  {summary.totalEst > 0 && <>{formatPrice(summary.totalEst)} at estimate midpoint · {summary.priced} of {upcoming.length} lots priced</>}
                   {(changes.moved > 0 || changes.newBids > 0) && (
                     <>
-                      {' '}· since you saved
+                      {summary.totalEst > 0 ? ' · ' : ''}since you saved
                       {changes.moved > 0 && <> · {changes.moved} {changes.moved === 1 ? 'signal' : 'signals'} moved</>}
                       {changes.newBids > 0 && <> · {changes.newBids} new {changes.newBids === 1 ? 'bid' : 'bids'}</>}
                     </>
                   )}
                   {taste.length > 0 && <> · you watch {taste.join(' · ')}</>}
                   {tenure && <> · since {tenure}</>}
-                </>
-              }
-            />
+                  {authEnabled && user && <> · signed in as {user.email || 'you'} · <a href="#account" className="ck-away-link">Account</a></>}
+                </p>
+              </div>
+            )}
 
             {/* partial phase-2 failure — say so where the data would be */}
             {partialLoadFailed && (
@@ -1433,96 +1603,15 @@ export default function SavedPage() {
                 <button className="ck-warn-btn" onClick={() => retryFullLoad()}>Try again</button>
               </div>
             )}
-
-            {/* ── 1 · WHILE YOU WERE AWAY ── */}
-            {(sinceLast || unseenAlerts > 0 || summary.closesToday > 0 || unclaimedWins > 0) && (
-              <div className="ck-away ray-enter" role="status">
-                <span className="kicker"><span className="ray-sect-mark" aria-hidden><AwayMark size={14} /></span>While you were away</span>
-                <span className="ck-away-line">
-                  {sinceLast && (
-                    <>
-                      {sinceLast.n} watched {sinceLast.n === 1 ? 'lot' : 'lots'} settled
-                      {sinceLast.med != null && (
-                        <> · your {sinceLast.n === 1 ? 'call went' : 'calls went'}{' '}
-                          <b style={{ color: sinceLast.med > 0 ? 'var(--color-up)' : sinceLast.med < 0 ? 'var(--color-down-text)' : 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>
-                            {fmtSignedPct(Math.round(sinceLast.med))}
-                          </b>{' '}
-                          vs estimate
-                        </>
-                      )}
-                    </>
-                  )}
-                  {unseenAlerts > 0 && (
-                    <>{sinceLast ? ' · ' : ''}<a href="#inbox" className="ck-away-link">{unseenAlerts} new {unseenAlerts === 1 ? 'match' : 'matches'} in your inbox</a></>
-                  )}
-                  {summary.closesToday > 0 && (
-                    <>{(sinceLast || unseenAlerts > 0) ? ' · ' : ''}{summary.closesToday} {summary.closesToday === 1 ? 'lot closes' : 'lots close'} today</>
-                  )}
-                  {unclaimedWins > 0 && (
-                    <>{(sinceLast || unseenAlerts > 0 || summary.closesToday > 0) ? ' · ' : ''}<a href="#settled" className="ck-away-link">{unclaimedWins} settled {unclaimedWins === 1 ? 'win' : 'wins'} unclaimed — won any?</a></>
-                  )}
-                </span>
-                {sinceLast && <a href="#settled" className="ck-away-go">See what happened <Flick size={9} /></a>}
-              </div>
-            )}
-
-            {/* ── 2 · THE GAUGE LINE — the desk's provenance ledger: gray label
-                over black value, closed by the dotted rule (ns-byline). Signed
-                deltas keep their measured red/green exactly. ── */}
-            {(collection.rows.length > 0 || record || unseenAlerts > 0) && (
-              <div className="ns-byline ray-enter" style={{ marginTop: 22 }}>
-                {collection.rows.length > 0 && (
-                  <a href="#collection" style={{ display: 'block', minWidth: 120, color: 'inherit', textDecoration: 'none' }}>
-                    <div className="k">Collection</div>
-                    <div className="v">
-                      {formatPrice(collection.totalAppraised)}
-                      {collection.deltaPct != null && collection.deltaPct !== 0 && (
-                        <em style={{ fontStyle: 'normal', fontWeight: 600, marginLeft: 7, color: collection.deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
-                          {fmtSignedPct(collection.deltaPct)}
-                        </em>
-                      )}
-                    </div>
-                    <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 3 }}>{collection.rows.length} {collection.rows.length === 1 ? 'piece' : 'pieces'} · appraised vs bought</div>
-                  </a>
-                )}
-                {record && record.med != null && (
-                  <a href="#record" style={{ display: 'block', minWidth: 120, color: 'inherit', textDecoration: 'none' }}>
-                    <div className="k">Your record</div>
-                    <div className="v" style={{ fontWeight: 600, color: record.med > 0 ? 'var(--color-up)' : record.med < 0 ? 'var(--color-down-text)' : 'var(--color-fg)' }}>
-                      {fmtSignedPct(Math.round(record.med))}
-                    </div>
-                    <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 3 }}>{record.n} judged · vs estimate, median</div>
-                  </a>
-                )}
-                {unseenAlerts > 0 && (
-                  <a href="#inbox" style={{ display: 'block', minWidth: 120, color: 'inherit', textDecoration: 'none' }}>
-                    <div className="k">Inbox</div>
-                    <div className="v">{unseenAlerts}<em style={{ fontStyle: 'normal', fontWeight: 600, marginLeft: 7, color: 'var(--color-fg)' }}>new</em></div>
-                    <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 3 }}>nightly matches to your searches</div>
-                  </a>
-                )}
-              </div>
-            )}
-            {/* ── 2b · THE READS — hot vs quiet vs landing vs underpriced,
-                each with its measured evidence ── */}
-            {reads.length > 0 && (
-              <div className="ck-reads ray-enter" role="list" aria-label="Today's reads">
-                <div className="ck-reads-head" aria-hidden>
-                  <span className="kicker"><span className="ray-sect-mark" aria-hidden><ReadsMark size={14} /></span>Today&rsquo;s reads</span>
-                  <i className="ck-reads-rule" />
-                </div>
-                {reads.map(r => (
-                  <Link key={r.key} href={`/lot?id=${encodeURIComponent(r.lot.id)}`} className="ck-read" role="listitem" data-nav-row>
-                    <span className="ck-tag" data-tone={r.tone === 'up' ? 'up' : r.tone === 'hot' ? 'hot' : undefined}>{r.tag}</span>
-                    <span className="ck-read-title">{craftTitle(r.lot.title, r.lot.auctionHouse)}</span>
-                    <span className="ck-read-fact">{makerLineOf(r.lot).name} · {r.fact}</span>
-                  </Link>
-                ))}
-              </div>
-            )}
           </section>
 
-          {/* ══ 2c · LOTS YOU MAY LIKE — picked from the desk itself ══ */}
+          <PillRail items={railItems} />
+
+          {/* ══ 1 · TODAY — new since, closing tonight, today's reads; the
+              away facts ride its header line ══ */}
+          <TodayBand loop={deal.loop} closingWatches={closingWatches} reads={reads} away={awayLine} />
+
+          {/* ══ 2 · LOTS YOU MAY LIKE — picked from the desk itself ══ */}
           {recsRoom()}
 
           {/* ══ 3 · WATCHING — the room, action-first, brief fused in ══ */}
@@ -1542,7 +1631,6 @@ export default function SavedPage() {
                   in place — <b>j</b>/<b>k</b> walks the rows. The tag on each row says why it needs you now.
                 </HelpChip>
               </div>
-
               {/* desktop ledger */}
               <div className="ray-saved-ledger ray-enter" ref={boardRef}>
                 <div className="ray-saved-cols ray-saved-ledger-head">
@@ -1660,117 +1748,113 @@ export default function SavedPage() {
             </section>
           )}
 
-          {/* the inbox rides directly under the room — new matches are watch-adjacent */}
-          <div id="inbox"><AlertsInbox /></div>
+          {/* ══ 4 · YOUR SIGNALS — follows, saved searches + inbox, what this
+              device learned ══ */}
+          <YourSignals book={allLots} signedOut={false} />
 
-          {/* ══ 4 · THE RECORD — the receipt, at display scale ══ */}
-          {record && record.med != null && (
-            <section id="record" className="rail ray-enter" style={{ paddingBlock: '38px 10px' }}>
-              <div className="ck-record">
-                <div className="ck-record-lead">
-                  <span className="kicker"><span className="ray-sect-mark" aria-hidden><RecordMark size={14} /></span>Your record</span>
-                  <span className="ck-record-fig" style={{ color: record.med > 0 ? 'var(--color-up)' : record.med < 0 ? 'var(--color-down-text)' : 'var(--color-fg)' }}>
-                    {fmtSignedPct(Math.round(record.med))}
-                  </span>
-                  <span className="ck-record-s">
-                    {record.n} {record.n === 1 ? 'watch' : 'watches'} <Term k="judged">judged</Term> <Term k="vs estimate">vs estimate</Term> · median, all-in · {formatPrice(record.realized)} realized ·{' '}
-                    <a href="#settled" className="ck-away-link">receipts below</a>
-                  </span>
+          {/* ══ 5 · YOUR RECORD — the figures row (once), the receipt, the
+              timeline ══ */}
+          {hasRecordRoom && (
+            <section id="record" className="ray-saved-section rail ray-enter" aria-label="Your record">
+              <div className="ns-plate" style={{ paddingTop: 18 }}>
+                <div className="ck-room-head" style={{ marginBottom: 16 }}>
+                  <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><RecordMark size={17} /></span>Your record</h2>
+                  <HelpChip name="Your record">
+                    <b>Appraised vs bought</b>: the engine&rsquo;s appraisal of your pieces against what you paid — only pieces with a
+                    recorded price enter the read. <b>Your record</b>: each settled watch judged against its estimate, median, all-in.
+                    The signed figure is green only when it is a real gain, red only when it is a real loss; with no signed read
+                    yet it stays ink. <b>Collection</b>: pieces held, at the engine&rsquo;s appraisal — pieces without a usable comp
+                    pool carry at their bought price. <b>On the block</b>: your live watches, at estimate midpoint over the lots
+                    that carry one. <b>Settled</b>: every watch that has hammered — the line-item receipts are under History.
+                  </HelpChip>
                 </div>
-                {record.split ? (
-                  <div className="ck-record-split">
-                    <span className="kicker">Flagged vs the rest</span>
-                    <span className="ck-record-splitline">
-                      saved while flagged below market{' '}
-                      <b style={{ color: (record.split.flagged ?? 0) > 0 ? 'var(--color-up)' : (record.split.flagged ?? 0) < 0 ? 'var(--color-down-text)' : 'var(--color-fg)' }}>{fmtSignedPct(Math.round(record.split.flagged ?? 0))}</b>{' '}
-                      ({record.split.flaggedN}) · saved while showing above market{' '}
-                      <b style={{ color: (record.split.rest ?? 0) > 0 ? 'var(--color-up)' : (record.split.rest ?? 0) < 0 ? 'var(--color-down-text)' : 'var(--color-fg)' }}>{fmtSignedPct(Math.round(record.split.rest ?? 0))}</b>{' '}
-                      ({record.split.restN}) — vs estimate, all-in
-                    </span>
-                  </div>
-                ) : (
-                  <div className="ck-record-split">
-                    <span className="kicker">Flagged vs the rest</span>
-                    <span className="ck-record-splitline" style={{ color: 'var(--color-text-muted)' }}>
-                      publishes once 3 watches saved while flagged below market and 3 saved while showing above settle — saves with no live signal at save time count toward neither; direction recorded since Aug&nbsp;2026
-                    </span>
+                {/* THE DESK IN FIGURES — one forced-color cell carries the
+                    desk's signed read (collection.deltaPct / record.med exactly
+                    as computed; zero or none → ink abstention); the quiet cells
+                    are counts the page prints nowhere else now */}
+                <CellGrid min={200} className="ck-cells ck-figs">
+                  {collection.deltaPct != null && collection.totalPaid > 0 ? (
+                    <ColorCell
+                      dir={collection.deltaPct > 0 ? 'up' : collection.deltaPct < 0 ? 'down' : 'ink'}
+                      stat={fmtSignedPct(collection.deltaPct)}
+                      label="Appraised vs bought"
+                      body={`${formatPrice(collection.totalAppraised)} vs ${formatPrice(collection.totalPaid)} bought`}
+                      href="#collection"
+                    />
+                  ) : record && record.med != null ? (
+                    <ColorCell
+                      dir={record.med > 0 ? 'up' : record.med < 0 ? 'down' : 'ink'}
+                      stat={fmtSignedPct(Math.round(record.med))}
+                      label="Your record"
+                      body={`${record.n} judged · median vs estimate`}
+                      href="#settled"
+                    />
+                  ) : (
+                    <ColorCell dir="ink" stat="—" label="Your record" body="No signed read yet" />
+                  )}
+                  {collection.rows.length > 0 && (
+                    <Cell
+                      stat={collection.rows.length.toLocaleString()}
+                      statNote={collection.rows.length === 1 ? 'piece held' : 'pieces held'}
+                      label="Collection"
+                      body={`${formatPrice(collection.totalAppraised)} at appraisal`}
+                      href="#collection"
+                    />
+                  )}
+                  {upcoming.length > 0 && (
+                    <Cell
+                      stat={upcoming.length.toLocaleString()}
+                      statNote="watching, live"
+                      label="On the block"
+                      body={summary.totalEst > 0 ? `${formatPrice(summary.totalEst)} at est. midpoint${summary.flagged > 0 ? ` · ${summary.flagged} below market` : ''}` : 'tracked to the hammer'}
+                      href="#watching"
+                    />
+                  )}
+                  {settledCount > 0 && (
+                    <Cell
+                      stat={settledCount.toLocaleString()}
+                      statNote={settledCount === 1 ? 'settled watch' : 'settled watches'}
+                      label="Settled"
+                      body={record ? `${record.n} judged · ${formatPrice(record.realized)} realized` : 'awaiting judgment'}
+                      href="#settled"
+                    />
+                  )}
+                </CellGrid>
+                {record && record.med != null && (
+                  <div className="ck-record" style={{ marginTop: 26 }}>
+                    <div className="ck-record-lead">
+                      <span className="kicker">Median vs estimate</span>
+                      <span className="ck-record-fig" style={{ color: record.med > 0 ? 'var(--color-up)' : record.med < 0 ? 'var(--color-down-text)' : 'var(--color-fg)' }}>
+                        {fmtSignedPct(Math.round(record.med))}
+                      </span>
+                      <span className="ck-record-s">
+                        {record.n} {record.n === 1 ? 'watch' : 'watches'} <Term k="judged">judged</Term> <Term k="vs estimate">vs estimate</Term> · median, all-in · {formatPrice(record.realized)} realized ·{' '}
+                        <a href="#settled" className="ck-away-link">receipts below</a>
+                      </span>
+                    </div>
+                    {record.split ? (
+                      <div className="ck-record-split">
+                        <span className="kicker">Flagged vs the rest</span>
+                        <span className="ck-record-splitline">
+                          saved while flagged below market{' '}
+                          <b style={{ color: (record.split.flagged ?? 0) > 0 ? 'var(--color-up)' : (record.split.flagged ?? 0) < 0 ? 'var(--color-down-text)' : 'var(--color-fg)' }}>{fmtSignedPct(Math.round(record.split.flagged ?? 0))}</b>{' '}
+                          ({record.split.flaggedN}) · saved while showing above market{' '}
+                          <b style={{ color: (record.split.rest ?? 0) > 0 ? 'var(--color-up)' : (record.split.rest ?? 0) < 0 ? 'var(--color-down-text)' : 'var(--color-fg)' }}>{fmtSignedPct(Math.round(record.split.rest ?? 0))}</b>{' '}
+                          ({record.split.restN}) — vs estimate, all-in
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="ck-record-split">
+                        <span className="kicker">Flagged vs the rest</span>
+                        <span className="ck-record-splitline" style={{ color: 'var(--color-text-muted)' }}>
+                          publishes once 3 watches saved while flagged below market and 3 saved while showing above settle — saves with no live signal at save time count toward neither; direction recorded since Aug&nbsp;2026
+                        </span>
+                      </div>
+                    )}
+                    <RecordTimeline series={record.series} />
                   </div>
                 )}
-                <RecordTimeline series={record.series} />
               </div>
-            </section>
-          )}
-
-          {/* ══ 4b · THE DESK IN CELLS — the cell-system POP (the home page's
-              instrument-set grammar). ONE forced-color cell carries the desk's
-              signed read — appraised-vs-bought when a bought total exists,
-              else the settled-record median — and its dir is the REAL sign of
-              that already-computed number (signed-signal law untouched: the
-              values are collection.deltaPct / record.med exactly as the gauge
-              line and the record room print them). Zero or no signed read →
-              ink, honest abstention. The quiet cells' big numerals are counts
-              the page already prints. Renders only once the desk has a record
-              or a collection — a watching-only desk keeps its density. ══ */}
-          {(collection.rows.length > 0 || settledCount > 0) && (
-            <section className="rail ray-enter" aria-label="The desk in figures" style={{ paddingBlock: '34px 6px' }}>
-              <CellGrid min={225} className="ck-cells">
-                {collection.deltaPct != null && collection.totalPaid > 0 ? (
-                  <ColorCell
-                    dir={collection.deltaPct > 0 ? 'up' : collection.deltaPct < 0 ? 'down' : 'ink'}
-                    stat={fmtSignedPct(collection.deltaPct)}
-                    label="Appraised vs bought"
-                    body={`${formatPrice(collection.totalAppraised)} at the engine's appraisal against ${formatPrice(collection.totalPaid)} bought — only pieces with a recorded price enter the read.`}
-                    href="#collection"
-                  />
-                ) : record && record.med != null ? (
-                  <ColorCell
-                    dir={record.med > 0 ? 'up' : record.med < 0 ? 'down' : 'ink'}
-                    stat={fmtSignedPct(Math.round(record.med))}
-                    label="Your record"
-                    body={`${record.n} settled ${record.n === 1 ? 'watch' : 'watches'} judged vs estimate — median, all-in. Receipts below.`}
-                    href="#record"
-                  />
-                ) : (
-                  <ColorCell
-                    dir="ink"
-                    label="Your record"
-                    body="No signed read yet — a delta prints once a judged watch settles, or a piece carries a bought price."
-                  />
-                )}
-                {collection.rows.length > 0 && (
-                  <Cell
-                    stat={collection.rows.length.toLocaleString()}
-                    statNote={collection.rows.length === 1 ? 'piece held' : 'pieces held'}
-                    mark={<FigPools size={96} />}
-                    label="Collection"
-                    body={`${formatPrice(collection.totalAppraised)} at the engine's appraisal — pieces without a usable comp pool carry at their bought price.`}
-                    href="#collection"
-                  />
-                )}
-                {upcoming.length > 0 && (
-                  <Cell
-                    stat={upcoming.length.toLocaleString()}
-                    statNote="watching, live"
-                    label="On the block"
-                    body={summary.totalEst > 0
-                      ? `${formatPrice(summary.totalEst)} at estimate midpoint · ${summary.priced} of ${upcoming.length} lots priced${summary.flagged > 0 ? ` — ${summary.flagged} flagged below market now.` : '.'}`
-                      : 'Tracked to the hammer — signals and bids follow every watch.'}
-                    href="#watching"
-                  />
-                )}
-                {settledCount > 0 && (
-                  <Cell
-                    stat={settledCount.toLocaleString()}
-                    statNote={settledCount === 1 ? 'settled watch' : 'settled watches'}
-                    mark={<FigTape size={96} />}
-                    label="Settled"
-                    body={record
-                      ? `${record.n} judged vs estimate · ${formatPrice(record.realized)} realized — the line-item receipts below.`
-                      : 'Awaiting judgment — a watch grades once it settles with a published price and carried an estimate.'}
-                    href="#settled"
-                  />
-                )}
-              </CellGrid>
             </section>
           )}
 
@@ -1908,6 +1992,10 @@ export default function SavedPage() {
             </div>
           )}
 
+          {/* ══ 7 · HISTORY — settled receipts, concluded & other, no longer
+              on the block ══ */}
+          {(settledCount > 0 || other.length > 0 || orphanIds.length > 0) && (
+          <div id="history" className="ck-history">
           {/* ══ 6 · SETTLED — the line-item receipts ══ */}
           {(sold.length > 0 || soldOrphans.length > 0) && (
             <section id="settled" className="ray-saved-section rail ray-enter" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
@@ -1975,23 +2063,23 @@ export default function SavedPage() {
           )}
 
           {other.length > 0 && (
-            <section className="ray-saved-section rail">
-              <div className="ns-plate" style={{ paddingTop: 18 }}>
-              {/* head with intro copy — the split grammar: light head left, copy right */}
-              <div className="ns-split ray-enter" style={{ marginBottom: 18 }}>
-                <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><ArchiveMark size={17} /></span>Concluded &amp; other</h2>
-                <p>
+            <section className="ray-saved-section rail ck-fold-section">
+              <details className="ns-plate ck-fold" open={isDesktop !== false}>
+                <summary className="ck-fold-sum">
+                  <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><ArchiveMark size={17} /></span>Concluded &amp; other</h2>
+                  <span className="ck-fold-n">{other.length}</span>
+                </summary>
+                <p className="ck-fold-dek">
                   Saved lots that closed without a published hammer, were bought in, or are awaiting results.
                 </p>
-              </div>
-              <div className="ray-saved-grid" style={{ display: 'grid' }}>
-                {other.map((lot, i) => (
-                  <div key={lot.id} className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms` } as React.CSSProperties}>
-                    <LotCard lot={lot} showArtist allLots={allLots} saved={isSaved(savedIdOf(lot.id)) || isSaved(lot.id)} onToggleSave={onCardToggle} />
-                  </div>
-                ))}
-              </div>
-              </div>
+                <div className="ray-saved-grid" style={{ display: 'grid' }}>
+                  {other.map((lot, i) => (
+                    <div key={lot.id} className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms` } as React.CSSProperties}>
+                      <LotCard lot={lot} showArtist allLots={allLots} saved={isSaved(savedIdOf(lot.id)) || isSaved(lot.id)} onToggleSave={onCardToggle} />
+                    </div>
+                  ))}
+                </div>
+              </details>
             </section>
           )}
 
@@ -2016,14 +2104,15 @@ export default function SavedPage() {
             </section>
           )}
           {goneOrphans.length > 0 && (
-            <section className="rail ray-enter" style={{ paddingBlock: '34px 64px' }}>
-              <div className="ns-plate" style={{ paddingTop: 18 }}>
-              <div className="ns-split" style={{ marginBottom: 14 }}>
-                <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><HorizonMark size={17} /></span>No longer on the block</h2>
-                <p>
+            <section className="ray-saved-section rail ray-enter ck-fold-section">
+              <details className="ns-plate ck-fold" open={isDesktop !== false}>
+                <summary className="ck-fold-sum">
+                  <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><HorizonMark size={17} /></span>No longer on the block</h2>
+                  <span className="ck-fold-n">{goneOrphans.length}</span>
+                </summary>
+                <p className="ck-fold-dek">
                   Saved lots the crawl no longer carries — withdrawn, relisted or purged by the house.
                 </p>
-              </div>
               <div className="glass glass-quiet">
                 {goneOrphans.map(id => {
                   const m = savedMeta[id];
@@ -2060,9 +2149,13 @@ export default function SavedPage() {
                   );
                 })}
               </div>
-              </div>
+              </details>
             </section>
           )}
+          </div>
+          )}
+
+          {accountStrip}
         </RayEntrance>
       )}
       <Colophon record={null} />

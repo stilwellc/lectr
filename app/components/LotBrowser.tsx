@@ -32,11 +32,14 @@ import { makerLineOf, labelTagOf, subColumnOf } from '../lib/lot-labels';
 import { foldVariants, foldNote, foldQuery, crossSibs, crossNote } from '../lib/fold';
 import type { Follow } from '../lib/follows';
 import { recommend, recNote, type Taste } from '../lib/recs';
+import { useReturnLoop, NewSincePicks, ClosingTonightPicks } from './PickStrips';
 import { feedPass } from '../lib/lot-browser';
 import { isFlagged, FLAG_SIGNAL } from '../lib/flags';
 import { useLotModal } from '../lib/use-lot-modal';
 import { cameBack } from '../lib/use-back-scroll';
 import Flick from './Flick';
+import { recordSignal } from '../lib/recs-signals';
+import { PickFeedback, UndoSeat, usePickFeedback, withUndoSeat } from './PickFeedback';
 
 const NOOP = () => {};
 
@@ -139,13 +142,19 @@ function BidVelChip({ lot }: { lot: AuctionLot }) {
   );
 }
 
-export function FeedRow({ lot, onOpen, tone, note, onNote }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down'; note?: string | null; onNote?: () => void }) {
+export function FeedRow({ lot, onOpen, tone, note, onNote, feedback }: {
+  lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down'; note?: string | null; onNote?: () => void;
+  /** a pick's "More like this / Not for me" (components/PickFeedback) — rides
+   *  inside the row's hairline, under its text */
+  feedback?: React.ReactNode;
+}) {
   const est = feedRowPrice(lot);
   // the label's lead word (its lead badge, else the sub) — the full line
   // ellipsized the maker away at 390px
   const label = labelTagOf(lot);
-  return (
-    <button type="button" className="ray-feedrow" onClick={onOpen} aria-label={`Comps for ${craftTitle(lot.title, lot.auctionHouse)}`}>
+  const row = (
+    <button type="button" className="ray-feedrow" onClick={onOpen} aria-label={`Comps for ${craftTitle(lot.title, lot.auctionHouse)}`}
+      style={feedback ? { borderBottom: 'none' } : undefined}>
       <span className="ray-feedrow-thumb" data-tone={tone} aria-hidden>
         {(lot.title || '?').charAt(0)}
         {lot.imageUrl && (
@@ -193,6 +202,8 @@ export function FeedRow({ lot, onOpen, tone, note, onNote }: { lot: AuctionLot; 
       </span>
     </button>
   );
+  if (!feedback) return row;
+  return <div style={{ borderBottom: '1px solid var(--hairline-soft)' }}>{row}{feedback}</div>;
 }
 
 // the feed grid — global ray-* classes the reused LotCard renders into
@@ -236,6 +247,9 @@ export interface LotBrowserProps {
   /** the reader's taste (app/lib/use-recs) — enables the "For you" tab: the
    *  same recommender as the profile's "Lots you may like" room */
   taste?: Taste | null;
+  /** (Oct 11) what the For-you tab shows while the reader has no taste yet
+   *  (home's quick start) — present → the tab shows even with no signals */
+  youCold?: React.ReactNode;
   /** scoped to one maker's book: the maker lens hides, a saved search
    *  carries the maker; `named` = a real maker (art/design/watches), whose
    *  shortlist can't diversify across makers. `subj` = one subject's book
@@ -279,6 +293,7 @@ export default function LotBrowser({
   belowSignal: belowSignalProp,
   follows = [],
   taste = null,
+  youCold = null,
   scope = null,
   savedIds,
   isSaved: isSavedProp,
@@ -420,8 +435,11 @@ export default function LotBrowser({
   // player, category, house) — signed in or not (app/lib/follows)
   // (a feed scoped to one subject row by ?subj= is one "who" as well)
   const whoCap = scope?.named || scope?.subj || feedFilters.subj ? Infinity : undefined;
-  const youAvail = !!taste && taste.seeds.length > 0;
+  const youTaste = !!taste && taste.seeds.length > 0;
+  const youAvail = youTaste || !!youCold;
   const youTab = youAvail && feedFilters.tab === 'you';
+  // the For-you tab before any signal: the quick start stands in for the rows
+  const youColdOn = youTab && !youTaste;
   const wantTop = !youTab && feedFilters.sort === 'priority' && (feedFilters.tab ?? 'top') !== 'all';
   const top = useMemo(
     () => (wantTop || scoped ? shortlist(feedAll, Date.now(), 20, { who: whoCap }) : null),
@@ -437,14 +455,27 @@ export default function LotBrowser({
   // named on the reason line; pressing that line searches the feed for the
   // whole group (app/lib/fold). Off when the reader asked for something by
   // name (a text query or a maker): then every copy is the answer.
+  // For you: "More like this / Not for me" — this device only (recs-signals)
+  const fb = usePickFeedback();
+  // a term typed in the feed's search, once the reader pauses on it (terms
+  // only, on this device — app/lib/recs-signals)
+  const typedQ = feedFilters.query.trim();
+  useEffect(() => {
+    if (typedQ.length < 3) return;
+    const t = setTimeout(() => recordSignal('search', typedQ), 1500);
+    return () => clearTimeout(t);
+  }, [typedQ]);
   const foldOn = !feedFilters.query.trim() && (scoped || !feedFilters.maker);
   const fold = useMemo(() => (foldOn ? foldVariants(feedAll) : null), [feedAll, foldOn]);
   // "For you" — the ONE recommender (app/lib/recs), over whatever the
   // toolbar filtered; each pick keeps its reason for the note line
   const youRecs = useMemo(
-    () => (youTab && taste ? recommend(feedAll, taste, { n: 20 }) : null),
-    [youTab, taste, feedAll]
+    () => (youTab && youTaste && taste ? recommend(feedAll, taste, { n: 20 }) : null),
+    // the stated price range rides inside the taste (useTaste → recs' stated band)
+    [youTab, youTaste, taste, feedAll]
   );
+  // the return loop above the picks: new since the last visit, closing tonight
+  const loop = useReturnLoop(feedAll, youTab ? taste : null, { prevVisitDay, baselines });
   const youNote = useMemo(() => new Map((youRecs ?? []).map(r => [r.lot.id, { full: recNote(r), short: recNote(r, { short: true }) }])), [youRecs]);
   const feed = useMemo(
     () => (youTab
@@ -550,9 +581,9 @@ export default function LotBrowser({
             className="ray-toolbar-pill"
             data-active={youTab}
             onClick={() => handleFilters({ ...feedFilters, sort: 'priority', tab: 'you' })}
-            title={follows.length ? `Picked from your desk and what you follow: ${follows.map(f => f.label).join(', ')}` : 'Picked from the lots on your desk'}
+            title={!youTaste ? 'Tell lectr what you collect — picks from the live book' : follows.length ? `Picked from your desk and what you follow: ${follows.map(f => f.label).join(', ')}` : 'Picked from the lots on your desk'}
           >
-            For you {youTab && <i>{feed.length}</i>}
+            For you {youTab && youTaste && <i>{feed.length}</i>}
           </button>
         )}
         <button
@@ -587,7 +618,15 @@ export default function LotBrowser({
       />
       </>}
 
-      {effectiveView === 'table' && feed.length > 0 ? (
+      {youTab && loop && feed.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 420px), 1fr))', gap: '0 28px', marginBottom: 26 }}>
+          <ClosingTonightPicks loop={loop} max={narrowView ? 2 : 3} />
+          <NewSincePicks loop={loop} max={narrowView ? 2 : 3} />
+        </div>
+      )}
+      {youColdOn ? (
+        <div className="ray-feed-rekey">{youCold}</div>
+      ) : effectiveView === 'table' && feed.length > 0 ? (
         <div key={feedKey} className="ray-feed-rekey ray-feedtable-scroll" style={{ overflowX: 'auto' }}>
           <table className="ray-feedtable">
             <thead>
@@ -605,7 +644,12 @@ export default function LotBrowser({
               </tr>
             </thead>
             <tbody>
-              {feed.slice(0, visibleUpcoming).map(lot => {
+              {(youTab ? withUndoSeat(feed.slice(0, visibleUpcoming).map(lot => ({ lot })), fb.undo) : feed.slice(0, visibleUpcoming).map(lot => ({ lot }))).map((it, i) => {
+                // For you: a "Not for me" pick leaves its Undo in its seat
+                if ('undoSeat' in it) {
+                  return <tr key={`undo-${it.undoSeat.id}`}><td></td><td colSpan={9}><UndoSeat undo={it.undoSeat} onUndo={fb.undoIt} /></td></tr>;
+                }
+                const lot = it.lot;
                 const sig = lotSignal(lot, compLots);
                 const dth = daysToHammer(lot, localToday());
                 return (
@@ -673,6 +717,7 @@ export default function LotBrowser({
                           ? <button type="button" onClick={e => { e.stopPropagation(); open(); }} style={{ ...st, background: 'none', border: 0, padding: 0, fontFamily: 'inherit', textAlign: 'left', cursor: 'pointer' }}>{n}</button>
                           : <span style={st}>{n}</span>;
                       })()}
+                      {youTab && <PickFeedback lot={lot} mark={fb.marks.get(lot.id)} onMark={fb.mark} at={i} tight />}
                     </td>
                     <td>{lot.auctionHouse}</td>
                     <td className="t-cat">{subColumnOf(lot)}</td>
@@ -750,7 +795,17 @@ export default function LotBrowser({
             )}
           </div>
         ) : (
-          feed.slice(0, visibleUpcoming).map((lot, i) =>
+          (youTab ? withUndoSeat(feed.slice(0, visibleUpcoming).map(lot => ({ lot })), fb.undo) : feed.slice(0, visibleUpcoming).map(lot => ({ lot }))).map((it, i) => {
+            // For you: a "Not for me" pick leaves its Undo in its seat
+            if ('undoSeat' in it) {
+              return (
+                <div key={`undo-${it.undoSeat.id}`} className={narrowView ? 'ray-feeditem-row' : 'ray-feeditem-card'} style={{ minWidth: 0 }}>
+                  <UndoSeat undo={it.undoSeat} onUndo={fb.undoIt} row={narrowView} />
+                </div>
+              );
+            }
+            const lot = it.lot;
+            return (
             // ≤640px: EVERY lot folds to a compact ruled row — the
             // engine's verdict shows as a quiet glow behind the
             // thumb (green = below market, red = reads rich). No
@@ -769,13 +824,14 @@ export default function LotBrowser({
                   tone={feedTone(lot, belowIds, belowSignal.hasSig)}
                   note={noteOf(lot, true)}
                   onNote={foldOpeners.get(lot.id)}
+                  feedback={youTab ? <PickFeedback lot={lot} mark={fb.marks.get(lot.id)} onMark={fb.mark} at={i} inset /> : undefined}
                 />
               </div>
             ) : (
               <div
                 key={lot.id}
                 className={fromCache ? 'ray-feeditem-card' : 'ray-feed-rekey ray-feeditem-card'}
-                style={{ animationDelay: fromCache ? undefined : `${Math.min(i, 10) * 40}ms`, minWidth: 0 }}
+                style={{ animationDelay: fromCache ? undefined : `${Math.min(i, 10) * 40}ms`, minWidth: 0, ...(youTab ? { display: 'grid', gridTemplateRows: 'minmax(0, 1fr) auto' } : null) }}
               >
                 <LotCard
                   lot={lot}
@@ -787,9 +843,11 @@ export default function LotBrowser({
                   note={noteOf(lot)}
                   onNote={foldOpeners.get(lot.id)}
                 />
+                {youTab && <PickFeedback lot={lot} mark={fb.marks.get(lot.id)} onMark={fb.mark} at={i} />}
               </div>
             )
-          )
+            );
+          })
         )}
       </div>
       )}

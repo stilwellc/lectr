@@ -12,6 +12,7 @@ import type { AuctionLot } from '../types';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
 import { useFullLotsOnDemand, useVisibilityTrigger, useSoldArchive, retryFullLoad, retryArchiveLoad, settleLiveRow } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
+import { useLearnVisit } from '../lib/recs-signals';
 import { useRefs } from '../hooks/useRefs';
 import { safeHref } from '../lib/safe-href';
 import { splitTitle, deglue, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
@@ -467,6 +468,9 @@ export default function LotPage({ lotId, initialLot }: {
     [preResolved, archive.archiveLoaded, archive.soldArchive, lotId],
   );
   const lot = preResolved || archiveLot;
+  // on-device memory (app/lib/recs-signals): an opened lot leans "Lots you
+  // may like" toward its kind — never sent anywhere
+  useLearnVisit('lot', lot ? lot.id : null, () => (lot ? { lot } : null));
 
   // THE MAKER POOL (Sep 27 2026): every comp read here (signalWithPool,
   // appraiseLot, soldCompBand, the science reference band) pools SAME-ARTIST
