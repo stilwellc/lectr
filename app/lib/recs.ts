@@ -52,7 +52,7 @@
 import { taxonOf, subMatches, subLabel, SPORTS, type CatKey } from './taxonomy';
 import { lotFacets, FACET_LABEL } from './facets';
 import { entityKeyOf } from './entity/key';
-import { parseCard, cardLadderKey } from './cards';
+import { parseCard, cardLadderKey, cardSetKey, cardYearKey, type CardId } from './cards';
 import { prioStatic, priorityOf, closeMsOf, saleKeyOf } from './priority';
 import { matchesSavedQuery, unmatchableReason } from './saved-query';
 import { makerLineOf } from './lot-labels';
@@ -196,13 +196,34 @@ function anchorOf(l: RecLot, nowMs: number, fallback?: number | null): number | 
   return fallback && fallback > 0 ? fallback : null;
 }
 
+/** ONE CARD, ANY GRADE (r9, QA4 C2): the ladder key (player · year · set ·
+ *  number · variant), else — a Pokémon / TCG card, which carries no player
+ *  slug, so cardLadderKey is null for ~80% of them — year · set · number ·
+ *  variant. The grade is never part of it: the raw card and its PSA 10 are
+ *  one seat ("2002 Legendary Collection Reverse Holo #3 Charizard" was dealt
+ *  twice). */
+export function cardIdentityKey(id: CardId, cat: CatKey): string | null {
+  const k = cardLadderKey(id);
+  if (k) return k;
+  if (cat !== 'tcg' || id.multi || id.notCard || !id.cardNo || !id.setName) return null;
+  const y = cardYearKey(id.year);
+  if (!y) return null;
+  return `tcg|${y}|${cardSetKey(id.setName)}|${id.cardNo.toLowerCase()}${id.variant ? `|v:${id.variant}` : ''}${id.serialOf ? `|/${id.serialOf}` : ''}`;
+}
+
+/** the grade a card lot is offered in ("PSA 10", "raw") — the twin note */
+export function cardGradeOf(title: string): string {
+  const id = parseCard(title);
+  return id.gradeCo && id.gradeNum != null ? `${id.gradeCo} ${id.gradeNum}` : id.gradeCo ? id.gradeCo : 'raw';
+}
+
 export function featOf(l: RecLot, nowMs: number, estFallback?: number | null): Feat {
   const hit = featMemo.get(l as object);
   if (hit) return hit;
   const t = taxonOf(l);
   const ek = ekOf(l);
   let card: string | null = null;
-  if (CARD_CATS.has(t.cat) && l.title) card = cardLadderKey(parseCard(l.title));
+  if (CARD_CATS.has(t.cat) && l.title) card = cardIdentityKey(parseCard(l.title), t.cat);
   const fx = new Set<string>();
   for (const k of Array.from(lotFacets(l))) if (TASTE_FX.test(k)) fx.add(k);
   const a = anchorOf(l, nowMs, estFallback);
@@ -377,6 +398,21 @@ export interface Rec<L extends RecLot = RecLot> {
   seed: Seed;
 }
 
+/** the deal size the per-entity cap reads (the profile's list) */
+export const REC_DEAL = 24;
+
+/** How deep the profile's list runs (r9, QA4 C1). A NARROW taste — at most
+ *  two things followed or saved (one maker; a Pokémon and its category) —
+ *  asks for a followed name's book, not a sampler: it deals twice the seats,
+ *  and Show more walks them. A broad taste keeps the standard deal. */
+export function recDepth(taste: Taste): number {
+  const targets = new Set<string>();
+  for (const s of taste.seeds) {
+    targets.add(s.follow ? `${s.follow.kind}:${s.follow.key}` : s.f?.named && s.f.ek ? s.f.ek : s.query ? `q:${s.label}` : `lot:${s.lotId}`);
+  }
+  return targets.size > 0 && targets.size <= 2 ? REC_DEAL * 2 : REC_DEAL;
+}
+
 export interface RecOpts {
   nowMs?: number;
   n?: number;
@@ -533,9 +569,23 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
   const seedW = new Map<string, number>();
   let seedTot = 0;
   for (const s of lotSeeds) { seedTot += s.w; if (s.f!.named && s.f!.ek) seedW.set(s.f!.ek, (seedW.get(s.f!.ek) ?? 0) + s.w); }
-  for (const s of taste.seeds) if (s.follow && (s.follow.kind === 'entity' || s.follow.kind === 'maker')) seedTot += s.w;
-  const shareOf = (ek: string | null) => (ek && seedTot > 0 ? (seedW.get(ek) ?? 0) / seedTot : 0);
-  const cand = rows.slice(0, Math.max(400, n * 20));
+  // (r9, QA4 C1) a followed maker / player / subject IS a named entity of the
+  // taste: it carries its weight to its entity key(s), so a reader who follows
+  // only Warhol is a Warhol taste (share 1) — the follow used to add to the
+  // total and never to the entity, so every follow-only taste read share 0
+  // and capped at ~40% of the seats (10 of 101 live Warhol lots)
+  for (const s of taste.seeds) {
+    const fo = s.follow;
+    if (!fo || (fo.kind !== 'entity' && fo.kind !== 'maker')) continue;
+    seedTot += s.w;
+    const eks = fo.kind === 'entity' ? [fo.key] : [`mk:${fo.key}`, `pl:${fo.key}`];
+    for (const ek of eks) seedW.set(ek, (seedW.get(ek) ?? 0) + s.w);
+  }
+  const shareOf = (ek: string | null) => (ek && seedTot > 0 ? Math.min(1, (seedW.get(ek) ?? 0) / seedTot) : 0);
+  // the per-entity cap reads a fixed deal size, not n: home (20) and the
+  // profile (24) deal the same list, so home is the profile's prefix (C7)
+  const capN = Math.max(n, REC_DEAL);
+  const cand = rows.slice(0, Math.max(400, capN * 20));
   const perEnt = new Map<string, number>(), perSale = new Map<string, number>(), perHouse = new Map<string, number>(), perSeed = new Map<Seed, number>();
   const seen = new Set<string>();
   const keysOf = (r: Row) => ({
@@ -553,7 +603,7 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
       if (seen.has(k.thing) || seen.has(`id:${r.l.id}`)) { used.add(r); continue; }
       const e = perEnt.get(k.ent) ?? 0;
       const share = r.f.named ? shareOf(r.f.ek) : 0;
-      if (r.f.named && e >= Math.max(4, Math.ceil(n * (0.4 + 0.5 * share)))) continue;
+      if (r.f.named && e >= Math.max(4, Math.ceil(capN * (0.4 + 0.5 * share)))) continue;
       const v = r.score
         * Math.pow(r.f.named ? 0.8 + 0.15 * share : 0.7, e)
         * Math.pow(0.85, perSale.get(k.sale) ?? 0)
@@ -570,13 +620,34 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
     for (const x of best.l.crossLive || []) if (x?.id) seen.add(`id:${x.id}`);
   }
 
+  // (r9, QA4 C2) the same card in another grade lost its seat to the better
+  // fit — the kept pick says the other is live too ("also live as PSA 10")
+  const twinOf = new Map<string, Row>();
+  const picked = new Set(out);
+  for (const r of rows) {
+    if (picked.has(r) || !r.f.card) continue;
+    const t = `card:${r.f.card}`;
+    if (!twinOf.has(t)) twinOf.set(t, r);
+  }
+
   return out.map(r => {
-    const { reason, why, short } = explain(r.l, r.f, r.best, lotSeeds);
-    return { lot: r.l, score: Math.round(r.score * 1000) / 1000, taste: Math.round(r.taste * 1000) / 1000, reason, short: short ?? reason, why, seed: r.best.seed };
+    const { reason: base, why, short: baseShort } = explain(r.l, r.f, r.best, lotSeeds);
+    const tw = r.f.card ? twinOf.get(`card:${r.f.card}`) : undefined;
+    const twinNote = tw ? twinNoteOf(r.l, tw.l) : null;
+    const reason = twinNote ? `${base} · ${twinNote}` : base;
+    const short = baseShort ? (twinNote ? `${baseShort} · ${twinNote}` : baseShort) : reason;
+    return { lot: r.l, score: Math.round(r.score * 1000) / 1000, taste: Math.round(r.taste * 1000) / 1000, reason, short, why, seed: r.best.seed };
   });
 }
 
 /* ── reasons ────────────────────────────────────────────────────────────── */
+
+/** "also live as PSA 10" / "also live raw" (the house when only it differs) */
+function twinNoteOf(kept: RecLot, twin: RecLot): string | null {
+  const g = cardGradeOf(twin.title);
+  if (g === cardGradeOf(kept.title)) return twin.auctionHouse && twin.auctionHouse !== kept.auctionHouse ? `also live at ${twin.auctionHouse}` : null;
+  return `also live ${g === 'raw' ? 'raw' : `as ${g}`}`;
+}
 
 function explain(l: RecLot, f: Feat, best: { seed: Seed; parts?: SimParts }, lotSeeds: Seed[]): { reason: string; why: string[]; short?: string } {
   const s = best.seed;

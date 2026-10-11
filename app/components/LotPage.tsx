@@ -10,7 +10,7 @@ import { loadLotPack, loadLotFromShard, loadPageStats, loadMakerLots, packRowsTo
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
-import { useFullLotsOnDemand, useVisibilityTrigger, useSoldArchive, retryFullLoad, retryArchiveLoad } from '../hooks/useRayData';
+import { useFullLotsOnDemand, useVisibilityTrigger, useSoldArchive, retryFullLoad, retryArchiveLoad, settleLiveRow } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import { useRefs } from '../hooks/useRefs';
 import { safeHref } from '../lib/safe-href';
@@ -19,7 +19,7 @@ import { isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBan
 import { enginePoolOf } from '../lib/engine-pool';
 import { lotFace, fmtFace, medianRowId, FACE_LABEL } from '../lib/lot-face';
 import { lotAllInFactor } from '../lib/premiums';
-import { lotFloor, lotMaxBid, lotProjectedClose } from '../lib/verdict';
+import { lotFloor, lotProjectedClose } from '../lib/verdict';
 import { formatEstimate, estimateOnly, lotSignal, confidenceMeter } from './LotCard';
 import { daysWord, Colophon } from './Terminal';
 import ArtistNav from './ArtistNav';
@@ -435,7 +435,12 @@ export default function LotPage({ lotId, initialLot }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lotId, loading]);
   const shardHit = shardLot && shardLot !== 'noindex' ? shardLot : null;
-  const preResolved = live || initialLot || dbLot || shardHit || null;
+  // (r9, QA4 B1) a row resolved off the eager tape (prerender, Supabase, the
+  // per-lot shard) is nightly history: a stale 'upcoming' on a lot the eager
+  // book closed out settles to closed (app/lib/live-pool) — never "Current bid"
+  const offTape = initialLot || dbLot || shardHit || null;
+  const settledOffTape = useMemo(() => (offTape && !loading ? settleLiveRow(offTape) : offTape), [offTape, loading]);
+  const preResolved = live || settledOffTape || null;
 
   // THE LOT PACK: the build-time corpus reads for this upcoming lot (comps,
   // band, appraisal, reference band, provenance) — ~15KB instead of the
@@ -553,7 +558,11 @@ export default function LotPage({ lotId, initialLot }: {
   // ── the certificate's numbers ─────────────────────────────────────────
   const isUpcoming = lot?.status === 'upcoming';
   const todayIso = (lastCrawl || (mounted ? new Date().toISOString() : '')).slice(0, 10);
-  const isPastPending = !!lot && isUpcoming && !!lot.resultsPending && !!lot.saleDate && !!todayIso && lot.saleDate.slice(0, 10) < todayIso;
+  // (r9) 'unknown-result' = the sale closed, the house's result isn't
+  // reconciled (a stale shard 'upcoming' the eager book closed out settles
+  // here — app/lib/live-pool): past tense, results pending, never "Current bid"
+  const isClosedUnknown = lot?.status === 'unknown-result';
+  const isPastPending = isClosedUnknown || (!!lot && isUpcoming && !!lot.resultsPending && !!lot.saleDate && !!todayIso && lot.saleDate.slice(0, 10) < todayIso);
 
   // the number every card shows: crawl-time signal first, client compute after
   const sig = useMemo(() => (lot && isUpcoming ? lotSignal(lot, allLots) : null), [lot, allLots, isUpcoming]);
@@ -993,6 +1002,7 @@ export default function LotPage({ lotId, initialLot }: {
                 <div className="k">
                   {isSold
                     ? (lot.status === 'bought_in' ? 'Result' : 'Realized')
+                    : isClosedUnknown ? ((lot.currentBid || 0) > 0 && !(lot.estimateLow && lot.estimateHigh) ? 'Last bid seen' : 'Estimate')
                     : lot.auctionHouse === 'Goldin' || (!(lot.estimateLow && lot.estimateHigh) && (lot.currentBid || 0) > 0) ? 'Current bid' : 'Ask'}
                 </div>
                 <div className="v">
@@ -1038,7 +1048,7 @@ export default function LotPage({ lotId, initialLot }: {
                   // (r8) lot-face: the ratio's own derivation from printed
                   // numbers, then the engine's value — the plate's and the
                   // modal's exact figures and labels
-                  const mb = lotMaxBid(lot);
+                  const mb = face?.maxBid;
                   const parts = [
                     face?.call?.derivation ?? null,
                     face?.value ? `${FACE_LABEL.value} ${face.value.text}` : null,
@@ -1067,9 +1077,11 @@ export default function LotPage({ lotId, initialLot }: {
 
               {/* (r8) the engine's value on a valued lot without a read cell —
                   the modal's and the plate's figure (the read cell carries it
-                  when there is a call) */}
-              {isUpcoming && face?.value && lot.value?.basis !== 'card-comp' && !(sig && !!(lot.estimateLow || lot.estimateHigh)) && (
-                <LeaderRow k={FACE_LABEL.value} v={face.value.text} sub={`${FACE_LABEL.valueSub} · ${FACE_LABEL.range} ${face.value.range}`} />
+                  when there is a call). (r9, QA4 B2) card lots too: the max
+                  bid below is read off this value, so it prints beside it —
+                  the modal's exact sentence (lot-face card path) */}
+              {isUpcoming && face?.value && !(sig && !!(lot.estimateLow || lot.estimateHigh)) && (
+                <LeaderRow k={FACE_LABEL.value} v={face.value.text} sub={`${FACE_LABEL.valueSub} · ${FACE_LABEL.range} ${face.value.range}${face.card?.basis ? ` · ${face.card.basis}` : ''}`} />
               )}
 
               {isUpcoming && !sig && band && (
@@ -1087,15 +1099,9 @@ export default function LotPage({ lotId, initialLot }: {
               {isUpcoming && (() => {
                 // (Oct 6 2026, wave 3) the engine's own max bid (verdict.ts —
                 // one source), not the hammer under the band's all-in low
-                const mb = lotMaxBid(lot);
+                const mb = face?.maxBid;
                 if (!mb) return null;
-                return (
-                  <LeaderRow
-                    k="Max bid"
-                    v={`≤ ${fmtFace(mb.hammer)} hammer`}
-                    sub={`walk-away price · ${fmtFace(mb.allIn)} all-in`}
-                  />
-                );
+                return <LeaderRow k="Max bid" v={mb.text} sub={mb.sub} />;
               })()}
               {isUpcoming && lotProjectedClose(lot) != null && (() => {
                 // (Oct 6 2026, wave 3) only a projection whose cell is
@@ -1207,19 +1213,21 @@ export default function LotPage({ lotId, initialLot }: {
               )}
 
               {/* live card: the exact-card record — same card, same grade */}
-              {isUpcoming && lot.cardComps && lot.cardComps.n > 0 && (
+              {/* (r9) the card's own record, from lot-face: the same-card
+                  median is CONTEXT beside the value, labelled as a median */}
+              {isUpcoming && face?.card && face.card.n > 0 && (
                 <LeaderRow
                   k="This card"
-                  v={lot.cardComps.med != null ? formatPrice(lot.cardComps.med) : '—'}
-                  sub={`${lot.cardComps.n} ${lot.cardComps.n === 1 ? 'sale' : 'sales'}, same card & grade`}
+                  v={face.card.text ?? '—'}
+                  sub={face.card.sub}
                   // (wave 3) the median is all-in: the bid is compared all-in too
-                  tone={lot.cardComps.med != null && (lot.currentBid || 0) > 0 && lot.currentBid! * lotAllInFactor(lot, lot.currentBid!) < lot.cardComps.med ? 'up' : undefined}
+                  tone={face.card.med != null && (lot.currentBid || 0) > 0 && lot.currentBid! * lotAllInFactor(lot, lot.currentBid!) < face.card.med ? 'up' : undefined}
                 />
               )}
-              {isUpcoming && lot.cardComps && lot.cardComps.lastSales.length > 0 && (
+              {isUpcoming && face?.card?.last && (
                 <LeaderRow
                   k="Last sold"
-                  v={`${formatPrice(lot.cardComps.lastSales[0].p)}${lot.cardComps.lastSales[0].d ? ` · ${formatDate(lot.cardComps.lastSales[0].d, { month: 'short', year: 'numeric' })}` : ''}`}
+                  v={`${fmtFace(face.card.last.p)}${face.card.last.d ? ` · ${formatDate(face.card.last.d, { month: 'short', year: 'numeric' })}` : ''}`}
                 />
               )}
             </div>

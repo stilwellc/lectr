@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { AuctionLot } from '../types';
-import { useRayData, triggerFullLoad } from './useRayData';
+import { useRayData, triggerFullLoad, settleLiveRow } from './useRayData';
 import { loadPageStats, loadMakerLots } from '../lib/page-data';
 
 /**
@@ -59,7 +59,10 @@ export function useMakerRows(slug: string): MakerRows {
     for (const r of raw.rows) {
       if (seen.has(r.id)) continue;
       seen.add(r.id);
-      out.push(eager.get(r.id) || r);
+      // (r9) the eager copy wins; a maker-shard row the eager book closed
+      // out never reads live (app/lib/live-pool)
+      const e = eager.get(r.id);
+      out.push(e || settleLiveRow(r));
     }
     eager.forEach((l, id) => { if (!seen.has(id)) out.push(l); });
     return out;

@@ -66,7 +66,7 @@ function PersonFollow({ slug, name }: { slug: string; name: string }) {
   if (!authEnabled) return null;
 
   const onClick = async () => {
-    if (!user) { openLogin(); return; }
+    if (!user) { openLogin('follow'); return; }
     setBusy(true);
     try {
       if (existing) await remove(existing.id);

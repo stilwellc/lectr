@@ -34,7 +34,7 @@ import type { AuctionLot } from '../types';
 import { engineFlagOf, signalMagnitude } from './comps';
 import { enginePoolOf } from './engine-pool';
 import { lotHammerFromAllIn } from './premiums';
-import { fmtUsd, lotVerdict } from './verdict';
+import { fmtUsd, lotMaxBid, lotVerdict } from './verdict';
 
 /** the one set of labels — a surface that prints a face figure prints its label */
 export const FACE_LABEL = {
@@ -93,10 +93,43 @@ export interface FaceCall {
   derivation: string | null;
 }
 
+/** THE CARD PATH (r9, QA4 B2). A card-comp lot's value IS `value` above
+ *  (the engine's expected hammer off its same-card pool); this is the
+ *  card's own record beside it — context, never a second value. Before r9
+ *  the lot page hid the value, printed this median as "This card" and a max
+ *  bid derived from the hidden value: 1951 Bowman Mantle read "This card
+ *  $10K · Max bid ≤ $17K" while the modal said "lectr value $20K". */
+export interface FaceCard {
+  /** "from 2 comparable card sales" — what the value was read from */
+  basis: string | null;
+  /** the same-card, same-grade median (all-in realized), every sale on file */
+  med: number | null;
+  n: number;
+  /** "$10K" */
+  text: string | null;
+  /** "median · 11 sales, same card & grade" */
+  sub: string;
+  /** the most recent same-card sale */
+  last: { p: number; d: string | null } | null;
+}
+
+export interface FaceMaxBid {
+  hammer: number;
+  allIn: number;
+  /** "≤ $17K hammer" */
+  text: string;
+  /** "walk-away price · $21K all-in" */
+  sub: string;
+}
+
 export interface LotFace {
   value: FaceValue | null;
   comps: FaceComps | null;
   call: FaceCall | null;
+  /** the engine's max bid (verdict.lotMaxBid) — every surface's one walk-away */
+  maxBid: FaceMaxBid | null;
+  /** card lots: the same-card record beside the value (null off the card path) */
+  card: FaceCard | null;
 }
 
 function estMidOf(lot: AuctionLot): number | null {
@@ -162,7 +195,31 @@ export function lotFace(lot: AuctionLot): LotFace {
       compsHammer, askAdj, net, derivation,
     };
   }
-  return { value, comps, call };
+  const mb = lotMaxBid(lot);
+  const maxBid: FaceMaxBid | null = mb ? {
+    hammer: mb.hammer, allIn: mb.allIn,
+    text: `≤ ${fmtFace(mb.hammer)} hammer`,
+    sub: `walk-away price · ${fmtFace(mb.allIn)} all-in`,
+  } : null;
+
+  return { value, comps, call, maxBid, card: cardFaceOf(lot, value) };
+}
+
+function cardFaceOf(lot: AuctionLot, value: FaceValue | null): FaceCard | null {
+  const cc = lot.cardComps;
+  const isCard = lot.value?.basis === 'card-comp';
+  if (!isCard && !(cc && cc.n > 0)) return null;
+  const n = cc?.n || 0;
+  const med = cc && cc.med != null && cc.med > 0 ? cc.med : null;
+  const vn = lot.value?.n || 0;
+  const last = cc?.lastSales?.find(s => s.p > 0) || null;
+  return {
+    basis: isCard && value && vn > 0 ? `from ${vn} comparable card ${vn === 1 ? 'sale' : 'sales'}` : null,
+    med, n,
+    text: med != null ? fmtFace(med) : null,
+    sub: `median · ${n} ${n === 1 ? 'sale' : 'sales'}, same card & grade`,
+    last: last ? { p: last.p, d: last.d } : null,
+  };
 }
 
 /** "lectr value $416 · likely $292–$927" — the one sentence form */

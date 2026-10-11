@@ -180,8 +180,11 @@ interface AccountValue {
   toggleOwned: (id: string) => void;
   // login UI
   loginOpen: boolean;
-  openLogin: () => void;
+  /** (r9) 'follow' = the sheet opened from a maker / player Follow (the sheet
+   *  says so); any other argument (a click event) = the save sheet */
+  openLogin: (purpose?: unknown) => void;
   closeLogin: () => void;
+  loginPurpose: 'save' | 'follow';
 }
 
 const Ctx = createContext<AccountValue | null>(null);
@@ -192,6 +195,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   const [entries, setEntries] = useState<SavedEntry[]>([]);
   const [savedReady, setSavedReady] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [loginPurpose, setLoginPurpose] = useState<'save' | 'follow'>('save');
   const migratedRef = useRef(false);
   // ── auth-race guard: while the sign-in select() is in flight, every toggle
   // is recorded here; the snapshot merge replays them so a save (or unsave)
@@ -478,7 +482,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   // Only meaningful in auth mode — never blow away the localStorage-mode list.
   const signOut = useCallback(async () => { if (!supabase) return; await supabase.auth.signOut(); setEntries([]); migratedRef.current = false; }, []);
 
-  const openLogin = useCallback(() => setLoginOpen(true), []);
+  const openLogin = useCallback((purpose?: unknown) => { setLoginPurpose(purpose === 'follow' ? 'follow' : 'save'); setLoginOpen(true); }, []);
   const closeLogin = useCallback(() => setLoginOpen(false), []);
   // memoized: a toast flash or unrelated provider render must not re-render
   // every save button and page consuming the account context
@@ -486,9 +490,9 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     authEnabled, user, authReady, savedReady,
     signInWithEmail, signInWithGoogle, signOut,
     savedIds, savedMeta, isSaved, toggle, ownedIds, toggleOwned, setSavedFields,
-    loginOpen, openLogin, closeLogin,
+    loginOpen, openLogin, closeLogin, loginPurpose,
   }), [user, authReady, savedReady, signInWithEmail, signInWithGoogle, signOut,
-    savedIds, savedMeta, isSaved, toggle, ownedIds, toggleOwned, setSavedFields, loginOpen, openLogin, closeLogin]);
+    savedIds, savedMeta, isSaved, toggle, ownedIds, toggleOwned, setSavedFields, loginOpen, openLogin, closeLogin, loginPurpose]);
 
   return (
     <Ctx.Provider value={value}>
@@ -527,7 +531,8 @@ export function useAuth() {
 
 // ── The login sheet — Google-only ──
 function LoginModal() {
-  const { signInWithGoogle, closeLogin } = useAccount();
+  const { signInWithGoogle, closeLogin, loginPurpose } = useAccount();
+  const follow = loginPurpose === 'follow';
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -553,14 +558,16 @@ function LoginModal() {
     <div className="ray-auth-scrim" role="presentation" onClick={closeLogin}>
       <div ref={cardRef} className="ray-auth-card" role="dialog" aria-modal="true" aria-label="Sign in" onClick={e => e.stopPropagation()}>
         <div className="ray-auth-head">
-          <span className="ray-auth-title">Sign in to save lots</span>
+          <span className="ray-auth-title">{follow ? 'Sign in to follow makers and players' : 'Sign in to save lots'}</span>
           <button className="ray-auth-x" aria-label="Close" onClick={closeLogin}>
             <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true" style={{ display: 'block' }}>
               <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </button>
         </div>
-        <p className="ray-auth-lede">Your saved lots follow you across devices — and only you can see them.</p>
+        <p className="ray-auth-lede">{follow
+          ? 'A maker or player you follow syncs to your account — new lots for them land in For you, and only you can see them.'
+          : 'Your saved lots follow you across devices — and only you can see them.'}</p>
 
         <button className="ray-auth-google" onClick={() => signInWithGoogle()}>
           <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h11.8c-.5 2.7-2 5-4.3 6.6v5.5h7C42.6 36.9 45.1 31.2 45.1 24.5z"/><path fill="#34A853" d="M24 46c5.8 0 10.6-1.9 14.2-5.2l-7-5.5c-1.9 1.3-4.4 2.1-7.2 2.1-5.5 0-10.2-3.7-11.9-8.7H4.9v5.7C8.5 41.6 15.7 46 24 46z"/><path fill="#FBBC05" d="M12.1 28.7c-.4-1.3-.7-2.7-.7-4.2s.3-2.9.7-4.2v-5.7H4.9C3.4 17.6 2.5 20.7 2.5 24s.9 6.4 2.4 9.1l7.2-4.4z"/><path fill="#EA4335" d="M24 11.1c3.1 0 5.9 1.1 8.1 3.2l6.1-6.1C34.6 4.8 29.8 2.9 24 2.9 15.7 2.9 8.5 7.3 4.9 14.9l7.2 5.7c1.7-5 6.4-8.7 11.9-8.7z"/></svg>
