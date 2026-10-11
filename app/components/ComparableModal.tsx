@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { AuctionLot } from '../types';
 import { marketOf } from '../constants';
 import { makerLineOf, labelLineOf, drillLabelOf } from '../lib/lot-labels';
-import { closeDayOf, houseColors, categoryColors, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText } from '../utils';
+import { closeDayOf, houseColors, categoryColors, formatDate, craftTitle, httpsImg, sizedImg, cleanText } from '../utils';
 import { contextComps, isSportsScienceObject, FORM_LABEL, signalMagnitude, type Form } from '../lib/comps';
 import { enginePoolOf } from '../lib/engine-pool';
 import { lotFace, fmtFace, medianRowId, valueSentence, FACE_LABEL } from '../lib/lot-face';
@@ -38,11 +38,9 @@ import '../northstar-pages.css';
 // makes a claim the temporal holdout validated: a DIRECTIONAL "trading below/
 // above comparable market" call (not a fabricated price), and — where a genuine
 // repeat sale exists — "this exact item last sold for $Z".
-function usd(n: number): string {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-  return `$${Math.round(n).toLocaleString()}`;
-}
+// (W23) the face formatter — "last sold for $8K" sat over the same sale's
+// "$8.3K" row in the list under it
+const usd = fmtFace;
 function LotValueBlock({ lot, allLots, market, backtest }: { lot: AuctionLot; allLots: AuctionLot[]; market: MarketData | null; backtest: Backtest | null }) {
   const v = (lot as AuctionLot & { value?: NonNullable<AuctionLot['value']> }).value;
   // ×5 ESTIMATE-BAND SANITY (mirrors scripts/build-upcoming.ts): a compRatio
@@ -121,8 +119,11 @@ function LotValueBlock({ lot, allLots, market, backtest }: { lot: AuctionLot; al
         </div>
       )}
       {/* (r9, QA4 B2) the lot page's max bid and same-card record, from the
-          same lot-face — the modal and the page print one card value */}
-      {v && !dir && face.value && lot.status === 'upcoming' && (face.maxBid || (face.card && face.card.n > 0)) && (
+          same lot-face — the modal and the page print one card value.
+          (W23) a directional call shows its max bid too: the walk-away is
+          the decision, and the lot page's read cell prints it — the modal
+          showed "+84% below market" over a $12K bid and no number to stop at */}
+      {v && face.value && lot.status === 'upcoming' && (face.maxBid || (face.card && face.card.n > 0)) && (
         <div style={{ fontSize: 13.5, marginTop: 4, color: 'var(--color-text-muted)' }}>
           {face.maxBid && (
             <span>Max bid <b style={{ color: 'var(--color-fg)', fontWeight: 500 }}>{face.maxBid.text}</b> · {face.maxBid.sub}</span>
@@ -217,7 +218,7 @@ function CardCompsBlock({ lot }: { lot: AuctionLot }) {
             {sales.map((s, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--color-text-secondary)' }}>
                 <span style={{ color: 'var(--color-text-faint)' }}>{s.d ? formatDate(s.d, { month: 'short', year: 'numeric' }) : '—'}{used[i] ? ' · in the last year · in the value' : ''}</span>
-                <span style={{ color: 'var(--color-fg)', fontWeight: 500 }}>{formatPrice(s.p)}</span>
+                <span style={{ color: 'var(--color-fg)', fontWeight: 500 }}>{fmtFace(s.p)}</span>
               </div>
             ))}
           </div>
@@ -239,7 +240,7 @@ function CardCompsBlock({ lot }: { lot: AuctionLot }) {
               const rv = rungView(r, fmtFace);
               return (
                 <span key={i} title={rv.meta} style={{ fontSize: 12.5, color: 'var(--color-text-secondary)', border: '1px solid var(--hairline)', borderRadius: 6, padding: '3px 8px' }}>
-                  {r.g} <b style={{ color: 'var(--color-fg)', fontWeight: 500 }}>{formatPrice(rv.price)}</b>
+                  {r.g} <b style={{ color: 'var(--color-fg)', fontWeight: 500 }}>{fmtFace(rv.price)}</b>
                   <span style={{ color: 'var(--color-text-faint)' }}> · {rv.basis === 'year' ? `${r.rn} in 12 mo` : `${r.n}${typeof r.rn === 'number' && r.y0 != null ? ` in ${yearsText(r.y0, r.y1 ?? r.y0)}` : ' all-time'}`}</span>
                 </span>
               );

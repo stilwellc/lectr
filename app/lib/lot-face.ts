@@ -327,7 +327,7 @@ export interface DecisionWhen { ms: number; timed: boolean; text: string }
 export interface Decision {
   close: DecisionClose | null;
   worth: DecisionWorth | null;
-  /** no max bid, and the engine abstained explicitly ("no engine read") */
+  /** no max bid, no value, and the engine abstained explicitly ("no engine read") */
   abstained: boolean;
   gap: DecisionGap | null;
   when: DecisionWhen | null;
@@ -427,7 +427,11 @@ export function decisionOf(lot: AuctionLot, nowMs: number = Date.now(), face: Lo
     ? { usd: mb.hammer, text: `worth up to ${fmtFace(mb.hammer)}`, title: `lectr’s max bid ${mb.text} — ${mb.sub}` }
     : null;
   const ab = (lot.value as { abstain?: string | null } | null | undefined)?.abstain;
-  const abstained = !worth && typeof ab === 'string' && ab.length > 0;
+  // (W23) "no engine read" only when there is NO read: an abstain that held
+  // back the FLAG ('flag:purity') or the max bid (a low-confidence value)
+  // still prints a lectr value on the lot — 102 live lots read "no engine
+  // read" in the line over "lectr value $2.61M" in the rows under it
+  const abstained = !worth && !face.value && typeof ab === 'string' && ab.length > 0;
 
   let gap: DecisionGap | null = null;
   if (close && worth) {

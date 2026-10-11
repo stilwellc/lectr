@@ -15,13 +15,13 @@ import { useSavedLots } from '../hooks/useSavedLots';
 import { useLearnVisit } from '../lib/recs-signals';
 import { useRefs } from '../hooks/useRefs';
 import { safeHref } from '../lib/safe-href';
-import { closeDayOf, isLiveUpcoming, localToday, splitTitle, deglue, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
+import { closeDayOf, isLiveUpcoming, localToday, splitTitle, deglue, formatDate, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
 import { isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand, contextComps } from '../lib/comps';
 import { enginePoolOf } from '../lib/engine-pool';
 import { lotFace, fmtFace, medianRowId, FACE_LABEL, projectedCloseFace } from '../lib/lot-face';
 import { lotAllInFactor } from '../lib/premiums';
 import { lotFloor } from '../lib/verdict';
-import { formatEstimate, estimateOnly, lotSignal, confidenceMeter } from './LotCard';
+import { formatEstimate, lotSignal, confidenceMeter } from './LotCard';
 import { daysWord, Colophon } from './Terminal';
 import ArtistNav from './ArtistNav';
 import FollowButton from './FollowButton';
@@ -63,6 +63,32 @@ import { ladderBasisText, rungView, valueRowFlags } from '../lib/card-record';
  *  leaned on a floor the engine itself would not certify. */
 function gatedFloor(lot: AuctionLot): number | null {
   return lotFloor(lot);
+}
+
+/** (W23) THE LOT PAGE'S MONEY IN ONE FORMAT — lot-face fmtFace, the figure
+ *  the decision line, the value and the max bid print — with estimate-text's
+ *  wording (formatEstimate / estimateOnly) but never its whole-K rounding: a
+ *  $1,272 bid read "$1K bid", its all-in "$2K", beside "projected close
+ *  ~$3.3K"; one Bonhams estimate read "$7K–$9K est." in the byline and
+ *  "estimate $6.9K–$9.2K" in the decision line under it. */
+const foldText = (t: string | null | undefined): string =>
+  String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+
+function estimateFaceOnly(lot: AuctionLot): string {
+  const lo = lot.estimateLow || 0, hi = lot.estimateHigh || 0;
+  if (lo > 0 && hi > 0) { const a = fmtFace(lo), b = fmtFace(hi); return a === b ? a : `${a}–${b}`; }
+  if (lo > 0) return `from ${fmtFace(lo)}`;
+  if (hi > 0) return `to ${fmtFace(hi)}`;
+  return '—';
+}
+function estimateFace(lot: AuctionLot): string {
+  if (lot.estimateLow && lot.estimateHigh) return `${estimateFaceOnly(lot)} est.`;
+  // a bid sale's live bid is the honest number (formatEstimate's rule)
+  if (lot.currentBid && lot.currentBid > 0) {
+    return `${fmtFace(lot.currentBid)} bid${lot.bidCount ? ` · ${lot.bidCount} ${lot.bidCount === 1 ? 'bid' : 'bids'}` : ''}`;
+  }
+  if (lot.estimateLow || lot.estimateHigh) return `${estimateFaceOnly(lot)} est.`;
+  return formatEstimate(lot);
 }
 
 /* The copy button styles itself (id-guarded head injection, LotCard's
@@ -159,6 +185,14 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
 .lectr-lot-lv{font-size:13.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--color-fg);white-space:nowrap}
 .lectr-lot-lv.up{color:var(--color-up)}
 .lectr-lot-lv.down{color:var(--color-down)}
+/* (W23) a long sub WRAPS IN PLACE — the value line ("expected hammer ·
+   likely $13K–$32K · from 2 sales of this card & grade in the last year")
+   ran nowrap under the label at 1024–1280 and orphaned the figure on its own
+   line on a phone. The sub takes the room left between label and figure and
+   wraps there (same 11px); the figure never wraps away from it. */
+.lectr-lot .ns-ledger-row>.lectr-lot-lval{flex:0 1 auto}
+.lectr-lot-lsub{white-space:normal;min-width:0;text-wrap:pretty}
+.lectr-lot-lv{flex:none}
 /* the read as color — compact ns-cell-color face; ground = the signal */
 .lectr-lot-read{min-height:0;padding:20px 22px;border-radius:16px;margin:18px 0 4px}
 .lectr-lot-read-stat{font-family:var(--font-mono),monospace;font-size:clamp(30px,3.2vw,40px);font-weight:500;letter-spacing:-0.02em;line-height:1;font-variant-numeric:tabular-nums;margin:10px 0 8px}
@@ -213,9 +247,9 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
   .lectr-lot-row{flex-wrap:wrap}
   .lectr-lot-sub{white-space:normal}
   .lectr-lot-v{max-width:100%;overflow:hidden;text-overflow:ellipsis}
-  /* north-star rows: same wrap doctrine on the new ledger grammar */
-  .lectr-lot-lval{flex-wrap:wrap}
-  .lectr-lot-lsub{white-space:normal}
+  /* north-star rows: same wrap doctrine on the new ledger grammar — the
+     sub wraps beside its figure (W23), the figure ellipsizes before it
+     ever pushes the page wide */
   .lectr-lot-lv{max-width:100%;overflow:hidden;text-overflow:ellipsis}
   .lectr-lot .ns-byline .s{max-width:100%}
   .lectr-lot-read-stat{font-size:30px}
@@ -224,6 +258,15 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
    and its own gap rhythm; this flex-era tightening must not override it */
 @media (min-width:641px) and (max-width:899px){
   .lectr-lot .ns-byline{gap:8px 28px}
+}
+/* (W23) phone: a row with a sentence-long sub reads label + figure on one
+   line and the sub under them as its caption — never the figure alone on a
+   third line */
+@media (max-width:640px){
+  .lectr-lot .ns-ledger-row.lectr-lot-lrow-long{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:16px;row-gap:3px;align-items:baseline}
+  .lectr-lot-lrow-long>.lectr-lot-lval{display:contents}
+  .lectr-lot-lrow-long .lectr-lot-lv{grid-column:2;grid-row:1;justify-self:end}
+  .lectr-lot-lrow-long .lectr-lot-lsub{grid-column:1/-1;grid-row:2;margin:0}
 }
 `;
 
@@ -290,11 +333,14 @@ export function CopyLinkButton({ id, style, compact }: {
 /** One certificate spec row in the north-star ledger grammar: label left,
     sub + value right, dotted hairline between rows (.ns-ledger-row). Tone
     stays lamp-lawful — up/down only ever carry the signal's own direction. */
+/** a sub past this many characters cannot sit beside label + figure on a
+    phone (≈150px left at 360) — it rides under them (.lectr-lot-lrow-long) */
+const LONG_SUB = 44;
 function LeaderRow({ k, v, tone, sub, children }: {
   k: string; v?: string; tone?: 'up' | 'down'; sub?: string; children?: React.ReactNode;
 }) {
   return (
-    <div className="ns-ledger-row">
+    <div className={`ns-ledger-row${sub && sub.length > LONG_SUB ? ' lectr-lot-lrow-long' : ''}`}>
       <span className="lectr-lot-lk">{k}</span>
       <span className="lectr-lot-lval">
         {sub && <span className="lectr-lot-lsub">{sub}</span>}
@@ -381,7 +427,14 @@ function TrailRow({ id, when, house, title, img, price, note }: {
     certificate: the exact model, every house, realized prices. Identity is
     the dossier's own (maker + reference, ref-path codec both sides — the
     ReferenceRow's existence test), never similarity. */
-function ReferenceSales({ maker, reference, selfId }: { maker: string; reference: string; selfId: string }) {
+function ReferenceSales({ maker, reference, selfId, quietMedian }: {
+  maker: string; reference: string; selfId: string;
+  /** (W23) the page already prints this lot's comps median — the dossier's
+   *  all-sales median (every metal, every dial: Daytona 6265 "$59K median ·
+   *  150 sales" over a gold lot's "$78K" comps median) would be a second
+   *  median for the same question; the count stays */
+  quietMedian?: boolean;
+}) {
   const { refs } = useRefs();
   const entry = useMemo(
     () => refs?.find(r => r.maker === maker && encodeRefPath(r.ref) === encodeRefPath(reference)) || null,
@@ -397,7 +450,9 @@ function ReferenceSales({ maker, reference, selfId }: { maker: string; reference
           <h2 className="lectr-lot-h2">This reference, recent sales</h2>
         </div>
         <span className="lectr-lot-shctx">
-          {fmtFace(entry.medianUsd)} median · {entry.n.toLocaleString()} {entry.n === 1 ? 'sale' : 'sales'}
+          {quietMedian
+            ? `${entry.n.toLocaleString()} ${entry.n === 1 ? 'sale' : 'sales'} of this reference on file`
+            : `${fmtFace(entry.medianUsd)} median · ${entry.n.toLocaleString()} ${entry.n === 1 ? 'sale' : 'sales'}`}
         </span>
       </div>
       <div style={{ marginTop: 6 }}>
@@ -1009,6 +1064,10 @@ export default function LotPage({ lotId, initialLot }: {
   // the grade ladder: the lot's own rung marked; a long ladder (the 1951
   // Bowman Mantle carries 27 rungs) folds to the rungs around it
   const ladder = lot.cardComps?.gradeLadder || [];
+  const ownAll = (() => {
+    const cc = lot.cardComps;
+    return cc && cc.med != null && cc.med > 0 && cc.n > 0 ? { med: cc.med, n: cc.n } : null;
+  })();
   const ownRung = ladder.length > 1 ? ownRungOf(lot) : null;
   const ladderView = (() => {
     if (ladderOpen || ladder.length <= LADDER_FOLD) return ladder;
@@ -1085,9 +1144,9 @@ export default function LotPage({ lotId, initialLot }: {
                 {provenance.map(p => {
                   const here = p.id === lot.id;
                   const money = p.status === 'sold' && p.priceUsd
-                    ? formatPrice(p.priceUsd)
+                    ? fmtFace(p.priceUsd)
                     : p.status === 'bought_in' ? 'bought in'
-                    : p.status === 'upcoming' ? (formatEstimate(p) || 'on the block') : '—';
+                    : p.status === 'upcoming' ? (estimateFace(p) || 'on the block') : '—';
                   const inner = (
                     <>
                       <span className="lectr-lot-comp-i" aria-hidden>{here ? '·' : ''}</span>
@@ -1149,7 +1208,7 @@ export default function LotPage({ lotId, initialLot }: {
 
           {/* (W11) the reference's own record — watch lots with a dossier */}
           {marketKey === 'watches' && lot.reference && (
-            <ReferenceSales maker={lot.artist} reference={lot.reference} selfId={lot.id} />
+            <ReferenceSales maker={lot.artist} reference={lot.reference} selfId={lot.id} quietMedian={compsMed != null} />
           )}
 
           {/* (W11) THIS EDITION, SOLD BEFORE — other impressions of the same
@@ -1190,8 +1249,12 @@ export default function LotPage({ lotId, initialLot }: {
                 <span className="lectr-lot-shctx">{ladderBasisText(ladder)}</span>
               </div>
               <div style={{ marginTop: 6 }}>
-                {ladderView.map(r => {
-                  const own = r.g === ownRung;
+                {ladderView.map(r0 => {
+                  const own = r0.g === ownRung;
+                  // (W23) the lot's own rung IS this card & grade — the record
+                  // the section above and the "This card" row print (the rung
+                  // read "19 sales $2K" under "$2.5K median · 18 sales")
+                  const r = own && ownAll ? { ...r0, med: ownAll.med, n: ownAll.n } : r0;
                   const rv = rungView(r, fmtFace);
                   return (
                     <span key={r.g} className="lectr-lot-comp" style={{ cursor: 'default' }} aria-current={own ? 'true' : undefined}>
@@ -1199,7 +1262,7 @@ export default function LotPage({ lotId, initialLot }: {
                         <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{r.g}{own ? ' — this lot' : ''}</span>
                         <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>{rv.meta}</span>
                       </span>
-                      <span className="lectr-lot-comp-p">{formatPrice(rv.price)}</span>
+                      <span className="lectr-lot-comp-p">{fmtFace(rv.price)}</span>
                     </span>
                   );
                 })}
@@ -1278,15 +1341,15 @@ export default function LotPage({ lotId, initialLot }: {
                 </div>
                 <div className="v">
                   {isSold
-                    ? (lot.status === 'bought_in' ? 'bought in' : lot.priceUsd ? formatPrice(lot.priceUsd) : '—')
+                    ? (lot.status === 'bought_in' ? 'bought in' : lot.priceUsd ? fmtFace(lot.priceUsd) : '—')
                     : isWithdrawn ? 'withdrawn'
-                    : (formatEstimate(lot) || '—')}
+                    : (estimateFace(lot) || '—')}
                 </div>
                 {isWithdrawn && (lot.estimateLow || lot.estimateHigh) ? (
-                  <div className="s">{estimateOnly(lot)} est.</div>
+                  <div className="s">{estimateFaceOnly(lot)} est.</div>
                 ) : null}
                 {!isSold && !isWithdrawn && !(lot.estimateLow && lot.estimateHigh) && !!(lot.estimateLow || lot.estimateHigh) && (lot.currentBid || 0) > 0 && (
-                  <div className="s">{estimateOnly(lot)} est.</div>
+                  <div className="s">{estimateFaceOnly(lot)} est.</div>
                 )}
               </div>
               <div>
@@ -1402,7 +1465,7 @@ export default function LotPage({ lotId, initialLot }: {
 
             <div className="lectr-lot-leaders">
               {isSold && (lot.estimateLow || lot.estimateHigh) ? (
-                <LeaderRow k="Estimate" v={formatEstimate(lot)} />
+                <LeaderRow k="Estimate" v={estimateFace(lot)} />
               ) : null}
 
               {compsMed != null && (
@@ -1420,15 +1483,15 @@ export default function LotPage({ lotId, initialLot }: {
               )}
 
               {isUpcoming && !sig && band && (
-                <LeaderRow k="Similar sold" v={`${formatPrice(band.low)}–${formatPrice(band.high)}`} sub={`${band.n} sales`} />
+                <LeaderRow k="Similar sold" v={`${fmtFace(band.low)}–${fmtFace(band.high)}`} sub={`${band.n} sales`} />
               )}
 
               {/* ── the action rows (Aug 13 value audit): turn the read into a bid ── */}
               {isActionable && (lot.currentBid || 0) > 0 && (
                 <LeaderRow
                   k="All-in today"
-                  v={formatPrice(Math.round(lot.currentBid! * lotAllInFactor(lot, lot.currentBid)))}
-                  sub={`${formatPrice(lot.currentBid!)} bid + ~${Math.round((lotAllInFactor(lot, lot.currentBid) - 1) * 100)}% premium`}
+                  v={fmtFace(Math.round(lot.currentBid! * lotAllInFactor(lot, lot.currentBid)))}
+                  sub={`${fmtFace(lot.currentBid!)} bid + ~${Math.round((lotAllInFactor(lot, lot.currentBid) - 1) * 100)}% premium`}
                 />
               )}
               {isActionable && (() => {
@@ -1451,15 +1514,25 @@ export default function LotPage({ lotId, initialLot }: {
                 const pc = projectedCloseFace(lot);
                 if (!pc) return null;
                 const floor = gatedFloor(lot);
-                const below = !!floor && pc.allIn < floor;
+                // (W23) held against the lectr value's PRINTED likely range,
+                // hammer to hammer — the floor (value.low) is that range's low
+                // edge all-in, and printed as "$3K floor" beside "likely
+                // $2.2K–$5.3K" it read as a third, unexplained number
+                const fv = face?.value;
+                const below = fv ? pc.hammer < fv.lo : !!floor && pc.allIn < floor;
+                const where = fv
+                  ? (below ? `under the likely low ${fmtFace(fv.lo)}` : pc.hammer > fv.hi ? `over the likely high ${fmtFace(fv.hi)}` : 'inside the likely range')
+                  : null;
                 return (
                   <LeaderRow
                     k="Projected close"
                     v={pc.text}
-                    tone={below ? 'up' : undefined}
-                    sub={floor
-                      ? (below ? `${pc.allInText} · still under the ${formatPrice(floor)} floor` : `${pc.allInText} vs ${formatPrice(floor)} floor`)
-                      : `hammer · ${pc.allInText} with ~${pc.premiumPct}% premium`}
+                    tone={below && floor ? 'up' : undefined}
+                    sub={where && floor
+                      ? `hammer · ${pc.allInText} · ${where}`
+                      : floor
+                        ? (below ? `${pc.allInText} · still under the ${fmtFace(floor)} all-in floor` : `${pc.allInText} vs ${fmtFace(floor)} all-in floor`)
+                        : `hammer · ${pc.allInText} with ~${pc.premiumPct}% premium`}
                   />
                 );
               })()}
@@ -1474,7 +1547,7 @@ export default function LotPage({ lotId, initialLot }: {
                 return (
                   <LeaderRow
                     k="Also live at"
-                    v={`${sibs[0].house} · ${sibs[0].bid > 0 ? formatPrice(sibs[0].bid) + ' bid' : 'open'}`}
+                    v={`${sibs[0].house} · ${sibs[0].bid > 0 ? fmtFace(sibs[0].bid) + ' bid' : 'open'}`}
                     sub={sibs.length > 1
                       ? (others ? `same card at ${others} other venues` : 'same card at other venues')
                       : 'the same card, head to head'}
@@ -1512,7 +1585,7 @@ export default function LotPage({ lotId, initialLot }: {
                   ? `${dr.index.horizon} ${pct! >= 0 ? '+' : ''}${pct!.toFixed(0)}% verified [${dr.index.ciLoPct.toFixed(0)}, ${dr.index.ciHiPct.toFixed(0)}] · ${dr.lots.toLocaleString()} lots`
                   : dr.readType === 'demand' && pct != null
                     ? `${pct >= 0 ? '+' : ''}${pct.toFixed(0)}% vs estimate, trailing year · ${dr.lots.toLocaleString()} lots`
-                    : `${dr.lots.toLocaleString()} lots tracked${dr.typicalUsd != null ? ` · ${formatPrice(dr.typicalUsd)} typical` : ''}`;
+                    : `${dr.lots.toLocaleString()} lots tracked${dr.typicalUsd != null ? ` · ${fmtFace(dr.typicalUsd)} typical` : ''}`;
                 const ref = drillSlugFor(lot);
                 const tone: 'up' | 'down' | undefined = pct != null ? (pct >= 0 ? 'up' : 'down') : undefined;
                 if (ref) {
@@ -1536,8 +1609,8 @@ export default function LotPage({ lotId, initialLot }: {
               {showRefBand && refBand && (
                 <LeaderRow
                   k="Reference comps"
-                  v={`${formatPrice(refBand.q1)}–${formatPrice(refBand.q3)}`}
-                  sub={`${formatPrice(refBand.med)} median · ${refBand.n} sales · low-confidence reference`}
+                  v={`${fmtFace(refBand.q1)}–${fmtFace(refBand.q3)}`}
+                  sub={`${fmtFace(refBand.med)} median · ${refBand.n} sales · low-confidence reference`}
                 />
               )}
 
@@ -1637,9 +1710,15 @@ export default function LotPage({ lotId, initialLot }: {
                     <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
                       <span style={{ color: houseColors[comp.auctionHouse] || 'var(--color-text-faint)', fontWeight: 600 }}>{comp.auctionHouse}</span>
                       {' · '}{formatDate(comp.saleDate, { month: 'short', year: 'numeric' })}
-                      {comp.medium ? ` · ${deglue(cleanText(comp.medium))}` : ''}
-                      {/* (r8) the weighted median IS one of these sales — name it */}
+                      {/* (r8) the weighted median IS one of these sales — name
+                          it (W23: ahead of the medium, which the ellipsis cuts) */}
                       {!band && compsMed != null && face?.comps && enginePool && comp.id === medianRowId(all, compsMed) ? ' · the median' : ''}
+                      {(() => {
+                        // a medium the title already carries (Christie's rows
+                        // echo the secondary title there) is not printed twice
+                        const m = comp.medium ? deglue(cleanText(comp.medium)) : '';
+                        return m && !foldText(comp.title).includes(foldText(m)) ? ` · ${m}` : '';
+                      })()}
                     </span>
                   </span>
                   <span className="lectr-lot-comp-p">{comp.priceUsd ? fmtFace(comp.priceUsd) : '—'}</span>
