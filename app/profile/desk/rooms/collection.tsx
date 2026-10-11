@@ -1,0 +1,207 @@
+'use client';
+/**
+ * YOUR COLLECTION — the certificate for what you own (lifted from page.tsx
+ * unchanged): byline, the appraisal-vs-bought chart, where it trades, the
+ * piece ledger with its cost-basis/note editor.
+ */
+import React, { useState } from 'react';
+import Link from 'next/link';
+import HeroChart from '../../../preview/terminal/HeroChart';
+import Flick from '../../../components/Flick';
+import { CollectionMark } from '../../../components/marks';
+import { closeDayOf, formatPrice, formatDate, craftTitle, fmtSignedPct } from '../../../utils';
+import { makerLineOf, labelLineOf, drillLabelOf } from '../../../lib/lot-labels';
+import { RoomHead } from '../../head';
+import { useDeskInternals, type DeskInternals } from '../provider';
+import type { SectionProps, SectionMeta, DeskData } from '../types';
+import { Term } from './shared';
+
+/** Inline cost-basis + note editor for a collection piece. Paid overrides
+    the hammer price in every collection figure; the note is private ink on
+    the row. Both persist per save (Enter or Save commits). */
+function PieceEditor({ paid, note, onSave, onClose }: {
+  paid: number | null; note: string | null;
+  onSave: (patch: { paidUsd: number | null; note: string | null }) => void;
+  onClose: () => void;
+}) {
+  const [paidStr, setPaidStr] = useState(paid != null ? String(paid) : '');
+  const [noteStr, setNoteStr] = useState(note || '');
+  const commit = () => {
+    const cleaned = paidStr.replace(/[$,\s]/g, '');
+    const n = cleaned === '' ? null : Number(cleaned);
+    onSave({ paidUsd: n != null && Number.isFinite(n) && n >= 0 ? Math.round(n) : null, note: noteStr.trim() || null });
+    onClose();
+  };
+  const onKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') onClose(); };
+  return (
+    <div className="ck-piece-edit">
+      <label>
+        <span className="kicker">Paid</span>
+        <input inputMode="decimal" value={paidStr} onChange={e => setPaidStr(e.target.value)} onKeyDown={onKey}
+          placeholder="what you paid, $" aria-label="What you paid, in dollars" />
+      </label>
+      <label style={{ flex: 1, minWidth: 180 }}>
+        <span className="kicker">Note</span>
+        <input value={noteStr} onChange={e => setNoteStr(e.target.value)} onKeyDown={onKey}
+          placeholder="private note" maxLength={200} aria-label="Private note" />
+      </label>
+      <button type="button" className="ray-own-btn" onClick={commit}>Save</button>
+      <button type="button" className="ray-own-x" style={{ fontSize: 12 }} aria-label="Cancel" onClick={onClose}>Cancel</button>
+    </div>
+  );
+}
+
+export function when(_desk: DeskData, i: DeskInternals): boolean { return i.deskView && i.collection.rows.length > 0; }
+export function meta(_desk: DeskData, i: DeskInternals): SectionMeta | null {
+  if (!when(_desk, i)) return null;
+  const c = i.collection;
+  return { id: 'collection', label: 'Collection', count: c.appraisedN > 0 ? formatPrice(c.totalAppraised) : c.rows.length };
+}
+
+export default function CollectionRoom(_p: SectionProps) {
+  const i = useDeskInternals();
+  const { collection, collectionChart, exposure, fullLoaded, fullError, fullSlow, setSavedFields } = i;
+  // which collection piece has its cost-basis/note editor open
+  const [editPiece, setEditPiece] = useState<string | null>(null);
+  return (
+    <div id="collection" className="ray-band ray-enter" style={{ marginTop: 30, paddingBlock: '28px 30px' }}>
+      <section className="rail" aria-label="Your collection">
+        <RoomHead mark={<CollectionMark size={17} />} title="Your collection"
+          sub={<>{collection.rows.length} {collection.rows.length === 1 ? 'piece' : 'pieces'} held · {collection.appraisedN > 0 ? `${collection.appraisedN} appraised from comps` : 'none appraised from comps yet'}</>} />
+        {/* the certificate's provenance ledger — gray label over black
+            value, dotted closing rule; the signed delta keeps its ink */}
+        <div className="ns-byline" style={{ margin: '14px 0 2px' }}>
+          <div>
+            <div className="k">Pieces</div>
+            <div className="v">{collection.rows.length}</div>
+          </div>
+          {collection.totalPaid > 0 && (
+            <div>
+              {/* (W19) a price the reader never entered is the lot's
+                  realized price — say so, never imply they told us */}
+              <div className="k">Bought{collection.rows.every(r => !r.paidIsOverride) ? ' · at the realized price' : ''}</div>
+              <div className="v">{formatPrice(collection.totalPaid)}</div>
+            </div>
+          )}
+          <div>
+            {/* (W19) with no piece read from comps the "appraisal" was
+                only the bought prices summed back — no number then */}
+            <div className="k">lectr appraisal{collection.appraisedN > 0 && collection.appraisedN < collection.rows.length ? ` · ${collection.appraisedN} of ${collection.rows.length} from comps` : ''}</div>
+            <div className="v">{collection.appraisedN > 0 ? formatPrice(collection.totalAppraised) : <span title="none of your pieces has a comp pool yet">—</span>}</div>
+          </div>
+          {collection.deltaPct != null && collection.deltaPct !== 0 && collection.appraisedPaidN > 0 && (
+            <div>
+              <div className="k">Appraised vs bought</div>
+              <div className="v" style={{ fontWeight: 600, color: collection.deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
+                {fmtSignedPct(collection.deltaPct)}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {collectionChart && (
+          <div style={{ margin: '18px 0 8px' }}>
+            <div className="kicker" style={{ marginBottom: 4, color: 'var(--paper-muted, var(--color-text-muted))' }}>
+              Your collection over time · appraisal vs bought · daily snapshots
+            </div>
+            <HeroChart anchor={collectionChart.anchor} layers={collectionChart.layers} height={150} compact play={false} />
+          </div>
+        )}
+
+        {exposure.length > 0 && (
+          <div style={{ margin: '18px 0 4px' }}>
+            <div className="kicker" style={{ padding: '0 0 2px', color: 'var(--paper-muted, var(--color-text-muted))' }}>
+              Where it trades · the market&rsquo;s move, not your pieces&rsquo;
+            </div>
+            {exposure.map(({ row, n, held }) => {
+              const read = row.readType === 'index' && row.index
+                ? (() => { const r = Math.round(row.index!.changePct); return { txt: `${fmtSignedPct(r)} ${row.index!.horizon} verified`, dir: r > 0 ? 'up' : r < 0 ? 'down' : 'flat' }; })()
+                : row.readType === 'demand' && row.demandNow != null
+                  ? (() => { const r = Math.round(row.demandNow!); return { txt: `${fmtSignedPct(r)} vs estimate`, dir: r > 0 ? 'up' : r < 0 ? 'down' : 'flat' }; })()
+                  : null;
+              return (
+                <Link key={row.slug} href={`/sub/${row.slug.replace(':', '/')}`} className="ray-coll-exposure-row">
+                  <span style={{ fontSize: 13.5, fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {drillLabelOf(row.slug, row.label)} <Flick size={9} style={{ marginLeft: 2 }} />
+                  </span>
+                  <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                    {n} {n === 1 ? 'piece' : 'pieces'} · {formatPrice(held)} held
+                  </span>
+                  <span style={{ width: 150, textAlign: 'right', fontSize: 12.5, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', fontFamily: read ? 'var(--font-mono), monospace' : undefined, color: read ? (read.dir === 'up' ? 'var(--color-up)' : read.dir === 'down' ? 'var(--color-down-text)' : 'var(--color-fg)') : 'var(--color-text-faint)' }}>
+                    {read ? read.txt : `${row.lots.toLocaleString()} lots tracked`}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="kicker ck-piece-head" style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '14px 0 6px', color: 'var(--paper-muted, var(--color-text-muted))' }}>
+          <div style={{ flex: 1 }}>Piece</div>
+          <div style={{ width: 92, textAlign: 'right' }}>Bought</div>
+          <div style={{ width: 128, textAlign: 'right' }}><Term k="appraisal">lectr appraisal</Term></div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {collection.rows.map(({ lot, paid, paidIsOverride, note, savedId, appraised, basis, deltaPct, drill, drillSlug }) => (
+            <React.Fragment key={lot.id}>
+              {/* the spec-sheet row — dotted hairline ledger (ns-ledger-row);
+                  a phone stacks it: title (2 lines), meta, then
+                  Bought · Appraisal side by side with their labels */}
+              <div className="ns-ledger-row ck-piece" style={{ gap: 12 }}>
+                <div className="ck-piece-main">
+                  <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                    <div className="ck-piece-title">{craftTitle(lot.title, lot.auctionHouse)}</div>
+                  </Link>
+                  <div className="ck-piece-meta">
+                    <span>{[makerLineOf(lot).name, labelLineOf(lot), lot.auctionHouse, closeDayOf(lot) ? formatDate(closeDayOf(lot)) : ''].filter(Boolean).join(' · ')}</span>
+                    {drill && drillSlug && (
+                      <Link href={`/sub/${drillSlug.replace(':', '/')}`} className="ray-coll-chip">{drillLabelOf(drillSlug, drill.label)}</Link>
+                    )}
+                    <button type="button" className="ck-piece-editbtn"
+                      aria-expanded={editPiece === lot.id}
+                      aria-label={`Edit cost basis and note for ${craftTitle(lot.title, lot.auctionHouse)}`}
+                      onClick={() => setEditPiece(p => (p === lot.id ? null : lot.id))}>
+                      {paidIsOverride || note ? 'edit' : 'set what you paid'}
+                    </button>
+                  </div>
+                  {note && <div className="ck-piece-note">{note}</div>}
+                </div>
+                <div className="ck-piece-paid"
+                  title={paidIsOverride ? 'Your recorded cost basis' : 'Realized price — set what you paid to override'}>
+                  <span className="ck-piece-k kicker">Bought</span>
+                  {paid != null ? formatPrice(paid) : '—'}
+                  {paidIsOverride && <span className="ck-piece-basis">your basis</span>}
+                </div>
+                <div className="ck-piece-appr">
+                  <span className="ck-piece-k kicker">Appraisal</span>
+                  <div className="ck-piece-v">
+                    {appraised != null ? formatPrice(appraised) : '—'}
+                    {deltaPct != null && deltaPct !== 0 && (
+                      <span style={{ marginLeft: 6, fontSize: 12, fontWeight: 600, color: deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
+                        {deltaPct > 0 ? '+' : '−'}{Math.abs(deltaPct)}%
+                      </span>
+                    )}
+                  </div>
+                  <div className="ck-piece-src">
+                    {basis ?? (fullLoaded ? 'no comps yet' : fullError ? 'couldn’t load comps' : fullSlow ? 'comps slow to load' : 'appraising…')}
+                  </div>
+                </div>
+              </div>
+              {editPiece === lot.id && (
+                <PieceEditor paid={paidIsOverride ? paid : null} note={note}
+                  onSave={patch => setSavedFields(savedId, patch)}
+                  onClose={() => setEditPiece(null)} />
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+        <p style={{ fontSize: 11.5, color: 'var(--color-text-muted)', margin: '14px 0 0' }}>
+          The lectr appraisal is the median its comparable sales currently trade at — our read from the data,
+          not a formal appraisal. Pieces without a usable comp pool carry at their bought price in the total;
+          a reference range is context only and never enters a number. The headline &plusmn;% compares
+          only pieces with a recorded bought price.
+        </p>
+      </section>
+    </div>
+  );
+}

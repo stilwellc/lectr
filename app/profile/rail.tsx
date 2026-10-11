@@ -14,6 +14,7 @@
  * section's own null gate — the page passes only what renders.
  */
 import React, { useEffect, useRef, useState } from 'react';
+import { HelpChip } from './help';
 
 export interface RailItem {
   id: string;
@@ -28,9 +29,13 @@ export interface RailItem {
   dot?: boolean;
   /** the page's grouping (now · picks · desk) — a hairline parts the groups */
   group?: string;
+  /** the pill's title — the `g`-chord that lands here ("g then w") */
+  hint?: string;
 }
 
-function jump(id: string) {
+/** scroll a section into view and stamp its hash (replaceState — Back
+ *  leaves the page rather than walking sections) */
+export function jump(id: string) {
   const el = document.getElementById(id);
   if (!el) return;
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -70,7 +75,9 @@ const toneInk = (t?: 'up' | 'down') => (t === 'up' ? 'var(--color-up)' : t === '
 
 /** the sticky pill rail. Place it as a direct child of the page-long
  *  wrapper so it stays pinned past every section. */
-export function PillRail({ items }: { items: RailItem[] }) {
+export function PillRail({ items, help }: { items: RailItem[];
+  /** the how-to-read strip behind the rail's (?) — the keys legend */
+  help?: React.ReactNode }) {
   const active = useActive(items.map(i => i.id));
   // keep the active pill in view inside the rail's own sideways scroll
   useEffect(() => {
@@ -109,7 +116,7 @@ export function PillRail({ items }: { items: RailItem[] }) {
           <React.Fragment key={it.id}>
           {i > 0 && it.group && items[i - 1].group && it.group !== items[i - 1].group && <i className="ck-rail-sep" aria-hidden />}
           <a href={`#${it.id}`} data-id={it.id} className="ck-rail-pill" aria-current={active === it.id ? 'true' : undefined}
-            onClick={e => { e.preventDefault(); jump(it.id); }}>
+            title={it.hint} onClick={e => { e.preventDefault(); jump(it.id); }}>
             {it.label}
             {it.count != null && <b style={{ color: toneInk(it.tone) }}>{it.count}</b>}
             {it.dot && <i className="ck-rail-dot" aria-label="new matches" />}
@@ -117,6 +124,8 @@ export function PillRail({ items }: { items: RailItem[] }) {
           </React.Fragment>
         ))}
       </div>
+      {/* the keys legend rides outside the scroller, so it never scrolls away */}
+      {help && <div className="ck-rail-help"><HelpChip name="the keys" stripStyle={{ position: 'absolute', left: 0, right: 0, top: '100%', margin: 0 }}>{help}</HelpChip></div>}
     </nav>
   );
 }

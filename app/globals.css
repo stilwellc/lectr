@@ -4544,7 +4544,131 @@ button.ns-stat { cursor: pointer; }
 .ck-deskdetails > p { margin: 4px 0 6px; max-width: 760px; line-height: 1.6; color: var(--color-text-secondary); }
 
 /* every section lands under the nav + the pill rail (one rail, every width) */
-.ck-page :is(#desk, #today, #for-you, #watching, #signals, #inbox, #on-device, #record, #collection, #history, #settled, #account) { scroll-margin-top: 116px; }
+.ck-page :is(#desk, #today, #week, #for-you, #for-collection, #pick-outcomes, #watching, #budget, #portfolio, #market, #names, #signals, #inbox, #on-device, #record, #edge, #collection, #history, #settled, #account) { scroll-margin-top: 116px; }
+
+/* ── THE COCKPIT (THE DESK v3 §0) — three registration cells under the
+   masthead's statement, then the 14-day hammer strip. Registration grammar:
+   one hairline plate (ns-plate crop marks), cells parted by hairlines, the
+   value in mono at cell scale (ns-cell-stat), gray label over ink body. ── */
+.ck-cockpit { margin-top: 16px; }
+.ck-ccells {
+  position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline);
+}
+.ck-ccells::before, .ck-ccells::after {
+  content: ''; position: absolute; top: -2px; width: 3px; height: 3px; border-radius: 50%; background: var(--color-border-mid);
+}
+.ck-ccells::before { left: -1.5px; }
+.ck-ccells::after { right: -1.5px; }
+.ck-ccell {
+  display: flex; flex-direction: column; gap: 5px; min-width: 0;
+  padding: 12px 18px 12px 0; color: inherit; text-decoration: none;
+  border-left: 1px solid var(--hairline); padding-left: 18px;
+  transition: background 150ms var(--ease-house, ease);
+}
+.ck-ccell:first-child { border-left: none; padding-left: 2px; }
+.ck-ccell:last-child { padding-right: 2px; }
+a.ck-ccell:hover { background: var(--color-hover-item); }
+.ck-ccell-k { font-size: 12.5px; font-weight: 450; color: var(--color-text-muted); }
+.ck-ccell-v {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px;
+  font-family: var(--font-mono), monospace; font-size: clamp(22px, 1.8vw, 26px); font-weight: 500;
+  letter-spacing: -0.02em; line-height: 1.05; color: var(--color-fg); font-variant-numeric: tabular-nums;
+}
+.ck-ccell-v small { font-family: var(--font-sans), sans-serif; font-size: 12.5px; font-weight: 400; letter-spacing: 0; color: var(--color-text-muted); }
+.ck-ccell-b { font-size: 12.5px; line-height: 1.4; color: var(--color-text-secondary); display: grid; gap: 1px; }
+.ck-ccell-b b { color: var(--color-fg); font-weight: 600; }
+.ck-ccell-lot { color: var(--color-fg); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ck-ccell-sub { color: var(--color-text-muted); font-size: 12.5px; }
+.ck-ccell .ck-ccell-decision { margin-top: 2px; }
+/* cold desk: the dashes stay ink; the body says what fills the cell — and
+   the whole instrument sits tighter (nothing needs the reader here yet, the
+   picks under it do: they keep the first screen) */
+.ck-cockpit[data-cold] { margin-top: 12px; }
+.ck-cockpit[data-cold] .ck-ccell { padding-block: 9px; gap: 3px; }
+.ck-cockpit[data-cold] .ck-ccell-v { color: var(--color-text-faint); font-size: 18px; line-height: 1; }
+.ck-cockpit[data-cold] .ck-hstrip { margin-top: 4px; }
+.ck-cockpit[data-cold] .ck-hbar { grid-template-rows: 14px auto; }
+/* the strip: 14 columns, a bar per day (height = share of the busiest
+   day), the weekday letter under each; today in ink */
+.ck-hstrip {
+  display: flex; align-items: flex-end; gap: 22px; width: 100%; margin: 8px 0 0; padding: 4px 2px 2px;
+  background: none; border: none; cursor: pointer; text-align: left; color: inherit; font: inherit;
+  border-radius: 10px; transition: background 150ms var(--ease-house, ease);
+}
+.ck-hstrip:hover:not(:disabled) { background: var(--color-hover-item); }
+.ck-hstrip:disabled { cursor: default; }
+.ck-hstrip:focus-visible { outline: 1.5px solid var(--color-fg); outline-offset: 2px; }
+.ck-hstrip-bars { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 4px; flex: 0 0 auto; width: min(100%, 322px); }
+.ck-hbar { display: grid; grid-template-rows: 26px auto; gap: 3px; justify-items: center; min-width: 0; }
+.ck-hbar i {
+  align-self: end; width: 100%; max-width: 14px; height: 0; border-radius: 2px 2px 0 0;
+  background: var(--color-text-faint); border-bottom: 1px solid var(--color-border-mid); box-sizing: border-box;
+}
+.ck-hbar[data-n] i { background: var(--color-fg); }
+.ck-hbar b { font-family: var(--font-mono), monospace; font-size: 10px; font-weight: 500; color: var(--color-text-faint); line-height: 1; }
+.ck-hbar[data-today] b { color: var(--color-fg); text-decoration: underline; text-decoration-color: var(--color-fg); text-underline-offset: 3px; }
+.ck-hbar[data-today] i { outline: 1px solid var(--color-fg); outline-offset: -1px; }
+.ck-hstrip-cap { display: grid; gap: 2px; min-width: 0; font-size: 12.5px; color: var(--color-text-secondary); align-self: center; }
+.ck-hstrip-cap .kicker { color: var(--color-text-muted); }
+
+/* the phone-only lines (the Next-hammer lot, the cold "What fills these") */
+.ck-cockpit-next, .ck-cockpit-what { display: none; }
+@media (max-width: 639.98px) {
+  /* PHONE: the cells stack 1-col as a ledger — label · value · note on one
+     30px row each (the bodies fold, as the figures row's do); the whole
+     instrument stays under ~220px so Today's Top 3 keeps the first screen */
+  .ck-cockpit { margin-top: 8px; }
+  .ck-ccells { grid-template-columns: 1fr; }
+  .ck-ccell {
+    display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: baseline; column-gap: 10px; row-gap: 0;
+    border-left: none; padding: 5px 2px; border-top: 1px solid var(--hairline); min-height: 30px;
+  }
+  .ck-ccell:first-child { border-top: none; }
+  .ck-ccell-k { font-size: 12px; }
+  .ck-ccell-v { font-size: 16px; gap: 2px 7px; }
+  .ck-ccell-v small { font-size: 11px; }
+  .ck-ccell-b { display: none; }
+  .ck-cockpit-next {
+    display: grid; gap: 2px; padding: 6px 2px 7px; border-bottom: 1px solid var(--hairline);
+    font-size: 12.5px; color: inherit; text-decoration: none;
+  }
+  .ck-cockpit-next .ck-ccell-lot { font-size: 12.5px; }
+  .ck-cockpit-next .ck-ccell-sub { font-size: 12px; }
+  /* the in-cell decision line is the Next-hammer line's now */
+  .ck-ccell > .ck-ccell-decision { display: none; }
+  .ck-cockpit-next { font-size: 12.5px; }
+  /* the strip: bars only (today outlined; the caption carries the dates) */
+  .ck-cockpit .ck-hbar { grid-template-rows: 11px; gap: 0; }
+  .ck-cockpit .ck-hbar b { display: none; }
+  .ck-cockpit .ck-hstrip { flex-direction: column; align-items: stretch; margin-top: 6px; gap: 3px; padding: 0 2px 2px; }
+  .ck-cockpit .ck-hstrip-bars { width: 100%; }
+  .ck-cockpit .ck-hstrip-cap { align-self: stretch; font-size: 11.5px; gap: 0; }
+  .ck-cockpit .ck-hstrip-cap .kicker { display: none; }
+  /* a cold phone: three dashes on one row, the bodies + the strip's note
+     behind one disclosure line, the bars folded (nothing is on them yet) */
+  .ck-cockpit[data-cold] .ck-ccells { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ck-cockpit[data-cold] .ck-ccell { display: flex; flex-direction: column; gap: 2px; border-top: none; border-left: 1px solid var(--hairline); padding: 6px 8px; min-height: 0; }
+  .ck-cockpit[data-cold] .ck-ccell:first-child { border-left: none; padding-left: 2px; }
+  .ck-cockpit[data-cold] .ck-ccell-v { font-size: 15px; }
+  .ck-cockpit[data-cold] .ck-hstrip { display: none; }
+  .ck-cockpit-what { display: block; font-size: 12.5px; color: var(--color-text-secondary); }
+  .ck-cockpit-what > summary {
+    list-style: none; cursor: pointer; min-height: 32px; display: flex; align-items: center; gap: 6px;
+    color: var(--color-text-muted); text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px;
+  }
+  .ck-cockpit-what > summary::-webkit-details-marker { display: none; }
+  .ck-cockpit-what > summary::after { content: '›'; transition: transform 150ms var(--ease-house, ease); }
+  .ck-cockpit-what[open] > summary::after { transform: rotate(90deg); }
+  .ck-cockpit-what ul { margin: 0 0 8px; padding: 0 0 0 2px; list-style: none; display: grid; gap: 6px; line-height: 1.45; }
+  .ck-cockpit-what b { color: var(--color-fg); font-weight: 600; }
+}
+
+/* the rail's (?) — the keys legend, pinned at the rail's right edge */
+.ck-rail-wrap { display: flex; align-items: center; gap: 8px; }
+.ck-rail-wrap > .ck-rail { flex: 1 1 auto; min-width: 0; }
+.ck-rail-help { flex: none; display: flex; align-items: center; position: static; }
+.ck-rail-help .ck-help { position: absolute; left: 0; right: 0; top: 100%; margin: 0; z-index: 25; border-radius: 0 0 12px 12px; }
 
 /* ── THE PILL RAIL (every width): sticky under the site nav — the nav is
    64px tall (10px padding + 44px row), so top 64; at 54 the nav covered
