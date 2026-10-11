@@ -6,13 +6,22 @@ import type { User } from '@supabase/supabase-js';
 import { supabase, authEnabled } from './supabase';
 import type { AuctionLot } from '../types';
 import { craftTitle } from '../utils';
+import { track } from './analytics';
+
+/** the push half is built in (app/lib/push reads the same key) */
+const VAPID_IN_BUILD = !!(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '').trim();
 
 /**
  * The account layer. ONE responsibility beyond auth: saved lots are scoped to a
- * user. Everything else in the app stays public — only saving (and the /saved
- * view) needs a session. Degrades gracefully: with no Supabase keys the app
- * behaves exactly as before (saved lots in localStorage), so nothing breaks
- * until auth is provisioned.
+ * user. Everything else in the app stays public. Degrades gracefully: with no
+ * Supabase keys the app behaves exactly as before (saved lots in
+ * localStorage), so nothing breaks until auth is provisioned.
+ *
+ * (Oct 11 2026) SIGNED OUT, SAVE STILL WORKS: like follows, a save made
+ * without an account is kept on this device (the same localStorage list the
+ * no-auth mode uses) and carried into the account the moment the reader
+ * signs in — the one-time upload below always did that; it just had nothing
+ * to lift, because the signed-out star opened the sign-in sheet instead.
  */
 
 const STORAGE_KEY = 'ray-saved-lots';
@@ -122,6 +131,26 @@ function readStored(): SavedEntry[] {
 }
 function writeStored(entries: SavedEntry[]) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(entries)); } catch { /* private mode */ }
+}
+
+/** The device list after one star press: unsave when present, else append a
+ *  fresh entry. Pure — the signed-out and no-auth paths share it. */
+export function toggleEntries<E extends { id: string }>(list: readonly E[], lotId: string, make: () => E): E[] {
+  return list.some(e => e.id === lotId) ? list.filter(e => e.id !== lotId) : [...list, make()];
+}
+
+/** The carry-over's second pass: device saves that carry a SIGNED call whose
+ *  cloud copy is legacy (no call, or saved before the signed convention) —
+ *  ignoreDuplicates would keep the legacy row and downgrade the watch to
+ *  direction-unknown forever, so these overwrite. Pure; tested. */
+export function signedUpgrades<E extends { id: string; savedAt: string; signalPct: number | null }>(
+  local: readonly E[],
+  cloud: readonly { lot_id: string; saved_at: string | null; signal_pct: number | null }[],
+): E[] {
+  const legacyCloud = new Set(cloud
+    .filter(r => r.signal_pct == null || (r.saved_at || '').slice(0, 10) < SIGNED_SIGNAL_SINCE)
+    .map(r => r.lot_id));
+  return local.filter(e => e.signalPct != null && (e.savedAt || '').slice(0, 10) >= SIGNED_SIGNAL_SINCE && legacyCloud.has(e.id));
 }
 function rowToEntry(r: Record<string, unknown>): SavedEntry {
   return {
@@ -250,7 +279,9 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   // ── saved lots follow the user ──
   useEffect(() => {
     if (!supabase) return; // localStorage mode already loaded above
-    if (!user) { setEntries([]); setSavedReady(true); return; }
+    // signed out: the saves kept on THIS device (carried into the account
+    // below the moment the reader signs in)
+    if (!user) { setEntries(readStored()); setSavedReady(true); return; }
     setSavedReady(false); // a fresh session's saves are in flight
     let cancelled = false;
     fetchInFlight.current = true;
@@ -278,10 +309,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
                 .select('lot_id,saved_at,signal_pct')
                 .eq('user_id', user.id)
                 .in('lot_id', signedLocal.map(e => e.id));
-              const legacyCloud = new Set((cloudRows || [])
-                .filter(r => (r.signal_pct as number | null) == null || ((r.saved_at as string) || '').slice(0, 10) < SIGNED_SIGNAL_SINCE)
-                .map(r => r.lot_id as string));
-              const upgrades = signedLocal.filter(e => legacyCloud.has(e.id));
+              const upgrades = signedUpgrades(signedLocal, (cloudRows || []) as { lot_id: string; saved_at: string | null; signal_pct: number | null }[]);
               if (upgrades.length) ({ error: upgradeError } = await upsertSaved(user.id, upgrades, { onConflict: 'user_id,lot_id' }));
             }
           }
@@ -339,25 +367,24 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     // fresh User instance each time and would otherwise re-fetch on a timer.
   }, [user?.id]);
 
+  // the one-time "kept on this device" note (per page-session)
+  const toldDevice = useRef(false);
   const toggle = useCallback((lotId: string, lot?: AuctionLot) => {
-    // no auth configured → localStorage, exactly like before
-    if (!supabase) {
-      setEntries(prev => {
-        const next = prev.some(e => e.id === lotId) ? prev.filter(e => e.id !== lotId) : [...prev, entryFromLot(lotId, lot)];
-        writeStored(next);
-        if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(8);
-        return next;
-      });
-      return;
-    }
-    // auth on → saving requires a session. Remember what they were trying to
-    // save (survives the OAuth full-page redirect via localStorage) so it
-    // completes automatically once they're signed in — the click isn't lost.
-    if (!user) {
-      // persist the intent even from bare-id call sites — the click must
-      // survive the OAuth full-page redirect either way
-      try { localStorage.setItem('lectr-pending-save', JSON.stringify(entryFromLot(lotId, lot))); } catch { /* private mode */ }
-      setLoginOpen(true);
+    const exists = entriesRef.current.some(e => e.id === lotId);
+    track(exists ? 'unsave_lot' : 'save_lot');
+    // no auth configured, or signed out → this device's list. Signed out,
+    // the save is real (it tracks on My profile) and rides into the account
+    // on sign-in — no sign-in wall in front of the site's highest-intent tap.
+    if (!supabase || !user) {
+      const next = toggleEntries(entriesRef.current, lotId, () => entryFromLot(lotId, lot));
+      entriesRef.current = next;
+      setEntries(next);
+      writeStored(next);
+      if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(8);
+      if (supabase && !exists && !toldDevice.current) {
+        toldDevice.current = true;
+        flash('Saved on this device — it tracks on My profile. Sign in any time to keep it on every device.');
+      }
       return;
     }
     // Supabase query builders are LAZY — they only run when awaited or .then()'d.
@@ -366,7 +393,6 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     // and log any error instead of failing silently. Optimistic UI regardless.
     // Optimistic UI, but roll the state change back if the write fails so the
     // star never lies about what's actually persisted.
-    const exists = entriesRef.current.some(e => e.id === lotId);
     if (exists) {
       const removed = entriesRef.current.find(e => e.id === lotId);
       if (fetchInFlight.current) mutationLog.current.set(lotId, 'DELETED');
@@ -395,7 +421,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
         });
       if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(8);
     }
-  }, [user]);
+  }, [user, flash]);
 
   const savedIds = useMemo(() => entries.map(e => e.id), [entries]);
   const savedMeta = useMemo<Record<string, SavedMeta>>(() => {
@@ -415,12 +441,12 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     const updated = { ...cur, owned: next };
     if (fetchInFlight.current) mutationLog.current.set(lotId, updated);
     setEntries(prev => prev.map(e => (e.id === lotId ? { ...e, owned: next } : e)));
-    if (!supabase) {
+    if (!supabase || !user) {
+      // no auth, or signed out: the device list (carried over on sign-in)
       const updated = entriesRef.current.map(e => (e.id === lotId ? { ...e, owned: next } : e));
       writeStored(updated);
       return;
     }
-    if (!user) return; // entries only exist when signed in under auth mode
     supabase.from('saved_lots').update({ owned: next }).eq('user_id', user.id).eq('lot_id', lotId)
       .then(({ error }) => {
         if (error) {
@@ -442,11 +468,10 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     const updated = { ...cur, ...patch };
     if (fetchInFlight.current) mutationLog.current.set(lotId, updated);
     setEntries(prev => prev.map(e => (e.id === lotId ? { ...e, ...patch } : e)));
-    if (!supabase) {
+    if (!supabase || !user) {
       writeStored(entriesRef.current.map(e => (e.id === lotId ? { ...e, ...patch } : e)));
       return;
     }
-    if (!user) return;
     const row: Record<string, unknown> = {};
     if ('paidUsd' in patch) row.paid_usd = patch.paidUsd ?? null;
     if ('note' in patch) row.note = patch.note ?? null;
@@ -477,6 +502,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   }, []);
   const signInWithGoogle = useCallback(async () => {
     if (!supabase) return;
+    track('signin_click');
     await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: returnTo() } });
   }, []);
   // Only meaningful in auth mode — never blow away the localStorage-mode list.
@@ -530,9 +556,11 @@ export function useAuth() {
 }
 
 // ── The login sheet — Google-only ──
+// (Oct 11 2026) Nothing on lectr is gated any more — saves, follows, the
+// quick start and the picks all work on the device signed out — so the sheet
+// says what an account TRULY adds, and nothing it doesn't.
 function LoginModal() {
-  const { signInWithGoogle, closeLogin, loginPurpose } = useAccount();
-  const follow = loginPurpose === 'follow';
+  const { signInWithGoogle, closeLogin } = useAccount();
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -558,27 +586,39 @@ function LoginModal() {
     <div className="ray-auth-scrim" role="presentation" onClick={closeLogin}>
       <div ref={cardRef} className="ray-auth-card" role="dialog" aria-modal="true" aria-label="Sign in" onClick={e => e.stopPropagation()}>
         <div className="ray-auth-head">
-          <span className="ray-auth-title">{follow ? 'Sign in to follow makers and players' : 'Sign in to save lots'}</span>
+          <span className="ray-auth-title">Sign in to lectr</span>
           <button className="ray-auth-x" aria-label="Close" onClick={closeLogin}>
             <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true" style={{ display: 'block' }}>
               <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </button>
         </div>
-        <p className="ray-auth-lede">{follow
-          ? 'A maker or player you follow syncs to your account — new lots for them land in For you, and only you can see them.'
-          : 'Your saved lots follow you across devices — and only you can see them.'}</p>
+        <p className="ray-auth-lede" style={{ marginBottom: 8 }}>
+          Nothing on lectr needs an account — saves, follows and your picks already work on this device. Signing in adds:
+        </p>
+        <ul className="ray-auth-list">
+          {ACCOUNT_ADDS.map(x => <li key={x}>{x}</li>)}
+        </ul>
 
         <button className="ray-auth-google" onClick={() => signInWithGoogle()}>
           <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h11.8c-.5 2.7-2 5-4.3 6.6v5.5h7C42.6 36.9 45.1 31.2 45.1 24.5z"/><path fill="#34A853" d="M24 46c5.8 0 10.6-1.9 14.2-5.2l-7-5.5c-1.9 1.3-4.4 2.1-7.2 2.1-5.5 0-10.2-3.7-11.9-8.7H4.9v5.7C8.5 41.6 15.7 46 24 46z"/><path fill="#FBBC05" d="M12.1 28.7c-.4-1.3-.7-2.7-.7-4.2s.3-2.9.7-4.2v-5.7H4.9C3.4 17.6 2.5 20.7 2.5 24s.9 6.4 2.4 9.1l7.2-4.4z"/><path fill="#EA4335" d="M24 11.1c3.1 0 5.9 1.1 8.1 3.2l6.1-6.1C34.6 4.8 29.8 2.9 24 2.9 15.7 2.9 8.5 7.3 4.9 14.9l7.2 5.7c1.7-5 6.4-8.7 11.9-8.7z"/></svg>
           Continue with Google
         </button>
+        <p className="ray-auth-fine">Free · one tap · only you can see it.</p>
       </div>
       <style dangerouslySetInnerHTML={{ __html: AUTH_CSS }} />
     </div>,
     document.body
   );
 }
+
+/** what an account adds — each line true today (the push line only once
+ *  the build carries the VAPID key — app/lib/push) */
+const ACCOUNT_ADDS: string[] = [
+  'Your saves, follows, record and collection on every device — kept in your account, not just this browser.',
+  'Nightly matches: each night lectr checks new lots against what you follow and your saved searches, and flags them on My profile.',
+  ...(VAPID_IN_BUILD ? ['Closing alerts on this device — before a watched lot closes and when it sells, plus a note when new lots match your follows (turn on in My profile).'] : []),
+];
 
 const AUTH_CSS = `
 .ray-auth-scrim { position: fixed; inset: 0; z-index: 400; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15,14,10,0.66); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: rayAuthIn 160ms var(--ease-signature) both; }
@@ -587,6 +627,9 @@ const AUTH_CSS = `
 .ray-auth-title { font-size: 16px; font-weight: 700; color: var(--color-fg); letter-spacing: -0.01em; }
 .ray-auth-x { border: none; background: none; color: var(--color-text-muted); font-size: 15px; cursor: pointer; padding: 6px; margin: -6px; }
 .ray-auth-lede { font-size: 13px; line-height: 1.5; color: var(--color-text-secondary); margin: 8px 0 18px; }
+.ray-auth-list { margin: 0 0 18px; padding-left: 18px; list-style: disc; font-size: 13px; line-height: 1.5; color: var(--color-text-secondary); }
+.ray-auth-list li + li { margin-top: 6px; }
+.ray-auth-fine { font-size: 12px; color: var(--color-text-muted); margin: 12px 0 0; text-align: center; }
 .ray-auth-google { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 11px; border-radius: 10px; border: 1px solid var(--color-border); background: #fff; color: #1f1f1f; font-family: var(--font-sans), sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; }
 .ray-auth-google:hover { background: #f3f3f3; }
 @keyframes rayAuthIn { from { opacity: 0; } to { opacity: 1; } }

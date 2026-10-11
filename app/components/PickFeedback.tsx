@@ -11,6 +11,7 @@ import { markLot, unmarkLot, clearSignals, type MarkKind, type SignalMark } from
 import { useSignals } from '../lib/use-recs';
 import { craftTitle } from '../utils';
 import type { AuctionLot } from '../types';
+import { track } from '../lib/analytics';
 
 export interface PickUndo { id: string; kind: MarkKind; prev: SignalMark | null; lot: AuctionLot; at: number }
 
@@ -27,6 +28,7 @@ export function usePickFeedback() {
       return;
     }
     const prev = markLot(kind, lot);
+    track(kind === 'more' ? 'pick_more' : 'pick_less');
     setUndo({ id: lot.id, kind, prev, lot, at });
   }, [marks]);
   const undoIt = useCallback(() => {

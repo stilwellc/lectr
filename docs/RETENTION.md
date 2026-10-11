@@ -278,8 +278,8 @@ Read it with the ops step above, or with
 
 | to switch on | add |
 | --- | --- |
-| all of the schema | run `supabase/migrations/0008_return_loop.sql` in the SQL editor (idempotent) |
+| all of the schema | run `supabase/migrations/0008_return_loop.sql`, then `0009_growth_loop.sql`, in the SQL editor (both idempotent). As of Oct 11 2026 neither is applied in prod: `track_event` and `register_push_subscription` answer 404 |
 | page views | Cloudflare dashboard → Web Analytics → add site `lectr.bid` (manual JS snippet) → copy the token → GitHub repo **Variable** `NEXT_PUBLIC_CF_BEACON_TOKEN` + Cloudflare Pages env var of the same name. Do NOT also enable the Pages automatic injection. |
-| product events | nothing new: they ride the existing Supabase vars once 0008 is applied |
-| push | `npx web-push generate-vapid-keys` → public key as repo **Variable** `NEXT_PUBLIC_VAPID_PUBLIC_KEY` (+ Pages env var), private key as repo **Secret** `VAPID_PRIVATE_KEY`; add the workflow steps in §3 |
+| product events | nothing new: they ride the existing Supabase vars once 0008 + 0009 are applied (0009 adds the growth-loop verbs: qs_start, qs_done, follow, unfollow, pick_more, pick_less, pick_open, signin_click, save_search, profile_view) |
+| push | `npx web-push generate-vapid-keys` → public key as repo **Variable** `NEXT_PUBLIC_VAPID_PUBLIC_KEY` (+ Pages env var), private key as repo **Secret** `VAPID_PRIVATE_KEY`. The workflow steps are already in nightly.yml (hammer, close24, matches) and close-board.yml (close24, close1); the opt-in row appears in the /profile Account strip on the first build that carries the public key |
 | Pro fake door | nothing new: visible once 0008 is applied (it hides when auth is off) |

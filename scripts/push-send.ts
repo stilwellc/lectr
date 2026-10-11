@@ -6,6 +6,9 @@
  *            be punctual — see docs/RETENTION.md; at 4h cadence a lot is only
  *            caught when a run lands inside its last 90 minutes)
  *   hammer   "Sold for $X (lectr forecast $Y)" after the nightly settles it
+ *   matches  "N new lots for what you follow" — once a night, after
+ *            match-alerts, from the fresh unseen alert rows (migration 0009
+ *            adds the kind to push_log; before it the log write warns once)
  *
  * Rules (scripts/lib/push-plan.ts, unit-tested): one push per user × lot ×
  * kind EVER (public.push_log), ≤ 3 per user per kind per run with the rest
@@ -29,8 +32,8 @@ import fs from 'fs';
 import path from 'path';
 import webpush from 'web-push';
 import {
-  planSends, classifyPushError, shouldRetire, baseId, dedupeKey, closeKindFor,
-  type Kind, KINDS, type LiveLot, type SettledLot, type Watch, HAMMER_FRESH_DAYS,
+  planSends, planMatchSends, classifyPushError, shouldRetire, baseId, dedupeKey, closeKindFor,
+  type Kind, KINDS, type LiveLot, type SettledLot, type Watch, type AlertLite, HAMMER_FRESH_DAYS, MATCH_FRESH_MS,
 } from './lib/push-plan';
 
 const SB = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '');
@@ -115,12 +118,13 @@ async function main() {
   }
   const watchedIds = Array.from(new Set(watches.map(w => baseId(w.lot_id))));
   console.log(`[push-send] ${subs.length} subscription(s) · ${users.length} user(s) · ${watchedIds.length} watched lot(s) · kinds ${Array.from(kinds).join(',')}`);
-  if (!watchedIds.length) return;
+  const wantsMatches = kinds.has('matches');
+  if (!watchedIds.length && !wantsMatches) return;
   const watchedSet = new Set(watchedIds);
 
   // 3 · live state (close kinds) + forecast snapshots for the hammer message
   const live = new Map<string, LiveLot>();
-  if (kinds.has('close24') || kinds.has('close1') || kinds.has('hammer')) {
+  if (watchedIds.length && (kinds.has('close24') || kinds.has('close1') || kinds.has('hammer'))) {
     for (const l of await loadLive()) if (l?.id && watchedSet.has(baseId(l.id))) live.set(baseId(l.id), l);
   }
   const snaps = Array.from(live.values())
@@ -165,9 +169,20 @@ async function main() {
     }
   }
 
+  // 5b · tonight's matches (the nightly matcher's fresh, unseen alert rows)
+  const alerts: AlertLite[] = [];
+  if (wantsMatches) {
+    const since = new Date(now - MATCH_FRESH_MS).toISOString();
+    for (const c of chunks(users, 100)) {
+      alerts.push(...await restAll<AlertLite>(`alerts?select=user_id,created_at,seen&seen=eq.false&created_at=gte.${encodeURIComponent(since)}&user_id=in.${inList(c)}`));
+    }
+  }
+
   // 6 · plan
-  const plan = planSends({ usersWithSubs: new Set(users), watches, live, settled, sent, forecasts, now })
-    .filter(p => kinds.has(p.kind));
+  const plan = [
+    ...planSends({ usersWithSubs: new Set(users), watches, live, settled, sent, forecasts, now }),
+    ...(wantsMatches ? planMatchSends({ usersWithSubs: new Set(users), alerts, sent, now }) : []),
+  ].filter(p => kinds.has(p.kind));
   const liveInWindow = Array.from(live.values()).filter(l => closeKindFor(l, now)).length;
   console.log(`[push-send] ${live.size} watched lot(s) live (${liveInWindow} in a close window) · ${settled.size} freshly sold · ${plan.length} notification(s) planned`);
   if (DRY) { for (const p of plan) console.log(`  [dry] ${p.kind} → user …${p.userId.slice(-4)}: ${p.payload.title} | ${p.payload.body}`); return; }
@@ -206,11 +221,16 @@ async function main() {
   }
 
   // 8 · book-keeping (each step best-effort)
-  try {
-    for (const c of chunks(logRows, 500)) {
-      await rest('push_log?on_conflict=user_id,lot_id,kind', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify(c) });
-    }
-  } catch (e) { warn(`push_log write failed (pushes may repeat next run): ${(e as Error).message}`); }
+  // the 'matches' rows go in their own batch: on a database without
+  // migration 0009 the kind check refuses them, and that must never cost the
+  // close/hammer ledger (which would re-send those pushes)
+  for (const rows of [logRows.filter(r => r.kind !== 'matches'), logRows.filter(r => r.kind === 'matches')]) {
+    try {
+      for (const c of chunks(rows, 500)) {
+        await rest('push_log?on_conflict=user_id,lot_id,kind', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify(c) });
+      }
+    } catch (e) { warn(`push_log write failed (pushes may repeat next run${rows[0]?.kind === 'matches' ? ' — is migration 0009 applied?' : ''}): ${(e as Error).message}`); }
+  }
   try {
     for (const c of chunks(pruned, 200)) await rest(`push_subscriptions?id=in.(${c.join(',')})`, { method: 'DELETE' });
     const nowIso = new Date().toISOString();

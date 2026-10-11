@@ -45,6 +45,8 @@ import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, l
 import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
 import { makerLineOf, labelLineOf, drillLabelOf } from '../lib/lot-labels';
 import { displayMakerOf } from '../lib/maker-subjects';
+import PushOptIn from '../components/retention/PushOptIn';
+import { TrackOnMount } from '../components/retention/trackers';
 
 /* ============================================================
    MY PROFILE — THE COCKPIT (Aug 24 2026 rebuild). The page is
@@ -1364,7 +1366,9 @@ export default function SavedPage() {
     if (process.env.NODE_ENV === 'production') return;
     try { setPreviewOut(new URLSearchParams(window.location.search).get('preview') === 'signedout'); } catch { /* ignore */ }
   }, []);
-  const signedOutView = (authEnabled && authReady && !user) || previewOut;
+  // signed out WITH saves on this device (save works without an account,
+  // app/lib/account) → the real desk, exactly as the no-auth mode renders it
+  const signedOutView = (authEnabled && authReady && !user && savedIds.length === 0) || previewOut;
 
   /* ── TODAY: watches that hammer today, soonest first ── */
   const closingWatches = useMemo(() => upcoming
@@ -1462,11 +1466,19 @@ export default function SavedPage() {
             Not signed in — follows, interests and what this device learned stay in this browser ·{' '}
             <button type="button" className="ck-warn-btn ck-account-btn" onClick={() => signInWithGoogle()}>Sign in with Google</button>
           </span>
+        ) : authEnabled && !user ? (
+          <span>
+            Saved on this device — sign in to keep your saves, follows, record and collection on every device ·{' '}
+            <button type="button" className="ck-warn-btn ck-account-btn" onClick={() => signInWithGoogle()}>Sign in with Google</button>
+          </span>
         ) : (
           <span>Saved on this device</span>
         )}
         <a href="#on-device" className="ck-away-link">Clear on-device signals</a>
       </div>
+      {/* notifications for this device — renders nothing until push is configured */}
+      <PushOptIn />
+      <TrackOnMount event="profile_view" onceKey="profile" />
     </section>
   );
 
@@ -1492,7 +1504,7 @@ export default function SavedPage() {
       <PillRail items={railWith({ away: unseenAlerts > 0 && !!awayLine, closing: 0, reads: 0 })} />
       <TodayBand loop={deal.loop} closingWatches={[]} reads={[]} away={unseenAlerts > 0 ? awayLine : null} />
       {recsRoom()}
-      <YourSignals book={allLots} signedOut={false} />
+      <YourSignals book={allLots} signedOut={authEnabled && !user} />
       <section className="rail ray-enter" style={{ paddingTop: 34 }}>
         <div className="ns-plate" style={{ paddingTop: 18 }}>
           <h2 className="ray-h2" style={{ margin: 0 }}>What else this page becomes</h2>
@@ -1539,7 +1551,7 @@ export default function SavedPage() {
                   Sign in with Google
                 </button>
               )}
-              <span>to keep this everywhere — your follows carry over. Free · one tap · nothing else on lectr is gated.</span>
+              <span>to keep this everywhere — your follows and saves carry over. Free · one tap · nothing on lectr is gated.</span>
             </div>
           </section>
           <YourSignals book={allLots} signedOut />
@@ -1811,7 +1823,7 @@ export default function SavedPage() {
 
           {/* ══ 4 · YOUR SIGNALS — follows, saved searches + inbox, what this
               device learned ══ */}
-          <YourSignals book={allLots} signedOut={false} />
+          <YourSignals book={allLots} signedOut={authEnabled && !user} />
 
           {/* ══ 5 · YOUR RECORD — the figures row (once), the receipt, the
               timeline ══ */}

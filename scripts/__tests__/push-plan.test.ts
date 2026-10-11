@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   planSends, closeKindFor, classifyPushError, dedupeKey, isFreshHammer, payloadFor, shouldRetire,
+  planMatchSends, matchesLogId, matchesPayload, MATCH_FRESH_MS, KINDS,
   type LiveLot, type SettledLot, type Watch,
 } from '../lib/push-plan';
 
@@ -106,4 +107,51 @@ test('classifyPushError: 404/410 prune, 429/5xx/network retry, 4xx error', () =>
   assert.equal(classifyPushError(413), 'error');
   assert.equal(shouldRetire(79), false);
   assert.equal(shouldRetire(80), true);
+});
+
+// ── matches (Oct 11 2026): one nightly note per user from fresh unseen alerts ──
+
+test('matches: one note per subscribed user, counting fresh unseen alerts only', () => {
+  const subs = new Set(['u1', 'u2']);
+  const alerts = [
+    { user_id: 'u1', created_at: iso(NOW - 2 * H), seen: false },
+    { user_id: 'u1', created_at: iso(NOW - 3 * H), seen: false },
+    { user_id: 'u1', created_at: iso(NOW - 4 * H), seen: true },            // already read
+    { user_id: 'u1', created_at: iso(NOW - MATCH_FRESH_MS - H), seen: false }, // yesterday's news
+    { user_id: 'u2', created_at: 'not a date', seen: false },
+    { user_id: 'u3', created_at: iso(NOW - H), seen: false },               // no device subscribed
+  ];
+  const plan = planMatchSends({ usersWithSubs: subs, alerts, sent: new Set(), now: NOW });
+  assert.equal(plan.length, 1);
+  assert.equal(plan[0].userId, 'u1');
+  assert.equal(plan[0].kind, 'matches');
+  assert.deepEqual(plan[0].lotIds, [matchesLogId(NOW)]);
+  assert.equal(plan[0].payload.title, '2 new lots for what you follow');
+  assert.equal(plan[0].payload.url, '/profile#signals');
+});
+
+test('matches: today\'s note is never sent twice (push_log dedupe)', () => {
+  const alerts = [{ user_id: 'u1', created_at: iso(NOW - H), seen: false }];
+  const sent = new Set([dedupeKey('u1', matchesLogId(NOW), 'matches')]);
+  assert.deepEqual(planMatchSends({ usersWithSubs: new Set(['u1']), alerts, sent, now: NOW }), []);
+  // tomorrow is a new day
+  assert.equal(planMatchSends({ usersWithSubs: new Set(['u1']), alerts: [{ user_id: 'u1', created_at: iso(NOW + 23 * H), seen: false }], sent, now: NOW + 24 * H }).length, 1);
+});
+
+test('matches: payload matches the service-worker contract and reads singular right', () => {
+  const p = matchesPayload(1);
+  assert.equal(p.title, '1 new lot for what you follow');
+  assert.ok(p.url.startsWith('/'), 'same-origin path (public/sw.js safePath)');
+  assert.ok(p.tag && p.body);
+  assert.equal(matchesPayload(1200).title, '1,200 new lots for what you follow');
+  assert.ok(KINDS.includes('matches'));
+});
+
+test('migration 0009 lets push_log hold every kind', async () => {
+  const fs = await import('node:fs');
+  const sql = fs.readFileSync(new URL('../../supabase/migrations/0009_growth_loop.sql', import.meta.url), 'utf8');
+  const m = sql.match(/check \(kind in \(([^)]*)\)\)/);
+  assert.ok(m);
+  const kinds = Array.from(m![1].matchAll(/'([a-z0-9]+)'/g)).map(x => x[1]).sort();
+  assert.deepEqual(kinds, [...KINDS].sort());
 });

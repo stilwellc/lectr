@@ -7,8 +7,10 @@
  *    does not take custom events, so it answers "how many visits / which
  *    pages", nothing else.
  *
- * 2. PRODUCT EVENTS: a fixed vocabulary of seven verbs, recorded as anonymous
- *    DAILY COUNTS in Supabase via the track_event() RPC (migration 0008). The
+ * 2. PRODUCT EVENTS: a fixed vocabulary of verbs (EVENTS below), recorded as
+ *    anonymous DAILY COUNTS in Supabase via the track_event() RPC (migration
+ *    0008; the growth-loop verbs were added by 0009 — the RPC drops any name
+ *    its own list lacks, so the two lists must move together). The
  *    request carries the event name and nothing else — no user id, no lot id,
  *    no session, no device signal, no cookie. The RPC rate-limits globally and
  *    drops unknown names. Inert without the Supabase env vars.
@@ -27,6 +29,17 @@ export const EVENTS = [
   'push_optin',      // browser push turned on for a device
   'pro_interest',    // "I'd pay for this" on the Pro card
   'calendar_add',    // an .ics handed to the calendar
+  // ── the growth loop (Oct 11 2026, migration 0009) ──
+  'qs_start',        // the quick start left its first step (markets → names)
+  'qs_done',         // the quick start finished (follows + interests written)
+  'follow',          // a maker / player / subject / category / house followed
+  'unfollow',        // …and unfollowed
+  'pick_more',       // "More like this" on a pick
+  'pick_less',       // "Not for me" on a pick
+  'pick_open',       // a pick (For you, home or /profile) opened
+  'signin_click',    // "Continue with Google" / "Sign in with Google" pressed
+  'save_search',     // "Save this search" (signed in or on the device)
+  'profile_view',    // /profile opened (once per page-session)
 ] as const;
 export type EventName = (typeof EVENTS)[number];
 

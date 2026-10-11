@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from './supabase';
 import { useAuth } from './account';
+import { readLocalSearches, writeLocalSearches, localSearchPlan, type LocalSearch } from './local-searches';
 
 export interface SavedQuery {
   market?: string | null;
@@ -173,6 +174,10 @@ function useAlertsStore(): AlertsSnapshot {
   return snap;
 }
 
+/** the account the device's saved searches were last carried into (module-
+ *  wide: every mounted useSavedSearches runs the carry effect) */
+let carriedFor: string | null = null;
+
 export function useSavedSearches() {
   const { user } = useAuth();
   const [searches, setSearches] = useState<SavedSearch[]>([]);
@@ -193,6 +198,28 @@ export function useSavedSearches() {
   }, [user?.id]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  // (Oct 11) searches saved on this device while signed out ride into the
+  // account once per sign-in (app/lib/local-searches) — a failed insert
+  // stays on the device for the next visit, never a retry loop
+  useEffect(() => { if (!user) carriedFor = null; }, [user]);
+  useEffect(() => {
+    if (!supabase || !user || !ready || carriedFor === user.id) return;
+    const local = readLocalSearches();
+    if (!local.length) return;
+    carriedFor = user.id;
+    const db = supabase;
+    (async () => {
+      const kept: LocalSearch[] = [];
+      for (const s of localSearchPlan(local, searches.map(x => x.query || {}))) {
+        const { error } = await db.from('saved_searches').insert({ user_id: user.id, name: s.name, query: s.query });
+        if (error && error.code !== '23505') kept.push(s);
+      }
+      writeLocalSearches(kept);
+      refresh();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, ready]);
 
   const save = useCallback(async (name: string, query: SavedQuery): Promise<'saved' | 'exists' | 'error'> => {
     if (!supabase || !user) return 'error';
