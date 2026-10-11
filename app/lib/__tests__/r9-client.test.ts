@@ -175,14 +175,17 @@ test('C2: the same Pokémon card in two grades is one seat; the kept pick names 
 
 /* ── C3 ─────────────────────────────────────────────────────────────────── */
 
-test('C3: signed-out copy promises no-account follows only for the kinds that keep them', () => {
+test('C3 (Oct 11): every follow — makers and players too — works signed out, and the copy says so', () => {
+  // the quick start (the profile's and home's cold state) promises no account
+  const qs = src('app/components/QuickStart.tsx');
+  assert.match(qs, /no account needed/);
   const profile = src('app/profile/page.tsx');
-  const signedOut = profile.match(/signedOut\s*\?\s*<>([^<]*)<\/>/)?.[1] ?? '';
-  assert.ok(signedOut, 'the signed-out sentence');
-  const free = signedOut.split('no account needed')[0];
-  assert.doesNotMatch(free, /maker|player/i, 'makers and players need an account signed out');
-  assert.match(signedOut, /sign in to follow makers and players/);
-  // the sheet a maker / player Follow opens says follow, not "save lots"
-  assert.match(src('app/components/FollowButton.tsx'), /openLogin\('follow'\)/);
-  assert.match(src('app/lib/account.tsx'), /Sign in to follow makers and players/);
+  assert.doesNotMatch(profile, /sign in to follow makers and players/i);
+  // a maker / player Follow keeps the follow on the device instead of opening the sign-in sheet
+  const fb = src('app/components/FollowButton.tsx');
+  assert.doesNotMatch(fb, /openLogin/);
+  assert.match(fb, /makerFollow\(/);
+  const makers = src('app/makers/page.tsx');
+  assert.doesNotMatch(makers, /to follow makers and players too/);
+  assert.match(makers, /Follow a maker, player, Pokémon/);
 });

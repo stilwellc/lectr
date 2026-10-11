@@ -32,6 +32,8 @@ import { useLotModal } from '../lib/use-lot-modal';
 import { recommend, recNote, recDepth, type Taste } from '../lib/recs';
 import { useTaste } from '../lib/use-recs';
 import { PickFeedback, UndoSeat, LearnedOnDevice, usePickFeedback, withUndoSeat } from '../components/PickFeedback';
+import QuickStart from '../components/QuickStart';
+import { usePricePref, priceText } from '../lib/interests';
 import { CellGrid, Cell, ColorCell, FigPools, FigTape } from '../components/cells';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, median, overEstimatePct, isOnBlock } from '../utils';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
@@ -395,10 +397,14 @@ function RecsRoom({ book, compLots, taste, ready, lastCrawl, isSaved, onToggleSa
   isSaved: (id: string) => boolean; onToggleSave: (id: string, lot?: AuctionLot) => void; signedOut?: boolean;
 }) {
   // the block (isOnBlock — every live count's pool), re-cut per book
+  // (Oct 11) the reader's stated price range (quick start, app/lib/interests)
+  // rides inside the taste as a strong band (recs' statedFit) — named here only
+  const pricePref = usePricePref();
   const pool = useMemo(() => {
     const today = localToday(), now = Date.now();
     return book.filter(l => l.status === 'upcoming' && isOnBlock(l, today, now));
   }, [book]);
+  const [editing, setEditing] = useState(false);
   // (r9) a narrow taste (one followed maker) deals deeper — Show more walks it
   const recs = useMemo(() => (ready && taste.seeds.length ? recommend(pool, taste, { n: Math.max(RECS_MAX, recDepth(taste)) }) : []), [ready, pool, taste]);
   const below = useMemo(() => belowSignalOf(recs.map(r => r.lot), compLots), [recs, compLots]);
@@ -443,8 +449,15 @@ function RecsRoom({ book, compLots, taste, ready, lastCrawl, isSaved, onToggleSa
           <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><RankMark size={17} /></span>Lots you may like</h2>
           {!cold && (
             <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-              {recs.length > 0 ? <>{recs.length} picked</> : <>nothing ties yet</>} from {pool.length.toLocaleString()} live lots · read from your {from}
+              {recs.length > 0 ? <>{recs.length} picked</> : <>nothing ties yet</>} from {pool.length.toLocaleString()} live lots{pricePref ? <> · {priceText(pricePref)}</> : null} · read from your {from}
             </span>
+          )}
+          {!cold && !editing && (
+            <button type="button" className="ck-away-link"
+              onClick={() => setEditing(true)}
+              style={{ background: 'none', border: 0, padding: 0, font: 'inherit', fontSize: 13, cursor: 'pointer' }}>
+              Edit interests
+            </button>
           )}
           <HelpChip name="Lots you may like">
             Every lot on the block is read against what you <b>own</b>, <b>save</b>, <b>follow</b> and <b>search</b> — in
@@ -462,15 +475,13 @@ function RecsRoom({ book, compLots, taste, ready, lastCrawl, isSaved, onToggleSa
         </div>
 
         {cold ? (
-          <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: '10px 0 0', maxWidth: 640, lineHeight: 1.55 }}>
-            Nothing to go on yet, so nothing is picked.{' '}
-            {signedOut
-              ? <>Follow a category, a house, or a Pokémon, film or other subject — no account needed — and lots like them land here; sign in to follow makers and players, and the lots you save shape it too.</>
-              : <>Save a lot, mark one you won, or follow a maker, player, category or house, and lots like them land here.</>}
-            {' '}Or just look around: the lots and pages you open lean it too, kept on this device only.
-            {' '}<Link href="/makers" className="ck-away-link">Find something to follow</Link>
-          </p>
-        ) : recs.length === 0 ? (
+          <QuickStart book={book} mode="cold" surface="profile" />
+        ) : editing ? (
+          <div style={{ marginBottom: 20 }}>
+            <QuickStart book={book} mode="edit" surface="profile" onClose={() => setEditing(false)} />
+          </div>
+        ) : null}
+        {cold ? null : recs.length === 0 ? (
           <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: 0, maxWidth: 640, lineHeight: 1.55 }}>
             Nothing on the block ties to your desk right now — no live lot shares a name, card, franchise or close
             enough cut with what you hold. New lots land with every crawl.

@@ -6,6 +6,10 @@
  *   - signed out → kept in localStorage (no account needed to personalize)
  *   - signed in  → saved_searches rows (the same table + RLS the maker follows
  *     use); follows made while signed out are carried into the account once.
+ * (Oct 11) makers and players too: a signed-out maker/player follow is kept
+ * on the device like every other kind (it used to ask for sign-in) and rides
+ * the same carry-over into saved_searches as { player, playerName } — the
+ * exact row FollowButton always wrote — the moment the reader signs in.
  * Category/house follows are stored as { follow: 'cat'|'house', … } queries;
  * the nightly matcher (scripts/match-alerts) alerts on them only for lots that
  * clear the shortlist bar, capped — never the raw firehose.
@@ -23,6 +27,11 @@ export interface Follow {
   label: string;
 }
 
+/** a maker (art/design/watches) or a player, by slug — the row FollowButton
+ *  and the /makers + have always written ({ player, playerName }) */
+export function makerFollow(slug: string, label: string): Follow {
+  return { kind: 'maker', key: slug, label };
+}
 export function catFollow(cat: CatKey, sub: string | null): Follow {
   return { kind: 'cat', key: sub ? `${cat}:${sub}` : cat, label: sub ? `${CAT_LABEL[cat]} · ${subLabel(cat, sub)}` : CAT_LABEL[cat] };
 }
@@ -35,14 +44,16 @@ export function entityFollow(id: string, label: string): Follow {
   return { kind: 'entity', key: id, label };
 }
 
-function queryOf(f: Follow): SavedQuery {
+/** the saved_searches query a follow is stored as (signed in) */
+export function queryOf(f: Follow): SavedQuery {
   if (f.kind === 'maker') return { player: f.key, playerName: f.label };
   if (f.kind === 'house') return { follow: 'house', house: f.key, label: f.label };
   if (f.kind === 'entity') return { follow: 'entity', id: f.key, label: f.label };
   const [cat, sub] = f.key.split(':');
   return { follow: 'cat', cat, sub: sub || null, label: f.label };
 }
-function followOf(q: SavedQuery): Follow | null {
+/** a saved_searches query read back as a follow (null: a plain search) */
+export function followOf(q: SavedQuery): Follow | null {
   if (q.player) return { kind: 'maker', key: q.player, label: q.playerName || q.player };
   if (q.follow === 'house' && q.house) return { kind: 'house', key: q.house, label: q.label || q.house };
   if (q.follow === 'entity' && q.id) return { kind: 'entity', key: q.id, label: q.label || q.id };
@@ -59,7 +70,34 @@ function writeLocal(f: Follow[]) {
   window.dispatchEvent(new Event(LS_KEY));
 }
 
-const same = (a: Follow, b: Follow) => a.kind === b.kind && a.key === b.key;
+export const sameFollow = (a: Follow, b: Follow) => a.kind === b.kind && a.key === b.key;
+const same = sameFollow;
+
+/** the account the device's follows were last carried into — module-wide, as
+ *  every mounted useFollows runs the carry-over effect (one pass per sign-in;
+ *  a failed save stays on the device for the next visit, never a retry loop) */
+let migratedFor: string | null = null;
+
+/** the signed-out follows still to carry into the account: each local follow
+ *  the account lacks, once (a follow tapped twice on the device is one row) */
+export function migrationPlan(local: readonly Follow[], cloud: readonly Follow[]): Follow[] {
+  const out: Follow[] = [];
+  for (const f of local) {
+    if (!f || typeof f.key !== 'string' || !f.kind) continue;
+    if (cloud.some(c => same(c, f)) || out.some(o => same(o, f))) continue;
+    out.push(f);
+  }
+  return out;
+}
+
+/** the follows to add and drop so `current` becomes `picked` — dropping only
+ *  among `offered` (what the picker showed): a follow the reader never saw in
+ *  this pass is never removed by it */
+export function followsDiff(current: readonly Follow[], picked: readonly Follow[], offered: readonly Follow[]): { add: Follow[]; drop: Follow[] } {
+  const add = migrationPlan(picked, current);
+  const drop = current.filter(c => offered.some(o => same(o, c)) && !picked.some(p => same(p, c)));
+  return { add, drop };
+}
 
 export function useFollows() {
   const { user } = useAuth();
@@ -79,14 +117,22 @@ export function useFollows() {
     [searches]
   );
 
-  // signed in: carry the signed-out follows into the account, once
+  // signed in: carry the signed-out follows (makers and players included)
+  // into the account, once per sign-in (migratedFor: each save refreshes
+  // `cloud`, which re-runs this effect mid-loop). A follow whose save failed
+  // stays on the device for the next visit rather than being dropped.
+  useEffect(() => { if (!user) migratedFor = null; }, [user]);
   useEffect(() => {
-    if (!user || !ready || !local.length) return;
+    if (!user || !ready || !local.length || migratedFor === user.id) return;
+    migratedFor = user.id;
     (async () => {
-      for (const f of local) {
-        if (!cloud.some(c => same(c.f, f))) await save(`Following ${f.label}`, queryOf(f));
+      const kept: Follow[] = [];
+      for (const f of migrationPlan(local, cloud.map(c => c.f))) {
+        let r: string = 'error';
+        try { r = await save(`Following ${f.label}`, queryOf(f)); } catch { /* kept below */ }
+        if (r === 'error') kept.push(f);
       }
-      writeLocal([]);
+      writeLocal(kept);
     })();
   }, [user, ready, local, cloud, save]);
 
@@ -105,6 +151,18 @@ export function useFollows() {
     writeLocal(cur.some(x => same(x, f)) ? cur.filter(x => !same(x, f)) : [...cur, f]);
   }, [user, cloud, save, remove]);
 
+  /** several follows at once (the quick start's finish): add `add`, drop
+   *  `drop` — one device write signed out, one row each signed in */
+  const applyMany = useCallback(async ({ add, drop }: { add: Follow[]; drop: Follow[] }) => {
+    if (user) {
+      for (const f of drop) { const hit = cloud.find(c => same(c.f, f)); if (hit) await remove(hit.id); }
+      for (const f of add) if (!cloud.some(c => same(c.f, f))) await save(`Following ${f.label}`, queryOf(f));
+      return;
+    }
+    const cur = readLocal().filter(x => !drop.some(d => same(d, x)));
+    writeLocal([...cur, ...migrationPlan(add, cur)]);
+  }, [user, cloud, save, remove]);
+
   // the plain saved searches (not follows) ride the same fetch — the
   // recommender reads them as the weakest taste signal (app/lib/recs)
   const searchesPlain = useMemo(
@@ -112,7 +170,7 @@ export function useFollows() {
     [user, searches]
   );
 
-  return { follows, isFollowing, toggle, signedIn: !!user, searches: searchesPlain, ready: !user || ready };
+  return { follows, isFollowing, toggle, applyMany, signedIn: !!user, searches: searchesPlain, ready: !user || ready };
 }
 
 /**

@@ -113,6 +113,77 @@ export function clearedFilters(f: FeedFilters): FeedFilters {
  * one-tap way back to the whole market. Houses were never how anyone shops —
  * they're gone from the pills (search still finds them).
  */
+/** the phone bottom sheet's rules (scrim, sheet, grip, microcap heads,
+ *  wrapping chips, Clear / Done foot) — shared with the quick start's sheet
+ *  (app/components/QuickStart), so both read as the one sheet */
+export const FEEDSHEET_CSS = `
+        @keyframes rayFeedScrimIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes rayFeedSheetUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+        .ray-feedsheet-scrim {
+          position: fixed; inset: 0; z-index: 300;
+          background: rgba(15, 14, 10, 0.62);
+          -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+          animation: rayFeedScrimIn 160ms var(--ease-signature) both;
+        }
+        .ray-feedsheet {
+          position: fixed; left: 0; right: 0; bottom: 0; z-index: 301;
+          display: flex; flex-direction: column;
+          max-height: 76dvh;
+          background: var(--color-bg-elevated);
+          border: 1px solid var(--color-border); border-bottom: none;
+          border-radius: 18px 18px 0 0;
+          animation: rayFeedSheetUp 240ms var(--ease-signature) both;
+          outline: none;
+        }
+        .ray-feedsheet-grip {
+          width: 36px; height: 4px; border-radius: 2px; flex: none;
+          background: var(--color-border-mid);
+          margin: 10px auto 2px;
+        }
+        .ray-feedsheet-body {
+          flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+          overscroll-behavior: contain;
+          padding: 4px 18px 16px;
+        }
+        .ray-feedsheet-head {
+          font-family: var(--font-sans), sans-serif;
+          font-size: 10.5px; font-weight: 700;
+          letter-spacing: 0.16em; text-transform: uppercase;
+          color: var(--color-text-muted);
+          padding: 16px 2px 10px;
+        }
+        .ray-feedsheet-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+        .ray-feedsheet-chips .ray-toolbar-pill { min-height: 44px; }
+        .ray-feedsheet-catpill[data-active=true] {
+          background: var(--color-butter);
+          border-color: var(--color-butter);
+          color: var(--color-butter-ink, #1C1712);
+        }
+        .ray-feedsheet-catpill[data-active=true] i { color: color-mix(in srgb, var(--color-butter-ink, #1C1712) 62%, transparent); }
+        .ray-feedsheet-foot {
+          flex: none; display: flex; align-items: center; gap: 12px;
+          padding: 12px 18px calc(14px + env(safe-area-inset-bottom, 0px));
+          border-top: 1px solid var(--color-border);
+        }
+        .ray-feedsheet-clear {
+          border: none; background: none; cursor: pointer;
+          font-family: var(--font-sans), sans-serif;
+          font-size: 14px; font-weight: 600;
+          color: var(--color-text-muted);
+          padding: 12px 10px; min-height: 44px;
+        }
+        .ray-feedsheet-clear:hover { color: var(--color-fg); }
+        .ray-feedsheet-done {
+          flex: 1; border: none; cursor: pointer;
+          background: var(--color-butter);
+          color: var(--color-butter-ink, #1C1712);
+          font-family: var(--font-sans), sans-serif;
+          font-size: 15px; font-weight: 700;
+          border-radius: 12px; padding: 13px 16px; min-height: 46px;
+        }
+        .ray-feedsheet-done:active { filter: brightness(0.96); }
+`;
+
 export default function FeedToolbar({
   lots,
   belowIds,
@@ -687,71 +758,7 @@ export default function FeedToolbar({
     <div className="ray-toolbar" role="search" aria-label="Find lots">
       {/* hydration-safe scoped styles — NEVER a raw-text style child */}
       <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes rayFeedScrimIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes rayFeedSheetUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
-        .ray-feedsheet-scrim {
-          position: fixed; inset: 0; z-index: 300;
-          background: rgba(15, 14, 10, 0.62);
-          -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
-          animation: rayFeedScrimIn 160ms var(--ease-signature) both;
-        }
-        .ray-feedsheet {
-          position: fixed; left: 0; right: 0; bottom: 0; z-index: 301;
-          display: flex; flex-direction: column;
-          max-height: 76dvh;
-          background: var(--color-bg-elevated);
-          border: 1px solid var(--color-border); border-bottom: none;
-          border-radius: 18px 18px 0 0;
-          animation: rayFeedSheetUp 240ms var(--ease-signature) both;
-          outline: none;
-        }
-        .ray-feedsheet-grip {
-          width: 36px; height: 4px; border-radius: 2px; flex: none;
-          background: var(--color-border-mid);
-          margin: 10px auto 2px;
-        }
-        .ray-feedsheet-body {
-          flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
-          overscroll-behavior: contain;
-          padding: 4px 18px 16px;
-        }
-        .ray-feedsheet-head {
-          font-family: var(--font-sans), sans-serif;
-          font-size: 10.5px; font-weight: 700;
-          letter-spacing: 0.16em; text-transform: uppercase;
-          color: var(--color-text-muted);
-          padding: 16px 2px 10px;
-        }
-        .ray-feedsheet-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-        .ray-feedsheet-chips .ray-toolbar-pill { min-height: 44px; }
-        .ray-feedsheet-catpill[data-active=true] {
-          background: var(--color-butter);
-          border-color: var(--color-butter);
-          color: var(--color-butter-ink, #1C1712);
-        }
-        .ray-feedsheet-catpill[data-active=true] i { color: color-mix(in srgb, var(--color-butter-ink, #1C1712) 62%, transparent); }
-        .ray-feedsheet-foot {
-          flex: none; display: flex; align-items: center; gap: 12px;
-          padding: 12px 18px calc(14px + env(safe-area-inset-bottom, 0px));
-          border-top: 1px solid var(--color-border);
-        }
-        .ray-feedsheet-clear {
-          border: none; background: none; cursor: pointer;
-          font-family: var(--font-sans), sans-serif;
-          font-size: 14px; font-weight: 600;
-          color: var(--color-text-muted);
-          padding: 12px 10px; min-height: 44px;
-        }
-        .ray-feedsheet-clear:hover { color: var(--color-fg); }
-        .ray-feedsheet-done {
-          flex: 1; border: none; cursor: pointer;
-          background: var(--color-butter);
-          color: var(--color-butter-ink, #1C1712);
-          font-family: var(--font-sans), sans-serif;
-          font-size: 15px; font-weight: 700;
-          border-radius: 12px; padding: 13px 16px; min-height: 46px;
-        }
-        .ray-feedsheet-done:active { filter: brightness(0.96); }
+${FEEDSHEET_CSS}
         .ray-toolbar-select {
           -webkit-appearance: none; appearance: none; cursor: pointer;
           padding-right: 26px;

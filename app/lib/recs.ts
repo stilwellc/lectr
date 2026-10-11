@@ -150,8 +150,16 @@ export interface TasteInput {
   extra?: ExtraInput[];
   /** on-device "Not for me" marks */
   negative?: NegativeInput;
+  /** the price range the reader STATED in the quick start (app/lib/interests,
+   *  hammer-basis USD) — read as a strong band across every category, never a
+   *  hard filter: a lot outside it sinks, it does not vanish */
+  price?: StatedPriceInput | null;
   nowMs?: number;
 }
+
+export interface StatedPriceInput { minUsd: number | null; maxUsd: number | null }
+/** a stated range in log10 dollars (null = open on that side) */
+export interface StatedBand { lo: number | null; hi: number | null; text: string; /** the suffix a pick inside it carries */ say: string }
 
 export interface Feat {
   cat: CatKey;
@@ -204,6 +212,8 @@ export interface Taste {
    *  they own and save (learnBands) — a category with < BAND_MIN priced
    *  lots on the desk has none */
   bands: Map<CatKey, PriceBand>;
+  /** the range the reader stated (quick start), if any */
+  stated?: StatedBand | null;
 }
 
 /** a learned price band, in log10 dollars */
@@ -380,7 +390,7 @@ export function buildTaste(input: TasteInput): Taste {
       seeds.push({ kind: 'signal', w: x.weight, verb: x.reason, label: x.text.trim(), query });
     }
   }
-  return { seeds, exclude, excludeKeys, down, counts: { owned, saved, follows: input.follows.length, searches, signals }, bands: learnBands(seeds) };
+  return { seeds, exclude, excludeKeys, down, counts: { owned, saved, follows: input.follows.length, searches, signals }, bands: learnBands(seeds), stated: statedBandOf(input.price) };
 }
 
 /* ── price-band learning ────────────────────────────────────────────────── */
@@ -422,6 +432,38 @@ export function learnBands(seeds: readonly Seed[]): Map<CatKey, PriceBand> {
     out.set(cat, { med, lo: med - BAND_K * sd, hi: med + BAND_K * sd, n });
   });
   return out;
+}
+
+/* ── the stated range (quick start) ───────────────────────────────────── */
+
+const STATED_SIGMA = 0.2;    // decades past the edge → falls off faster than a learned band
+const STATED_FLOOR = 0.2;    // far outside still keeps a fifth: strong, not a filter
+const STATED_NOPRICE = 0.85; // no price yet: cannot be placed, kept close to the in-range lots
+
+const usdWord = (n: number) => `$${fmtK(n)}`;
+/** the stated range as a band in log space, with its words ("$5K–50K",
+ *  "under $1K", "$25K and up") — null when nothing is stated */
+export function statedBandOf(p: StatedPriceInput | null | undefined): StatedBand | null {
+  if (!p) return null;
+  const lo = p.minUsd != null && p.minUsd > 0 ? p.minUsd : null;
+  let hi = p.maxUsd != null && p.maxUsd > 0 ? p.maxUsd : null;
+  if (lo != null && hi != null && lo >= hi) hi = null;
+  if (lo == null && hi == null) return null;
+  const text = lo != null && hi != null ? `${usdWord(lo)}–${fmtK(hi)}` : lo != null ? `${usdWord(lo)} and up` : `under ${usdWord(hi!)}`;
+  const say = lo != null && hi != null ? `in your ${text} range` : lo != null ? `in your ${usdWord(lo)}-and-up range` : `under your ${usdWord(hi!)} cap`;
+  return { lo: lo != null ? Math.log10(lo) : null, hi: hi != null ? Math.log10(hi) : null, text, say };
+}
+
+/** how a lot sits against the stated range: 1 inside, a steep Gaussian
+ *  fall-off past either edge down to STATED_FLOOR — a reader who said
+ *  "under $1K" sees $1K lots first and a $40K grail only when nothing
+ *  under $1K ties (it sinks; it never disappears) */
+export function statedFit(logA: number | null, b: StatedBand | null | undefined): { fit: number; inside: boolean } {
+  if (!b) return { fit: 1, inside: false };
+  if (logA == null) return { fit: STATED_NOPRICE, inside: false };
+  const d = b.lo != null && logA < b.lo ? b.lo - logA : b.hi != null && logA >= b.hi ? logA - b.hi + 0.02 : 0;
+  if (d === 0) return { fit: 1, inside: true };
+  return { fit: Math.max(STATED_FLOOR, Math.exp(-(d * d) / (2 * STATED_SIGMA * STATED_SIGMA))), inside: false };
 }
 
 /** how a lot sits against the reader's band in its category: `fit` is the
@@ -544,6 +586,9 @@ export function bandOfCat(bands: ReadonlyMap<CatKey, PriceBand> | undefined, cat
   return b ? bandText(Math.pow(10, b.lo), Math.pow(10, b.hi)) : null;
 }
 
+/** the most of the deal's seats one seed may fill while others have lots */
+export const SEED_SHARE = 0.4;
+
 /** the deal size the per-entity cap reads (the profile's list) */
 export const REC_DEAL = 24;
 
@@ -649,6 +694,8 @@ export interface ScoredRow<L extends RecLot = RecLot> {
   flagged?: boolean;
   /** it sits inside the reader's learned price band for its category */
   inBand?: boolean;
+  /** it sits inside the range the reader stated (quick start) */
+  inStated?: boolean;
 }
 
 /** the engine's below-market flag lifts a qualifying pick this much — a
@@ -779,8 +826,9 @@ export function scoreLots<L extends RecLot>(pool: readonly L[], taste: Taste, op
     // "Not for me" on a lot quiets its entity and its card in any grade
     const quiet = !taste.down?.size ? 1
       : (f.card && taste.down.has(`card:${f.card}`) ? 0.3 : 1) * Math.pow(0.6, (f.ek && taste.down.get(f.ek)) || 0);
-    const score = tasteV * (0.45 + 0.55 * q) * windowFactor(close, nowMs) * band.fit * (flagged ? ENGINE_LIFT : 1) * quiet;
-    return { score, flagged, inBand: band.inside };
+    const said = statedFit(f.logA, taste.stated);
+    const score = tasteV * (0.45 + 0.55 * q) * windowFactor(close, nowMs) * band.fit * said.fit * (flagged ? ENGINE_LIFT : 1) * quiet;
+    return { score, flagged, inBand: band.inside, inStated: said.inside };
   };
   for (const l of pool) {
     if (l.status && l.status !== 'upcoming') continue;
@@ -825,7 +873,7 @@ export function scoreLots<L extends RecLot>(pool: readonly L[], taste: Taste, op
     const tasteV = contribs[0].c + 0.35 * (contribs[1]?.c ?? 0) + 0.15 * (contribs[2]?.c ?? 0);
     const fin = finish(l, f, tasteV, close);
     if (fin.score <= 0) continue;
-    rows.push({ l, score: fin.score, taste: tasteV, best: contribs[0], f, flagged: fin.flagged, inBand: fin.inBand });
+    rows.push({ l, score: fin.score, taste: tasteV, best: contribs[0], f, flagged: fin.flagged, inBand: fin.inBand, inStated: fin.inStated });
   }
   const order = (a: Row, b: Row) => (b.score - a.score) || (a.l.id < b.l.id ? -1 : 1);
   rows.sort(order);
@@ -859,7 +907,7 @@ export function scoreLots<L extends RecLot>(pool: readonly L[], taste: Taste, op
     if (!bestTier || !bestA) continue;
     const fin = finish(l, f, bestC, close);
     if (fin.score <= 0) continue;
-    rungs[bestTier].push({ l, score: fin.score, taste: bestC, best: { seed: bestA.seed, c: bestC, ladder: { tier: bestTier, anchor: bestA } }, f, flagged: fin.flagged, inBand: fin.inBand });
+    rungs[bestTier].push({ l, score: fin.score, taste: bestC, best: { seed: bestA.seed, c: bestC, ladder: { tier: bestTier, anchor: bestA } }, f, flagged: fin.flagged, inBand: fin.inBand, inStated: fin.inStated });
   }
   // each rung sits strictly below the one above: rescale into the gap
   let ceil = rows.length ? rows[rows.length - 1].score : Infinity;
@@ -928,6 +976,13 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
   // two phases: every real tie is dealt before any fallback rung opens (a
   // diversity penalty never lets a ladder row jump a real one)
   let ladderOpen = !cand.some(r => !r.best.ladder);
+  // ONE SEED'S SHARE (Oct 11): no single seed — one "More like this" at .7,
+  // one save — takes more than ~40% of the seats while another seed still
+  // has something to deal, so a mixed taste stays mixed. A one-seed taste
+  // (or one whose other seeds run dry) fills past the cap rather than
+  // printing a short list.
+  const seedCapOn = new Set(cand.map(r => r.best.seed)).size > 1;
+  let seedCap = Math.ceil(capN * SEED_SHARE);
   while (out.length < n) {
     let best: Row | null = null, bestV = 0;
     for (const r of cand) {
@@ -938,6 +993,7 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
       const e = perEnt.get(k.ent) ?? 0;
       const share = r.f.named ? shareOf(r.f.ek) : 0;
       if (r.f.named && e >= Math.max(4, Math.ceil(capN * (0.4 + 0.5 * share)))) continue;
+      if (seedCapOn && (perSeed.get(r.best.seed) ?? 0) >= seedCap) continue;
       const v = r.score
         * Math.pow(r.f.named ? 0.8 + 0.15 * share : 0.7, e)
         * Math.pow(0.85, perSale.get(k.sale) ?? 0)
@@ -945,7 +1001,14 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
         * Math.pow(0.94, perHouse.get(k.house) ?? 0);
       if (v > bestV) { bestV = v; best = r; }
     }
-    if (!best) { if (ladderOpen) break; ladderOpen = true; continue; }
+    if (!best) {
+      if (!ladderOpen) { ladderOpen = true; continue; }
+      // every seed with lots left sits at the cap: lift it one seat (the
+      // strongest seed takes the next, the others keep pace) — a one-seed
+      // taste walks it up to the full deal
+      if (seedCapOn && seedCap < n) { seedCap++; continue; }
+      break;
+    }
     const k = keys.get(best)!;
     used.add(best);
     out.push(best);
@@ -972,9 +1035,11 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
     // (isFlagged — a published read, never a number made up here), else the
     // reader's learned band when the lot sits in it and the reason does not
     // already print a band; then the card's other grade live
+    // the learned band speaks first; else the range the reader stated
     const band = r.inBand ? bandOfCat(taste.bands, r.f.cat) : null;
+    const said = !band && r.inStated && taste.stated ? taste.stated.say : null;
     const extra = [
-      r.flagged ? ENGINE_NOTE : !/\$/.test(base) && band ? `in your ${band} range` : null,
+      r.flagged ? ENGINE_NOTE : !/\$/.test(base) && band ? `in your ${band} range` : !/\$/.test(base) && said ? said : null,
       twinNote,
     ].filter(Boolean).join(' · ');
     const reason = extra ? `${base} · ${extra}` : base;

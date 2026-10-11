@@ -282,3 +282,49 @@ test('return loop: closing tonight soonest first, new-since-last-visit without r
   const end = tonightEndMs(NOW);
   assert.ok(end > NOW && end - NOW <= 24 * 3_600_000 && new Date(end).getHours() === 4);
 });
+
+/* ── merge round (Oct 11): the stated price range + one seed's share ───── */
+
+test('a stated price range is a strong band, not a filter: inside leads, outside sinks but stays', () => {
+  const follow = entityFollow('pl:michael-jordan', 'Michael Jordan');
+  const pool = [
+    card('1986 Fleer #57 Michael Jordan Rookie - PSA 9', 'basketball', 40000, { playerSlug: 'michael-jordan' }),
+    card('1990 Fleer #26 Michael Jordan - PSA 9', 'basketball', 400, { playerSlug: 'michael-jordan' }),
+    card('1991 Upper Deck #44 Michael Jordan - PSA 9', 'basketball', 600, { playerSlug: 'michael-jordan' }),
+  ];
+  const free = recommend(pool, buildTaste({ saved: [], follows: [follow], nowMs: NOW }), { nowMs: NOW });
+  const said = recommend(pool, buildTaste({ saved: [], follows: [follow], price: { minUsd: null, maxUsd: 5000 }, nowMs: NOW }), { nowMs: NOW });
+  assert.equal(said.length, free.length, 'nothing is hidden by a stated range');
+  assert.ok(said.slice(0, 2).every(r => Number(r.lot.currentBid) < 1000) /* anchors ~$1.7K–2.5K */, said.map(r => r.lot.title).join(' | '));
+  assert.equal(Number(said[said.length - 1].lot.currentBid), 40000, 'the $40K rookie sinks to the bottom');
+  assert.match(said[0].reason, /under your \$5K cap/);
+});
+
+test('one seed fills at most ~40% of the seats while another seed still has lots', () => {
+  const a = card('1986 Fleer #57 Michael Jordan - PSA 8', 'basketball', 5000, { playerSlug: 'michael-jordan' });
+  const b = card('1952 Topps #311 Mickey Mantle - PSA 3', 'baseball', 5000, { playerSlug: 'mickey-mantle' });
+  const houses = ['Goldin', 'Heritage', 'PWCC'];
+  const pool: RecLot[] = [];
+  for (let i = 0; i < 30; i++) pool.push(card(`19${60 + i} Topps #${i + 1} Michael Jordan - PSA ${8 + (i % 2)}`, 'basketball', 4000 + i * 10, { playerSlug: 'michael-jordan', saleName: `Sale ${i % 6}`, auctionHouse: houses[i % 3] }));
+  for (let i = 0; i < 30; i++) pool.push(card(`${1950 + i} Bowman #${i + 1} Mickey Mantle - PSA ${2 + (i % 3)}`, 'baseball', 4000 + i * 10, { playerSlug: 'mickey-mantle', saleName: `Sale ${i % 6}`, auctionHouse: houses[i % 3] }));
+  // one "More like this" (.7) on Jordan, a weak looked-at (.25) on Mantle
+  const t = buildTaste({ saved: [], follows: [], extra: [{ lot: a, weight: 0.7, reason: 'asked for more like' }, { lot: b, weight: 0.25, reason: 'looked at' }], nowMs: NOW });
+  const rs = recommend(pool, t, { n: 24, nowMs: NOW });
+  const jordan = rs.filter(r => /Jordan/.test(r.lot.title)).length;
+  assert.ok(rs.length >= 20, `${rs.length}`);
+  // the cap lifts one seat at a time once both seeds sit at it — the deal
+  // stays near half-and-half, never 70/30
+  const first20 = rs.slice(0, 20).filter(r => /Jordan/.test(r.lot.title)).length;
+  assert.ok(first20 <= Math.ceil(24 * 0.4), `Jordan took ${first20} of the first 20`);
+  assert.ok(jordan <= 13, `Jordan took ${jordan} of ${rs.length}`);
+  assert.ok(rs.length - jordan >= 11, 'the other taste keeps its seats');
+});
+
+test('a one-seed taste still fills past the share cap (never a short list)', () => {
+  const houses = ['Goldin', 'Heritage', 'PWCC'];
+  const pool: RecLot[] = [];
+  for (let i = 0; i < 30; i++) pool.push(card(`19${60 + i} Topps #${i + 1} Michael Jordan - PSA ${8 + (i % 2)}`, 'basketball', 4000 + i * 10, { playerSlug: 'michael-jordan', saleName: `Sale ${i % 6}`, auctionHouse: houses[i % 3] }));
+  const t = buildTaste({ saved: [], follows: [entityFollow('pl:michael-jordan', 'Michael Jordan')], nowMs: NOW });
+  const rs = recommend(pool, t, { n: 24, nowMs: NOW });
+  assert.ok(rs.length > Math.ceil(24 * 0.4), `${rs.length}`);
+});

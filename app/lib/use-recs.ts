@@ -9,6 +9,8 @@
  *                        id aliases, else read from the snapshot it took
  *   follows              'lectr-follows' signed out, saved_searches signed in
  *   saved searches       the plain (non-follow) saved_searches rows
+ *   stated price range   the quick start's (app/lib/interests) — a strong
+ *                        band in scoring, never a filter that hides lots
  *
  * The profile's "Lots you may like" room and the home feed's For-you tab
  * both read this one hook, so the two lists agree.
@@ -18,6 +20,7 @@ import type { AuctionLot } from '../types';
 import { useAccount } from './account';
 import { useFollows } from './follows';
 import { buildTaste, idAliases, type Taste, type SavedInput } from './recs';
+import { usePricePref } from './interests';
 import { readSignals, signalsToTaste, SIGNALS_EVENT, SIGNALS_KEY, type SignalStore } from './recs-signals';
 
 /** the on-device signal store (app/lib/recs-signals). Read once on mount
@@ -54,6 +57,8 @@ export function useTaste(book: readonly AuctionLot[]): TasteState {
   const { savedIds, savedMeta, savedReady } = useAccount();
   const { follows, searches, ready: followsReady } = useFollows();
   const signals = useSignals();
+  // the quick start's stated price range — a strong band inside recs, not a pre-filter
+  const price = usePricePref();
   const anySignal = !!signals && signals.ev.length + signals.marks.length > 0;
   const byId = useMemo(() => {
     const m = new Map<string, AuctionLot>();
@@ -77,10 +82,10 @@ export function useTaste(book: readonly AuctionLot[]): TasteState {
     return buildTaste({
       saved, follows,
       searches: searches.map(s => ({ id: s.id, name: s.name, query: s.query, createdAt: s.created_at })),
-      extra, negative,
+      extra, negative, price,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedIds, savedMeta, byId, follows, searches, day, signals]);
+  }, [savedIds, savedMeta, byId, follows, searches, day, signals, price]);
   return {
     taste,
     ready: savedReady && followsReady && signals !== null,
