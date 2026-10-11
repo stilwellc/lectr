@@ -253,7 +253,7 @@ export function lotFace(lot: AuctionLot): LotFace {
 
   const ep = enginePoolOf(lot.value);
   const flagMed = sig?.med;
-  const other = ep ? otherWorkIdsOf(lot.value as Parameters<typeof otherWorkIdsOf>[0]) : [];
+  const other = ep ? otherWorkIdsOf(lot.value) : [];
   let comps: FaceComps | null = null;
   if (ep) {
     const sub = compsSub(ep.n, ep.ids.length);

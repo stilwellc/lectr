@@ -374,6 +374,9 @@ export interface AuctionLot {
     /** 'card-comp' = tiered sports-card comp value (bid-only Goldin cards),
      *  not the hedonic engine. Absent/'hedonic' = the engine value. */
     basis?: 'hedonic' | 'card-comp';
+    /** (W24) pool rows the engine's readers call ANOTHER work — kept in the
+     *  blend, set apart on comps lists (lot-face otherWorksOf) */
+    otherWorkIds?: string[];
   } | null;
 
   // ── v2 STATUS / TIME / PROVENANCE ──
