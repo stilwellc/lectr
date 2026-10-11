@@ -26,10 +26,10 @@ import { ARTIST_LABEL, marketArtists, marketOf, MARKETS } from '../app/constants
 import { lotAllInFactor } from '../app/lib/premiums';
 import { appendCalls, readCalls, type Call } from './lib/calls-ledger';
 import { hasConditionFlag } from '../app/lib/condition';
-import { gapRead, sleeperRead, valueFloor, closeGrowth, validateGapCells, gapCellKey, type CloseCurve } from '../app/lib/lanes';
+import { gapRead, sleeperRead, valueFloor, validateGapCells, gapCellKey, PROJ_CALL_MARK } from '../app/lib/lanes';
 import { CARD_TIER_CODE } from './lib/calls-ledger';
 import { taxonOf } from '../app/lib/taxonomy';
-import { prioStatic } from '../app/lib/priority';
+import { prioStatic, projectedCloseOf } from '../app/lib/priority';
 import { setCloseK } from '../app/lib/close-k';
 import { refitCloseK, snapFromBook, writeSnap, CLOSE_K_DIR } from './lib/close-k-fit';
 import { isDayStamp, scheduledClose, normalizeCloseStamp, closeMs as closeInstantOf } from '../app/lib/house-tz';
@@ -83,14 +83,6 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
   // at the UTC-day boundary, shipping lots the client always hides (and mis-
   // parsing 'YYYY-MM-DD' as UTC midnight). The build always precedes the client
   // load, so `>= today` here never drops a lot the client would still show.
-  // close-day growth curve (analytics.closeCurve) — the projection factor for
-  // bid-house lots. Absent (first build) → no projections stamped.
-  let closeCurve: CloseCurve | null = null;
-  try {
-    const mj = JSON.parse(fs.readFileSync(path.join(dataDir, 'market.json'), 'utf8'));
-    const cc = mj?.markets?.all?.analytics?.closeCurve;
-    if (cc?.buckets?.length) closeCurve = cc;
-  } catch { /* no curve yet */ }
   // THE BID ROOMS' CLOSE MULTIPLES (app/lib/close-k.ts), refit tonight from
   // the sold rows' bidHistory + the archived nightly book snapshots
   // (data/closek/snaps/, pulled from R2 before assemble) → close-k.json, and
@@ -101,6 +93,7 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
   const freshCalls: Call[] = [];
   // THE GAP'S PUBLISH GATE (Oct 6 2026, lanes.validateGapCells): the cells
   // whose graded projections land within [0.8, 1.25] of realized at n ≥ 50
+  // (Oct 11: only calls logged on THE projected close — vsbid s 'k')
   const gapCells = validateGapCells(readCalls());
   {
     const pass = Object.entries(gapCells).filter(([, c]) => c.pass).map(([k, c]) => `${k} (n${c.n} ${c.ratio}×)`);
@@ -240,32 +233,25 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
       // does. bidVelocity is NOT in STRIP, so slimForClient keeps it (verified).
       const vel = velById.get(l.id);
       if (vel) emitted.bidVelocity = vel;
-      // BID PROJECTION (bid houses): expected close = currentBid × the fitted
-      // close-day growth median for this lot's days-out bucket, grossed to
-      // all-in by the house premium schedule. `below` = projection still under
-      // the lot's value-band low (or 0.85× the exact-card median). This is a
-      // DATA read with its own basis — the receipt accumulates in nightly
-      // payload snapshots before it ever ranks a ledger.
+      // THE PROJECTED CLOSE (Oct 11 2026): no projection is stamped — every
+      // surface reads priority.projectedCloseOf at its own clock (the live
+      // bid × the room's close multiple, close-k, installed above). The old
+      // stamp (bidProj: bid × the close-day growth curve, all-in) printed on
+      // the lot page ~3–4× the decision line's figure. What the nightly
+      // still owes the projection is its RECEIPT: tonight's figure (all-in,
+      // against the one floor) logged to the calls ledger, marked s 'k' so
+      // the Gap's cells validate on this projection only, and the Gap's cell
+      // gate (gapOk) for the lane.
       {
-        const bid = (l as { currentBid?: number }).currentBid || 0;
-        // the ONE close clock (house-tz): a date-only lot closes at its sale
-        // day's end where it is sold, never at that day's UTC midnight
+        const withProj = { ...l, ...emitted } as unknown as Parameters<typeof projectedCloseOf>[0];
+        const pc = projectedCloseOf(withProj, Date.now());
         const closeMs = closeInstantOf(l as Parameters<typeof closeInstantOf>[0]) ?? NaN;
-        if (closeCurve && bid > 0 && !isNaN(closeMs)) {
+        if (pc && !isNaN(closeMs)) {
           const daysOut = Math.max(0, (closeMs - Date.now()) / 86400000);
-          // THE one projection factor (lanes.closeGrowth: bid band × days out)
-          const g = closeGrowth(closeCurve, bid, daysOut);
-          if (g && g >= 1) {
-            const projAllIn = Math.round(bid * g * lotAllInFactor(l as { auctionHouse?: string | null; buyerPremiumPct?: number | null }, bid * g));
-            // ONE floor rule (lanes.valueFloor — P1-4): value.low at non-low
-            // confidence, else 0.85× the exact-card median at n≥3. This stamp
-            // used to take ANY value.low / ANY card median, so the served
-            // floor disagreed with the lane and the close-board that read it.
-            const floor = valueFloor(l as { value?: { low?: number; confidence?: string } | null; cardComps?: { med?: number | null; n?: number } | null })?.floor ?? null;
-            const ok = floor ? gapCells[gapCellKey(String(l.id), daysOut, projAllIn, floor)]?.pass === true : false;
-            emitted.bidProj = { g, allIn: projAllIn, ...(floor ? { floor, below: projAllIn < floor } : {}), ...(ok ? { ok } : {}) };
-            if (floor) freshCalls.push({ id: String(l.id), d: todayCall, k: 'vsbid', p: projAllIn, f: floor, m: marketOf(l.artist) });
-          }
+          // ONE floor rule (lanes.valueFloor — P1-4): value.low at non-low confidence
+          const floor = valueFloor(l as { value?: { low?: number; confidence?: string } | null; cardComps?: { med?: number | null; n?: number } | null })?.floor ?? null;
+          if (floor && gapCells[gapCellKey(String(l.id), daysOut, pc.allIn, floor)]?.pass === true) emitted.gapOk = true;
+          if (floor) freshCalls.push({ id: String(l.id), d: todayCall, k: 'vsbid', s: PROJ_CALL_MARK, p: pc.allIn, f: floor, m: marketOf(l.artist) });
         }
         // CARD CALL with its TIER (P0-2): the graded claim is the value the
         // card actually wears — the tiered card-comp value when one was
@@ -280,7 +266,7 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
         // THE GAP + THE SLEEPERS (multi-lane engine, Aug 25): both lanes log
         // the night a lot first enters their board — the SAME readers the
         // /value page renders from (app/lib/lanes), so a lot can never show
-        // one number and log another. Both stamps (bidProj, cardComps, value)
+        // one number and log another. The stamps (gapOk, cardComps, value)
         // are already on `emitted` at this point in the map.
         {
           const withStamps = { ...l, ...emitted } as unknown as import('../app/types').AuctionLot;
@@ -304,7 +290,7 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
     });
   // CLEAN TAXONOMY + PRIORITY health line (Oct 8). Both are pure functions of
   // fields every served lot already carries (artist/subCat/drill, estimates,
-  // value, signal, bidProj), so the client computes them — stamping them would
+  // value, signal, currentBid), so the client computes them — stamping them would
   // add ~0.9MB to the eager payload for nothing. Logged nightly so a classifier
   // or anchor regression shows up in the run log.
   {
@@ -478,47 +464,12 @@ export function buildUpcoming(dataDir: string, allLots?: AuctionLot[]): Record<s
     sports: bidCompetitionSeries(lots as unknown as AuctionLot[], { slug: 'sports-cards' }),
   };
 
-  // ── DEEP VALUE (no-estimate lots) — Collin, Aug 14: projected close still
-  // FAR under the value floor with the hammer approaching. The close curve
-  // already prices in the late-bid surge, so a lot that projects ≥25% under
-  // its floor inside the final ~3.5 days is genuinely behind, not merely
-  // early. Ranked by depth; capped per market. Labeled a PROJECTION read —
-  // the calls ledger is accumulating its receipt before it wears any
-  // certified language.
-  const deepValue: Record<string, Array<{ id: string; depth: number; allIn: number; floor: number; closes: string }>> = {};
-  {
-    const nowMs = Date.now();
-    const rows: Array<{ m: string; id: string; depth: number; allIn: number; floor: number; closes: string }> = [];
-    for (const e of upcoming) {
-      const bp = (e as { bidProj?: { allIn: number; floor?: number; below?: boolean; ok?: boolean } }).bidProj;
-      if (!bp?.below || !bp.floor || !(bp.allIn > 0)) continue;
-      if (bp.ok !== true) continue; // (Oct 6) only a validated projection cell
-      if (hasConditionFlag((e as { title?: string }).title)) continue; // dirty lot, clean floor — never a board seat
-      const sdt = (e as { saleDateTime?: string | null }).saleDateTime || (e as { saleDate?: string }).saleDate;
-      const closeMs = closeInstantOf(e as Parameters<typeof closeInstantOf>[0]) ?? NaN;
-      if (!sdt || isNaN(closeMs)) continue;
-      const daysOut = (closeMs - nowMs) / 86400000;
-      if (daysOut < 0 || daysOut > 3.5) continue; // "coming up on hammer"
-      const depth = 1 - bp.allIn / bp.floor;
-      if (depth < 0.25) continue; // ≥25% under floor AFTER the growth projection
-      // too-good-to-be-true gate: >90% under floor is almost always a floor
-      // error (damaged/partial lot comped against clean copies), not value
-      if (depth > 0.9) continue;
-      const vv = (e as { value?: { low?: number; confidence?: string } }).value;
-      if (vv?.low && vv.low > 0 && vv.confidence === 'low') continue; // weak floor, no board seat
-      rows.push({ m: marketOf(String((e as { artist?: string }).artist)), id: String((e as { id?: string }).id), depth: Math.round(depth * 100) / 100, allIn: bp.allIn, floor: bp.floor, closes: String((e as { saleDate?: string }).saleDate || '') });
-    }
-    rows.sort((a, b) => b.depth - a.depth);
-    for (const r of rows) {
-      const arr = deepValue[r.m] || (deepValue[r.m] = []);
-      if (arr.length < 40) arr.push({ id: r.id, depth: r.depth, allIn: r.allIn, floor: r.floor, closes: r.closes });
-    }
-    const dvCounts = Object.keys(deepValue).map(k => `${k}:${deepValue[k].length}`).join(' ') || 'none';
-    console.log(`[upcoming] deep value (proj ≥25% under floor, closes ≤3.5d): ${dvCounts}`);
-  }
+  // DEEP VALUE (Aug 14) is retired (Oct 11 2026): its per-market rows were
+  // read off the growth-curve projection (bidProj) and no surface rendered
+  // them — the Gap (lanes.gapRead, on THE projected close) is the lane.
   // THE COHERENCE STAMP (Oct 10): the crawl this payload was built from —
   // every served JSON the makers pages read carries it (scripts/lib/served-stamp)
-  const out = { generatedAt: new Date().toISOString(), lastCrawl: servedLastCrawl(dataDir), tape, demand, realized, bidComp, recentSold, deepValue, lots: upcoming };
+  const out = { generatedAt: new Date().toISOString(), lastCrawl: servedLastCrawl(dataDir), tape, demand, realized, bidComp, recentSold, lots: upcoming };
   fs.writeFileSync(path.join(dataDir, 'upcoming.json'), JSON.stringify(out));
   // tonight's bid-room book → the close-k snapshot archive (the nightly ships
   // data/closek/tonight.json.gz write-once to R2 closek/snaps/)

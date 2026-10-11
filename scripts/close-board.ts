@@ -4,18 +4,16 @@
 //
 // Every ~4h (cron in close-board.yml): refetch CURRENT bids for lots closing
 // within 24h — Goldin via its lots API (grouped per auction, cheap), REA via
-// its plain lot pages — recompute the projection + deep-value read with the
-// served close curve, and write public/data/ray/close-board.json. The CI job
+// its plain lot pages — and write public/data/ray/close-board.json. (Oct 11
+// 2026) No projection rides the overlay any more: every surface projects the
+// fresh bid itself (priority.projectedCloseOf — bid × the room's close
+// multiple), so the old growth-curve figure + deep-value rows are gone. The CI job
 // commits the file; the on-push deploy ships it; the client merges the
 // overlay over the eager payload. The corpus is untouched — this is a small
 // overlay, not a build.
 //   RAY_SKIP_MAIN=1 npx tsx scripts/close-board.ts [--source https://lectr.bid]
 import * as fs from 'fs';
 import * as path from 'path';
-import { lotAllInFactor } from '../app/lib/premiums';
-import { marketOf } from '../app/constants';
-import { hasConditionFlag } from '../app/lib/condition';
-import { valueFloor, closeGrowth, type CloseCurve } from '../app/lib/lanes';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 const GOLDIN_API = 'https://d1wu47wucybvr3.cloudfront.net/api/lots_v2';
@@ -28,9 +26,6 @@ type Lot = {
   saleDate?: string; saleDateTime?: string | null;
   currentBid?: number; bidCount?: number; auctionId?: string;
   buyerPremiumPct?: number | null; url?: string;
-  value?: { low?: number; confidence?: string };
-  cardComps?: { med?: number | null; n?: number };
-  bidProj?: { g: number; allIn: number; floor?: number; below?: boolean };
 };
 
 async function fetchJson(url: string): Promise<any> {
@@ -42,9 +37,6 @@ async function fetchJson(url: string): Promise<any> {
 async function main() {
   const src = argStr('source', 'https://lectr.bid');
   const up = await fetchJson(`${src}/data/ray/upcoming.json?cb=${Date.now()}`);
-  const mj = await fetchJson(`${src}/data/ray/market.json?cb=${Date.now()}`);
-  const curve = mj?.markets?.all?.analytics?.closeCurve as CloseCurve | undefined;
-  if (!curve?.buckets?.length) { console.log('[close-board] no close curve served — nothing to do'); return; }
 
   const now = Date.now();
   const lots: Lot[] = (up?.lots || []) as Lot[];
@@ -105,46 +97,22 @@ async function main() {
   }
   console.log(`[close-board] refreshed bids: goldin ${freshBid.size - reaOk}, rea ${reaOk}`);
 
-  // ── recompute projections + deep value on the refreshed bids ─────────────
-  const overlay: Record<string, { b: number; n: number; proj?: number; floor?: number; below?: boolean }> = {};
-  const deep: Array<{ id: string; depth: number; allIn: number; floor: number; closes: string; m?: string }> = [];
+  // ── the overlay: fresh bid + bid count per closing lot ───────────────────
+  const overlay: Record<string, { b: number; n: number }> = {};
   for (const l of closing) {
     const fresh = freshBid.get(l.id);
-    const b = fresh?.b ?? l.currentBid ?? 0;
-    const n = fresh?.n ?? l.bidCount ?? 0;
-    const entry: (typeof overlay)[string] = { b, n };
-    const closeMs = new Date(String(l.saleDateTime || l.saleDate)).getTime();
-    const daysOut = Math.max(0, (closeMs - now) / 86400000);
-    // THE one projection factor (lanes.closeGrowth: bid band × days out)
-    const g = closeGrowth(curve, b, daysOut);
-    if (b > 0 && g && g >= 1) {
-      const projAllIn = Math.round(b * g * lotAllInFactor(l, b * g));
-      // ONE floor rule (lanes.valueFloor — P1-4), shared with build-upcoming + gapRead
-      const floor = valueFloor(l)?.floor ?? null;
-      entry.proj = projAllIn;
-      if (floor) {
-        entry.floor = floor;
-        entry.below = projAllIn < floor;
-        const depth = 1 - projAllIn / floor;
-        if (entry.below && depth >= 0.25 && depth <= 0.9 && !hasConditionFlag(l.title)) {
-          deep.push({ id: l.id, depth: Math.round(depth * 100) / 100, allIn: projAllIn, floor, closes: String(l.saleDate || ''), m: marketOf(String(l.artist || '')) });
-        }
-      }
-    }
-    if (fresh || entry.proj) overlay[l.id] = entry;
+    if (fresh) overlay[l.id] = { b: fresh.b, n: fresh.n };
   }
-  deep.sort((a, b) => b.depth - a.depth);
 
   const out = {
     generatedAt: new Date().toISOString(),
     closingCount: closing.length,
     refreshed: Object.keys(overlay).length,
     bids: overlay,
-    deepValue: deep.slice(0, 60),
   };
   const dest = path.join(process.cwd(), 'public', 'data', 'ray', 'close-board.json');
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.writeFileSync(dest, JSON.stringify(out));
-  console.log(`[close-board] wrote ${Object.keys(overlay).length} refreshed lots, ${deep.length} deep-value rows → close-board.json`);
+  console.log(`[close-board] wrote ${Object.keys(overlay).length} refreshed lots → close-board.json`);
 }
 main().catch(e => { console.error('[close-board] fatal', e); process.exit(1); });

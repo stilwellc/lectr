@@ -43,6 +43,7 @@ import YourSignals from './signals';
 import YourMarket from './YourMarket';
 import PickMenu from './pickmenu';
 import PickOutcomes from './outcomes';
+import ForYourCollection from './collection';
 import { useLogPicks } from '../lib/pick-log';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, median, overEstimatePct, isOnBlock } from '../utils';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
@@ -1357,12 +1358,16 @@ export default function SavedPage() {
   const recsReady = !loading && tasteReady && (!deskNeedsCorpus || fullLoaded || fullError || savedLots.length >= savedIds.length);
   // ONE deal per page: the Today band, the rail's count and the room agree
   const deal = useDeal(allLots, recTaste, recsReady);
-  // the picks, then how the ones shown before did (N4, app/profile/outcomes)
+  // the picks, then how the ones shown before did (N4, app/profile/outcomes),
+  // then what the block would do to what you hold (N3, app/profile/collection)
+  const [collectionN, setCollectionN] = useState(0);
   const recsRoom = (signedOut = false) => (
     <>
       <RecsRoom book={allLots} deal={deal} compLots={allLots} taste={recTaste} ready={recsReady} lastCrawl={lastCrawl || undefined}
         isSaved={isSaved} onToggleSave={toggle} signedOut={signedOut} />
       <PickOutcomes book={allLots} />
+      <ForYourCollection book={allLots} pool={deal.pool} compLots={allLots} ready={recsReady} lastCrawl={lastCrawl || undefined}
+        isSaved={isSaved} onToggleSave={toggle} onCount={setCollectionN} />
     </>
   );
 
@@ -1450,6 +1455,7 @@ export default function SavedPage() {
     const forYou: RailItem = { id: 'for-you', label: 'For you', mark: <RankMark size={15} />, count: deal.recs.length || undefined };
     if (watchFirst) r.push({ id: 'watching', label: 'Watching', mark: <WatchMark size={15} />, count: upcoming.length });
     r.push(forYou);
+    if (collectionN > 0) r.push({ id: 'for-collection', label: 'For your collection', mark: <CollectionMark size={15} />, count: collectionN });
     if (hasMarket) r.push({ id: 'market', label: 'Market', mark: <MoversMark size={15} /> });
     r.push({ id: 'signals', label: 'Signals', mark: <SignalMark size={15} />, count: myFollows.length || undefined, dot: unseenAlerts > 0 });
     if (deskView && hasRecordRoom) {
@@ -1459,7 +1465,7 @@ export default function SavedPage() {
     if (deskView && collection.rows.length > 0) r.push({ id: 'collection', label: 'Collection', mark: <CollectionMark size={15} />, count: formatPrice(collection.totalAppraised) });
     if (deskView && (historyCount > 0 || orphanIds.length > 0)) r.push({ id: 'history', label: 'History', mark: <TapeMark size={15} />, count: historyCount || undefined });
     return r;
-  }, [deal.recs.length, deskView, watchFirst, upcoming.length, myFollows.length, hasMarket, unseenAlerts, hasRecordRoom, record, collection, historyCount, orphanIds.length]);
+  }, [deal.recs.length, collectionN, deskView, watchFirst, upcoming.length, myFollows.length, hasMarket, unseenAlerts, hasRecordRoom, record, collection, historyCount, orphanIds.length]);
   // "Today" leads the rail wherever the band renders — TodayBand's own gate:
   // the return loop answered, or there is an away fact, a closing watch or a read
   const railWith = (band: { away: boolean; closing: number; reads: number }): RailItem[] =>

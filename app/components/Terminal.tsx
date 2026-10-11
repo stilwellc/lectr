@@ -212,7 +212,7 @@ export function CallPlate({
   const saved = isSaved ? isSaved(lot.id) : false;
   const imgOk = !!lot.imageUrl && failedImgId !== lot.id;
   const makerName = makerLineOf(lot).name;
-  const monogram = makerName.trim().charAt(0).toUpperCase();
+  const monogram = (makerName.trim() || craftTitle(lot.title, lot.auctionHouse)).charAt(0).toUpperCase();
   const saleDay = trueSaleDay(lot) || lot.saleDate;
   // CLOSING-TIME SALIENCE — a call that closes today/tonight names the urgency
   // instead of a bare date. Same LOCAL-day arithmetic daysWord uses; the call
@@ -320,7 +320,7 @@ export function CallPlate({
                 <div className="lectr-cpc-img">
                   <img
                     src={httpsImg(lot.imageUrl)}
-                    alt=""
+                    alt={craftTitle(lot.title, lot.auctionHouse)}
                     loading="lazy"
                     referrerPolicy="no-referrer"
                     onError={() => setFailedImgId(lot.id)}
@@ -365,7 +365,7 @@ export function CallPlate({
               <div className="ray-plate-img">
                 <img
                   src={httpsImg(lot.imageUrl)}
-                  alt=""
+                  alt={craftTitle(lot.title, lot.auctionHouse)}
                   loading="lazy"
                   referrerPolicy="no-referrer"
                   onError={() => setFailedImgId(lot.id)}

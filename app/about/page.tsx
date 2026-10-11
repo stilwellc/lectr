@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { seoMeta } from '../lib/seo';
 import BookTotal from '../components/BookTotal';
 import Link from 'next/link';
 import ArtistNav from '../components/ArtistNav';
@@ -36,12 +37,13 @@ import { httpsImg, sizedImg } from '../utils';
  * is DeckFx, which choreographs — it holds no data.
  */
 
-export const metadata: Metadata = {
+export const metadata: Metadata = seoMeta({
   title: 'What is lectr — the auction market, priced',
   // Derived, not typed: a previous revision hardcoded the corpus count here
   // and it drifted 772 lots stale within two nightlies.
   description: `lectr reads every published estimate against every realised hammer across ${meta.sources.length} auction houses and three decades — ${Number(meta.totalSold).toLocaleString('en-US')} settled lots — and prices what comes next. The corpus, the value engine, the replayed record, and what it refuses to say.`,
-};
+  path: '/about',
+});
 
 const p: React.CSSProperties = { fontSize: 15.5, lineHeight: 1.7, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
 const caption: React.CSSProperties = { fontSize: 12.5, color: 'var(--color-text-faint)', margin: '10px 0 0', lineHeight: 1.6 };
@@ -561,7 +563,7 @@ function HeroLot({ c }: { c: typeof proof.cases[number] }) {
     <section className="deck-hero">
       <div className="rail dk-s">
         <div className="hero-plate">
-          <PlateImg src={img} alt="" loading="lazy" referrerPolicy="no-referrer" />
+          <PlateImg src={img} alt={craftTitle(c.title)} loading="lazy" referrerPolicy="no-referrer" />
         </div>
         <p className="hero-cap">
           <b>{craftTitle(c.title)}</b> · {c.house} · {String(c.saleDate).slice(0, 10)} — lectr priced it at{' '}

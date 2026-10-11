@@ -11,6 +11,7 @@
  *
  *   pages/page-stats.json     settlement per market · maker faces · maker shard
  *                             counts · ref/player directories · settled calls
+ *                             · graded flag outcomes (accuracy-ledger.json)
  *   pages/lot-idx-XX.json     lot id → served shard (256 buckets, bucketOf)
  *   pages/lot-pack-XX.json    per upcoming lot: comps / band / appraisal /
  *                             reference band / provenance
@@ -36,7 +37,7 @@ import { entityKeyOf } from '../app/lib/entity/key';
 import { faceValueOf } from './emit-entities';
 import { betterFace } from '../app/lib/img-host';
 import { overEstimatePct } from '../app/utils';
-import { bucketOf, markFallbackProjections, type PageStats, type LotPack, type PackRow, type SettledCallRow } from '../app/lib/page-data';
+import { bucketOf, markFallbackProjections, flagOutcomesByMarket, type PageStats, type LotPack, type PackRow, type SettledCallRow, type FlagOutcomeRow } from '../app/lib/page-data';
 import type { AuctionLot } from '../app/types';
 import { enginePoolOf } from '../app/lib/engine-pool';
 
@@ -76,7 +77,7 @@ export async function emitPageStats(opts: PageStatsOpts = {}): Promise<void> {
     if (!e) return l;
     const x = { ...l } as unknown as Record<string, unknown>;
     if (e.signal !== undefined) x.signal = e.signal;
-    for (const k of ['soldComp', 'bidVelocity', 'saleDateTime', 'bidProj', 'currentBid', 'bidCount', 'overlayAt']) {
+    for (const k of ['soldComp', 'bidVelocity', 'saleDateTime', 'gapOk', 'currentBid', 'bidCount', 'overlayAt']) {
       if (e[k] != null) x[k] = e[k];
     }
     return x as unknown as AuctionLot;
@@ -356,10 +357,20 @@ export async function emitPageStats(opts: PageStatsOpts = {}): Promise<void> {
     }
   }
 
+  // ── 8 · the graded Flags (live accuracy ledger) — the served ledger when
+  // this runner holds one; the nightly's ledger step re-patches tonight's
+  // (it runs after this emitter: scripts/accuracy-ledger.ts) ─────────────────
+  let flagOutcomes: PageStats['flagOutcomes'];
+  try {
+    const ledger = readJson<{ asOf: string; flagged?: FlagOutcomeRow[] }>('accuracy-ledger.json');
+    if (Array.isArray(ledger.flagged)) flagOutcomes = flagOutcomesByMarket(ledger);
+  } catch { /* no ledger on this runner — the room abstains */ }
+
   const stats: PageStats = {
     generatedAt: new Date().toISOString(),
     lastCrawl: meta.lastCrawl || '',
     settlement, makerFaces, makerShards, refIndex, playerIndex, settled,
+    ...(flagOutcomes ? { flagOutcomes } : {}),
   };
   const sz = write('page-stats.json', stats);
   log(`page-stats.json ${(sz / 1024).toFixed(0)}KB — done`);

@@ -24,6 +24,7 @@ import { estUsdBand } from './comps';
 import { hasConditionFlag } from './condition';
 import { lotAllInFactor } from './premiums';
 import { closeMs as closeAt } from './house-tz';
+import { projectedCloseOf } from './priority';
 export { SIGNAL_LABEL, type SignalLabel, basisNote } from './value';
 
 /* ── THE FLOOR (one-source law, P1-4, Sep 2 2026) ───────────────────────── */
@@ -32,7 +33,7 @@ export interface ValueFloor { floor: number; src: 'value.low' | 'cardComps' }
 
 /** THE value floor a projected close is measured against — the strict rule
  *  (F6): `value.low` only at non-low confidence; else none. gapRead,
- *  build-upcoming's bidProj stamp and close-board's overlay ALL call this —
+ *  build-upcoming's vsbid call and the lot page ALL call this —
  *  there used to be three copies and build-upcoming's was ungated (any
  *  value.low, any card median), so the served floor disagreed with the lane
  *  it fed. (Oct 6 2026, wave 4) The 0.85 × exact-card-median branch is gone:
@@ -48,36 +49,6 @@ export function valueFloor(lot: {
   return null;
 }
 
-/* ── THE CLOSE-DAY GROWTH CURVE (one reader, Sep 27 2026) ──────────────── */
-
-/** market.json analytics.closeCurve. `buckets`/`edges`/`n` = the days-out
- *  medians (unchanged meaning); `grid[bidBand][dayBucket]` = the same median
- *  within a hammer-USD bid band (`bidEdges`), null where thin. */
-export interface CloseCurve {
-  buckets: (number | null)[];
-  edges: number[];
-  n?: number[];
-  bidEdges?: number[];
-  grid?: (number | null)[][];
-  gridN?: number[][];
-}
-
-/** THE projection factor for a live bid `daysOut` from close: the bid-band ×
- *  days-out cell when fitted, else the days-out bucket (the pre-Sep 27 curve).
- *  build-upcoming's bidProj stamp and close-board's overlay BOTH call this so
- *  a lot never wears two projections. Null when no factor ≥ 1 exists. */
-export function closeGrowth(curve: CloseCurve | null | undefined, bid: number, daysOut: number): number | null {
-  if (!curve?.buckets?.length || !(bid > 0) || !(daysOut >= 0)) return null;
-  let d = 0; for (const e of curve.edges) { if (daysOut < e) break; d++; }
-  let g: number | null | undefined = null;
-  if (curve.grid && curve.bidEdges) {
-    let b = 0; for (const e of curve.bidEdges) { if (bid < e) break; b++; }
-    g = curve.grid[b]?.[d];
-  }
-  if (!(typeof g === 'number' && g >= 1)) g = curve.buckets[d];
-  return typeof g === 'number' && g >= 1 ? g : null;
-}
-
 /* ── THE GAP'S PUBLISH GATE (Oct 6 2026) ────────────────────────────────
    The graded tape (calls ledger, 'vsbid' rows: every floored projection,
    graded on the realized price) showed the projection is right only where
@@ -91,8 +62,15 @@ export function closeGrowth(curve: CloseCurve | null | undefined, bid: number, d
    prefix) × days out × projection/floor band — has ≥ GAP_CELL_GATE.minN
    graded calls whose median realized/projected sits in [lo, hi]. The cells
    are re-validated every night from the ledger (build-upcoming stamps
-   bidProj.ok); a cell that drifts out stops seating rows. The forming shelf
-   is frozen outright. */
+   gapOk); a cell that drifts out stops seating rows. The forming shelf
+   is frozen outright.
+   (Oct 11 2026) THE PROJECTION CHANGED: the Gap now reads THE projected
+   close every surface prints (priority.projectedCloseOf — bid × the room's
+   measured close multiple, close-k; all-in = that × the premium), not the
+   old close-day growth curve, which the lot page printed beside it ~3–4×
+   off. Cells graded on the old curve say nothing about the new figure, so
+   only calls logged on it (vsbid rows marked s 'k') validate a cell — the
+   lane seats nothing until a cell earns its ≥50 graded calls. */
 export const GAP_CELL_GATE = { minN: 50, lo: 0.8, hi: 1.25 };
 /** the Gap shelf the lane may seat (forming frozen, Oct 6 2026) */
 export const GAP_FORMING_FROZEN = true;
@@ -104,12 +82,15 @@ const pfBand = (x: number) => (x < 0.5 ? '<0.5' : x < 0.75 ? '0.5-0.75' : x < 1 
 export function gapCellKey(id: string, daysOut: number, projAllIn: number, floor: number): string {
   return `${houseKeyOf(id)}|${daysBand(daysOut)}|${pfBand(projAllIn / floor)}`;
 }
-/** Validate every cell from graded 'vsbid' calls (call day → sale day is the
- *  days out; p = projected close, f = the floor, r = realized). */
-export function validateGapCells(calls: { id: string; d: string; k: string; p: number; f?: number; r?: number; sd?: string }[]): Record<string, GapCell> {
+/** the ledger marker on a 'vsbid' call logged on THE projected close (close-k) */
+export const PROJ_CALL_MARK = 'k';
+/** Validate every cell from graded 'vsbid' calls on the current projection
+ *  (s 'k'; call day → sale day is the days out; p = projected close all-in,
+ *  f = the floor, r = realized). */
+export function validateGapCells(calls: { id: string; d: string; k: string; s?: string; p: number; f?: number; r?: number; sd?: string }[]): Record<string, GapCell> {
   const acc = new Map<string, number[]>();
   for (const c of calls) {
-    if (c.k !== 'vsbid' || !(c.r! > 0) || !(c.p > 0) || !(c.f! > 0) || !c.sd) continue;
+    if (c.k !== 'vsbid' || c.s !== PROJ_CALL_MARK || !(c.r! > 0) || !(c.p > 0) || !(c.f! > 0) || !c.sd) continue;
     const d = (Date.parse(c.sd.slice(0, 10)) - Date.parse(c.d)) / 86400000;
     if (!Number.isFinite(d) || d < 0) continue;
     const k = gapCellKey(c.id, d, c.p, c.f!);
@@ -128,8 +109,11 @@ export function validateGapCells(calls: { id: string; d: string; k: string; p: n
 
 export interface GapRead {
   shelf: 'wire' | 'forming';
-  /** 1 − projected close / floor — the lane's one statistic */
+  /** 1 − projected close (all-in) / floor — the lane's one statistic */
   depth: number;
+  /** THE projected close (projectedCloseOf), hammer */
+  hammer: number;
+  /** the same × the lot's premium factor — the floor's basis */
   allIn: number;
   floor: number;
   floorSrc: 'value.low' | 'cardComps';
@@ -143,10 +127,10 @@ export function gapRead(lot: AuctionLot, now: number): GapRead | null {
   // population law: no-estimate lots only (the curve's fitted population)
   const est = estUsdBand(lot);
   if (est.low != null || est.high != null) return null;
-  const proj = lot.bidProj;
-  if (!proj || !(proj.allIn > 0)) return null;
   // (Oct 6) only a projection whose cell is validated on the graded tape
-  if (proj.ok !== true) return null;
+  if (lot.gapOk !== true) return null;
+  const proj = projectedCloseOf(lot as Parameters<typeof projectedCloseOf>[0], now);
+  if (!proj || !(proj.allIn > 0)) return null;
   if (hasConditionFlag(lot.title)) return null;
   // the floor is derived HERE through the ONE floor rule (valueFloor above)
   const vf = valueFloor(lot);
@@ -162,8 +146,8 @@ export function gapRead(lot: AuctionLot, now: number): GapRead | null {
   if (daysOut > 8) return null; // beyond the curve's last fitted edge
   const depth = 1 - proj.allIn / floor;
   if (depth < 0.25 || depth > 0.90) return null; // 0.90 = the floor-error gate
-  if (daysOut <= 3.5) return { shelf: 'wire', depth, allIn: proj.allIn, floor, floorSrc, daysOut };
-  if (!GAP_FORMING_FROZEN && depth >= 0.40) return { shelf: 'forming', depth, allIn: proj.allIn, floor, floorSrc, daysOut };
+  if (daysOut <= 3.5) return { shelf: 'wire', depth, hammer: proj.hammer, allIn: proj.allIn, floor, floorSrc, daysOut };
+  if (!GAP_FORMING_FROZEN && depth >= 0.40) return { shelf: 'forming', depth, hammer: proj.hammer, allIn: proj.allIn, floor, floorSrc, daysOut };
   return null;
 }
 
@@ -178,6 +162,12 @@ export interface SleeperRead {
   /** the opening ask when a min-bid book posts one */
   entry: number | null;
   closes: string;
+  /** (Oct 11) the fairness test's OWN ratio (fair-est only): the pool's
+   *  comps median over the estimate midpoint grossed to all-in — the number
+   *  the 0.75–1.3 band was applied to, so a surface never prints another */
+  ratio: number | null;
+  /** the comps median that ratio read (all-in), when the pool carried one */
+  poolMed: number | null;
 }
 
 /** Verified-fair lots with a DEAD room (bidCount === 0 — median on bid-
@@ -192,6 +182,8 @@ export function sleeperRead(lot: AuctionLot, now: number): SleeperRead | null {
   const est = estUsdBand(lot);
   const estMid = est.low && est.high ? (est.low + est.high) / 2 : (est.low ?? est.high);
   let anchor: SleeperRead['anchor'];
+  let fairRatio: number | null = null;
+  const poolMed = (lot.value as { compMedianUsd?: number } | null | undefined)?.compMedianUsd;
   if (estMid) {
     // BASIS-CONSISTENT (P2): the comps are all-in (median of premium-inclusive
     // realized), estMid is hammer-basis — gross the estimate to all-in
@@ -200,10 +192,10 @@ export function sleeperRead(lot: AuctionLot, now: number): SleeperRead | null {
     // fairness test reads the POOL's own median (value.compMedianUsd) — on
     // estimate lots compValueUsd is now the house-anchored prediction, and a
     // number built from the estimate cannot verify the estimate.
-    const poolMed = (lot.value as { compMedianUsd?: number } | null | undefined)?.compMedianUsd;
     const ratio = (poolMed && poolMed > 0 ? poolMed : cvu) / (estMid * lotAllInFactor(lot, estMid));
     if (ratio < 0.75 || ratio > 1.3) return null; // the engine's own at-market band
     anchor = 'fair-est';
+    fairRatio = ratio;
   } else {
     const conf = lot.value?.confidence;
     if (conf !== 'high' && conf !== 'medium') return null;
@@ -216,7 +208,10 @@ export function sleeperRead(lot: AuctionLot, now: number): SleeperRead | null {
   const closeMs = closeAt(lot) ?? NaN;
   if (isNaN(closeMs) || closeMs <= now) return null;
   if ((closeMs - now) / 86400000 > 7) return null; // attention only means something near hammer
-  return { anchor, cvu, estMid: estMid ?? null, entry, closes: lot.saleDate || iso.slice(0, 10) };
+  return {
+    anchor, cvu, estMid: estMid ?? null, entry, closes: lot.saleDate || iso.slice(0, 10),
+    ratio: fairRatio, poolMed: poolMed && poolMed > 0 ? poolMed : null,
+  };
 }
 
 /* ── the cockpit's lane counters ────────────────────────────────────────── */

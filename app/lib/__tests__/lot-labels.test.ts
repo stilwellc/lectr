@@ -13,7 +13,8 @@ test('maker line: the Pokémon on a numbered card; sealed product names its set 
   const box = makerLineOf({ artist: 'pokemon', title: '2005 Pokemon EX Deoxys Factory-Sealed Booster Box (36 Packs)' });
   assert.equal(box.name, 'Deoxys');
   assert.equal(box.href, makerHref('pokemon'));
-  assert.equal(makerLineOf({ artist: 'pokemon', title: 'Pokemon Booster Box Sealed' }).name, 'Pokémon');
+  // (Oct 11) nothing readable: no maker line, never the category "Pokémon" as a maker
+  assert.equal(makerLineOf({ artist: 'pokemon', title: 'Pokemon Booster Box Sealed' }).name, '');
 });
 
 test('maker line: real makers and memorabilia are untouched', () => {

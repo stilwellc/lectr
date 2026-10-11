@@ -49,6 +49,7 @@ import {
 } from './accuracy-report';
 import { unsoldCapturedCells, unsoldCellKey, type L } from './backtest-core';
 import { adjustedTop, estKindOf } from '../app/lib/value';
+import { flagOutcomesByMarket, type FlagOutcomeRow } from '../app/lib/page-data';
 
 // ── rules ───────────────────────────────────────────────────────────────────
 export const WINDOWS = [7, 30, 90] as const;
@@ -104,6 +105,10 @@ export type LedgerLot = {
   beat: boolean | null;
   /** calibrated odds at the serve (0–1) */
   odds?: number;
+  /** (Oct 11) the bar a flag had to clear — the house-adjusted top, hammer
+   *  USD (0 = no estimate) — and the realized hammer (0 = bought in) */
+  top?: number;
+  ham?: number;
 };
 export type LedgerCounts = {
   lots: number; settled: number; graded: number; unsoldCounted: number; unsoldUncaptured: number;
@@ -132,13 +137,13 @@ export function gradeLedger(serves: Map<string, Serve[]>, sold: Map<string, Sold
     };
     if (s.status === 'bought_in') {
       if (!capturedCells.has(unsoldCellKey(s.house, s.sd))) { counts.unsoldUncaptured++; return; }
-      out.push({ ...base, sold: false, beat: top > 0 ? false : null });
+      out.push({ ...base, sold: false, beat: top > 0 ? false : null, top: Math.round(top), ham: 0 });
       counts.unsoldCounted++;
       return;
     }
     const { graded } = gradeTape([t], new Map([[id, s]]), W);
     if (!graded.length) { counts.unsettled++; return; }
-    out.push({ ...base, sold: true, g: graded[0], beat: top > 0 ? s.h > top : null });
+    out.push({ ...base, sold: true, g: graded[0], beat: top > 0 ? s.h > top : null, top: Math.round(top), ham: Math.round(s.h) });
     counts.graded++;
   });
   out.sort((a, b) => (a.saleDay < b.saleDay ? -1 : a.saleDay > b.saleDay ? 1 : a.id < b.id ? -1 : 1));
@@ -303,8 +308,31 @@ export type Ledger = {
   rollups: Record<string, Rollup>;
   drift: Drift[];
   daily: DailyRow[];
+  /** (Oct 11) THE FLAG OUTCOMES — every graded Flag (flagged estimate lot)
+   *  that settled in the trailing FLAG_OUTCOME_DAYS, newest sale first: did
+   *  its hammer clear the house-adjusted high? The rollups' `flags` cell, lot
+   *  by lot, so /value can answer "did the last flags beat the estimate?" */
+  flagged?: FlagOutcome[];
 };
-export function buildLedger(input: { tape: TapeRow[]; snapshots?: TapeRow[]; sold: Map<string, SoldInfo>; capturedCells: Set<string>; asOf: string; now: Date; prior?: Partial<Ledger> | null; sources?: Record<string, string> }): Ledger {
+/** one graded flag, as /value's settled room prints it (hammer basis) */
+export type FlagOutcome = FlagOutcomeRow;
+export const FLAG_OUTCOME_DAYS = 30;
+const FLAG_OUTCOME_CAP = 240;
+/** the graded flags of the trailing window, newest sale day first */
+export function flagOutcomesOf(lots: LedgerLot[], asOf: string, meta?: Map<string, { t?: string; a?: string }>): FlagOutcome[] {
+  return lots
+    .filter(l => l.flagged && l.beat != null && (l.top || 0) > 0 && inTrailing(l.saleDay, asOf, FLAG_OUTCOME_DAYS))
+    .sort((a, b) => (a.saleDay < b.saleDay ? 1 : a.saleDay > b.saleDay ? -1 : a.id < b.id ? -1 : 1))
+    .slice(0, FLAG_OUTCOME_CAP)
+    .map(l => {
+      const mt = meta?.get(l.id);
+      return {
+        id: l.id, sd: l.saleDay, m: l.market, h: l.house, ham: l.ham || 0, top: l.top || 0, hit: !!l.beat,
+        ...(mt?.t ? { t: mt.t } : {}), ...(mt?.a ? { a: mt.a } : {}),
+      };
+    });
+}
+export function buildLedger(input: { tape: TapeRow[]; snapshots?: TapeRow[]; sold: Map<string, SoldInfo>; capturedCells: Set<string>; asOf: string; now: Date; prior?: Partial<Ledger> | null; sources?: Record<string, string>; meta?: Map<string, { t?: string; a?: string }> }): Ledger {
   const serves = servesOf(input.tape, input.snapshots || []);
   const { lots, counts } = gradeLedger(serves, input.sold, input.capturedCells, input.asOf);
   const priorDaily = Array.isArray(input.prior?.daily) ? input.prior!.daily as DailyRow[] : [];
@@ -324,6 +352,7 @@ export function buildLedger(input: { tape: TapeRow[]; snapshots?: TapeRow[]; sol
     rollups: Object.fromEntries(WINDOWS.map(d => [String(d), rollupOf(lots, input.asOf, d)])),
     drift: driftOf(lots, input.asOf),
     daily: mergeDaily(priorDaily, dailyRowsOf(lots), input.asOf),
+    flagged: flagOutcomesOf(lots, input.asOf, input.meta),
   };
 }
 
@@ -362,8 +391,10 @@ const quarterStart = (d: string) => `${d.slice(0, 4)}-${String(Math.floor((+d.sl
 /** One streaming pass: the settlement of every served lot, and the concluded
  *  range-estimate lots of the quarters a served lot can settle in (for the
  *  unsold-captured cells). Only those lines are parsed. */
-export async function scanSettlements(files: string[], need: Set<string>, sinceDay: string | null): Promise<{ sold: Map<string, SoldInfo>; capturedCells: Set<string>; scanned: number }> {
+export async function scanSettlements(files: string[], need: Set<string>, sinceDay: string | null): Promise<{ sold: Map<string, SoldInfo>; capturedCells: Set<string>; scanned: number; meta: Map<string, { t?: string; a?: string }> }> {
   const sold = new Map<string, SoldInfo>();
+  // the display fields a settled row prints (title + maker slug) — first seen wins
+  const meta = new Map<string, { t?: string; a?: string }>();
   const concluded: L[] = [];
   const qFrom = sinceDay ? quarterStart(sinceDay) : '9999';
   const ID = /"id":("([^"\\]*)"|(\d+))/, SD = /"saleDate":"(\d{4}-\d{2}-\d{2})/, ST = /"status":"(sold|bought_in)"/;
@@ -385,6 +416,10 @@ export async function scanSettlements(files: string[], need: Set<string>, sinceD
           const prev = sold.get(lid), cur = soldInfoOf(l as unknown as Parameters<typeof soldInfoOf>[0]);
           // main corpus + archive can both carry a lot: the settled row wins
           if (!prev || (prev.status !== 'sold' && cur.status === 'sold') || (prev.status === 'other' && cur.status === 'bought_in')) sold.set(lid, cur);
+          if (!meta.has(lid)) {
+            const x = l as unknown as { title?: unknown; artist?: unknown };
+            meta.set(lid, { t: typeof x.title === 'string' ? x.title.slice(0, 160) : undefined, a: typeof x.artist === 'string' ? x.artist : undefined });
+          }
         }
         if ((l.status === 'sold' || l.status === 'bought_in') && l.saleDate && String(l.saleDate).slice(0, 10) >= qFrom) {
           concluded.push({ status: l.status, saleDate: String(l.saleDate).slice(0, 10), auctionHouse: l.auctionHouse, estLowUsd: l.estLowUsd, estHighUsd: l.estHighUsd } as L);
@@ -392,7 +427,7 @@ export async function scanSettlements(files: string[], need: Set<string>, sinceD
       }
     });
   }
-  return { sold, capturedCells: new Set(unsoldCapturedCells(concluded)), scanned };
+  return { sold, capturedCells: new Set(unsoldCapturedCells(concluded)), scanned, meta };
 }
 
 export type Args = { corpusDir: string; out: string; prior: string; asOf: string; snapshotDir: string | null; summary: string | null };
@@ -438,9 +473,21 @@ async function main() {
   const scan = await scanSettlements(corpusFiles, need, since);
   sources['sold corpus'] = corpusFiles.length ? `${corpusFiles.map(f => path.basename(f)).join(' + ')} (${scan.scanned} rows scanned, ${scan.sold.size} of ${need.size} served lots found, ${scan.capturedCells.size} unsold-captured cells)` : 'MISSING';
 
-  const ledger = buildLedger({ tape, snapshots, sold: scan.sold, capturedCells: scan.capturedCells, asOf: args.asOf, now, prior, sources });
+  const ledger = buildLedger({ tape, snapshots, sold: scan.sold, capturedCells: scan.capturedCells, asOf: args.asOf, now, prior, sources, meta: scan.meta });
   fs.mkdirSync(path.dirname(args.out), { recursive: true });
   fs.writeFileSync(args.out, JSON.stringify(ledger) + '\n');
+  // tonight's graded flags ride into the page payload /value already loads
+  // (page-stats.json is emitted earlier in the same run, before this ledger
+  // exists — patch it in place; advisory, a miss keeps last night's outcomes)
+  try {
+    const ps = path.join(path.dirname(args.out), 'pages', 'page-stats.json');
+    if (exists(ps)) {
+      const stats = JSON.parse(fs.readFileSync(ps, 'utf8'));
+      stats.flagOutcomes = flagOutcomesByMarket(ledger, 8, FLAG_OUTCOME_DAYS);
+      fs.writeFileSync(ps, JSON.stringify(stats));
+      console.log(`[ledger] page-stats flag outcomes: ${(ledger.flagged || []).length} graded flags (${FLAG_OUTCOME_DAYS}d)`);
+    }
+  } catch (e) { console.log(`::warning title=accuracy ledger::page-stats flag outcomes not written (${(e as Error).message})`); }
   const o30 = ledger.rollups['30'].overall;
   console.log(`[ledger] ${args.asOf}: graded ${ledger.counts.graded} (+${ledger.counts.unsoldCounted} unsold) of ${ledger.counts.settled} settled · 30d n ${o30.n} err ${pct(o30.medAbsErrPct)} vs house ${pct(o30.house.medAbsErrPct)} · ±30% ${pct(o30.within30Pct)} · bias ${times(o30.bias)} · band ${pct(o30.bandCoveragePct)} · ${ledger.daily.length} daily rows · ${(fs.statSync(args.out).size / 1024).toFixed(1)}KB · ${((Date.now() - t0) / 1000).toFixed(1)}s`);
   for (const d of ledger.drift) console.log(`::warning title=accuracy drift (${d.scope})::${d.message}`);

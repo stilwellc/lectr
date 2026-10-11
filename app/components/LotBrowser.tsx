@@ -19,7 +19,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link';
 import type { Market } from '../constants';
 import type { AuctionLot } from '../types';
-import { formatDate, formatPrice, craftTitle, httpsImg, sizedImg, localToday, trueSaleDay, isClosedPending } from '../utils';
+import { closeDayOf, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, localToday, trueSaleDay, isClosedPending } from '../utils';
 import LotCard, { lotSignal, confidenceMeter } from './LotCard';
 import { feedRowPrice } from '../lib/estimate-text';
 import { signalMagnitude } from '../lib/comps';
@@ -116,6 +116,12 @@ function saleWhenTitle(lot: AuctionLot): string | undefined {
     hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
   })} · your local time`;
 }
+// (Oct 11) the printed hammer day is the reader's TRUE day — the one the
+// "In" column, the closing windows and Closing tonight count on. The crawl's
+// saleDate printed "Oct 9" beside "1d" for a 1:56 AM ET close on Oct 10.
+function hammerDay(lot: AuctionLot): string {
+  return closeDayOf(lot);
+}
 function housePublishesBids(lot: AuctionLot, houses: Set<string>): boolean {
   return houses.has(String(lot.auctionHouse || ''));
 }
@@ -152,7 +158,7 @@ function StackRow({ lot, onOpen, tone, note, est, decision }: { lot: AuctionLot;
   const label = labelTagOf(lot);
   const title = craftTitle(lot.title, lot.auctionHouse);
   return (
-    <button type="button" className="ray-feedrow ray-feedrow-stack" onClick={onOpen} aria-label={`Comps for ${title}`}>
+    <button type="button" className="ray-feedrow ray-feedrow-stack" onClick={onOpen} aria-haspopup="dialog">
       <span className="ray-feedrow-thumb" data-tone={tone} aria-hidden>
         {(lot.title || '?').charAt(0)}
         {lot.imageUrl && (
@@ -169,7 +175,7 @@ function StackRow({ lot, onOpen, tone, note, est, decision }: { lot: AuctionLot;
         {note && <span className="ray-feedrow-note">{note}</span>}
         <span className="ray-feedrow-price">
           <b>{est}</b>
-          {lot.saleDate ? <span className="ray-feedrow-day">· {formatDate(lot.saleDate)}</span> : null}
+          {lot.saleDate ? <span className="ray-feedrow-day">· {formatDate(hammerDay(lot))}</span> : null}
           <BidVelChip lot={lot} />
         </span>
         {decision}
@@ -177,6 +183,11 @@ function StackRow({ lot, onOpen, tone, note, est, decision }: { lot: AuctionLot;
     </button>
   );
 }
+
+// the phone row's reason line carries the decision ("Closes in 2 days ·
+// $1.3M projected close") — one ellipsized line cut the number off at 390px;
+// it wraps to a second line instead, never more
+const NOTE_WRAP = { whiteSpace: 'normal', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' } as const;
 
 export function FeedRow({ lot, onOpen, tone, note, onNote, feedback, decision, stack = false }: {
   lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down'; note?: string | null; onNote?: () => void;
@@ -197,9 +208,8 @@ export function FeedRow({ lot, onOpen, tone, note, onNote, feedback, decision, s
   // the label's lead word (its lead badge, else the sub) — the full line
   // ellipsized the maker away at 390px
   const label = labelTagOf(lot);
-  const row = (
-    <button type="button" className="ray-feedrow" onClick={onOpen} aria-label={`Comps for ${craftTitle(lot.title, lot.auctionHouse)}`}
-      style={feedback ? { borderBottom: 'none' } : undefined}>
+  const title = craftTitle(lot.title, lot.auctionHouse);
+  const thumb = (
       <span className="ray-feedrow-thumb" data-tone={tone} aria-hidden>
         {(lot.title || '?').charAt(0)}
         {lot.imageUrl && (
@@ -217,35 +227,59 @@ export function FeedRow({ lot, onOpen, tone, note, onNote, feedback, decision, s
           />
         )}
       </span>
-      <span className="ray-feedrow-main">
+  );
+  const makerLine = (
         <span className="ray-feedrow-maker">
           {makerLineOf(lot).name}
           {/* the label rides the maker line's spare width in the title tier's
-              ink (the words LotCard prints) — never a new line */}
-          {label && <span style={{ fontWeight: 400, fontSize: '12.5px', color: 'var(--color-text-muted)' }}> · {label}</span>}
+              ink (the words LotCard prints) — never a new line; with no
+              maker line (a pseudo-maker lot with no subject) it leads */}
+          {label && <span style={{ fontWeight: 400, fontSize: '12.5px', color: 'var(--color-text-muted)' }}>{makerLineOf(lot).name ? ' · ' : ''}{label}</span>}
         </span>
-        <span className="ray-feedrow-title">{craftTitle(lot.title, lot.auctionHouse)}</span>
-        {note && (onNote ? (
-          // the row is itself a button: the folded note presses as a link
-          // inside it (same type as the plain note — no new chrome)
-          <span
-            className="ray-feedrow-title"
-            role="link"
-            tabIndex={0}
-            style={{ color: 'var(--color-text-secondary)', fontSize: '0.86em', cursor: 'pointer' }}
-            onClick={e => { e.preventDefault(); e.stopPropagation(); onNote(); }}
-            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onNote(); } }}
-          >
-            {note}
-          </span>
-        ) : <span className="ray-feedrow-title" style={{ color: 'var(--color-text-secondary)', fontSize: '0.86em' }}>{note}</span>)}
-        {decision}
-      </span>
+  );
+  const right = (
       <span className="ray-feedrow-right">
         <b>{est}</b>
-        <span>{formatDate(lot.saleDate)}</span>
+        <span>{formatDate(hammerDay(lot))}</span>
         <BidVelChip lot={lot} />
       </span>
+  );
+  // a pressable folded note: the row can't be ONE button any more (a
+  // control inside a button is invisible to AT and unreachable by Tab), so
+  // the row stays a pointer target and the maker/title and the note are two
+  // sibling buttons — same type, same places, no new chrome
+  const row = note && onNote ? (
+    <div className="ray-feedrow" onClick={onOpen} style={feedback ? { borderBottom: 'none' } : undefined}>
+      {thumb}
+      <span className="ray-feedrow-main">
+        <button type="button" aria-haspopup="dialog" onClick={e => { e.stopPropagation(); onOpen(); }}
+          style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, background: 'none', border: 0, padding: 0, margin: 0, font: 'inherit', color: 'inherit', textAlign: 'left', cursor: 'pointer' }}>
+          {makerLine}
+          <span className="ray-feedrow-title">{title}</span>
+        </button>
+        <button
+          type="button"
+          className="ray-feedrow-title"
+          style={{ color: 'var(--color-text-secondary)', fontSize: '0.86em', cursor: 'pointer', background: 'none', border: 0, padding: 0, margin: 0, fontFamily: 'inherit', textAlign: 'left', minHeight: 24, ...NOTE_WRAP }}
+          onClick={e => { e.preventDefault(); e.stopPropagation(); onNote(); }}
+        >
+          {note}
+        </button>
+        {decision}
+      </span>
+      {right}
+    </div>
+  ) : (
+    <button type="button" className="ray-feedrow" onClick={onOpen} aria-haspopup="dialog"
+      style={feedback ? { borderBottom: 'none' } : undefined}>
+      {thumb}
+      <span className="ray-feedrow-main">
+        {makerLine}
+        <span className="ray-feedrow-title">{title}</span>
+        {note && <span className="ray-feedrow-title" style={{ color: 'var(--color-text-secondary)', fontSize: '0.86em', ...NOTE_WRAP }}>{note}</span>}
+        {decision}
+      </span>
+      {right}
     </button>
   );
   if (!feedback) return row;
@@ -601,6 +635,51 @@ export default function LotBrowser({
     return () => { cancelAnimationFrame(raf); window.clearTimeout(t); };
   }, [anchorId]);
 
+  // (Oct 11) INPUT CRAFT — the /makers ledger's keys on the live book:
+  // '/' finds, j / k walk the rows (the table's title buttons, the phone
+  // rows), Enter opens the comps (the focused control is a real button),
+  // s saves the row in hand. Off while typing, inside any dialog or menu,
+  // and on a bare browser (its page owns the keys).
+  useEffect(() => {
+    if (bare) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      if (t?.closest?.('[role="dialog"],[role="menu"],[role="listbox"]')) return;
+      if (document.querySelector('[aria-modal="true"], .ray-ck-overlay')) return;
+      const root = document.getElementById(anchorId);
+      if (!root) return;
+      if (e.key === '/') {
+        const q = root.querySelector<HTMLInputElement>('.ray-toolbar-search input');
+        if (!q) return;
+        e.preventDefault();
+        q.focus();
+        return;
+      }
+      const rows = Array.from(root.querySelectorAll<HTMLElement>('.ray-feedtable .t-title, .ray-feedrow'));
+      const cur = rows.indexOf(document.activeElement as HTMLElement);
+      if (e.key === 's' && cur >= 0) {
+        const save = rows[cur].closest('tr')?.querySelector<HTMLButtonElement>('.ray-tbl-save');
+        if (save) { e.preventDefault(); save.click(); }
+        return;
+      }
+      if ((e.key !== 'j' && e.key !== 'k') || !rows.length) return;
+      e.preventDefault();
+      const next = cur < 0 ? 0 : e.key === 'j' ? Math.min(rows.length - 1, cur + 1) : Math.max(0, cur - 1);
+      rows[next].focus({ preventScroll: true });
+      // clear the pinned toolbar: land the row under it, not behind it
+      const bar = root.querySelector('.ray-toolbar')?.getBoundingClientRect();
+      const r = rows[next].getBoundingClientRect();
+      const top = Math.max(64, bar ? bar.bottom : 64) + 8;
+      // 'instant': a held key repeats faster than a smooth scroll settles
+      const by = r.top < top ? r.top - top : r.bottom > window.innerHeight - 8 ? r.bottom - window.innerHeight + 8 : 0;
+      if (by) window.scrollTo({ top: window.scrollY + by, behavior: 'instant' });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [bare, anchorId]);
+
   const handleFilters = (next: FeedFilters) => {
     // the shortlist only exists in Matters-most order: any other sort is "All lots"
     if (next.sort !== 'priority' && next.tab === 'top') next = { ...next, tab: 'all' };
@@ -667,7 +746,9 @@ export default function LotBrowser({
         onResetView={onResetView}
         scopeMaker={scope?.maker ?? null}
         scopeSubj={scope?.subj ?? null}
-        countLabel={youTab && youTaste ? <>{feed.length.toLocaleString()} picked from {onBlock.length.toLocaleString()} lots</> : null}
+        // a tab that shows a picked subset names it — "What matters 20" over
+        // "9,667 lots" read as if the tab held the whole book
+        countLabel={(youTab && youTaste) || topTab ? <>{feed.length.toLocaleString()} picked from {onBlock.length.toLocaleString()} lots</> : null}
       />}
       </>}
 
@@ -684,7 +765,7 @@ export default function LotBrowser({
           <table className="ray-feedtable">
             <thead>
               <tr>
-                <th></th>
+                <th><span className="sr-only">Image</span></th>
                 <th>Maker / work</th>
                 <th>House</th>
                 <th>Cat.</th>
@@ -693,7 +774,7 @@ export default function LotBrowser({
                 <th className="num">Bids</th>
                 <th className="num">Estimate</th>
                 <th>Signal</th>
-                <th></th>
+                <th><span className="sr-only">Save</span></th>
               </tr>
             </thead>
             <tbody>
@@ -730,7 +811,7 @@ export default function LotBrowser({
                             // the seconds a 600KB Bonhams master took to land
                             // (the four white Patek squares on the block)
                             src={sizedImg(httpsImg(lot.imageUrl), 120)}
-                            alt=""
+                            alt={craftTitle(lot.title, lot.auctionHouse)}
                             loading="lazy"
                             decoding="async"
                             referrerPolicy="no-referrer"
@@ -742,13 +823,15 @@ export default function LotBrowser({
                       </span>
                     </td>
                     <td className="t-work">
-                      <Link
-                        href={makerLineOf(lot).href}
-                        className="t-artist"
-                        onClick={e => e.stopPropagation()}
-                      >
-                        {makerLineOf(lot).name}
-                      </Link>
+                      {makerLineOf(lot).name && (
+                        <Link
+                          href={makerLineOf(lot).href}
+                          className="t-artist"
+                          onClick={e => e.stopPropagation()}
+                        >
+                          {makerLineOf(lot).name}
+                        </Link>
+                      )}
                       {/* a REAL button (Enter + Space for free), row
                           semantics intact for AT */}
                       <button
@@ -762,13 +845,16 @@ export default function LotBrowser({
                       </button>
                       {(() => {
                         // folded copies — the Signal column's own sub-line type;
-                        // on For you the pick's reason leads it (the cards' note)
-                        const n = youTab ? noteOf(lot, true) : alsoOf(lot);
+                        // on For you and What matters the pick's reason leads it
+                        // (the cards' and phone rows' note — the table was the
+                        // one view where a shortlisted "$350K bid · —" row never
+                        // said why it made the list)
+                        const n = youTab || topTab ? noteOf(lot, true) : alsoOf(lot);
                         if (!n) return null;
                         const open = foldOpeners.get(lot.id);
                         const st = { display: 'block', color: 'var(--color-text-faint)', fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' } as const;
                         return open
-                          ? <button type="button" onClick={e => { e.stopPropagation(); open(); }} style={{ ...st, background: 'none', border: 0, padding: 0, fontFamily: 'inherit', textAlign: 'left', cursor: 'pointer' }}>{n}</button>
+                          ? <button type="button" className="t-fold" onClick={e => { e.stopPropagation(); open(); }} style={{ ...st, background: 'none', border: 0, padding: 0, fontFamily: 'inherit', textAlign: 'left', cursor: 'pointer' }}>{n}</button>
                           : <span style={st}>{n}</span>;
                       })()}
                       {youTab && <DecisionLine lot={lot} estimate={false} when={false} style={{ fontSize: 10.5, marginTop: 2 }} />}
@@ -776,7 +862,7 @@ export default function LotBrowser({
                     </td>
                     <td>{lot.auctionHouse}</td>
                     <td className="t-cat">{subColumnOf(lot)}</td>
-                    <td className="t-date" title={saleWhenTitle(lot)}>{formatDate(lot.saleDate)}</td>
+                    <td className="t-date" title={saleWhenTitle(lot)}>{formatDate(hammerDay(lot))}</td>
                     <td className="num t-days">
                       {isClosedPending(lot) ? 'closed' : dth == null ? '—' : dth <= 0 ? 'today' : `${dth}d`}
                     </td>

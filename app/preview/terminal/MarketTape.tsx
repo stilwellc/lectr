@@ -327,12 +327,11 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
     [market, demandAll, realized, omit]);
   if (!rows.length) return null;
   return (
-    <div className={styles.mtTape} role="list" data-play={play ? 'true' : undefined}>
+    <div className={styles.mtTape} data-play={play ? 'true' : undefined}>
       {rows.map((r, i) => (
         <button
-          key={r.key} type="button" role="listitem" className={styles.mtRow}
+          key={r.key} type="button" className={styles.mtRow}
           onClick={() => setMarket(r.key)}
-          aria-label={`${r.label} — open the ${r.label} lander`}
         >
           <span className={styles.mtLabelBlock}>
             <span className={styles.mtLabel}>{r.label}</span>
@@ -438,11 +437,11 @@ export function SubTape({ market, activeKey, play }: {
   }, [market, activeKey]);
   if (!rows.length) return null;
   return (
-    <div className={styles.mtTape} role="list" data-play={play ? 'true' : undefined}>
+    <div className={styles.mtTape} data-play={play ? 'true' : undefined}>
       {rows.map((r, i) => {
         const idx = r.readType === 'index' ? r.index : null;
         return (
-          <Link key={r.slug} href={subHref(r)} role="listitem" className={styles.mtRow}>
+          <Link key={r.slug} href={subHref(r)} className={styles.mtRow}>
             <span className={styles.mtLabelBlock}>
               <span className={styles.mtLabel}>{r.label}</span>
               <span className={styles.mtTag}>

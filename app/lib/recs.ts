@@ -120,7 +120,7 @@ export type RecLot = {
   objectClass?: string | null;
   itemClass?: string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  value?: any; signal?: any; bidProj?: any;
+  value?: any; signal?: any;
 };
 
 export type SeedKind = 'owned' | 'saved' | 'follow' | 'search' | 'signal';
@@ -880,10 +880,11 @@ function entityName(f: Feat, l: RecLot): string {
   // a player card whose title the card parser could not name prints the
   // desk's pseudo-maker ("Like your Sports Cards cards") — the player's
   // own key names them
-  if (f.ek?.startsWith('pl:') && name === (ARTIST_LABEL[l.artist] || l.artist)) {
+  if (f.ek?.startsWith('pl:') && (!name || name === (ARTIST_LABEL[l.artist] || l.artist))) {
     return f.ek.slice(3).split('-').map(w => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(' ');
   }
-  return name;
+  // (Oct 11) a pseudo-maker lot with no subject has no maker line - the desk label names the group
+  return name || ARTIST_LABEL[l.artist] || l.artist;
 }
 
 const FX_WORD: Record<string, string> = {

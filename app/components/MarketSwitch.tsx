@@ -131,11 +131,10 @@ export default function MarketSwitch({
             data-market={m.key}
             data-active={isActive}
             style={{ '--cell-i': i } as CSSProperties}
-            aria-label={readCount != null ? `${m.label} — ${fmtCount(readCount)} live` : m.label}
             onClick={() => setMarket(m.key)}
             onKeyDown={e => onKeys(e, i)}
           >
-            <span className="ray-rail-top" aria-hidden="true">
+            <span className="ray-rail-top">
               <MarketIcon market={m.key} size={14} />
               <span className="ray-rail-name">
                 <span className="ray-rail-name-full">{m.label}</span>
@@ -143,7 +142,7 @@ export default function MarketSwitch({
               </span>
             </span>
             {readCount != null && (
-              <span className="ray-rail-read" aria-hidden="true">
+              <span className="ray-rail-read">
                 <b>{fmtCount(readCount)}</b> live
               </span>
             )}
@@ -151,7 +150,9 @@ export default function MarketSwitch({
         );
       })}
       {flap && (
-        <div className="ray-rail-flap" aria-live="polite">
+        // the flap repeats the selected tab's own name + count (already
+        // announced on the tab) — hidden from AT so the tablist owns only tabs
+        <div className="ray-rail-flap" aria-hidden="true">
           {flap.map((tok, i) => (
             <span key={i}>
               {i > 0 && <span className="ray-rail-flap-dot" aria-hidden="true">·</span>}

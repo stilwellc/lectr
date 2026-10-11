@@ -10,7 +10,7 @@ import React, { useMemo } from 'react';
 import Link from 'next/link';
 import { ARTIST_LABEL } from '../../constants';
 import type { AuctionLot } from '../../types';
-import { formatDate, formatPrice, craftTitle, httpsImg, sizedImg, tidyTitle, trueSaleDay, refLabel } from '../../utils';
+import { closeDayOf, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, tidyTitle, trueSaleDay, refLabel } from '../../utils';
 import { formatEstimate } from '../LotCard';
 import CloseClock from '../CloseClock';
 import Flick from '../Flick';
@@ -169,7 +169,7 @@ export function LiveLotRow({ l, letter, kind, note }: { l: AuctionLot; letter: s
         <span className="mkx-lot-close">
           {closeSoon
             ? <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}><CloseClock iso={l.saleDateTime!} windowHours={24} /></span>
-            : <>closes {formatDate(l.saleDate)}</>}
+            : <>closes {formatDate(closeDayOf(l))}</>}
         </span>
       </span>
     </Link>

@@ -314,7 +314,10 @@ export function DepthField({ lots, scope = 'all' }: { lots: AuctionLot[]; scope?
                 ? { background: MARKET_INK[p.mkt] || 'var(--color-text-faint)' }
                 : { background: 'transparent', border: `1.5px solid ${MARKET_INK[p.mkt] || 'var(--color-text-faint)'}` }),
               opacity: p.conf === 'high' ? 0.92 : p.conf === 'medium' ? 0.6 : 0.35,
-            }} aria-label={`Open lot: ${p.title.slice(0, 50)}`} />
+            }} aria-label={`Open lot: ${p.title.slice(0, 50)}`}
+            // a pointer convenience on a dense field (~190 points): out of
+            // the Tab order so the keyboard isn't marched through every dot
+            tabIndex={-1} />
         ))}
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', padding: '10px 0 0', fontSize: 11.5, color: 'var(--color-text-muted)' }}>

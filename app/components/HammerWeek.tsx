@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import type { AuctionLot } from '../types';
+import { closeDayOf } from '../utils';
 
 /**
  * HammerWeek — a thin ruled seven-day strip between the feed toolbar and the
@@ -60,7 +61,7 @@ export default function HammerWeek({
     const counts = new Map<string, number>();
     const houses = new Map<string, Set<string>>();
     for (const l of lots) {
-      const day = l.saleDate?.slice(0, 10);
+      const day = closeDayOf(l).slice(0, 10);
       if (!day || !daySet.has(day)) continue;
       counts.set(day, (counts.get(day) || 0) + 1);
       (houses.get(day) || houses.set(day, new Set()).get(day)!).add(l.auctionHouse);

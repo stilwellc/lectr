@@ -25,7 +25,7 @@ import { useSavedLots } from '../hooks/useSavedLots';
 // never fetch refs.json twice
 import { useRefs, type RefEntry } from '../hooks/useRefs';
 import { ARTIST_LABEL } from '../constants';
-import { closeCut, isOnBlock, formatPrice, formatDate, getUpcomingCounts, houseColors, craftTitle, refLabel, httpsImg, sizedImg } from '../utils';
+import { closeDayOf, closeCut, isOnBlock, formatPrice, formatDate, getUpcomingCounts, houseColors, craftTitle, refLabel, httpsImg, sizedImg } from '../utils';
 import PlateImg from './PlateImg';
 import '../northstar-pages.css';
 
@@ -194,7 +194,7 @@ export default function RefPage({ refKey }: { refKey: string }) {
                     <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{craftTitle(l.title, l.auctionHouse)}</span>
                     <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
                       <span style={{ color: houseColors[l.auctionHouse] || 'var(--color-text-faint)', fontWeight: 500 }}>{l.auctionHouse}</span>
-                      {' · hammers '}{formatDate(l.saleDate)}
+                      {' · hammers '}{formatDate(closeDayOf(l))}
                     </span>
                   </span>
                   <span className="lectr-lot-comp-p">
