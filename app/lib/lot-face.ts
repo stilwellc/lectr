@@ -73,10 +73,20 @@ export interface FaceComps {
   n: number;
   /** the pool's ids (the rows behind the median) */
   ids: string[];
+  /** (W29) the pool ids the engine calls ANOTHER work (value.otherWorkIds,
+   *  held to `ids`): they priced the median, but they are not this object */
+  other: string[];
+  /** the pool's comparables proper — n less the other works (the count a
+   *  "N comparable …" head prints) */
+  sameN: number;
   /** "$1.7K" */
   text: string;
   /** "weighted · 4 sales" */
   sub: string;
+  /** (W29) `sub` where the pool's rows are listed (the lot page, the comps
+   *  modal): "weighted · 4 sales · incl. 2 other works" — the median names
+   *  the other works it read; `sub` itself when there are none */
+  listSub: string;
 }
 
 export interface FaceCall {
@@ -163,6 +173,67 @@ function compsSub(n: number, k: number): string {
     : `${FACE_LABEL.compsSub} · ${n.toLocaleString()} ${n === 1 ? 'sale' : 'sales'}`;
 }
 
+/** (W29) the median was read over the other works too — said beside it
+ *  where the rows are listed, so the figure matches the rows under it */
+function compsListSub(sub: string, other: number, n: number): string {
+  if (!(other > 0)) return sub;
+  return other >= n ? `${sub} · all other works` : `${sub} · incl. ${otherWorksCount(other)}`;
+}
+
+/* ── OTHER WORKS (W29, Oct 11 2026) ───────────────────────────────────────
+   The engine (W24, docs/ENGINE_LANES.md §22) keeps every pool row in the
+   blend — on art the value leans on the house estimate, so an off-object
+   row barely moves it — but it marks the rows its estimate-scale and
+   work-date readers call a DIFFERENT WORK (value.otherWorkIds): Picasso's
+   1965 "Femmes à leur toilette" priced beside two 1956 linocuts, the
+   Lichtenstein Cow Triptych beside a $1,250 Rago poster. A comps list sets
+   them apart, after the comparables, labelled for what they are: other
+   works by the maker, for context. The comps median is still the pool's
+   (they are in it) and says so; the "N comparable" count is the rest. */
+
+/** "1 other work" / "2 other works" */
+export function otherWorksCount(k: number): string {
+  return `${k} other ${k === 1 ? 'work' : 'works'}`;
+}
+
+/** the group label: "Other works by Pablo Picasso, for context" */
+export function otherWorksLabel(maker: string | null | undefined): string {
+  const m = (maker || '').trim();
+  return m ? `Other works by ${m}, for context` : 'Other works, for context';
+}
+
+/** the engine's other-work ids for this lot's pool (empty when none) */
+export function otherWorkIdsOf(v: { otherWorkIds?: readonly (string | number)[] | null; poolIds?: readonly (string | number)[] | null } | null | undefined): string[] {
+  const o = v?.otherWorkIds;
+  if (!o || !o.length) return [];
+  const pool = new Set((v?.poolIds || []).map(String));
+  return o.map(String).filter(id => pool.has(id));
+}
+
+/** a comps head's form noun at its count: "1 comparable print", never
+ *  "1 comparable prints" (comps.FORM_LABEL is plural) */
+export function formNoun(label: string, n: number): string {
+  if (n !== 1) return label;
+  const fixed: Record<string, string> = {
+    'works on paper': 'work on paper', 'books & catalogues': 'book or catalogue',
+    'tickets & passes': 'ticket or pass', 'trophies & awards': 'trophy or award',
+  };
+  if (fixed[label]) return fixed[label];
+  if (/(ches|shes|xes|sses)$/.test(label)) return label.slice(0, -2);
+  if (/[^s]s$/.test(label)) return label.slice(0, -1);
+  return label;
+}
+
+/** rows split into the comparables and the other works, each keeping its
+ *  order; no other-work ids → every row is a comparable (the same array) */
+export function splitOtherWorks<T extends { id: string }>(rows: readonly T[], otherIds: readonly string[] | null | undefined): { same: T[]; other: T[] } {
+  if (!otherIds || !otherIds.length) return { same: rows as T[], other: [] };
+  const o = new Set(otherIds);
+  const same: T[] = [], other: T[] = [];
+  for (const r of rows) (o.has(String(r.id)) ? other : same).push(r);
+  return { same, other };
+}
+
 /** THE ONE FUNCTION — every printed value figure of a lot. */
 export function lotFace(lot: AuctionLot): LotFace {
   // a card value the engine marked context-only (abstain 'card:…') is
@@ -182,11 +253,15 @@ export function lotFace(lot: AuctionLot): LotFace {
 
   const ep = enginePoolOf(lot.value);
   const flagMed = sig?.med;
-  const comps: FaceComps | null = ep
-    ? { med: ep.med, n: ep.n, ids: ep.ids, text: fmtFace(ep.med), sub: compsSub(ep.n, ep.ids.length) }
-    : flagMed != null && flagMed > 0
-      ? { med: flagMed, n: sig!.basis || 0, ids: [], text: fmtFace(flagMed), sub: compsSub(sig!.basis || 0, 0) }
-      : null;
+  const other = ep ? otherWorkIdsOf(lot.value as Parameters<typeof otherWorkIdsOf>[0]) : [];
+  let comps: FaceComps | null = null;
+  if (ep) {
+    const sub = compsSub(ep.n, ep.ids.length);
+    comps = { med: ep.med, n: ep.n, ids: ep.ids, other, sameN: Math.max(0, ep.n - other.length), text: fmtFace(ep.med), sub, listSub: compsListSub(sub, other.length, ep.n) };
+  } else if (flagMed != null && flagMed > 0) {
+    const sub = compsSub(sig!.basis || 0, 0);
+    comps = { med: flagMed, n: sig!.basis || 0, ids: [], other: [], sameN: sig!.basis || 0, text: fmtFace(flagMed), sub, listSub: sub };
+  }
 
   let call: FaceCall | null = null;
   if (sig) {

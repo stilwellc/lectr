@@ -9,7 +9,7 @@ import { makerLineOf, labelLineOf, drillLabelOf } from '../lib/lot-labels';
 import { closeDayOf, houseColors, categoryColors, formatDate, craftTitle, httpsImg, sizedImg, cleanText } from '../utils';
 import { contextComps, isSportsScienceObject, FORM_LABEL, signalMagnitude, type Form } from '../lib/comps';
 import { enginePoolOf } from '../lib/engine-pool';
-import { lotFace, fmtFace, medianRowId, valueSentence, FACE_LABEL } from '../lib/lot-face';
+import { lotFace, fmtFace, medianRowId, valueSentence, FACE_LABEL, splitOtherWorks, otherWorksLabel, otherWorksCount, formNoun } from '../lib/lot-face';
 import { rungView, valueRowFlags, yearsText } from '../lib/card-record';
 import { latestExactSale } from '../lib/exact-sale';
 import { lotHammerFromAllIn } from '../lib/premiums';
@@ -514,9 +514,10 @@ export default function ComparableModal({
       const ids = face.comps && face.comps.ids.length ? new Set(face.comps.ids) : null;
       const seen = new Set(engine.pool.map(r => r.id));
       const poolRows = [...engine.pool, ...(evRows || []).filter(r => !seen.has(r.id) && (!ids || ids.has(r.id)))];
-      return [...poolRows]
-        .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
-        .map(l => ({ lot: l, score: 1 }));
+      const byDate = [...poolRows].sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime());
+      // (W29) the engine's other works list after the comparables
+      const { same, other } = splitOtherWorks(byDate, face.comps?.other);
+      return (other.length ? [...same, ...other] : byDate).map(l => ({ lot: l, score: 1 }));
     }
     if (band) {
       // the realized band's own pool, most recent first — no similarity score,
@@ -566,7 +567,7 @@ export default function ComparableModal({
     // (r8) the engine's median is the WEIGHTED median of these very rows —
     // labelled as what it is (it was relabelled "lectr value" when it
     // differed from the rows' plain median: a second number's name)
-    if ((called || valued) && face.comps) return `${FACE_LABEL.comps} · ${face.comps.sub}`;
+    if ((called || valued) && face.comps) return `${FACE_LABEL.comps} · ${face.comps.listSub}`;
     if (!compStats || comparables.length === 0) return 'Median';
     const prices = comparables.map(c => c.lot.priceUsd).filter((p): p is number => !!p).sort((a, b) => a - b);
     if (prices.length === 0) return 'Median';
@@ -577,6 +578,12 @@ export default function ComparableModal({
   // the min/max of whichever rows resolved
   const engineValue = (called || valued) && !band ? face.value : null;
   const medId = (called || valued) && face.comps ? medianRowId(comparables.map(c => c.lot), face.comps.med) : null;
+  // (W29) the engine's other works (value.otherWorkIds), set apart under
+  // their own caption; the call's / pool's count is the comparables only
+  const otherIdSet = new Set((called || valued) && !band && face.comps ? face.comps.other : []);
+  const sameRows = otherIdSet.size ? comparables.filter(c => !otherIdSet.has(c.lot.id)) : comparables;
+  const otherRows = otherIdSet.size ? comparables.filter(c => otherIdSet.has(c.lot.id)) : [];
+  const sameN = otherRows.length && face.comps ? face.comps.sameN : null;
 
   const houseColor = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
   // the home feed's label line (app/lib/lot-labels): "Pokémon · Vintage ·
@@ -584,6 +591,146 @@ export default function ComparableModal({
   const catLabel = labelLineOf(lot) || null;
   const catColor = categoryColors[lot.category] || 'var(--color-text-faint)';
   const maker = makerLineOf(lot);
+
+  // one comps row (W29: the comparables and the other works share it)
+  const renderRow = (comp: AuctionLot, i: number) => {
+    const compHouseColor = houseColors[comp.auctionHouse] || 'var(--color-text-secondary)';
+    const estMid = lot.estimateLow && lot.estimateHigh
+      ? (lot.estimateLow + lot.estimateHigh) / 2
+      : null;
+    // (r8) on the call's own basis when there is one: the comp's
+    // hammer over the house-adjusted ask — the median row then
+    // reads exactly the call's ratio
+    const askAdj = face.call?.askAdj ?? null;
+    const ratio = comp.priceUsd && askAdj
+      ? lotHammerFromAllIn(lot, comp.priceUsd) / askAdj
+      : estMid && comp.priceUsd
+        ? comp.priceUsd / estMid
+        : null;
+
+    return (
+      <a
+        key={comp.id}
+        // scheme-allowlisted; undefined renders a non-navigating
+        // row — the comp's facts still read, no dead click
+        href={safeHref(comp.url)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="comp-modal-row"
+        style={{
+          display: 'block',
+          padding: '10px 12px',
+          borderRadius: 12,
+          textDecoration: 'none',
+          color: 'inherit',
+          transition: 'background var(--duration-fast) var(--ease-signature)',
+        }}
+      >
+        <div className="comp-modal-row-inner">
+          {/* Rank */}
+          <span style={{
+            fontSize: 12.5,
+            color: 'var(--color-text-faint)',
+            fontWeight: 500,
+            width: 16,
+            textAlign: 'right',
+            flexShrink: 0,
+          }}>
+            {i + 1}
+          </span>
+
+          {/* Thumbnail — matte plate always behind, photo overlays;
+              on a hotlink-block the plate shows through, never a gap */}
+          <div className="comp-modal-thumb" style={{
+            position: 'relative',
+            borderRadius: 8,
+            overflow: 'hidden',
+            flexShrink: 0,
+            background: 'var(--color-bg-elevated)',
+            border: '1px solid var(--hairline)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <span style={{ fontFamily: 'var(--font-sans), sans-serif', fontWeight: 400, fontSize: 18, lineHeight: 1, color: 'var(--color-text-faint)' }}>
+              {(craftTitle(comp.title) || '?').charAt(0)}
+            </span>
+            {comp.imageUrl && (
+              // .comp-modal-thumb is 52×52 (44×44 on the sheet) —
+              // 160 is 3× the largest box, still ~1/150th the master
+              <PlateImg src={sizedImg(httpsImg(comp.imageUrl), 160)} alt="" loading="lazy" referrerPolicy="no-referrer" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+            )}
+          </div>
+
+          {/* Info */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontSize: 13.5,
+              fontFamily: 'var(--font-sans), sans-serif',
+              fontWeight: 500,
+              letterSpacing: '-0.01em',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              marginBottom: 3,
+            }}>
+              {comp.title}
+            </div>
+            <div className="comp-modal-meta" style={{
+              fontSize: 12.5,
+              color: 'var(--color-text-faint)',
+            }}>
+              <span style={{ color: compHouseColor, fontWeight: 500 }}>{comp.auctionHouse}</span>
+              <span>&middot;</span>
+              <span>{formatDate(comp.saleDate, { month: 'short', year: 'numeric' })}</span>
+              {comp.id === medId && (<><span>&middot;</span><span>the median</span></>)}
+              {comp.medium && (
+                <>
+                  <span>&middot;</span>
+                  <span style={{
+                    maxWidth: 140,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}>{cleanText(comp.medium)}</span>
+                </>
+              )}
+              {comp.dimensions && (
+                <span className="comp-modal-meta-dims">
+                  <span>&middot; </span>
+                  {comp.dimensions}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Price + ratio */}
+          <div className="comp-modal-price" style={{ flexShrink: 0 }}>
+            <div style={{
+              fontSize: 14,
+              fontWeight: 500,
+              color: 'var(--color-fg)',
+            }}>
+              {comp.priceUsd ? fmtFace(comp.priceUsd) : '—'}
+            </div>
+            {ratio !== null && (
+              <div style={{
+                fontSize: 12.5,
+                color: 'var(--color-text-secondary)',
+                fontWeight: 500,
+              }}>
+                {Math.round(Math.abs(ratio - 1) * 100) === 0
+                  ? (askAdj ? 'at the call\u2019s ask' : 'at est.')
+                  : <>{ratio >= 1
+                    ? signalMagnitude('Below Market', Math.round((ratio - 1) * 100))
+                    : signalMagnitude('Above Market', Math.round((1 - ratio) * 100))} {askAdj ? 'vs the call\u2019s ask' : 'vs est.'}</>}
+              </div>
+            )}
+          </div>
+        </div>
+      </a>
+    );
+  };
 
   // Portal to <body>: the card grid animates with transforms, and a transformed
   // ancestor traps fixed/z-indexed descendants beneath the sticky toolbar.
@@ -1025,15 +1172,18 @@ export default function ComparableModal({
                 basis, say so rather than shrink the call */}
             {called
               ? (() => {
-                  const n = face.comps?.n || called.signal.basis || comparables.length;
-                  const shown = comparables.length < n ? ` · ${comparables.length} shown` : '';
+                  const n = sameN ?? (face.comps?.n || called.signal.basis || comparables.length);
+                  const shown = sameRows.length < n ? ` · ${sameRows.length} shown` : '';
+                  if (sameN != null && !sameRows.length) return `The call — no comparable ${FORM_LABEL[called.signal.form]} · ${otherWorksCount(otherRows.length)}`;
                   return called.signal.kind === 'edition'
                     ? `The call — this exact work, sold ${n} times${shown}`
-                    : `The call — ${n} comparable ${FORM_LABEL[called.signal.form]}${(lot as AuctionLot & { value?: { crossPlayer?: boolean } | null }).value?.crossPlayer ? ' · same-game jerseys, player-tier matched' : ''}${shown}`;
+                    : `The call — ${n} comparable ${formNoun(FORM_LABEL[called.signal.form], n)}${(lot as AuctionLot & { value?: { crossPlayer?: boolean } | null }).value?.crossPlayer ? ' · same-game jerseys, player-tier matched' : ''}${shown}`;
                 })()
               : valued
                 // (r7) the engine valued it without a call: its pool, its n
-                ? `The pool — ${valued.n} comparable sales${!compsPending && comparables.length < valued.n ? ` · ${comparables.length} shown` : ''} · no call`
+                ? sameN != null && !sameRows.length
+                  ? `The pool — no comparable sales · ${otherWorksCount(otherRows.length)} · no call`
+                  : `The pool — ${sameN ?? valued.n} comparable ${formNoun('sales', sameN ?? valued.n)}${!compsPending && sameRows.length < (sameN ?? valued.n) ? ` · ${sameRows.length} shown` : ''} · no call`
               : band
                 ? `Recent sold — ${band.n} comparable ${(FORM_LABEL as Record<string, string>)[band.form] || band.form}${band.confidence === 'low' ? ' · thin evidence' : ''}`
                 : compsPending || comparables.length === 0
@@ -1108,144 +1258,11 @@ export default function ComparableModal({
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {comparables.map(({ lot: comp }, i) => {
-                const compHouseColor = houseColors[comp.auctionHouse] || 'var(--color-text-secondary)';
-                const estMid = lot.estimateLow && lot.estimateHigh
-                  ? (lot.estimateLow + lot.estimateHigh) / 2
-                  : null;
-                // (r8) on the call's own basis when there is one: the comp's
-                  // hammer over the house-adjusted ask — the median row then
-                  // reads exactly the call's ratio
-                const askAdj = face.call?.askAdj ?? null;
-                const ratio = comp.priceUsd && askAdj
-                  ? lotHammerFromAllIn(lot, comp.priceUsd) / askAdj
-                  : estMid && comp.priceUsd
-                    ? comp.priceUsd / estMid
-                    : null;
-
-                return (
-                  <a
-                    key={comp.id}
-                    // scheme-allowlisted; undefined renders a non-navigating
-                    // row — the comp's facts still read, no dead click
-                    href={safeHref(comp.url)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="comp-modal-row"
-                    style={{
-                      display: 'block',
-                      padding: '10px 12px',
-                      borderRadius: 12,
-                      textDecoration: 'none',
-                      color: 'inherit',
-                      transition: 'background var(--duration-fast) var(--ease-signature)',
-                    }}
-                  >
-                    <div className="comp-modal-row-inner">
-                      {/* Rank */}
-                      <span style={{
-                        fontSize: 12.5,
-                        color: 'var(--color-text-faint)',
-                        fontWeight: 500,
-                        width: 16,
-                        textAlign: 'right',
-                        flexShrink: 0,
-                      }}>
-                        {i + 1}
-                      </span>
-
-                      {/* Thumbnail — matte plate always behind, photo overlays;
-                          on a hotlink-block the plate shows through, never a gap */}
-                      <div className="comp-modal-thumb" style={{
-                        position: 'relative',
-                        borderRadius: 8,
-                        overflow: 'hidden',
-                        flexShrink: 0,
-                        background: 'var(--color-bg-elevated)',
-                        border: '1px solid var(--hairline)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}>
-                        <span style={{ fontFamily: 'var(--font-sans), sans-serif', fontWeight: 400, fontSize: 18, lineHeight: 1, color: 'var(--color-text-faint)' }}>
-                          {(craftTitle(comp.title) || '?').charAt(0)}
-                        </span>
-                        {comp.imageUrl && (
-                          // .comp-modal-thumb is 52×52 (44×44 on the sheet) —
-                          // 160 is 3× the largest box, still ~1/150th the master
-                          <PlateImg src={sizedImg(httpsImg(comp.imageUrl), 160)} alt="" loading="lazy" referrerPolicy="no-referrer" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-                        )}
-                      </div>
-
-                      {/* Info */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{
-                          fontSize: 13.5,
-                          fontFamily: 'var(--font-sans), sans-serif',
-                          fontWeight: 500,
-                          letterSpacing: '-0.01em',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          marginBottom: 3,
-                        }}>
-                          {comp.title}
-                        </div>
-                        <div className="comp-modal-meta" style={{
-                          fontSize: 12.5,
-                          color: 'var(--color-text-faint)',
-                        }}>
-                          <span style={{ color: compHouseColor, fontWeight: 500 }}>{comp.auctionHouse}</span>
-                          <span>&middot;</span>
-                          <span>{formatDate(comp.saleDate, { month: 'short', year: 'numeric' })}</span>
-                          {comp.id === medId && (<><span>&middot;</span><span>the median</span></>)}
-                          {comp.medium && (
-                            <>
-                              <span>&middot;</span>
-                              <span style={{
-                                maxWidth: 140,
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                              }}>{cleanText(comp.medium)}</span>
-                            </>
-                          )}
-                          {comp.dimensions && (
-                            <span className="comp-modal-meta-dims">
-                              <span>&middot; </span>
-                              {comp.dimensions}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Price + ratio */}
-                      <div className="comp-modal-price" style={{ flexShrink: 0 }}>
-                        <div style={{
-                          fontSize: 14,
-                          fontWeight: 500,
-                          color: 'var(--color-fg)',
-                        }}>
-                          {comp.priceUsd ? fmtFace(comp.priceUsd) : '—'}
-                        </div>
-                        {ratio !== null && (
-                          <div style={{
-                            fontSize: 12.5,
-                            color: 'var(--color-text-secondary)',
-                            fontWeight: 500,
-                          }}>
-                            {Math.round(Math.abs(ratio - 1) * 100) === 0
-                              ? (askAdj ? 'at the call\u2019s ask' : 'at est.')
-                              : <>{ratio >= 1
-                                ? signalMagnitude('Below Market', Math.round((ratio - 1) * 100))
-                                : signalMagnitude('Above Market', Math.round((1 - ratio) * 100))} {askAdj ? 'vs the call\u2019s ask' : 'vs est.'}</>}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </a>
-                );
-              })}
+              {sameRows.map(({ lot: comp }, i) => renderRow(comp, i))}
+              {otherRows.length > 0 && (
+                <div className="nsp-modal-cap" style={{ margin: sameRows.length ? '18px 0 6px' : '0 0 6px' }}>{otherWorksLabel(maker.name)}</div>
+              )}
+              {otherRows.map(({ lot: comp }, i) => renderRow(comp, sameRows.length + i))}
             </div>
           )}
         </div>

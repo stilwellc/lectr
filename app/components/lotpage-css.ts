@@ -118,6 +118,10 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
 .lectr-lot-h2{font-size:clamp(19px,2.2vw,23px);font-weight:350;letter-spacing:-0.02em;line-height:1.15;color:var(--color-fg);margin:0}
 .lectr-lot-shctx{font-size:11.5px;color:var(--color-text-faint);padding-bottom:2px}
 .lectr-lot .lectr-lot-comp{border-bottom:1px dotted var(--color-border-mid)}
+/* (W29) the engine's other works, after the comparables — the section's own kicker */
+.lectr-lot-ow{padding-top:22px}
+.lectr-lot-ow:first-child{padding-top:10px}
+.lectr-lot-ow .ns-kicker{margin-bottom:2px}
 .lectr-lot .lectr-lot-note{padding:14px 16px;margin-top:14px}
 /* (W11) the head's catalogue id holds one line (a Goldin uuid ran two) */
 .lectr-lot-cert .lectr-lot-head{flex-wrap:nowrap}
