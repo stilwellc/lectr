@@ -62,21 +62,23 @@ test('r7 data: athlete names the shape test used to miss', () => {
 
 test('r7 data: a famous non-athlete on a sports desk is a person, never a player', () => {
   assert.ok(isPublicFigure('Marilyn Monroe') && isPublicFigure('Ronald Reagan Typewritten') && !isPublicFigure('Earl Monroe'));
-  assert.equal(key('autographs', 'Richard Nixon Signed Baseball (PSA/DNA 8 NM-MT)'), 'sj:sports|p:richard-nixon');
-  assert.equal(key('sports-memorabilia', 'Marilyn Monroe and Joe DiMaggio Photograph c.1954 (Joe DiMaggio Collection)(PSA/DNA Type I)', { playerName: 'Marilyn Monroe', playerSlug: 'marilyn-monroe' }), 'sj:sports|p:marilyn-monroe');
+  // (r8) …and that person is their home market's (Pop Culture), never a sports person
+  assert.equal(key('autographs', 'Richard Nixon Signed Baseball (PSA/DNA 8 NM-MT)'), 'sj:culture|p:richard-nixon');
+  assert.equal(key('sports-memorabilia', 'Marilyn Monroe and Joe DiMaggio Photograph c.1954 (Joe DiMaggio Collection)(PSA/DNA Type I)', { playerName: 'Marilyn Monroe', playerSlug: 'marilyn-monroe' }), 'sj:culture|p:marilyn-monroe');
   // the athlete beside them keeps his row
   assert.equal(key('autographs', 'Earl Monroe Signed Basketball'), 'pl:earl-monroe');
   // a leading photographer yields to the stamped athlete the title spells
   assert.equal(key('autographs', 'c.1956 J.D. McCarthy Signed Mickey Mantle Postcard PSA 9 MINT Auto', { playerName: 'Mickey Mantle', playerSlug: 'mickey-mantle' }), 'pl:mickey-mantle');
 });
 
-test('r7 data: an artist\'s own work on a collectibles desk files under the maker; ephemera stays the person', () => {
+test('r7 data: an artist\'s own work on a collectibles desk files under the maker; (r8) so do their ephemera', () => {
   assert.equal(key('entertainment-memorabilia', "Andy Warhol Oversized Signed Screenprint - 'John Wayne' (Ltd. Ed. #216/250) (FS II.377)"), 'mk:andy-warhol');
   assert.equal(key('entertainment-memorabilia', 'Andy Warhol Signed Book with Soup Can Sketch - The Philosophy of Andy Warhol'), 'mk:andy-warhol');
   assert.equal(key('entertainment-memorabilia', 'Pablo Picasso Signed Sketch on Postcard to Man Ray'), 'mk:pablo-picasso');
-  assert.equal(key('entertainment-memorabilia', "Andy Warhol Signed Postcard of 'Marilyn Monroe'"), 'sj:culture|p:andy-warhol');
-  assert.equal(key('entertainment-memorabilia', 'Andy Warhol Signed Book - Prints'), 'sj:culture|p:andy-warhol');
-  assert.equal(key('entertainment-memorabilia', 'Andy Warhol and Jamie Wyeth Signed Prints'), 'sj:culture|p:andy-warhol');
+  // (r8) one Warhol: the r7 "person · Culture" shell is gone — ⌘K lists him once
+  assert.equal(key('entertainment-memorabilia', "Andy Warhol Signed Postcard of 'Marilyn Monroe'"), 'mk:andy-warhol');
+  assert.equal(key('entertainment-memorabilia', 'Andy Warhol Signed Book - Prints'), 'mk:andy-warhol');
+  assert.equal(key('entertainment-memorabilia', 'Andy Warhol and Jamie Wyeth Signed Prints'), 'mk:andy-warhol');
   assert.ok(!isWorkByArtist("Andy Warhol Signed Postcard - 'Andy Mouse' by Keith Haring"));
   assert.ok(!isWorkByArtist('Pablo Picasso Signed Photograph of His 1906 Painting'));
 });
@@ -137,7 +139,8 @@ test('r7 data: a keyed lens draws the same items, chained — the mix cannot spi
   const f = entityFigures(keyedPoints(), TODAY, LENS_LABELS);
   assert.equal(f.sparkBasis, 'matched');
   const sp = f.spark!.filter((v): v is number => v != null);
-  assert.equal(sp.length, 12);
+  // (r8) each point the trailing year: the first two quarters have no year behind them here
+  assert.equal(sp.length, 10);
   // monotone ~+5% a quarter, the last quarter included (a pooled median would jump ~20×)
   for (let i = 1; i < sp.length; i++) assert.ok(sp[i] / sp[i - 1] > 1.02 && sp[i] / sp[i - 1] < 1.08, `${i}: ${sp[i - 1]} → ${sp[i]}`);
   // the newest four quarters average the typical sale

@@ -25,8 +25,10 @@
  * subject.ts, subject-groups.ts and lot-labels.ts — never duplicated here.
  */
 import { marketOf, MAKER_MARKETS, ARTIST_LABEL, type Market } from '../../constants';
-import { isMisattributed, isWorkByArtist } from '../attribution';
+import { isMisattributed } from '../attribution';
 import { lotSubjectOf } from '../maker-subjects';
+import { publicFigureCanon, publicFigureHome } from '../player-name';
+import { playerSlugOf } from '../cards';
 import { taxonOf, subLabel, CAT_LABEL, type CatKey } from '../taxonomy';
 import type { EntityKind } from './model';
 
@@ -62,15 +64,32 @@ function read(l: KeyLot): string | null {
   }
   const s = lotSubjectOf(l);
   if (s) {
-    // (r7 data fix) a tracked artist's OWN work on a collectibles desk (RR's signed Warhol
-    // screenprints, Picasso sketches) is the maker's, never a second "person" entity; the
-    // artist's autographs and ephemera stay the person subject (app/lib/attribution isWorkByArtist)
-    const mk = s.kind === 'person' ? artistMakerOf(s.playerSlug) : null;
-    if (mk && isWorkByArtist(String(l.title || '')) && !isMisattributed(mk, String(l.title || ''), String(l.description || ''))) return `mk:${mk}`;
+    if (s.kind === 'person') {
+      // (r8) ONE entity per tracked artist: their own work on a collectibles desk (RR's signed
+      // Warhol screenprints) AND their autographs and ephemera file under the maker — the r7
+      // "person · Culture" shell made ⌘K list Warhol and Picasso twice (three times, with a
+      // sports-desk Warhol). A piece the attribution guard says is by someone else (a
+      // photographer's portrait of Warhol) is no one's entity: its collection category.
+      const mk = artistMakerOf(s.playerSlug);
+      if (mk) return isMisattributed(mk, String(l.title || ''), String(l.description || '')) ? collectionKey(l, artist) : `mk:${mk}`;
+      // (r8) a famous non-athlete files under ONE person in their home market (app/lib/
+      // player-name publicFigureHome) — a president's baseball at a sports house, Marilyn's
+      // DiMaggio photos, Einstein at a culture house — never a sports person, never a twin
+      const pf = publicFigureCanon(s.name, true);
+      const slug = pf ? playerSlugOf(pf) : null;
+      if (pf && slug) return `sj:${publicFigureHome(pf)}|p:${slug}`;
+      // a person no reader calls an athlete never keys to the sports market
+      return `sj:${market === 'sports' ? 'culture' : market}|${s.key}`;
+    }
     if (s.kind === 'player' && s.playerSlug) return `pl:${s.playerSlug}`;
     if (s.kind === 'set') return `st:${market}|${s.key}`;
     return `sj:${market}|${s.key}`;
   }
+  return collectionKey(l, artist);
+}
+
+/** a lot no reader names: its clean collection category (cs:<cat>:<sub>) */
+function collectionKey(l: KeyLot, artist: string): string {
   const t = taxonOf(l);
   const sub = t.cat === 'space-science' && t.sub === 'science' && SCIENCE_COLLECTIONS.has(artist) ? artist : t.sub;
   return `cs:${t.cat}:${sub}`;

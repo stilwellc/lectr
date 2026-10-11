@@ -67,8 +67,13 @@ export interface EntitySummary extends EntityRef {
   sparkN: number[] | null;
   /** (r7) 'matched' = the same items' price level, chained (cards, Pokémon,
    *  references, editions — app/lib/entity/stats sameItemSpark); 'median' =
-   *  the quarterly median sale; absent on an older payload (= median) */
+   *  the median sale; (r8) both read the TRAILING YEAR at each quarter, so
+   *  four points apart is the yoy's comparison; absent on an older payload
+   *  (a fail-soft quarterly median) */
   sparkBasis?: 'median' | 'matched' | null;
+  /** (r8) the line's own four-quarter change (percent), present only when it
+   *  falls outside the YoY's 90% interval (app/lib/entity/stats sparkYoyOff) */
+  sparkYoyOff?: number | null;
   /** like for like (app/lib/entity/stats yoyOf): 'matched' = the median of
    *  per-identity ratios, n = identities sold in both years; 'median' = pooled
    *  medians, only on a stable intake, n = the smaller year. lo/hi = its 90%
@@ -112,9 +117,15 @@ export interface EntityDetail {
   recent: EntityResultRow[];
   /** (>1 coarse lens only) unique vs editions, cards vs memorabilia — n all-time, n12 / med the trailing year */
   lensSplit?: { key: string; label: string; n: number; n12: number; med: number | null; yearly: { y: number; med: number | null; n: number; partial?: true }[]; top: EntityResultRow[] }[];
-  /** (Pokémon / sets: grade + language; missions: flown / signed) the live
-   *  chips' cuts over the sold history — app/lib/entity/facets */
-  facets?: { key: 'grade' | 'lang' | 'object'; label: string; scope?: string; rows: { key: string; label: string; n: number; n12: number; med12m: number | null }[] }[];
+  /** (Pokémon / sets / athletes: grade + language; missions: flown / signed;
+   *  teams: season) the live chips' cuts over the sold history — app/lib/entity/facets.
+   *  (r8) a grade group with basis 'matched' prices the SAME cards at each grade:
+   *  n12 = the cards matched at that rung, med12m = the chained level */
+  facets?: {
+    key: 'grade' | 'lang' | 'object' | 'season'; label: string; scope?: string;
+    basis?: 'matched'; base?: string; cards?: number; days?: number;
+    rows: { key: string; label: string; n: number; n12: number; med12m: number | null }[];
+  }[];
 }
 
 /** a decoded entities file (app/lib/entity/wire decodes the v2 wire into this) */

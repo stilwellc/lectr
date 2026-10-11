@@ -29,9 +29,9 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { SERVED_DIR } from './corpus-io';
 import { servedLastCrawl } from './lib/served-stamp';
-import { MARKETS, MAKER_MARKETS, MAKER_DISCIPLINE, ARTIST_LABEL, marketOf } from '../app/constants';
+import { MARKETS, MAKER_MARKETS, MAKER_DISCIPLINE, ARTIST_LABEL, ARTISTS, marketOf, type Market } from '../app/constants';
 import { MIN_SOLD, LENS_LABELS, BUDGET_MARKET_BR, BUDGET_ALL_BR, encodeEntities, tierEntities, isEntitiesWire, ledgerNamesBy } from '../app/lib/entity/wire';
-import { entityKeyOf, parseEntityId, entityPageOf, subEntityLabel, artistMakerOf } from '../app/lib/entity/key';
+import { entityKeyOf, parseEntityId, entityPageOf, subEntityLabel } from '../app/lib/entity/key';
 import { entityFigures, completeQuarters, SPARK_QUARTERS, THIN_SOLD12M, type SoldPoint, type Labels } from '../app/lib/entity/stats';
 import type { EntitySummary, EntityDetail } from '../app/lib/entity/model';
 import { lotSubjectOf } from '../app/lib/maker-subjects';
@@ -39,11 +39,11 @@ import { taxonOf, CAT_LABEL, SPORTS, DOMAINS } from '../app/lib/taxonomy';
 import { classifyForm, formsForMarket } from '../app/lib/comps';
 import { bucketOf } from '../app/lib/page-data';
 import { betterFace } from '../app/lib/img-host';
-import { facetKeysFor, facetSplits } from '../app/lib/entity/facets';
+import { facetKeysFor, facetSplits, facetGroupsOf } from '../app/lib/entity/facets';
 import { isLiveUpcoming } from '../app/utils';
 import { verifiedMovers } from '../app/preview/terminal/verified';
 import type { AuctionLot } from '../app/types';
-import { parseCard, cardKey } from '../app/lib/cards';
+import { parseCard, cardKey, cardLadderKey } from '../app/lib/cards';
 import { numericWatchRef, watchMaterialCoarse, isEditionLot, editionIdentityKey } from '../app/lib/identity';
 import { pokemonKey } from './sub-markets';
 
@@ -76,8 +76,31 @@ export function lensesOf(l: Lot): { lens: string; coarse: string; sport?: string
  *  reference in the same case material, the same print edition. null = no
  *  identity a resale could repeat (a unique work, most memorabilia). */
 export function identityOf(l: Lot, lens: string): string | null {
-  if (l.artist === 'pokemon') return pokemonKey(l);
-  if (lens.startsWith('sports-cards:')) return cardKey(parseCard(String(l.title || '')));
+  return identitiesOf(l, lens, false).k;
+}
+/** (r8) the identity AND, for a grade-ladder entity, the same card without its
+ *  grade (`kg` — app/lib/entity/facets gradeLadder): a card's cardLadderKey, a
+ *  Pokémon key minus its grade. One parse for both. */
+export function identitiesOf(l: Lot, lens: string, ladder: boolean): { k: string | null; kg: string | null } {
+  if (l.artist === 'pokemon') {
+    const k = pokemonKey(l);
+    return { k, kg: ladder && k ? k.slice(0, k.lastIndexOf('|')) : null };
+  }
+  if (lens.startsWith('sports-cards:')) {
+    const t = String(l.title || '');
+    const c = parseCard(t);
+    const k = cardKey(c);
+    // a card whose grade the parser could not read never prices a rung — nor
+    // does a "raw" card whose title reads a slab the parser does not know
+    // ("WCG GEM MT 10", "KSA 9.5"): it is no raw card
+    const slabbedRaw = !!k && k.endsWith('|raw') && SLAB_WORDS.test(t);
+    return { k, kg: ladder && k && !slabbedRaw ? cardLadderKey(c) : null };
+  }
+  return { k: otherIdentityOf(l), kg: null };
+}
+/** a grade or a grading company in a title (a "raw" read the card parser missed) */
+const SLAB_WORDS = /\b(?:gem|mint|nm-mt|ex-mt|vg-ex|graded|slabbed|authentic|altered|wcg|ksa|gma|hga|isa|csg|ags|mnt|ace|bccg|bvg|beckett|psa|bgs|sgc|cgc)\b/i;
+function otherIdentityOf(l: Lot): string | null {
   const ref = numericWatchRef(l);
   if (ref) return `${ref}|${watchMaterialCoarse(l) || '?'}`;
   const m = marketOf(l.artist);
@@ -87,8 +110,6 @@ export function identityOf(l: Lot, lens: string): string | null {
 
 /** (r7) a set entity's scope, printed as its discipline */
 export const SET_SCOPE = 'Sets, lots & sealed · singles file under the player';
-/** (r7) a tracked artist's person subject (their works file under the maker) */
-export const ARTIST_EPHEMERA = 'Signed & ephemera · works file under the maker';
 
 /** the lens labels (one copy, shared with the client's decoder) */
 export const LABELS: Labels = LENS_LABELS;
@@ -205,7 +226,10 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): BuiltEntiti
     soldRows++;
     const a = acc(id);
     const ln = lensesOf(l);
-    a.pts.push({ p: row.priceUsd!, d: String(row.saleDate || '').slice(0, 10), h: row.auctionHouse || '', lens: I(ln.lens), coarse: I(ln.coarse), id: linkId(row), t: row.title || '', img: row.imageUrl || null, fx: facetKeysFor(id, l), k: identityOf(l, ln.lens) });
+    const ids = identitiesOf(l, ln.lens, !!facetGroupsOf(id)?.includes('grade'));
+    const pt: SoldPoint = { p: row.priceUsd!, d: String(row.saleDate || '').slice(0, 10), h: row.auctionHouse || '', lens: I(ln.lens), coarse: I(ln.coarse), id: linkId(row), t: row.title || '', img: row.imageUrl || null, fx: facetKeysFor(id, l), k: ids.k };
+    if (ids.kg) pt.kg = ids.kg;
+    a.pts.push(pt);
     note(a, l, ln);
   });
   for (const l of input.live) {
@@ -226,8 +250,13 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): BuiltEntiti
   const summaries: EntitySummary[] = [];
   const details = new Map<string, EntityDetail>();
   const live = new Map<string, { n: number; photo: boolean }>();
+  // (r8) EVERY roster maker ships a summary, however thin its history: a maker
+  // missing from the wire fell back to stats.json's unlabeled median (Fab 5
+  // Freddy's "typical sale $704" was one sale, printed with no n). The wire's
+  // median is n-gated (MIN_MED_N) with its n beside it.
+  for (const m of ARTISTS) if (MAKER_MARKETS.has(m.market as Market)) acc(`mk:${m.slug}`);
   accs.forEach(a => {
-    if (!(a.live >= 1 || a.pts.length >= MIN_SOLD)) return;
+    if (!(a.live >= 1 || a.pts.length >= MIN_SOLD || a.id.startsWith('mk:'))) return;
     const ref = parseEntityId(a.id);
     if (!ref) return;
     // (r7) a SUBJECT's typical sale reads its live book's lens, when that lens holds at least half
@@ -256,7 +285,6 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): BuiltEntiti
       else if (ref.kind === 'set') discipline = SET_SCOPE;
       // a tracked artist's own works file under the maker (entity key); what stays here is signed
       // ephemera and pieces about them — said so, so ⌘K's second "Andy Warhol" is not a twin
-      else if (ref.subKind === 'person' && artistMakerOf(ref.subjectKey?.slice(2))) discipline = ARTIST_EPHEMERA;
       else if (ref.subKind === 'film' || ref.subKind === 'franchise' || (ref.subKind === 'person' && ref.market === 'culture')) {
         discipline = (domain && DOMAINS.find(x => x.key === domain)?.label) || subTag;
       } else discipline = subTag;
@@ -282,6 +310,7 @@ export function buildEntities(input: Omit<EntitiesInput, 'outDir'>): BuiltEntiti
       spark: f.spark,
       sparkN: f.sparkN,
       sparkBasis: f.sparkBasis,
+      sparkYoyOff: f.sparkYoyOff,
       yoy: f.yoy,
       verified: ref.kind === 'maker' ? verified.get(ref.slug!) ?? null : null,
       thin: f.sold12m < THIN_SOLD12M,

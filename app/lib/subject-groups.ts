@@ -53,6 +53,10 @@ const TEAM_QUAL = /^(?:(?:World Series|World Champion(?:ship)?s?|Champions?|Cham
 /** what a team piece IS: signed by the team, or the team's own card/photo */
 const TEAM_VERB = /^(?:\(.{1,30}?\)\s+)?(?:["“][^"”]{1,30}["”]\s+)?(?:(?:Super Bowl [IVXL]+|Reunion|Championship|Champions?|World Champions?|Starting \d|Team|Stars?|Hall of Famers?|Legends?|Greats|Alumni|Pennant|Spring Training)\s+){0,3}(?:Team[- ]Signed|Team[- ]Autographed|Multi-Signed|Mult-Signed|Signed|Autographed|Team-Issued|Team Issued|Team Photo|Team Ball|Team Baseball|Team Football|Team Basketball)\b/;
 
+/** (r8) the season a team lot's title leads with ("1961 New York Yankees …" → "1961"), or null */
+export function teamSeasonOf(title: string | null | undefined): string | null {
+  return seasonOf(String(title || '').replace(/\s+/g, ' ').trim());
+}
 function seasonOf(lead: string): string | null {
   const m = lead.match(SEASON);
   if (!m) return null;

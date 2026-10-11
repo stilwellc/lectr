@@ -105,6 +105,9 @@ export interface EntitiesWire {
     y: ([number, number] | [number, number, 0 | 1 | 2] | [number, number, 0 | 1 | 2, number, number] | 0)[];
     /** (r7) spark basis: 1 = matched (same items, chained), 0 = median; absent on older files */
     sb?: (0 | 1)[];
+    /** (r8) the spark's four-quarter change where it falls outside the yoy's
+     *  interval (stats sparkYoyOff); null = agrees; absent when none does */
+    so?: (number | null)[];
   };
   /** verified movers by id (makers only, sparse) */
   vf: Record<string, unknown>;
@@ -145,7 +148,7 @@ export function encodeEntities(list: readonly EntitySummary[], o: WireOpts): Ent
     if (i === undefined) { i = arr.length; arr.push(v); m.set(v, i); }
     return i;
   };
-  const c: EntitiesWire['c'] = { id: [], l: [], d: [], f: [], s: [], s12: [], m: [], mn: [], ml: [], r: [], sp: [], spn: [], y: [], sb: [] };
+  const c: EntitiesWire['c'] = { id: [], l: [], d: [], f: [], s: [], s12: [], m: [], mn: [], ml: [], r: [], sp: [], spn: [], y: [], sb: [], so: [] };
   const vf: Record<string, unknown> = {};
   for (const e of list) {
     c.id.push(e.id);
@@ -162,9 +165,11 @@ export function encodeEntities(list: readonly EntitySummary[], o: WireOpts): Ent
     c.spn.push(e.sparkN ?? 0);
     c.y.push(e.yoy ? yoyCell(e.yoy) : 0);
     c.sb!.push(e.spark && e.sparkBasis === 'matched' ? 1 : 0);
+    c.so!.push(e.spark && e.sparkYoyOff != null ? e.sparkYoyOff : null);
     if (e.verified != null) vf[e.id] = e.verified;
   }
   if (!c.sb!.some(Boolean)) delete c.sb;
+  if (!c.so!.some(v => v != null)) delete c.so;
   return { v: WIRE_V, tier: o.tier, generatedAt: o.generatedAt, lastCrawl: o.lastCrawl, sparkQ: o.sparkQ, tailN: o.tailN, ...(o.tailBy ? { tailBy: o.tailBy } : {}), ds, ml, c, vf };
 }
 
@@ -201,6 +206,7 @@ export function decodeEntities(w: EntitiesWire): EntitiesFile & { tier: 'main' |
       spark,
       sparkN: c.spn[i] || null,
       sparkBasis: spark ? (c.sb?.[i] ? 'matched' : 'median') : null,
+      sparkYoyOff: spark ? c.so?.[i] ?? null : null,
       yoy: y ? yoyOfCell(y) : null,
       verified: w.vf[id] ?? null,
       thin: c.s12[i] < THIN_SOLD12M,

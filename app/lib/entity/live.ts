@@ -77,12 +77,16 @@ function entryOf(lots: AuctionLot[]): LiveEntry {
 }
 
 /** maker buckets: every live lot whose entity is a maker (`mk:<artist>`;
- *  the attribution guard has already dropped the lots not by their maker) */
+ *  the attribution guard has already dropped the lots not by their maker).
+ *  (r8) a collectibles-desk lot of a tracked artist (RR's signed Warhol
+ *  screenprint, a Picasso autograph) keys to the maker too — the build counts
+ *  it on the maker's row, so the live join does */
 export function groupByMaker(pool: readonly AuctionLot[]): Map<string, LiveEntry> {
   const by = new Map<string, AuctionLot[]>();
   for (const l of pool) {
-    // a collection lot never keys to a maker — skip its subject read here
-    if (!MAKER_MARKETS.has(marketOf(l.artist))) continue;
+    // an unstamped collection lot keys to a maker only through a person subject
+    // that is a tracked artist — skip the subject read for the rest of them
+    if (!MAKER_MARKETS.has(marketOf(l.artist)) && (l as KeyLot).ek === undefined && lotSubjectOf(l)?.kind !== 'person') continue;
     const k = entityIdOf(l);
     if (!k || !k.startsWith('mk:')) continue;
     const a = by.get(k); if (a) a.push(l); else by.set(k, [l]);
@@ -112,7 +116,8 @@ export function groupByName(pool: readonly AuctionLot[]): Map<string, NameEntry>
     const market = marketOf(l.artist);
     if (!SUBJECT_MARKETS.has(market)) continue;
     const id = entityIdOf(l);
-    if (!id) continue;
+    // (r8) a collectibles-desk piece of a tracked artist is the maker's row (groupByMaker)
+    if (!id || id.startsWith('mk:')) continue;
     const k = nameBucketOf(id, l);
     // the spelling + subject come from the reader — a stamped book only needs
     // them for the fail-soft summary (entities files carry the label)

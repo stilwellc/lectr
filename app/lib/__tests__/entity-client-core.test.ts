@@ -179,7 +179,7 @@ test('adapters: a sub row from cat-stats; an athlete from players.json', () => {
   const { s } = subBundle('sports-cards', 'singles', 'Cards · Singles', 'sports',
     { sold: 100, sold12m: 30, median12m: 250, revenue: 5000, record: { price: 9000, title: 'Rookie', date: '2026-01-02', house: 'Goldin' },
       q: [['2025-Q4', 200, 10], ['2026-Q1', 210, 10], ['2026-Q2', 220, 10], ['2026-Q3', 230, 10], ['2026-Q4', 1, 1]] }, null, NOW);
-  assert.deepEqual([s.id, s.kind, s.sold, s.med12m, s.discipline], ['cs:sports-cards:singles', 'sub', 100, 250, 'Sports Cards']);
+  assert.deepEqual([s.id, s.kind, s.sold, s.med12m, s.med12mN, s.discipline], ['cs:sports-cards:singles', 'sub', 100, 250, 30, 'Sports Cards']);
   assert.deepEqual(s.spark, [200, 210, 220, 230]);
 
   const pool = [lot('graded-cards', '1952 Topps #311 Mickey Mantle - PSA 8', { imageUrl: 'https://img/m.jpg' })];
@@ -192,8 +192,9 @@ test('adapters: a sub row from cat-stats; an athlete from players.json', () => {
   const b = nameBundle('pl:mickey-mantle', g, players, new Set(['mickey-mantle']));
   assert.equal(b.s.label, 'Mickey Mantle');
   assert.equal(b.s.sold, 6560);
-  assert.equal(b.s.med12m, 1200);
-  assert.ok(b.s.medScope);                                               // the median's scope rides the note
+  // (r8) players.json's trailing-year median ships no n: never printed without one
+  assert.equal(b.s.med12m, null);
+  assert.equal(b.s.med12mN, null);
   assert.equal(b.s.record?.p, 1250000);
   assert.equal(b.s.caps.follow, 'mickey-mantle');
   assert.ok(b.detail);

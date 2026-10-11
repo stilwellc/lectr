@@ -19,7 +19,8 @@
  *   franchise an entertainment lot with no person or film but a franchise facet
  *   mission   the one space mission a lot names (subject.missionOf), or (r5)
  *             its program when no numbered mission reads ("Apollo")
- *   team      (r5) a team-signed piece's team-season, a team card's team
+ *   team      (r5) a team-signed piece's team, a team card's team — (r8) one id
+ *             per team, every season (the season is the entity's facet)
  *   set       (r5) sealed wax / set lots: product line + year ("1986 Fleer
  *             Basketball"); sealed Pokémon / set lots: the set ("Base Set")
  *   brand     (r5) an instrument's maker ("Gibson")
@@ -295,8 +296,13 @@ function setNameOf(name: string, l: SubjectLot): string {
 
 function groupRow(name: string, kind: 'team' | 'set' | 'brand' | string): LotSubject {
   const k = kind === 'team' ? 'team' : kind === 'brand' ? 'brand' : 'set';
-  return { key: `${k[0]}:${norm(name)}`, name, kind: k, playerSlug: null };
+  // (r8) ONE team, every season: "1961 New York Yankees" and "1998 New York Yankees" were 53
+  // team ids — the season is the team entity's facet (app/lib/entity/facets teamSeasonOf)
+  const nm = k === 'team' ? name.replace(TEAM_SEASON_LEAD, '') || name : name;
+  return { key: `${k[0]}:${norm(nm)}`, name: nm, kind: k, playerSlug: null };
 }
+/** a team-season's leading season ("1961 ", "1986-87 ") */
+export const TEAM_SEASON_LEAD = /^(?:18|19|20)\d{2}(?:-(?:\d{2}|\d{4}))?\s+/;
 const SOLO_ACT: Record<string, string> = { 'fr-mj': 'Michael Jackson', 'fr-elvis': 'Elvis Presley' };
 
 /** the row a live lot is counted under on the roster: `<market>|<subject key>`,

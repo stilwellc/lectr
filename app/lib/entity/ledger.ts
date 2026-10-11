@@ -363,15 +363,31 @@ export function compareRows(sort: SortKey): (a: Row, b: Row) => number {
   }
 }
 
+/** (r8) the markets Movers does not rank. Their pieces are one of a kind —
+ *  almost nothing sells twice to compare like for like (a signed photo is not
+ *  the same object as last year's), so every year-over-year read there is a
+ *  pooled median that moves with what sold, not with prices. Measured Oct 10
+ *  on the full corpus: same-title repeats across both years reach 5 on 29 of
+ *  3,543 Pop Culture and Science names, and those are generic titles, not one
+ *  object resold. Rows there keep the Matters order under Movers, said so. */
+export const NO_MOVERS: ReadonlySet<Market> = new Set<Market>(['culture', 'science']);
+
 /** the remainder row always closes its group */
 export function sortRows(rows: Row[], sort: SortKey): Row[] {
+  if (sort === 'movers' && rows.some(r => NO_MOVERS.has(r.market))) {
+    // grouped by market downstream: each part keeps its own order
+    const ranked = sortRows(rows.filter(r => !NO_MOVERS.has(r.market)), sort);
+    const kept = sortRows(rows.filter(r => NO_MOVERS.has(r.market)), 'matters');
+    return ranked.concat(kept);
+  }
   const cmp = compareRows(sort);
   return rows.sort((a, b) => (a.kind === 'rest' ? 1 : 0) - (b.kind === 'rest' ? 1 : 0) || cmp(a, b));
 }
 
 /* ═════════ small reads the row + panel print ═════════ */
 
-/** the trend's last complete quarter (a quarterly median), for a compare
+/** the trend's last complete quarter (r8: the trailing year's median to it on a
+ *  'median' spark; a quarterly median on a fail-soft one), for a compare
  *  column's caption — never the partial current quarter */
 export function lastQuarterOf(r: Row, now = Date.now()): { q: string; v: number } | null {
   const sp = r.spark, q = r.bundle.sparkQ;
