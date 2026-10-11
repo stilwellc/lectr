@@ -18,7 +18,7 @@ import { safeHref } from '../lib/safe-href';
 import { closeDayOf, isLiveUpcoming, localToday, splitTitle, deglue, formatDate, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
 import { isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand, contextComps } from '../lib/comps';
 import { enginePoolOf } from '../lib/engine-pool';
-import { lotFace, fmtFace, medianRowId, FACE_LABEL, projectedCloseFace } from '../lib/lot-face';
+import { lotFace, fmtFace, medianRowId, FACE_LABEL, projectedCloseFace, splitOtherWorks, otherWorksLabel, otherWorksCount, formNoun } from '../lib/lot-face';
 import { lotAllInFactor } from '../lib/premiums';
 import { lotFloor } from '../lib/verdict';
 import { formatEstimate, lotSignal, confidenceMeter } from './LotCard';
@@ -654,10 +654,12 @@ export default function LotPage({ lotId, initialLot }: {
       calledRows = [...called.pool, ...(evRows || []).filter(r => !seen.has(r.id) && (!ids || ids.has(r.id)))];
     }
     const pool = band ? band.pool : called ? calledRows : ctx?.rows.length ? ctx.rows : (evRows || []);
-    return [...pool]
-      .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
-      .slice(0, 12);
-  }, [band, called, ctx, evRows, enginePool]);
+    const byDate = [...pool].sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime());
+    // (W29) the engine's other works list after the comparables (each
+    // most recent first) — never ahead of them, never cut ahead of them
+    const { same, other } = splitOtherWorks(byDate, called && enginePool ? face?.comps?.other : null);
+    return (other.length ? [...same, ...other] : byDate).slice(0, 12);
+  }, [band, called, ctx, evRows, enginePool, face]);
 
   // ── provenance: the same physical object across the book ──
   // repeatSaleGroupId is the engine's strict physical-match verdict (photo/
@@ -867,6 +869,43 @@ export default function LotPage({ lotId, initialLot }: {
   // the head reads from the pending-safe call, so a partial read never sets
   // the headline count either
   const headCalled = compsPending ? null : called;
+  // (W29) the engine's other works (value.otherWorkIds) set apart: the
+  // comparables first, then "Other works by <maker>, for context". The head
+  // counts the comparables only; the median (read over both) is tagged on
+  // its own row, wherever it sits — and its sub names the other works.
+  const otherSplit = splitOtherWorks(compRows, !band && called && enginePool ? face?.comps?.other : null);
+  const headSameN = headCalled && !band && enginePool && face?.comps && otherSplit.other.length ? face.comps.sameN : headCalled?.n ?? 0;
+  const medRowId = !band && compsMed != null && face?.comps && enginePool ? medianRowId(compRows, compsMed) : null;
+  const compRow = (comp: AuctionLot, i: number) => (
+    // safe-href: undefined renders a non-navigating row — the
+    // comp's facts still read, no javascript:-shaped click
+    <a key={comp.id} href={safeHref(comp.url)} target="_blank" rel="noopener noreferrer" className="lectr-lot-comp">
+      <span className="lectr-lot-comp-i">{i + 1}</span>
+      <span className="lectr-lot-comp-thumb" aria-hidden>
+        <span>{(craftTitle(comp.title) || '?').charAt(0)}</span>
+        {comp.imageUrl && (
+          <PlateImg src={sizedImg(httpsImg(comp.imageUrl), 160)} alt="" loading="lazy" referrerPolicy="no-referrer" />
+        )}
+      </span>
+      <span className="lectr-lot-comp-t">
+        <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{craftTitle(comp.title)}</span>
+        <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
+          <span style={{ color: houseColors[comp.auctionHouse] || 'var(--color-text-faint)', fontWeight: 600 }}>{comp.auctionHouse}</span>
+          {' · '}{formatDate(comp.saleDate, { month: 'short', year: 'numeric' })}
+          {/* (r8) the weighted median IS one of these sales — name
+              it (W23: ahead of the medium, which the ellipsis cuts) */}
+          {comp.id === medRowId ? ' · the median' : ''}
+          {(() => {
+            // a medium the title already carries (Christie's rows
+            // echo the secondary title there) is not printed twice
+            const m = comp.medium ? deglue(cleanText(comp.medium)) : '';
+            return m && !foldText(comp.title).includes(foldText(m)) ? ` · ${m}` : '';
+          })()}
+        </span>
+      </span>
+      <span className="lectr-lot-comp-p">{comp.priceUsd ? fmtFace(comp.priceUsd) : '—'}</span>
+    </a>
+  );
   const formLabel = (band && ((FORM_LABEL as Record<string, string>)[band.form] || band.form))
     || (headCalled?.form && (FORM_LABEL as Record<string, string>)[headCalled.form])
     || 'sales';
@@ -1295,7 +1334,7 @@ export default function LotPage({ lotId, initialLot }: {
 
               {compsMed != null && (
                 <LeaderRow k={FACE_LABEL.comps} v={fmtFace(compsMed)}
-                  sub={calledIsHonest && face?.comps && enginePool ? face.comps.sub : compsN != null ? `${compsN} sales` : undefined} />
+                  sub={calledIsHonest && face?.comps && enginePool ? face.comps.listSub : compsN != null ? `${compsN} sales` : undefined} />
               )}
 
               {/* (r8) the engine's value on a valued lot without a read cell —
@@ -1481,7 +1520,9 @@ export default function LotPage({ lotId, initialLot }: {
                   : headCalled
                     ? headCalled.kind === 'edition'
                       ? `This exact work, sold ${headCalled.n} times`
-                      : `${headCalled.n} comparable ${formLabel}${!compsPending && compRows.length && compRows.length < headCalled.n && compRows.length < 12 ? ` · ${compRows.length} shown` : ''}`
+                      : otherSplit.other.length && !otherSplit.same.length
+                        ? `No comparable ${formLabel} · ${otherWorksCount(otherSplit.other.length)}`
+                        : `${headSameN} comparable ${formNoun(formLabel, headSameN)}${!compsPending && otherSplit.same.length && otherSplit.same.length < headSameN && compRows.length < 12 ? ` · ${otherSplit.same.length} shown` : ''}`
                     : 'Comparable sales'}
               </h2>
             </div>
@@ -1519,36 +1560,13 @@ export default function LotPage({ lotId, initialLot }: {
             </div>
           ) : (
             <div style={{ marginTop: 6 }}>
-              {compRows.map((comp, i, all) => (
-                // safe-href: undefined renders a non-navigating row — the
-                // comp's facts still read, no javascript:-shaped click
-                <a key={comp.id} href={safeHref(comp.url)} target="_blank" rel="noopener noreferrer" className="lectr-lot-comp">
-                  <span className="lectr-lot-comp-i">{i + 1}</span>
-                  <span className="lectr-lot-comp-thumb" aria-hidden>
-                    <span>{(craftTitle(comp.title) || '?').charAt(0)}</span>
-                    {comp.imageUrl && (
-                      <PlateImg src={sizedImg(httpsImg(comp.imageUrl), 160)} alt="" loading="lazy" referrerPolicy="no-referrer" />
-                    )}
-                  </span>
-                  <span className="lectr-lot-comp-t">
-                    <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{craftTitle(comp.title)}</span>
-                    <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
-                      <span style={{ color: houseColors[comp.auctionHouse] || 'var(--color-text-faint)', fontWeight: 600 }}>{comp.auctionHouse}</span>
-                      {' · '}{formatDate(comp.saleDate, { month: 'short', year: 'numeric' })}
-                      {/* (r8) the weighted median IS one of these sales — name
-                          it (W23: ahead of the medium, which the ellipsis cuts) */}
-                      {!band && compsMed != null && face?.comps && enginePool && comp.id === medianRowId(all, compsMed) ? ' · the median' : ''}
-                      {(() => {
-                        // a medium the title already carries (Christie's rows
-                        // echo the secondary title there) is not printed twice
-                        const m = comp.medium ? deglue(cleanText(comp.medium)) : '';
-                        return m && !foldText(comp.title).includes(foldText(m)) ? ` · ${m}` : '';
-                      })()}
-                    </span>
-                  </span>
-                  <span className="lectr-lot-comp-p">{comp.priceUsd ? fmtFace(comp.priceUsd) : '—'}</span>
-                </a>
-              ))}
+              {otherSplit.same.map((comp, i) => compRow(comp, i))}
+              {otherSplit.other.length > 0 && (
+                <>
+                  <div className="lectr-lot-ow"><span className="ns-kicker">{otherWorksLabel(makerName)}</span></div>
+                  {otherSplit.other.map((comp, i) => compRow(comp, otherSplit.same.length + i))}
+                </>
+              )}
             </div>
           )}
         </section>
