@@ -11,7 +11,7 @@ import { pinClock } from '../../../lib/__tests__/helpers/pin-clock';
 import { lotMaxBid } from '../../../lib/verdict';
 import { lotAllInFactor } from '../../../lib/premiums';
 import {
-  bidPlan, planRowOf, dropOrder, budgetBuys, readerMarkets, followMarket, marketOfLot, winTotals, basisMix,
+  bidPlan, planRowOf, dropOrder, smallestDropSet, budgetBuys, readerMarkets, followMarket, marketOfLot, winTotals, basisMix,
   nightLabel, isoDayOf, allInText, BASIS_TAG,
 } from '../budget';
 
@@ -110,24 +110,48 @@ test('bidPlan: live lots only, grouped by close night in order; sums per night a
   assert.equal(basisMix(p.rows), '2 at max bid · 3 at estimate midpoint');
 });
 
-test('bidPlan: a ceiling flags the over nights and suggests drops — lowest edge first, engine-priced last, biggest first', () => {
+test('bidPlan: a ceiling flags the over nights and suggests the SMALLEST drop set — as many lots stay as possible', () => {
   const p = bidPlan(SAVED, NOW, { minUsd: 1000, maxUsd: 25000 });
   assert.equal(p.ceiling, 25000);
   const oct14 = p.nights.find(n => n.day === '2026-10-14')!;
   assert.equal(oct14.over, 36924 + 12500 + 2000 - 25000);
-  // B (est, no edge, $12.5K) and D (est, no edge, $2K) go before A (max bid):
-  // B first (biggest), still over → D, still over → A
-  assert.deepEqual(oct14.drops.map(r => r.lot.id), ['christies-B', 'rrauction-D', 'phillips-A']);
-  assert.equal(oct14.afterDrops, 0);
+  // dropping A alone ($36.9K) fits ($14.5K left) — never B then D then A → $0
+  assert.deepEqual(oct14.drops.map(r => r.lot.id), ['phillips-A']);
+  assert.equal(oct14.afterDrops, 12500 + 2000);
+  assert.equal(oct14.kept, 2);
   const oct13 = p.nights.find(n => n.day === '2026-10-13')!;
   assert.equal(oct13.over, null);
   assert.equal(p.overNights, 1);
-  // a ceiling that one drop clears
+  // a ceiling one drop clears: B or D both fit; same cost (est, no edge) →
+  // the one that keeps the most money in play (drop D, $2K)
   const p2 = bidPlan(SAVED, NOW, { minUsd: null, maxUsd: 50000 });
   const n2 = p2.nights.find(n => n.day === '2026-10-14')!;
   assert.equal(n2.over, 1424);
-  assert.deepEqual(n2.drops.map(r => r.lot.id), ['christies-B']);
-  assert.equal(n2.afterDrops, 36924 + 2000);
+  assert.deepEqual(n2.drops.map(r => r.lot.id), ['rrauction-D']);
+  assert.equal(n2.afterDrops, 36924 + 12500);
+  assert.equal(n2.kept, 2);
+});
+
+test('smallestDropSet: the tight seed’s night — $37K max-bid Rolex + $12K est-mid Rolex under a $25K ceiling drops ONLY the $37K lot', () => {
+  const R1 = mk('phillips-rolex-gmt', { auctionHouse: 'Phillips', artist: 'rolex', title: 'A rare white gold dual-time wristwatch', estLowUsd: 26000, estHighUsd: 52000, estimateLow: 26000, estimateHigh: 52000,
+    saleDate: '2026-10-09', saleDateTime: '2026-10-09T10:00:00-04:00', value: value({ maxBidUsd: 36924, low: 39562, compValueUsd: 50000 }) });
+  const R2 = mk('phillips-rolex-dd', { auctionHouse: 'Phillips', artist: 'rolex', title: 'A well-preserved white gold wristwatch', estLowUsd: 8000, estHighUsd: 16000, estimateLow: 8000, estimateHigh: 16000,
+    saleDate: '2026-10-09', saleDateTime: '2026-10-09T10:00:00-04:00', value: value({ maxBidUsd: 12332, low: 12289, confidence: 'low' }) });
+  const rows = [planRowOf(R1, NOW)!, planRowOf(R2, NOW)!];
+  assert.equal(rows[0].basis, 'max'); assert.equal(rows[0].hammer, 36924);
+  assert.equal(rows[1].basis, 'est'); assert.equal(rows[1].hammer, 12000);
+  const drops = smallestDropSet(rows, 25000);
+  assert.deepEqual(drops.map(r => r.lot.id), ['phillips-rolex-gmt'], 'the greedy order (est first) over-dropped to $0; one lot stays');
+  assert.equal(rows.reduce((s, r) => s + r.hammer, 0) - drops.reduce((s, r) => s + r.hammer, 0), 12000);
+  // nothing fits alone → everything drops, and only then
+  assert.deepEqual(smallestDropSet(rows, 10000).map(r => r.lot.id), ['phillips-rolex-dd', 'phillips-rolex-gmt'].sort((a, b) => (a === 'phillips-rolex-dd' ? -1 : 1)));
+  // under the ceiling → nothing to drop
+  assert.deepEqual(smallestDropSet(rows, 60000), []);
+  // two cheap no-edge rows beat one expensive flagged row when both sets fit:
+  // size wins first (one drop), then cost (the unflagged est row before the max-bid one)
+  const C1 = { ...rows[1], lot: mk('c1', {}), hammer: 20000, edge: 0.6, basis: 'est' as const };
+  const C2 = { ...rows[1], lot: mk('c2', {}), hammer: 20000, edge: 0, basis: 'est' as const };
+  assert.deepEqual(smallestDropSet([C1, C2], 25000).map(r => r.lot.id), ['c2']);
 });
 
 test('dropOrder: Above Market before unflagged before flagged; within a tie the unpriced-by-engine rows, biggest first', () => {

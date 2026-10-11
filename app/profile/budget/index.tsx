@@ -133,7 +133,9 @@ function NightView({ n, plan, now }: { n: PlanNight; plan: BidPlan; now: number 
                   <em>{craftTitle(d.lot.title, d.lot.auctionHouse)}</em> ({fmtFace(d.hammer)} {BASIS_TAG[d.basis].toLowerCase()}{d.edge > 0 ? ', flagged' : d.edge < 0 ? ', above market' : ', no edge'})
                 </React.Fragment>
               ))}
-              {' '}→ {fmtFace(n.afterDrops)}. A suggestion — nothing leaves your desk.
+              {' '}→ {n.kept > 0
+                ? <>{fmtFace(n.afterDrops)}, {n.kept} {n.kept === 1 ? 'lot stays' : 'lots stay'}</>
+                : <>$0 — nothing on this night fits under {fmtFace(plan.ceiling)} on its own</>}. A suggestion — nothing leaves your desk.
             </>
           )}
         </p>

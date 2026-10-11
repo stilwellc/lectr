@@ -124,10 +124,13 @@ export interface PlanNight {
   nOther: number;
   /** hammer over the stated ceiling, null when under it or no ceiling */
   over: number | null;
-  /** the suggested drops, in order, that bring the night under the ceiling */
+  /** the suggested drops (smallestDropSet), in dropOrder, that bring the
+   *  night under the ceiling */
   drops: PlanRow[];
   /** the night's hammer sum after the suggested drops */
   afterDrops: number;
+  /** the lots that stay after the suggested drops */
+  kept: number;
 }
 
 export interface BidPlan {
@@ -180,7 +183,8 @@ export function planRowOf(lot: AuctionLot, now: number): PlanRow | null {
 
 /** the drop order on an over-budget night: lowest edge first (Above Market,
  *  then unflagged, then the shallowest flag), the engine-priced rows last,
- *  the biggest figure first within a tie — each drop frees the most */
+ *  the biggest figure first within a tie — the order a suggestion is read
+ *  in, and the greedy fallback past the exact search's cap */
 export function dropOrder(rows: readonly PlanRow[]): PlanRow[] {
   return [...rows].sort((a, b) => {
     if (a.edge !== b.edge) return a.edge - b.edge;
@@ -188,6 +192,52 @@ export function dropOrder(rows: readonly PlanRow[]): PlanRow[] {
     if (am !== bm) return am - bm;
     return b.hammer - a.hammer;
   });
+}
+
+/** what dropping a row costs the desk: its edge, and the engine's own
+ *  pricing on it — a flagged or max-bid lot is the last to go */
+const dropCost = (r: PlanRow) => r.edge + (r.basis === 'max' ? 1 : 0);
+
+/** the exact search runs up to this many rows a night (2^20 subsets at
+ *  most; a night rarely has 20 watched lots) — past it, greedy */
+export const DROP_SEARCH_CAP = 20;
+
+/** THE SMALLEST set of rows whose removal brings the night under the
+ *  ceiling — as many lots stay as possible; among sets of that size the
+ *  one that drops the least edge / engine pricing, then the one that keeps
+ *  the most money in play. Rows come back in dropOrder (the sentence's
+ *  "drop first X, then Y"). Nothing is removed from the desk. */
+export function smallestDropSet(rows: readonly PlanRow[], ceiling: number): PlanRow[] {
+  const total = rows.reduce((s, r) => s + r.hammer, 0);
+  if (total <= ceiling) return [];
+  const n = rows.length;
+  if (n > DROP_SEARCH_CAP) {
+    const out: PlanRow[] = [];
+    let left = total;
+    for (const r of dropOrder(rows)) { if (left <= ceiling) break; out.push(r); left -= r.hammer; }
+    return out;
+  }
+  const need = total - ceiling;
+  let best: { idx: number[]; cost: number; dropped: number } | null = null;
+  // combinations of size k, smallest k first; the first k with a fit wins
+  for (let k = 1; k <= n && !best; k++) {
+    const idx: number[] = [];
+    const walk = (start: number) => {
+      if (idx.length === k) {
+        let dropped = 0, cost = 0;
+        for (const i of idx) { dropped += rows[i].hammer; cost += dropCost(rows[i]); }
+        if (dropped + 1e-9 < need) return;
+        if (!best || cost < best.cost - 1e-9 || (Math.abs(cost - best.cost) <= 1e-9 && dropped < best.dropped)) best = { idx: [...idx], cost, dropped };
+        return;
+      }
+      for (let i = start; i <= n - (k - idx.length); i++) { idx.push(i); walk(i + 1); idx.pop(); }
+    };
+    walk(0);
+  }
+  const chosen = best as { idx: number[] } | null;
+  if (!chosen) return [...rows];
+  const set = new Set(chosen.idx.map(i => rows[i]));
+  return dropOrder(rows).filter(r => set.has(r));
 }
 
 /** the bid plan: every live watched lot, by close night, against the ceiling */
@@ -215,16 +265,9 @@ export function bidPlan(saved: readonly AuctionLot[], now: number, price: PriceP
       const totalAllIn = rs.reduce((s, r) => s + r.allIn, 0);
       const nMax = rs.filter(r => r.basis === 'max').length;
       const over = ceiling != null && total > ceiling ? total - ceiling : null;
-      const drops: PlanRow[] = [];
-      let after = total;
-      if (over != null) {
-        for (const r of dropOrder(rs)) {
-          if (after <= ceiling!) break;
-          drops.push(r);
-          after -= r.hammer;
-        }
-      }
-      return { day, rows: rs, total, totalAllIn, nMax, nOther: rs.length - nMax, over, drops, afterDrops: after };
+      const drops = over != null ? smallestDropSet(rs, ceiling!) : [];
+      const after = total - drops.reduce((s, r) => s + r.hammer, 0);
+      return { day, rows: rs, total, totalAllIn, nMax, nOther: rs.length - nMax, over, drops, afterDrops: after, kept: rs.length - drops.length };
     });
   const total = rows.reduce((s, r) => s + r.hammer, 0);
   const totalAllIn = rows.reduce((s, r) => s + r.allIn, 0);
