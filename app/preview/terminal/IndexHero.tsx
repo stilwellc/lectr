@@ -407,14 +407,17 @@ export default function IndexHero({
 
   // the departures line — inside the board on desktop, after the search on
   // the phone (the shell decides; the element is one and the same)
-  const tickerEl = closes.length > 0 ? (
+  // (perf W13) while the counts are pending the line holds its place with
+  // one '—' chip: each house's next close is read off the whole live book
+  const tickerEl = closes.length > 0 || countsPending ? (
     <div className={styles.pulseTicker} role="group" aria-label="Auctions closing next">
       <div className={styles.pulseHead} aria-hidden>
         <span className={styles.pulseTitle}>Closing next</span>
         <i className={styles.pulseRule} />
       </div>
       <span className={styles.pulseTickerChips}>
-        {closes.map((c) => (
+        {countsPending && <span className={styles.pulseChip}>—</span>}
+        {!countsPending && closes.map((c) => (
           <span key={c.house} className={styles.pulseChip} data-tonight={['tonight', 'today'].includes(relDay(c.when, c.tonight)) ? 'true' : undefined}>
             {c.house}<em>{relDay(c.when, c.tonight)}</em>
           </span>
