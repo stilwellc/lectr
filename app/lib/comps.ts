@@ -85,6 +85,12 @@ function classifyFormUncached(lot: Pick<AuctionLot, 'title' | 'medium' | 'catego
   const m = ` ${(lot.medium || '').toLowerCase()} `;
   const tm = t + m;
 
+  // (W21) an artist's JEWEL is jewelry in any category: Calder / Haring /
+  // Lichtenstein brooches, a Picasso "bague", Paloma Picasso earclips came in
+  // as print / original and read Prints & Multiples. Only the object noun
+  // counts — "Femme au collier", "Woman with a Necklace" are paintings.
+  if (lot.category !== 'object' && isJewelTitle(t) && !ART_MEDIUM_RE.test(m.replace(/\benamel\b/g, ' '))) return 'jewelry';
+
   // paper/publishing forms hiding across categories
   // (wave 5) …but "book" is also a subject and a support: a painting of a book
   // ("Still Life with Oysters, Fish in a Bowl and Book, oil and magna on
@@ -107,7 +113,9 @@ function classifyFormUncached(lot: Pick<AuctionLot, 'title' | 'medium' | 'catego
   const fsRef = /\bf\.?\s*&\s*s\.?\s*(?:[ivx]+|\d)|\bfeldman\s*(?:&|and)\s*schellmann\b/.test(tm);
   if ((lot.category === 'photograph' && !fsRef) || /\b(gelatin silver|c-print|chromogenic|polaroid|cibachrome|photograph)\b/.test(m)) return 'photograph';
 
-  if (/\b(rug|tapestry|carpet|textile|blanket|scarf)\b/.test(tm)) return 'textile';
+  // (W21) a print / painting titled "Statue, Carpet, Cooking Pans…" depicts a
+  // carpet — on the art categories only the MEDIUM says textile
+  if (/\b(rug|tapestry|carpet|textile|blanket|scarf)\b/.test(lot.category === 'print' || lot.category === 'original' ? m : tm)) return 'textile';
 
   // editioned objects & multiples (KAWS companions, decks, plates, plush…)
   // (never for watches/science 'object' lots or furniture: a "cushion-shaped
@@ -133,7 +141,13 @@ function classifyFormUncached(lot: Pick<AuctionLot, 'title' | 'medium' | 'catego
     // Panthère is also a watch line). SINGULAR forms — unchanged from before.
     // …unless the lot is a watch set in it ("bangle watch", "ring clip watch",
     // "wristwatch … and 'Nautilus' cufflinks")
-    if (/\b(ring|necklace|brooch|earrings?|pendant|bangle|choker|cufflinks)\b/.test(t) && !/watch|\bmontre\b/.test(tm)) return 'jewelry';
+    // (W21) + the French / Italian nouns and the trade words a jeweler's
+    // catalogue prints (Cartier's "COLLIER MAILLONS PANTHÈRE", "earclips",
+    // "demi-parure", "Bague Trinity" all read as wristwatches off the
+    // Panthère / Trinity model words); a bare "ring" needs a jeweler's word
+    // beside it (an "O-ring", the "Poison Ring" gang, "Hat in the Ring")
+    // (a flown Snoopy lapel pin is a space artifact, read below)
+    if ((JEWEL_NOUN_RE.test(t) || jewelRing(t)) && !/watch|\bmontre\b|\bpendulette\b|\bclock\b|\bbarometer\b|\b(?:dial|movement|calibre|caliber)\b/.test(tm) && !/\b(?:flown|apollo|nasa|astronaut|lunar|skylab|space shuttle)\b/.test(t)) return 'jewelry';
     // Plural / set jewelry forms the singular gate missed. A watch-MODEL word
     // (Ellipse, Tank, Santos, Panthère) is ALSO a jewelry line, so a lot whose
     // OBJECT noun is jewelry (a ring SET, a pair of bangles) must resolve to
@@ -159,12 +173,17 @@ function classifyFormUncached(lot: Pick<AuctionLot, 'title' | 'medium' | 'catego
     }
     // watch titles are catalog-style ("Cosmograph Daytona, Ref: 16518",
     // "Montre bracelet en or…") — the word "watch" is often absent
-    if (/wrist ?watch|\bmontre\b/.test(tm)
+    if (/wrist ?watch|\bmontre\b/.test(tm) || (/\borologio\b(?! da (?:tavolo|parete|tasca|viaggio))/.test(tm) && !/\bclock\b/.test(tm))
       || (/watch/.test(tm) && /\b(chronograph|chronometer|automatic|quartz|manual wind|movement|dial|bezel|calibre|caliber|tourbillon|perpetual calendar|bracelet|gold|steel|lady'?s|gentleman)\b/.test(tm))
-      || /\bref[:.]?\s*[a-z]?\d{3,6}/.test(t)
+      || (/\bref[:.]?\s*[a-z]{0,3}\d{3,6}/.test(t) && !/\b(?:clock|pendulette)\b/.test(t))
       || /\b(chronograph|chronometer|chronometre|oyster|cosmograph|cellini)\b/.test(t)
-      || WATCH_MODELS.test(t)) return 'wristwatch';
-    if (/\b(clock|regulator)\b/.test(tm)) return 'clock';
+      || WATCH_MODELS_SURE.test(t)
+      || (/\bdial\b/.test(t) && /\b(?:movement|calibre|caliber|case no)\b/.test(t))
+      || (WATCH_MODELS.test(t) && WATCH_CONTEXT.test(t))
+      // a watch house's catalogue titles the lot by its model alone ("Tank,
+      // Circa 1975", "Baignoire Allongée, No.314/400") — the model word LEADS
+      || (WATCH_MODELS_AMBIGUOUS.test(t) && new RegExp(`^\\s*(?:(?:cartier|omega|patek philippe(?: geneve)?|rolex|audemars piguet|jaeger[- ]lecoultre)\\s*[-:,|.]?\\s*)?(?:(?:mini|golden|lady'?s?|petite|grande?|must de cartier)\\s+)?['‘"“]?(?:${WATCH_MODELS_AMBIGUOUS.source.slice(2, -2)})\\b(?![- ](?:\\d\\b|[ivx]+\\b|satellite|probe|rover|mission|program|davis))`).test(t))) return 'wristwatch';
+    if (/\b(clock|regulator|pendulette)\b/.test(tm)) return 'clock';
 
     // natural history, space & technology
     if (/\b(meteorite|pallasite|tektite|moldavite)\b/.test(tm)) return 'meteorite';
@@ -179,10 +198,14 @@ function classifyFormUncached(lot: Pick<AuctionLot, 'title' | 'medium' | 'catego
   // furniture / design forms (title carries the truth in this data)
   const isDesign = lot.category === 'design';
   if (isDesign || /\b(walnut|teak|oak|rosewood)\b/.test(m)) {
-    if (/\b(bench|settee|daybed)\b/.test(t)) return 'seating-bench';
-    if (/\b(stool|ottoman|pouf)\b/.test(t)) return 'seating-stool';
+    // (W21) Bonhams' Wright-family rows glue the next field onto the noun
+    // ("Q Bench1966American", "Conoid Desk1966", "Lounge Chair1966"): a noun
+    // ends at any non-letter, not only a word boundary
+    if (/\b(bench(?:es)?|settees?|daybeds?)(?![a-z])/.test(t)) return 'seating-bench';
+    // a lounge chair WITH its ottoman is the chair
+    if (/\b(stool|ottoman|pouf)(?![a-z])/.test(t) && !/\bchairs?(?![a-z])/.test(t)) return 'seating-stool';
     if (/\b(sofa|couch|sectional)\b/.test(t)) return 'seating-sofa';
-    if (/\b(chair|rocker|recliner)\b/.test(t)) return 'seating-chair';
+    if (/\b(chair|rocker|recliner)(?![a-z])/.test(t)) return 'seating-chair';
     if (/\b(dining table|conference table|trestle table)\b/.test(t)) return 'table-dining';
     if (/\b(coffee table|low table|cocktail table)\b/.test(t)) return 'table-low';
     if (/\b(side table|end table|occasional table|nesting table|nightstand|night stand)\b/.test(t)) return 'table-side';
@@ -191,8 +214,10 @@ function classifyFormUncached(lot: Pick<AuctionLot, 'title' | 'medium' | 'catego
     // on: "Table Lamp1966walnut"); a "lamp table" stays a table
     if (/\b(lamps?|sconces?|chandeliers?|lighting|light fixture|lanterns?)(?![a-z])(?!\s*tables?\b)/.test(t)) return 'lighting';
     if (/\btable\b/.test(t)) return 'table';
-    if (/\b(cabinet|chest|dresser|sideboard|credenza|wardrobe|bookcase|bookshelf|shelves|shelf|case piece|etagere|étagère|highboard|commode)\b/.test(t)) return 'case';
-    if (/\b(desk|workbench|vanity)\b/.test(t)) return 'desk';
+    if (/\besu\b/.test(t) && /\bdesk(?![a-z])/.test(t)) return 'desk';
+    if (/\b(cabinets?|chests?|dressers?|sideboards?|credenzas?|wardrobes?|bookcases?|bookshel(?:f|ves)|shelves|shelf|case piece|etageres?|étagères?|highboards?|commodes?|nightstands?|night stands?|placards?|esu)(?![a-z])/.test(t)) return 'case';
+    if (/\bltrs?\b/.test(t)) return 'table-low';
+    if (/\b(desks?|workbench|vanity)(?![a-z])/.test(t)) return 'desk';
     if (/\b(bed|headboard)\b/.test(t)) return 'bed';
     if (/\b(lamp|sconce|chandelier|lighting|light fixture|lantern)\b/.test(t)) return 'lighting';
     if (/\bmirror\b/.test(t)) return 'mirror';
@@ -331,7 +356,41 @@ const FURNITURE = new Set<Form>([
  */
 // model-line vocabulary for classifyForm's wristwatch test (the KEY reader
 // lives in watch-ref.ts, word-bounded + brand-scoped)
+/** (W21) model lines that are also everyday words ("Space Shuttle Orbiter
+ *  CRASH and Rescue Manual", a "Tank", an "Explorer", "Monaco") name a watch
+ *  only beside a watch word; the rest name one alone */
+const WATCH_MODELS_AMBIGUOUS = /\b(?:explorer(?:\s*ii)?|air[- ]king|world time|ellipse|twenty[~-]?4|millenary|constellation|de ville|tank|santos|panth[eè]re|pasha|crash|baignoire|tortue|polaris|monaco|carrera|defy|portofino|overseas|patrimony|villeret|polaris|luminor|ingenieur)\b/;
+const WATCH_CONTEXT = /\b(?:gold|steel|platinum|titanium|ceramic|dial|bezel|bracelet|strap|case|ref(?:erence)?|quartz|automatic|mechanical|manual[- ]wind(?:ing)?|movement|calibre|caliber|cal\.|lady'?s|gent'?s|wrist|watch|montre|mm|diamond[- ]set|chronograph)\b|\d{2}\s?mm\b|\b1[89]k\b|\b\d{2}k\b/;
 const WATCH_MODELS = /(submariner|daytona|datejust|day[- ]date|gmt[- ]master(?:\s*ii)?|explorer(?:\s*ii)?|sea[- ]dweller|yacht[- ]master|milgauss|air[- ]king|oyster perpetual|cellini|nautilus|aquanaut|calatrava|ellipse|gondolo|twenty[~-]?4|world time|royal oak(?: offshore)?|millenary|jules audemars|speedmaster|seamaster|constellation|de ville|railmaster|tank|santos|panth[eè]re|ballon bleu|pasha|crash|baignoire|tortue|reverso|memovox|polaris|navitimer|superocean|chronomat|monaco|carrera|autavia|el primero|defy|portugieser|portofino|ingenieur|aquatimer|luminor|radiomir|overseas|patrimony|fifty ?fathoms|villeret)/;
+const WATCH_MODELS_SURE = new RegExp(WATCH_MODELS.source.replace(/\|(?:explorer\(\?:\\s\*ii\)\?|air\[- \]king|world time|ellipse|twenty\[~-\]\?4|millenary|constellation|de ville|tank|santos|panth\[eè\]re|pasha|crash|baignoire|tortue|polaris|monaco|carrera|defy|portofino|overseas|patrimony|villeret|luminor|ingenieur)(?=[|)])/g, ''));
+
+/** (W21) jewelry nouns, English and the jewelers' French / Italian */
+const JEWEL_NOUN_RE = /(?<!\bthe )\b(?:ear studs|clips d'oreilles|cuff(?! ?links|-type| type)|jabot pin|tie-?pin|stick ?pin|lapel pin|dress set|diamond suite|(?:diamond|gold|emerald|sapphire|ruby|pearl|onyx|gem-set)[\w ,]{0,30}\b(?:clips?|pins?|suite)|bracelets\b|necklaces?|colliers?|sautoirs?|brooch(?:es)?|broches?|earrings?|ear ?clips?|ear ?pendants?|boucles d'oreilles|orecchini|pendentifs?|pendant|bangles?|bracelet jonc|choker|cufflinks|boutons de manchette|bagues?|tiaras?|parures?|demi-parure|clip brooch|clip de corsage)\b/;
+const JEWEL_RING_CONTEXT = /\b(?:gold|diamond|malachite|turquoise|jade|ivory|amber|lapis|platinum|silver|signet|engagement|wedding|cocktail|eternity|ruby|rubies|sapphire|emerald|pearl|karat|carat|ct|onyx|coral|enamel|gem(?:-?set)?|band|size|\d{1,2}k)\b/;
+function jewelRing(t: string): boolean {
+  return /(?<![-\w])rings?\b(?! (?:of|the|bearer|rope|binder|leader|announcer|master|card|post|bell)\b)/.test(t)
+    && !/\b(?:o-ring|poison ring|hat in the ring|lord of the rings|boxing ring|key ?ring|ring-?side|onion ring|bull ring|ring of fire|ring girl|championship ring|super bowl ring|world series ring|stanley cup ring)/.test(t)
+    && JEWEL_RING_CONTEXT.test(t);
+}
+/** a title whose OBJECT is a jewel (the lead noun phrase — "'Modern Head'
+ *  enamel pendant brooch", "Untitled (Brooch)", "two brooches", "Bague de
+ *  forme ovale", "A pair of Tiffany earclips") — never a picture OF one ("au
+ *  collier", "with a necklace", "wearing a necklace") */
+function isJewelTitle(t: string): boolean {
+  const lead = t.split(/[;:|]|\.\s|,\s(?=(?:\d|signed|executed|circa|c\.|galvanized|gold|silver|brass|enamel))/)[0];
+  const words = lead.trim().split(/\s+/);
+  const NOUN = /^[("'“‘[]*(?:brooch(?:es)?|broches?|necklaces?|earrings?|ear ?clips?|earclips|bangles?|cufflinks|tiaras?|parures?|demi-parure|collier|bague|sautoir|pendentif|jabot|pin(?![-\w])(?! ?up\b)|cuffs?(?!-type)|studs|bracelets)\b/;
+  // a jewel the lot IS: its noun within the lead's first six words, never
+  // after a preposition ("Femme au collier", "Woman with a Necklace",
+  // "Buste de femme au corsage orné d'une broche"), never a band ("The Bangles")
+  for (let i = 0; i < Math.min(words.length, 6); i++) {
+    if (!NOUN.test(words.slice(i).join(' '))) continue;
+    const prev = words.slice(Math.max(0, i - 2), i).join(' ');
+    if (/(?:^|\s)(?:au|aux|avec|à|la|d'une?|de|du|des|with|wearing|in|the|and)$|(?:^|\s)(?:au|aux|with|wearing|d'une?|de) (?:a|an|her|his|the|un|une|son|sa|ses|deux|trois|two|three)$/.test(prev) && !/^(?:a|an)$/.test(prev)) continue;
+    return true;
+  }
+  return /^\s*(?:(?:a|an|one|two|three|pair of|set of)\s+)?[\w' -]{0,40}\b(?:gold|silver|platinum|diamond)\s+(?:and\s+[\w ]+\s+)?(?:necklace|ring|bracelet|brooch|pendant)\b/.test(lead);
+}
 
 export function watchKey(lot: Pick<AuctionLot, 'title'> & { artist?: string }): string | null {
   // (Sep 28 2026) one reader, app/lib/watch-ref.ts: a labelled ref in any

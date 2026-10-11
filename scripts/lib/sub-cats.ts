@@ -328,7 +328,8 @@ const SPACE_PROGRAM: [string, RegExp][] = [
   // (wave 2) Skylab flew Apollo hardware (the Apollo Applications Program) —
   // read after an explicit shuttle-era mention ("Skylab and Shuttle-Era Suits")
   ['apollo', /skylab/i],
-  ['soviet', /soyuz|sputnik|cosmonaut|vostok|voskhod|\bmir\b|lunokhod|\bsoviet\b|\bussr\b|\bn1-l3\b|gagarin|korolev|tereshkova|leonov|titov|komarov/i],
+  // (W21) + the Soviet probes / stations / launchers by name ("Venera 4 Model", "R7 Rocket Model")
+  ['soviet', /soyuz|sputnik|cosmonaut|vostok|voskhod|\bmir\b|lunokhod|\bsoviet\b|\bussr\b|\bn1-l3\b|gagarin|korolev|tereshkova|leonov|titov|komarov|\bvenera\b|\bsalyut\b|\bburan\b|\bbaikonur\b|\bzond\b|\bluna \d|\br-?7 rocket\b|\bvega (?:\d|probe)\b|\benergia\b/i],
   // (wave 2) RR's space catalogue titles a lot by the astronaut alone ("Neil
   // Armstrong Signed Photograph", "Gus Grissom Check"): the program of the
   // astronaut's era — Apollo crews and moon words first, then the Mercury /
@@ -347,7 +348,8 @@ const SPACE_PROGRAM: [string, RegExp][] = [
   ['apollo', /\b(?:(?:ed|edward) (?:h\.? )?white(?: ii)?|(?:roger )?chaffee|(?:jim|james) (?:a\.? )?lovell|lovell|(?:frank )?borman|(?:tom|thomas) (?:p\.? )?stafford|john (?:w\.? )?young|(?:rocketdyne )?f-?1 (?:rocket )?engines?)\b/i],
   // (Oct 8) the shuttle-era names, read after the Apollo crews (Apollo 11's
   // command module was also "Columbia")
-  ['shuttle-iss', /\b(?:challenger|columbia|(?:christa )?mcauliffe|sally ride)\b/i],
+  // (W21) + the shuttle commanders and crews RR titles alone ("Bob Crippen, Joe Engle, Richard Truly…")
+  ['shuttle-iss', /\b(?:challenger|columbia|(?:christa )?mcauliffe|sally ride|(?:bob|robert) crippen|joe engle|richard truly|rick hauck|story musgrave|eileen collins|mae jemison|guion bluford|judith resnik|ellison onizuka|ronald mcnair|dick scobee|bruce mccandless|franklin chang-diaz)\b/i],
 ];
 /** (Oct 8) the scientists a culture 'space-science' lot names → 'science' */
 const SCIENTIST_RE = /\b(?:einstein|newton|curie|tesla|edison|darwin|hawking|galileo|faraday|bohr|oppenheimer|feynman|freud|pasteur|salk|sabin|schweitzer|morse|graham bell|marconi|fleming|lister|pauling|planck|jung|heisenberg|fermi|teller|watson|crick|carver|nightingale|goodall|tombaugh|hubble|sagan|scientists?|physicists?|chemists?|inventors?|nobel|dna|apple computer|steve jobs|wozniak|computer)\b/i;
@@ -446,7 +448,7 @@ const DESIGN_MATERIALS = ['walnut', 'teak', 'oak', 'rosewood', 'plywood', 'steel
 const DESIGN_KIND_WORDS: [string, RegExp][] = [
   ['lighting', /\b(?:lamps?|lampe|lighting|light fixture|wall[- ]light|ceiling light|floor light|potence|sconces?|applique|lanterns?|chandeliers?)/i],
   // (wave 4) + a wall unit, a bahut, a buffet / commode / vitrine / étagère
-  ['case-storage', /\besus?\b|\b(?:eames storage unit|storage units?|wall units?|cabinets?|chests?|bookcases?|biblioth[eè]que|room divider|wall case|credenza|sideboards?|bahuts?|buffets?|commodes?|vitrines?|[ée]tag[eè]res?|dressers?|rangement|kornblut|pj-r-|wardrobes?|armoire|shelv(?:es|ing)|bookshel)/i],
+  ['case-storage', /\besus?\b|\b(?:eames storage unit|storage units?|wall units?|cabinets?|chests?|bookcases?|biblioth[eè]que|room divider|wall case|credenza|sideboards?|bahuts?|buffets?|commodes?|vitrines?|[ée]tag[eè]res?|dressers?|rangement|kornblut|pj-r-|wardrobes?|armoire|shelv(?:es|ing)|bookshel|nightstands?|night stands?|placards?)/i],
   // (wave 4) + a banquette
   ['seating', /\bbanquettes?\b|\b(?:lcw|lcm|dcw|dcm|dsr|dsw|dsx|dss|dar|dax|daw|rar|raw|rkr|pkw|pkc|lar|lax|lkr|lkx|dkr|dkx|dkw|es ?\d{3}|670|671)(?:s|-?\d)?\b|\b(?:pj-si|chairs?|armchairs?|fauteuils?|chaises?|chaise longue|lounge|stools?|tabourets?|bench(?:es)?|settees?|sofas?|canap[ée]|daybeds?|rockers?|rocking|ottomans?|seating|kangaroo|committee)/i],
   // (wave 4) + Jeanneret's IT-1 table code

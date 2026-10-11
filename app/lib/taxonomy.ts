@@ -103,6 +103,9 @@ export const SUBS: Record<CatKey, { key: string; label: string }[]> = {
     { key: 'wristwatches', label: 'Wristwatches' },
     { key: 'pocket', label: 'Pocket & Pendant' },
     { key: 'clocks', label: 'Clocks & Accessories' },
+    // (W21) the watch houses' jewels (Cartier's Panthère necklaces, earclips,
+    // Trinity rings) read Wristwatches — a NEW key, old links hold
+    { key: 'jewelry', label: 'Jewelry' },
   ],
   design: [
     { key: 'seating', label: 'Seating' },
@@ -271,7 +274,9 @@ const CARTOON_ART_RE = /\b(?:animation (?:cels?|drawings?|art)|(?:production|ori
 export const HIST_MUSIC_RE = /\bled zeppelin\b|\bguitars?\b|\bgrandmaster (?:flash|caz)\b|\bflyer featuring\b/i;
 /** the notorious a culture title names that the crime rule missed (Pattern 10 /
  *  11): the Massacre, Prohibition, the Capone family and the New York families */
-export const CRIME_EXTRA_RE = /\b(?:(?:st\.?|saint) valentine['’]?s day massacre|capone|gigante|gotti|carlo gambino|gambino (?:crime )?family|genovese|murder,? inc\b|karpis|aiuppa|accardo)\b/i;
+// (W21) + the named mob bosses and the public enemies by full name (a bare
+// "Costello" is Lou Costello the comedian as often as Frank the boss)
+export const CRIME_EXTRA_RE = /\b(?:(?:st\.?|saint) valentine['’]?s day massacre|capone|gigante|gotti|carlo gambino|gambino (?:crime )?family|genovese|murder,? inc\b|karpis|aiuppa|accardo|frank costello|lucky luciano|meyer lansky|bugsy siegel|dutch schultz|john dillinger|baby face nelson|pretty boy floyd|clyde barrow|bonnie parker|machine gun kelly|whitey bulger|legs diamond|bumpy johnson|sam giancana|carlo marcello|santo trafficante|joe bonanno|albert anastasia|mickey cohen)\b/i;
 const PROHIBITION_CRIME_RE = /\bbureau of prohibition\b|\bprohibition(?:[- ]era| agents?| raids?| photographs?)\b|^prohibition\b/i;
 /** the Prohibition PARTY (a jugate, a campaign ribbon, "Prohibition for President") is politics */
 const PROHIBITION_POLITICAL_RE = /\bprohibition (?:party|for|ticket|convention|candidate)\b|\bjugate\b|\bcampaign\b|\bbuttons?\b|\bribbons?\b|\bstickpin\b|\blapel\b|\bw\.?\s?c\.?\s?t\.?\s?u\b/i;
@@ -371,6 +376,12 @@ const CACHE = new WeakMap<object, { a: unknown; s: unknown; d: unknown; t: unkno
 
 /** The clean { cat, sub, sport? } for one lot. Total: every lot gets a cat.
  *  With a `title` it also applies the shared title rules above (view time). */
+/** (W21) the scientists a space-catalogue lot can name (not its astronauts) */
+const SPACE_SCIENTIST_RE = /\b(?:einstein|edwin hubble|carl sagan|stephen hawking|clyde tombaugh|percival lowell|edwin p\. hubble|marie curie|nikola tesla|thomas edison|oppenheimer|enrico fermi|richard feynman)\b/i;
+/** (W21) a space piece a watch house's name rides on (no timepiece word) */
+const WATCH_HOUSE_SPACE_RE = /\b(?:apollo|gemini|mercury|skylab|astronauts?|nasa|space shuttle|lunar|moon landing)\b/i;
+const WATCH_NOUN_RE = /\b(?:watch(?:es)?|wristwatch|chronograph|speedmaster|montre|movement|dial|bezel|caliber|calibre)\b/i;
+
 export function taxonOf(l: LotLike): Taxon {
   const hit = CACHE.get(l);
   if (hit && hit.a === l.artist && hit.s === l.subCat && hit.d === l.drill && hit.t === l.title) return { ...hit.v };
@@ -416,6 +427,9 @@ function taxonOfRaw(l: LotLike): Taxon {
     return { cat: 'tcg', sub: POKE_VINTAGE_SET_RE.test(title) ? 'vintage' : 'modern' };
   }
   if (a === 'space-exploration') {
+    // (W21) a scientist's piece the space catalogue carries (Edwin Hubble's
+    // Caltech card) is science, not rocketry — no program, a scientist named
+    if (!SPACE_DRILL[d] && title && SPACE_SCIENTIST_RE.test(title) && !/\b(?:telescope|space|rocket|flown|nasa|mission)\b/i.test(title)) return { cat: 'space-science', sub: 'science' };
     return { cat: 'space-science', sub: SPACE_DRILL[d] || (MERCURY_CAPSULE_RE.test(title) ? 'mercury-gemini' : 'space-other') };
   }
   if (a === 'science-tech' || a === 'meteorites' || a === 'fossils' || a === 'scientific-instruments') {
@@ -457,6 +471,12 @@ function taxonOfRaw(l: LotLike): Taxon {
   const m = marketOf(a);
   if (m === 'watches') {
     if (s === 'clocks' || s === 'watch-accessories') return { cat: 'watches', sub: 'clocks' };
+    if (s === 'jewelry') return { cat: 'watches', sub: 'jewelry' };
+    // (W21) a watch house's name on a space piece (Omega's Apollo astronaut
+    // dinner MENU) is no wristwatch: no timepiece sub, a mission in the title
+    if (!s && title && WATCH_HOUSE_SPACE_RE.test(title) && !WATCH_NOUN_RE.test(title)) {
+      return { cat: 'space-science', sub: MERCURY_CAPSULE_RE.test(title) ? 'mercury-gemini' : /\bapollo\b/i.test(title) ? 'apollo' : /\b(?:shuttle|iss|space station)\b/i.test(title) ? 'shuttle-iss' : 'space-other' };
+    }
     return { cat: 'watches', sub: s === 'pocket-watches' ? 'pocket' : 'wristwatches' };
   }
   if (m === 'design') return { cat: 'design', sub: DESIGN_SUB[s] || 'objects' };

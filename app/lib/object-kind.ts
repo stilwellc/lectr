@@ -57,6 +57,8 @@ export function kindFits(l: KindLot): boolean {
   const t = taxonOf(l);
   const title = String(l.title || '');
   if (t.cat === 'watches') {
+    // (W21) the watch houses' jewels live in their own Jewelry sub — the kind it promises
+    if (t.sub === 'jewelry') return l.formKey === 'jewelry' || l.objectClass === 'jewelry' || !WATCH_WORD.test(title);
     const watchy = l.objectClass === 'watch' || /(?:wrist|pocket)-?watch/.test(l.formKey || '') || WATCH_WORD.test(title);
     return watchy && !(NOT_A_WATCH.test(title) && !WATCH_WORD.test(title));
   }

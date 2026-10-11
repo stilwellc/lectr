@@ -1549,8 +1549,26 @@ export const RECLASS_RULES: ReclassRule[] = [
 ];
 
 /** Category rules: same contract, but they return the corrected CATEGORY. */
+/** (W21) a DESIGN maker's furniture / lighting filed under an art category
+ *  (Bonhams' Nakashima "Floor Lamp1966walnut" as sculpture, Christie's Prouvé
+ *  "Rare Sideboard" as an original with medium "board") read sculpture /
+ *  original-2d and never reached the furniture forms. The design category
+ *  when the title names a furniture or lighting object (nouns end at any
+ *  non-letter: Bonhams glues the date on) and the medium is no art medium. */
+const DESIGN_OBJECT_NOUN_RE = /\b(?:chairs?|armchairs?|lounge chair|stools?|ottomans?|benches|bench|settees?|sofas?|daybeds?|tables?|desks?|cabinets?|chests?|sideboards?|credenzas?|bookcases?|shelves|shelving|dressers?|wardrobes?|nightstands?|lamps?|chandeliers?|sconces?|lanterns?|lighting|beds?|headboards?|screens?|mirrors?|fauteuils?|chaises?|guéridons?|bahuts?|buffets?|commodes?|bureaux?)(?![a-z])/i;
+const ART_MEDIUM_LINE_RE = /\b(?:lithograph|screenprint|screen print|silkscreen|serigraph|etching|aquatint|woodcut|linocut|engraving|oil on|acrylic on|gouache|watercolou?r|gelatin silver|bronze)\b/i;
+export function designCategoryFix(l: ClassifyLot): string | null {
+  if (ARTIST_MARKET[l.artist as keyof typeof ARTIST_MARKET] !== 'design') return null;
+  const cat = l.category || 'unknown';
+  if (cat === 'design' || cat === 'object') return null;
+  if (!DESIGN_OBJECT_NOUN_RE.test(String(l.title || ''))) return null;
+  if (ART_MEDIUM_LINE_RE.test(String(l.medium || ''))) return null;
+  return 'design';
+}
+
 export const RECAT_RULES: ReclassRule[] = [
   { cls: 'art-ceramic-unique-vs-print', apply: artCategoryFix },
+  { cls: 'design-object-vs-art-category', apply: designCategoryFix },
 ];
 
 /** Run the ladder over one lot. Returns the classes that fired (in order) and
