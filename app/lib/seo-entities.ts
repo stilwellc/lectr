@@ -5,6 +5,7 @@ import type { EntitySummary } from './entity/model';
 import { slugify } from './seo';
 import { displayName, KIND_NOUN } from './entity/display';
 import { formatPrice } from '../utils';
+import { entityQueryOf, encodeAliases } from './entity/aliases';
 
 /**
  * The STATIC entity aliases (SEO wave, Oct 11 2026) — /p/<player> and
@@ -12,10 +13,10 @@ import { formatPrice } from '../utils';
  * query pages (/player?id=, /entity?id=): a static export ships ONE shell for
  * them, so every one of the 600 sitemap'd query URLs carried the same
  * generic title, description and site card, with no canonical. These paths
- * prerender per name with their own head, share card and structured data;
- * the query routes keep working (every in-app link still points there) and
- * declare the alias as their canonical once it is known (app/player,
- * app/entity → /entity-paths.json).
+ * prerender per name with their own head, share card and structured data.
+ * Every in-app link lands on them (W12: app/lib/entity/aliases, inlined into
+ * the bundle by next.config.js); the query routes keep working and forward
+ * to the alias, declaring it as their canonical (app/player, app/entity).
  *
  * The set is decided HERE, once, from the served entities files the build
  * reads — the same deploy ships the pages, the cards (scripts/build-og.tsx),
@@ -89,10 +90,10 @@ export function staticEntities(): StaticEntity[] {
   const seen = new Set<string>();
   const uniq = all.filter(e => e && typeof e.id === 'string' && !seen.has(e.id) && (seen.add(e.id), true));
   const players = uniq
-    .filter(e => e.kind === 'player' && (e.sold ?? 0) >= MIN_SOLD && typeof e.page === 'string' && e.page.startsWith('/player?id='))
+    .filter(e => e.kind === 'player' && e.id.startsWith('pl:') && (e.sold ?? 0) >= MIN_SOLD)
     .sort(bySold).slice(0, PLAYER_CAP);
   const others = uniq
-    .filter(e => (e.kind === 'subject' || e.kind === 'set' || e.kind === 'sub') && (e.sold ?? 0) >= MIN_SOLD && typeof e.page === 'string' && e.page.startsWith('/entity?id='))
+    .filter(e => (e.kind === 'subject' || e.kind === 'set' || e.kind === 'sub') && (e.sold ?? 0) >= MIN_SOLD)
     .sort(bySold).slice(0, ENTITY_CAP);
 
   // a player's slug IS its id slug (pl:<slug>) — already unique and path-clean
@@ -103,15 +104,22 @@ export function staticEntities(): StaticEntity[] {
   for (const e of players) {
     const s = pSlug.get(e.id)!;
     if (!/^[a-z0-9-]+$/.test(s)) continue;
-    out.push({ id: e.id, kind: 'player', slug: s, path: `/p/${s}`, query: e.page!, e });
+    out.push({ id: e.id, kind: 'player', slug: s, path: `/p/${s}`, query: entityQueryOf(e.id), e });
   }
   for (const e of others) {
     const s = eSlug.get(e.id);
     if (!s) continue;
-    out.push({ id: e.id, kind: 'entity', slug: s, path: `/e/${s}`, query: e.page!, e });
+    out.push({ id: e.id, kind: 'entity', slug: s, path: `/e/${s}`, query: entityQueryOf(e.id), e });
   }
   cache = out;
   return out;
+}
+
+/** the alias set as the client bundle carries it (app/lib/entity/aliases:
+ *  next.config.js inlines it as NEXT_PUBLIC_ENTITY_ALIASES via
+ *  scripts/entity-aliases.ts) — the same set the pages prerender from */
+export function encodedEntityAliases(): string {
+  return encodeAliases(staticEntities().map(x => ({ id: x.id, slug: x.slug })));
 }
 
 export function staticPlayers(): StaticEntity[] { return staticEntities().filter(x => x.kind === 'player'); }

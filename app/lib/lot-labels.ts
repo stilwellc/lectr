@@ -29,6 +29,7 @@ import { taxonOf, subLabel, CAT_LABEL, SPORTS, type CatKey } from './taxonomy';
 import { cardBadgesOf } from './facets';
 import { subjectOf, cardGroupOf } from './subject';
 import { makerHref } from './entity/retired';
+import { playerHrefOf } from './entity/aliases';
 import { athleteName, notOnePerson } from './player-name';
 
 const CARD_MAKERS = new Set(['sports-cards', 'graded-cards']);
@@ -81,7 +82,7 @@ export function makerLineOf(lot: NamedLot & FacetExtra): MakerLine {
   if (!sub) return { name: '', href: line.href };
   // a person links to their /player dossier only when it exists and the pipeline stamped the lot to them
   const dossier = !!sub.playerSlug && lot.playerSlug === sub.playerSlug && dossiers.has(sub.playerSlug);
-  return { name: sub.name, href: dossier ? `/player?id=${encodeURIComponent(sub.playerSlug!)}` : line.href };
+  return { name: sub.name, href: dossier ? playerHrefOf(sub.playerSlug!) : line.href };
 }
 
 /** the catalogue's own read of the maker slot: a pseudo-maker's category
@@ -109,7 +110,7 @@ export function catalogMakerLineOf(lot: NamedLot): MakerLine {
       // first two words stand in when they are the athlete ("Duke Snider Play Brings")
       const ath = notOnePerson(id.player) ? null : (personRun(id.player) ? athleteName(id.player, title) : null) ?? (two !== id.player ? athleteName(two, title) : null);
       const slug = ath ? playerSlugOf(ath) : null;
-      if (ath && slug) out = { name: ath, href: `/player?id=${encodeURIComponent(slug)}` };
+      if (ath && slug) out = { name: ath, href: playerHrefOf(slug) };
     }
   } else if (title && lot.artist === 'pokemon') {
     const m = title.match(POKE_NAME);
@@ -120,7 +121,7 @@ export function catalogMakerLineOf(lot: NamedLot): MakerLine {
     if (sub) {
       const slug = sub.kind === 'person' ? playerSlugOf(sub.name) : null;
       const dossier = !!slug && lot.playerSlug === slug && dossiers.has(slug);
-      out = { name: sub.name, href: dossier ? `/player?id=${encodeURIComponent(slug!)}` : fallback.href };
+      out = { name: sub.name, href: dossier ? playerHrefOf(slug!) : fallback.href };
     }
   }
   // (r5) a set / sealed / team-card lot with no player or Pokémon: its set or team

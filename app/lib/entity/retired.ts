@@ -16,10 +16,11 @@
  * maker page goes through it, so nothing links a retired page.
  */
 import { MAKER_MARKETS, ARTISTS, type Market } from '../../constants';
+import { entityHrefOf } from './aliases';
 
 const feed = (market: Market, cat: string, sub?: string) =>
   `/${market}?${new URLSearchParams({ cat, ...(sub ? { sub } : {}), tab: 'all' }).toString()}#on-the-block`;
-const entity = (id: string) => `/entity?id=${encodeURIComponent(id)}`;
+const entity = (id: string) => entityHrefOf(id);
 
 /** retired slug → where it lives now (every non-maker-market ARTISTS slug) */
 export const RETIRED_MAKERS: Readonly<Record<string, string>> = {

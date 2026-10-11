@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import EntityPage from '../components/entity/EntityPage';
 import { entityPageOf, parseEntityId } from '../lib/entity/key';
 import AliasCanonical from '../components/AliasCanonical';
+import { aliasOf } from '../lib/entity/aliases';
 
 /**
  * /entity?id=<entity id> — the page of every entity without a page of its own
@@ -12,7 +13,8 @@ import AliasCanonical from '../components/AliasCanonical';
  * or franchise, a mission, a person, a sealed set, a science collection
  * (`cs:space-science:meteorites`). A query page like /player and /ref, so the
  * static export ships ONE shell, never a page per id. A maker or player id is
- * sent on to its canonical page (/makers/<slug>, /player?id=).
+ * sent on to its canonical page (/makers/<slug>, its player page), and an id
+ * with a static alias (/e/<slug>, W12) to that.
  */
 function EntityFromQuery() {
   const params = useSearchParams();
@@ -22,12 +24,9 @@ function EntityFromQuery() {
   const canonical = p && (p.kind === 'maker' || p.kind === 'player') ? entityPageOf(id) : null;
   useEffect(() => { if (canonical) router.replace(canonical); }, [canonical, router]);
   if (canonical) return <div className="rail" aria-busy="true" style={{ paddingTop: 28, paddingBottom: 40, minHeight: '60vh' }} />;
-  return (
-    <>
-      <AliasCanonical id={id} />
-      <EntityPage key={id} id={id} />
-    </>
-  );
+  // an entity with a static page (/e/<slug>, W12) is forwarded there by AliasCanonical
+  if (aliasOf(id)) return <><AliasCanonical id={id} /><div className="rail" aria-busy="true" style={{ paddingTop: 28, paddingBottom: 40, minHeight: '60vh' }} /></>;
+  return <EntityPage key={id} id={id} />;
 }
 
 export default function EntityQueryPage() {

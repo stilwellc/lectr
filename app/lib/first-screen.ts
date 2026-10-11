@@ -23,6 +23,7 @@ import type { AuctionLot } from '../types';
 import type { BaselineStats } from './feed-filters';
 import type { CloseBoardJson } from './eager-book';
 import { bucketOf } from './page-data';
+import { idOfAlias } from './entity/aliases';
 
 /** the deploy's first-screen hash ('' = this build ships none) */
 export const FS_VERSION: string = process.env.NEXT_PUBLIC_FS_VERSION || '';
@@ -52,6 +53,10 @@ export function fsKeyOf(pathname: string | null | undefined, search = ''): strin
   if (mm) return MAKERS_FS.has(mm[1]) ? 'makers' : null;
   const ms = p.match(/^\/makers\/([a-z0-9-]+)$/);
   if (ms && ms[1] !== 'm') return entityFsKey(`mk:${ms[1]}`);
+  // the static entity aliases (/p/<player>, /e/<name>) are the same page
+  const pm = p.match(/^\/p\/([a-z0-9-]+)$/);
+  if (pm) return entityFsKey(idOfAlias(p) ?? `pl:${pm[1]}`);
+  if (/^\/e\/[a-z0-9-]+$/.test(p)) { const id = idOfAlias(p); return id ? entityFsKey(id) : null; }
   if (p === '/player' || p === '/entity') {
     const id = new URLSearchParams(search).get('id');
     if (!id) return null;

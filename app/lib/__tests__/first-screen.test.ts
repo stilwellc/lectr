@@ -18,6 +18,7 @@ import { buildFirstScreens, withClock, readerDays, trimMarket } from '../../../s
 import { homeFeedIds, valueRead, makersRead, entityLiveIds, closeOverRefs } from '../first-screen-select';
 import { prepareEagerLots, type CloseBoardJson } from '../eager-book';
 import { entityFsKey } from '../first-screen';
+import { setEntityAliasesForTest } from '../entity/aliases';
 import { houseBaselines, houseBaselineStats, baselinesFromStats } from '../feed-filters';
 import { foldKeyOf } from '../fold';
 import { ARTISTS, type Market } from '../../constants';
@@ -239,6 +240,12 @@ test('routes → payloads; a payload from another deploy is discarded', async ()
   assert.equal(mod.fsKeyOf('/makers/m/sports'), null); // collection rows are names over the whole book
   assert.equal(mod.fsKeyOf('/makers/andy-warhol'), mod.entityFsKey('mk:andy-warhol'));
   assert.equal(mod.fsKeyOf('/player', '?id=mickey-mantle'), mod.entityFsKey('pl:mickey-mantle'));
+  // the static aliases (W12) are the same entity page
+  assert.equal(mod.fsKeyOf('/p/mickey-mantle'), mod.entityFsKey('pl:mickey-mantle'));
+  setEntityAliasesForTest([{ id: 'sj:tcg|k:charizard', slug: 'charizard' }]);
+  assert.equal(mod.fsKeyOf('/e/charizard'), mod.entityFsKey('sj:tcg|k:charizard'));
+  assert.equal(mod.fsKeyOf('/e/nobody-here'), null);
+  setEntityAliasesForTest(null);
   assert.equal(mod.fsKeyOf('/art'), null);
   assert.equal(mod.fsKeyOf('/profile'), null);
   assert.equal(mod.fsKeyOf('/about'), null);
@@ -262,7 +269,7 @@ test('served book: every slice = the book (a 24h sweep, off its grid)', { skip: 
   const cb = read('close-board.json');
   const meta = read('meta.json') || {};
   const from = Date.parse(up.generatedAt || meta.lastCrawl || '') || T0;
-  const built = buildFirstScreens({ up, meta, market: null, backtest: null, closeBoard: cb, closeK: read('close-k.json'), fromMs: from, hours: 24, stepMin: 30 });
+  const built = buildFirstScreens({ up, meta, market: null, backtest: null, closeBoard: cb, closeK: read('close-k.json'), fromMs: from, hours: 24, stepMin: 60 });
   const prep = (rows: readonly AuctionLot[]) => { const c = clone(rows) as Lot[]; withClock(from, () => prepareEagerLots(c, cb, up.generatedAt)); return c; };
   const full = prep(up.lots);
   const home = prep(built.get('home')!.lots), value = prep(built.get('value')!.lots), makers = prep(built.get('makers')!.lots);
