@@ -182,7 +182,7 @@ function classifyFormUncached(lot: Pick<AuctionLot, 'title' | 'medium' | 'catego
       || (WATCH_MODELS.test(t) && WATCH_CONTEXT.test(t))
       // a watch house's catalogue titles the lot by its model alone ("Tank,
       // Circa 1975", "Baignoire Allongée, No.314/400") — the model word LEADS
-      || (WATCH_MODELS_AMBIGUOUS.test(t) && new RegExp(`^\\s*(?:(?:cartier|omega|patek philippe(?: geneve)?|rolex|audemars piguet|jaeger[- ]lecoultre)\\s*[-:,|.]?\\s*)?(?:(?:mini|golden|lady'?s?|petite|grande?|must de cartier)\\s+)?['‘"“]?(?:${WATCH_MODELS_AMBIGUOUS.source.slice(2, -2)})\\b(?![- ](?:\\d\\b|[ivx]+\\b|satellite|probe|rover|mission|program|davis))`).test(t))) return 'wristwatch';
+      || (WATCH_MODELS_AMBIGUOUS.test(t) && new RegExp(`^\\s*(?:(?:cartier|omega|patek philippe(?: geneve)?|rolex|audemars piguet|jaeger[- ]lecoultre)\\s*(?:-|:|,|\\||\\.)?\\s*)?(?:(?:mini|golden|lady'?s?|petite|grande?|must de cartier)\\s+)?['‘"“]?(?:${WATCH_MODELS_AMBIGUOUS.source.slice(2, -2)})\\b(?![- ](?:\\d\\b|[ivx]+\\b|satellite|probe|rover|mission|program|davis))`).test(t))) return 'wristwatch';
     if (/\b(clock|regulator|pendulette)\b/.test(tm)) return 'clock';
 
     // natural history, space & technology
@@ -365,7 +365,7 @@ const WATCH_MODELS = /(submariner|daytona|datejust|day[- ]date|gmt[- ]master(?:\
 const WATCH_MODELS_SURE = new RegExp(WATCH_MODELS.source.replace(/\|(?:explorer\(\?:\\s\*ii\)\?|air\[- \]king|world time|ellipse|twenty\[~-\]\?4|millenary|constellation|de ville|tank|santos|panth\[eè\]re|pasha|crash|baignoire|tortue|polaris|monaco|carrera|defy|portofino|overseas|patrimony|villeret|luminor|ingenieur)(?=[|)])/g, ''));
 
 /** (W21) jewelry nouns, English and the jewelers' French / Italian */
-const JEWEL_NOUN_RE = /(?<!\bthe )\b(?:ear studs|clips d'oreilles|cuff(?! ?links|-type| type)|jabot pin|tie-?pin|stick ?pin|lapel pin|dress set|diamond suite|(?:diamond|gold|emerald|sapphire|ruby|pearl|onyx|gem-set)[\w ,]{0,30}\b(?:clips?|pins?|suite)|bracelets\b|necklaces?|colliers?|sautoirs?|brooch(?:es)?|broches?|earrings?|ear ?clips?|ear ?pendants?|boucles d'oreilles|orecchini|pendentifs?|pendant|bangles?|bracelet jonc|choker|cufflinks|boutons de manchette|bagues?|tiaras?|parures?|demi-parure|clip brooch|clip de corsage)\b/;
+const JEWEL_NOUN_RE = /(?<!\bthe )\b(?:jewel(?:le)?ry (?:suite|set|parure)|ear studs|clips d'oreilles|cuff(?! ?links|-type| type)|jabot pin|tie-?pin|stick ?pin|lapel pin|dress set|diamond suite|(?:diamond|gold|emerald|sapphire|ruby|pearl|onyx|gem-set)[\w ,]{0,30}\b(?:clips?|pins?|suite)|bracelets\b|necklaces?|colliers?|sautoirs?|brooch(?:es)?|broches?|earrings?|ear ?clips?|ear ?pendants?|boucles d'oreilles|orecchini|pendentifs?|pendant|bangles?|bracelet jonc|choker|cufflinks|boutons de manchette|bagues?|tiaras?|parures?|demi-parure|clip brooch|clip de corsage)\b/;
 const JEWEL_RING_CONTEXT = /\b(?:gold|diamond|malachite|turquoise|jade|ivory|amber|lapis|platinum|silver|signet|engagement|wedding|cocktail|eternity|ruby|rubies|sapphire|emerald|pearl|karat|carat|ct|onyx|coral|enamel|gem(?:-?set)?|band|size|\d{1,2}k)\b/;
 function jewelRing(t: string): boolean {
   return /(?<![-\w])rings?\b(?! (?:of|the|bearer|rope|binder|leader|announcer|master|card|post|bell)\b)/.test(t)

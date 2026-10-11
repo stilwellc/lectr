@@ -103,9 +103,6 @@ export const SUBS: Record<CatKey, { key: string; label: string }[]> = {
     { key: 'wristwatches', label: 'Wristwatches' },
     { key: 'pocket', label: 'Pocket & Pendant' },
     { key: 'clocks', label: 'Clocks & Accessories' },
-    // (W21) the watch houses' jewels (Cartier's Panthère necklaces, earclips,
-    // Trinity rings) read Wristwatches — a NEW key, old links hold
-    { key: 'jewelry', label: 'Jewelry' },
   ],
   design: [
     { key: 'seating', label: 'Seating' },
@@ -471,7 +468,6 @@ function taxonOfRaw(l: LotLike): Taxon {
   const m = marketOf(a);
   if (m === 'watches') {
     if (s === 'clocks' || s === 'watch-accessories') return { cat: 'watches', sub: 'clocks' };
-    if (s === 'jewelry') return { cat: 'watches', sub: 'jewelry' };
     // (W21) a watch house's name on a space piece (Omega's Apollo astronaut
     // dinner MENU) is no wristwatch: no timepiece sub, a mission in the title
     if (!s && title && WATCH_HOUSE_SPACE_RE.test(title) && !WATCH_NOUN_RE.test(title)) {

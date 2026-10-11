@@ -57,6 +57,8 @@ test('headline: a list of names and the year inside a phrase run on to the objec
   assert.equal(h1('John Glenn, Charles Conrad, and Gordon Cooper (3) Signed Photographs'), 'John Glenn, Charles Conrad, and Gordon Cooper (3) Signed Photographs');
   assert.equal(h1('Kayne West Signed, Inscribed Limited Edition 2004 UMG iPod - Beckett LOA'), 'Kayne West Signed, Inscribed Limited Edition 2004 UMG iPod - Beckett LOA');
   assert.equal(h1('Signed 1990 Topps Big #296 Larry Walker Rookie Beckett GEM MINT 10'), 'Signed 1990 Topps Big #296 Larry Walker Rookie Beckett GEM MINT 10');
+  assert.equal(h1('Shohei Ohtani Signed 2023 American League All-Star Game Jersey (#12/23) - Fanatics'), 'Shohei Ohtani Signed 2023 American League All-Star Game Jersey (#12/23) - Fanatics');
+  assert.equal(h1('2009 Pokemon Platinum Supreme Victors Holo #143 Charizard Lv. X - BGS MINT 9'), '2009 Pokemon Platinum Supreme Victors Holo #143 Charizard Lv. X - BGS MINT 9');
   assert.equal(h1('MITCHELL, Margaret (1900–1949). Gone with the Wind. New York: Macmillan, 1936. First edition, first issue.'), 'MITCHELL, Margaret (1900–1949). Gone with the Wind');
   // the catalogue's own year field still closes a Bonhams / Wright title
   assert.equal(h1("Conoid Chair 1966American black walnut, signed 'Cohn' in black on underside height 35 1/2in (90.2cm); width 20in (58cm); depth 22 1/2in (57.1cm)"), 'Conoid Chair, 1966');
@@ -65,6 +67,7 @@ test('headline: a list of names and the year inside a phrase run on to the objec
 test('glued fields re-spaced: Bonhams Wright-family rows', () => {
   assert.equal(h1("Q Bench1966American black walnut, signed 'Cohn' on underside height 13 1/8in (33.3cm); length 96 1/2in (245cm); depth 19 1/2in (49.5cm)"), 'Q Bench, 1966');
   assert.equal(h1("'670' Lounge Chair and '671' Ottomandesigned 1956for Herman Miller, leather, rosewood, aluminumheight of chair 31 3/4in (80.7cm); width 33 1/2in (85.1cm)"), "'670' Lounge Chair and '671' Ottoman, 1956");
+  assert.equal(craftTitle('Conoid Benchcirca 1965American black walnut, oak height 29 1/4in'), 'Conoid Bench circa 1965 American black walnut, oak height 29 1/4in');
   assert.match(craftTitle('Conoid Desk1966American black walnut, hickoryheight 29in (73.2cm); width 72in (182.8cm)'), /^Conoid Desk 1966 American black walnut, hickory height 29in/);
 });
 
@@ -157,16 +160,14 @@ test('category: a design maker\'s furniture filed under an art category moves to
   assert.equal(print.category, 'print');
 });
 
-test('sub: the watch houses\' jewels file under Watches · Jewelry, the kind they promise', () => {
-  const l = { artist: 'cartier', title: 'CARTIER: COLLIER MAILLONS "PANTHÈRE"', formKey: 'jewelry', objectClass: 'jewelry' };
-  const sc = subCatOf(l);
-  assert.equal(sc.subCat, 'jewelry');
-  const lot = { ...l, subCat: sc.subCat };
-  assert.deepEqual(taxonOf(lot), { cat: 'watches', sub: 'jewelry' });
-  assert.equal(subLabelOf(lot), 'Jewelry');
-  assert.equal(kindFits(lot), true);
-  // a wristwatch filed under Jewelry would not fit
-  assert.equal(kindFits({ artist: 'cartier', title: 'Tank Louis wristwatch', subCat: 'jewelry', formKey: 'wristwatch' }), false);
+test('a watch house\'s jewel now reads jewelry, so the watches book drops it (watchMakerFix: "jewelry is NOT a watch")', () => {
+  const l = { artist: 'cartier', category: 'object', title: 'CARTIER: COLLIER MAILLONS "PANTHÈRE"' };
+  assert.equal(reclassifyLot(l).drop, true);
+  const w = { artist: 'cartier', category: 'object', title: 'Cartier: Panthère of 18k gold and steel, ref. 187957. Quartz movement with date indication. 1980s.' };
+  assert.equal(reclassifyLot(w).drop, false);
+  assert.equal(form('Panthère jewelry suite, Cartier'), 'jewelry');
+  // the kind gate still holds a jewel back from a Wristwatches follow
+  assert.equal(kindFits({ artist: 'cartier', title: 'CARTIER: COLLIER MAILLONS "PANTHÈRE"', subCat: 'wristwatches', formKey: 'wristwatch' }), false);
 });
 
 test('category: a watch house\'s name on a space menu is a space piece', () => {
@@ -232,4 +233,38 @@ test('the title craft is idempotent on its own output', () => {
     const once = craftTitle(t);
     assert.equal(craftTitle(once), once, t);
   }
+});
+
+test('tcg: partial sets, uncut sheets and graded pairs are Lots & Sets; a Base Set single is not', () => {
+  const sub = (title: string) => subCatOf({ artist: 'pokemon', title }).subCat;
+  assert.equal(sub('1997 Pokemon Japanese Rocket Gang PSA GEM MT 10 Compete Set (65) - Featuring Dark Charizard'), 'pokemon-lots');
+  assert.equal(sub('1999 Pokemon Fossil Partial Set - (47 Cards, 45 Different) - Featuring Gengar, Lapras, Zapdos'), 'pokemon-lots');
+  assert.equal(sub('2013 Pokemon Black & White Legendary Treasures Radiant Collection Uncut Sheet (100 Cards)'), 'pokemon-lots');
+  assert.equal(sub('2010 Pokemon HeartGold & SoulSilver Holo Lugia Legend PSA GEM MT 10 Pair (2) - Sequential'), 'pokemon-lots');
+  assert.equal(sub('1999 Pokemon Base Set #4 Charizard Holographic PSA 9'), 'pokemon-cards');
+  assert.equal(sub('2000 Pokemon Base Set 2 Factory-Sealed Booster Box (36 Packs)'), 'pokemon-sealed');
+});
+
+test('headline: a circa stays with its year; the trade acronyms keep their capitals', () => {
+  assert.equal(h1('Pair of Bonhams chairs designed circa 1950, molded plywood and walnut with labels'), 'Pair of Bonhams chairs, circa 1950');
+  assert.match(craftTitle('A STAINLESS STEEL AND BLACK PVD-COATED AUTOMATIC WRISTWATCH'), /PVD-coated/);
+});
+
+test('home-review misfiles: a Les Paul is no card, ArtBox Harry Potter has no home, a road car leaves Culture', () => {
+  const guitar = { artist: 'sports-cards', auctionHouse: 'Goldin', title: '2000s Gibson Custom Shop Les Paul - Dale Earnhardt "The Intimidator" (#35/333) (#DE2-035) - Includes Gibson Hardshell Case' };
+  assert.equal(reclassifyLot(guitar).drop, false);
+  assert.equal(guitar.artist, 'sports-memorabilia');
+  const hp = { artist: 'sports-cards', auctionHouse: 'Goldin', title: '2004 ArtBox Harry Potter Prisoner of Azkaban Update Autographs Daniel Radcliffe Signed Card - PSA NM-MT 8 - MBA' };
+  assert.equal(reclassifyLot(hp).drop, true);
+  const car = { artist: 'entertainment-memorabilia', auctionHouse: 'RR Auction', title: '1967 Plymouth Belvedere GTX - From the Personal Collection of William E. Thornton' };
+  assert.equal(reclassifyLot(car).drop, true);
+  // a postcard, a mint's ingot and a screen car stay
+  for (const title of ['1906 Lincoln Publishing Postcard Andrew Coakley', '1971 Lincoln Mint Salvador Dali "Unicorn Dyonisiaque" Solid Sterling Silver Plate', '1966 Ford Thunderbird Screen-Used in Thelma & Louise']) {
+    const l = { artist: 'entertainment-memorabilia', auctionHouse: 'RR Auction', title };
+    assert.equal(reclassifyLot(l).drop, false, title);
+  }
+  // a sports card with a sports name stays a card
+  const card = { artist: 'sports-cards', auctionHouse: 'Goldin', title: '1986 Fleer #57 Michael Jordan Rookie Card - PSA MINT 9' };
+  assert.equal(reclassifyLot(card).drop, false);
+  assert.equal(card.artist, 'sports-cards');
 });

@@ -248,6 +248,12 @@ export function goldinSportKind(title: string | null | undefined): string {
   const t = String(title || '');
   if (NON_SPORT_TCG_RE.test(t) || COMIC_RE.test(t)) return DROP;
   if (MASS_TOY_RE.test(t) && !SIGNED_RE.test(t)) return DROP;
+  // (W21) a guitar is no card, whatever catalogue numbers it carries ("Gibson
+  // Custom Shop Les Paul - Dale Earnhardt (#35/333) (#DE2-035)" sat in Singles)
+  if (INSTRUMENT_OBJECT_RE.test(t) && !/\bcards?\b/i.test(t)) return sportsObjectKind(t, 'sports-memorabilia');
+  // (W21) a NON-SPORT trading card in Goldin's sport book (ArtBox Harry
+  // Potter autographs) has no home — the sports houses' rule (class 2)
+  if (isCardTitle(t) && NON_SPORT_CARD_RE.test(t) && !isSportsEvidence(t) && !SPORT_WORD_RE.test(t) && !athleteIn(t)) return DROP;
   if (SEALED_RE.test(t)) return 'unopened-wax';
   // (wave 3) "Roger Clemens Signed Commemorative 300th Win … OML Baseball" read as a card
   if (isSignedRetailObject(t)) return 'autographs';
@@ -334,7 +340,8 @@ export function expansionSportsKind(l: ClassifyLot): string | null {
  *  houses' pop-memorabilia. */
 const CARD_LOT_RE = /\(\d[\d,]*\+?\)[^.]{0,60}\b(?:singles|stars|rookies|inserts|commons|cards)\b|\b(?:singles|inserts|rookies?|rcs|commons|stars|hall of famers?|hofers?|graded|cards?|parallels?|refractors?|sets?)\b[^.]{0,50}\b(?:lots?|collections?|groups?|grouping|runs?|hoards?|assortments?|accumulations?|treasure chest|balance)\b|\b(?:lots?|collections?|groups?|accumulations?|hoards?)\b[^.]{0,40}\b(?:singles|rookies?|rcs|commons|inserts|cards?)\b/i;
 const CARD_LOT_NOT_RE = /\b(?:photos?|photographs?|jerseys?|bats?|balls?|uniforms?|tickets?|stubs?|line-?up cards?|programs?|scorecards?|pins?|buttons?|pennants?|postcards?|wrappers?|display|signed|autographs?|autographed|cuts?|index cards?|magazines?|press|negatives?|letters?|checks?|contracts?|trophies|awards?|rings?|bobble\w*|figures?|statues?|posters?|game[- ]used|game[- ]worn|blankets?|rugs?|silks?|packages?|labels?|coupons?|lids?|coins?|advertising|premiums?|felts?|stamps?|decals?|stickers?|tattoos?|lobby cards?|movie|matchbooks?|menus?)\b/i;
-const NON_SPORT_CARD_RE = /\b(?:power for peace|garbage pail|wacky packages|howdy doody|presidents?|beauties|actors and actresses|actresses|mars attacks|chiefs and rulers|savage and semi|star wars|star trek|disney|mickey mouse|marvel|batman|superman|wizard of oz|elvis|beatles|monkees|non-?sports?|nonsports?|pok[eé]mon|yu-?gi-?oh|magic:? the gathering|green hornet|munsters|rails and sails|krazy|civil war|world war|wwii|james bond|beverly hillbillies|bewitched|i love lucy|between the acts|indian chiefs|indian gum|automobile|flags of|wildlife|dinosaurs?|astronauts?|universal monsters|frankenstein|dracula|film stars|movie stars|comics?)\b/i;
+const INSTRUMENT_OBJECT_RE = /\b(?:les paul|stratocaster|telecaster|flying v|epiphone|electric guitar|acoustic guitar|guitar|hardshell case|drum (?:kit|set))\b/i;
+const NON_SPORT_CARD_RE = /\b(?:harry potter|artbox|lord of the rings|game of thrones|power for peace|garbage pail|wacky packages|howdy doody|presidents?|beauties|actors and actresses|actresses|mars attacks|chiefs and rulers|savage and semi|star wars|star trek|disney|mickey mouse|marvel|batman|superman|wizard of oz|elvis|beatles|monkees|non-?sports?|nonsports?|pok[eé]mon|yu-?gi-?oh|magic:? the gathering|green hornet|munsters|rails and sails|krazy|civil war|world war|wwii|james bond|beverly hillbillies|bewitched|i love lucy|between the acts|indian chiefs|indian gum|automobile|flags of|wildlife|dinosaurs?|astronauts?|universal monsters|frankenstein|dracula|film stars|movie stars|comics?)\b/i;
 export function sportsHouseCardLotKind(l: ClassifyLot): string | null {
   if (!SPORTS_EXPANSION_HOUSES.has(l.auctionHouse || '')) return null;
   const t = String(l.title || '');
@@ -1451,7 +1458,22 @@ export interface ReclassRule {
   apply: (l: ClassifyLot) => string | null;
 }
 
+/** (W21) a road CAR in a culture / science book (RR's "1967 Plymouth
+ *  Belvedere GTX - From the Personal Collection of William E. Thornton") has
+ *  no home — the art books' car rule (app/lib/attribution) for the
+ *  collection books. A screen / film car, a model, a toy, a part, a sign, a
+ *  photo or a document of one stays where it is. */
+const VEHICLE_LEAD_RE = /^\s*(?:19|20)\d{2}\s+(?:plymouth|chevrolet|chevy|ford|dodge|pontiac|cadillac|buick|oldsmobile|lincoln|chrysler|studebaker|packard|amc|shelby|jeep|corvette|jaguar|porsche|ferrari|mercedes(?:-benz)?|volkswagen|vw|triumph|mg|austin[- ]healey|lotus|lamborghini|maserati|alfa romeo|rolls-?royce|bentley|aston martin|datsun|toyota|harley[- ]davidson|indian motorcycle)\b/i;
+const NOT_A_VEHICLE_RE = /\b(?:model|scale|die-?cast|toy|replica|miniature|photo(?:graph)?s?|posters?|signs?|signed|brochures?|advertis\w*|keys?|license plates?|hood ornament|emblem|badge|screen[- ](?:used|worn)|film[- ]used|production[- ](?:used|made)|from the (?:film|movie|tv)|pedal car|parts?|engine|wheel|seat|title document|manual|postcards?|mint|publishing|coins?|medals?|stamps?|covers?|tickets?|letters?|documents?|books?|ingots?|sterling)\b/i;
+const COLLECTION_SLUGS = new Set(['movie-tv', 'music-memorabilia', 'entertainment-memorabilia', 'pop-memorabilia', 'space-exploration', 'science-tech', 'scientific-instruments']);
+export function collectionVehicle(l: ClassifyLot): string | null {
+  if (!COLLECTION_SLUGS.has(l.artist)) return null;
+  const t = String(l.title || '');
+  return VEHICLE_LEAD_RE.test(t) && !NOT_A_VEHICLE_RE.test(t) ? DROP : null;
+}
+
 export const RECLASS_RULES: ReclassRule[] = [
+  { cls: 'collection-road-vehicle', apply: collectionVehicle },
   {
     cls: 'goldin-sport-noncard',
     apply: l => {

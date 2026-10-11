@@ -491,7 +491,9 @@ const POKE_MEMORABILIA_RE = /\b(?:shikishi|film reels?|film cels?|skateboards?|s
 /** ...and the ones a card can be named after ("#1 Trophy Pikachu", "Trophy Card") */
 const POKE_MEMORABILIA_LOOSE_RE = /\b(?:troph(?:y|ies)(?! cards?)|figurines?|statues?|figures?(?! collection| box))\b/i;
 /** multi-card lots and sets — a set NAME ("Legendary Collection") is not one */
-const POKE_LOTS_RE = /\blots? of\b|\b(?:near[- ])?complete (?:master )?sets?\b|\b(?:card|graded|slabs?) collection\b|-graded (?:card )?collection\b|\bcollection \((?!\d+ (?:packs?|boxes|cases?|tins?|blisters?)\b)\d|\(\d+ (?:different|cards?)\)/i;
+// (W21) + partial / master sets, Goldin's "Compete Set" typo, uncut sheets, a
+// graded pair / trio, "(47 Cards, 45 Different)"
+const POKE_LOTS_RE = /\blots? of\b|\b(?:near[- ])?(?:complete|compete|partial) (?:master )?sets?\b|\bmaster sets?\b|\buncut (?:sheets?|panels?)\b|\b(?:pair \(2\)|trio \(3\))|\(\d+ (?:different )?cards?\b|\b(?:card|graded|slabs?) collection\b|-graded (?:card )?collection\b|\bcollection \((?!\d+ (?:packs?|boxes|cases?|tins?|blisters?)\b)\d|\(\d+ (?:different|cards?)\)/i;
 const POKE_ECARD_RE = /\b(?:aquapolis|skyridge|expedition|e-?card)\b/i;
 
 // ── the stamps ──────────────────────────────────────────────────────────────

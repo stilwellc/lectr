@@ -129,9 +129,10 @@ const SMALL_WORDS = new Set(['a', 'an', 'and', 'as', 'at', 'by', 'de', 'for', 'f
 /** one SHOUTED word, lower-cased with what must stay: a token carrying a digit
  *  (a reference "5712G-001", a grade "A7.5"), an initialism ("G.I.", "U.S.A."),
  *  a short all-consonant code ("PSA", "JSA", "CAS", "LC") */
-const ACRONYMS = new Set('PSA DNA JSA BGS SGC CGC COA LOA LOP OOA NFL NBA MLB NHL WNBA USA UK USSR NASA RIAA NCAA HOF MVP WWI WWII TV DVD VHS LP EP CD GU AFA CAS TMNT UFC WWE WWF FBI CIA JFK RFK MGM RKO BBC CBS NBC ABC HBO AMC UCLA USC LSU BYU TCU SMU NYPD LAPD PGA LPGA FIFA UEFA PMG CBCS'.split(' '));
+const ACRONYMS = new Set('PVD DLC GMT UTC ETA PSA DNA JSA BGS SGC CGC COA LOA LOP OOA NFL NBA MLB NHL WNBA USA UK USSR NASA RIAA NCAA HOF MVP WWI WWII TV DVD VHS LP EP CD GU AFA CAS TMNT UFC WWE WWF FBI CIA JFK RFK MGM RKO BBC CBS NBC ABC HBO AMC UCLA USC LSU BYU TCU SMU NYPD LAPD PGA LPGA FIFA UEFA PMG CBCS'.split(' '));
 function quietWord(w: string): string {
   if (w.includes('/') && !/\d/.test(w)) return w.split('/').map(quietWord).join('/');
+  if (/^[A-Z]{2,5}-[A-Z]/.test(w) && ACRONYMS.has(w.split('-')[0])) return w.split('-').map((p, i) => (i ? quietWord(p) : p)).join('-');
   if (/^\d+(?:ST|ND|RD|TH)\b/.test(w)) return w.replace(/(ST|ND|RD|TH)/, x => x.toLowerCase());
   if (/\d/.test(w)) return w;
   const bare = w.replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, '');
@@ -221,12 +222,13 @@ export function deglue(raw: string): string {
     .replace(/([a-z]{3,})((?:1[5-9]|20)\d{2})\b/g, '$1 $2')
     .replace(/\b((?:1[5-9]|20)\d{2})(for|by|in)\b/g, '$1 $2')
     .replace(/([a-z]{3,})(designed|produced|executed|manufactured)(?= (?:\d|circa|c\.))/g, '$1 $2')
+    .replace(/([a-z]{3,})(circa)(?= \d)/g, '$1 $2')
     .replace(/([a-z]{3,})(height|width|depth|diameter|length)(?= (?:of [a-z ]+)?\d)/g, '$1 $2');
 }
 
 /** a word that ends in "." without ending a sentence: a catalogue's labels
  *  ("ref.", "No.", "cal.", "Bl.", "approx.", "a.o.") and initials ("John F.") */
-const ABBREV_BEFORE = /(?:\b(?:ref|réf|refs|no|nos|nr|cal|bl|ba|approx|ca|circa|c|cf|fig|figs|pl|pls|vol|vols|op|ed|eds|inc|co|corp|ltd|jr|sr|dr|mr|mrs|ms|st|mt|ft|sgt|lt|col|capt|gen|gov|pres|rev|vs|est|illus|pp|p|nb|a\.o|i\.e|e\.g|u\.s|s|t|d|f)|\b[A-Z]|\.[a-z])\.$/i;
+const ABBREV_BEFORE = /(?:\b(?:ref|réf|refs|no|nos|nr|lv|cal|bl|ba|approx|ca|circa|c|cf|fig|figs|pl|pls|vol|vols|op|ed|eds|inc|co|corp|ltd|jr|sr|dr|mr|mrs|ms|st|mt|ft|sgt|lt|col|capt|gen|gov|pres|rev|vs|est|illus|pp|p|nb|a\.o|i\.e|e\.g|u\.s|s|t|d|f)|\b[A-Z]|\.[a-z])\.$/i;
 /** the depth of open brackets / quotes before index i (a break inside "(after,
  *  Studies of the Human Body …)" is no break) */
 function openAt(t: string, i: number): boolean {
@@ -272,10 +274,15 @@ export function splitTitle(raw: string, house?: string | null): { short: string;
   // walnut", "1956 for Herman Miller") — never mid-phrase ("Limited Edition
   // 2004 UMG iPod", "Hall of Fame 2001 Inductees Multi-Signed Poster")
   const yNext = y ? t.slice(y[0].length).replace(/^\s+/, '') : '';
-  const yField = !!y && (/^[,.;]/.test(t.slice(y[1].length + y[0].slice(y[1].length).indexOf(y[2]) + y[2].length)) || /^(?:[a-z]|(?:American|French|Italian|Danish|Swedish|Norwegian|Finnish|English|British|German|Dutch|Brazilian|Japanese|Indian|Swiss)\b)/.test(yNext));
+  const yField = !!y && (/^[,.;]/.test(t.slice(y[1].length + y[0].slice(y[1].length).indexOf(y[2]) + y[2].length)) || /^(?:[a-z]|(?:American|French|Italian|Danish|Swedish|Norwegian|Finnish|English|British|German|Dutch|Brazilian|Japanese|Indian|Swiss|East Indian) [a-z])/.test(yNext));
   if (y && yField && !/\b(?:ref(?:erence)?|réf|no|nos|nr|model|cal(?:ibre)?|op|vol|lot|edition|number|#)\.?:?$/i.test(y[1].trim()) && !openAt(t, y[1].length)) {
     const rest = tidy(t.slice(y[0].length));
-    if (rest.length > 12) return { short: `${y[1].replace(/[\s,]+$/, '').replace(/\s+(?:designed|produced|executed|manufactured|made)$/i, '')}, ${y[2]}`, rest };
+    if (rest.length > 12) {
+      const lead = y[1].replace(/[\s,]+$/, '').replace(/\s+(?:designed|produced|executed|manufactured|made)(?=(?:\s+(?:circa|c\.|ca\.))?$)/i, '');
+      // "…ca. 1940" keeps its circa with the year ("…, ca. 1940", never "…ca., 1940")
+      const circa = lead.match(/^(.*?)[\s,]+(circa|ca\.|c\.)$/i);
+      return { short: circa ? `${circa[1]}, ${circa[2]} ${y[2]}` : `${lead}, ${y[2]}`, rest };
+    }
   }
   for (const [re, min] of [[/;\s|\s—\s|\.\s/g, 16], [/,\s/g, 30]] as const) {
     re.lastIndex = 0;
