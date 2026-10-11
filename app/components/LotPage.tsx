@@ -15,7 +15,7 @@ import { useSavedLots } from '../hooks/useSavedLots';
 import { useLearnVisit } from '../lib/recs-signals';
 import { useRefs } from '../hooks/useRefs';
 import { safeHref } from '../lib/safe-href';
-import { splitTitle, deglue, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
+import { closeDayOf, splitTitle, deglue, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
 import { isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand, contextComps } from '../lib/comps';
 import { enginePoolOf } from '../lib/engine-pool';
 import { lotFace, fmtFace, medianRowId, FACE_LABEL, projectedCloseFace } from '../lib/lot-face';
@@ -1000,11 +1000,11 @@ export default function LotPage({ lotId, initialLot }: {
               </div>
               <div>
                 <div className="k">{isSold || isPastPending ? 'Hammered' : 'Hammers'}</div>
-                <div className="v">{formatDate(lot.saleDate)}</div>
+                <div className="v">{formatDate(mounted ? closeDayOf(lot) : lot.saleDate)}</div>
                 {isPastPending
                   ? <div className="s">results pending</div>
-                  : !isSold && mounted && !isNaN(new Date(lot.saleDate).getTime())
-                    ? <div className="s">{daysWord(lot.saleDate)}</div>
+                  : !isSold && mounted && !isNaN(new Date(closeDayOf(lot)).getTime())
+                    ? <div className="s">{daysWord(closeDayOf(lot))}</div>
                     : null}
               </div>
               <div>

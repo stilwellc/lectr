@@ -19,7 +19,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link';
 import type { Market } from '../constants';
 import type { AuctionLot } from '../types';
-import { formatDate, formatPrice, craftTitle, httpsImg, sizedImg, localToday, trueSaleDay, isClosedPending } from '../utils';
+import { closeDayOf, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, localToday, trueSaleDay, isClosedPending } from '../utils';
 import LotCard, { lotSignal, confidenceMeter } from './LotCard';
 import { feedRowPrice } from '../lib/estimate-text';
 import { signalMagnitude } from '../lib/comps';
@@ -120,7 +120,7 @@ function saleWhenTitle(lot: AuctionLot): string | undefined {
 // "In" column, the closing windows and Closing tonight count on. The crawl's
 // saleDate printed "Oct 9" beside "1d" for a 1:56 AM ET close on Oct 10.
 function hammerDay(lot: AuctionLot): string {
-  return trueSaleDay(lot) || lot.saleDate;
+  return closeDayOf(lot);
 }
 function housePublishesBids(lot: AuctionLot, houses: Set<string>): boolean {
   return houses.has(String(lot.auctionHouse || ''));
@@ -232,8 +232,9 @@ export function FeedRow({ lot, onOpen, tone, note, onNote, feedback, decision, s
         <span className="ray-feedrow-maker">
           {makerLineOf(lot).name}
           {/* the label rides the maker line's spare width in the title tier's
-              ink (the words LotCard prints) — never a new line */}
-          {label && <span style={{ fontWeight: 400, fontSize: '12.5px', color: 'var(--color-text-muted)' }}> · {label}</span>}
+              ink (the words LotCard prints) — never a new line; with no
+              maker line (a pseudo-maker lot with no subject) it leads */}
+          {label && <span style={{ fontWeight: 400, fontSize: '12.5px', color: 'var(--color-text-muted)' }}>{makerLineOf(lot).name ? ' · ' : ''}{label}</span>}
         </span>
         <span className="ray-feedrow-title">{craftTitle(lot.title, lot.auctionHouse)}</span>
         {note && (onNote ? (
@@ -800,13 +801,15 @@ export default function LotBrowser({
                       </span>
                     </td>
                     <td className="t-work">
-                      <Link
-                        href={makerLineOf(lot).href}
-                        className="t-artist"
-                        onClick={e => e.stopPropagation()}
-                      >
-                        {makerLineOf(lot).name}
-                      </Link>
+                      {makerLineOf(lot).name && (
+                        <Link
+                          href={makerLineOf(lot).href}
+                          className="t-artist"
+                          onClick={e => e.stopPropagation()}
+                        >
+                          {makerLineOf(lot).name}
+                        </Link>
+                      )}
                       {/* a REAL button (Enter + Space for free), row
                           semantics intact for AT */}
                       <button

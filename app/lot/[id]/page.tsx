@@ -9,6 +9,7 @@ import { seoMeta, webPageLd, breadcrumbLd, type Ld } from '../../lib/seo';
 import { PAGE_MAKERS } from '../../lib/entity/retired';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../../constants';
 import type { AuctionLot } from '../../types';
+import { houseCloseDayOf } from '../../lib/house-tz';
 
 /**
  * The STATIC flagged set — /lot/<id> prerendered for every lot the crawl
@@ -54,15 +55,15 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
       ? `${formatPrice((lot.estimateLow || lot.estimateHigh)!)} est.`
       : null;
   const description = [
-    `${maker} — flagged Below Market: comps run ${sig ? signalMagnitude(sig.label, sig.pct) : 'over'} the ask${sig?.basis ? ` across ${sig.basis} comparable sales` : ''}.`,
+    `${maker || title} — flagged Below Market: comps run ${sig ? signalMagnitude(sig.label, sig.pct) : 'over'} the ask${sig?.basis ? ` across ${sig.basis} comparable sales` : ''}.`,
     est,
-    `Hammers ${formatDate(lot.saleDate)} at ${lot.auctionHouse}${lot.lotNumber != null ? `, lot ${lot.lotNumber}` : ''}.`,
+    `Hammers ${formatDate(houseCloseDayOf(lot) || lot.saleDate)} at ${lot.auctionHouse}${lot.lotNumber != null ? `, lot ${lot.lotNumber}` : ''}.`,
   ].filter(Boolean).join(' ');
   // two flagged lots of one title (editions, a letter series in one sale)
   // would share a <title>: the lot number tells them apart
   const twin = lot.lotNumber != null && flaggedLots().some(o => o.id !== lot.id
     && makerLineOf(o).name === maker && splitTitle(o.title, o.auctionHouse).short === title);
-  const head = `${title} — ${maker}${twin ? ` · lot ${lot.lotNumber}` : ''}`;
+  const head = `${maker ? `${title} — ${maker}` : title}${twin ? ` · lot ${lot.lotNumber}` : ''}`;
 
   // the lot's own photograph carries the share; https-forced (mixed-content),
   // sized for an unfurler (shareImg), falling back to the site card when the
@@ -74,7 +75,7 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
     description,
     path: `/lot/${lot.id}`,
     image,
-    imageAlt: `${title} — ${maker}, at ${lot.auctionHouse}`,
+    imageAlt: `${maker ? `${title} — ${maker}` : title}, at ${lot.auctionHouse}`,
     type: 'article',
   });
 }
@@ -93,14 +94,14 @@ function lotLd(lot: AuctionLot): Ld[] {
   crumbs.push([title, path]);
   return [
     webPageLd({
-      path, type: 'ItemPage', name: `${title} — ${maker}`,
-      description: `${title} by ${maker}, offered at ${lot.auctionHouse} on ${formatDate(lot.saleDate)} — read against its comparable sales by lectr.`,
+      path, type: 'ItemPage', name: maker ? `${title} — ${maker}` : title,
+      description: `${title}${maker ? ` by ${maker}` : ''}, offered at ${lot.auctionHouse} on ${formatDate(houseCloseDayOf(lot) || lot.saleDate)} — read against its comparable sales by lectr.`,
       image: img || undefined,
       about: {
         '@type': art ? 'VisualArtwork' : 'Thing',
         name: title,
         ...(img ? { image: img } : {}),
-        ...(art ? { creator: { '@type': 'Person', name: maker } } : {}),
+        ...(art && maker ? { creator: { '@type': 'Person', name: maker } } : {}),
       },
     }),
     breadcrumbLd(crumbs),

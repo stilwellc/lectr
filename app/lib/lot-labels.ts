@@ -20,7 +20,10 @@
  * team-signed piece names its team-season, sealed wax / set lots their
  * product line + year, sealed Pokémon their set, an instrument its maker.
  */
-import { ARTIST_LABEL } from '../constants';
+import { ARTIST_LABEL, marketOf } from '../constants';
+// (Oct 11) a module cycle by design: maker-subjects reads catalogMakerLineOf,
+// makerLineOf reads its subject row (functions only, nothing at module init)
+import { lotSubjectOf, SUBJECT_MARKETS } from './maker-subjects';
 import { parseCard, cardLadderKey, playerSlugOf } from './cards';
 import { taxonOf, subLabel, CAT_LABEL, SPORTS, type CatKey } from './taxonomy';
 import { cardBadgesOf } from './facets';
@@ -38,6 +41,7 @@ const CARD_WORD = /\b(?:Inaugural|Bowman|Topps|Fleer|Donruss|Panini|Prizm|Chrome
 type NamedLot = { artist: string; title?: string | null; subCat?: string | null; drill?: string | null; playerName?: string | null; playerSlug?: string | null };
 
 export interface MakerLine { name: string; href: string }
+type FacetExtra = { flown?: boolean | null; formKey?: string | null };
 
 /** the /player dossiers that exist (page-stats playerIndex). Empty until the
  *  page-stats payload lands — until then athletes keep the maker link. */
@@ -57,7 +61,33 @@ export function playerDossierVersion(): number { return dossierVer; }
 
 const memo = new WeakMap<object, { v: number; line: MakerLine }>();
 
-export function makerLineOf(lot: NamedLot): MakerLine {
+/** (Oct 11) THE name in a lot's maker slot, on every surface (home table /
+ *  cards / rows, lot page, modal, /value, /makers panels, ⌘K, receipts).
+ *  The collection books file lots under pseudo-makers ("Sports Cards",
+ *  "Graded Cards", "Autographs", "Game Worn & Used", "Entertainment & Icons",
+ *  "Pokémon", "Space Exploration") and the slot printed those category names
+ *  as if they were makers ("Sports Cards" over "1949 Bowman #50 Jackie
+ *  Robinson"). A pseudo-maker's line now gives way to the lot's subject row
+ *  (app/lib/maker-subjects lotSubjectOf: the player, Pokémon, person, film,
+ *  franchise, team, set or mission), else to NO name (`name: ''`, the slot
+ *  is left out; never a category printed as a maker). Real makers (art,
+ *  design, watches) keep their line untouched. The catalogue read
+ *  (catalogMakerLineOf) stays for the subject reader itself. */
+export function makerLineOf(lot: NamedLot & FacetExtra): MakerLine {
+  const line = catalogMakerLineOf(lot);
+  if (!SUBJECT_MARKETS.has(marketOf(lot.artist))) return line;
+  if (line.name !== (ARTIST_LABEL[lot.artist] || lot.artist)) return line;
+  const sub = lotSubjectOf(lot);
+  if (!sub) return { name: '', href: line.href };
+  // a person links to their /player dossier only when it exists and the pipeline stamped the lot to them
+  const dossier = !!sub.playerSlug && lot.playerSlug === sub.playerSlug && dossiers.has(sub.playerSlug);
+  return { name: sub.name, href: dossier ? `/player?id=${encodeURIComponent(sub.playerSlug!)}` : line.href };
+}
+
+/** the catalogue's own read of the maker slot: a pseudo-maker's category
+ *  label stands when no player / Pokémon / subject reads. Only the subject
+ *  reader (maker-subjects) wants this; every printed slot uses makerLineOf. */
+export function catalogMakerLineOf(lot: NamedLot): MakerLine {
   const hit = memo.get(lot as object);
   if (hit && hit.v === dossierVer) return hit.line;
   const fallback: MakerLine = { name: ARTIST_LABEL[lot.artist] || lot.artist, href: makerHref(lot.artist) };
@@ -66,13 +96,18 @@ export function makerLineOf(lot: NamedLot): MakerLine {
   if (title && CARD_MAKERS.has(lot.artist) && taxonOf(lot).cat === 'sports-cards') {
     const id = parseCard(title);
     // a player only off a parsed card identity — never a guessed name from a memorabilia title
-    if (!id.notCard && !id.multi && id.player && id.playerSlug && cardLadderKey(id) && PERSON.test(id.player) && !CARD_WORD.test(id.player.replace(/^Red (?=[A-Z][a-z])/, ''))) {
+    const personRun = (n: string) => PERSON.test(n) && !CARD_WORD.test(n.replace(/^Red (?=[A-Z][a-z])/, ''));
+    const two = id.player ? id.player.split(' ').slice(0, 2).join(' ') : '';
+    // (Oct 11) a run-on into card words ("Jackie Robinson Inaugural Bowman") used to
+    // fail CARD_WORD whole and print "Sports Cards"; its first two words stand in
+    // when THEY are a clean person run (athleteName still decides below)
+    const runOk = !!id.player && (personRun(id.player) || (two !== id.player && personRun(two)));
+    if (!id.notCard && !id.multi && id.player && id.playerSlug && cardLadderKey(id) && runOk) {
       // (r7 data fix) only an ATHLETE links to /player (app/lib/player-name): a team card's
       // "New York" ("1961 Topps #228 New York Yankees Team") linked to a phantom /player?id=new-york;
       // a surname-only highlight ("Mantle Hits") or a non-athlete is no /player either. The run-on's
       // first two words stand in when they are the athlete ("Duke Snider Play Brings")
-      const two = id.player.split(' ').slice(0, 2).join(' ');
-      const ath = notOnePerson(id.player) ? null : athleteName(id.player, title) ?? (two !== id.player ? athleteName(two, title) : null);
+      const ath = notOnePerson(id.player) ? null : (personRun(id.player) ? athleteName(id.player, title) : null) ?? (two !== id.player ? athleteName(two, title) : null);
       const slug = ath ? playerSlugOf(ath) : null;
       if (ath && slug) out = { name: ath, href: `/player?id=${encodeURIComponent(slug)}` };
     }

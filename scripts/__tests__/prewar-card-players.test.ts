@@ -110,9 +110,10 @@ test('the stamped athlete files the lot under its player row on /makers', () => 
   const s = lotSubjectOf({ artist: 'graded-cards', title: t, playerName: np.player, playerSlug: np.playerSlug } as never);
   assert.equal(s?.key, 'p:mickey-mantle');
   assert.equal(s?.kind, 'player');
-  // a numbered card whose slot run is not a person falls through to the stamp
+  // a numbered card whose slot run-on is not a person ("Jackie Robinson Inaugural Bowman"):
+  // (Oct 11) the run's first two words read on their own now (lot-labels), and the stamp agrees
   const t2 = '1949 Bowman #50 Jackie Robinson Inaugural Bowman Card - PSA MINT 9; MBA Bronze Diamond Certification';
-  assert.equal(lotSubjectOf({ artist: 'graded-cards', title: t2 } as never), null);
+  assert.equal(lotSubjectOf({ artist: 'graded-cards', title: t2 } as never)?.key, 'p:jackie-robinson');
   const np2 = rosterCardPlayerOf(t2, KNOWN);
   assert.equal(lotSubjectOf({ artist: 'graded-cards', title: t2, playerName: np2.player, playerSlug: np2.playerSlug } as never)?.key, 'p:jackie-robinson');
 });

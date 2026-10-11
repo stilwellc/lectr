@@ -49,7 +49,7 @@ import {
 // globals.css "THE CELL SYSTEM"): figure cells for the reads room, the
 // forced-color cell classes re-plate the call. Never redefined here.
 import { CellGrid, FigureCell, FigGate, FigReplay, FigPools } from '../components/cells';
-import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isOnBlock, trueSaleDay, toneOf } from '../utils';
+import { closeDayOf, getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isOnBlock, trueSaleDay, toneOf } from '../utils';
 import { closeMs as closeAt } from '../lib/house-tz';
 import { dealScore, signalMagnitude, estUsdBand } from '../lib/comps';
 import { lotFace, FACE_LABEL, fmtFace } from '../lib/lot-face';
@@ -67,7 +67,9 @@ import { makerLineOf, labelLineOf } from '../lib/lot-labels';
  *  span tier, held inline so it never adds a line (desktop only — see .vd-label-tail) */
 function LabelSuffix({ lot }: { lot: AuctionLot }) {
   const label = labelLineOf(lot);
-  return label ? <span className="vd-label-tail" style={{ display: 'inline' }}> · {label}</span> : null;
+  // (Oct 11) a pseudo-maker lot with no subject has no maker line: the label leads, no dangling " · "
+  const lead = makerLineOf(lot).name ? ' · ' : '';
+  return label ? <span className="vd-label-tail" style={{ display: 'inline' }}>{lead}{label}</span> : null;
 }
 
 const ROWS_PAGE = 12;
@@ -333,7 +335,7 @@ function GapAnnex({ rows, total, measured, validated, receipts, activeKey, play,
           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(o => (o === lot.id ? null : lot.id)); } }}
         >
           <span className="ray-value-row-thumb" aria-hidden style={{ position: 'relative' }}>
-            <span className="vd-thumb-letter">{makerLineOf(lot).name.charAt(0)}</span>
+            <span className="vd-thumb-letter">{(makerLineOf(lot).name || craftTitle(lot.title, lot.auctionHouse)).charAt(0)}</span>
             {lot.imageUrl && (
               <img src={httpsImg(lot.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
@@ -359,13 +361,13 @@ function GapAnnex({ rows, total, measured, validated, receipts, activeKey, play,
           <span className="vd-cell">
             {lot.saleDateTime && (Date.parse(lot.saleDateTime) - Date.now()) < 24 * 3600e3 && (Date.parse(lot.saleDateTime) > Date.now())
               ? <span className="vd-breathe" style={{ color: 'var(--color-fg)', fontWeight: 600 }}><CloseClock iso={lot.saleDateTime} windowHours={24} /></span>
-              : formatDate(lot.saleDate)}
+              : formatDate(closeDayOf(lot))}
           </span>
           {/* mobile stack */}
           <span className="vd-lane-mob">
             <span className="vd-cell-strong" style={{ display: 'block' }}>−{Math.round(g.depth * 100)}% under floor</span>
             <span style={{ display: 'block' }}>{formatPrice(g.allIn)} all-in proj → floor {formatPrice(g.floor)}</span>
-            <span style={{ display: 'block' }}>closes {formatDate(lot.saleDate)}</span>
+            <span style={{ display: 'block' }}>closes {formatDate(closeDayOf(lot))}</span>
           </span>
         </div>
         {/* THE EVIDENCE — the row's whole case, interrogated in place */}
@@ -551,7 +553,7 @@ function SleepersAnnex({ rows, total, queued, receipts, activeLabel, play, isSav
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(o => (o === lot.id ? null : lot.id)); } }}
                 >
                   <span className="ray-value-row-thumb" aria-hidden style={{ position: 'relative' }}>
-                    <span className="vd-thumb-letter">{makerLineOf(lot).name.charAt(0)}</span>
+                    <span className="vd-thumb-letter">{(makerLineOf(lot).name || craftTitle(lot.title, lot.auctionHouse)).charAt(0)}</span>
                     {lot.imageUrl && (
                       <img src={httpsImg(lot.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
                         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
@@ -2266,13 +2268,13 @@ export default function ValuePage() {
                     className="ray-value-row"
                     data-nav-row
                     onClick={() => setModalLot(d.lot)}
-                    aria-label={`${makerLineOf(d.lot).name} — see the comps`}
+                    aria-label={`${makerLineOf(d.lot).name || craftTitle(d.lot.title, d.lot.auctionHouse)} — see the comps`}
                   >
                     {/* Thumbnail — monogram plate always behind, photo overlays;
                         on a hotlink-block the plate shows through, never a gap */}
                     <span className="ray-value-row-thumb" aria-hidden="true" style={{ position: 'relative' }}>
                       <span className="vd-thumb-letter">
-                        {makerLineOf(d.lot).name.charAt(0)}
+                        {(makerLineOf(d.lot).name || craftTitle(d.lot.title, d.lot.auctionHouse)).charAt(0)}
                       </span>
                       {d.lot.imageUrl && (
                         <img src={httpsImg(d.lot.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"

@@ -89,7 +89,7 @@ export default function BookIndex({ kind }: { kind: Kind }) {
                 <span className="lectr-lot-comp-t">
                   <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{craftTitle(l.title, l.auctionHouse)}</span>
                   <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
-                    {makerLineOf(l).name} · <span style={{ color: houseColors[l.auctionHouse] || 'inherit', fontWeight: 600 }}>{l.auctionHouse}</span> · hammers {formatDate(trueSaleDay(l))}
+                    {makerLineOf(l).name && <>{makerLineOf(l).name} · </>}<span style={{ color: houseColors[l.auctionHouse] || 'inherit', fontWeight: 600 }}>{l.auctionHouse}</span> · hammers {formatDate(trueSaleDay(l))}
                   </span>
                 </span>
                 <span className="lectr-lot-comp-p" style={{ color: 'var(--color-up)' }}>{signalMagnitude('Below Market', l.signal!.pct)}</span>

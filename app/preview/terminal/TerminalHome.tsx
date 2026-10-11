@@ -25,7 +25,7 @@ import { useRayData, useSoldArchive, retryArchiveLoad, triggerFullLoad, retryFul
 import { loadPageStats, type PageStats } from '../../lib/page-data';
 import { signalCallOf } from '../../lib/account';
 import { useSavedLots } from '../../hooks/useSavedLots';
-import { formatDate, formatPrice, getUpcomingCounts, craftTitle, fmtSignedPct, localToday, trueSaleDay, isLiveUpcoming, isClosedPending, overEstimatePct } from '../../utils';
+import { closeDayOf, formatDate, formatPrice, getUpcomingCounts, craftTitle, fmtSignedPct, localToday, trueSaleDay, isLiveUpcoming, isClosedPending, overEstimatePct } from '../../utils';
 import ArtistNav from '../../components/ArtistNav';
 import { lotSignal } from '../../components/LotCard';
 import { dealScore } from '../../lib/comps';
@@ -592,7 +592,7 @@ export default function TerminalHomePage() {
       <span className="ray-watchstrip-k">Your watchlist</span>
       <span className="ray-watchstrip-line">
         {watchStrip.count} saved
-        {watchStrip.next && <> · next hammer {daysWord(watchStrip.next.saleDate)}</>}
+        {watchStrip.next && <> · next hammer {daysWord(closeDayOf(watchStrip.next))}</>}
         {watchStrip.bestMove && (
           <> · best move <b className="up">+{Math.round(watchStrip.bestMove.from)}% → +{Math.round(watchStrip.bestMove.to)}%</b></>
         )}
