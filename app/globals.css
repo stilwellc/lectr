@@ -1937,6 +1937,15 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-ck-item[data-active=true] { background: var(--color-hover-item); color: var(--color-fg); }
 .ray-ck-hint { font-size: 12.5px; color: var(--color-text-faint); white-space: nowrap; }
 .ray-ck-empty { padding: 24px; text-align: center; font-size: 13.5px; color: var(--color-text-faint); }
+/* phone: the hint sits under the label (side by side, a nowrap hint crushed
+   long lot titles to one word a line and scrolled the list sideways) */
+.ray-ck-list { overflow-x: hidden; }
+@media (max-width: 600px) {
+  .ray-ck-overlay { padding-top: 8vh; }
+  .ray-ck-list { max-height: 62vh; }
+  .ray-ck-item { flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; }
+  .ray-ck-hint { white-space: normal; }
+}
 
 /* ── methodology note ── */
 .ray-method-trigger {
