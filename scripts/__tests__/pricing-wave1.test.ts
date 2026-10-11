@@ -33,7 +33,13 @@ test('floorAtBid: expected hammer lifted to the bid (far from close); all-in = h
   assert.equal(f.estimateUsd, f.compValueUsd);
   assert.ok(f.bandLowUsd! >= 1400 && f.low! >= Math.round(1400 * 1.22));
   assert.ok(f.bandHighUsd! >= f.expectedHammerUsd! && f.high! >= f.compValueUsd);
-  assert.ok(f.maxBidUsd! >= f.bandLowUsd! && f.maxBidUsd! <= f.expectedHammerUsd!);
+  // (W24, maxBidOwn) the max bid stays the engine's own walk-away — never lifted to the bid
+  assert.equal(f.maxBidUsd, 900);
+  assert.ok(f.maxBidUsd! <= f.expectedHammerUsd!);
+  setEngineFlags(ENGINE_FLAGS_WAVE3);
+  const w3 = floorAtBid(v(), goldin(1400, '2026-10-20T02:00:00Z'), NOW);
+  setEngineFlags(null);
+  assert.ok(w3.maxBidUsd! >= w3.bandLowUsd! && w3.maxBidUsd! <= w3.expectedHammerUsd!, 'pre-W24: clamped into [bid, expected]');
   assert.deepEqual(f.vsBid, { label: 'above recent comps', pct: 40 }, 'vsBid stays the comps read');
 });
 

@@ -27,7 +27,7 @@ import { weightedMedian, quantileSorted } from './stats';
 import { lotShapeOf, shapesCompatible, isCompExcluded } from './comps';
 import type { CardGateCell } from './cards-gate';
 import { numericWatchRef, editionIdentityKey, isEditionLot, WATCH_SLUGS, ART_SLUGS } from './identity';
-import { compBoundaryFault, compPurityFault, isIdentityLessTitle, isIdentityLessArtTarget, sameWorkComp, mediumFamilyMatch, objectBoundaryFault, isBareSubjectTitle, catalogueNumberOf, type Boundary5Rules } from './comp-purity';
+import { compBoundaryFault, compPurityFault, isIdentityLessTitle, isIdentityLessArtTarget, sameWorkComp, mediumFamilyMatch, objectBoundaryFault, isBareSubjectTitle, catalogueNumberOf, uniqueSupportConflict, uniqueSizeConflict, workYearConflict, estMidUsdOf, type Boundary5Rules } from './comp-purity';
 
 /** THE signal-label vocabulary — one source (P2, Sep 2 2026). Re-exported from
  *  lanes.ts; UI files that hardcode the strings should import from there
@@ -276,6 +276,49 @@ export interface EngineFlags {
    *  so the fitted tier bands cannot see the served 'high' tier's spread
    *  (backtest-core.fitValueBands) */
   vbTier?: boolean;
+  /** (Oct 11 2026, W24) THE ESTIMATE SCALE: on an art / design estimate lot,
+   *  a comp whose OWN house estimate (time-carried to the valuation day) sits
+   *  more than EST_SCALE.ratio× from the target's estimate is another object
+   *  that shares the title — the houses' experts priced the two an order of
+   *  magnitude apart (Picasso's unique "Deux femmes à leur toilette", est.
+   *  $80–120k, in the pool of a $7–9k aquatint; a $1k poster in a $10k
+   *  triptych's). Unlike the wave-6 scale filter (compScale) it reads the
+   *  comp's estimate, never its result: a hot sale over its own estimate
+   *  stays in the pool */
+  estScale?: boolean;
+  /** (Oct 11 2026, W24) a unique work on paper never prices one on canvas /
+   *  panel, or the reverse (comp-purity.uniqueSupportConflict) */
+  uniqueSupport?: boolean;
+  /** (Oct 11 2026, W24) unique 2-D works more than UNIQUE_SIZE.ratio× apart
+   *  in surface area are different objects (comp-purity.uniqueSizeConflict) */
+  uniqueSize?: boolean;
+  /** (Oct 11 2026, W24) art lots dated more than WORK_YEAR.d years apart
+   *  are different works (comp-purity.workYearConflict) */
+  workYear?: boolean;
+  /** (Oct 11 2026, W24) THE MAX BID IS THE ENGINE'S OWN: the live-bid floor
+   *  (floorAtBid) lifts the expected hammer and the band low to the bid but
+   *  never the max bid. It used to clamp the max bid into [bid, expected], so
+   *  every lot whose bid had passed the engine's walk-away printed "worth up
+   *  to" the live bid itself (137 of 969 valued live lots with a bid on Oct
+   *  11: an NFL game-worn jersey at $2,500 on $1.5k comps, the Obama-signed
+   *  Declaration print). The walk-away now stays where the comps put it —
+   *  under the bid when the room has passed it, which is the call */
+  maxBidOwn?: boolean;
+  /** (Oct 11 2026, W24) THE MIXED POOL: an art / design estimate lot whose
+   *  top-K pool is at least MIXED_POOL.share other works — comps the
+   *  estimate-scale or work-date readers call another object (the estScale /
+   *  workYear tests, applied as a COUNT, never as a filter) — abstains
+   *  ('pool-mixed'). Filtering those comps out of the pool was measured and
+   *  not adopted (the value got worse on both live books); a pool that is
+   *  mostly other works is not a value either */
+  mixedPoolAbstain?: boolean;
+  /** (Oct 11 2026, W24) THE OTHER WORKS, MARKED: every served art / design
+   *  estimate value names the pool comps the estimate-scale and work-date
+   *  readers call another work (`value.otherWorkIds`). The value is
+   *  unchanged — filtering them out, or abstaining on a mostly-other pool,
+   *  measured worse or level (docs/ENGINE_LANES.md §22) — but the comps a
+   *  page lists can say which rows are the same object */
+  otherWorkMark?: boolean;
 }
 /** The engine before the Oct 3 pass (raw-estimate Flags, premium-only
  *  anchor, ungated card tiers) — kept so the harnesses can replay it. */
@@ -399,7 +442,19 @@ export const ENGINE_FLAGS_WAVE10: EngineFlags = {
   version: '2026.10.06-wave10',
   vbTier: true,
 };
-export const ENGINE_FLAGS_CURRENT: EngineFlags = ENGINE_FLAGS_WAVE10;
+/** (Oct 11 2026, W24) THE BUYER REVIEW: a unique work on paper never prices
+ *  one on canvas / panel (uniqueSupport), unique works 2.5× apart in area are
+ *  different objects (uniqueSize), the max bid stays the engine's own under
+ *  the live-bid floor (maxBidOwn), and the pool rows that are other works
+ *  are marked (otherWorkMark). Measured on the wave-10 engine
+ *  (docs/ENGINE_LANES.md §22). Measured and NOT adopted: estScale and
+ *  workYear as pool filters, mixedPoolAbstain. */
+export const ENGINE_FLAGS_W24: EngineFlags = {
+  ...ENGINE_FLAGS_WAVE10,
+  version: '2026.10.11-w24',
+  uniqueSupport: true, uniqueSize: true, maxBidOwn: true, otherWorkMark: true,
+};
+export const ENGINE_FLAGS_CURRENT: EngineFlags = ENGINE_FLAGS_W24;
 /** The candidate under evaluation. Equal to CURRENT's flags when nothing is
  *  pending — a candidate run then reports a no-op comparison. */
 export const ENGINE_FLAGS_CANDIDATE: EngineFlags = { ...ENGINE_FLAGS_CURRENT, version: `${ENGINE_FLAGS_CURRENT.version}+cand` };
@@ -590,7 +645,10 @@ export function floorAtBid<V extends Partial<ValueResult> & { compValueUsd: numb
   if (out.low != null && out.low < bidAllIn) out.low = bidAllIn;
   if (out.maxBidUsd != null) {
     const lo = out.bandLowUsd ?? Math.round(bid), hi = out.expectedHammerUsd ?? Infinity;
-    out.maxBidUsd = Math.min(hi, Math.max(lo, out.maxBidUsd));
+    // (W24, FLAGS.maxBidOwn) the walk-away is the comps', never the bid: the
+    // floor only ever raises the expected hammer, so the engine's max bid
+    // (≤ the unfloored expected hammer) still sits inside [0, expected]
+    out.maxBidUsd = FLAGS.maxBidOwn ? Math.min(hi, out.maxBidUsd) : Math.min(hi, Math.max(lo, out.maxBidUsd));
   }
   return out;
 }
@@ -631,6 +689,10 @@ export function pullTowardBid<V extends Partial<ValueResult> & { compValueUsd: n
 export interface ValueResult {
   /** the pool this was computed from (real sales, inspectable) */
   poolIds: string[];
+  /** (W24) the poolIds the estimate-scale / work-date readers call ANOTHER
+   *  work (comp-purity W24) — they still price the value; a comps list can
+   *  set them apart. Absent when none (or the target has no estimate). */
+  otherWorkIds?: string[];
   n: number;
   /** weighted-median comp value in USD */
   compValueUsd: number;
@@ -717,6 +779,7 @@ export type AbstainReason =
   | 'stale'             // (Oct 6) every comp in the pool sold > PURITY.maxAgeY ago
   | 'identity-less'     // (Oct 6, wave 3) an art title naming no object, comps spanning > ID_LESS.spread×
   | 'pool-scale'        // (Oct 6, wave 4) comp median outside ×/÷ POOL_SCALE.ratio of the estimate
+  | 'pool-mixed'        // (Oct 11, W24) most of the top pool is other works (another estimate scale / date)
   | 'card:pool<2'       // card tiers: exact/ladder pools too thin, no player pool
   | 'card:player<5'     // card tier 3: player pool under the floor (legacy)
   | 'card:player-tier'  // (Sep 27) only a PLAYER median exists — abstains (2.87× live)
@@ -1058,6 +1121,15 @@ export const COMP_HL = { band: 2, point: 2, noEst: 1 };
 export const HABIT_PREMIUM = { fr: 1.4, k: 1.1 };
 /** (wave 4) EngineFlags.mediumKnownPool's floor */
 export const MEDIUM_POOL = { minN: 3 };
+/** (W24) EngineFlags.estScale: the estimate-to-estimate ratio past which a
+ *  comp is another object, per market (1 = the rule applies there) */
+export const EST_SCALE = { ratio: 6, art: 1, design: 1, other: 0 };
+/** (W24) EngineFlags.uniqueSize: the surface-area ratio between two unique works */
+export const UNIQUE_SIZE = { ratio: 2.5 };
+/** (W24) EngineFlags.workYear: the years two dated art lots may lie apart */
+export const WORK_YEAR = { d: 2 };
+/** (W24) EngineFlags.mixedPoolAbstain: the share of the top-K pool that may be other works */
+export const MIXED_POOL = { share: 0.5 };
 export function exactBlendW(house: string | null | undefined): number {
   const v = house ? EXACT_BLEND.byHouse[house] : undefined;
   return typeof v === 'number' ? v : EXACT_BLEND.w;
@@ -1182,6 +1254,30 @@ export function estimateValueEx(
     const fam = watchRefFamily(lot);
     if (fam) src = src.filter(c => { if (!c.lot) return true; const f = watchRefFamily(c.lot); return f ? f === fam : !!WATCH_REF_BOUND.refless; });
   }
+  // (Oct 11 2026, W24) THE OBJECT A COMP IS: its own estimate's scale, a
+  // unique work's support and size, the work's date (comp-purity W24)
+  const w24mk = CAL?.marketBySlug?.[lot.artist] ?? TIDX?.marketBySlug?.[lot.artist] ?? 'other';
+  const w24tMid = (EST_SCALE as Record<string, number>)[w24mk === 'art' || w24mk === 'design' ? w24mk : 'other'] ? estMidUsdOf(lot) : 0;
+  /** another work by its own estimate's scale or its date (W24 readers) */
+  const otherWork = (c: Comp, scale: boolean, year: boolean): boolean => {
+    const cl = c.lot;
+    if (!cl) return false;
+    if (year && workYearConflict(lot, cl, WORK_YEAR.d)) return true;
+    if (scale && w24tMid > 0) {
+      const cMid = estMidUsdOf(cl) * timeFactor(w24mk, c.saleDate);
+      if (cMid > 0 && Math.max(w24tMid, cMid) / Math.min(w24tMid, cMid) > EST_SCALE.ratio) return true;
+    }
+    return false;
+  };
+  if (FLAGS.estScale || FLAGS.uniqueSupport || FLAGS.uniqueSize || FLAGS.workYear) {
+    src = src.filter(c => {
+      const cl = c.lot;
+      if (!cl) return true;
+      if (FLAGS.uniqueSupport && uniqueSupportConflict(lot, cl)) return false;
+      if (FLAGS.uniqueSize && uniqueSizeConflict(lot, cl, UNIQUE_SIZE.ratio)) return false;
+      return !otherWork(c, !!FLAGS.estScale, !!FLAGS.workYear);
+    });
+  }
   let pool = src
     .filter(c => passesGate(c.match) && c.realizedUsd > 0)
     .sort((a, b) => b.match.score - a.match.score);
@@ -1252,6 +1348,11 @@ export function estimateValueEx(
   }
 
   const top = pool.slice(0, TOP_K);
+  // (Oct 11, W24, FLAGS.mixedPoolAbstain) a pool that is mostly other works
+  if (FLAGS.mixedPoolAbstain && w24tMid > 0 && top.length) {
+    const other = top.filter(c => otherWork(c, true, true)).length;
+    if (other / top.length >= MIXED_POOL.share) return { value: null, abstain: 'pool-mixed' };
+  }
   // (Oct 6, wave 3, FLAGS.idLessAbstain) an art target that names no object
   // — no catalogue citation, no medium / edition evidence — priced by comps
   // that span more than ID_LESS.spread×: the title is shared by different
@@ -1559,6 +1660,8 @@ export function estimateValueEx(
     if (bid > 0) vsBid = vsBidRead(lot, bid, predUsd);
   }
 
+  // (W24, FLAGS.otherWorkMark) the pool rows that are other works — marked, never dropped
+  const otherIds = FLAGS.otherWorkMark && w24tMid > 0 ? top.filter(c => otherWork(c, true, true)).map(c => c.id) : [];
   return { value: {
     poolIds: top.map(c => c.id),
     n: pool.length,
@@ -1574,6 +1677,7 @@ export function estimateValueEx(
     exact,
     idn: idn || undefined,
     ...(partial ? { abstain: partial } : {}),
+    ...(otherIds.length ? { otherWorkIds: otherIds } : {}),
     compMedianUsd: Math.round(readRawUsd != null && readRawUsd > 0 && signal ? readRawUsd : compRawUsd),
     compAdjUsd: Math.round(compAdjUsd),
     ...(blendW != null ? { blendW: Math.round(blendW * 100) / 100 } : {}),
