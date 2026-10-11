@@ -655,7 +655,7 @@ export default function AboutPage() {
               <span className="kicker dk-serial">No. {serial}</span>
             </div>
             {/* the hand-drawn mark, writing itself on — the loader's wipe, once */}
-            <img className="dk-mark" src="/brand/lectr.png" alt="lectr" />
+            <img className="dk-mark" src="/brand/lectr-ink-lg.png" alt="lectr" />
             <h1 className="dk-h1">
               Every lot arrives with a guess.{' '}
               <span className="dk-h1-line2">We score it against{' '}

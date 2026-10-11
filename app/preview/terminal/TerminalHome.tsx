@@ -31,7 +31,7 @@ import { closeDayOf, formatDate, formatPrice, getUpcomingCounts, craftTitle, fmt
 import ArtistNav from '../../components/ArtistNav';
 import { lotSignal } from '../../components/LotCard';
 import { dealScore } from '../../lib/comps';
-import ComparableModal from '../../components/ComparableModal';
+import ComparableModal from '../../components/ComparableModalLazy';
 import type { AuctionLot } from '../../types';
 import PastResults from '../../components/PastResults';
 import RayEntrance, { RayLoading } from '../../components/RayEntrance';
