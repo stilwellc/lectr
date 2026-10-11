@@ -49,7 +49,7 @@ interface TapeRowData {
         changePct: number; ciLo: number; ciHi: number; n: number;
         /** the identity/population the read covers — printed, never implied */
         scope?: string | null }
-    | { kind: 'demand'; now: number; series: { period: string; value: number }[]; qN: number }
+    | { kind: 'demand'; now: number; series: { period: string; value: number }[]; qN: number; q: string }
     | { kind: 'descriptive'; typicalUsd: number; qN: number; series: { period: string; value: number }[] };
   /** vertical corpus size, for the row sub */
   lots: number;
@@ -154,7 +154,7 @@ function resolveTape(
         read: {
           kind: 'demand', now: d[d.length - 1].value,
           series: d.map((p) => ({ period: p.date, value: p.value })),
-          qN: d[d.length - 1].n,
+          qN: d[d.length - 1].n, q: d[d.length - 1].date,
         },
       });
       continue;
@@ -202,6 +202,14 @@ function demandFig(v: number): { text: string; dir: 'up' | 'down' | undefined; w
   if (Math.abs(v) < 0.5) return { text: '0%', dir: undefined, word: 'at estimate' };
   return { text: fmtPct(v), dir: v > 0 ? 'up' : 'down', word: 'over estimate' };
 }
+
+/** (r8, QA3 N8) a demand read's OWN n: the estimated sales in its trailing
+ *  12-month window, and the quarter that window ends ("n 203 · Q3") — never
+ *  the vertical's all-time corpus beside a one-window figure. Short: it
+ *  shares the row with the sparkline; the full reading rides the title. */
+const demandN = (r: { qN: number; q: string }) => `n ${fmtInt(r.qN)} · ${r.q.replace(/^\d{4} /, '')}`;
+const demandNTitle = (r: { qN: number; q: string }) =>
+  `Median hammer over estimate across the ${fmtInt(r.qN)} estimated ${r.qN === 1 ? 'sale' : 'sales'} of the 12 months to the end of ${r.q}`;
 
 const fmtCI = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`;
 
@@ -287,7 +295,7 @@ export function TapeMonument({ row, play }: { row: TapeRowData; play: boolean })
           <span className={styles.mtMonBeam}>{r.series.length >= 2 && <DemandLine series={r.series} dir={demandFig(r.now).dir} />}</span>
           <span className={styles.mtMonMeta}>
             <span>demand · {demandFig(r.now).dir ? 'sold over estimate' : 'sold at estimate'}</span>
-            <span>{fmtInt(row.lots)} lots</span>
+            <span title={demandNTitle(r)}>{demandN(r)}</span>
           </span>
         </>
       )}
@@ -363,7 +371,7 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
                   <span className={styles.tri} data-dir={demandFig(r.read.now).dir} aria-hidden />
                   {demandFig(r.read.now).text}<span className={styles.mtHz} aria-hidden />
                 </span>
-                <span className={styles.mtSub}>{demandFig(r.read.now).word} · {fmtInt(r.lots)} lots</span>
+                <span className={styles.mtSub} title={demandNTitle(r.read)}>{demandFig(r.read.now).word} · {demandN(r.read)}</span>
               </>
             )}
             {r.read.kind === 'descriptive' && (

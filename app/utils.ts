@@ -69,6 +69,14 @@ export function cleanText(raw?: string | null): string {
   t = t.replace(/&[a-z#0-9]+;/gi, m => ENTITY[m.toLowerCase()] ?? ' ');
   return t.replace(/\s+/g, ' ').trim();
 }
+
+/** cleanText, minus a house's star markers: Julien's leads its marquee
+ *  titles with "**" ("**JOHN LENNON GIBSON J-160E", "** RINGO STARR #1 …"),
+ *  which read as stray markup on a record line. A run of two or more stars
+ *  at either end goes; a single in-title "*" (a wedge's 60*, *Notes*) stays. */
+export function tidyTitle(raw?: string | null): string {
+  return cleanText(raw).replace(/^\*{2,}\s*/, '').replace(/\s*\*{2,}$/, '').trim();
+}
 /**
  * expandLeadYear — Goldin leads a title with a 2-digit year ("94 Mario Lemieux
  * Game-Used…", "87 Fleer #57…", "08 Upper Deck…"); bare, it reads like a typo.
@@ -93,7 +101,7 @@ export function expandLeadYear(t: string, house?: string | null): string {
 }
 
 export function craftTitle(raw: string, house?: string | null): string {
-  let t = cleanText(raw);
+  let t = tidyTitle(raw);
   t = t.replace(/^[·•]\s*/, '');                  // a leading catalogue bullet  '· Femme nue'
   t = t.replace(/^\[(.+?)\]$/, '$1').trim();          // unwrap a fully-bracketed title  [Apollo 14] → Apollo 14
   t = t.replace(/^\[[^\]]{1,40}\]\s*/, '').trim();     // drop a leading [collection tag]

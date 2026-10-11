@@ -48,13 +48,14 @@ import { lotSubjectOf } from '../../lib/maker-subjects';
 import { isFlagged } from '../../lib/flags';
 import { taxonOf, SPORTS, type CatKey } from '../../lib/taxonomy';
 import { ARTIST_LABEL, ARTIST_MARKET, MAKER_MARKETS, MARKETS, type Market } from '../../constants';
-import { closeCut, formatDate, formatPrice, getUpcomingCounts, httpsImg, sizedImg, trueSaleDay } from '../../utils';
+import { closeCut, formatDate, formatPrice, getUpcomingCounts, httpsImg, sizedImg, tidyTitle, trueSaleDay } from '../../utils';
 import { signedPct } from '../SubMarketDirectory';
 import { yoyIntervalText } from '../../lib/entity/ledger';
 import type { AuctionLot } from '../../types';
 import type { VerifiedMover } from '../../preview/terminal/verified';
 import { KindModule, YearlyLine, Results, Context } from './modules';
 import { recordOf } from '../../lib/entity/model';
+import { useLotLinks } from '../../lib/lot-resolve';
 import '../../northstar-pages.css';
 
 // the maker's full sold book (the maker shard + PastResults) mounts only on
@@ -88,6 +89,8 @@ const KIND_NOUN: Record<string, string> = {
 /** the live book's page on an entity page: 12 rows, then Show more (round 7 —
  *  the page scans first; home keeps its 24) */
 const LIVE_PAGE = 12;
+/** (r8, QA3 E1) …and 8 on a phone, where every row is a full-width card */
+const LIVE_PAGE_PHONE = 8;
 
 /* phone, tightened (round 7): the header's same type and ledger set closer,
    the record's caption held to two lines (its full title on hover / in the
@@ -184,6 +187,12 @@ export default function EntityPage({ id }: { id: string }) {
   const [every, setEvery] = useState(false);
   // the record photo's frame goes with a dead hotlink (no empty bordered box)
   const [recImgDeadSrc, setRecImgDeadSrc] = useState<string | null>(null);
+  // the record's lot link: its alias, or none when no lot page answers (r8)
+  const recRow = useMemo(() => {
+    const r = recordOf(summary?.record ?? null, detail);
+    return r?.id ? [{ id: r.id, img: r.img ?? null }] : [];
+  }, [summary, detail]);
+  const recLinkOf = useLotLinks(recRow);
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
   const houseCount = sources.length || new Set(allLots.map(l => l.auctionHouse)).size;
@@ -225,8 +234,8 @@ export default function EntityPage({ id }: { id: string }) {
   const recImg = httpsImg(rec?.img ?? null);
   const recImgDead = !!recImg && recImgDeadSrc === recImg;
   const onRecImgDead = () => setRecImgDeadSrc(recImg ?? null);
-  const recTitle = rec?.t || '';
-  const recId = rec?.id || null;
+  const recTitle = tidyTitle(rec?.t);
+  const recId = rec?.id ? recLinkOf(rec.id) : null;
   const houses = detail?.houses ?? [];
   const verified = (summary?.verified as VerifiedMover | null) ?? null;
   const defaultLens = (() => {
@@ -338,6 +347,7 @@ export default function EntityPage({ id }: { id: string }) {
               anchorId={anchorId}
               persistKey={`/entity/${id}`}
               pageSize={LIVE_PAGE}
+              phonePageSize={LIVE_PAGE_PHONE}
             />
           </section>
         )}
