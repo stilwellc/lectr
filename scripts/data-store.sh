@@ -336,18 +336,39 @@ push() {
   # NDJSON untouched (the tar is unpacked whole). Already zstd: plain tar.
   # corpus.parquet stays local: nothing reads it from R2 yet, and it would add
   # ~250MB to every write-once version (set CORPUS_TAR_PARQUET=1 to archive it)
-  (cd data/corpus && if [ "${CORPUS_TAR_PARQUET:-0}" = 1 ] && [ -f corpus.parquet ]; then tar -cf "$TMP/corpus.tar" ./*.json.gz ./corpus.parquet; else tar -cf "$TMP/corpus.tar" ./*.json.gz; fi)
-  (cd public/data/ray && tar -czf "$TMP/served.tar.gz" .)
+  # PARALLEL (Oct 11 2026, W6 pipeline pass): the two tarballs build side by
+  # side, and the three big PUTs (version corpus + served, the dated snapshot
+  # of the same corpus.tar) upload side by side — they were ~52s back to back
+  # on the nightly (corpus 28s · served 10s · snapshot 14s). Same bytes, same
+  # keys, same etag verification; the pointer still moves only after BOTH
+  # version payloads are verified, and any failed PUT still fails the push.
+  local p_ct p_st
+  (cd data/corpus && if [ "${CORPUS_TAR_PARQUET:-0}" = 1 ] && [ -f corpus.parquet ]; then tar -cf "$TMP/corpus.tar" ./*.json.gz ./corpus.parquet; else tar -cf "$TMP/corpus.tar" ./*.json.gz; fi) & p_ct=$!
+  (cd public/data/ray && tar -czf "$TMP/served.tar.gz" .) & p_st=$!
+  wait "$p_ct" || { echo "[data-store] ERROR: corpus tar failed"; exit 1; }
+  wait "$p_st" || { echo "[data-store] ERROR: served tar failed"; exit 1; }
   # WRITE-ONCE versioned keys — kills the GET-lag at the root. The lag only
   # afflicts same-key overwrites; a fresh key reads true on the first GET. So
   # every push lands under a unique versions/ prefix and only the tiny pointer
   # below is ever overwritten. Prefix: UTC stamp (sorts chronologically, prune
   # relies on it) + short sha (or run id / random) for uniqueness within a second.
-  local sha ver
+  local sha ver day p_cv p_sv p_sn rc
   sha=$(git rev-parse --short HEAD 2>/dev/null || echo "${GITHUB_RUN_ID:-$RANDOM$RANDOM}")
   ver="versions/$(date -u +%Y%m%dT%H%M%SZ)-$sha"
-  obj_put "$ver/corpus.tar" "$TMP/corpus.tar"
-  obj_put "$ver/served.tar.gz" "$TMP/served.tar.gz"
+  # dated corpus snapshot — the rollback ladder (replaces git history for data)
+  day=$(stamp_of public/data/ray/meta.json | cut -c1-10 | tr -d '-')
+  [ -n "$day" ] || day=$(date -u +%Y%m%d)
+  obj_put "$ver/corpus.tar" "$TMP/corpus.tar" > "$TMP/put-corpus.log" 2>&1 & p_cv=$!
+  obj_put "$ver/served.tar.gz" "$TMP/served.tar.gz" > "$TMP/put-served.log" 2>&1 & p_sv=$!
+  obj_put "snapshots/$day/corpus.tar" "$TMP/corpus.tar" > "$TMP/put-snapshot.log" 2>&1 & p_sn=$!
+  rc=0
+  wait "$p_cv" || rc=1
+  wait "$p_sv" || rc=1
+  cat "$TMP/put-corpus.log" "$TMP/put-served.log"
+  if [ "$rc" -ne 0 ]; then
+    wait "$p_sn" || true; cat "$TMP/put-snapshot.log"
+    echo "[data-store] ERROR: a version payload PUT failed — pointer NOT moved"; exit 1
+  fi
   # Pointer LAST — a reader can only ever see a version whose payloads are
   # already fully stored and etag-verified above.
   printf '%s' "$ver" > "$TMP/pointer.txt"
@@ -391,10 +412,10 @@ push() {
   # paid-for results must survive the segments rebuild. Absent until the
   # extraction layer is switched on (ANTHROPIC_API_KEY); then written nightly.
   test -f data/corpus/extract-cache.json.gz && ! test -f data/corpus/.extract-cache-unreadable && obj_put "latest/extract-cache.json.gz" "data/corpus/extract-cache.json.gz" || true
-  # dated corpus snapshot — the rollback ladder (replaces git history for data)
-  day=$(stamp_of public/data/ray/meta.json | cut -c1-10 | tr -d '-')
-  [ -n "$day" ] || day=$(date -u +%Y%m%d)
-  obj_put "snapshots/$day/corpus.tar" "$TMP/corpus.tar"
+  # the dated snapshot started uploading beside the version payloads above
+  rc=0; wait "$p_sn" || rc=1
+  cat "$TMP/put-snapshot.log"
+  [ "$rc" -eq 0 ] || { echo "[data-store] ERROR: snapshot snapshots/$day/corpus.tar PUT failed"; exit 1; }
   echo "[data-store] pushed $ver + snapshot $day"
 }
 

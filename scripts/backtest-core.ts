@@ -50,7 +50,7 @@
  *    record carry ENGINE_VERSION; the summary reports the share of rows scored
  *    on the current version so drift is visible instead of silent.
  */
-import { buildIdf, buildVectors } from '../app/lib/similarity';
+import { buildIdf, buildVectors, type IdfTable } from '../app/lib/similarity';
 import { resolveComps, estimateValue, setCalibration, setTimeIndex, setHouseBias, getEngineFlags, houseFactorOf, adjustedTop, estKindOf as estKindOfLot, BAND_TOP_RATIO, knownKey, FALLBACK_GATE, APPLY_NOEST_BIAS, MAXBID_Q, VB_MARKET, VB_TIER, ODDS_FLOOR, ENGINE_VERSION, quantile, type EngineCalibration, type TimeIndex, type HouseBias } from '../app/lib/value';
 import { makeTimeIndexer, makeHouseBiasIndexer } from '../app/lib/indices';
 import { gateCell, type CardGateCell } from '../app/lib/cards-gate';
@@ -291,6 +291,9 @@ interface ArtistIndex {
   idPosting: Map<string, number[]>;  // exact identity key → ascending roster indices
   mark: Int32Array;                  // generation-stamped visited marks
   gen: number;
+  /** per-roster-row partial dot product with the current target (valid
+   *  where mark[i] === gen) — the bounded pre-filter's accumulator */
+  acc?: Float64Array;
 }
 
 export interface Prepared {
@@ -324,13 +327,24 @@ export function identityKeyOf(l: L): string | null {
   return isEditionLot(l) ? editionIdentityKey(l) : null;
 }
 
-export function prepare(allLots: AuctionLot[], log: (m: string) => void, elapsed: () => string): Prepared {
+/** The ONLY in-place mutation prepare() makes to the lots: the IDF table over
+ *  the priced sold rows, and `_v`/`_vn` attached to EVERY lot from it.
+ *  Exported so a caller that needs the stamps but not the replay (the
+ *  segmented crawl leg, scripts/ray-crawl.ts) writes byte-identical rows
+ *  without paying for a backtest whose record it would discard. */
+export function stampVectors(allLots: AuctionLot[]): { sold: L[]; tbl: IdfTable } {
   const lots = allLots as L[];
   // compExclude-stamped lots (data contract: junk price, duplicate listing)
   // are never a comp and never a target
   const sold = lots.filter(l => l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate && l.titleTokens && l.titleTokens.length && !isCompExcluded(l));
   const tbl = buildIdf(sold);
   buildVectors(lots as AuctionLot[], tbl); // attach _v/_vn to every lot (priors need it)
+  return { sold, tbl };
+}
+
+export function prepare(allLots: AuctionLot[], log: (m: string) => void, elapsed: () => string): Prepared {
+  const lots = allLots as L[];
+  const { sold, tbl } = stampVectors(allLots);
 
   // same-maker sold, sorted by the day each sale became KNOWN (knownKey: a
   // month-precision sale is known once its month ends) — comp pools are
@@ -386,33 +400,78 @@ export function candidatePriors(prep: Prepared, lot: L): { priors: number; cands
   ix.gen++;
   if (ix.gen === 0x7fffffff) { ix.mark.fill(0); ix.gen = 1; }
   const gen = ix.gen;
-  const hits: number[] = [];
-  const visit = (list: number[] | undefined) => {
-    if (!list) return;
-    for (let k = 0; k < list.length; k++) {
-      const i = list[k];
-      if (i >= cut) break;
-      if (ix.mark[i] !== gen) { ix.mark[i] = gen; hits.push(i); }
-    }
-  };
+  const mark = ix.mark;
+  const acc = ix.acc || (ix.acc = new Float64Array(ix.roster.length));
+  const keep: number[] = [];
+  // ── THE BOUNDED PRE-FILTER (Oct 11 2026, W6 pipeline pass) ──────────────
+  // Exact, like the prefix filter it extends: tokenVector weights a token by
+  // its IDF alone (no term frequency), so a token two lots share carries the
+  // SAME weight w on both sides and their dot product is exactly Σ_shared w².
+  // Walking the target's tokens, each hit row accumulates its partial dot
+  // (acc); with s2 = the target's not-yet-walked norm², the row's FINAL dot
+  // is at most acc + min(s2, ‖row‖² − acc). A row whose bound sits under
+  // cosFloor·‖target‖·‖row‖ can never reach the admission cosine (non-identity
+  // comps need cosine ≥ FALLBACK_GATE.cosFloor), so it is dropped here instead
+  // of paying similarity() in resolveComps. Rows no walked token reaches are
+  // bounded by √s2/‖target‖ (Cauchy–Schwarz) — the walk stops once that falls
+  // under the floor, for ANY walk order, so it takes the cheapest postings
+  // per unit weight first. Exact-identity rows (idExact ⇔ same identityKeyOf
+  // key; admitted down to cosine 0.2) always pass. Admitted pools proven
+  // identical by scripts/ci/prefilter-equivalence.ts. MUST change if
+  // tokenVector ever weights by term frequency.
   if (vn > 0) {
-    // heaviest-IDF prefix: stop once the remaining suffix can no longer carry
-    // the cosine floor on its own
-    const toks = Object.keys(v).sort((a, b) => v[b] - v[a]);
-    const floor = FALLBACK_GATE.cosFloor - 1e-9;
-    let suffix2 = vn * vn;
-    for (const t of toks) {
-      if (Math.sqrt(Math.max(0, suffix2)) / vn < floor) break;
-      visit(ix.posting.get(t));
-      suffix2 -= v[t] * v[t];
+    const lim = (FALLBACK_GATE.cosFloor - 1e-9) * vn;
+    const toks: { p: number[] | undefined; w2: number; c: number }[] = [];
+    for (const t of Object.keys(v)) {
+      const w2 = v[t] * v[t];
+      if (!(w2 > 0)) continue; // a zero-weight token adds nothing to any dot or norm
+      const p = ix.posting.get(t);
+      toks.push({ p, w2, c: p ? lowerBoundNum(p, cut) : 0 });
+    }
+    toks.sort((a, b) => a.c / a.w2 - b.c / b.w2);
+    const hits: number[] = [];
+    let s2 = vn * vn;
+    for (const x of toks) {
+      if (Math.sqrt(Math.max(0, s2)) < lim) break;
+      s2 -= x.w2;
+      const list = x.p;
+      if (!list) continue;
+      for (let k = 0; k < list.length; k++) {
+        const i = list[k];
+        if (i >= cut) break;
+        if (mark[i] !== gen) { mark[i] = gen; acc[i] = 0; hits.push(i); }
+        acc[i] += x.w2;
+      }
+    }
+    const rest = Math.max(0, s2);
+    for (const i of hits) {
+      const bn = ix.roster[i]._vn || 0;
+      const a = acc[i];
+      if (a + Math.min(rest, Math.max(0, bn * bn - a)) >= lim * bn) keep.push(i);
+      else acc[i] = NaN; // visited and ruled out (an identity hit below re-admits it)
     }
   }
   const idk = identityKeyOf(lot);
-  if (idk) visit(ix.idPosting.get(idk));
-  hits.sort((a, b) => b - a);   // newest first — the order the unfiltered walk produced
+  const idList = idk ? ix.idPosting.get(idk) : undefined;
+  if (idList) {
+    for (let k = 0; k < idList.length; k++) {
+      const i = idList[k];
+      if (i >= cut) break;
+      if (mark[i] !== gen) { mark[i] = gen; acc[i] = 0; keep.push(i); }
+      else if (Number.isNaN(acc[i])) { acc[i] = 0; keep.push(i); }
+    }
+  }
+  keep.sort((a, b) => b - a);   // newest first — the order the unfiltered walk produced
   const cands: L[] = [];
-  for (const i of hits) { const s = ix.roster[i]; if (s.id !== lot.id) cands.push(s); }
+  for (const i of keep) { const s = ix.roster[i]; if (s.id !== lot.id) cands.push(s); }
   return { priors: cut, cands };
+}
+
+/** first index k with list[k] >= x (ascending number list). */
+function lowerBoundNum(list: number[], x: number): number {
+  let lo = 0, hi = list.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (list[m] < x) lo = m + 1; else hi = m; }
+  return lo;
 }
 
 /** Score a single lot exactly as production would have called it on its sale

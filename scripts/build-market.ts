@@ -1796,8 +1796,14 @@ async function persistMarket(all: AuctionLot[], t0: number): Promise<AuctionLot[
   // the standalone readers' view, with no second parse of the files.
   // the columnar corpus rides the same stream (advisory: a DuckDB failure
   // costs tonight's corpus.parquet, never the publish)
+  // RAY_CORPUS_PARQUET=0 skips it (the nightly sets it, Oct 11 2026): nothing
+  // in CI reads corpus.parquet — data-store.sh push leaves it out of the
+  // corpus tar unless CORPUS_TAR_PARQUET=1 — and on the runner it doubled the
+  // persist phase (measured locally on the 1.14M-row corpus: 58s gz-only vs
+  // 124-134s with the sink). The gz NDJSON bytes are identical either way.
   let sink: import('./corpus-io').CorpusRowSink | null = null;
-  try {
+  if (process.env.RAY_CORPUS_PARQUET === '0') console.log('[market] corpus.parquet skipped (RAY_CORPUS_PARQUET=0)');
+  else try {
     const { openParquetSink, PARQUET_FILE } = require('./lib/corpus-parquet');
     sink = await openParquetSink(path.join(CORPUS, PARQUET_FILE));
   } catch (e) { console.log(`::warning title=corpus.parquet skipped::${(e as Error).message}`); }
