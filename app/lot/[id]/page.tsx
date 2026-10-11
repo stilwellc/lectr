@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { flaggedLots } from '../flagged';
 import LotPage from '../../components/LotPage';
-import { splitTitle, formatDate, httpsImg, formatPrice } from '../../utils';
+import { splitTitle, formatDate, httpsImg, sizedImg, formatPrice } from '../../utils';
 import { signalMagnitude } from '../../lib/comps';
 import { makerLineOf } from '../../lib/lot-labels';
 import JsonLd from '../../components/JsonLd';
@@ -24,6 +24,20 @@ export const dynamicParams = false;
 
 export function generateStaticParams() {
   return flaggedLots().map(l => ({ id: l.id }));
+}
+
+/** the lot photo at share size. Unfurlers choke on the extremes: Christie's
+ *  `?mode=max` originals run 2–3 MB (WhatsApp / X drop the preview), Wright's
+ *  stored 220px thumbnail is under X's large-card minimum. sizedImg's
+ *  verified rungs (Wright /1200/, Bonhams &width=) plus Christie's `w=1200`
+ *  (curl-verified Oct 11 2026: 2.27 MB → 255 KB). */
+function shareImg(u: string | null | undefined): string | undefined {
+  const h = httpsImg(u);
+  if (!h) return undefined;
+  if (/^https:\/\/www\.christies\.com\/img\//i.test(h) && !/[?&]w=\d/i.test(h)) {
+    return `${h}${h.includes('?') ? '&' : '?'}w=1200`;
+  }
+  return sizedImg(h, 1200);
 }
 
 export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -51,8 +65,9 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
   const head = `${title} — ${maker}${twin ? ` · lot ${lot.lotNumber}` : ''}`;
 
   // the lot's own photograph carries the share; https-forced (mixed-content),
-  // falling back to the site card when the house published none
-  const image = httpsImg(lot.imageUrl) || 'https://lectr.bid/opengraph-image';
+  // sized for an unfurler (shareImg), falling back to the site card when the
+  // house published none
+  const image = shareImg(lot.imageUrl) || '/opengraph-image';
 
   return seoMeta({
     title: head,
@@ -71,7 +86,7 @@ function lotLd(lot: AuctionLot): Ld[] {
   const maker = makerLineOf(lot).name;
   const title = splitTitle(lot.title, lot.auctionHouse).short;
   const path = `/lot/${encodeURIComponent(lot.id)}`;
-  const img = httpsImg(lot.imageUrl);
+  const img = shareImg(lot.imageUrl);
   const art = ARTIST_MARKET[lot.artist] === 'art';
   const crumbs: [string, string][] = [['lectr', '/']];
   if (PAGE_MAKERS.includes(lot.artist)) crumbs.push([ARTIST_LABEL[lot.artist] || maker, `/makers/${lot.artist}`]);
