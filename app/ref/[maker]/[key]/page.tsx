@@ -5,6 +5,8 @@ import RefPage from '../../../components/RefPage';
 import { ARTIST_LABEL } from '../../../constants';
 import { formatPrice, refLabel } from '../../../utils';
 import { encodeRefPath, decodeRefPath } from '../../ref-path';
+import JsonLd from '../../../components/JsonLd';
+import { seoMeta, datasetLd, breadcrumbLd } from '../../../lib/seo';
 
 /**
  * The STATIC reference dossier — /ref/<maker>/<key>, the path form of the
@@ -77,13 +79,15 @@ export async function generateMetadata(props: { params: Promise<{ maker: string;
         '. lectr auction intelligence.',
       ].join('')
     : `${makerName} ${label} — every sale on the book: medians, trend and recent hammers. lectr auction intelligence.`;
-  return {
-    title: { absolute: title },
+  return seoMeta({
+    title,
+    absolute: true,
     description,
-    alternates: { canonical: `/ref/${params.maker}/${params.key}` },
-    openGraph: { title, description },
-    twitter: { title, description },
-  };
+    path: `/ref/${params.maker}/${params.key}`,
+    // the watch house's own card (scripts/build-og.tsx) — every ref belongs to one
+    image: ARTIST_LABEL[params.maker] ? `/og/${params.maker}.png` : undefined,
+    imageAlt: `${makerName} ${label} — a watch reference on lectr`,
+  });
 }
 
 export default async function StaticRefPage(props: { params: Promise<{ maker: string; key: string }> }) {
@@ -91,5 +95,25 @@ export default async function StaticRefPage(props: { params: Promise<{ maker: st
   const refKey = `${params.maker}:${decodeRefPath(params.key)}`;
   // key: navigating between ref dossiers must remount — same doctrine as the
   // query route it replaces.
-  return <RefPage key={refKey} refKey={refKey} />;
+  const row = findRow(params.maker, params.key);
+  const makerName = ARTIST_LABEL[params.maker] || params.maker;
+  const label = row ? refLabel(row.ref) : refLabel(decodeRefPath(params.key));
+  const path = `/ref/${params.maker}/${params.key}`;
+  return (
+    <>
+      <JsonLd data={[
+        datasetLd({
+          path,
+          name: `${makerName} ${label} — auction results`,
+          description: row
+            ? `Every ${makerName} ${label} sale on lectr's book: ${row.n.toLocaleString('en-US')} settled results, all-time median ${formatPrice(row.medianUsd)}${row.houses.length ? `, across ${row.houses.join(', ')}` : ''} — read nightly.`
+            : `Every ${makerName} ${label} sale on lectr's book — medians, trend and recent hammers, read nightly.`,
+          keywords: [makerName, `${makerName} ${label}`, 'watch auction results', 'hammer prices'],
+          measured: ['hammer price (USD)', 'sale date', 'auction house'],
+        }),
+        breadcrumbLd([['lectr', '/'], ...(ARTIST_LABEL[params.maker] ? [[makerName, `/makers/${params.maker}`] as [string, string]] : []), [`${makerName} ${label}`, path]]),
+      ]} />
+      <RefPage key={refKey} refKey={refKey} />
+    </>
+  );
 }

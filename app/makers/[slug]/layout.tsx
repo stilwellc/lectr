@@ -3,6 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ARTISTS, MARKETS, marketOf } from '../../constants';
 import { formatPrice } from '../../utils';
+import JsonLd from '../../components/JsonLd';
+import { PAGE_MAKERS } from '../../lib/entity/retired';
+import { seoMeta, webPageLd, breadcrumbLd } from '../../lib/seo';
 
 // The roster is finite and known at build time — every maker page prerenders
 // as a static file. Without this the whole segment was a λ invocation per
@@ -77,15 +80,35 @@ export async function generateMetadata(props: { params: Promise<{ slug: string }
 
   // absolute: the root '%s — lectr' template would double the brand suffix
   const title = `${label} — maker dossier · lectr`;
-  return {
-    title: { absolute: title },
+  return seoMeta({
+    title,
+    absolute: true,
     description,
-    alternates: { canonical: `/makers/${params.slug}` },
-    openGraph: { title, description, images: [`/og/${params.slug}.png`] },
-    twitter: { card: 'summary_large_image', title, description, images: [`/og/${params.slug}.png`] },
-  };
+    path: `/makers/${params.slug}`,
+    image: `/og/${params.slug}.png`,
+    imageAlt: `${label} at auction on lectr — average sale, record and tracked sales`,
+  });
 }
 
-export default function MakerLayout({ children }: { children: React.ReactNode }) {
-  return children;
+/** what a roster maker IS in schema.org terms: the watch houses are
+ *  organizations, the art and design makers are people */
+function makerThing(slug: string, label: string) {
+  return { '@type': marketOf(slug) === 'watches' ? 'Organization' : 'Person', name: label };
+}
+
+export default async function MakerLayout(props: { children: React.ReactNode; params: Promise<{ slug: string }> }) {
+  const { slug } = await props.params;
+  // retired pseudo-makers (categories) 301 away — only real roster pages say who they are about
+  const a = PAGE_MAKERS.includes(slug) ? ARTISTS.find(x => x.slug === slug) : null;
+  return (
+    <>
+      {a && (
+        <JsonLd data={[
+          webPageLd({ path: `/makers/${slug}`, name: `${a.label} — maker dossier · lectr`, description: `${a.label} at auction — the maker dossier on lectr.`, image: `/og/${slug}.png`, about: makerThing(slug, a.label) }),
+          breadcrumbLd([['lectr', '/'], ['The roster', '/makers'], [a.label, `/makers/${slug}`]]),
+        ]} />
+      )}
+      {props.children}
+    </>
+  );
 }
