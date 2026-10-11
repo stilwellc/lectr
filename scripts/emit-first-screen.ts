@@ -19,7 +19,8 @@
  *   value     every Below-Market flag, every dead-room appraised lot, every
  *             gapOk lot (clock-free predicates; the window runs on the client)
  *   makers    every lot of a maker-market maker (art · design · watches)
- *   ent-<bb>  every lot whose entity key hashes to bucket <bb> (256 files)
+ *   ent-<bb>  every lot whose entity key hashes to bucket <bb> (256 files),
+ *             plus (W30) `hdr`: the header of every entity in that bucket
  *
  * Fail-soft: no served data → no payloads, no hash, the site behaves exactly
  * as before. A payload whose rows lack a stamped signal (a pre-stamp book —
@@ -38,6 +39,7 @@ import {
   homeFeedIds, closeOverRefs, valueCandidate, makersCandidate,
 } from '../app/lib/first-screen-select';
 import type { FirstScreenPayload, FsMarket } from '../app/lib/first-screen';
+import { headerSeeds } from '../app/components/entity/seed-server';
 
 const SERVED = path.join(process.cwd(), 'public', 'data', 'ray');
 const HOUR = 3_600_000;
@@ -189,6 +191,15 @@ export function emitFirstScreens(served = SERVED): { ver: string; files: number;
     closeK: readJson(path.join(served, 'close-k.json')),
   });
   if (!built.size) return null;
+  // (W30) each entity slice carries its bucket's entity headers (summary +
+  // record + houses — app/components/entity/seed-server): a query-route
+  // entity page (/player?id=, /entity?id=) paints its header WITH the live
+  // book instead of waiting on its market's whole entities file
+  const hdrs = headerSeeds(served);
+  built.forEach((p, k) => {
+    const h = k.startsWith('ent-') ? hdrs.get(k.slice(4)) : undefined;
+    if (h && Object.keys(h).length) (p as { hdr?: unknown }).hdr = h;
+  });
   const bodies = new Map<string, string>();
   const h = crypto.createHash('sha1');
   built.forEach((p, k) => { const s = JSON.stringify(p); bodies.set(k, s); h.update(k).update(s); });

@@ -579,7 +579,10 @@ export function prefetchSubs(): void { void loadCatStats(); }
  * stats.json for a maker, cat-stats for a sub, players.json for an athlete.
  * `known` short-circuits with a bundle the caller already holds.
  */
-export function useEntity(id: string | null, enabled = true, known?: EntityBundle | null): { summary: EntitySummary | null; detail: EntityDetail | null; loading: boolean; summaryPending: boolean } {
+/** `ver` (W30): the deploy's crawl stamp, when the caller holds it before
+ *  the whole book (an entity page's first-screen slice) — the detail bucket
+ *  then loads beside the slice instead of after the book */
+export function useEntity(id: string | null, enabled = true, known?: EntityBundle | null, ver?: string): { summary: EntitySummary | null; detail: EntityDetail | null; loading: boolean; summaryPending: boolean } {
   const { statsByArtist, lastCrawl, loading: booting } = useRayData();
   const have = !!known?.detail;
   // the summary, when the caller holds none (an entity page): its market's
@@ -627,6 +630,11 @@ export function useEntity(id: string | null, enabled = true, known?: EntityBundl
     };
   }, [id, enabled, have, booting, lastCrawl, statsByArtist]);
   const loaded = useLoad(load);
+  // the early read: the detail file only (its fail-soft adapters need the
+  // book, so they stay on the path above); the same cached promise per bucket
+  const loadEarly = useMemo(() => (id && enabled && !have && ver && !entitiesMissing ? () => loadEntityDetail(id, ver) : null), [id, enabled, have, ver]);
+  const early = useLoad(loadEarly, true);
   if (have) return { summary: known!.s, detail: known!.detail, loading: false, summaryPending: false };
-  return { summary, detail: loaded ?? null, loading: !!load && loaded === undefined, summaryPending };
+  const detail = early ?? loaded ?? null;
+  return { summary, detail, loading: !detail && ((!!load && loaded === undefined) || (!!loadEarly && early === undefined)), summaryPending };
 }
