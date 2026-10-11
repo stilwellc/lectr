@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { AuctionLot, MarketStats, RealizedPoint, BidCompetitionPoint } from '../types';
-import { setCloseK } from '../lib/close-k';
+import { setCloseK, resetCloseK } from '../lib/close-k';
 import { prepareEagerLots, type CloseBoardJson } from '../lib/eager-book';
 import { completeQuarters } from '../lib/maker-hero';
 import { mergeCorpusOverEager, settleCorpusRow } from '../lib/live-pool';
-import { fetchFirstScreen, type FirstScreenPayload } from '../lib/first-screen';
+import { fetchFirstScreen, fsVersion, type FirstScreenPayload } from '../lib/first-screen';
+import { swGenCache } from '../lib/sw-register';
+import { replaceBookTotals } from '../lib/book';
 import { baselinesFromStats, houseBaselines, type BaselineStats, type HouseBaselines } from '../lib/feed-filters';
 import { localToday } from '../utils';
 
@@ -288,6 +290,19 @@ const listeners = new Set<(p: RayPayload) => void>();
 interface ArchiveState { soldArchive: AuctionLot[]; archiveLoaded: boolean; archiveError: boolean }
 const archiveListeners = new Set<(s: ArchiveState) => void>();
 
+// ── THE BOOK'S DEPLOY (W25, Oct 11 2026) ────────────────────────────────────
+// Every tier above is ONE deploy's book. public/sw.js paints a returning
+// visitor's last-seen book from its cache and, once a new deploy's phase-1
+// book is downloaded, says so ('genReady'); swapNewBook (below) builds that
+// whole book OFF-SCREEN and swaps every loaded tier at once. `bookEpoch`
+// counts swaps: a load started under an older book drops its result instead
+// of laying old rows over the new book. `bookVer` is the deploy the book on
+// screen came from ('' = the deploy that built this page, fsVersion()).
+let bookEpoch = 0;
+let bookVer = '';
+/** a swap adopted before any book loaded: phase 1 reads this generation */
+let bookSource: string | null = null;
+
 function notify(p: RayPayload) {
   cached = p;
   listeners.forEach(fn => fn(p));
@@ -319,6 +334,144 @@ function parseStats(statsData: unknown, lots: AuctionLot[]): Record<string, Mark
   return statsData as Record<string, MarketStats>;
 }
 
+/** the phase-1 book, in this order (public/sw.js BOOK holds the same eight) */
+export const BOOK_FILES = ['stats', 'meta', 'upcoming', 'backtest', 'market', 'close-board', 'receipts', 'close-k'] as const;
+type BookFile = typeof BOOK_FILES[number];
+type BookReader = (name: BookFile) => Promise<unknown>;
+/** the network (through the worker, which serves this tab's own generation) */
+const netBook: BookReader = name => fetchJson(`/data/ray/${name}.json`);
+
+/** the service worker's cache of one deploy's book (app/lib/sw-register
+ *  swGenCache) — null when the browser or the generation is gone */
+async function genBook(ver: string): Promise<BookReader | null> {
+  if (typeof caches === 'undefined' || !ver) return null;
+  const name = swGenCache(ver);
+  try {
+    // caches.open would CREATE a missing generation — ask first
+    if (!(await caches.has(name))) return null;
+    const c = await caches.open(name);
+    return async (file) => {
+      const r = await c.match(`/data/ray/${file}.json`);
+      if (!r || !r.ok) throw new Error(`${file}: not in generation ${ver}`);
+      return r.json();
+    };
+  } catch { return null; }
+}
+
+type MetaJson = { lastCrawl?: string; sources?: string[]; totalLots?: number; totalSold?: number };
+type UpcomingJson = {
+  generatedAt?: string;
+  tape?: TapeByMarket | TapeItem[];
+  demand?: DemandByMarket | DemandPoint[];
+  realized?: RealizedByMarket;
+  bidComp?: BidCompByMarket;
+  recentSold?: RecentSoldByMarket;
+  lots?: AuctionLot[];
+};
+const settledValue = (r: PromiseSettledResult<unknown>): unknown => (r.status === 'fulfilled' ? r.value : null);
+
+/** phase 1's payload off the eight settled reads — null without
+ *  upcoming.json (the fallback path). Prepares the eager rows in place. */
+function assembleCore(r: PromiseSettledResult<unknown>[], metaData: MetaJson): { core: RayPayload; up: UpcomingJson; closeK: unknown } | null {
+  const [statsR, , upR, btR, mkR, cbR, rcR, ckR] = r;
+  const up = settledValue(upR) as UpcomingJson | null;
+  if (!up) return null;
+  const statsData = settledValue(statsR);
+  // close stamps + the close-board's intraday bid overlay — ONE function
+  // (app/lib/eager-book) shared with the first-screen payloads, so a lot
+  // prints the same bid whichever payload painted it first
+  const cb = settledValue(cbR) as CloseBoardJson | null;
+  const overlayAt = prepareEagerLots(up.lots, cb, up.generatedAt);
+  // statsData may be null (a transient stats.json failure) — parseStats
+  // handles it; requiring it here forced the full-corpus fallback (152MB)
+  // and dropped every eager field over a one-request blip.
+  const core: RayPayload = {
+    statsByArtist: parseStats(statsData, up.lots || []),
+    allLots: up.lots || [],
+    tape: Array.isArray(up.tape) ? { all: up.tape } : (up.tape || {}),
+    demand: Array.isArray(up.demand) ? { art: up.demand } : (up.demand || {}),
+    realized: up.realized || {},
+    bidComp: up.bidComp || {},
+    recentSold: up.recentSold || {},
+    backtest: (settledValue(btR) as Backtest | null) ?? null,
+    market: (settledValue(mkR) as MarketData | null) ?? null,
+    receipts: (settledValue(rcR) as ReceiptsData | null) ?? null,
+    lastCrawl: metaData.lastCrawl || '',
+    overlayAt,
+    sources: metaData.sources || [],
+    totalLots: metaData.totalLots,
+    totalSold: metaData.totalSold,
+    fullLoaded: false,
+    fullError: false,
+    error: null,
+  };
+  return { core, up, closeK: ckR.status === 'fulfilled' ? ckR.value : undefined };
+}
+
+const crawlVer = (lastCrawl: string | undefined) => (lastCrawl ? `?v=${encodeURIComponent(lastCrawl)}` : '');
+
+/** three tries with backoff: the first trusts the browser cache, retries
+ *  bypass it in case the cached body itself was the problem (a truncated
+ *  download). No version ⇒ never force-cache: the shard paths are
+ *  immutable-cached, and a bare force-cache fetch would pin a stale corpus
+ *  for a year. */
+async function threeTries<T>(ver: string, fn: (cache: RequestCache) => Promise<T>): Promise<T> {
+  let last: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 1000 * 2 ** (attempt - 1)));
+    try { return await fn(attempt === 0 && ver ? 'force-cache' : 'reload'); } catch (e) { last = e; }
+  }
+  throw last;
+}
+
+// lots.json is SHARDED (lots-0.json, lots-1.json, …) — a single file
+// outgrew Cloudflare Pages' 25 MiB/file hard cap. lots-index.json says
+// how many shards; they download in parallel and concat in order.
+async function fetchCorpus(ver: string, cache: RequestCache): Promise<AuctionLot[]> {
+  const idx = await fetchJson(`/data/ray/lots-index.json${ver}`, { cache }) as { shards: number };
+  const shardArrs = await Promise.all(
+    Array.from({ length: Math.max(1, idx.shards || 1) }, (_, i) =>
+      fetchJson(`/data/ray/lots-${i}.json${ver}`, { cache }) as Promise<AuctionLot[]>)
+  );
+  return ([] as AuctionLot[]).concat(...shardArrs);
+}
+
+/** phase 2 for one book: the corpus with that book's eager rows laid over it */
+async function loadCorpusFor(up: Pick<UpcomingJson, 'lots'>, ver: string): Promise<AuctionLot[]> {
+  const full = await threeTries(ver, cache => fetchCorpus(ver, cache));
+  // THE LIVE POOL IS THE EAGER BOOK (r9, QA4 B1 — app/lib/live-pool).
+  // Each eager lot is laid OVER its shard row: the eager copy wins on
+  // every field it carries (signal incl. explicit null, soldComp,
+  // bidVelocity, saleDateTime, gapOk/currentBid/bidCount/overlayAt —
+  // all stripped from or nightly-stale on the shards), the shard only
+  // fills what the eager row lacks. A shard row still saying
+  // 'upcoming' for a lot the eager book closed out settles to
+  // 'unknown-result' — it used to keep its status, and opening any
+  // comps modal grew the live book 9,662 → 10,842 (Oct 10).
+  return mergeCorpusOverEager(up.lots || [], full);
+}
+
+/** the phase-2 loader for one book (the retry hook triggerFullLoad calls) */
+function makeLoadFull(core: RayPayload, upLots: AuctionLot[]): () => void {
+  const ver = crawlVer(core.lastCrawl);
+  const epoch = bookEpoch;
+  return () => {
+    if (epoch !== bookEpoch || inflightFull || cached?.fullLoaded) return;
+    inflightFull = true;
+    // a retry after fullError returns gated pages to their loading state
+    if (cached?.fullError) notify({ ...cached, fullError: false });
+    loadCorpusFor({ lots: upLots }, ver).then(merged => {
+      if (epoch !== bookEpoch) return; // a newer book took the screen meanwhile
+      notify({ ...(cached || core), allLots: merged, fullLoaded: true, fullError: false });
+      // phase 2 is done for the session — drop the retry closure so the
+      // eager payload (up.lots et al) it captures can be collected.
+      retryFull = null;
+    }, () => {
+      if (epoch === bookEpoch) notify({ ...(cached || core), fullError: true });
+    }).finally(() => { if (epoch === bookEpoch) inflightFull = false; });
+  };
+}
+
 function loadRayData(): Promise<RayPayload> {
   if (cached) {
     // a requested-but-failed (or never-finished) phase 2 re-kicks on the next
@@ -333,26 +486,21 @@ function loadRayData(): Promise<RayPayload> {
     // lands (or the payload misses) — the slice gets the phone's bandwidth
     if (phase1Gate) await phase1Gate;
     // ── phase 1: the small eager payload — stats + meta + upcoming (w/ signals)
-    const [statsR, metaR, upR, btR, mkR, cbR, rcR, ckR] = await Promise.allSettled([
-      fetchJson('/data/ray/stats.json'),
-      fetchJson('/data/ray/meta.json'),
-      fetchJson('/data/ray/upcoming.json'),
-      fetchJson('/data/ray/backtest.json'),
-      fetchJson('/data/ray/market.json'),
-      fetchJson('/data/ray/close-board.json'),
-      fetchJson('/data/ray/receipts.json'),
-      // the bid rooms' close multiples, refit with the book every night
-      // (app/lib/close-k.ts) — fetched beside upcoming.json (same crawl, same
-      // revalidation; the file carries its lastCrawl) and installed BEFORE the
-      // first paint so the priority order never reshuffles after it. Missing
-      // or malformed → the compiled table stands.
-      fetchJson('/data/ray/close-k.json'),
-    ]);
+    // + backtest, market, close-board, receipts, and the bid rooms' close
+    // multiples (close-k.json, refit with the book every night —
+    // app/lib/close-k.ts), installed BEFORE the first paint so the priority
+    // order never reshuffles after it. Missing or malformed → the compiled
+    // table stands. A swap adopted before any book loaded reads its deploy
+    // from the worker's cache (whole, or not at all).
+    const adopted = bookSource ? await genBook(bookSource) : null;
+    let settled = adopted ? await Promise.allSettled(BOOK_FILES.map(adopted)) : null;
+    if (settled && (settled[1].status !== 'fulfilled' || settled[2].status !== 'fulfilled')) settled = null;
+    if (settled) { bookVer = bookSource as string; replaceBookTotals(settled[1].status === 'fulfilled' ? settled[1].value as MetaJson : {}); }
+    bookSource = null;
+    if (!settled) settled = await Promise.allSettled(BOOK_FILES.map(netBook));
+    const [, metaR, , , , , , ckR] = settled;
     if (ckR.status === 'fulfilled') setCloseK(ckR.value);
-    const market = mkR.status === 'fulfilled' ? (mkR.value as MarketData) : null;
-    const receipts = rcR.status === 'fulfilled' ? (rcR.value as ReceiptsData) : null;
-    const statsData = statsR.status === 'fulfilled' ? statsR.value : null;
-    let metaData = (metaR.status === 'fulfilled' ? metaR.value : {}) as { lastCrawl?: string; sources?: string[]; totalLots?: number; totalSold?: number };
+    let metaData = (metaR.status === 'fulfilled' ? metaR.value : {}) as MetaJson;
     // DATA-VERSION SKEW CHECK (Sep 2 2026): next.config bakes the served
     // meta.json's lastCrawl into the build (NEXT_PUBLIC_DATA_VERSION). If the
     // meta.json we just fetched disagrees, either the CDN handed us a cached
@@ -360,11 +508,12 @@ function loadRayData(): Promise<RayPayload> {
     // be versioned by a stale crawl) or the HTML and the data come from
     // different deploys. Re-fetch meta with a cache-bust: a fresher answer
     // replaces the stale one (and versions the shards correctly); a matching
-    // answer means genuine build/data skew — log it, no UI change.
+    // answer means genuine build/data skew — log it, no UI change. (An
+    // adopted newer book is SUPPOSED to differ from the build — skip it.)
     const builtVersion = process.env.NEXT_PUBLIC_DATA_VERSION || '';
-    if (builtVersion && metaData.lastCrawl && metaData.lastCrawl !== builtVersion) {
+    if (!adopted && builtVersion && metaData.lastCrawl && metaData.lastCrawl !== builtVersion) {
       try {
-        const fresh = await fetchJson(`/data/ray/meta.json?cb=${Date.now()}`, { cache: 'reload' }) as typeof metaData;
+        const fresh = await fetchJson(`/data/ray/meta.json?cb=${Date.now()}`, { cache: 'reload' }) as MetaJson;
         if (fresh?.lastCrawl && fresh.lastCrawl !== metaData.lastCrawl) {
           console.warn(`[ray-data] meta.json was cache-stale (${metaData.lastCrawl} → ${fresh.lastCrawl}); build stamped ${builtVersion}`);
           metaData = fresh;
@@ -373,49 +522,15 @@ function loadRayData(): Promise<RayPayload> {
         }
       } catch { /* the first meta stands; the skew is logged next visit */ }
     }
+    const statsR = settled[0];
+    const btR = settled[3];
+    const statsData = statsR.status === 'fulfilled' ? statsR.value : null;
     const backtest = btR.status === 'fulfilled' ? (btR.value as Backtest) : null;
-    const up = upR.status === 'fulfilled'
-      ? (upR.value as {
-          tape?: TapeByMarket | TapeItem[];
-          demand?: DemandByMarket | DemandPoint[];
-          realized?: RealizedByMarket;
-          bidComp?: BidCompByMarket;
-          recentSold?: RecentSoldByMarket;
-          lots?: AuctionLot[];
-        })
-      : null;
-    // close stamps + the close-board's intraday bid overlay — ONE function
-    // (app/lib/eager-book) shared with the first-screen payloads, so a lot
-    // prints the same bid whichever payload painted it first
-    const cb = cbR.status === 'fulfilled' ? (cbR.value as CloseBoardJson) : null;
-    const upGen = (up as { generatedAt?: string } | null)?.generatedAt;
-    const overlayAt = prepareEagerLots(up?.lots, cb, upGen);
 
-    // statsData may be null (a transient stats.json failure) — parseStats
-    // handles it; requiring it here forced the full-corpus fallback (152MB)
-    // and dropped every eager field over a one-request blip.
-    if (up) {
+    const built = assembleCore(settled, metaData);
+    if (built) {
+      const { core, up } = built;
       eagerLiveIds = new Set((up.lots || []).map(l => l.id));
-      const core: RayPayload = {
-        statsByArtist: parseStats(statsData, up.lots || []),
-        allLots: up.lots || [],
-        tape: Array.isArray(up.tape) ? { all: up.tape } : (up.tape || {}),
-        demand: Array.isArray(up.demand) ? { art: up.demand } : (up.demand || {}),
-        realized: up.realized || {},
-        bidComp: up.bidComp || {},
-        recentSold: up.recentSold || {},
-        backtest,
-        market,
-        receipts,
-        lastCrawl: metaData.lastCrawl || '',
-        overlayAt,
-        sources: metaData.sources || [],
-        totalLots: metaData.totalLots,
-        totalSold: metaData.totalSold,
-        fullLoaded: false,
-        fullError: false,
-        error: null,
-      };
       notify(core);
       if (process.env.NODE_ENV !== 'production' && fsShown) {
         const shown = fsShown;
@@ -430,55 +545,10 @@ function loadRayData(): Promise<RayPayload> {
       // re-downloading the multi-MB archive; a new crawl is a new URL.
       // Failures retry with backoff, then surface fullError — the eager
       // payload keeps the app alive, but gated pages get a real error state.
-      // lots.json is SHARDED (lots-0.json, lots-1.json, …) — a single file
-      // outgrew Cloudflare Pages' 25 MiB/file hard cap. lots-index.json says
-      // how many shards; they download in parallel and concat in order.
-      const ver = metaData.lastCrawl ? `?v=${encodeURIComponent(metaData.lastCrawl)}` : '';
-      const loadFull = () => {
-        if (inflightFull || cached?.fullLoaded) return;
-        inflightFull = true;
-        // a retry after fullError returns gated pages to their loading state
-        if (cached?.fullError) notify({ ...cached, fullError: false });
-        (async () => {
-          for (let attempt = 0; attempt < 3; attempt++) {
-            if (attempt > 0) await new Promise(r => setTimeout(r, 1000 * 2 ** (attempt - 1)));
-            try {
-              // first try trusts the cache; retries bypass it in case the
-              // cached body itself was the problem (truncated download).
-              // No version (meta.json failed → ver='') ⇒ never force-cache:
-              // the shard paths are immutable-cached, and a bare force-cache
-              // fetch would silently pin a stale corpus for a year.
-              const cacheMode: RequestCache = attempt === 0 && ver ? 'force-cache' : 'reload';
-              const idx = await fetchJson(`/data/ray/lots-index.json${ver}`, { cache: cacheMode }) as { shards: number };
-              const shardArrs = await Promise.all(
-                Array.from({ length: Math.max(1, idx.shards || 1) }, (_, i) =>
-                  fetchJson(`/data/ray/lots-${i}.json${ver}`, { cache: cacheMode }) as Promise<AuctionLot[]>)
-              );
-              const full = ([] as AuctionLot[]).concat(...shardArrs);
-              // THE LIVE POOL IS THE EAGER BOOK (r9, QA4 B1 — app/lib/live-pool).
-              // Each eager lot is laid OVER its shard row: the eager copy wins on
-              // every field it carries (signal incl. explicit null, soldComp,
-              // bidVelocity, saleDateTime, gapOk/currentBid/bidCount/overlayAt —
-              // all stripped from or nightly-stale on the shards), the shard only
-              // fills what the eager row lacks. A shard row still saying
-              // 'upcoming' for a lot the eager book closed out settles to
-              // 'unknown-result' — it used to keep its status, and opening any
-              // comps modal grew the live book 9,662 → 10,842 (Oct 10).
-              const merged = mergeCorpusOverEager(up.lots || [], full);
-              notify({ ...(cached || core), allLots: merged, fullLoaded: true, fullError: false });
-              // phase 2 is done for the session — drop the retry closure so the
-              // eager payload (up.lots et al) it captures can be collected.
-              retryFull = null;
-              return;
-            } catch { /* retry, then surface */ }
-          }
-          notify({ ...(cached || core), fullError: true });
-        })().finally(() => { inflightFull = false; });
-      };
-      retryFull = loadFull;
+      retryFull = makeLoadFull(core, up.lots || []);
       // OPT-IN: only fire phase 2 if a surface has already asked (or asks
       // later, via triggerFullLoad, which will call retryFull directly).
-      if (fullRequested) loadFull();
+      if (fullRequested) retryFull();
 
       inflight = null;
       return core;
@@ -488,15 +558,11 @@ function loadRayData(): Promise<RayPayload> {
     // Version the shard URLs by lastCrawl like the primary path: the shard paths
     // are immutable-cached (public/_headers), so an un-versioned fetch here could
     // pin a stale shard for a year.
-    const fbVer = metaData.lastCrawl ? `?v=${encodeURIComponent(metaData.lastCrawl)}` : '';
+    const fbVer = crawlVer(metaData.lastCrawl);
     // unversioned (meta failed) ⇒ bypass the browser cache: the shard paths
     // are immutable-cached, and a default fetch would pin stale for a year.
-    const fbCache: RequestCache | undefined = fbVer ? undefined : 'reload';
-    const lotsR = await Promise.allSettled([(async () => {
-      const idx = await fetchJson(`/data/ray/lots-index.json${fbVer}`, { cache: fbCache }) as { shards: number };
-      const arrs = await Promise.all(Array.from({ length: Math.max(1, idx.shards || 1) }, (_, i) => fetchJson(`/data/ray/lots-${i}.json${fbVer}`, { cache: fbCache }) as Promise<AuctionLot[]>));
-      return ([] as AuctionLot[]).concat(...arrs);
-    })()]);
+    const fbCache: RequestCache = fbVer ? 'default' : 'reload';
+    const lotsR = await Promise.allSettled([fetchCorpus(fbVer, fbCache)]);
     const lotsData = (lotsR[0].status === 'fulfilled' ? lotsR[0].value : []) as AuctionLot[];
     const lotsOk = lotsR[0].status === 'fulfilled';
     const statsOk = statsR.status === 'fulfilled';
@@ -561,9 +627,44 @@ export function retrySoldLedger() {
 // only from a mounted useSoldArchive(). On success it re-attaches the
 // precomputed soldComp from the eager upcoming payload, exactly as phase 2
 // re-attaches signal, so a sports card never flickers to a client recompute.
+async function fetchArchiveFor(core: RayPayload | null): Promise<AuctionLot[]> {
+  const ver = crawlVer(core?.lastCrawl);
+  // the precomputed soldComp lives on the eager upcoming lots, keyed by id
+  const soldComps = new Map((core?.allLots || []).map(l => [l.id, l.soldComp]));
+  const archive = await threeTries(ver, async cache => {
+    // SHARDED like phase 2 (the single file crossed 22MB against the CDN's
+    // 25MB cap): index → shards in parallel. Single-file fallback covers
+    // the transition window where a client has new code but cached old data.
+    try {
+      const idx = await fetchJson(`/data/ray/sold-archive-index.json${ver}`, { cache }) as { shards: number };
+      const nShards = Number(idx?.shards) || 0;
+      if (nShards < 1) throw new Error('bad sold-archive index');
+      const parts = await Promise.all(Array.from({ length: nShards }, (_, i) =>
+        fetchJson(`/data/ray/sold-archive-${i}.json${ver}`, { cache }) as Promise<AuctionLot[]>));
+      return parts.flat();
+    } catch {
+      return await fetchJson(`/data/ray/sold-archive.json${ver}`, { cache }) as AuctionLot[];
+    }
+  });
+  // DEDUPE (Sep 2 2026): the archive can carry ids the main shards also
+  // ship (17 goldin-2026* ids were duplicated main↔archive in the audit)
+  // and, across a shard boundary, itself. Drop self-duplicates here;
+  // main-wins against allLots happens in useSoldArchive's merge, which
+  // is the only place that sees phase 2 land AFTER the archive did.
+  const seenIds = new Set<string>();
+  const merged: AuctionLot[] = [];
+  for (const l of archive) {
+    if (seenIds.has(l.id)) continue;
+    seenIds.add(l.id);
+    merged.push(soldComps.has(l.id) ? { ...l, soldComp: soldComps.get(l.id) } : l);
+  }
+  return merged;
+}
+
 function loadSoldArchive() {
   if (inflightArchive || archiveLoadedState) return;
   inflightArchive = true;
+  const epoch = bookEpoch;
   // a retry after archiveError returns gated surfaces to their loading state
   if (archiveErrorState) { archiveErrorState = false; notifyArchive(); }
   (async () => {
@@ -574,53 +675,19 @@ function loadSoldArchive() {
     // Awaiting loadRayData also seats the eager soldComps map for re-attach.
     let core = cached;
     if (!core) { try { core = await loadRayData(); } catch { core = cached; } }
-    const lastCrawl = core?.lastCrawl || '';
-    const ver = lastCrawl ? `?v=${encodeURIComponent(lastCrawl)}` : '';
-    // the precomputed soldComp lives on the eager upcoming lots, keyed by id
-    const soldComps = new Map((core?.allLots || []).map(l => [l.id, l.soldComp]));
-    for (let attempt = 0; attempt < 3; attempt++) {
-      if (attempt > 0) await new Promise(r => setTimeout(r, 1000 * 2 ** (attempt - 1)));
-      try {
-        // first try trusts the cache; retries bypass it in case the cached
-        // body itself was the problem (truncated download). No version ⇒
-        // never force-cache (immutable-cached paths would pin stale a year).
-        const cacheMode: RequestCache = attempt === 0 && ver ? 'force-cache' : 'reload';
-        // SHARDED like phase 2 (the single file crossed 22MB against the CDN's
-        // 25MB cap): index → shards in parallel. Single-file fallback covers
-        // the transition window where a client has new code but cached old data.
-        let archive: AuctionLot[];
-        try {
-          const idx = await fetchJson(`/data/ray/sold-archive-index.json${ver}`, { cache: cacheMode }) as { shards: number };
-          const nShards = Number(idx?.shards) || 0;
-          if (nShards < 1) throw new Error('bad sold-archive index');
-          const parts = await Promise.all(Array.from({ length: nShards }, (_, i) =>
-            fetchJson(`/data/ray/sold-archive-${i}.json${ver}`, { cache: cacheMode }) as Promise<AuctionLot[]>));
-          archive = parts.flat();
-        } catch {
-          archive = await fetchJson(`/data/ray/sold-archive.json${ver}`, { cache: cacheMode }) as AuctionLot[];
-        }
-        // DEDUPE (Sep 2 2026): the archive can carry ids the main shards also
-        // ship (17 goldin-2026* ids were duplicated main↔archive in the audit)
-        // and, across a shard boundary, itself. Drop self-duplicates here;
-        // main-wins against allLots happens in useSoldArchive's merge, which
-        // is the only place that sees phase 2 land AFTER the archive did.
-        const seenIds = new Set<string>();
-        const merged: AuctionLot[] = [];
-        for (const l of archive) {
-          if (seenIds.has(l.id)) continue;
-          seenIds.add(l.id);
-          merged.push(soldComps.has(l.id) ? { ...l, soldComp: soldComps.get(l.id) } : l);
-        }
-        cachedArchive = merged;
-        archiveLoadedState = true;
-        archiveErrorState = false;
-        notifyArchive();
-        return;
-      } catch { /* retry, then surface */ }
+    try {
+      const merged = await fetchArchiveFor(core);
+      if (epoch !== bookEpoch) return; // a newer book took the screen meanwhile
+      cachedArchive = merged;
+      archiveLoadedState = true;
+      archiveErrorState = false;
+      notifyArchive();
+    } catch {
+      if (epoch !== bookEpoch) return;
+      archiveErrorState = true;
+      notifyArchive();
     }
-    archiveErrorState = true;
-    notifyArchive();
-  })().finally(() => { inflightArchive = false; });
+  })().finally(() => { if (epoch === bookEpoch) inflightArchive = false; });
 }
 retryArchive = loadSoldArchive;
 
@@ -646,32 +713,159 @@ function notifyLedger() {
   const s: LedgerState = { ledger: cachedLedger || new Map(), ledgerLoaded: ledgerLoadedState, ledgerError: ledgerErrorState };
   ledgerListeners.forEach(fn => fn(s));
 }
+async function fetchLedgerFor(core: RayPayload | null): Promise<Map<string, LedgerEntry>> {
+  const ver = crawlVer(core?.lastCrawl);
+  return threeTries(ver, async cache => {
+    const idx = await fetchJson(`/data/ray/sold-ledger-index.json${ver}`, { cache }) as { shards: number };
+    const nShards = Number(idx?.shards) || 0;
+    if (nShards < 1) throw new Error('bad sold-ledger index');
+    const parts = await Promise.all(Array.from({ length: nShards }, (_, i) =>
+      fetchJson(`/data/ray/sold-ledger-${i}.json${ver}`, { cache }) as Promise<Record<string, LedgerEntry>>));
+    const map = new Map<string, LedgerEntry>();
+    for (const p of parts) for (const k in p) map.set(k, p[k]);
+    return map;
+  });
+}
 function loadSoldLedger() {
   if (inflightLedger || ledgerLoadedState) return;
   inflightLedger = true;
+  const epoch = bookEpoch;
   if (ledgerErrorState) { ledgerErrorState = false; notifyLedger(); }
   (async () => {
     let core = cached;
     if (!core) { try { core = await loadRayData(); } catch { core = cached; } }
-    const ver = core?.lastCrawl ? `?v=${encodeURIComponent(core.lastCrawl)}` : '';
-    for (let attempt = 0; attempt < 3; attempt++) {
-      if (attempt > 0) await new Promise(r => setTimeout(r, 1000 * 2 ** (attempt - 1)));
-      try {
-        const cacheMode: RequestCache = attempt === 0 && ver ? 'force-cache' : 'reload';
-        const idx = await fetchJson(`/data/ray/sold-ledger-index.json${ver}`, { cache: cacheMode }) as { shards: number };
-        const nShards = Number(idx?.shards) || 0;
-        if (nShards < 1) throw new Error('bad sold-ledger index');
-        const parts = await Promise.all(Array.from({ length: nShards }, (_, i) =>
-          fetchJson(`/data/ray/sold-ledger-${i}.json${ver}`, { cache: cacheMode }) as Promise<Record<string, LedgerEntry>>));
-        const map = new Map<string, LedgerEntry>();
-        for (const p of parts) for (const k in p) map.set(k, p[k]);
-        cachedLedger = map; ledgerLoadedState = true; ledgerErrorState = false; notifyLedger();
-        return;
-      } catch { /* retry, then surface */ }
+    try {
+      const map = await fetchLedgerFor(core);
+      if (epoch !== bookEpoch) return;
+      cachedLedger = map; ledgerLoadedState = true; ledgerErrorState = false; notifyLedger();
+    } catch {
+      if (epoch !== bookEpoch) return;
+      ledgerErrorState = true; notifyLedger();
     }
-    ledgerErrorState = true; notifyLedger();
-  })().finally(() => { inflightLedger = false; });
+  })().finally(() => { if (epoch === bookEpoch) inflightLedger = false; });
 }
+
+// ── A NEW BOOK IN THE SAME VISIT (W25, Oct 11 2026) ─────────────────────────
+// public/sw.js broadcasts `{ type: 'lectr-sw', genReady: <ver>, lastCrawl }`
+// once a new deploy's phase-1 book sits whole in its cache
+// (`lectr-sw1-data-<ver>`). prepareNewBook builds THAT book — the eight files
+// from that one cache, never the network — plus every tier this session has
+// loaded (the corpus, the sold archive, the ledger, at the new crawl's
+// versioned URLs), entirely off-screen. Nothing on screen changes until
+// commit(), which swaps every tier in one tick: a page never shows rows of
+// two deploys. app/components/ServiceWorker decides WHEN (silently for a
+// visitor who has not touched the page, on a tap otherwise).
+
+/** what the tiers on screen need from a new book */
+function tiersNow() {
+  return {
+    full: fullRequested || !!cached?.fullLoaded,
+    archive: archiveLoadedState || inflightArchive,
+    ledger: ledgerLoadedState || inflightLedger,
+  };
+}
+
+export interface PreparedBook {
+  ver: string;
+  lastCrawl: string;
+  /** swap it onto the screen; false = the tiers on screen grew since
+   *  prepare (call prepareNewBook again) or a newer book already landed */
+  commit(): boolean;
+}
+
+/** the deploy whose book is on screen ('' = unknown: a build without a
+ *  first-screen version) */
+export function bookOnScreen(): string {
+  return bookVer || fsVersion();
+}
+
+const preparing = new Map<string, Promise<PreparedBook | 'adopted' | null>>();
+
+/**
+ * Build deploy `ver`'s book off-screen. Resolves:
+ *   null       nothing to do (already on screen, no worker cache, a broken
+ *              generation, the fallback book shape) — the next visit has it
+ *   'adopted'  no book was loaded yet: phase 1 will read `ver` when it runs
+ *   PreparedBook  ready to commit
+ */
+export function prepareNewBook(ver: string): Promise<PreparedBook | 'adopted' | null> {
+  if (!ver || ver === bookOnScreen()) return Promise.resolve(null);
+  let p = preparing.get(ver);
+  if (!p) {
+    p = prepareImpl(ver).catch(() => null).finally(() => preparing.delete(ver));
+    preparing.set(ver, p);
+  }
+  return p;
+}
+
+async function prepareImpl(ver: string): Promise<PreparedBook | 'adopted' | null> {
+  if (!cached && !inflight) {
+    // nothing on screen reads the book yet: the first load reads the new one
+    if (!(await genBook(ver))) return null;
+    if (cached || inflight) return prepareImpl(ver);
+    bookSource = ver;
+    return 'adopted';
+  }
+  if (!cached && inflight) { try { await inflight; } catch { /* below */ } }
+  if (!cached || !eagerLiveIds) return null; // the fallback book shape never swaps
+  if (ver === bookOnScreen()) return null;
+  const read = await genBook(ver);
+  if (!read) return null;
+  const settled = await Promise.allSettled(BOOK_FILES.map(read));
+  // a generation the worker stored is whole; a hole means it was evicted or
+  // replaced mid-read — no swap (the next visit reads it from the start)
+  if (settled[1].status !== 'fulfilled' || settled[2].status !== 'fulfilled') return null;
+  const metaData = settled[1].value as MetaJson;
+  const built = assembleCore(settled, metaData);
+  if (!built) return null;
+  const { core, up, closeK } = built;
+  const need = tiersNow();
+  const upLots = up.lots || [];
+  const [full, archive, ledger] = await Promise.all([
+    need.full ? loadCorpusFor(up, crawlVer(core.lastCrawl)) : null,
+    need.archive ? fetchArchiveFor(core) : null,
+    need.ledger ? fetchLedgerFor(core) : null,
+  ]);
+  const epochAtPrepare = bookEpoch;
+  return {
+    ver,
+    lastCrawl: core.lastCrawl,
+    commit() {
+      if (bookEpoch !== epochAtPrepare || ver === bookOnScreen()) return false;
+      const now = tiersNow();
+      if ((now.full && !full) || (now.archive && !archive) || (now.ledger && !ledger)) return false;
+      bookEpoch++;
+      bookVer = ver;
+      bookSource = null;
+      inflightFull = false;
+      inflightArchive = false;
+      inflightLedger = false;
+      if (closeK !== undefined) setCloseK(closeK); else resetCloseK();
+      eagerLiveIds = new Set(upLots.map(l => l.id));
+      const payload: RayPayload = full ? { ...core, allLots: full, fullLoaded: true } : core;
+      retryFull = full ? null : makeLoadFull(core, upLots);
+      if (archive) { cachedArchive = archive; archiveLoadedState = true; archiveErrorState = false; }
+      if (ledger) { cachedLedger = ledger; ledgerLoadedState = true; ledgerErrorState = false; }
+      // one tick: every subscriber of every tier re-renders off the new book
+      // (the colophon's totals + crawl date too — app/lib/book)
+      replaceBookTotals(metaData);
+      notify(payload);
+      if (archive) notifyArchive();
+      if (ledger) notifyLedger();
+      return true;
+    },
+  };
+}
+
+/** tests only: drop every module tier back to a cold session */
+export function __resetRayDataForTests() {
+  cached = null; inflight = null; inflightFull = false; retryFull = null; fullRequested = false;
+  eagerLiveIds = null; cachedArchive = null; archiveLoadedState = false; archiveErrorState = false;
+  inflightArchive = false; cachedLedger = null; ledgerLoadedState = false; ledgerErrorState = false;
+  inflightLedger = false; bookEpoch = 0; bookVer = ''; bookSource = null; preparing.clear();
+  phase1Gate = null; openGate = null;
+}
+
 /** (r7, QA2 N3/Q9) THE DEMAND READ IS A COMPLETE QUARTER: the build's
  *  series ends on the quarter in progress (a trailing year to today), which
  *  swung on ten days of tape — home printed Pop Culture −20% (Q4, Oct 10)
@@ -769,6 +963,9 @@ function payloadToRay(p: FirstScreenPayload): FsPayload {
  *  effect can start phase 1). Never arms once phase 1 is running or done. */
 function armFirstScreen(key: string): Promise<FsPayload | null> | null {
   if (cached || (inflight && !phase1Gate)) return null;
+  // an adopted newer book (W25) is the one this page paints: this build's
+  // slice is the older deploy's, and would be swapped out under the reader
+  if (bookSource) return null;
   if (!phase1Gate) {
     phase1Gate = new Promise<void>(res => { openGate = res; });
     setTimeout(releasePhase1, FS_GATE_MS);
@@ -1054,4 +1251,9 @@ export function useSoldArchive(): SoldArchive {
     archiveError: state.archiveError,
     allLotsWithArchive,
   };
+}
+
+/** tests only: phase 1 as the hooks start it */
+export function __loadRayDataForTests(): Promise<unknown> {
+  return loadRayData();
 }
