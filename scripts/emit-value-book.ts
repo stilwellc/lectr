@@ -27,7 +27,6 @@ import fs from 'node:fs';
 import zlib from 'node:zlib';
 import { execFileSync } from 'node:child_process';
 import { readGzRows, CORPUS_DIR } from './corpus-io';
-import { normalizeCorpus } from './lib/corpus-normalize';
 import {
   numericWatchRef,
   editionIdentityKey,
@@ -432,14 +431,18 @@ export function aggregatePool(
   return { row: { k, v, med, lo, hi, n, n12: t12.length, lastSale: last, trend, conf } };
 }
 
-/** Build the book from the full corpus (main tier + archive, readCorpus order).
- *  Normalizes `all` IN PLACE first, exactly as the standalone read did — the
- *  caller must not need the rows unmodified afterwards. Reads market.json
- *  (grade ladder + vertical indexes) from the served dir. */
+/** Build the book from the full PUBLISHED corpus (main tier + archive,
+ *  readCorpus order) — rows exactly as assemble + build-market persisted them.
+ *  NO corpus cleanup here (Oct 11 2026): the rows were normalized by assemble
+ *  and again by build-market, which then stamps the athlete-tested player ids
+ *  and sport tags onto them; re-running normalizeCorpus on those rows changed
+ *  nothing but to overwrite ~4.9k better player ids and ~5k sport tags with
+ *  the title parser's weaker reads. The key builders below still mutate rows
+ *  in place (assemble runs the book last). Reads market.json (grade ladder +
+ *  vertical indexes) from the served dir. */
 export function buildValueBook(all: AuctionLot[]): ValueBook {
   const REF_MS = Date.now();
-  console.log(`[value-book] ${all.length.toLocaleString()} lots; normalizing…`);
-  normalizeCorpus(all);
+  console.log(`[value-book] ${all.length.toLocaleString()} published lots (no re-normalize)…`);
 
   // Pool settled sales by identity key.
   const pools = new Map<string, Pool>();
