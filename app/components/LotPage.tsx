@@ -30,6 +30,7 @@ import Flick from './Flick';
 // hotlinked photo that unmounts on failure so the monogram plate under it shows
 import PlateImg from './PlateImg';
 import { crossSibs } from '../lib/fold';
+import { playerHrefOf } from '../lib/entity/aliases';
 
 /**
  * LotPage — one lot as a CATALOGUE PAGE in the north-star grammar: the
@@ -1169,7 +1170,7 @@ export default function LotPage({ lotId, initialLot }: {
               {/* sports lots link to the athlete's cross-market dossier */}
               {marketKey === 'sports' && lot.playerSlug && (
                 <LeaderRow k="Player">
-                  <Link href={`/player?id=${encodeURIComponent(lot.playerSlug)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                  <Link href={playerHrefOf(lot.playerSlug)} style={{ color: 'inherit', textDecoration: 'none' }}>
                     {lot.playerName || lot.playerSlug} <Flick size={10} style={{ marginLeft: 2 }} />
                   </Link>
                 </LeaderRow>
