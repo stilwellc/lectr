@@ -1,9 +1,26 @@
 /**
  * comp-score.ts — the comps modal's CONTEXT ranking (similarity of a sold lot
- * to the anchor: medium class, dimensions, estimate proximity, year). Read
+ * to the anchor: medium class, dimensions, year, title, sale recency). Read
  * ONLY through comps.contextComps — the modal and the build-time comps
  * answers (scripts/r2/comps.ts) rank context rows with the same call.
  * Pure; no React.
+ *
+ * NEVER THE ESTIMATE (W15, Oct 11 2026). Until then a comp scored up to 25
+ * points for having SOLD near the anchor's estimate midpoint — the context
+ * median then repeated the estimate back: a Picasso print with no medium /
+ * dims on file ("Pique", est. $5.8–8K) read 15 comps every one $6.9K, ten of
+ * them 1998–99 Christie's sales. The estimate stays an ADMISSIBILITY gate
+ * upstream (comps.ts: the ×/÷2 estimate-tier band, guardedMedian's ×/÷5
+ * scale) — coarse, measured — and never a ranking pull. Temporal holdout
+ * (art/design sold since 2015, n=11,327, read = the context median):
+ *   reads within ±5% of the estimate midpoint   61.7% → 10.5%
+ *   corr(ln real/est, ln read/est)              0.120 → 0.257
+ *     ≥$500K 0.023 → 0.074 · $100–500K 0.095 → 0.144 · <$100K 0.117 → 0.256
+ *   estimate + fitted share of the read, error   ×1.303 → ×1.280 (house ×1.312)
+ *   coverage                                     88.2% → 88.2%
+ *   raw median error ×1.32 → ×1.32 (≥$500K ×1.22 → ×1.28: the echo had
+ *   matched the estimate, which there is ×1.18).
+ * Same-house (+5) was measured and adds nothing (r 0.257 → 0.257).
  */
 import type { AuctionLot } from '../types';
 
@@ -74,7 +91,7 @@ function parseYear(y: string | null): number | null {
 
 /** Per-lot features the scorer reads, derived once per lot object (the
     nightly comps precompute scores every candidate against every anchor). */
-interface Feat { cls: string | null; words: Set<string>; area: number | null; year: number | null }
+interface Feat { cls: string | null; words: Set<string>; area: number | null; year: number | null; title: Set<string>; ms: number }
 const FEAT = new WeakMap<object, Feat>();
 function feat(l: AuctionLot): Feat {
   let f = FEAT.get(l);
@@ -84,10 +101,26 @@ function feat(l: AuctionLot): Feat {
       words: new Set((l.medium || '').toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/).filter(Boolean)),
       area: parseArea(l.dimensions),
       year: parseYear(l.year),
+      title: titleWords(l.title),
+      ms: l.saleDate ? Date.parse(l.saleDate) : NaN,
     };
     FEAT.set(l, f);
   }
   return f;
+}
+
+/** title tokens for the same-work / same-edition read: accent-folded, no
+    stop words, no "untitled" (a shared "Untitled" is not one work) */
+const TITLE_STOP = new Set(['the', 'a', 'an', 'of', 'and', 'de', 'la', 'le', 'les', 'du', 'des', 'et', 'untitled', 'from', 'in', 'with', 'for', 'on', 'to', 'by', 'sans', 'titre']);
+function titleWords(t: string | null | undefined): Set<string> {
+  return new Set((t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 1 && !TITLE_STOP.has(w)));
+}
+function jaccard(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let o = 0;
+  a.forEach(w => { if (b.has(w)) o++; });
+  return o / (a.size + b.size - o);
 }
 
 /** Simple word overlap score between two medium word sets (0-1) */
@@ -129,19 +162,18 @@ export function scoreComparable(upcoming: AuctionLot, sold: AuctionLot): number 
     score += ratio * 35;
   }
 
-  // Estimate proximity (weight: 25) — good proxy for importance/scale
-  const estMid = upcoming.estimateLow && upcoming.estimateHigh
-    ? (upcoming.estimateLow + upcoming.estimateHigh) / 2
-    : null;
-  if (estMid && sold.priceUsd) {
-    const ratio = Math.min(estMid, sold.priceUsd) / Math.max(estMid, sold.priceUsd);
-    score += ratio * 25;
-  }
-
   // Year proximity (weight: 10)
   if (fa.year && fb.year) {
     const diff = Math.abs(fa.year - fb.year);
     score += Math.max(0, 1 - diff / 50) * 10;
+  }
+
+  // Title overlap (weight: 20) — the same work / edition / suite plate
+  score += jaccard(fa.title, fb.title) * 20;
+
+  // Sale recency (weight: 10, linear over 20 years before the anchor's sale)
+  if (Number.isFinite(fa.ms) && Number.isFinite(fb.ms)) {
+    score += Math.min(1, Math.max(0, 1 - (fa.ms - fb.ms) / (20 * 31_557_600_000))) * 10;
   }
 
   return score;

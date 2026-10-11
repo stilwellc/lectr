@@ -178,10 +178,25 @@ const GRADE_QUAL_RE = /^\s*\(?\s*(OC|MK|ST|PD|MC|OF)\s*\)?(?![a-z])/i;
  *  only ever the legacy scale; a 10 is legacy only beside POOR/PR. */
 const SGC_LEGACY: Record<string, string> = { 100: '10', 98: '10', 96: '9', 92: '8.5', 88: '8', 86: '7.5', 84: '7', 82: '6.5', 80: '6', 70: '5.5', 60: '5', 55: '4.5', 50: '4', 45: '3.5', 40: '3', 35: '2.5', 30: '2', 20: '1.5' };
 const SGC_LEGACY_RE = /\b(SGC)\b(?!\s*\/\s*DNA)([^0-9()#,;]{0,24}?)\b(100|98|96|92|88|86|84|82|80|70|60|55|50|45|40|35|30|20|10)\b(?![\d.])/g;
+// (W15, Oct 11 2026) a legacy POOR 10 also reads with the word AFTER the
+// number ("SGC 10 Poor 1", H&S) — and a pre-1980 card's BARE "SGC 10" (no
+// Gem / Mint / Pristine anywhere in the title) is the legacy Poor too: every
+// one of the 15 corpus sales with a same-card ladder to judge by priced at
+// the card's grade-1–2 rungs, none near its 8+ rungs (1951 Bowman Mantle
+// "SGC 10" sold $1,116 / $1,541 in 2012–13 and printed as an "SGC 10" rung
+// below every other grade). A vintage gem is always worded ("SGC 10 GEM
+// MINT", "SGC 98 GEM 10").
+const SGC_POOR_AFTER_RE = /^\s*[-–—(]?\s*(?:POOR|PR)\b/i;
+const SGC_GEM_WORD_RE = /\b(?:GEM|GM|MINT|MT|PRISTINE)\b/i;
 function sgcTenPoint(t: string): string {
   if (!/\bSGC\b/.test(t)) return t;
-  return t.replace(SGC_LEGACY_RE, (m, co: string, gap: string, n: string) => {
-    if (n === '10') return /\b(?:POOR|PR)\b/i.test(gap) ? `${co}${gap}1` : m;
+  const y = t.match(/\b(1[89]\d\d)\b/);
+  const vintageBare = !!y && parseInt(y[1], 10) < 1980 && !SGC_GEM_WORD_RE.test(t);
+  return t.replace(SGC_LEGACY_RE, (m, co: string, gap: string, n: string, off: number) => {
+    if (n === '10') {
+      const legacy = /\b(?:POOR|PR)\b/i.test(gap) || SGC_POOR_AFTER_RE.test(t.slice(off + m.length, off + m.length + 12)) || vintageBare;
+      return legacy ? `${co}${gap}1` : m;
+    }
     return `${co}${gap}${SGC_LEGACY[n]}`;
   });
 }
