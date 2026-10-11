@@ -74,7 +74,19 @@ const lead = (l: AuctionLot, rest: React.ReactNode): React.ReactNode => {
   const who = whoOf(l);
   // a reason that already names the maker ("Same maker · you own Patek
   // Philippe") is not prefixed with it a second time
-  if (who && typeof rest === 'string' && rest.toLowerCase().includes(who.toLowerCase())) return rest;
+  // a price band never breaks at its dash ("$25K–" / "50K" at 1440)
+  if (typeof rest === 'string') rest = rest.replace(/(\$[\d.,]+[KMB]?)–(\$?[\d.,]+[KMB]?)/g, '$1\u2060–\u2060$2');
+  if (who && typeof rest === 'string') {
+    // "Like your Andy Warhol prints" over an untitled-looking lot ("Van
+    // Heusen (Ronald Reagan)…") hid that the lot IS a Warhol: WHO leads,
+    // the reason keeps what is shared ("Andy Warhol · Like your prints")
+    const esc = who.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const yours = new RegExp(`\\byour ${esc}\\b\\s*`, 'i');
+    // (only when something follows the name — "Like your Charizard" stays whole)
+    const m = rest.match(yours);
+    if (m && /^\s*[a-z]/i.test(rest.slice(m.index! + m[0].length))) return <>{who} · {rest.replace(yours, 'your ')}</>;
+    if (rest.toLowerCase().includes(who.toLowerCase())) return rest;
+  }
   return who ? <>{who} · {rest}</> : rest;
 };
 
