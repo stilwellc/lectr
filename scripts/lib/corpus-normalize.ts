@@ -10,7 +10,7 @@ import { classifyForm, objectClassOf, cleanGoldinTitle, watchKey, isPersonNameRu
 import { vetReference, readDescriptionReference, readHouseReference, splitWatchRef, isWatchModelLine } from '../../app/lib/watch-ref';
 import { titleTokens as titleTokensOf, extractEdition, extractSerials, toUsdDated, fxRateFor } from '../../app/lib/normalize';
 import { isCurrency } from '../../app/types';
-import { christiesLocationCurrency } from './houses/common';
+import { christiesLocationCurrency, MEDIUM_PATTERNS } from './houses/common';
 import { ARTIST_MARKET } from '../../app/constants';
 import { isMisattributed } from '../../app/lib/attribution';
 import { AUTOGRAPH_SLUGS, autographFormatOf } from '../../app/lib/identity';
@@ -326,6 +326,32 @@ export function enrichWatchReferences(lots: Lot[]): number {
   }
   if (healed || cleared) console.log(`[normalize] watch references re-derived: healed=${healed} cleared=${cleared}`);
   return filled;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3a · healGluedMediums (W24, Oct 11 2026) — the crawlers' medium reader
+// (houses/common MEDIUM_PATTERNS) matched its keywords anywhere inside a
+// word until Oct 11: Picasso's "Femmes à leur toilette" carried the medium
+// "oilette" (and "oilettelinocut" where Christie's text ran the title into
+// the medium), a watch "temperature", Oskar Linke "inke". The reader now
+// needs a whole word; a stored medium that only the OLD reader would have
+// produced (its head is a keyword glued into a longer word) is the garbage
+// capture and is deleted — the comps modal printed it as the medium.
+// ─────────────────────────────────────────────────────────────────────────────
+const OLD_MEDIUM_HEAD = /^(?:oil|acrylic|gouache|watercolor|watercolour|ink|charcoal|pencil|pastel|spray|enamel|screenprint|silkscreen|lithograph|etching|woodcut|woodblock|linocut|engraving|aquatint|monotype|monoprint|offset|poster|gicl[eé]e|print|photograph|gelatin silver|c-print|chromogenic|pigment print|inkjet|cibachrome|bronze|ceramic|porcelain|earthenware|stoneware|terracotta|glazed|mixed media|collage|canvas|linen|paper|board|panel|synthetic polymer|marker|crayon|felt[- ]?tip|tempera|encaustic|aluminum|steel|wood|glass|leather|fabric|textile|neon|plaster|resin|fiberglass|marble)/i;
+const NEW_MEDIUM_HEAD = new RegExp(`^${MEDIUM_PATTERNS.source}`, 'i');
+export function isGluedMedium(medium: string | null | undefined): boolean {
+  const m = (medium || '').trim();
+  return !!m && OLD_MEDIUM_HEAD.test(m) && !NEW_MEDIUM_HEAD.test(m);
+}
+export function healGluedMediums(lots: Lot[]): number {
+  let n = 0;
+  for (const l of lots) {
+    if (!isGluedMedium(l.medium)) continue;
+    l.medium = null;
+    n++;
+  }
+  return n;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1539,6 +1565,8 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   // regex first; the extraction fills only a reference still empty (src:'llm')
   fillWatchReferencesFromExtract(ls);
   const junkModelKeys = clearJunkModelKeys(ls);
+  const gluedMediums = healGluedMediums(ls);
+  if (gluedMediums) console.log(`[normalize] glued medium captures cleared ("oilette" from "toilette"): ${gluedMediums}`);
   console.log(`[normalize] junk modelKeys cleared (grade / size / metal tokens outside design, art and watch model lines): ${junkModelKeys}`);
   const players = recoverPlayerSlugs(ls);
   const junkEntities = healCrawlEntities(ls);

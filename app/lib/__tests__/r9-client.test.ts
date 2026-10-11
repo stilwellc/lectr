@@ -122,7 +122,7 @@ test('C4: a feed row prints the live bid on a lot without a two-sided estimate',
   assert.strictEqual(feedRowPrice({ ...base, estimateLow: 20000, currentBid: 8000, bidCount: 18 } as unknown as AuctionLot), '$8K bid');
   assert.strictEqual(feedRowPrice({ ...base, estimateLow: 400000, estimateHigh: null, currentBid: 97000 } as unknown as AuctionLot), '$97K bid');
   // a two-sided estimate prints as the card prints it, labelled
-  assert.strictEqual(feedRowPrice({ ...base, estimateLow: 7_980_000, estimateHigh: 10_640_000 } as unknown as AuctionLot), '$8.0M–$10.6M est.');
+  assert.strictEqual(feedRowPrice({ ...base, estimateLow: 7_980_000, estimateHigh: 10_640_000 } as unknown as AuctionLot), '$7.98M–$10.6M est.'); // (W24) the lot page's fmtFace
   // a bound with no bid keeps its side; nothing to print is a dash
   assert.strictEqual(feedRowPrice({ ...base, estimateLow: 20000 } as unknown as AuctionLot), 'from $20K est.');
   assert.strictEqual(feedRowPrice({ ...base } as unknown as AuctionLot), '—');

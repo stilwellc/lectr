@@ -3,17 +3,19 @@
  * (moved out of LotCard.tsx in r9 so pure modules and tests can read them).
  */
 import type { AuctionLot } from '../types';
+import { fmtFace } from './lot-face';
+
+/** (W24, Oct 11 2026) the card's money words are the lot page's: fmtFace
+ *  ($6.9K, $18K, $2.39M, $850) — one decimal under $10K. The cards used to
+ *  round to whole thousands, so a $6,900–$9,200 estimate read "$7K–$9K est."
+ *  on the feed and "$6.9K–$9.2K" on the lot page it opens. */
+const fmt = fmtFace;
 
 /** The house ESTIMATE alone — for a column headed "Estimate". formatEstimate
  *  leads with the live bid when the estimate is one-sided or absent (right for
  *  an "ask" cell), which printed "$200 bid" under an Estimate header on /value.
  *  Here a one-sided bound prints as that bound, and no estimate prints "—". */
 export function estimateOnly(lot: AuctionLot): string {
-  const fmt = (n: number) => {
-    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-    return `$${Math.round(n).toLocaleString()}`;
-  };
   if (lot.estimateLow && lot.estimateHigh) {
     const lo = fmt(lot.estimateLow), hi = fmt(lot.estimateHigh);
     return lo === hi ? lo : `${lo}–${hi}`;
@@ -24,15 +26,10 @@ export function estimateOnly(lot: AuctionLot): string {
 }
 
 export function formatEstimate(lot: AuctionLot): string {
-  const fmt = (n: number) => {
-    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-    return `$${Math.round(n).toLocaleString()}`;
-  };
   if (lot.estimateLow && lot.estimateHigh) {
     const lo = fmt(lot.estimateLow);
     const hi = fmt(lot.estimateHigh);
-    // K-rounding often collapses low and high into the same string — a
+    // rounding can collapse low and high into the same string — a
     // "$49K–$49K" range reads as a bug on the most repeated line in the
     // product. One value, and the app is USD-denominated: no suffix noise.
     return lo === hi ? `${lo} est.` : `${lo}–${hi} est.`;
