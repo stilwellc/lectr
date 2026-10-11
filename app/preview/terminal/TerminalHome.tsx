@@ -464,6 +464,13 @@ export default function TerminalHomePage() {
     document.getElementById('on-the-block')?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // (Oct 11) the hero's door to For you for a reader with no signals yet:
+  // the For you tab (its quick start), at the feed
+  const openForYou = () => {
+    setFeedFilters(f => { const next: FeedFilters = { ...f, sort: 'priority', tab: 'you' }; rememberFeed(next); return next; });
+    document.getElementById('on-the-block')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   const sold = useMemo(() =>
     marketLots
       .filter(l => l.status === 'sold' && l.priceUsd)
@@ -627,6 +634,7 @@ export default function TerminalHomePage() {
               isMobile={mounted && isMobile}
               serial={lastCrawl}
               closingNext={closingNext}
+              onPersonalize={tasteReady && !hasSignals ? openForYou : undefined}
             />
 
             {/* Oct 8: the feed opens right under the hero — the shortlist

@@ -198,6 +198,9 @@ interface Props {
   /** the live book's nearest closes, per house (soonest first) — the pulse
       board's "closing next" ticker */
   closingNext?: ClosingHouse[];
+  /** (Oct 11) a reader lectr knows nothing about yet: the thesis line ends
+      with a door to the feed's For you quick start */
+  onPersonalize?: () => void;
 }
 
 // Resolve the hero series for the active market — DEMAND first (measured,
@@ -252,6 +255,7 @@ export default function IndexHero({
   play,
   isMobile,
   closingNext,
+  onPersonalize,
 }: Props) {
   const reduce = useReducedMotion();
   const hero = useHeroSeries(activeKey, demand, realized);
@@ -315,6 +319,14 @@ export default function IndexHero({
           <img src="/brand/lectr-nav.png" alt="lectr" className={styles.nsMastMark} />
           {' '}reads the live auction book each night and checks every ask against
           where its comparables actually sold — {fmtInt(totalLots)} lots on file.
+          {onPersonalize && (
+            <>
+              {' '}
+              <a href="#on-the-block" className="ck-away-link" onClick={e => { e.preventDefault(); onPersonalize(); }}>
+                Tell it what you collect →
+              </a>
+            </>
+          )}
         </p>
       </div>
     </m.div>

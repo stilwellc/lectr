@@ -158,7 +158,7 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
       { label: 'Blog', hint: 'quarterly market notes + how we built the engine', path: '/blog', kind: 'section' as const },
       { label: 'How lectr works', hint: 'the engine, for engineers', path: '/about', kind: 'section' as const },
       // the identity entry sits last among the rooms — same order as the nav bar
-      { label: `My profile${savedCount > 0 ? ` · ${savedCount}` : ''}`, hint: 'your watchlist', path: '/profile', kind: 'section' as const },
+      { label: `My profile${savedCount > 0 ? ` · ${savedCount}` : ''}`, hint: 'For you · Watching · Signals', path: '/profile', kind: 'section' as const },
       {
         label: onBlockCount > 0 ? `On the block · ${onBlockCount}` : 'On the block',
         hint: 'the live feed',

@@ -17,7 +17,13 @@
 #               more; an allow-list would silently blank a house's photos on
 #               the night it lands. Images cannot run script.
 #   connect-src same-origin data shards + the Supabase project (auth + saved
-#               lots + /rest/v1/lots). No analytics hosts are called.
+#               lots + /rest/v1/lots + the anonymous track_event counter).
+#               No analytics hosts are called.
+#   worker-src  'self' covers the push service worker (/sw.js — no fetch
+#               handler, no cache); manifest-src 'self' the web-app manifest
+#               (/manifest.webmanifest — iOS delivers web push only to a
+#               Home Screen app). Push delivery itself is the browser's own
+#               channel (FCM / Mozilla / Apple), never a page connect.
 # frame-ancestors 'none' + X-Frame-Options block clickjacking of the login
 # modal. HSTS pins https; adding `preload` (and submitting to hstspreload.org)
 # is Collin's call — it is hard to undo.
@@ -29,6 +35,12 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
   Cross-Origin-Opener-Policy: same-origin-allow-popups
+
+# The push service worker must never be served stale from a cache: a fixed
+# sw.js would keep running in every subscribed browser until it expired.
+/sw.js
+  Cache-Control: no-cache
+  Service-Worker-Allowed: /
 
 # Content-hashed build output (chunks, css, fonts, flight payloads, and the
 # per-build buildId dir) never changes under a given URL — freeze it.

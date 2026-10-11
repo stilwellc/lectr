@@ -6,6 +6,7 @@
  */
 import { useState } from 'react';
 import { useFollows, type Follow } from '../lib/follows';
+import { track } from '../lib/analytics';
 
 export default function FollowChip({ follow }: { follow: Follow }) {
   const { isFollowing, toggle } = useFollows();
@@ -19,7 +20,7 @@ export default function FollowChip({ follow }: { follow: Follow }) {
       aria-pressed={on}
       disabled={busy}
       title={on ? `Stop following ${follow.label}` : `Follow ${follow.label} — it shapes your "For you" list`}
-      onClick={async () => { setBusy(true); try { await toggle(follow); } finally { setBusy(false); } }}
+      onClick={async () => { track(on ? 'unfollow' : 'follow'); setBusy(true); try { await toggle(follow); } finally { setBusy(false); } }}
       style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
     >
       <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true">

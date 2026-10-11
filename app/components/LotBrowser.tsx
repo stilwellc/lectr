@@ -597,7 +597,10 @@ export default function LotBrowser({
         </button>
       </div>
 
-      <FeedToolbar
+      {/* For you before any signal: the quick start IS the tab — the sort,
+          filter rows and the "N lots" count do nothing for it, so they step
+          aside and the quick start sits right under the tabs (Oct 11) */}
+      {!youColdOn && <FeedToolbar
         lots={onBlock}
         belowIds={belowIds}
         filters={feedFilters}
@@ -615,7 +618,7 @@ export default function LotBrowser({
         onResetView={onResetView}
         scopeMaker={scope?.maker ?? null}
         scopeSubj={scope?.subj ?? null}
-      />
+      />}
       </>}
 
       {youTab && loop && feed.length > 0 && (
@@ -660,6 +663,7 @@ export default function LotBrowser({
                   // button for AT and ignored Space — B3 finding 6)
                   <tr
                     key={lot.id}
+                    data-pick={youTab || undefined}
                     onClick={() => setTableLot(lot)}
                     style={{ cursor: 'pointer' }}
                   >
@@ -815,6 +819,7 @@ export default function LotBrowser({
             narrowView ? (
               <div
                 key={lot.id}
+                data-pick={youTab || undefined}
                 className={fromCache ? 'ray-feeditem-row' : 'ray-feed-rekey ray-feeditem-row'}
                 style={{ animationDelay: fromCache ? undefined : `${Math.min(i, 10) * 40}ms`, minWidth: 0 }}
               >
@@ -830,6 +835,7 @@ export default function LotBrowser({
             ) : (
               <div
                 key={lot.id}
+                data-pick={youTab || undefined}
                 className={fromCache ? 'ray-feeditem-card' : 'ray-feed-rekey ray-feeditem-card'}
                 style={{ animationDelay: fromCache ? undefined : `${Math.min(i, 10) * 40}ms`, minWidth: 0, ...(youTab ? { display: 'grid', gridTemplateRows: 'minmax(0, 1fr) auto' } : null) }}
               >

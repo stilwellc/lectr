@@ -11,6 +11,11 @@
  *            "within 24 hours" after the fact.
  *   hammer   a watched lot settled SOLD with a price; the message carries the
  *            engine's forecast when push_lot_snap captured one while it was live
+ *   matches  (Oct 11 2026, migration 0009) the nightly matcher
+ *            (scripts/match-alerts.ts) found new lots for the reader's follows
+ *            or saved searches: ONE note per user per UTC day, counting the
+ *            fresh unseen alert rows, pointing at Your signals on /profile.
+ *            Logged under lot_id 'matches:YYYY-MM-DD' (planMatchSends).
  *
  * Volume: at most MAX_PER_USER_KIND notifications per user per kind per run;
  * the overflow collapses into one summary pointing at /profile (every lot in
@@ -18,8 +23,10 @@
  */
 import { craftTitle, formatPrice } from '../../app/utils';
 
-export type Kind = 'close24' | 'close1' | 'hammer';
-export const KINDS: Kind[] = ['close24', 'close1', 'hammer'];
+export type Kind = 'close24' | 'close1' | 'hammer' | 'matches';
+export const KINDS: Kind[] = ['close24', 'close1', 'hammer', 'matches'];
+/** an alert row older than this is not "tonight's" news */
+export const MATCH_FRESH_MS = 30 * 3600 * 1000;
 
 /** close-board runs every 4h; an hourly runner tightens this. 90 min keeps
  *  a lot that closes between two hourly runs from slipping past. */
@@ -191,6 +198,41 @@ export function planSends(input: {
     }
   });
   return out;
+}
+
+export interface AlertLite { user_id: string; created_at: string; seen?: boolean | null }
+/** the push_log lot_id a day's matches note is logged under */
+export const matchesLogId = (now: number) => `matches:${utcDay(now)}`;
+
+export function matchesPayload(n: number): Payload {
+  return {
+    title: n === 1 ? '1 new lot for what you follow' : `${n.toLocaleString('en-US')} new lots for what you follow`,
+    body: 'Matched tonight against your follows and saved searches. See them in Your signals.',
+    url: '/profile#signals', tag: 'matches',
+  };
+}
+
+/**
+ * Tonight's matches notes: one per subscribed user with at least one UNSEEN
+ * alert created inside MATCH_FRESH_MS, unless today's note was already sent.
+ * The count is the number the reader will find waiting — never a lot id.
+ */
+export function planMatchSends(input: { usersWithSubs: Set<string>; alerts: AlertLite[]; sent: Set<string>; now: number }): Planned[] {
+  const { usersWithSubs, alerts, sent, now } = input;
+  const logId = matchesLogId(now);
+  const n = new Map<string, number>();
+  for (const a of alerts) {
+    if (!usersWithSubs.has(a.user_id) || a.seen) continue;
+    const t = Date.parse(a.created_at);
+    if (!Number.isFinite(t) || now - t > MATCH_FRESH_MS || t > now + 60_000) continue;
+    n.set(a.user_id, (n.get(a.user_id) || 0) + 1);
+  }
+  const out: Planned[] = [];
+  n.forEach((count, userId) => {
+    if (sent.has(dedupeKey(userId, logId, 'matches'))) return;
+    out.push({ userId, kind: 'matches', lotIds: [logId], payload: matchesPayload(count) });
+  });
+  return out.sort((a, b) => a.userId.localeCompare(b.userId));
 }
 
 /** What to do with a failed send. 404/410 = the subscription is gone (the

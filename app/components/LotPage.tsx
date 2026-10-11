@@ -24,6 +24,8 @@ import { lotFloor, lotProjectedClose } from '../lib/verdict';
 import { formatEstimate, estimateOnly, lotSignal, confidenceMeter } from './LotCard';
 import { daysWord, Colophon } from './Terminal';
 import ArtistNav from './ArtistNav';
+import FollowButton from './FollowButton';
+import { lotFollowOf } from '../lib/lot-follow';
 import Flick from './Flick';
 // hotlinked photo that unmounts on failure so the monogram plate under it shows
 import PlateImg from './PlateImg';
@@ -812,6 +814,9 @@ export default function LotPage({ lotId, initialLot }: {
   const monogram = (makerName.trim().charAt(0) || craftTitle(lot.title, lot.auctionHouse).charAt(0) || '?').toUpperCase();
   const imgOk = !!lot.imageUrl && !imgFailed;
   const saved = isSaved(lot.id);
+  // the lot's named maker / player / subject — Follow shapes For you and
+  // the nightly matches (app/lib/lot-follow; null: nothing named to follow)
+  const lotFollow = lotFollowOf(lot);
   const isSold = lot.status === 'sold' || lot.status === 'bought_in';
   const houseColor = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
   // (Oct 6 2026, wave 3) the calibrated odds print only on a BELOW call: on
@@ -1261,6 +1266,7 @@ export default function LotPage({ lotId, initialLot }: {
                 </svg>
                 {saved ? 'Saved' : 'Save'}
               </button>
+              {lotFollow && <FollowButton name={lotFollow.label} follow={lotFollow} short />}
               <CopyLinkButton id={lot.id} />
             </div>
           </div>

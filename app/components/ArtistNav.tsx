@@ -170,10 +170,11 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
     { label: 'Makers', path: makersPath, active: activeSlug === 'artists', icon: NAV_ICONS.makers },
     { label: 'Analytics', path: '/analytics', active: activeSlug === 'analytics', icon: NAV_ICONS.analytics },
     { label: 'Blog', path: '/blog', active: activeSlug === 'blog', icon: NAV_ICONS.blog },
-    // ONE identity entry, LAST — same order as the desktop bar: signed in (or
-    // auth unconfigured) → My profile; signed out → the sheet's Sign in row
-    // stands alone instead.
-    ...((!authEnabled || user) ? [{ label: `My profile${savedCount > 0 ? ` · ${savedCount}` : ''}`, path: '/profile', active: activeSlug === 'saved', icon: NAV_ICONS.profile }] : []),
+    // My profile, LAST — for EVERYONE (Oct 11 2026): signed out it is the
+    // quick start, the picks and the device's saves, so hiding it behind
+    // Sign in hid the site's personal half. Signed out, the sheet's Sign in
+    // row still follows it.
+    { label: `My profile${savedCount > 0 ? ` · ${savedCount}` : ''}`, path: '/profile', active: activeSlug === 'saved', icon: NAV_ICONS.profile },
   ];
 
   // Shared finder pieces — the filter input and the grouped maker list — reused
@@ -571,19 +572,19 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           <button className="ray-nav-link" data-active={activeSlug === 'artists'} onClick={() => navigate(makersPath)}>{NAV_ICONS.makers}Makers</button>
           <button className="ray-nav-link" data-active={activeSlug === 'analytics'} onClick={() => navigate('/analytics')}>{NAV_ICONS.analytics}Analytics</button>
           <button className="ray-nav-link" data-active={activeSlug === 'blog'} onClick={() => navigate('/blog')}>{NAV_ICONS.blog}Blog</button>
-          {(!authEnabled || user) ? (
-            <button className="ray-nav-link" data-active={activeSlug === 'saved'} onClick={() => navigate('/profile')} title={user?.email || undefined}>
-              {NAV_ICONS.profile}My profile{savedCount > 0 ? ` · ${savedCount}` : ''}
-              {unseenAlerts > 0 && (
-                // ink marker: "something new happened" is a verb — the lamp
-                // law keeps green for the market's up-read only
-                <span aria-label={`${unseenAlerts} new matches`} style={{
-                  display: 'inline-block', width: 5, height: 5, borderRadius: '50%',
-                  background: 'var(--color-fg)', marginLeft: 6, verticalAlign: '2px',
-                }} />
-              )}
-            </button>
-          ) : (
+          {/* My profile for everyone; signed out, Sign in rides beside it */}
+          <button className="ray-nav-link" data-active={activeSlug === 'saved'} onClick={() => navigate('/profile')} title={user?.email || undefined}>
+            {NAV_ICONS.profile}My profile{savedCount > 0 ? ` · ${savedCount}` : ''}
+            {unseenAlerts > 0 && (
+              // ink marker: "something new happened" is a verb — the lamp
+              // law keeps green for the market's up-read only
+              <span aria-label={`${unseenAlerts} new matches`} style={{
+                display: 'inline-block', width: 5, height: 5, borderRadius: '50%',
+                background: 'var(--color-fg)', marginLeft: 6, verticalAlign: '2px',
+              }} />
+            )}
+          </button>
+          {authEnabled && !user && (
             <button className="ray-nav-link" onClick={openLogin}>{NAV_ICONS.signin}Sign in</button>
           )}
         </nav>

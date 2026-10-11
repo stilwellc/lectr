@@ -32,6 +32,7 @@ import { VALUE_FLOORS, VALUE_CEILINGS, fmtCeiling } from '../lib/feed-filters';
 import { FEEDSHEET_CSS } from './FeedToolbar';
 import { useDialogFocus } from './useDialogFocus';
 import ArtistAvatar from './ArtistAvatar';
+import { track } from '../lib/analytics';
 
 const STEP_LABEL: Record<QsStep, string> = { markets: 'Markets', names: 'Names', price: 'Price' };
 const fmtFloor = (n: number) => (n >= 1000 ? `$${n / 1000}K+` : `$${n}+`);
@@ -255,6 +256,7 @@ function QsBody({ book, sheet = false, titleId, onDone, onCancel }: {
       const offered = [...seen.current, ...initial.current];
       await applyMany(followsDiff(follows.filter(f => f.kind !== 'house'), s.picked, offered));
       writeInterests({ markets: s.markets, minUsd: s.minUsd, maxUsd: s.maxUsd, at: new Date().toISOString() });
+      track('qs_done');
     } finally { setBusy(false); }
     onDone();
   };
@@ -375,7 +377,7 @@ function QsBody({ book, sheet = false, titleId, onDone, onCancel }: {
 
   const primary = s.step === 'markets'
     ? <button type="button" className={sheet ? 'ray-feedsheet-done' : 'ray-call-btn ray-call-btn-primary'} disabled={!canAdvance(s)}
-        onClick={() => dispatch({ t: 'next' })} style={!canAdvance(s) ? { opacity: 0.45, cursor: 'default' } : undefined}>
+        onClick={() => { if (canAdvance(s)) track('qs_start', 'qs'); dispatch({ t: 'next' }); }} style={!canAdvance(s) ? { opacity: 0.45, cursor: 'default' } : undefined}>
         Next
       </button>
     : <button type="button" className={sheet ? 'ray-feedsheet-done' : 'ray-call-btn ray-call-btn-primary'} disabled={!n || busy}

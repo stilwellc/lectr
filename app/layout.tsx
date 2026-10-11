@@ -6,6 +6,7 @@ import ThemeProvider from './components/ThemeProvider';
 import { MarketProvider } from './lib/market';
 import { AccountProvider } from './lib/account';
 import { ROSTER_PHRASE } from './constants';
+import { DelegatedTrackers } from './components/retention/trackers';
 
 // One voice. Inter carries everything — display numerals, labels, body —
 // with tabular figures for anything that counts money.
@@ -126,6 +127,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </AccountProvider>
           </MarketProvider>
         </ThemeProvider>
+        {/* anonymous product-event counts (outbound + pick opens) — renders nothing */}
+        <DelegatedTrackers />
       </body>
     </html>
   );
