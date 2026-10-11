@@ -68,7 +68,13 @@ const CSS = `
  * butter marker until "Mark all read". Hidden entirely when the reader has
  * no saved searches (the toolbar's "Save this search" is the front door).
  */
-export default function AlertsInbox() {
+export default function AlertsInbox({ embedded = false }: {
+  /** inside the profile's Your signals room: no rail of its own, a sub-head
+   *  instead of a room head (Oct 11 redesign) — contents unchanged */
+  embedded?: boolean;
+} = {}) {
+  const wrapClass = embedded ? 'ray-enter' : 'rail ray-enter';
+  const wrapPad = embedded ? '6px 0 4px' : '34px 8px';
   const { searches, ready: searchesReady, remove } = useSavedSearches();
   const { alerts, ready: alertsReady, markAllSeen, unseen } = useAlerts();
   const [lots, setLots] = useState<Record<string, SlimLot>>({});
@@ -125,7 +131,7 @@ export default function AlertsInbox() {
     // the only Mark-all-read control lives inside this hidden section
     if (unseen === 0) return null;
     return (
-      <section className="rail ray-enter" aria-label="Saved searches" style={{ paddingBlock: '34px 8px' }}>
+      <section className={wrapClass} aria-label="Saved searches" style={{ paddingBlock: wrapPad }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 14px' }}>
           <span style={{ fontSize: 12.5, color: 'var(--color-text-muted)' }}>
             {unseen} unread {unseen === 1 ? 'match' : 'matches'} from searches you&rsquo;ve since deleted.
@@ -144,10 +150,12 @@ export default function AlertsInbox() {
   }
 
   return (
-    <section className="rail ray-enter" aria-label="Saved searches" style={{ paddingBlock: '34px 8px' }}>
+    <section className={wrapClass} aria-label="Saved searches" style={{ paddingBlock: wrapPad }}>
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '4px 14px', marginBottom: 4 }}>
-        <h2 className="ray-h2" style={{ margin: 0 }}>Saved searches</h2>
+        {embedded
+          ? <h3 className="kicker" style={{ margin: 0 }}>Saved searches</h3>
+          : <h2 className="ray-h2" style={{ margin: 0 }}>Saved searches</h2>}
         <span style={{ fontSize: 13.5, color: 'var(--color-text-muted)' }}>
           {searches.length === 1 ? 'one standing search' : `${searches.length} standing searches`} · matched nightly against every new lot
         </span>

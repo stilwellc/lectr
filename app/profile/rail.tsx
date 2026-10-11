@@ -1,0 +1,141 @@
+'use client';
+/**
+ * THE SECTION RAIL (Oct 11 2026, /profile redesign) — the desk's in-page
+ * index. One item list, two presentations:
+ *
+ *   ≥1160px   the left-gutter index (the old /value spine grammar): fixed,
+ *             vertically centered in the gutter; marks only until the gutter
+ *             is wide enough (≥1400px) to print the label + count beside it.
+ *   <1160px   a sticky pill rail under the site nav (top 54) that scrolls
+ *             sideways on itself — never on a sticky ancestor.
+ *
+ * Every item is a real hash link (#for-you, #watching …): it jumps, stamps
+ * the hash (replaceState, so Back leaves the page rather than walking
+ * sections), and the active item tracks the scroll. Items follow each
+ * section's own null gate — the page passes only what renders.
+ */
+import React, { useEffect, useState } from 'react';
+
+export interface RailItem {
+  id: string;
+  label: string;
+  mark: React.ReactNode;
+  /** the figure beside the label (a count, a signed %, a money total) */
+  count?: React.ReactNode;
+  /** signed ink for a measured delta (lamp law: only a real sign) */
+  tone?: 'up' | 'down';
+  /** unseen matches waiting (the inbox dot — ink, never a lamp) */
+  dot?: boolean;
+}
+
+function jump(id: string) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+  try { window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}#${id}`); } catch { /* ignore */ }
+}
+
+function useActive(ids: string[]): string | null {
+  const [active, setActive] = useState<string | null>(null);
+  const key = ids.join('|');
+  useEffect(() => {
+    let raf = 0;
+    const read = () => {
+      raf = 0;
+      const bar = window.innerHeight * 0.34;
+      let cur: string | null = null;
+      for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el && el.getBoundingClientRect().top <= bar) cur = id;
+      }
+      setActive(cur);
+    };
+    const on = () => { if (!raf) raf = requestAnimationFrame(read); };
+    read();
+    window.addEventListener('scroll', on, { passive: true });
+    window.addEventListener('resize', on, { passive: true });
+    // sections above grow as data lands (picks, the Today band) — re-read
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(on) : null;
+    ro?.observe(document.body);
+    return () => { window.removeEventListener('scroll', on); window.removeEventListener('resize', on); ro?.disconnect(); if (raf) cancelAnimationFrame(raf); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return active;
+}
+
+const toneInk = (t?: 'up' | 'down') => (t === 'up' ? 'var(--color-up)' : t === 'down' ? 'var(--color-down-text)' : undefined);
+
+/** the sticky pill rail (<1160px). Place it as a direct child of the
+ *  page-long wrapper so it stays pinned past every section. */
+export function PillRail({ items }: { items: RailItem[] }) {
+  const active = useActive(items.map(i => i.id));
+  // keep the active pill in view inside the rail's own sideways scroll
+  useEffect(() => {
+    if (!active) return;
+    const pill = document.querySelector<HTMLElement>(`.ck-rail a[data-id="${active}"]`);
+    const rail = pill?.parentElement;
+    if (!pill || !rail || rail.scrollWidth <= rail.clientWidth) return;
+    const l = pill.offsetLeft - rail.offsetLeft, r = l + pill.offsetWidth;
+    if (l < rail.scrollLeft || r > rail.scrollLeft + rail.clientWidth) rail.scrollTo({ left: Math.max(0, l - 16), behavior: 'auto' });
+  }, [active]);
+  if (items.length < 2) return null;
+  return (
+    <nav className="ck-rail-wrap" aria-label="Sections on this page">
+      <div className="ck-rail rail">
+        {items.map(it => (
+          <a key={it.id} href={`#${it.id}`} data-id={it.id} className="ck-rail-pill" aria-current={active === it.id ? 'true' : undefined}
+            onClick={e => { e.preventDefault(); jump(it.id); }}>
+            {it.label}
+            {it.count != null && <b style={{ color: toneInk(it.tone) }}>{it.count}</b>}
+            {it.dot && <i className="ck-rail-dot" aria-label="new matches" />}
+          </a>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+/** the left-gutter index (≥1160px) — fixed, so it mounts OUTSIDE any
+ *  transformed ancestor (the entrance animation would re-anchor it) */
+export function GutterIndex({ items }: { items: RailItem[] }) {
+  const active = useActive(items.map(i => i.id));
+  if (items.length < 2) return null;
+  return (
+    <nav className="ck-spine" aria-label="Sections on this page">
+      {items.map(it => (
+        <a key={it.id} href={`#${it.id}`} className="ck-spine-item" aria-current={active === it.id ? 'true' : undefined}
+          aria-label={`${it.label}${typeof it.count === 'string' || typeof it.count === 'number' ? ` · ${it.count}` : ''}`}
+          onClick={e => { e.preventDefault(); jump(it.id); }}>
+          <span className="ck-spine-mark" aria-hidden>{it.mark}{it.dot && <i className="ck-rail-dot" />}</span>
+          <span className="ck-spine-label" aria-hidden>
+            {it.label}
+            {it.count != null && <b style={{ color: toneInk(it.tone) }}>{it.count}</b>}
+          </span>
+        </a>
+      ))}
+    </nav>
+  );
+}
+
+/** a deep link (/profile#settled) arrives before its section exists — the
+ *  desk renders after the saves resolve — so land on it once it does */
+export function useHashLanding(ready: boolean) {
+  const done = React.useRef(false);
+  useEffect(() => {
+    if (!ready || done.current) return;
+    const id = decodeURIComponent(window.location.hash.slice(1));
+    if (!id) { done.current = true; return; }
+    let tries = 0;
+    const t = window.setInterval(() => {
+      const el = document.getElementById(id);
+      if (el) {
+        done.current = true;
+        window.clearInterval(t);
+        // after layout settles (images, the Today band) — instant, no animation
+        requestAnimationFrame(() => el.scrollIntoView({ block: 'start', behavior: 'auto' }));
+      } else if (++tries > 40) { done.current = true; window.clearInterval(t); }
+    }, 150);
+    return () => window.clearInterval(t);
+  }, [ready]);
+}

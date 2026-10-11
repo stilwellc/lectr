@@ -4479,3 +4479,260 @@ button.ns-stat { cursor: pointer; }
   .ns-ledger-row { flex-wrap: wrap; row-gap: 2px; }
   .ns-ledger-row > * { min-width: 0; }
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   /profile REDESIGN (Oct 11 2026) — personalization at the center,
+   nothing removed. Tokens, type, pills and hairlines only; every class
+   here re-uses the cockpit grammar above (ck-read, ck-tag, ns-plate,
+   ns-byline, ray-toolbar-pill, the cell system).
+   ════════════════════════════════════════════════════════════════════ */
+
+/* the compressed masthead: one-line statement on desktop, smaller and
+   still light (north star §2.2); the old sub-line's tail → Desk details */
+@media (min-width: 900px) {
+  .ck-desk .ray-masthead-h1 { font-size: clamp(32px, 3.1vw, 44px) !important; max-width: none !important; }
+}
+.ck-desk .ray-masthead > div:last-child { margin-top: 18px !important; }
+.ck-deskdetails { margin: -8px 0 4px; font-size: 13px; color: var(--color-text-muted); }
+.ck-deskdetails > summary {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; list-style: none;
+  min-height: 32px; color: var(--color-text-muted);
+  text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px;
+}
+.ck-deskdetails > summary::-webkit-details-marker { display: none; }
+.ck-deskdetails > summary::after { content: '›'; transition: transform 150ms var(--ease-house, ease); }
+.ck-deskdetails[open] > summary::after { transform: rotate(90deg); }
+.ck-deskdetails > summary:hover { color: var(--color-fg); }
+.ck-deskdetails > p { margin: 4px 0 6px; max-width: 760px; line-height: 1.6; color: var(--color-text-secondary); }
+
+/* every section lands under the nav (+ the pill rail below 1160) */
+.ck-page :is(#desk, #today, #for-you, #watching, #signals, #inbox, #on-device, #record, #collection, #history, #settled, #account) { scroll-margin-top: 104px; }
+@media (min-width: 1160px) {
+  .ck-page :is(#desk, #today, #for-you, #watching, #signals, #inbox, #on-device, #record, #collection, #history, #settled, #account) { scroll-margin-top: 70px; }
+}
+
+/* ── THE PILL RAIL (<1160px): sticky under the nav; the rail itself
+   scrolls sideways (never a sticky ancestor) ── */
+.ck-rail-wrap {
+  position: sticky; top: 54px; z-index: 24;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--hairline);
+}
+.ck-rail {
+  display: flex; gap: 6px; align-items: center;
+  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  padding-block: 7px;
+}
+.ck-rail::-webkit-scrollbar { display: none; }
+.ck-rail-pill {
+  flex: none; display: inline-flex; align-items: center; gap: 7px;
+  height: 30px; padding: 0 13px; border-radius: 999px;
+  font-size: 13px; font-weight: 500; letter-spacing: -0.01em; white-space: nowrap;
+  color: var(--color-text-muted); background: var(--color-bg-elevated);
+  text-decoration: none;
+  transition: color 150ms var(--ease-house, ease), background 150ms var(--ease-house, ease);
+}
+.ck-rail-pill b { font-family: var(--font-mono), monospace; font-size: 12px; font-weight: 500; color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+.ck-rail-pill:hover { color: var(--color-fg); }
+.ck-rail-pill[aria-current='true'] { background: var(--color-fg); color: var(--color-bg); }
+.ck-rail-pill[aria-current='true'] b { color: inherit !important; }
+.ck-rail-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--color-fg); flex: none; }
+.ck-rail-pill[aria-current='true'] .ck-rail-dot { background: var(--color-bg); }
+@media (max-width: 639.98px) {
+  .ck-rail { padding-block: 4px; }
+  .ck-rail-pill { height: 36px; padding: 0 14px; }
+}
+@media (min-width: 1160px) { .ck-rail-wrap { display: none; } }
+/* the ledger's sticky heads ride under the pill rail where both pin */
+@media (min-width: 900px) and (max-width: 1159.98px) {
+  .ck-page .ray-saved-ledger-head, .ck-page .ray-settled-head { top: 98px; }
+}
+
+/* ── THE GUTTER INDEX (≥1160px): fixed in the left gutter; marks only
+   until the gutter fits the label (≥1400px) ── */
+.ck-spine {
+  position: fixed; left: 14px; top: 50%; transform: translateY(-50%);
+  z-index: 25; display: none; flex-direction: column; gap: 2px;
+}
+@media (min-width: 1160px) { .ck-spine { display: flex; } }
+.ck-spine-item {
+  position: relative; display: flex; align-items: center; gap: 10px;
+  min-height: 34px; padding: 0 10px 0 0; border-radius: 9px;
+  color: var(--color-text-faint); text-decoration: none;
+  transition: color 150ms var(--ease-house, ease);
+}
+.ck-spine-mark {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; flex: none; border-radius: 9px; border: 1px solid transparent;
+}
+.ck-spine-mark .ck-rail-dot { position: absolute; top: 6px; right: 6px; width: 5px; height: 5px; }
+.ck-spine-item:hover { color: var(--color-text-secondary); }
+.ck-spine-item[aria-current='true'] { color: var(--color-fg); }
+.ck-spine-item[aria-current='true'] .ck-spine-mark { background: var(--color-bg-elevated); border-color: var(--color-border); }
+.ck-spine-label {
+  display: none; flex-direction: column; gap: 1px;
+  font-size: 12.5px; line-height: 1.2; white-space: nowrap; color: inherit;
+}
+.ck-spine-label b { font-family: var(--font-mono), monospace; font-size: 11px; font-weight: 500; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.ck-spine-item[aria-current='true'] .ck-spine-label b { color: var(--color-text-secondary); }
+@media (min-width: 1400px) { .ck-spine-label { display: inline-flex; } }
+/* 1160–1399: the label rides as a tip on hover / focus */
+@media (min-width: 1160px) and (max-width: 1399.98px) {
+  .ck-spine-label {
+    position: absolute; left: calc(100% + 4px); top: 50%; transform: translateY(-50%);
+    display: inline-flex; flex-direction: row; gap: 6px; align-items: baseline;
+    background: var(--color-bg-elevated); border: 1px solid var(--color-border);
+    border-radius: 8px; padding: 5px 9px; color: var(--color-fg);
+    opacity: 0; pointer-events: none; transition: opacity 150ms var(--ease-house, ease);
+  }
+  .ck-spine-item:hover .ck-spine-label, .ck-spine-item:focus-visible .ck-spine-label { opacity: 1; }
+}
+
+/* ── room heads: title, figure line, actions, ? — one wrapping row ── */
+.ck-room-head { display: flex; align-items: baseline; gap: 6px 14px; flex-wrap: wrap; }
+.ck-room-sub { font-size: 13px; color: var(--color-text-muted); min-width: 0; }
+.ck-tune { align-self: center; padding: 5px 14px; font-size: 13px; }
+
+/* ── THE TODAY BAND ── */
+.ck-today { padding-top: 22px; padding-bottom: 6px; }
+.ck-today-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; }
+.ck-today-head .kicker { display: inline-flex; align-items: center; font-size: 14px; color: var(--color-fg); }
+.ck-today-head .ck-away-line { font-size: 13px; color: var(--color-text-secondary); }
+.ck-today-head .ck-away-go { margin-left: 0; }
+.ck-today-cols { display: grid; grid-template-columns: 1fr; gap: 0 36px; }
+.ck-today-cols > div > .ck-reads:first-child, .ck-today-cols > .ck-reads { margin-top: 14px; }
+.ck-today-cols .ck-reads + .ck-reads { margin-top: 10px; }
+@media (min-width: 900px) {
+  .ck-today-cols[data-split='two'] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .ck-today-cols[data-split='two'] .ck-read-title { max-width: 46%; }
+}
+.ck-today-empty { font-size: 12.5px; color: var(--color-text-muted); margin: 14px 0 0; padding: 10px 2px; border-bottom: 1px solid var(--hairline); }
+.ck-today-more {
+  margin: 8px 0 0; padding: 10px 2px; min-height: 40px;
+  background: none; border: none; cursor: pointer;
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--color-fg);
+  text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px;
+}
+.ck-today-more:hover { text-decoration-color: var(--color-fg); }
+
+/* ── For you on phone: the row + its ⋯ (44px-wide target, full row height) ── */
+.ck-pickrow { display: grid; grid-template-columns: minmax(0, 1fr) 40px; align-items: stretch; border-bottom: 1px solid var(--hairline-soft); }
+.ck-pickrow .ray-feedrow { border-bottom: none !important; }
+.ck-pick-more {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 44px; width: 40px; padding: 0;
+  background: none; border: none; cursor: pointer;
+  font-size: 20px; line-height: 1; color: var(--color-text-muted);
+}
+.ck-pick-more[data-on] { color: var(--color-fg); }
+.ck-pick-sheet-title { font-size: 14px; font-weight: 600; color: var(--color-fg); padding: 14px 2px 12px; line-height: 1.4; }
+.ck-pick-sheet-actions { display: grid; gap: 8px; }
+.ck-pick-sheet-actions .ray-toolbar-pill { min-height: 44px; justify-content: center; font-size: 14.5px; }
+
+/* ── YOUR SIGNALS ── */
+.ck-sig-grid { display: grid; grid-template-columns: 1fr; gap: 8px 48px; }
+@media (min-width: 900px) { .ck-sig-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.ck-sig-block { margin-bottom: 18px; }
+.ck-sig-block .ck-reads-head { padding-top: 6px; }
+.ck-sig-group { display: grid; gap: 6px; margin-top: 10px; }
+.ck-sig-k { font-size: 12px; color: var(--color-text-muted); }
+.ck-sig-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ck-sig-chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 13px; color: var(--color-fg); }
+.ck-sig-x { font-size: 14px; line-height: 1; color: var(--color-text-faint); }
+.ck-sig-chip:hover .ck-sig-x { color: var(--color-fg); }
+.ck-sig-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; }
+.ck-sig-add { padding: 6px 14px; font-size: 13px; color: var(--color-fg); }
+.ck-sig-note { font-size: 13px; color: var(--color-text-muted); line-height: 1.55; margin: 10px 0 0; max-width: 640px; }
+.ck-sig-ledger { margin-top: 10px; gap: 8px 28px; }
+.ck-sig-ledger > div { min-width: 0; }
+.ck-sig-recent { list-style: none; margin: 10px 0 0; padding: 0; }
+.ck-sig-recent li {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 7px 2px; border-bottom: 1px dotted var(--color-border-mid);
+  font-size: 12.5px; color: var(--color-text-secondary);
+}
+.ck-sig-recent li > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ck-sig-when { flex: none; color: var(--color-text-faint); font-variant-numeric: tabular-nums; }
+@media (max-width: 899.98px) { .ck-sig-ledger { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* ── THE DESK IN FIGURES — the cell grammar, slimmed to a figures row:
+   four across on desktop, 2×2 at ~72px on a phone (body copy → HelpChip) ── */
+.ck-figs { --cell-min: 200px; gap: 10px; }
+.ck-figs .ns-cell { min-height: 0; padding: 16px 18px; border-radius: 14px; }
+.ck-figs .ns-cell-air { flex: 0 0 10px; min-height: 10px; }
+.ck-figs .ns-cell-stat { font-size: clamp(24px, 2.2vw, 30px); }
+.ck-figs .ns-cell-statwrap { flex-direction: row; align-items: baseline; gap: 8px; }
+.ck-figs .ns-ccell-stat { font-size: clamp(24px, 2.2vw, 30px); margin-bottom: 0; }
+.ck-figs .ns-cell-color { text-align: left; align-items: flex-start; }
+.ck-figs .ns-cell-color .ns-cell-air { display: none; }
+.ck-figs .ns-cell-color .ns-ccell-stat { margin-bottom: 10px; }
+.ck-figs .ns-cell-label, .ck-figs .ns-cell-color .ns-cell-label { font-size: 13px; margin-bottom: 2px; }
+.ck-figs .ns-cell-body, .ck-figs .ns-cell-color .ns-cell-body { font-size: 13px; font-weight: 400; line-height: 1.4; letter-spacing: 0; max-width: none; }
+@media (min-width: 900px) { .ck-figs { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); } }
+@media (max-width: 639.98px) {
+  .ck-figs { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px; }
+  .ck-figs > * { grid-column: auto !important; }
+  .ck-figs .ns-cell { min-height: 72px; padding: 12px 14px; border-radius: 12px; }
+  .ck-figs .ns-cell-air, .ck-figs .ns-cell-body, .ck-figs .ns-cell-stat-note { display: none; }
+  .ck-figs .ns-cell-stat, .ck-figs .ns-ccell-stat { font-size: 22px; margin-bottom: 4px; }
+  .ck-figs .ns-cell-color .ns-ccell-stat { margin-bottom: 4px; }
+}
+
+/* ── HISTORY: the folded rooms (open on desktop, folded on a phone) ── */
+.ck-fold > summary { list-style: none; }
+.ck-fold > summary::-webkit-details-marker { display: none; }
+.ck-fold-sum { display: flex; align-items: baseline; gap: 12px; padding: 18px 0 4px; cursor: pointer; min-height: 44px; }
+.ck-fold-n { font-family: var(--font-mono), monospace; font-size: 13px; color: var(--color-text-muted); }
+.ck-fold-sum::after { content: '›'; margin-left: auto; align-self: center; font-size: 18px; color: var(--color-text-faint); transition: transform 150ms var(--ease-house, ease); }
+.ck-fold[open] > .ck-fold-sum::after { transform: rotate(90deg); }
+.ck-fold-dek { font-size: 14px; line-height: 1.6; color: var(--color-text-secondary); margin: 6px 0 16px; max-width: 640px; }
+.ck-fold-section { padding-block: 22px 18px; }
+
+/* ── signed out: the slim sign-in line ── */
+.ck-signin { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; padding: 22px 0 6px; font-size: 13.5px; color: var(--color-text-muted); }
+
+/* ── ACCOUNT strip ── */
+.ck-account { padding-block: 26px 56px; }
+.ck-account-in {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 18px;
+  padding-top: 14px; border-top: 1px dotted var(--color-border-mid);
+  font-size: 13px; color: var(--color-text-secondary);
+}
+.ck-account-in .kicker { color: var(--color-fg); }
+.ck-account-btn { position: relative; }
+@media (max-width: 899.98px) { .ck-account-btn::before { content: ""; position: absolute; inset: -12px -4px; } }
+.ck-today-cols { grid-template-columns: minmax(0, 1fr); }
+.ck-today-cols > div { min-width: 0; }
+@media (max-width: 640px) {
+  /* phone: tag + work on one line, the fact under it — a row ≈ 60px */
+  .ck-today .ck-read { gap: 2px 10px; padding: 8px 2px; }
+  .ck-today .ck-read-title { flex: 1 1 0; min-width: 0; max-width: none; }
+  .ck-today .ck-read-fact { flex: 1 1 100%; }
+  .ck-today-head .ck-away-line { font-size: 12.5px; }
+  .ck-foryou.ray-saved-section { padding-top: 18px; }
+}
+.ck-room-subline { flex: 1 1 100%; }
+.ck-foryou .ck-room-head .ray-h2 { margin-right: auto !important; }
+@media (min-width: 900px) { .ck-foryou .ck-room-head .ray-h2 { margin-right: 0 !important; } }
+@media (max-width: 640px) {
+  .ck-wide { display: none; }
+  .ck-today { padding-bottom: 0; }
+  .ck-today-more { margin-top: 2px; }
+}
+.ck-deskdetails-btn {
+  background: none; border: none; padding: 0; cursor: pointer; font: inherit; color: var(--color-text-muted);
+  text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px; position: relative;
+}
+.ck-deskdetails-btn::after { content: ' ›'; display: inline-block; margin-left: 4px; transition: transform 150ms var(--ease-house, ease); }
+.ck-deskdetails-btn[aria-expanded='true']::after { transform: rotate(90deg); }
+.ck-deskdetails-btn:hover { color: var(--color-fg); }
+@media (max-width: 899.98px) { .ck-deskdetails-btn::before { content: ""; position: absolute; inset: -12px -6px; } }
+.ck-deskdetails { margin: 0 0 6px; }
+@media (max-width: 640px) { .ck-today { padding-top: 16px; } }
+@media (max-width: 640px) {
+  .ck-page .ray-h2 { font-size: 26px; }
+}
+.ck-desk .ray-masthead > div:last-child { display: none; }
+.ck-desk { padding-bottom: 6px; }
+.ck-desk .ray-masthead { margin-bottom: 0; }
+@media (max-width: 1159.98px) { .ck-rail-wrap { margin-top: 12px; } }

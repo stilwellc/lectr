@@ -328,3 +328,15 @@ export function CallMark(p: MarkProps) {
     </M>
   );
 }
+
+/** Your signals — the tuning desk: two faders, each at its own level */
+export function SignalMark(p: MarkProps) {
+  return (
+    <M {...p}>
+      <path d="M3.5 7.5h4M11.5 7.5h9" pathLength={1} />
+      <circle cx="9.5" cy="7.5" r="2" pathLength={1} />
+      <path d="M3.5 16.5h10M17.5 16.5h3" pathLength={1} />
+      <circle cx="15.5" cy="16.5" r="2" pathLength={1} />
+    </M>
+  );
+}
