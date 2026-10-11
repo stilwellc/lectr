@@ -116,6 +116,12 @@ function saleWhenTitle(lot: AuctionLot): string | undefined {
     hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
   })} · your local time`;
 }
+// (Oct 11) the printed hammer day is the reader's TRUE day — the one the
+// "In" column, the closing windows and Closing tonight count on. The crawl's
+// saleDate printed "Oct 9" beside "1d" for a 1:56 AM ET close on Oct 10.
+function hammerDay(lot: AuctionLot): string {
+  return trueSaleDay(lot) || lot.saleDate;
+}
 function housePublishesBids(lot: AuctionLot, houses: Set<string>): boolean {
   return houses.has(String(lot.auctionHouse || ''));
 }
@@ -169,7 +175,7 @@ function StackRow({ lot, onOpen, tone, note, est, decision }: { lot: AuctionLot;
         {note && <span className="ray-feedrow-note">{note}</span>}
         <span className="ray-feedrow-price">
           <b>{est}</b>
-          {lot.saleDate ? <span className="ray-feedrow-day">· {formatDate(lot.saleDate)}</span> : null}
+          {lot.saleDate ? <span className="ray-feedrow-day">· {formatDate(hammerDay(lot))}</span> : null}
           <BidVelChip lot={lot} />
         </span>
         {decision}
@@ -177,6 +183,11 @@ function StackRow({ lot, onOpen, tone, note, est, decision }: { lot: AuctionLot;
     </button>
   );
 }
+
+// the phone row's reason line carries the decision ("Closes in 2 days ·
+// $1.3M projected close") — one ellipsized line cut the number off at 390px;
+// it wraps to a second line instead, never more
+const NOTE_WRAP = { whiteSpace: 'normal', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' } as const;
 
 export function FeedRow({ lot, onOpen, tone, note, onNote, feedback, decision, stack = false }: {
   lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down'; note?: string | null; onNote?: () => void;
@@ -232,18 +243,18 @@ export function FeedRow({ lot, onOpen, tone, note, onNote, feedback, decision, s
             className="ray-feedrow-title"
             role="link"
             tabIndex={0}
-            style={{ color: 'var(--color-text-secondary)', fontSize: '0.86em', cursor: 'pointer' }}
+            style={{ color: 'var(--color-text-secondary)', fontSize: '0.86em', cursor: 'pointer', ...NOTE_WRAP }}
             onClick={e => { e.preventDefault(); e.stopPropagation(); onNote(); }}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onNote(); } }}
           >
             {note}
           </span>
-        ) : <span className="ray-feedrow-title" style={{ color: 'var(--color-text-secondary)', fontSize: '0.86em' }}>{note}</span>)}
+        ) : <span className="ray-feedrow-title" style={{ color: 'var(--color-text-secondary)', fontSize: '0.86em', ...NOTE_WRAP }}>{note}</span>)}
         {decision}
       </span>
       <span className="ray-feedrow-right">
         <b>{est}</b>
-        <span>{formatDate(lot.saleDate)}</span>
+        <span>{formatDate(hammerDay(lot))}</span>
         <BidVelChip lot={lot} />
       </span>
     </button>
@@ -601,6 +612,51 @@ export default function LotBrowser({
     return () => { cancelAnimationFrame(raf); window.clearTimeout(t); };
   }, [anchorId]);
 
+  // (Oct 11) INPUT CRAFT — the /makers ledger's keys on the live book:
+  // '/' finds, j / k walk the rows (the table's title buttons, the phone
+  // rows), Enter opens the comps (the focused control is a real button),
+  // s saves the row in hand. Off while typing, inside any dialog or menu,
+  // and on a bare browser (its page owns the keys).
+  useEffect(() => {
+    if (bare) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      if (t?.closest?.('[role="dialog"],[role="menu"],[role="listbox"]')) return;
+      if (document.querySelector('[aria-modal="true"], .ray-ck-overlay')) return;
+      const root = document.getElementById(anchorId);
+      if (!root) return;
+      if (e.key === '/') {
+        const q = root.querySelector<HTMLInputElement>('.ray-toolbar-search input');
+        if (!q) return;
+        e.preventDefault();
+        q.focus();
+        return;
+      }
+      const rows = Array.from(root.querySelectorAll<HTMLElement>('.ray-feedtable .t-title, .ray-feedrow'));
+      const cur = rows.indexOf(document.activeElement as HTMLElement);
+      if (e.key === 's' && cur >= 0) {
+        const save = rows[cur].closest('tr')?.querySelector<HTMLButtonElement>('.ray-tbl-save');
+        if (save) { e.preventDefault(); save.click(); }
+        return;
+      }
+      if ((e.key !== 'j' && e.key !== 'k') || !rows.length) return;
+      e.preventDefault();
+      const next = cur < 0 ? 0 : e.key === 'j' ? Math.min(rows.length - 1, cur + 1) : Math.max(0, cur - 1);
+      rows[next].focus({ preventScroll: true });
+      // clear the pinned toolbar: land the row under it, not behind it
+      const bar = root.querySelector('.ray-toolbar')?.getBoundingClientRect();
+      const r = rows[next].getBoundingClientRect();
+      const top = Math.max(64, bar ? bar.bottom : 64) + 8;
+      // 'instant': a held key repeats faster than a smooth scroll settles
+      const by = r.top < top ? r.top - top : r.bottom > window.innerHeight - 8 ? r.bottom - window.innerHeight + 8 : 0;
+      if (by) window.scrollTo({ top: window.scrollY + by, behavior: 'instant' });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [bare, anchorId]);
+
   const handleFilters = (next: FeedFilters) => {
     // the shortlist only exists in Matters-most order: any other sort is "All lots"
     if (next.sort !== 'priority' && next.tab === 'top') next = { ...next, tab: 'all' };
@@ -667,7 +723,9 @@ export default function LotBrowser({
         onResetView={onResetView}
         scopeMaker={scope?.maker ?? null}
         scopeSubj={scope?.subj ?? null}
-        countLabel={youTab && youTaste ? <>{feed.length.toLocaleString()} picked from {onBlock.length.toLocaleString()} lots</> : null}
+        // a tab that shows a picked subset names it — "What matters 20" over
+        // "9,667 lots" read as if the tab held the whole book
+        countLabel={(youTab && youTaste) || topTab ? <>{feed.length.toLocaleString()} picked from {onBlock.length.toLocaleString()} lots</> : null}
       />}
       </>}
 
@@ -762,8 +820,11 @@ export default function LotBrowser({
                       </button>
                       {(() => {
                         // folded copies — the Signal column's own sub-line type;
-                        // on For you the pick's reason leads it (the cards' note)
-                        const n = youTab ? noteOf(lot, true) : alsoOf(lot);
+                        // on For you and What matters the pick's reason leads it
+                        // (the cards' and phone rows' note — the table was the
+                        // one view where a shortlisted "$350K bid · —" row never
+                        // said why it made the list)
+                        const n = youTab || topTab ? noteOf(lot, true) : alsoOf(lot);
                         if (!n) return null;
                         const open = foldOpeners.get(lot.id);
                         const st = { display: 'block', color: 'var(--color-text-faint)', fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' } as const;
@@ -776,7 +837,7 @@ export default function LotBrowser({
                     </td>
                     <td>{lot.auctionHouse}</td>
                     <td className="t-cat">{subColumnOf(lot)}</td>
-                    <td className="t-date" title={saleWhenTitle(lot)}>{formatDate(lot.saleDate)}</td>
+                    <td className="t-date" title={saleWhenTitle(lot)}>{formatDate(hammerDay(lot))}</td>
                     <td className="num t-days">
                       {isClosedPending(lot) ? 'closed' : dth == null ? '—' : dth <= 0 ? 'today' : `${dth}d`}
                     </td>

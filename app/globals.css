@@ -565,11 +565,26 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 14px 0 12px;
-  margin-bottom: 18px;
+  /* (Oct 11) only search + sort + the lead row stick; the refine/facet rows
+     and the count ride in .ray-toolbar-tail below, which scrolls away — at
+     rest the two read as one bar (same gap, the tail carries the rule) */
+  padding: 14px 0 10px;
   background: var(--color-nav-bg);
-  backdrop-filter: blur(24px);
+  /* -webkit- FIRST: with the unprefixed line first the CSS minifier kept
+     only the prefixed copy, which Chrome ignores — the bar painted with no
+     blur and the rows ghosted through its pills */
   -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  transition: box-shadow 160ms var(--ease-ui);
+}
+/* pinned under the nav: a hairline closes the bar's lower edge */
+.ray-toolbar[data-stuck='true'] { box-shadow: 0 1px 0 var(--color-border); }
+.ray-toolbar-tail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 0 12px;
+  margin-bottom: 18px;
   border-bottom: 1px solid var(--color-border);
 }
 .ray-toolbar-row {
@@ -766,7 +781,8 @@ h1 {
 }
 
 @media (max-width: 768px) {
-  .ray-toolbar { top: 54px; gap: 8px; }
+  .ray-toolbar { top: 54px; gap: 8px; padding-bottom: 8px; }
+  .ray-toolbar-tail { gap: 8px; }
   .ray-toolbar-search { max-width: none; flex-basis: 100%; }
   /* the sort pills never clip invisibly on narrow phones — same scroll +
      right-edge fade the filter chip row wears */
@@ -1617,7 +1633,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-seg-btn[data-active=true] { color: var(--color-bg); background: var(--color-fg); }
 
 /* ───────────────────────── toolbar, humanized ───────────────────────── */
-.ray-toolbar { border-bottom-color: var(--color-border); }
+.ray-toolbar-tail { border-bottom-color: var(--color-border); }
 .ray-toolbar-search { border-bottom: none; background: var(--color-bg-elevated); border-radius: 12px; padding: 9px 14px; max-width: 380px; }
 .ray-toolbar-search:focus-within { outline: 1.5px solid var(--ba-6, rgba(232, 218, 182, 0.6)); }
 .ray-toolbar-search input { font-family: var(--font-sans); font-style: normal; font-size: 14px; }
@@ -2090,7 +2106,8 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   border: 1px solid var(--hairline-soft);
   border-radius: 12px;
 }
-.ray-feedtable tbody tr:hover { background: var(--color-hover-item); }
+.ray-feedtable tbody tr:hover,
+.ray-feedtable tbody tr:has(.t-title:focus-visible) { background: var(--color-hover-item); }
 .ray-feedtable .thumb {
   width: 40px; height: 40px; border-radius: 8px; object-fit: cover; display: block;
   background: var(--color-bg-elevated);
@@ -2628,7 +2645,7 @@ body {
   border-bottom: 1px solid var(--hairline-soft);
   transition: background 120ms var(--ease-ui);
 }
-.ray-feedrow:hover { background: var(--color-hover-item); }
+.ray-feedrow:hover, .ray-feedrow:focus-visible { background: var(--color-hover-item); }
 .ray-feedrow-thumb {
   position: relative;
   width: 56px;
