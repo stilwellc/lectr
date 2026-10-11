@@ -12,7 +12,7 @@ export function estimateOnly(lot: AuctionLot): string {
   const fmt = (n: number) => {
     if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
     if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-    return `$${n.toLocaleString()}`;
+    return `$${Math.round(n).toLocaleString()}`;
   };
   if (lot.estimateLow && lot.estimateHigh) {
     const lo = fmt(lot.estimateLow), hi = fmt(lot.estimateHigh);
@@ -27,7 +27,7 @@ export function formatEstimate(lot: AuctionLot): string {
   const fmt = (n: number) => {
     if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
     if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-    return `$${n.toLocaleString()}`;
+    return `$${Math.round(n).toLocaleString()}`;
   };
   if (lot.estimateLow && lot.estimateHigh) {
     const lo = fmt(lot.estimateLow);

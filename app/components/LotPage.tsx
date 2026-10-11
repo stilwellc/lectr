@@ -15,7 +15,7 @@ import { useSavedLots } from '../hooks/useSavedLots';
 import { useLearnVisit } from '../lib/recs-signals';
 import { useRefs } from '../hooks/useRefs';
 import { safeHref } from '../lib/safe-href';
-import { closeDayOf, splitTitle, deglue, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
+import { closeDayOf, isLiveUpcoming, localToday, splitTitle, deglue, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
 import { isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand, contextComps } from '../lib/comps';
 import { enginePoolOf } from '../lib/engine-pool';
 import { lotFace, fmtFace, medianRowId, FACE_LABEL, projectedCloseFace } from '../lib/lot-face';
@@ -31,6 +31,12 @@ import Flick from './Flick';
 import PlateImg from './PlateImg';
 import { crossSibs } from '../lib/fold';
 import { playerHrefOf } from '../lib/entity/aliases';
+import { parseCard } from '../lib/cards';
+import { editionIdentityKey, isEditionLot } from '../lib/identity';
+import { addLotToCalendar } from '../lib/remind';
+import { closeMs as houseCloseMs, closeIsTimed } from '../lib/house-tz';
+import DecisionLine, { decisionLineShows } from './DecisionLine';
+import { decisionOf } from '../lib/lot-face';
 
 /**
  * LotPage — one lot as a CATALOGUE PAGE in the north-star grammar: the
@@ -164,6 +170,25 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
 .lectr-lot-shctx{font-size:11.5px;color:var(--color-text-faint);padding-bottom:2px}
 .lectr-lot .lectr-lot-comp{border-bottom:1px dotted var(--color-border-mid)}
 .lectr-lot .lectr-lot-note{padding:14px 16px;margin-top:14px}
+/* (W11) the head's catalogue id holds one line (a Goldin uuid ran two) */
+.lectr-lot-cert .lectr-lot-head{flex-wrap:nowrap}
+.lectr-lot-cert .lectr-lot-head>span:first-child{flex:none;max-width:70%}
+.lectr-lot-head .no{min-width:0;flex:0 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* (W11) the decision line, at the certificate's reading size — the feed's
+   mono price-line grammar (DecisionLine), one step up */
+.lectr-lot-decision{margin:18px 0 0}
+.lectr-lot-decision .ray-feedrow-price{margin-top:0;font-size:12.5px;color:var(--color-text-muted);row-gap:4px}
+.lectr-lot-decision .ray-feedrow-price b{font-size:15px}
+.lectr-lot-cert .lectr-lot-decision + .lectr-lot-ctas{margin-top:14px}
+.lectr-lot-cert .lectr-lot-ctas{gap:8px}
+/* a catalogue sentence in the title field (RR runs 120 characters) steps down a size so the decision stays on the first screen */
+.lectr-lot-title.lectr-lot-title-long{font-size:clamp(23px,2.6vw,30px);line-height:1.15}
+.lectr-lot-cert .lectr-lot-byline + .lectr-lot-ctas{border-top:none;padding-top:0;margin-top:18px}
+.lectr-lot-cert .lectr-lot-ctas + .lectr-lot-leaders{margin-top:14px}
+/* the quiet "more" under a paper-trail section (ladder fold, dossier link) */
+.lectr-lot-more{display:inline-flex;align-items:center;gap:4px;margin-top:10px;padding:4px 0;background:none;border:none;font:inherit;font-size:12.5px;font-weight:500;color:var(--color-butter-text);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.lectr-lot-comp[aria-current] .lectr-lot-comp-title{color:var(--color-fg)}
+.lectr-lot-comp[aria-current]{background:var(--color-hover-item)}
 @media (max-width:899px){
   .lectr-lot{padding-block-start:14px}
   .lectr-lot-grid{grid-template-columns:minmax(0,1fr)}
@@ -173,13 +198,13 @@ export const LOTPAGE_CSS = COPY_BTN_CSS + `
   .lectr-lot-grid>*{min-width:0}
   .lectr-lot-cola>.ray-plate-mat{order:1}
   .lectr-lot-cert{order:2}
-  .lectr-lot-prov{order:3}
+  .lectr-lot-prov,.lectr-lot-record{order:3}
   .lectr-lot-ladder{order:4}
   .lectr-lot-pool{order:5}
   /* inside the grid the 26px row-gap already separates the sections — trim
      the section margin so the total stays the original 44px */
   .lectr-lot-grid .lectr-lot-comps{margin-top:18px}
-  .lectr-lot .ray-plate-img{height:240px}
+  .lectr-lot .ray-plate-img{height:210px}
   .lectr-lot-noimg .ray-plate-img{height:160px}
   .lectr-lot-monoglyph{font-size:44px}
   /* narrow screens: subs wrap, rows may stack, values ellipsize — the
@@ -208,7 +233,11 @@ export function lotPermalink(id: string): string {
 
 /** The share affordance: copies the universal permalink, confirms for 1.5s.
     Butter outline — the accent family, never green/red. */
-export function CopyLinkButton({ id, style }: { id: string; style?: React.CSSProperties }) {
+export function CopyLinkButton({ id, style, compact }: {
+  id: string; style?: React.CSSProperties;
+  /** "Copy" — the lot page's five-button row fits one desktop line */
+  compact?: boolean;
+}) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<number | null>(null);
   useInsertionEffect(() => {
@@ -241,7 +270,7 @@ export function CopyLinkButton({ id, style }: { id: string; style?: React.CSSPro
   };
 
   return (
-    <button type="button" className="lectr-lot-copy" data-copied={copied} onClick={onCopy} style={style} aria-live="polite">
+    <button type="button" className="lectr-lot-copy" data-copied={copied} onClick={onCopy} style={style} title={compact ? 'Copy link' : undefined} aria-live="polite">
       {copied ? (
         <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true">
           <path d="M2.5 7.5l3 3 6-7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
@@ -252,7 +281,7 @@ export function CopyLinkButton({ id, style }: { id: string; style?: React.CSSPro
           <path d="M8.25 5.75a2.5 2.5 0 00-3.54 0l-2.5 2.5a2.5 2.5 0 103.54 3.54l1-1" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
         </svg>
       )}
-      {copied ? 'Copied' : 'Copy link'}
+      {copied ? 'Copied' : compact ? 'Copy' : 'Copy link'}
     </button>
   );
 }
@@ -314,6 +343,82 @@ function ReferenceRow({ maker, reference }: { maker: string; reference: string }
     </LeaderRow>
   );
 }
+
+/** One sold row in the paper-trail sections (same card, same reference, same
+    edition) — the comp ledger's row grammar; a row with a lot id links to its
+    own certificate. */
+function TrailRow({ id, when, house, title, img, price }: {
+  id?: string | null; when: string; house?: string | null; title?: string | null; img?: string | null; price: number;
+}) {
+  const inner = (
+    <>
+      {(img || title) && (
+        <span className="lectr-lot-comp-thumb" aria-hidden>
+          <span>{(craftTitle(title || '') || '?').charAt(0)}</span>
+          {img && <PlateImg src={sizedImg(httpsImg(img), 160)} alt="" loading="lazy" referrerPolicy="no-referrer" />}
+        </span>
+      )}
+      <span className="lectr-lot-comp-t">
+        <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{title ? craftTitle(title) : when}</span>
+        <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
+          {house && <span style={{ color: houseColors[house] || 'var(--color-text-faint)', fontWeight: 600 }}>{house}</span>}
+          {title ? `${house ? ' · ' : ''}${when}` : house ? '' : 'same card, same grade'}
+        </span>
+      </span>
+      <span className="lectr-lot-comp-p">{fmtFace(price)}</span>
+    </>
+  );
+  return id
+    ? <Link href={`/lot?id=${encodeURIComponent(id)}`} className="lectr-lot-comp">{inner}</Link>
+    : <span className="lectr-lot-comp" style={{ cursor: 'default' }}>{inner}</span>;
+}
+
+/** THE REFERENCE'S OWN RECORD — a watch lot whose reference has a dossier
+    (refs.json) shows that reference's most recent sales beside the
+    certificate: the exact model, every house, realized prices. Identity is
+    the dossier's own (maker + reference, ref-path codec both sides — the
+    ReferenceRow's existence test), never similarity. */
+function ReferenceSales({ maker, reference, selfId }: { maker: string; reference: string; selfId: string }) {
+  const { refs } = useRefs();
+  const entry = useMemo(
+    () => refs?.find(r => r.maker === maker && encodeRefPath(r.ref) === encodeRefPath(reference)) || null,
+    [refs, maker, reference],
+  );
+  const rows = useMemo(() => (entry?.recent || []).filter(r => r.id !== selfId && r.p > 0).slice(0, 8), [entry, selfId]);
+  if (!entry || !rows.length) return null;
+  return (
+    <section className="lectr-lot-comps lectr-lot-record ns-plate" aria-label="This reference, recent sales">
+      <div className="lectr-lot-shead">
+        <div>
+          <span className="ns-kicker">{refLabel(reference)}</span>
+          <h2 className="lectr-lot-h2">This reference, recent sales</h2>
+        </div>
+        <span className="lectr-lot-shctx">
+          {fmtFace(entry.medianUsd)} median · {entry.n.toLocaleString()} {entry.n === 1 ? 'sale' : 'sales'}
+        </span>
+      </div>
+      <div style={{ marginTop: 6 }}>
+        {rows.map(r => (
+          <TrailRow key={r.id} id={r.id} title={r.t} house={r.h} img={r.img} price={r.p}
+            when={formatDate(r.d, { month: 'short', year: 'numeric' })} />
+        ))}
+      </div>
+      <Link href={`/ref/${maker}/${encodeRefPath(reference)}`} className="lectr-lot-more">
+        The {refLabel(reference)} dossier <Flick size={10} />
+      </Link>
+    </section>
+  );
+}
+
+/** the ladder rung a card lot sits on ("PSA 8") — the build's own key
+    (gradeCo + gradeNum off the title, scripts/build-market) */
+function ownRungOf(lot: AuctionLot): string | null {
+  const c = parseCard(lot.title || '');
+  return c.gradeCo && c.gradeNum != null ? `${c.gradeCo} ${c.gradeNum}` : null;
+}
+
+/** the grade ladder folds to the rungs around the lot's own grade past this */
+const LADDER_FOLD = 7;
 
 /** The loading state — a certificate-shaped skeleton, no spinners. Also the
     Suspense fallback for the query route. */
@@ -569,7 +674,14 @@ export default function LotPage({ lotId, initialLot }: {
   // reconciled (a stale shard 'upcoming' the eager book closed out settles
   // here — app/lib/live-pool): past tense, results pending, never "Current bid"
   const isClosedUnknown = lot?.status === 'unknown-result';
-  const isPastPending = isClosedUnknown || (!!lot && isUpcoming && !!lot.resultsPending && !!lot.saleDate && !!todayIso && lot.saleDate.slice(0, 10) < todayIso);
+  // (W11) an 'upcoming' row whose sale is over where it is held (utils
+  // isLiveUpcoming, the feed's one "live" predicate — no grace day) is closed
+  // too, flagged or not: the page read "Hammers · hammered 3d ago" over an
+  // ask and a bid button on a past Sotheby's lot. Read at the reader's clock,
+  // after mount (the SSG HTML was built on another day).
+  const isPastPending = isClosedUnknown || (!!lot && isUpcoming && (
+    (!!lot.resultsPending && !!lot.saleDate && !!todayIso && lot.saleDate.slice(0, 10) < todayIso)
+    || (mounted && !isLiveUpcoming(lot, localToday(), 0))));
 
   // the number every card shows: crawl-time signal first, client compute after
   const sig = useMemo(() => (lot && isUpcoming ? lotSignal(lot, allLots) : null), [lot, allLots, isUpcoming]);
@@ -758,12 +870,39 @@ export default function LotPage({ lotId, initialLot }: {
      INTO the viewport, which is height-independent (a threshold would fail on
      a section taller than the viewport) and holds at both 1440 and 390 (where
      the comps sit 1,370px down, two screens in). */
+  // ── the same edition's own record (prints / multiples) ──
+  // identity.editionIdentityKey — the engine's edition identity (maker + the
+  // catalogue number, else the normalized title + signed + after), the same
+  // key its edition pools read. Other impressions of THIS edition, read over
+  // the maker's own rows; never a similarity call.
+  const editionKey = useMemo(() => (lot && isEditionLot(lot) ? editionIdentityKey(lot) : null), [lot]);
+  const editionRows = useMemo(() => {
+    if (!lot || !editionKey || !rowsSettled) return [];
+    return poolLots
+      .filter(l => l.artist === lot.artist && l.id !== lot.id && l.status === 'sold' && (l.priceUsd || 0) > 0
+        && isEditionLot(l) && editionIdentityKey(l) === editionKey)
+      .sort((a, b) => ((a.saleDate || '') < (b.saleDate || '') ? 1 : -1));
+  }, [lot, editionKey, rowsSettled, poolLots]);
+  const [ladderOpen, setLadderOpen] = useState(false);
+  const [reminded, setReminded] = useState(false);
+  const remindTimer = useRef<number | null>(null);
+  useEffect(() => () => { if (remindTimer.current) window.clearTimeout(remindTimer.current); }, []);
+  // the hammer's clock time on the reader's clock, when the house publishes
+  // one (house-tz) — after mount: the SSG HTML was built on another day/zone
+  const closeClock = useMemo(() => {
+    if (!lot || !mounted || !closeIsTimed(lot)) return null;
+    const ms = houseCloseMs(lot);
+    return ms == null ? null : new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(':00 ', ' ');
+  }, [lot, mounted]);
+
   const poolPartial = !!called && !corpusSettled
     && (!engineCalled || (called.pool.length > 0 && called.n > called.pool.length));
   // (r7) rows the pack doesn't carry (a valued lot whose pack predates r7,
   // an abstained lot's context read) wait on a real pool, not on the pack
   const compsNeedCorpus = !rowsSettled && (poolPartial || needEvidence || (!band && !called) || (!!called && called.pool.length === 0));
-  const compsSentinel = useVisibilityTrigger(requestPool, { rootMargin: '0px 0px -180px 0px', enabled: compsNeedCorpus && pack !== undefined });
+  // (W11) a print also asks for its maker's rows once the reader reaches the
+  // comps — the same edition's own record reads over them
+  const compsSentinel = useVisibilityTrigger(requestPool, { rootMargin: '0px 0px -180px 0px', enabled: (compsNeedCorpus || (!!editionKey && !rowsSettled)) && pack !== undefined });
 
   // ── resolution states ─────────────────────────────────────────────────
   if (!lot) {
@@ -855,6 +994,39 @@ export default function LotPage({ lotId, initialLot }: {
   // gates" under a "This card — N sales" row — a self-contradiction.
   const isCardComp = lot.value?.basis === 'card-comp' && (lot.cardComps?.n ?? 0) > 0;
   const hideComps = isCardComp && compRows.length === 0;
+  // a withdrawn lot never went under the hammer: no ask, no "hammered"
+  const isWithdrawn = lot.status === 'withdrawn';
+  // a live lot a reader can still act on (not withdrawn, not past its hammer)
+  const isActionable = isUpcoming && !isPastPending;
+  // ONE LOT, ONE NUMBER: the low-confidence reference range carries its own
+  // median — beside the engine's (or the band's) comps median it would be a
+  // second, different "median" for the same lot (RR's Madison passport read
+  // "Comps median $2.3K" over "Reference comps · $1K median")
+  const showRefBand = !!refBand && compsMed == null;
+  // the grade ladder: the lot's own rung marked; a long ladder (the 1951
+  // Bowman Mantle carries 27 rungs) folds to the rungs around it
+  const ladder = lot.cardComps?.gradeLadder || [];
+  const ownRung = ladder.length > 1 ? ownRungOf(lot) : null;
+  const ladderView = (() => {
+    if (ladderOpen || ladder.length <= LADDER_FOLD) return ladder;
+    const at = ownRung ? ladder.findIndex(r => r.g === ownRung) : -1;
+    if (at < 0) return ladder.slice(0, LADDER_FOLD);
+    const from = Math.max(0, Math.min(at - Math.floor(LADDER_FOLD / 2), ladder.length - LADDER_FOLD));
+    return ladder.slice(from, from + LADDER_FOLD);
+  })();
+  // the same card & grade, sold before (build-stamped cardComps.lastSales)
+  const cardSales = (lot.cardComps?.lastSales || []).filter(s => s.p > 0);
+  // the same edition's record — not when the comps ARE this edition already
+  const editionShow = headCalled?.kind === 'edition' ? [] : editionRows.slice(0, 8);
+  const editionMed = editionRows.length >= 3
+    ? (() => { const v = editionRows.map(r => r.priceUsd!).sort((a, b) => a - b); const m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; })()
+    : null;
+  const onRemind = () => {
+    if (!addLotToCalendar(lot)) return;
+    setReminded(true);
+    if (remindTimer.current) window.clearTimeout(remindTimer.current);
+    remindTimer.current = window.setTimeout(() => setReminded(false), 2500);
+  };
 
   return (
     <div className="terminal-shell">
@@ -934,10 +1106,64 @@ export default function LotPage({ lotId, initialLot }: {
             </section>
           )}
 
+          {/* (W11) THIS CARD, SOLD BEFORE — the same card in the same grade,
+              its most recent sales (build-stamped cardComps.lastSales: exact
+              card identity incl. grade, the pair-checked same-object pool) */}
+          {cardSales.length > 0 && (
+            <section className="lectr-lot-comps lectr-lot-record ns-plate" aria-label="This card, sold before">
+              <div className="lectr-lot-shead">
+                <div>
+                  <span className="ns-kicker">{ownRungOf(lot) ?? 'Same card, same grade'}</span>
+                  <h2 className="lectr-lot-h2">This card, sold before</h2>
+                </div>
+                <span className="lectr-lot-shctx">
+                  {face?.card?.text && face.card.n >= 3
+                    ? `${face.card.text} median · ${face.card.n} sales`
+                    : `${face?.card?.n || cardSales.length} ${(face?.card?.n || cardSales.length) === 1 ? 'sale' : 'sales'} on file`}
+                </span>
+              </div>
+              <div style={{ marginTop: 6 }}>
+                {cardSales.map((s, i) => (
+                  <TrailRow key={`${s.d}-${i}`} price={s.p}
+                    when={s.d ? formatDate(s.d, { month: 'long', day: 'numeric', year: 'numeric' }) : 'date not published'} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* (W11) the reference's own record — watch lots with a dossier */}
+          {marketKey === 'watches' && lot.reference && (
+            <ReferenceSales maker={lot.artist} reference={lot.reference} selfId={lot.id} />
+          )}
+
+          {/* (W11) THIS EDITION, SOLD BEFORE — other impressions of the same
+              print (the engine's edition identity: the catalogue number, else
+              the title), read over the maker's own rows once they load */}
+          {editionShow.length > 0 && (
+            <section className="lectr-lot-comps lectr-lot-record ns-plate" aria-label="This edition, sold before">
+              <div className="lectr-lot-shead">
+                <div>
+                  <span className="ns-kicker">Same edition</span>
+                  <h2 className="lectr-lot-h2">This edition, sold before</h2>
+                </div>
+                <span className="lectr-lot-shctx">
+                  {editionMed != null ? `${fmtFace(editionMed)} median · ` : ''}{editionRows.length} {editionRows.length === 1 ? 'sale' : 'sales'}{editionRows.length > editionShow.length ? ` · ${editionShow.length} latest` : ''}
+                </span>
+              </div>
+              <div style={{ marginTop: 6 }}>
+                {editionShow.map(r => (
+                  <TrailRow key={r.id} id={r.id} title={r.title} house={r.auctionHouse} img={r.imageUrl} price={r.priceUsd!}
+                    when={formatDate(r.saleDate, { month: 'short', year: 'numeric' })} />
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* the grade ladder — same card, every grade: the economics of the
               card market in one table. Build-stamped from exact identity
-              matches, never similarity. */}
-          {lot.cardComps && lot.cardComps.gradeLadder.length > 1 && (
+              matches, never similarity. The lot's own rung is marked; a long
+              ladder folds to the rungs around it. */}
+          {ladder.length > 1 && (
             <section className="lectr-lot-comps lectr-lot-ladder ns-plate" aria-label="Grade ladder">
               <div className="lectr-lot-shead">
                 <div>
@@ -947,16 +1173,24 @@ export default function LotPage({ lotId, initialLot }: {
                 <span className="lectr-lot-shctx">medians, never means</span>
               </div>
               <div style={{ marginTop: 6 }}>
-                {lot.cardComps.gradeLadder.map(r => (
-                  <span key={r.g} className="lectr-lot-comp" style={{ cursor: 'default' }}>
-                    <span className="lectr-lot-comp-t">
-                      <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{r.g}</span>
-                      <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>{r.n} {r.n === 1 ? 'sale' : 'sales'}</span>
+                {ladderView.map(r => {
+                  const own = r.g === ownRung;
+                  return (
+                    <span key={r.g} className="lectr-lot-comp" style={{ cursor: 'default' }} aria-current={own ? 'true' : undefined}>
+                      <span className="lectr-lot-comp-t">
+                        <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{r.g}{own ? ' — this lot' : ''}</span>
+                        <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>{r.n} {r.n === 1 ? 'sale' : 'sales'}</span>
+                      </span>
+                      <span className="lectr-lot-comp-p">{formatPrice(r.med)}</span>
                     </span>
-                    <span className="lectr-lot-comp-p">{formatPrice(r.med)}</span>
-                  </span>
-                ))}
+                  );
+                })}
               </div>
+              {ladder.length > LADDER_FOLD && (
+                <button type="button" className="lectr-lot-more" onClick={() => setLadderOpen(o => !o)} aria-expanded={ladderOpen}>
+                  {ladderOpen ? 'Fewer grades' : `All ${ladder.length} grades`}
+                </button>
+              )}
             </section>
           )}
           </div>
@@ -973,12 +1207,14 @@ export default function LotPage({ lotId, initialLot }: {
                   ? <Link href={maker.href} style={{ color: 'inherit', textDecoration: 'none' }}>{makerName}</Link>
                   : makerName}
               </span>
-              <span className="no">no. {lot.id}</span>
+              {/* the catalogue id on one line — a 60-character Goldin uuid
+                  wrapped to two lines above the title on every phone */}
+              <span className="no" title={lot.id}>no. {lot.id}</span>
             </div>
 
             {/* the SHORT title carries the h1; a catalogue description the
                 house poured into the title field rides beneath as prose */}
-            <h1 className="lectr-lot-title">{titleParts.short}</h1>
+            <h1 className={`lectr-lot-title${titleParts.short.length > 64 ? ' lectr-lot-title-long' : ''}`}>{titleParts.short}</h1>
             {titleParts.rest && <p className="lectr-lot-medium">{titleParts.rest}</p>}
             {(lot.year || lot.medium) && (
               <p className="lectr-lot-medium">
@@ -1000,27 +1236,38 @@ export default function LotPage({ lotId, initialLot }: {
                 {houseIntel && <div className="s">{houseIntel}</div>}
               </div>
               <div>
-                <div className="k">{isSold || isPastPending ? 'Hammered' : 'Hammers'}</div>
+                {/* (W11) a withdrawn lot never went under the hammer — the
+                    page read "Hammers · hammered 3d ago" over a live-looking
+                    ask on Sotheby's withdrawn Warhol Apple */}
+                <div className="k">{isWithdrawn ? 'Sale' : isSold || isPastPending ? 'Hammered' : 'Hammers'}</div>
                 <div className="v">{formatDate(mounted ? closeDayOf(lot) : lot.saleDate)}</div>
-                {isPastPending
+                {isWithdrawn
+                  ? <div className="s">withdrawn before the sale</div>
+                  : isPastPending
                   ? <div className="s">results pending</div>
                   : !isSold && mounted && !isNaN(new Date(closeDayOf(lot)).getTime())
-                    ? <div className="s">{daysWord(closeDayOf(lot))}</div>
+                    // the house's published close, on the reader's clock
+                    ? <div className="s">{daysWord(closeDayOf(lot))}{closeClock ? ` · closes ${closeClock}` : ''}</div>
                     : null}
               </div>
               <div>
                 <div className="k">
                   {isSold
                     ? (lot.status === 'bought_in' ? 'Result' : 'Realized')
-                    : isClosedUnknown ? ((lot.currentBid || 0) > 0 && !(lot.estimateLow && lot.estimateHigh) ? 'Last bid seen' : 'Estimate')
+                    : isWithdrawn ? 'Result'
+                    : isPastPending ? ((lot.currentBid || 0) > 0 && !(lot.estimateLow && lot.estimateHigh) ? 'Last bid seen' : 'Estimate')
                     : lot.auctionHouse === 'Goldin' || (!(lot.estimateLow && lot.estimateHigh) && (lot.currentBid || 0) > 0) ? 'Current bid' : 'Ask'}
                 </div>
                 <div className="v">
                   {isSold
                     ? (lot.status === 'bought_in' ? 'bought in' : lot.priceUsd ? formatPrice(lot.priceUsd) : '—')
+                    : isWithdrawn ? 'withdrawn'
                     : (formatEstimate(lot) || '—')}
                 </div>
-                {!isSold && !(lot.estimateLow && lot.estimateHigh) && !!(lot.estimateLow || lot.estimateHigh) && (lot.currentBid || 0) > 0 && (
+                {isWithdrawn && (lot.estimateLow || lot.estimateHigh) ? (
+                  <div className="s">{estimateOnly(lot)} est.</div>
+                ) : null}
+                {!isSold && !isWithdrawn && !(lot.estimateLow && lot.estimateHigh) && !!(lot.estimateLow || lot.estimateHigh) && (lot.currentBid || 0) > 0 && (
                   <div className="s">{estimateOnly(lot)} est.</div>
                 )}
               </div>
@@ -1075,6 +1322,66 @@ export default function LotPage({ lotId, initialLot }: {
               </div>
             )}
 
+            {/* (W11) THE DECISION, at the top: what the room is expected to
+                pay, what the engine says it is worth up to, the gap, and the
+                way to act — lot-face decisionOf through DecisionLine, the
+                feed's exact line (one lot, one number). The byline already
+                prints the estimate and the close day, so the line leaves them
+                out; the ledger below is its derivation. */}
+            {isActionable && mounted && decisionLineShows(decisionOf(lot), { estimate: false, when: false }) && (
+              <div className="lectr-lot-decision">
+                <DecisionLine lot={lot} estimate={false} when={false} />
+              </div>
+            )}
+            <div className="lectr-lot-ctas">
+              {/* scheme-allowlisted (safe-href): a crawler-faulted URL means
+                  no house CTA — Save and Copy link still carry the row */}
+              {safeHref(lot.url) && (
+                <a className="ray-call-btn ray-call-btn-primary" href={safeHref(lot.url)} target="_blank" rel="noopener noreferrer">
+                  {isActionable ? `Bid at ${lot.auctionHouse}` : `View at ${lot.auctionHouse}`} <Flick size={11} style={{ marginLeft: 2 }} />
+                </a>
+              )}
+              <button
+                type="button"
+                className="ray-call-btn ray-call-btn-quiet"
+                style={{ cursor: 'pointer', background: saved ? 'var(--color-bg-elevated)' : 'var(--color-bg)' }}
+                onClick={() => toggle(lot.id, lot)}
+                aria-pressed={saved}
+              >
+                <svg width="11" height="13" viewBox="0 0 12 14" fill="none" aria-hidden="true" style={{ marginRight: 1 }}>
+                  <path
+                    d="M1 1.5C1 1.22386 1.22386 1 1.5 1H10.5C10.7761 1 11 1.22386 11 1.5V12.5C11 12.6894 10.8862 12.8625 10.7096 12.9472C10.533 13.0319 10.3239 13.0136 10.1646 12.8994L6 9.91421L1.83541 12.8994C1.67614 13.0136 1.46698 13.0319 1.29037 12.9472C1.11377 12.8625 1 12.6894 1 12.5V1.5Z"
+                    fill={saved ? 'currentColor' : 'none'}
+                    stroke="currentColor"
+                    strokeWidth="1.1"
+                  />
+                </svg>
+                {saved ? 'Saved' : 'Save'}
+              </button>
+              {/* (W11) Remind me — the close handed to the reader's calendar
+                  (.ics, app/lib/remind; the lot card's exact handler) */}
+              {isActionable && (
+                <button type="button" className="ray-call-btn ray-call-btn-quiet" style={{ cursor: 'pointer', background: 'var(--color-bg)' }}
+                  onClick={onRemind} aria-live="polite">
+                  {reminded ? (
+                    <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                      <path d="M2.5 7.5l3 3 6-7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                    </svg>
+                  ) : (
+                    <svg width="11" height="11" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                      <rect x="1" y="2" width="12" height="11" rx="2" stroke="currentColor" strokeWidth="1.25" fill="none" />
+                      <line x1="4" y1="1" x2="4" y2="4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+                      <line x1="10" y1="1" x2="10" y2="4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+                      <line x1="1" y1="6" x2="13" y2="6" stroke="currentColor" strokeWidth="1.25" />
+                    </svg>
+                  )}
+                  {reminded ? 'Added' : 'Remind'}
+                </button>
+              )}
+              {lotFollow && <FollowButton name={lotFollow.label} follow={lotFollow} short />}
+              <CopyLinkButton id={lot.id} compact={isActionable} />
+            </div>
+
             <div className="lectr-lot-leaders">
               {isSold && (lot.estimateLow || lot.estimateHigh) ? (
                 <LeaderRow k="Estimate" v={formatEstimate(lot)} />
@@ -1099,21 +1406,21 @@ export default function LotPage({ lotId, initialLot }: {
               )}
 
               {/* ── the action rows (Aug 13 value audit): turn the read into a bid ── */}
-              {isUpcoming && (lot.currentBid || 0) > 0 && (
+              {isActionable && (lot.currentBid || 0) > 0 && (
                 <LeaderRow
                   k="All-in today"
                   v={formatPrice(Math.round(lot.currentBid! * lotAllInFactor(lot, lot.currentBid)))}
                   sub={`${formatPrice(lot.currentBid!)} bid + ~${Math.round((lotAllInFactor(lot, lot.currentBid) - 1) * 100)}% premium`}
                 />
               )}
-              {isUpcoming && (() => {
+              {isActionable && (() => {
                 // (Oct 6 2026, wave 3) the engine's own max bid (verdict.ts —
                 // one source), not the hammer under the band's all-in low
                 const mb = face?.maxBid;
                 if (!mb) return null;
                 return <LeaderRow k="Max bid" v={mb.text} sub={mb.sub} />;
               })()}
-              {isUpcoming && mounted && (() => {
+              {isActionable && mounted && (() => {
                 // (Oct 11 2026) THE ONE PROJECTED CLOSE — lot-face
                 // projectedCloseFace, the figure the decision line, the reason
                 // line and the Gap print: the live bid × this room's measured
@@ -1138,7 +1445,7 @@ export default function LotPage({ lotId, initialLot }: {
                   />
                 );
               })()}
-              {isUpcoming && crossSibs(lot).length ? (() => {
+              {isActionable && crossSibs(lot).length ? (() => {
                 // the build caps crossLive at 3 siblings — the array's
                 // length is a cap, not a count. A stamped total (crossLiveN)
                 // prints; otherwise no number at all. Same-house entries
@@ -1208,7 +1515,7 @@ export default function LotPage({ lotId, initialLot }: {
                   flag. Descriptive $ context: no tone, no %, no mono. The
                   label and sub say "reference · low-confidence" so it can
                   never be read as a verified index or a point estimate. */}
-              {refBand && (
+              {showRefBand && refBand && (
                 <LeaderRow
                   k="Reference comps"
                   v={`${formatPrice(refBand.q1)}–${formatPrice(refBand.q3)}`}
@@ -1219,7 +1526,7 @@ export default function LotPage({ lotId, initialLot }: {
               {/* bid velocity — a descriptive count of recent bids on a live
                   lot. Plain ink: no tone, no mono, never a price. Rendered
                   only when the sibling stamped it and the lot is still open. */}
-              {isUpcoming && lot.bidVelocity && lot.bidVelocity.delta > 0 && (
+              {isActionable && lot.bidVelocity && lot.bidVelocity.delta > 0 && (
                 <LeaderRow
                   k="Bid velocity"
                   v={`+${lot.bidVelocity.delta} ${lot.bidVelocity.delta === 1 ? 'bid' : 'bids'}`}
@@ -1239,42 +1546,8 @@ export default function LotPage({ lotId, initialLot }: {
                   tone={face.card.med != null && (lot.currentBid || 0) > 0 && lot.currentBid! * lotAllInFactor(lot, lot.currentBid!) < face.card.med ? 'up' : undefined}
                 />
               )}
-              {isUpcoming && face?.card?.last && (
-                <LeaderRow
-                  k="Last sold"
-                  v={`${fmtFace(face.card.last.p)}${face.card.last.d ? ` · ${formatDate(face.card.last.d, { month: 'short', year: 'numeric' })}` : ''}`}
-                />
-              )}
             </div>
 
-            <div className="lectr-lot-ctas">
-              {/* scheme-allowlisted (safe-href): a crawler-faulted URL means
-                  no house CTA — Save and Copy link still carry the row */}
-              {safeHref(lot.url) && (
-                <a className="ray-call-btn ray-call-btn-primary" href={safeHref(lot.url)} target="_blank" rel="noopener noreferrer">
-                  View at {lot.auctionHouse} <Flick size={11} style={{ marginLeft: 2 }} />
-                </a>
-              )}
-              <button
-                type="button"
-                className="ray-call-btn ray-call-btn-quiet"
-                style={{ cursor: 'pointer', background: saved ? 'var(--color-bg-elevated)' : 'var(--color-bg)' }}
-                onClick={() => toggle(lot.id, lot)}
-                aria-pressed={saved}
-              >
-                <svg width="11" height="13" viewBox="0 0 12 14" fill="none" aria-hidden="true" style={{ marginRight: 1 }}>
-                  <path
-                    d="M1 1.5C1 1.22386 1.22386 1 1.5 1H10.5C10.7761 1 11 1.22386 11 1.5V12.5C11 12.6894 10.8862 12.8625 10.7096 12.9472C10.533 13.0319 10.3239 13.0136 10.1646 12.8994L6 9.91421L1.83541 12.8994C1.67614 13.0136 1.46698 13.0319 1.29037 12.9472C1.11377 12.8625 1 12.6894 1 12.5V1.5Z"
-                    fill={saved ? 'currentColor' : 'none'}
-                    stroke="currentColor"
-                    strokeWidth="1.1"
-                  />
-                </svg>
-                {saved ? 'Saved' : 'Save'}
-              </button>
-              {lotFollow && <FollowButton name={lotFollow.label} follow={lotFollow} short />}
-              <CopyLinkButton id={lot.id} />
-            </div>
           </div>
 
           {/* the comp pool — the evidence, as ledger rows under the

@@ -7,7 +7,7 @@ import { AuctionLot } from '../types';
 import { labelLineOf } from '../lib/lot-labels';
 import { displayMakerOf } from '../lib/maker-subjects';
 import { usePlayerDossiers } from '../lib/use-player-dossiers';
-import { closeDayOf, houseColors, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg, sizedImg, localToday, isClosedPending } from '../utils';
+import { closeDayOf, houseColors, formatDate, craftTitle, formatPrice, httpsImg, sizedImg, localToday, isClosedPending } from '../utils';
 import ComparableModal from './ComparableModal';
 import { useBackClose } from '../lib/use-lot-modal';
 import Flick from './Flick';
@@ -17,6 +17,7 @@ import { cardCompsHammer } from '../lib/verdict';
 import { lotFace, fmtFace } from '../lib/lot-face';
 import { makerHref } from '../lib/entity/retired';
 import { formatEstimate } from '../lib/estimate-text';
+import { addLotToCalendar } from '../lib/remind';
 
 // stable empty-array identity — a fresh `[]` default each render would defeat
 // the buySignal useMemo and the memo() wrapper below.
@@ -154,24 +155,9 @@ function LotCard({
   function handleAddToCalendar(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    const ics = makeAuctionIcs(lot);
-    if (!ics) return; // malformed saleDate — no calendar file to mint, no throw
-    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    // window.open preserves the user-gesture context on iOS Safari so the
-    // system intercepts the .ics MIME type and offers to add it to Calendar.
-    const opened = window.open(url, '_blank');
-    if (!opened) {
-      // Popup blocked (desktop) — fall back to hidden anchor
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `auction-${lot.id}.ics`;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    // one handler for every Remind me (app/lib/remind) — a malformed
+    // saleDate mints no file and never throws
+    if (!addLotToCalendar(lot)) return;
     // brief confirmation so the user knows the .ics fired (esp. desktop download)
     setReminded(true);
     setTimeout(() => setReminded(false), 2500);
