@@ -6,6 +6,7 @@ import { normalizeCloseStamp } from '../lib/house-tz';
 import { setCloseK } from '../lib/close-k';
 import { floorAtBid } from '../lib/value';
 import { completeQuarters } from '../lib/maker-hero';
+import { mergeCorpusOverEager, settleCorpusRow } from '../lib/live-pool';
 
 // Stable empty-array identity for pre-load fallbacks — a fresh `[]` each render
 // would defeat downstream memoization (e.g. useSoldArchive's allLotsWithArchive).
@@ -266,6 +267,15 @@ let retryFull: (() => void) | null = null;
 // trigger that arrives before phase 1 resolves still kicks phase 2 the moment
 // the eager payload lands.
 let fullRequested = false;
+// THE LIVE POOL (r9, app/lib/live-pool): the eager book's ids, seated at
+// phase 1. Every corpus row a surface resolves off the eager tape (the
+// per-lot shard, a maker shard, Supabase) is settled against it, so a stale
+// shard 'upcoming' can never print "Current bid" on a closed lot.
+let eagerLiveIds: Set<string> | null = null;
+/** A corpus row settled against the eager live book (live-pool.settleCorpusRow). */
+export function settleLiveRow<T extends Pick<AuctionLot, 'id' | 'status'>>(row: T): T {
+  return settleCorpusRow(row, eagerLiveIds);
+}
 // Phase 3 (the Goldin sold-archive, ~10MB) is NEVER auto-fetched. It only
 // streams in when a surface mounts useSoldArchive(). Its own module cache +
 // inflight guard + retry hook keep it independent of phases 1/2.
@@ -443,6 +453,7 @@ function loadRayData(): Promise<RayPayload> {
     // handles it; requiring it here forced the full-corpus fallback (152MB)
     // and dropped every eager field over a one-request blip.
     if (up) {
+      eagerLiveIds = new Set((up.lots || []).map(l => l.id));
       const core: RayPayload = {
         statsByArtist: parseStats(statsData, up.lots || []),
         allLots: up.lots || [],
@@ -498,49 +509,16 @@ function loadRayData(): Promise<RayPayload> {
                   fetchJson(`/data/ray/lots-${i}.json${ver}`, { cache: cacheMode }) as Promise<AuctionLot[]>)
               );
               const full = ([] as AuctionLot[]).concat(...shardArrs);
-              const signals = new Map((up.lots || []).map(l => [l.id, l.signal]));
-              // soldComp is precomputed onto the SAME eager upcoming lots (sports/
-              // science bands); re-attach it here too, or the feed cards — which
-              // render from allLots, not upcoming.json — never see the band.
-              const soldComps = new Map((up.lots || []).map(l => [l.id, (l as AuctionLot).soldComp]));
-              // bidVelocity is stamped only on the eager upcoming lots (not the
-              // corpus shards) — re-attach it or the shard version overwrites it
-              // and LotPage's bid-velocity row never appears after phase 2.
-              const bidVels = new Map((up.lots || []).map(l => [l.id, (l as AuctionLot).bidVelocity]));
-              // saleDateTime is stripped from the shards (STRIP) but rides the
-              // eager upcoming lots — re-attach or every countdown dies the
-              // moment phase 2 lands (same class as the bidVelocity loss)
-              const closeTimes = new Map((up.lots || []).map(l => [l.id, (l as AuctionLot).saleDateTime]));
-              // THE BID STATE (Aug 25 2026, "the Gap says zero"): bidProj is
-              // ALSO stripped from the shards, and currentBid/bidCount on a
-              // shard are nightly-stale versus the eager lots (the close-board
-              // overlay refreshed them in place ~4-hourly). Without this
-              // re-attach the whole Gap lane — and every Bid-now cell — died
-              // the moment the corpus landed: 10 wire calls at first paint,
-              // zero after one scroll past the sentinel.
-              const bidStates = new Map((up.lots || []).map(l => {
-                const w = l as AuctionLot;
-                return [l.id, { bidProj: w.bidProj, currentBid: w.currentBid, bidCount: w.bidCount, overlayAt: w.overlayAt }] as const;
-              }));
-              const merged = full.map(l => {
-                let x = l;
-                // has() + !== undefined: the build stamps signal:null ON
-                // PURPOSE (a x5-sanity-killed flag must stay killed — an
-                // undefined signal lets lotSignal client-recompute and could
-                // resurrect it). Attach explicit nulls; skip only true absence.
-                if (signals.has(l.id) && signals.get(l.id) !== undefined) x = { ...x, signal: signals.get(l.id) };
-                if (soldComps.get(l.id) != null) x = { ...x, soldComp: soldComps.get(l.id) };
-                if (bidVels.get(l.id) != null) x = { ...x, bidVelocity: bidVels.get(l.id) };
-                if (closeTimes.get(l.id) != null) x = { ...x, saleDateTime: closeTimes.get(l.id) };
-                const bs = bidStates.get(l.id);
-                if (bs) {
-                  if (bs.bidProj != null) x = { ...x, bidProj: bs.bidProj };
-                  if (bs.currentBid != null) x = { ...x, currentBid: bs.currentBid };
-                  if (bs.bidCount != null) x = { ...x, bidCount: bs.bidCount };
-                  if (bs.overlayAt != null) x = { ...x, overlayAt: bs.overlayAt };
-                }
-                return x;
-              });
+              // THE LIVE POOL IS THE EAGER BOOK (r9, QA4 B1 — app/lib/live-pool).
+              // Each eager lot is laid OVER its shard row: the eager copy wins on
+              // every field it carries (signal incl. explicit null, soldComp,
+              // bidVelocity, saleDateTime, bidProj/currentBid/bidCount/overlayAt —
+              // all stripped from or nightly-stale on the shards), the shard only
+              // fills what the eager row lacks. A shard row still saying
+              // 'upcoming' for a lot the eager book closed out settles to
+              // 'unknown-result' — it used to keep its status, and opening any
+              // comps modal grew the live book 9,662 → 10,842 (Oct 10).
+              const merged = mergeCorpusOverEager(up.lots || [], full);
               notify({ ...(cached || core), allLots: merged, fullLoaded: true, fullError: false });
               // phase 2 is done for the session — drop the retry closure so the
               // eager payload (up.lots et al) it captures can be collected.

@@ -27,7 +27,7 @@ import { AwayMark, ReadsMark, WatchMark, RecordMark, CollectionMark, TapeMark, A
 import { FeedRow, belowSignalOf, feedTone } from '../components/LotBrowser';
 import ComparableModal from '../components/ComparableModal';
 import { useLotModal } from '../lib/use-lot-modal';
-import { recommend, recNote, type Taste } from '../lib/recs';
+import { recommend, recNote, recDepth, type Taste } from '../lib/recs';
 import { useTaste } from '../lib/use-recs';
 import { CellGrid, Cell, ColorCell, FigPools, FigTape } from '../components/cells';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, median, overEstimatePct, isOnBlock } from '../utils';
@@ -396,7 +396,8 @@ function RecsRoom({ book, compLots, taste, ready, lastCrawl, isSaved, onToggleSa
     const today = localToday(), now = Date.now();
     return book.filter(l => l.status === 'upcoming' && isOnBlock(l, today, now));
   }, [book]);
-  const recs = useMemo(() => (ready && taste.seeds.length ? recommend(pool, taste, { n: RECS_MAX }) : []), [ready, pool, taste]);
+  // (r9) a narrow taste (one followed maker) deals deeper — Show more walks it
+  const recs = useMemo(() => (ready && taste.seeds.length ? recommend(pool, taste, { n: Math.max(RECS_MAX, recDepth(taste)) }) : []), [ready, pool, taste]);
   const below = useMemo(() => belowSignalOf(recs.map(r => r.lot), compLots), [recs, compLots]);
   const [narrow, setNarrow] = useState(false);
   useEffect(() => {
@@ -447,7 +448,7 @@ function RecsRoom({ book, compLots, taste, ready, lastCrawl, isSaved, onToggleSa
           <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: '10px 0 0', maxWidth: 640, lineHeight: 1.55 }}>
             Nothing to go on yet, so nothing is picked.{' '}
             {signedOut
-              ? <>Follow a maker, player, category or house — no account needed — and lots like them land here; sign in and the lots you save shape it too.</>
+              ? <>Follow a category, a house, or a Pokémon, film or other subject — no account needed — and lots like them land here; sign in to follow makers and players, and the lots you save shape it too.</>
               : <>Save a lot, mark one you won, or follow a maker, player, category or house, and lots like them land here.</>}
             {' '}<Link href="/makers" className="ck-away-link">Find something to follow</Link>
           </p>

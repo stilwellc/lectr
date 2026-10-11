@@ -1335,8 +1335,14 @@ export function estimateValueEx(
   }
 
 
-  // strongest identity match → "this exact item sold for $Z"
-  const exactC = top.find(c => c.match.cls === 'physicalMatch') || top.find(c => c.match.cls === 'modelMatch' && c.match.cosine >= 0.92);
+  // the identity match → "this exact item / this model last sold for $Z".
+  // (r9, QA4 B3) the LATEST sale of that identity, not the first (most
+  // similar) one: Tête de fou printed $575K · 1996 over a $1.06M 2020 sale
+  // of the same work in the same pool. Physical matches first (the item
+  // itself), else same-model matches.
+  const latestOf = (cs: Comp[]) => cs.reduce<Comp | undefined>((b, c) => (!b || String(c.saleDate) > String(b.saleDate) ? c : b), undefined);
+  const exactC = latestOf(top.filter(c => c.match.cls === 'physicalMatch'))
+    || latestOf(top.filter(c => c.match.cls === 'modelMatch' && c.match.cosine >= 0.92));
   const exact = exactC ? { id: exactC.id, realizedUsd: exactC.realizedUsd, saleDate: exactC.saleDate, cls: exactC.match.cls as 'physicalMatch' | 'modelMatch' } : null;
 
   // single-point fallback (RR posts low only) — mirror estUsdBand/demand.ts

@@ -10,6 +10,7 @@ import { houseColors, categoryColors, formatDate, formatPrice, craftTitle, https
 import { contextComps, isSportsScienceObject, FORM_LABEL, signalMagnitude, type Form } from '../lib/comps';
 import { enginePoolOf } from '../lib/engine-pool';
 import { lotFace, fmtFace, medianRowId, valueSentence, FACE_LABEL } from '../lib/lot-face';
+import { latestExactSale } from '../lib/exact-sale';
 import { lotHammerFromAllIn } from '../lib/premiums';
 import type { SoldComp } from '../types';
 import { drillRowFor, drillSlugFor } from '../lib/submarkets';
@@ -50,6 +51,15 @@ function LotValueBlock({ lot, allLots, market, backtest }: { lot: AuctionLot; al
   const under = dir && dir.label === 'below comparable market';
   const over = dir && dir.label === 'above comparable market';
   const exactLot = v?.exact ? allLots.find(l => l.id === v.exact!.id) : null;
+  // (r9, QA4 B3) the LATEST sale of the same model in the engine's pool, not
+  // the first-matched one (lib/exact-sale; the engine picks it too from r9);
+  // null = the title names no single identity in the pool — no claim
+  const exact = useMemo(() => {
+    if (!v?.exact || !exactLot) return null;
+    const ids = new Set(v.poolIds || []);
+    return latestExactSale(v.exact, exactLot, allLots.filter(l => ids.has(l.id)));
+  }, [v, exactLot, allLots]);
+  const face = lotFace(lot);
   // A2-5: a Today's-Call lot can carry the crawl-stamped `signal` without the
   // build's `value` stamp — the SAME engine statistic, measured pre-outcome.
   // The directional line, the calibration disclosure and the sub-market link
@@ -64,11 +74,11 @@ function LotValueBlock({ lot, allLots, market, backtest }: { lot: AuctionLot; al
   if (!v && !sig && !calBand && !(drow && dslug)) return null;
   return (
     <div className="ray-lv" style={{ margin: '10px 0 2px', padding: '10px 12px', border: '1px solid var(--hairline)', borderRadius: 8, background: 'var(--panel)' }}>
-      {v && v.exact && exactLot && (
+      {v && exact && (
         <div style={{ fontSize: 13.5, color: 'var(--color-fg)', fontWeight: 500, marginBottom: dir || v.estimateUsd ? 8 : 0 }}>
-          {v.exact.cls === 'physicalMatch' ? 'This exact item' : 'This model'} last sold for{' '}
-          <b style={{ fontWeight: 500 }}>{usd(v.exact.realizedUsd)}</b>{' '}
-          <span style={{ color: 'var(--color-text-faint)', fontWeight: 400 }}>· {formatDate(v.exact.saleDate, { month: 'short', year: 'numeric' })}</span>
+          {exact.cls === 'physicalMatch' ? 'This exact item' : 'This model'} last sold for{' '}
+          <b style={{ fontWeight: 500 }}>{usd(exact.realizedUsd)}</b>{' '}
+          <span style={{ color: 'var(--color-text-faint)', fontWeight: 400 }}>· {formatDate(exact.saleDate, { month: 'short', year: 'numeric' })}</span>
         </div>
       )}
       {v && dir && (
@@ -96,16 +106,29 @@ function LotValueBlock({ lot, allLots, market, backtest }: { lot: AuctionLot; al
           </span>
         </div>
       )}
-      {v && !dir && v.estimateUsd != null && lotFace(lot).value && (
+      {v && !dir && v.estimateUsd != null && face.value && (
         <div style={{ fontSize: 13.5 }}>
           {/* (r8) lot-face's value — the plate's, the lot page's, the stats
               strip's: expected hammer + likely range, one format */}
           <span style={{ color: 'var(--color-fg)', fontWeight: 500 }}>
-            {valueSentence(lotFace(lot).value!)}
+            {valueSentence(face.value)}
           </span>
           {/* card-comp value: a point estimate from same-card / same-player sales
               (build-market §3), so it reads "from N same-card sales" not a band */}
-          <span style={{ color: 'var(--color-text-muted)' }}> · {v.confidence} confidence · from {v.n} {v.basis === 'card-comp' ? 'comparable card sales' : 'comparable sales'}{v.vsBid ? ` · bid ${v.vsBid.pct >= 0 ? '+' : ''}${v.vsBid.pct}% vs comps` : ''}</span>
+          <span style={{ color: 'var(--color-text-muted)' }}> · {v.confidence} confidence · {face.card?.basis ?? `from ${v.n} comparable sales`}{v.vsBid ? ` · bid ${v.vsBid.pct >= 0 ? '+' : ''}${v.vsBid.pct}% vs comps` : ''}</span>
+        </div>
+      )}
+      {/* (r9, QA4 B2) the lot page's max bid and same-card record, from the
+          same lot-face — the modal and the page print one card value */}
+      {v && !dir && face.value && lot.status === 'upcoming' && (face.maxBid || (face.card && face.card.n > 0)) && (
+        <div style={{ fontSize: 13.5, marginTop: 4, color: 'var(--color-text-muted)' }}>
+          {face.maxBid && (
+            <span>Max bid <b style={{ color: 'var(--color-fg)', fontWeight: 500 }}>{face.maxBid.text}</b> · {face.maxBid.sub}</span>
+          )}
+          {face.maxBid && face.card && face.card.n > 0 && ' · '}
+          {face.card && face.card.n > 0 && (
+            <span>This card <b style={{ color: 'var(--color-fg)', fontWeight: 500 }}>{face.card.text ?? '—'}</b> · {face.card.sub}</span>
+          )}
         </div>
       )}
 

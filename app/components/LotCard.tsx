@@ -14,6 +14,7 @@ import { safeHref } from '../lib/safe-href';
 import { cardCompsHammer } from '../lib/verdict';
 import { lotFace, fmtFace } from '../lib/lot-face';
 import { makerHref } from '../lib/entity/retired';
+import { formatEstimate } from '../lib/estimate-text';
 
 // stable empty-array identity — a fresh `[]` default each render would defeat
 // the buySignal useMemo and the memo() wrapper below.
@@ -35,55 +36,9 @@ export function LiveStamp({ iso }: { iso?: string }) {
   );
 }
 
-/** The house ESTIMATE alone — for a column headed "Estimate". formatEstimate
- *  leads with the live bid when the estimate is one-sided or absent (right for
- *  an "ask" cell), which printed "$200 bid" under an Estimate header on /value.
- *  Here a one-sided bound prints as that bound, and no estimate prints "—". */
-export function estimateOnly(lot: AuctionLot): string {
-  const fmt = (n: number) => {
-    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-    return `$${n.toLocaleString()}`;
-  };
-  if (lot.estimateLow && lot.estimateHigh) {
-    const lo = fmt(lot.estimateLow), hi = fmt(lot.estimateHigh);
-    return lo === hi ? lo : `${lo}–${hi}`;
-  }
-  if (lot.estimateLow) return `from ${fmt(lot.estimateLow)}`;
-  if (lot.estimateHigh) return `to ${fmt(lot.estimateHigh)}`;
-  return '—';
-}
-
-export function formatEstimate(lot: AuctionLot): string {
-  const fmt = (n: number) => {
-    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
-    return `$${n.toLocaleString()}`;
-  };
-  if (lot.estimateLow && lot.estimateHigh) {
-    const lo = fmt(lot.estimateLow);
-    const hi = fmt(lot.estimateHigh);
-    // K-rounding often collapses low and high into the same string — a
-    // "$49K–$49K" range reads as a bug on the most repeated line in the
-    // product. One value, and the app is USD-denominated: no suffix noise.
-    return lo === hi ? `${lo} est.` : `${lo}–${hi} est.`;
-  }
-  // Goldin runs bid auctions with no estimates — the live bid is the honest
-  // number, and it's real money on the lot right now.
-  if (lot.currentBid && lot.currentBid > 0) {
-    return `${fmt(lot.currentBid)} bid${lot.bidCount ? ` · ${lot.bidCount} ${lot.bidCount === 1 ? 'bid' : 'bids'}` : ''}`;
-  }
-  // ONE-SIDED estimate (D2 P2): a published bound must never vanish into
-  // "Estimate on request" — say which side the house put on paper. Live-bid
-  // lots never reach here (the bid stays the honest lead above).
-  if (lot.estimateLow) return `from ${fmt(lot.estimateLow)} est.`;
-  if (lot.estimateHigh) return `to ${fmt(lot.estimateHigh)} est.`;
-  // "No reserve" is a Goldin fact, not a fallback — traditional houses run
-  // reserves and merely keep some estimates private. Don't assert an auction
-  // condition we can't stand behind on anyone else's lot.
-  if (lot.auctionHouse === 'Goldin') return 'No reserve · opening bid';
-  return 'Estimate on request';
-}
+// the estimate / live-bid words moved to app/lib/estimate-text (pure — the
+// feed row and the tests read them without the card's CSS); re-exported
+export { estimateOnly, formatEstimate } from '../lib/estimate-text';
 
 /** Prefer the crawl-time signal when present; else compute from history. */
 export type LotSignal = { label: string; pct: number; basis?: number; kind?: 'edition' | 'form'; form?: string; confidence?: 'very-high' | 'high' | 'medium' | 'low' } | null;

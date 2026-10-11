@@ -21,6 +21,7 @@ import type { Market } from '../constants';
 import type { AuctionLot } from '../types';
 import { formatDate, formatPrice, craftTitle, httpsImg, sizedImg, localToday, trueSaleDay, isClosedPending } from '../utils';
 import LotCard, { lotSignal, confidenceMeter } from './LotCard';
+import { feedRowPrice } from '../lib/estimate-text';
 import { signalMagnitude } from '../lib/comps';
 import { lotFace } from '../lib/lot-face';
 import ComparableModal from './ComparableModal';
@@ -139,14 +140,7 @@ function BidVelChip({ lot }: { lot: AuctionLot }) {
 }
 
 export function FeedRow({ lot, onOpen, tone, note, onNote }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down'; note?: string | null; onNote?: () => void }) {
-  const est =
-    lot.estimateLow || lot.estimateHigh
-      ? (lot.estimateLow && lot.estimateHigh && formatPrice(lot.estimateLow) !== formatPrice(lot.estimateHigh)
-          ? `${formatPrice(lot.estimateLow)}–${formatPrice(lot.estimateHigh)}`
-          : formatPrice(lot.estimateLow || lot.estimateHigh!))
-      : lot.currentBid
-        ? `bid ${formatPrice(lot.currentBid)}`
-        : '—';
+  const est = feedRowPrice(lot);
   // the label's lead word (its lead badge, else the sub) — the full line
   // ellipsized the maker away at 390px
   const label = labelTagOf(lot);

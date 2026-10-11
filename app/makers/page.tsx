@@ -483,7 +483,7 @@ export default function MakersPage() {
     if (sp) { void toggleCatFollow(catFollow(sp.cat as CatKey, sp.sub)); return; }
     // (r7) a subject / set row follows its entity id — signed out too (useFollows)
     if (isEntityFollowKey(key)) { void toggleCatFollow(entityFollow(key, label)); return; }
-    if (!user) { openLogin(); return; }
+    if (!user) { openLogin('follow'); return; }
     const existing = searches.find(s => (s.query as { player?: string }).player === key);
     if (existing) void removeSearch(existing.id);
     else void saveSearch(`Following ${label}`, { player: key, playerName: label });
@@ -742,7 +742,7 @@ export default function MakersPage() {
         body={<>
           The Following lens shows only the names you follow, with what&rsquo;s new for them since your last visit.
           {' '}Follow a Pokémon, film, set, team or category with the + on its row &mdash; no account needed
-          {authEnabled && !user ? <>; <button type="button" className="mk-reset" onClick={openLogin}>sign in</button> to follow makers and players too</> : null}.
+          {authEnabled && !user ? <>; <button type="button" className="mk-reset" onClick={() => openLogin('follow')}>sign in</button> to follow makers and players too</> : null}.
           {' '}<button type="button" className="mk-reset" onClick={() => set({ fw: false })}>See every name</button>
         </>}
       />
