@@ -52,18 +52,28 @@
  *     pick judged by an encoded version of R1's "would a demanding collector
  *     of this kind keep it" (category, object kind, price range, near-duplicate
  *     of a pick above). Reported as hits / picks.
+ *
+ * 4 · REASON TRUTH + JUNK (W28, Oct 11) over 22 personas — the ten above and
+ *     twelve desks (heavy art like the W19 review desk, watches, vintage and
+ *     modern cards, TCG, culture, space, design, mixed, follows-only, a
+ *     house + category follow, cold). Each pick's reason is read back by
+ *     rules that never call the scorer (see falseOf); JUNK = a false reason
+ *     or an object outside the persona's world. False reasons are split into
+ *     a false CLAIM, a VACUOUS learned band (> ×25) and a mixed-unit FORMAT.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import type * as RecsMod from '../app/lib/recs';
-import { taxonOf } from '../app/lib/taxonomy';
-import { lotFacets } from '../app/lib/facets';
+import { taxonOf, SPORTS, subMatches } from '../app/lib/taxonomy';
+import { lotFacets, FACET_LABEL } from '../app/lib/facets';
 import { priorityOf, closeMsOf, saleKeyOf } from '../app/lib/priority';
 import { entityFollow, makerFollow, type Follow } from '../app/lib/follows';
 import { signalsToTaste, type SignalStore, quietKeysOf } from '../app/lib/recs-signals';
 import { isFlagged } from '../app/lib/flags';
 import { parseCard } from '../app/lib/cards';
 import { isOnBlock, isClosedPending } from '../app/utils';
+import { makerLineOf } from '../app/lib/lot-labels';
+import { kindFits } from '../app/lib/object-kind';
 
 const args = process.argv.slice(2);
 const argOf = (k: string) => (args.includes(k) ? args[args.indexOf(k) + 1] : null);
@@ -332,7 +342,7 @@ async function main() {
         fc.push(rows.filter(x => isFlagged(x.l as Parameters<typeof isFlagged>[0])).length / Math.max(1, rows.length));
         for (const x of rec) {
           const note = R.recNote(x);
-          const m = note.match(/(?:in your |· )\$([\d.]+)(K|M)?[–-]([\d.]+)(K|M)?(?: range)?/);
+          const m = note.match(/(?:in your |· )\$([\d.]+)(K|M)?[–-]\$?([\d.]+)(K|M)?(?: range)?/);
           if (!m || /near your/.test(note)) continue;
           const num = (v: string, u?: string) => Number(v) * (u === 'M' ? 1e6 : u === 'K' ? 1e3 : 1);
           const lo = num(m[1], m[2]), hi = num(m[3], m[4]);
@@ -497,6 +507,217 @@ async function main() {
   }
   say(`| TOTAL | ${impls.map(([n]) => `${totals[n][0]}/${totals[n][1]} (${pct(totals[n][0] / Math.max(1, totals[n][1]))})`).join(' | ')} |`);
   out.r1 = r1; out.r1Totals = totals;
+
+  /* ═══ 4 · reason truth + junk (Oct 11, W28) ═══
+   * Every pick's reason is read back against the lot and the desk by rules
+   * that do NOT call the scorer: a "Like your X prints" must be an X, a print
+   * (not a photograph or a poster), with ≥ 2 X's of that kind on the desk; a
+   * "Because you saved …" must name a fact the two lots really share; a
+   * "You follow …" must be the followed name / kind; a printed band must hold
+   * the lot and be narrow enough to mean something (≤ ×25). JUNK = a false
+   * reason, or an object outside the world a collector of that desk would
+   * ever want (the persona's own `world`). FILLER = a same-category-at-price
+   * rung (said honestly, but no tie). 22 personas: the ten R1 collectors
+   * above (follows + device signals) and twelve desks (saves + follows),
+   * including a follows-only reader and a cold one. */
+  say('\n## 4 · reason truth + junk (22 personas)');
+  const PHOTO = /\b(?:polaroids?|gelatin silver|chromogenic|c-print|platinum print|dye[- ]transfer|photographs?)\b/i;
+  const POSTER = /\b(?:posters?|offset lithograph|signed in print)\b/i;
+  const mediumOf = (l: L): string => { const t = T(l); if (t.cat !== 'fine-art') return `${t.cat}:${t.sub}`; if (PHOTO.test(title(l))) return 'photo'; if (POSTER.test(title(l))) return 'poster'; return `fine-art:${t.sub}`; };
+  const norm = (x: string) => x.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '');
+  /** the catalogue opens on ANOTHER artist's name and dates ("VIK MUNIZ (B. 1961) Andy Warhol …") */
+  const otherArtist = (l: L): boolean => {
+    const m = title(l).match(/^([A-Z][A-Z .'’-]{3,}?)\s*\((?:B\.\s*\d{4}|\d{4}\s*[-–]\s*\d{4})/);
+    if (!m) return false;
+    return !norm(makerLineOf(l).name || l.artist).includes(norm(m[1]).slice(0, 6));
+  };
+  const nameOf = (l: L) => norm(makerLineOf(l).name || '');
+  const ekA = (l: L) => A.featOf(l, NOW).ek;
+  const isName = (l: L, n: string) => !otherArtist(l) && (nameOf(l) === norm(n) || norm(ekA(l) ?? '').endsWith(norm(n)));
+  const FR_BY_LABEL = new Map(Object.entries(FACET_LABEL).filter(([k]) => k.startsWith('fr-')).map(([k, v]) => [v, k]));
+  const NOUN_KIND: Record<string, (l: L) => boolean> = {
+    prints: l => mediumOf(l) === 'fine-art:prints', ceramics: l => T(l).sub === 'ceramics', sculpture: l => T(l).sub === 'sculpture',
+    watches: l => T(l).cat === 'watches' && kindFits(l), cards: l => (T(l).cat === 'sports-cards' || T(l).cat === 'tcg') && kindFits(l), works: () => true, pieces: () => true,
+  };
+  const WORD_FX: Record<string, string> = { 'pre-war': 'era-prewar', vintage: 'era-vintage', "'80s–'90s": 'era-80s90s', modern: 'era-modern', japanese: 'lang-ja', chinese: 'lang-zh', psa: 'psa', sgc: 'sgc', bgs: 'bgs', cgc: 'cgc', rookie: 'rookie', signed: 'auto', flown: 'flown' };
+  const SPORT_OF = new Map(SPORTS.map(x => [x.label.toLowerCase(), x.key]));
+  const usdShown = (l: L) => { const a = A.featOf(l, NOW).logA; return a != null ? Math.pow(10, a) : null; };
+  const num = (v: string, u?: string) => Number(v) * (u === 'M' ? 1e6 : u === 'K' ? 1e3 : 1);
+  /** one rec, read back: '' when true, else what is false */
+  function falseOf(x: RecsMod.Rec, desk: L[], follows: Follow[], stated: string | null): string {
+    const l = x.lot as L; const r = x.reason; const s = x.seed;
+    // a printed band: holds the lot, narrow enough to say something, one money voice
+    for (const m of Array.from(r.matchAll(/\$([\d.]+)(K|M)?–(\$?)([\d.]+)(K|M)?/g))) {
+      if (!m[3] && (m[2] || '') !== (m[5] || '')) return `mixed-unit band "${m[0]}"`;
+      const lo = num(m[1], m[2]), hi = num(m[4], m[5]);
+      // the range the reader stated is theirs to make wide; a learned one must mean something
+      const own = !!stated && m[0].replace(/\$/g, '') === stated.replace(/\$/g, '');
+      if (!own && hi / lo > 25) return `vacuous band ${m[0]} (×${Math.round(hi / lo)})`;
+      const u = usdShown(l);
+      const near = r.slice(Math.max(0, (m.index ?? 0) - 12), m.index).includes('near your');
+      if (u != null && !near && (u < lo * 0.95 || u > hi * 1.05)) return `lot $${Math.round(u)} outside ${m[0]}`;
+    }
+    let m: RegExpMatchArray | null;
+    if ((m = r.match(/^Like your (.+?) (prints|works|ceramics|sculpture|watches|cards|pieces)\b/))) {
+      const [, n, noun] = m;
+      const fr = FR_BY_LABEL.get(n);
+      // the desk's own N's of that kind (≥ 2), and the lot is one of theirs
+      const mine = desk.filter(d => (fr ? FX(d).has(fr) : isName(d, n)) && NOUN_KIND[noun](d));
+      if (mine.length < 2) return `fewer than 2 ${n} ${noun} on the desk`;
+      const eks = new Set(mine.map(d => ekA(d)));
+      if (!(fr ? FX(l).has(fr) : eks.has(ekA(l)) && !otherArtist(l))) return `not ${n}${otherArtist(l) ? ' (another artist’s work)' : ''}`;
+      if (!NOUN_KIND[noun](l)) return `${n}, but not ${noun} (${mediumOf(l)})`;
+      return '';
+    }
+    if (/^You follow /.test(r)) {
+      const fo = follows.slice().sort((a, b) => b.label.length - a.label.length).find(f => r.startsWith(`You follow ${f.label}`));
+      if (!fo) return 'no such follow';
+      if (fo.kind === 'maker') return (l.artist === fo.key || l.playerSlug === fo.key || ekA(l) === `mk:${fo.key}` || ekA(l) === `pl:${fo.key}`) && !otherArtist(l) ? '' : `not ${fo.label}`;
+      if (fo.kind === 'entity') return ekA(l) === fo.key ? '' : `not ${fo.label}`;
+      if (fo.kind === 'house') return l.auctionHouse === fo.key ? '' : 'other house';
+      const [c, sub] = fo.key.split(':');
+      return T(l).cat === c && (!sub || T(l).sub === sub || subMatches(c as never, sub, T(l).sub)) && kindFits(l) ? '' : `not ${fo.label}`;
+    }
+    if ((m = r.match(/^You picked (.+?)(?: · |$)/))) return kindFits(l) ? '' : `not a ${m[1]} object`;
+    if (/^Because you searched/.test(r)) {
+      const q = (r.match(/“(.+?)”/)?.[1] ?? '').toLowerCase().split(/\s+/).filter(w => w.length >= 4 && !/^(?:screen|used|card|cards|signed|rookie|graded)$/.test(w));
+      const hay = `${title(l)} ${makerLineOf(l).name} ${l.artist} ${ekA(l) ?? ''}`.toLowerCase();
+      return q.some(w => hay.includes(w)) ? '' : 'search word not on the lot';
+    }
+    // a seed lot (save / own / watch / a looked-at lot) or an entity page
+    const sl = s.lotId ? (byId.get(s.lotId) ?? desk.find(d => d.id === s.lotId)) as L | undefined : undefined;
+    if (/^Because you (?:looked at|asked for more like) /.test(r) && !sl && s.follow) {
+      const fo = s.follow;
+      const ok = fo.kind === 'entity' ? ekA(l) === fo.key : (l.artist === fo.key || ekA(l) === `mk:${fo.key}` || ekA(l) === `pl:${fo.key}` || ekA(l) === fo.key);
+      return ok && !otherArtist(l) ? '' : `not ${fo.label}${otherArtist(l) ? ' (another artist’s work)' : ''}`;
+    }
+    if (/^(?:Another|More .+ at .+ prices)/.test(r)) {
+      // a rung: same category as its anchor (a desk lot or a followed name's lots)
+      const cats = new Set([...desk.map(d => T(d).cat), ...follows.map(f => f.key.split(':')[0])]);
+      return kindFits(l) && (cats.has(T(l).cat) || desk.length === 0) ? '' : 'rung outside the anchor’s category';
+    }
+    if ((m = r.match(/^More (.+?) (cards|prints|works|watches|pieces|ceramics|sculpture|Pokémon cards)(?: like yours| in your range)/))) {
+      if (!kindFits(l)) return `not the kind of object (${mediumOf(l)})`;
+      if (m[2] === 'prints' && mediumOf(l) !== 'fine-art:prints') return `not a print (${mediumOf(l)})`;
+      for (const w of m[1].toLowerCase().split(' ')) {
+        if (WORD_FX[w] && !FX(l).has(WORD_FX[w])) return `not ${w}`;
+        if (SPORT_OF.has(w) && T(l).sport !== SPORT_OF.get(w)) return `not ${w}`;
+      }
+      return desk.some(d => T(d).cat === T(l).cat && T(d).sub === T(l).sub && mediumOf(d) === mediumOf(l)) ? '' : 'no desk lot of this kind';
+    }
+    if (sl) {
+      const why0 = x.why[0] ?? '';
+      if (!why0) return 'names nothing shared';
+      const fs = A.featOf(sl, NOW), fl = A.featOf(l, NOW);
+      if (why0 === 'same card') return fs.card && fs.card === fl.card ? '' : 'not the same card';
+      if (/^same /.test(why0)) {
+        if (!(fs.ek && fs.ek === fl.ek)) return `not ${why0}`;
+        if (otherArtist(l) || otherArtist(sl)) return `${why0}, but another artist’s work`;
+        return '';
+      }
+      if (why0 === 'same model line') return l.drill && l.drill === sl.drill ? '' : 'not the same line';
+      if (!kindFits(l) || T(l).cat !== T(sl).cat) return 'another kind of object';
+      if (mediumOf(l) !== mediumOf(sl) && T(l).cat === 'fine-art') return `${mediumOf(l)} vs a ${mediumOf(sl)}`;
+      if (/^also /.test(why0)) { const fr = FR_BY_LABEL.get(why0.slice(5)); return fr ? (FX(l).has(fr) && FX(sl).has(fr) ? '' : 'franchise not shared') : (T(l).sub === T(sl).sub ? '' : 'sub not shared'); }
+      for (const w of why0.toLowerCase().split(/,\s*/)) if (WORD_FX[w] && !(FX(l).has(WORD_FX[w]) && FX(sl).has(WORD_FX[w]))) return `${w} not shared`;
+      return '';
+    }
+    return '';
+  }
+  // the desks: lots drawn from the block by predicate, priced, deterministic
+  const pickN = (pred: (l: L) => boolean, k: number, lo = 0, hi = Infinity): L[] => {
+    const xs = pool.filter(l => { const u = usd(l); return pred(l) && u != null && u >= lo && u <= hi; }).sort((a, b) => (a.id < b.id ? -1 : 1));
+    if (xs.length <= k) return xs;
+    const step = xs.length / k; return Array.from({ length: k }, (_, i) => xs[Math.floor(i * step)]);
+  };
+  const isEk = (ek: string) => (l: L) => ekA(l) === ek;
+  const W_ART = (l: L) => T(l).cat === 'fine-art' || T(l).cat === 'design';
+  interface DeskP { id: string; who: string; desk: L[]; follows: Follow[]; ev?: Record<string, unknown>[]; world: (l: L) => boolean; want: (l: L) => boolean }
+  const named = (desk: L[]) => { const s = new Set(desk.map(d => ekA(d)).filter(Boolean)); return (l: L) => s.has(ekA(l)); };
+  const heavyDesk = [
+    ...pickN(l => isEk('mk:andy-warhol')(l) && T(l).sub === 'prints', 3, 15000, 60000), ...pickN(l => isEk('mk:pablo-picasso')(l) && T(l).sub === 'prints', 2, 5000, 40000),
+    ...pickN(l => isEk('mk:roy-lichtenstein')(l), 1, 20000, 100000), ...pickN(isEk('mk:jeff-koons'), 1, 1000, 20000), ...pickN(l => isEk('mk:rolex')(l) && kindFits(l), 1, 30000, 150000),
+    // the W19 desk's cheap end (a $1K Picasso ceramic, two sub-$2K watches): its
+    // learned bands spanned ×250 ("in your $520–130K range")
+    ...pickN(l => isEk('mk:pablo-picasso')(l) && T(l).sub === 'ceramics', 1, 500, 2000), ...pickN(l => T(l).cat === 'watches' && kindFits(l), 2, 300, 2000),
+    ...pickN(isEk('sj:culture|p:harry-s-truman'), 1), ...pickN(l => ekA(l) === 'pl:victor-wembanyama' && T(l).cat === 'sports-cards', 1), ...pickN(l => ekA(l) === 'pl:michael-jordan' && T(l).cat === 'sports-cards', 1, 500, 20000),
+  ];
+  const DESKS: DeskP[] = [
+    { id: 'd01-heavy-art', who: 'W19 heavy desk: Warhol/Picasso/Lichtenstein prints + Koons + a Daytona, Truman, Wemby, Jordan; follows KAWS + Phillips; looked at Warhol, searched calder', desk: heavyDesk,
+      follows: [mk('kaws', 'KAWS'), { kind: 'house', key: 'Phillips', label: 'Phillips' }], ev: [ent('mk:andy-warhol', 'Andy Warhol', 3 * D), srch('calder', 2 * D)],
+      world: l => W_ART(l) || (T(l).cat === 'watches' && kindFits(l)) || named(heavyDesk)(l) || l.auctionHouse === 'Phillips', want: l => T(l).cat === 'fine-art' && mediumOf(l) !== 'photo' && mediumOf(l) !== 'poster' && !otherArtist(l) },
+    { id: 'd02-watch', who: 'Rolex / Patek wristwatches $10K–80K, follows Patek', desk: pickN(l => (isEk('mk:rolex')(l) || isEk('mk:patek-philippe')(l)) && kindFits(l), 5, 10000, 80000), follows: [mk('patek-philippe', 'Patek Philippe')],
+      world: l => T(l).cat === 'watches' && kindFits(l), want: l => T(l).cat === 'watches' && kindFits(l) && (shown(l) ?? 0) >= 5000 },
+    { id: 'd03-vintage-baseball', who: 'vintage baseball PSA cards $500–20K', desk: pickN(l => vintageBb(l) && FX(l).has('psa'), 6, 500, 20000), follows: [],
+      world: l => (T(l).cat === 'sports-cards' || T(l).cat === 'sports-memorabilia') && T(l).sport === 'baseball', want: l => T(l).cat === 'sports-cards' && T(l).sport === 'baseball' && isCard(l) && (year(l) ?? 2000) <= 1985 },
+    { id: 'd04-modern-hoops', who: 'modern basketball cards $200–5K', desk: pickN(l => T(l).cat === 'sports-cards' && T(l).sport === 'basketball' && FX(l).has('era-modern') && isCard(l), 6, 200, 5000), follows: [],
+      world: l => (T(l).cat === 'sports-cards' || T(l).cat === 'sports-memorabilia') && T(l).sport === 'basketball', want: l => T(l).cat === 'sports-cards' && T(l).sport === 'basketball' && isCard(l) && (year(l) ?? 0) >= 2010 },
+    { id: 'd05-tcg-vintage', who: 'vintage graded Pokémon $300–20K', desk: pickN(l => T(l).cat === 'tcg' && isCard(l) && FX(l).has('graded') && (year(l) ?? 2010) <= 2003, 6, 300, 20000), follows: [],
+      world: l => T(l).cat === 'tcg', want: l => T(l).cat === 'tcg' && isCard(l) && (year(l) ?? 2010) <= 2006 },
+    { id: 'd06-culture', who: 'Star Wars + Beatles pieces', desk: [...pickN(l => T(l).cat === 'entertainment' && FX(l).has('fr-starwars'), 3, 500, 50000), ...pickN(l => T(l).cat === 'entertainment' && FX(l).has('fr-beatles'), 3, 500, 50000)], follows: [],
+      world: l => T(l).cat === 'entertainment' || T(l).cat === 'historical', want: l => T(l).cat === 'entertainment' && (FX(l).has('fr-starwars') || FX(l).has('fr-beatles') || SW.test(title(l)) || ROCK.test(title(l))) },
+    { id: 'd07-space', who: 'Apollo flown pieces', desk: pickN(l => T(l).cat === 'space-science' && FX(l).has('flown'), 5, 500, 100000), follows: [],
+      world: l => T(l).cat === 'space-science', want: l => T(l).cat === 'space-science' && /apollo|lunar|gemini|mercury|flown/i.test(title(l)) },
+    { id: 'd08-design', who: 'mid-century design $1K–50K', desk: pickN(l => T(l).cat === 'design', 5, 1000, 50000), follows: [],
+      world: l => T(l).cat === 'design' || (T(l).cat === 'fine-art' && T(l).sub === 'sculpture'), want: l => T(l).cat === 'design' },
+    { id: 'd09-mixed', who: 'Jordan cards + Charizard + Rolex', desk: [...pickN(l => ekA(l) === 'pl:michael-jordan' && T(l).cat === 'sports-cards', 2, 300, 30000), ...pickN(isEk('sj:tcg|k:charizard'), 2, 300, 30000), ...pickN(l => isEk('mk:rolex')(l) && kindFits(l), 2, 5000, 60000)], follows: [],
+      world: l => /michael jordan/i.test(`${title(l)} ${ekA(l)}`) || ekA(l) === 'pl:michael-jordan' || ekA(l) === 'sj:tcg|k:charizard' || (T(l).cat === 'watches' && kindFits(l)) || T(l).cat === 'tcg' || (T(l).cat === 'sports-cards' && T(l).sport === 'basketball'),
+      want: l => ekA(l) === 'pl:michael-jordan' || ekA(l) === 'sj:tcg|k:charizard' || (isEk('mk:rolex')(l) && kindFits(l)) },
+    { id: 'd10-follows-only', who: 'follows Warhol + Rolex + Charizard, nothing saved', desk: [], follows: [mk('andy-warhol', 'Andy Warhol'), mk('rolex', 'Rolex'), en('sj:tcg|k:charizard', 'Charizard')],
+      world: l => l.artist === 'andy-warhol' || ekA(l) === 'mk:andy-warhol' || ekA(l) === 'mk:rolex' || ekA(l) === 'sj:tcg|k:charizard' || T(l).cat === 'tcg' || T(l).cat === 'watches' || T(l).cat === 'fine-art',
+      want: l => (ekA(l) === 'mk:andy-warhol' && !otherArtist(l)) || (ekA(l) === 'mk:rolex' && kindFits(l)) || ekA(l) === 'sj:tcg|k:charizard' },
+    { id: 'd11-house-cat', who: 'follows Phillips (house) + Watches (category)', desk: [], follows: [{ kind: 'house', key: 'Phillips', label: 'Phillips' }, cat('watches', 'Watches')],
+      world: l => l.auctionHouse === 'Phillips' || (T(l).cat === 'watches' && kindFits(l)), want: l => T(l).cat === 'watches' && kindFits(l) },
+    { id: 'd12-cold', who: 'nothing at all', desk: [], follows: [], world: () => false, want: () => false },
+  ];
+  const r1World: Record<string, (l: L) => boolean> = {
+    'p01-warhol-haring': l => T(l).cat === 'fine-art', 'p02-vintage-baseball': l => (T(l).cat === 'sports-cards' || T(l).cat === 'sports-memorabilia') && T(l).sport === 'baseball',
+    'p03-modern-hoops': l => (T(l).cat === 'sports-cards' || T(l).cat === 'sports-memorabilia') && T(l).sport === 'basketball', 'p04-pokemon-vintage-jp': l => T(l).cat === 'tcg',
+    'p05-patek-ap': l => T(l).cat === 'watches' && kindFits(l), 'p06-star-wars-props': l => T(l).cat === 'entertainment', 'p07-apollo-flown': l => T(l).cat === 'space-science',
+    'p08-beatles-rock': l => T(l).cat === 'entertainment', 'p09-design': l => T(l).cat === 'design', 'p10-mixed': l => ['sports-cards', 'sports-memorabilia', 'tcg', 'watches'].includes(T(l).cat),
+  };
+  const judge: Record<string, unknown> = {};
+  const jt: Record<string, number[]> = {};
+  /** false reasons by kind: a false CLAIM (wrong maker / kind / tie), a VACUOUS band, a FORMAT defect (mixed money units) */
+  const jk: Record<string, Record<'claim' | 'vacuous' | 'format', number>> = {};
+  say('| persona | ' + impls.map(([n]) => `${n}: picks · want · false reason · off-world · JUNK · filler`).join(' | ') + ' |');
+  const runs4: { id: string; desk: L[]; follows: Follow[]; ev: Record<string, unknown>[]; more: string[]; price?: { minUsd: number | null; maxUsd: number | null }; markets?: string[]; world: (l: L) => boolean; want: (l: L) => boolean }[] = [
+    ...R1.map(p => ({ id: p.id, desk: [] as L[], follows: p.follows, ev: p.ev, more: p.more, price: { minUsd: p.interests.minUsd, maxUsd: p.interests.maxUsd }, markets: p.interests.markets, world: r1World[p.id], want: p.hit })),
+    ...DESKS.map(p => ({ id: p.id, desk: p.desk, follows: p.follows, ev: p.ev ?? [], more: [] as string[], world: p.world, want: p.want })),
+  ];
+  for (const p of runs4) {
+    const cells: string[] = [];
+    for (const [name, R] of impls) {
+      const store: SignalStore = { v: 1, ev: p.ev as unknown as SignalStore['ev'], marks: p.more.map(id => ({ k: 'more' as const, id, t: NOW - D, lot: byId.get(id) as never })) };
+      const { extra, negative } = signalsToTaste(store, NOW, id => byId.get(id));
+      const taste = R.buildTaste({ saved: saved(p.desk), follows: p.follows, extra, negative, price: p.price, markets: p.markets, nowMs: NOW } as RecsMod.TasteInput);
+      const rec = R.recommend(pool, taste, { nowMs: NOW, n: Math.max(24, R.recDepth(taste)) }).slice(0, 24);
+      let want = 0, fr = 0, off = 0, junk = 0, fill = 0; const bad: string[] = [];
+      const kinds = (jk[name] ??= { claim: 0, vacuous: 0, format: 0 });
+      for (const x of rec) {
+        const l = x.lot as L;
+        const f = falseOf(x as RecsMod.Rec, p.desk, p.follows, taste.stated?.text ?? null);
+        // a desk collector never wants a lot ten times off the desk's own prices in that category
+        const deskPx = p.desk.filter(d => T(d).cat === T(l).cat).map(usd).filter((u): u is number => u != null);
+        const u0 = shown(l);
+        const priceOff = deskPx.length >= 2 && u0 != null && (u0 < med(deskPx) / 10 || u0 > med(deskPx) * 10);
+        const o = !p.world(l) || priceOff;
+        if (p.want(l)) want++;
+        if (f) { fr++; kinds[/^mixed-unit/.test(f) ? 'format' : /^vacuous/.test(f) ? 'vacuous' : 'claim']++; }
+        if (o) off++;
+        if (f || o) { junk++; bad.push(`${f ? `FALSE(${f})` : priceOff ? 'PRICE' : 'OFF'} ${title(l).slice(0, 50)} ($${Math.round(usd(l) ?? 0)}) ← ${R.recNote(x).slice(0, 90)}`); }
+        if (x.tier === 4) fill++;
+      }
+      cells.push(`${rec.length} · ${want} · ${fr} · ${off} · ${junk} · ${fill}`);
+      const t = (jt[name] ??= [0, 0, 0, 0, 0, 0]); t[0] += rec.length; t[1] += want; t[2] += fr; t[3] += off; t[4] += junk; t[5] += fill;
+      judge[`${p.id}:${name}`] = { picks: rec.length, want, falseReason: fr, offWorld: off, junk, filler: fill, bad, reasons: rec.map(x => `${x.lot.id} :: ${title(x.lot as L).slice(0, 60)} :: ${R.recNote(x)}`) };
+      if (name === 'new' && !quiet && bad.length) { log(`   ${p.id} junk (new):`); for (const b of bad) log(`     · ${b}`); }
+    }
+    say(`| ${p.id} | ${cells.join(' | ')} |`);
+  }
+  say(`| TOTAL | ${impls.map(([n]) => { const t = jt[n]; return `${t[0]} picks · want ${pct(t[1] / Math.max(1, t[0]))} · false ${t[2]} (${pct(t[2] / Math.max(1, t[0]))}) · off ${t[3]} · JUNK ${t[4]} (${pct(t[4] / Math.max(1, t[0]))}) · filler ${t[5]}`; }).join(' | ')} |`);
+  say(`false reasons by kind: ${impls.map(([n]) => `${n} claim ${jk[n]?.claim ?? 0} · vacuous band ${jk[n]?.vacuous ?? 0} · mixed-unit ${jk[n]?.format ?? 0}`).join(' | ')}`);
+  out.judge = judge; out.judgeTotals = jt; out.judgeKinds = jk;
   if (jsonOut) fs.writeFileSync(jsonOut, JSON.stringify(out, null, 1));
 }
 

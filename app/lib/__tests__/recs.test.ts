@@ -180,7 +180,8 @@ test('lotSim gates, bandText, notes, short titles', () => {
   assert.ok(s.card && s.entity && s.sim > 0.7);
   assert.equal(lotSim(x, z).sim, 0, 'a modern stranger at a different price is no tie');
   assert.equal(bandText(20000, 40000), '$20K–40K');
-  assert.equal(bandText(800, 1200), '$800–1.2K');
+  assert.equal(bandText(800, 1200), '$800–$1.2K');
+  assert.equal(bandText(520, 130000), '$520–$130K');
   assert.equal(bandText(2300, 4100), '$2.3K–4.1K');
   assert.equal(bandText(1_500_000, 2_000_000), '$1.5M–2M');
   assert.equal(recNote({ reason: 'Because you saved X', why: ['same player', 'PSA'] }), 'Because you saved X · same player');
