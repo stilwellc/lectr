@@ -26,7 +26,10 @@ import { bucketOf } from './page-data';
 import { idOfAlias } from './entity/aliases';
 
 /** the deploy's first-screen hash ('' = this build ships none) */
-export const FS_VERSION: string = process.env.NEXT_PUBLIC_FS_VERSION || '';
+/** read at call time (the browser bundle inlines it; tests may set it after import) */
+export const fsVersion = (): string => process.env.NEXT_PUBLIC_FS_VERSION || '';
+/** @deprecated read fsVersion() — kept for existing importers */
+export const FS_VERSION: string = fsVersion();
 
 /** /makers markets whose first screen is maker rows (the slice counts them
  *  exactly); the collection markets' rows are names over the whole book */
@@ -42,7 +45,7 @@ export const entityFsKey = (entityId: string) => `ent-${bucketOf(entityId)}`;
  * entity routes name their entity there).
  */
 export function fsKeyOf(pathname: string | null | undefined, search = ''): string | null {
-  if (!FS_VERSION) return null;
+  if (!fsVersion()) return null;
   const p = (pathname || '/').replace(/\.html$/, '').replace(/\/+$/, '') || '/';
   if (p === '/') return 'home';
   if (p === '/value') return 'value';
@@ -65,7 +68,7 @@ export function fsKeyOf(pathname: string | null | undefined, search = ''): strin
   return null;
 }
 
-export const fsUrl = (key: string) => `/data/ray/first/${key}.json?v=${encodeURIComponent(FS_VERSION)}`;
+export const fsUrl = (key: string) => `/data/ray/first/${key}.json?v=${encodeURIComponent(fsVersion())}`;
 
 /** market.json, trimmed to the reads a first screen prints (the tape, the
  *  pulse): per market its index + n, the vertical repeat-sale, the hedonic
@@ -109,7 +112,7 @@ export function fetchFirstScreen(key: string): Promise<FirstScreenPayload | null
   if (!p) {
     p = fetch(fsUrl(key))
       .then(r => (r.ok && (r.headers.get('content-type') || '').includes('json') ? r.json() : null))
-      .then((j: FirstScreenPayload | null) => (j && j.v === 1 && j.ver === FS_VERSION && Array.isArray(j.lots) ? j : null))
+      .then((j: FirstScreenPayload | null) => (j && j.v === 1 && j.ver === fsVersion() && Array.isArray(j.lots) ? j : null))
       .catch(() => null);
     cache.set(key, p);
   }
