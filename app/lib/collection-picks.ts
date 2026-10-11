@@ -39,6 +39,7 @@ import { entityKeyOf } from './entity/key';
 import { readWatchReference } from './watch-ref';
 import { editionIdentityKey } from './identity';
 import { lotFace } from './lot-face';
+import { cardRecordOf, spanText } from './card-record';
 import { priorityOf } from './priority';
 import { makerLineOf } from './lot-labels';
 import { craftTitle } from '../utils';
@@ -418,12 +419,23 @@ const CAP: Record<PickKind, number> = { upgrade: 3, set: 4, series: 4, maker: 3 
 
 const fmtN = (n: number) => n.toLocaleString('en-US');
 
-/** "same-card PSA 6 median $1.2K (4)" — the candidate's own card record
- *  (lotFace.card: same card & grade), else nothing */
+/** the candidate's own card record (lotFace.card: same card & grade), named
+ *  by its window the way the lot page names it (card-record, W17) — never
+ *  a bare median:
+ *    "same-card PSA 6 $1.2K median (4 sales in the last year)"
+ *    "same-card PSA 6 $1.2K (1 sale in the last year)"
+ *    "same-card PSA 6 $10K all-time median (since 2021 · 11 sales, most 2021–23)"
+ *  An all-time record under 3 sales prints no figure (the lot page's head
+ *  prints none either), so the line says nothing. */
 function sameCardLine(c: Cand): string | null {
-  const f = lotFace(c.lot);
-  if (f.card && f.card.med != null && f.card.n > 0 && f.card.text) return `same-card ${c.card!.gradeLabel} median ${f.card.text} (${fmtN(f.card.n)})`;
-  return null;
+  const f = lotFace(c.lot).card;
+  if (!f || f.med == null || !(f.n > 0) || !f.text) return null;
+  const g = c.card!.gradeLabel;
+  const sales = (k: number) => `${fmtN(k)} ${k === 1 ? 'sale' : 'sales'}`;
+  if (f.window === 'year') return `same-card ${g} ${f.text}${f.n === 1 ? '' : ' median'} (${sales(f.n)} in the last year)`;
+  if (f.n < 3) return null;
+  const rec = cardRecordOf(c.lot);
+  return `same-card ${g} ${f.text} all-time median (${spanText(f.n, rec?.all.span)}${rec?.recent && rec.recent.n === 0 ? ', none in the last year' : ''})`;
 }
 
 /** "PSA 9 ≈ 3.2× PSA 8 on Mickey Mantle's matched ladder (28 cards)" —

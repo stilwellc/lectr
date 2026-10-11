@@ -125,8 +125,8 @@ export default function ForYourCollection({ book, pool, compLots, ready, lastCra
             grade, or a watch with the same reference number; a raw card is never &ldquo;upgraded&rdquo; by a slab, and a
             qualified grade (OC, MK) or an Authentic slab never counts. The same-card median is that grade&rsquo;s own
             record, all-in (buyer&rsquo;s premium included): its sales in the last year when it sold then — the
-            window lectr&rsquo;s card value reads — else every sale on file (n beside it; the lot page dates
-            both); a grade premium is printed only from the player&rsquo;s matched grade ladder — the same
+            window lectr&rsquo;s card value reads, named &ldquo;N sales in the last year&rdquo; — else every sale on
+            file, named &ldquo;all-time&rdquo; with its years and n (under 3 sales, no figure); a grade premium is printed only from the player&rsquo;s matched grade ladder — the same
             cards sold at both grades. <b>Sets</b>: when you hold two or more singles of one set, live cards from that
             set and year whose numbers you don&rsquo;t hold. &ldquo;N of M&rdquo; is printed only for sets whose size is
             settled (1952 Topps, Base Set…); otherwise it says &ldquo;same set&rdquo;. <b>Series</b>: other prints from a
