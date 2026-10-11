@@ -16,13 +16,17 @@ import { seoMeta, breadcrumbLd, webPageLd } from '../../lib/seo';
 export const dynamicParams = false;
 
 export function generateStaticParams() {
-  return staticPlayers().map(x => ({ slug: x.slug }));
+  const out = staticPlayers().map(x => ({ slug: x.slug }));
+  // a static export needs ≥1 route: when the entity files are absent (the
+  // nightly's emit is advisory) ship one noindex placeholder instead of
+  // failing the whole deploy — the ?id= dossier routes keep working
+  return out.length ? out : [{ slug: '_' }];
 }
 
 export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await props.params;
   const x = staticEntityBySlug('player', slug);
-  if (!x) return { title: 'Player dossier' };
+  if (!x) return { title: 'Player dossier', robots: { index: false, follow: true } };
   const f = entityFacts(x);
   return seoMeta({
     title: entityDocTitle(f.name, 'player'),

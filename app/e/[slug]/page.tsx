@@ -16,7 +16,11 @@ import { seoMeta, breadcrumbLd, webPageLd, type Ld } from '../../lib/seo';
 export const dynamicParams = false;
 
 export function generateStaticParams() {
-  return staticOthers().map(x => ({ slug: x.slug }));
+  const out = staticOthers().map(x => ({ slug: x.slug }));
+  // a static export needs ≥1 route: when the entity files are absent (the
+  // nightly's emit is advisory) ship one noindex placeholder instead of
+  // failing the whole deploy — the ?id= dossier routes keep working
+  return out.length ? out : [{ slug: '_' }];
 }
 
 /** the schema.org thing the dossier is about — only the kinds schema.org
@@ -35,7 +39,7 @@ function aboutOf(x: StaticEntity, name: string): Ld {
 export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await props.params;
   const x = staticEntityBySlug('entity', slug);
-  if (!x) return { title: 'Entity' };
+  if (!x) return { title: 'Entity', robots: { index: false, follow: true } };
   const f = entityFacts(x);
   return seoMeta({
     title: entityDocTitle(f.name, x.e.kind),
