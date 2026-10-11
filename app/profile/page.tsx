@@ -28,7 +28,7 @@ import { useReturnLoop, type ReturnLoop } from '../components/PickStrips';
 import { useLastVisit, houseBaselines } from '../lib/feed-filters';
 import ComparableModal from '../components/ComparableModal';
 import { useLotModal } from '../lib/use-lot-modal';
-import { recommend, recNote, recDepth, type Taste, type Rec } from '../lib/recs';
+import { recommend, recNote, recDepth, idAliases, type Taste, type Rec } from '../lib/recs';
 import { closeMsOf } from '../lib/priority';
 import { useFollows } from '../lib/follows';
 import { useTaste } from '../lib/use-recs';
@@ -125,21 +125,10 @@ function isPastPending(l: AuctionLot): boolean {
   return !isNaN(graceMs) && graceMs < Date.parse(`${localToday()}T00:00:00Z`) + 1;
 }
 
-/** every id a save could be keyed under across the corpus AND the sold
-    ledger — the save itself, its tilde twin, and the Wright-family mirrors.
-    BOTH resolution passes must walk the same aliases: resolving a live row
-    through them but looking the ledger up by the raw id dressed real sales
-    as "withdrawn" whenever a save was keyed under an alias. */
-function idAliases(id: string): string[] {
-  const out = [id, id.endsWith('~') ? id.slice(0, -1) : `${id}~`];
-  const fam = id.match(/^(wright|rago|lama)-(\d+)~?$/);
-  if (fam) {
-    for (const h of ['wright', 'rago', 'lama']) {
-      if (h !== fam[1]) out.push(`${h}-${fam[2]}`, `${h}-${fam[2]}~`);
-    }
-  }
-  return out;
-}
+/* every id a save could be keyed under — tilde twin, Wright-family mirrors,
+   Christie's twin ids — is recs.ts idAliases (ONE copy). BOTH resolution
+   passes walk it: looking the ledger up by the raw id dressed real sales as
+   "withdrawn" whenever a save was keyed under an alias. */
 
 /* ── THE ONE CLASSIFIER — why a live watch needs you now. Both surfaces
    that tag rows (Today's reads and the Watching ledger) read THESE
