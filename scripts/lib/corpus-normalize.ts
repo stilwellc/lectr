@@ -18,7 +18,8 @@ import { parseSignerName, SIGNER_PARSER_VERSION } from './autograph-signer';
 import { leadsWithSetCode } from './set-codes';
 import { attachExtractions, fillWatchReferencesFromExtract } from './extract/apply';
 import { segmentOf } from '../corpus-io';
-import { reclassifyLot, isSpaceLeadTitle, goldinSportVerdict } from './classify';
+import { repairChristiesWrongSaleRows } from './christies-sale-repair';
+import { reclassifyLot, isSpaceLeadTitle, goldinSportVerdict, artMediumVerdict } from './classify';
 import { cultureObjectAt, WORN_RE } from '../../app/lib/taxonomy';
 import { saleDayOf, SALE_DAY_HOUSES } from './sale-day';
 import { seasonToDate } from './sports-crawl';
@@ -290,7 +291,12 @@ export function enrichWatchReferences(lots: Lot[]): number {
     // — only for a WATCH lot: a Patek "lithograph depicting a ref. 5098p"
     // or an AP cufflink must not join the reference's pool
     const desc = (l as Lot & { description?: string | null }).description;
-    const watchLot = !l.formKey || DESC_REF_FORMS.has(String(l.formKey));
+    // the form restampIdentityKeys stamps at the END of this pass — not the
+    // row's stale formKey (an "object-edition" Patek wristwatch read no
+    // description ref on pass 1, restamped to wristwatch, then filled it on
+    // pass 2: Oct 11 2026 idempotency)
+    const form = classifyForm({ title: l.title, medium: l.medium, category: l.category });
+    const watchLot = !form || DESC_REF_FORMS.has(String(form));
     // (Oct 6, pricing wave 7) the house's structured reference field
     // (Phillips wReferenceNo) beats the free-text description — OFF until it
     // measures better (USE_HOUSE_REFERENCE)
@@ -1478,6 +1484,10 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   if (rrUrls) console.log(`[normalize] rrauction url backfill: ${rrUrls} lots derived from id (lot-detail/<lotId>)`);
   const deadSso = nullDeadChristiesSsoUrls(ls);
   if (deadSso) console.log(`[normalize] christie's dead www /sso urls nulled: ${deadSso}`);
+  // (Oct 11 2026) rows the suffix-stripped sale URLs stored under the wrong
+  // sale → their real (legacy) sale's name; idempotent (lib/christies-sale-repair)
+  const wrongSale = repairChristiesWrongSaleRows(ls as never);
+  if (wrongSale.total) console.log(`[normalize] christie's wrong-sale rows relabelled: ${wrongSale.total} (${Object.entries(wrongSale.bySlug).map(([k, v]) => `${k}=${v}`).join(' ')})`);
   const rrStubs = dropRRStubRows(ls);
   const mirrorDupes = dedupeWrightFamilyMirrors(ls);
   // the Sep 27 dedupe family (next to the Wright mirrors — same compaction):
@@ -1742,6 +1752,20 @@ export function normalizeArtCategory(lots: Lot[]): { o2p: number; p2o: number } 
   for (const l of lots) {
     if (!ART_CAT_MAKERS.has(l.artist)) continue; // scope guard: art makers ONLY
     const s = `${l.title || ''}  ${l.medium || ''}`;
+    // THE shared print ↔ original verdict (classify artMediumVerdict) — the
+    // reclass ladder's artCategoryFix reads the same one, so the two can no
+    // longer file a row original and back to print on every pass
+    if (l.category === 'original' || l.category === 'print') {
+      const v = artMediumVerdict(l.title, l.medium);
+      if (v) {
+        if (v !== l.category) {
+          (l as Lot & { catReclass?: string }).catReclass = v === 'print' ? 'o2p' : 'p2o';
+          if (v === 'print') o2p++; else p2o++;
+          l.category = v;
+        }
+        continue;
+      }
+    }
     if (l.category === 'original') {
       if (ORIGINAL_STRONG.test(s)) continue; // never touch explicit unique mediums
       // the exact guard the print branch flips ON (Oct 11 2026 idempotency):

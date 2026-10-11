@@ -439,6 +439,9 @@ async function main() {
       estLowNative: (lot.estLowNative ?? null) !== null ? lot.estLowNative : prev.estLowNative,
       estHighNative: (lot.estHighNative ?? null) !== null ? lot.estHighNative : prev.estHighNative,
       firstSeen: prev.firstSeen,
+      // the enrichment attempt record (lib/houses/enrich attempt policy) —
+      // corpus-only; wiping it would re-fetch the same empty pages nightly
+      ...((prev as { enrichTries?: unknown }).enrichTries ? { enrichTries: (prev as { enrichTries?: unknown }).enrichTries } : {}),
     } : { ...lot, firstSeen: todayIso });
   }
 
