@@ -1,0 +1,60 @@
+/* THE BUDGET DESK (#budget) — layout only; every color, size and face is an
+   existing token or an existing profile class (ck-gauge, ck-read, ck-tag,
+   ck-reads-head, ns-ledger-row, ray-toolbar-pill). */
+
+.ck-budget-band { margin-top: 14px; display: grid; gap: 10px; }
+.ck-budget-band .ray-feedsheet-head { margin-top: 2px; }
+.ck-budget-band-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ck-budget-band-row .kicker { flex: 0 0 68px; }
+
+/* a night's head: the kicker, its figures on the rule's right */
+.ck-budget-night { margin-top: 18px; }
+.ck-budget-night:first-child { margin-top: 0; }
+.ck-budget-night-figs { font-size: 12.5px; color: var(--color-text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ck-budget-night-figs b { font-family: var(--font-mono), monospace; font-weight: 600; color: var(--color-fg); }
+.ck-budget-night-figs[data-over] b { color: var(--color-down-text); }
+
+/* the over-budget line under a night: the gap, then the suggestion */
+.ck-budget-over {
+  margin: 8px 0 2px; padding: 8px 2px 0;
+  border-top: 1px dotted var(--color-border-mid);
+  font-size: 12.5px; line-height: 1.5; color: var(--color-text-muted);
+}
+.ck-budget-over b { color: var(--color-down-text); font-weight: 600; }
+.ck-budget-over em { font-style: normal; color: var(--color-fg); }
+
+/* a row's figure, right-aligned, mono — the ledger's grammar */
+.ck-budget-fig { flex: none; margin-left: auto; font-family: var(--font-mono), monospace; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--color-fg); text-align: right; }
+.ck-budget-fig .sub { display: block; font-size: 10px; color: var(--color-text-faint); letter-spacing: 0.02em; }
+
+/* a buy row and its Watch pill side by side */
+.ck-budget-buy { display: flex; align-items: baseline; gap: 10px; border-bottom: 1px solid var(--hairline); }
+.ck-budget-buy:last-child { border-bottom: none; }
+.ck-budget-buy > .ck-read { flex: 1 1 auto; min-width: 0; border-bottom: none; }
+.ck-budget-buy > .ray-toolbar-pill { flex: none; padding: 4px 11px; font-size: 12px; }
+
+/* if you win: the ledger's rows (title over its house line) and its sum */
+.ck-budget-win .ns-ledger-row { font-size: 13px; }
+.ck-budget-win-main { min-width: 0; display: grid; gap: 2px; color: var(--color-fg); }
+.ck-budget-win-title { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: inherit; text-decoration: none; }
+.ck-budget-win-house { display: block; color: var(--color-text-muted); font-size: 12px; }
+.ck-budget-win .ns-ledger-row .ck-budget-fig { font-size: 12.5px; }
+.ck-budget-win .ck-budget-sum { border-top: 1px solid var(--color-border-mid); }
+.ck-budget-win .ck-budget-sum .ck-budget-fig { font-size: 14px; font-weight: 600; }
+
+.ck-budget-empty { font-size: 13px; line-height: 1.55; color: var(--color-text-muted); margin: 6px 0 0; max-width: 820px; }
+.ck-budget-empty b { color: var(--color-fg); font-weight: 600; }
+
+@media (max-width: 640px) {
+  /* the gauge scrolls sideways (ck-gauge's own rule); a cell keeps a card's width and wraps its line */
+  .ck-budget-gauge .ck-gauge-cell { flex: 0 0 196px; }
+  .ck-budget-night-figs { white-space: normal; }
+  .ck-budget-fig { margin-left: 0; text-align: left; }
+  /* the Watch pill rides the row's first line, right of the tag */
+  .ck-budget-buy { position: relative; }
+  .ck-budget-buy > .ck-read { padding-right: 84px; }
+  .ck-budget-buy > .ray-toolbar-pill { position: absolute; right: 2px; top: 9px; }
+  .ck-budget-win .ns-ledger-row { flex-wrap: wrap; }
+  .ck-budget-win-main { flex: 1 1 100%; }
+  .ck-budget-win-title { white-space: normal; }
+}
