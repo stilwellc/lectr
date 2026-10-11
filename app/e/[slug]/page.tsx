@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import EntityPage from '../../components/entity/EntityPage';
+import { entitySeed } from '../../components/entity/seed-server';
 import JsonLd from '../../components/JsonLd';
 import { staticOthers, staticEntityBySlug, entityFacts, entityDescription, entityCardPath, type StaticEntity } from '../../lib/seo-entities';
 import { entityDocTitle } from '../../lib/entity/display';
@@ -62,7 +63,7 @@ export default async function StaticEntityPage(props: { params: Promise<{ slug: 
         webPageLd({ path: x.path, name: entityDocTitle(f.name, x.e.kind), description: entityDescription(x), image: entityCardPath(x), about: aboutOf(x, f.name) }),
         breadcrumbLd([['lectr', '/'], ['The roster', '/makers'], [f.name, x.path]]),
       ]} />
-      <EntityPage key={x.id} id={x.id} />
+      <EntityPage key={x.id} id={x.id} seed={entitySeed(x.id)} />
     </>
   );
 }

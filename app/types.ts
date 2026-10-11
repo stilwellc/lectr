@@ -378,6 +378,13 @@ export interface AuctionLot {
      *  blend, set apart on comps lists (lot-face otherWorksOf) */
     otherWorkIds?: string[];
   } | null;
+  /** (W31) THE SETTLED APPRAISAL's clock: set (ISO day = the build day) on a
+   *  SOLD row whose `value` is today's read of the hammered object — the same
+   *  engine and pools as a live lot valued tonight, the row itself kept out
+   *  of its pool, comps after its sale admitted; `value.signal` / `vsBid` are
+   *  null (no call on a settled lot). Absent on live lots and on sold rows
+   *  the pass never reached (scripts/lib/settled-appraisal). */
+  valueAsOf?: string | null;
 
   // ── v2 STATUS / TIME / PROVENANCE ──
   /** full timestamp only when genuinely known (watch paths). Stripped from the

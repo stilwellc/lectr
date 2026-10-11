@@ -83,7 +83,11 @@ function Step({ raw, variant, render }: { raw: string; variant: FpVariant; rende
 
 interface FsIndex { ver?: string; fromMs?: number; generatedAt?: string }
 
-export default function FirstPaintIsland({ fsKey, render }: { fsKey: string | null; render: () => React.ReactNode }) {
+/** `stepMin` (W30): a coarser step for a page built hundreds of times (the
+ *  entity pages — every step is HTML the build writes, then folds). A lot's
+ *  close is one-way, so a close between two steps still ends the window at
+ *  the step before it; only the window's resolution coarsens. */
+export default function FirstPaintIsland({ fsKey, render, stepMin = FP_STEP_MIN }: { fsKey: string | null; render: () => React.ReactNode; stepMin?: number }) {
   // a step's own render never nests another island
   const inside = useFirstPaint();
   if (!fsKey || inside) return null;
@@ -98,12 +102,12 @@ export default function FirstPaintIsland({ fsKey, render }: { fsKey: string | nu
   const raw = JSON.stringify(payload);
   const t0 = Math.floor((idx.fromMs ?? Date.parse(idx.generatedAt || '')) / 60_000) * 60_000;
   if (!Number.isFinite(t0)) return <div data-fsi={fsKey} hidden />;
-  const steps = Math.floor((FP_HORIZON_H * 60) / FP_STEP_MIN);
+  const steps = Math.floor((FP_HORIZON_H * 60) / stepMin);
   const out: React.ReactNode[] = [];
   for (const v of Object.keys(FP_VIEWPORTS) as FpVariant[]) {
     for (const zone of FP_ZONES) {
       for (let k = 0; k <= steps; k++) {
-        const t = t0 + k * FP_STEP_MIN * 60_000;
+        const t = t0 + k * stepMin * 60_000;
         out.push(
           <template key={`${v}|${zone}|${k}`} data-fsv={`${v}|${zone}|${t}`}>
             <Pin t={t} zone={zone} />

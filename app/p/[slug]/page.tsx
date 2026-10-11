@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import EntityPage from '../../components/entity/EntityPage';
+import { entitySeed } from '../../components/entity/seed-server';
 import JsonLd from '../../components/JsonLd';
 import { staticPlayers, staticEntityBySlug, entityFacts, entityDescription, entityCardPath } from '../../lib/seo-entities';
 import { entityDocTitle } from '../../lib/entity/display';
@@ -54,7 +55,7 @@ export default async function StaticPlayerPage(props: { params: Promise<{ slug: 
           breadcrumbLd([['lectr', '/'], ['The roster', '/makers'], [f.name, x.path]]),
         ]} />
       )}
-      <EntityPage key={id} id={id} />
+      <EntityPage key={id} id={id} seed={entitySeed(id)} />
     </>
   );
 }
