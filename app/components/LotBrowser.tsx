@@ -40,6 +40,7 @@ import { useLotModal } from '../lib/use-lot-modal';
 import { cameBack } from '../lib/use-back-scroll';
 import Flick from './Flick';
 import { recordSignal } from '../lib/recs-signals';
+import { useLogPicks, LOG_MAX_PER_PASS } from '../lib/pick-log';
 import { PickFeedback, UndoSeat, usePickFeedback, withUndoSeat } from './PickFeedback';
 
 const NOOP = () => {};
@@ -515,6 +516,9 @@ export default function LotBrowser({
   );
   // the return loop above the picks: new since the last visit, closing tonight
   const loop = useReturnLoop(feedAll, youTab ? taste : null, { prevVisitDay, baselines });
+  // the For-you picks on screen, noted on this device with what lectr said
+  // then — the profile's "How your picks did" reads them back (app/lib/pick-log)
+  useLogPicks(useMemo(() => (youRecs ? youRecs.slice(0, Math.min(visibleUpcoming, LOG_MAX_PER_PASS)).map(r => ({ lot: r.lot as AuctionLot, rec: r })) : null), [youRecs, visibleUpcoming]), 'h');
   const youNote = useMemo(() => new Map((youRecs ?? []).map(r => [r.lot.id, { full: recNote(r), short: recNote(r, { short: true }) }])), [youRecs]);
   const feed = useMemo(
     () => (youTab

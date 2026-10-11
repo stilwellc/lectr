@@ -42,6 +42,8 @@ import TodayBand from './today';
 import YourSignals from './signals';
 import YourMarket from './YourMarket';
 import PickMenu from './pickmenu';
+import PickOutcomes from './outcomes';
+import { useLogPicks } from '../lib/pick-log';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, median, overEstimatePct, isOnBlock } from '../utils';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
 import { makerLineOf, labelLineOf, drillLabelOf } from '../lib/lot-labels';
@@ -478,6 +480,8 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
     return out.slice(0, Math.max(visible, keep.length));
   }, [recs, visible, fb.marks]);
   useEffect(() => { lastShown.current = shownList; }, [shownList]);
+  // the picks on screen, noted on this device with what lectr said then (N4)
+  useLogPicks(useMemo(() => (ready && !editing ? shownList.map(r => ({ lot: r.lot, rec: r })) : null), [ready, editing, shownList]), 'p');
   const seats = withUndoSeat(shownList, fb.undo);
 
   return (
@@ -1351,9 +1355,13 @@ export default function SavedPage() {
   const recsReady = !loading && tasteReady && (!deskNeedsCorpus || fullLoaded || fullError || savedLots.length >= savedIds.length);
   // ONE deal per page: the Today band, the rail's count and the room agree
   const deal = useDeal(allLots, recTaste, recsReady);
+  // the picks, then how the ones shown before did (N4, app/profile/outcomes)
   const recsRoom = (signedOut = false) => (
-    <RecsRoom book={allLots} deal={deal} compLots={allLots} taste={recTaste} ready={recsReady} lastCrawl={lastCrawl || undefined}
-      isSaved={isSaved} onToggleSave={toggle} signedOut={signedOut} />
+    <>
+      <RecsRoom book={allLots} deal={deal} compLots={allLots} taste={recTaste} ready={recsReady} lastCrawl={lastCrawl || undefined}
+        isSaved={isSaved} onToggleSave={toggle} signedOut={signedOut} />
+      <PickOutcomes book={allLots} />
+    </>
   );
 
   // the one settled count every surface prints (Settled head, the cell room)
