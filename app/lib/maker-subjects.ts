@@ -80,6 +80,21 @@ export function lotSubjectOf(l: SubjectLot): LotSubject | null {
   return v;
 }
 
+/** (Oct 11, /profile review R1 #6) the name a PICK files under on a card or
+ *  row: the maker line when it names someone, else — on the collection books,
+ *  where the maker slot holds a pseudo-maker ("Entertainment & Icons",
+ *  "Autographs", "Type 1 Photos") — the lot's subject row (a person, film,
+ *  franchise, mission, team…), else null: no name, so the slot is left out
+ *  rather than printing a category as if it were a maker. Art / design /
+ *  watch makers always keep their line. */
+export function displayMakerOf(l: SubjectLot): { name: string; href: string } | null {
+  const line = makerLineOf(l);
+  if (!SUBJECT_MARKETS.has(marketOf(l.artist))) return line;
+  if (line.name !== (ARTIST_LABEL[l.artist] || l.artist)) return line;
+  const sub = lotSubjectOf(l);
+  return sub ? { name: sub.name, href: line.href } : null;
+}
+
 /** a player row off a reader's name, canonical (null: no person). (r7 data
  *  fix) a one-word athlete (Pelé) is a player; a famous NON-athlete on a
  *  sports desk (a president's baseball, Marilyn Monroe's photos) is a

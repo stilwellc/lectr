@@ -458,6 +458,19 @@ export default function TerminalHomePage() {
     return p.toString() === '';
   }, [feedFilters]);
 
+  // (Oct 11) a link to /?tab=you (For you) lands ON the feed, not the hero —
+  // once, after the page has its feed; a hash or a restored scroll wins
+  const tabLanded = useRef(false);
+  useEffect(() => {
+    if (tabLanded.current || loading || upcoming.length === 0) return;
+    tabLanded.current = true;
+    try {
+      if (new URLSearchParams(window.location.search).get('tab') !== 'you' || window.location.hash || window.scrollY > 0) return;
+    } catch { return; }
+    const t = window.setTimeout(() => document.getElementById('on-the-block')?.scrollIntoView({ block: 'start' }), 250);
+    return () => window.clearTimeout(t);
+  }, [loading, upcoming.length]);
+
   // The below-market lens: biggest gap first, at the feed.
   const openBelowLens = () => {
     setFeedFilters(f => { const next: FeedFilters = { ...f, belowOnly: true, sort: 'gap-desc' }; rememberFeed(next); return next; });

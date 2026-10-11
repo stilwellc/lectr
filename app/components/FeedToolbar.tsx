@@ -202,6 +202,7 @@ export default function FeedToolbar({
   onResetView,
   scopeMaker = null,
   scopeSubj = null,
+  countLabel = null,
 }: {
   lots: AuctionLot[];          // the unfiltered upcoming pool (for counts)
   belowIds: Set<string>;
@@ -209,6 +210,10 @@ export default function FeedToolbar({
   onChange: (next: FeedFilters) => void;
   shown: number;
   total: number;
+  /** (Oct 11) what the unfiltered count line says instead of "N lots" — a
+   *  tab that shows a picked subset (For you) names the subset, so "For you
+   *  20" never sits over "9,662 lots" */
+  countLabel?: React.ReactNode;
   market?: Market;
   onMarketReset?: () => void;
   view: 'grid' | 'table';
@@ -1022,7 +1027,7 @@ ${FEEDSHEET_CSS}
             {saveable && <SaveSearch filters={scopeMaker ? { ...filters, maker: scopeMaker } : filters} market={effectiveMarket} />}
           </>
         ) : (
-          <>{total.toLocaleString()} lots</>
+          countLabel ?? <>{total.toLocaleString()} lots</>
         )}
         {onResetView && (
           <button className="ray-toolbar-reset" onClick={onResetView} title="This view was restored from your last visit">

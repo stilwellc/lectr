@@ -29,6 +29,7 @@ import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './FeedToolbar';
 import { houseBaselines, type HouseBaselines } from '../lib/feed-filters';
 import { shortlist, reasonOf } from '../lib/priority';
 import { makerLineOf, labelTagOf, subColumnOf } from '../lib/lot-labels';
+import { displayMakerOf } from '../lib/maker-subjects';
 import { foldVariants, foldNote, foldQuery, crossSibs, crossNote } from '../lib/fold';
 import type { Follow } from '../lib/follows';
 import { recommend, recNote, type Taste } from '../lib/recs';
@@ -142,13 +143,51 @@ function BidVelChip({ lot }: { lot: AuctionLot }) {
   );
 }
 
-export function FeedRow({ lot, onOpen, tone, note, onNote, feedback }: {
+/** the pick row (FeedRow stack) — thumb · maker/subject · title (1 line) ·
+ *  reason (wraps) · price · hammer day */
+function StackRow({ lot, onOpen, tone, note, est }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down'; note?: string | null; est: string }) {
+  const maker = displayMakerOf(lot);
+  const label = labelTagOf(lot);
+  const title = craftTitle(lot.title, lot.auctionHouse);
+  return (
+    <button type="button" className="ray-feedrow ray-feedrow-stack" onClick={onOpen} aria-label={`Comps for ${title}`}>
+      <span className="ray-feedrow-thumb" data-tone={tone} aria-hidden>
+        {(lot.title || '?').charAt(0)}
+        {lot.imageUrl && (
+          <img src={sizedImg(httpsImg(lot.imageUrl), 120)} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer"
+            style={{ background: 'transparent' }} onError={e => { e.currentTarget.style.display = 'none'; }} />
+        )}
+      </span>
+      <span className="ray-feedrow-main">
+        <span className="ray-feedrow-maker">
+          {maker ? maker.name : title}
+          {label && <span style={{ fontWeight: 400, fontSize: '12.5px', color: 'var(--color-text-muted)' }}> · {label}</span>}
+        </span>
+        {maker && <span className="ray-feedrow-title">{title}</span>}
+        {note && <span className="ray-feedrow-note">{note}</span>}
+        <span className="ray-feedrow-price">
+          <b>{est}</b>
+          {lot.saleDate ? <span className="ray-feedrow-day">· {formatDate(lot.saleDate)}</span> : null}
+          <BidVelChip lot={lot} />
+        </span>
+      </span>
+    </button>
+  );
+}
+
+export function FeedRow({ lot, onOpen, tone, note, onNote, feedback, stack = false }: {
   lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down'; note?: string | null; onNote?: () => void;
   /** a pick's "More like this / Not for me" (components/PickFeedback) — rides
    *  inside the row's hairline, under its text */
   feedback?: React.ReactNode;
+  /** (Oct 11, /profile picks) the pick row: the reason is the one line that
+   *  never truncates — it wraps; the price rides under the text in mono with
+   *  the hammer day, so no right column eats 40% of a phone's width. A
+   *  pseudo-maker gives way to the lot's subject (displayMakerOf). */
+  stack?: boolean;
 }) {
   const est = feedRowPrice(lot);
+  if (stack) return <StackRow lot={lot} onOpen={onOpen} tone={tone} note={note} est={est} />;
   // the label's lead word (its lead badge, else the sub) — the full line
   // ellipsized the maker away at 390px
   const label = labelTagOf(lot);
@@ -615,6 +654,7 @@ export default function LotBrowser({
         onResetView={onResetView}
         scopeMaker={scope?.maker ?? null}
         scopeSubj={scope?.subj ?? null}
+        countLabel={youTab && youTaste ? <>{feed.length.toLocaleString()} picked from {onBlock.length.toLocaleString()} lots</> : null}
       />
       </>}
 

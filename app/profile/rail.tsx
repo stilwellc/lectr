@@ -1,13 +1,12 @@
 'use client';
 /**
  * THE SECTION RAIL (Oct 11 2026, /profile redesign) — the desk's in-page
- * index. One item list, two presentations:
- *
- *   ≥1160px   the left-gutter index (the old /value spine grammar): fixed,
- *             vertically centered in the gutter; marks only until the gutter
- *             is wide enough (≥1400px) to print the label + count beside it.
- *   <1160px   a sticky pill rail under the site nav (top 54) that scrolls
- *             sideways on itself — never on a sticky ancestor.
+ * index: a sticky pill rail under the site nav (top 64, the nav's height)
+ * at EVERY width, scrolling sideways on itself — never on a sticky ancestor.
+ * (Oct 11 review: the ≥1160px left-gutter index retired — it revived the
+ * spine /value dropped on Aug 29, split the site into two navigation
+ * grammars, hid its labels below 1400px and broke the focus order. One rail,
+ * in reading order, "Today" first when the band renders.)
  *
  * Every item is a real hash link (#for-you, #watching …): it jumps, stamps
  * the hash (replaceState, so Back leaves the page rather than walking
@@ -19,7 +18,8 @@ import React, { useEffect, useState } from 'react';
 export interface RailItem {
   id: string;
   label: string;
-  mark: React.ReactNode;
+  /** the section's mark (kept on the item for any future glyph use) */
+  mark?: React.ReactNode;
   /** the figure beside the label (a count, a signed %, a money total) */
   count?: React.ReactNode;
   /** signed ink for a measured delta (lamp law: only a real sign) */
@@ -66,8 +66,8 @@ function useActive(ids: string[]): string | null {
 
 const toneInk = (t?: 'up' | 'down') => (t === 'up' ? 'var(--color-up)' : t === 'down' ? 'var(--color-down-text)' : undefined);
 
-/** the sticky pill rail (<1160px). Place it as a direct child of the
- *  page-long wrapper so it stays pinned past every section. */
+/** the sticky pill rail. Place it as a direct child of the page-long
+ *  wrapper so it stays pinned past every section. */
 export function PillRail({ items }: { items: RailItem[] }) {
   const active = useActive(items.map(i => i.id));
   // keep the active pill in view inside the rail's own sideways scroll
@@ -92,28 +92,6 @@ export function PillRail({ items }: { items: RailItem[] }) {
           </a>
         ))}
       </div>
-    </nav>
-  );
-}
-
-/** the left-gutter index (≥1160px) — fixed, so it mounts OUTSIDE any
- *  transformed ancestor (the entrance animation would re-anchor it) */
-export function GutterIndex({ items }: { items: RailItem[] }) {
-  const active = useActive(items.map(i => i.id));
-  if (items.length < 2) return null;
-  return (
-    <nav className="ck-spine" aria-label="Sections on this page">
-      {items.map(it => (
-        <a key={it.id} href={`#${it.id}`} className="ck-spine-item" aria-current={active === it.id ? 'true' : undefined}
-          aria-label={`${it.label}${typeof it.count === 'string' || typeof it.count === 'number' ? ` · ${it.count}` : ''}`}
-          onClick={e => { e.preventDefault(); jump(it.id); }}>
-          <span className="ck-spine-mark" aria-hidden>{it.mark}{it.dot && <i className="ck-rail-dot" />}</span>
-          <span className="ck-spine-label" aria-hidden>
-            {it.label}
-            {it.count != null && <b style={{ color: toneInk(it.tone) }}>{it.count}</b>}
-          </span>
-        </a>
-      ))}
     </nav>
   );
 }

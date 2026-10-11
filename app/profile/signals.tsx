@@ -16,7 +16,9 @@ import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import { useFollows, type Follow, type FollowKind } from '../lib/follows';
-import { useSavedSearches } from '../lib/alerts';
+import { useSavedSearches, useAlerts } from '../lib/alerts';
+import { useInterests, priceText } from '../lib/interests';
+import { MARKETS } from '../constants';
 import { useSignals } from '../lib/use-recs';
 import { clearSignals } from '../lib/recs-signals';
 import AlertsInbox from '../components/AlertsInbox';
@@ -27,6 +29,26 @@ import { HelpChip } from './help';
 
 const KIND_ORDER: FollowKind[] = ['maker', 'entity', 'cat', 'house'];
 const KIND_LABEL: Record<FollowKind, string> = { maker: 'Makers & players', entity: 'Subjects', cat: 'Categories', house: 'Houses' };
+
+/** what the reader STATED in the quick start — markets + price range —
+ *  shown where it tunes the picks, and editable in place (Edit → the
+ *  same quick start). Absent until the quick start has been finished once. */
+function Stated({ onEdit }: { onEdit: () => void }) {
+  const it = useInterests();
+  if (!it.at && !it.markets.length && it.minUsd == null && it.maxUsd == null) return null;
+  const mk = it.markets.map(m => MARKETS.find(x => x.key === m)?.label ?? m);
+  const price = priceText(it.minUsd != null || it.maxUsd != null ? { minUsd: it.minUsd, maxUsd: it.maxUsd } : null);
+  return (
+    <div className="ck-sig-stated">
+      <span className="ck-sig-k">Markets</span>
+      <span className="ck-sig-v">{mk.length ? mk.join(' · ') : 'any'}</span>
+      <span className="ck-sig-k">Price</span>
+      <span className="ck-sig-v">{price ?? 'any'}</span>
+      <button type="button" className="ck-warn-btn ck-sig-edit" aria-haspopup="dialog" onClick={onEdit}
+        aria-label="Edit the markets and price range you stated">Edit</button>
+    </div>
+  );
+}
 
 export function FollowChips({ book, onAdd }: { book: readonly AuctionLot[]; onAdd?: () => void }) {
   const { follows, toggle, ready } = useFollows();
@@ -41,6 +63,9 @@ export function FollowChips({ book, onAdd }: { book: readonly AuctionLot[]; onAd
       {groups.length === 0 && (
         <p className="ck-sig-note">Nothing followed yet. Follow a maker, player, subject, category or house and its live lots lead your picks.</p>
       )}
+      <Stated onEdit={add} />
+      {/* every kind on one wrapping line — the kind a small prefix, not a row */}
+      <div className="ck-sig-groups">
       {groups.map(g => (
         <div key={g.k} className="ck-sig-group">
           <span className="ck-sig-k">{KIND_LABEL[g.k]}</span>
@@ -55,6 +80,7 @@ export function FollowChips({ book, onAdd }: { book: readonly AuctionLot[]; onAd
           </div>
         </div>
       ))}
+      </div>
       <div className="ck-sig-actions">
         <button type="button" className="ray-toolbar-pill ck-sig-add" aria-haspopup="dialog" onClick={add}>+ Add</button>
         <Link href="/makers" className="ck-away-link" style={{ fontSize: 13 }}>Browse makers and players</Link>
@@ -127,6 +153,20 @@ export function OnDevice() {
 
 export default function YourSignals({ book, signedOut }: { book: readonly AuctionLot[]; signedOut: boolean }) {
   const { searches, ready } = useSavedSearches();
+  const { unseen } = useAlerts();
+  // no saved search and no orphaned matches: the inbox has nothing to show,
+  // so its note folds under the follows (one column, no lone sentence)
+  const inboxEmpty = ready && searches.length === 0 && unseen === 0;
+  const searchesNote = (
+    <>
+      <div className="ck-reads-head"><span className="kicker">Saved searches</span><i className="ck-reads-rule" /></div>
+      <p className="ck-sig-note">
+        {signedOut
+          ? 'Sign in and the searches you save from any feed are matched nightly against every new lot — the matches land here.'
+          : 'No saved searches yet. Save one from any feed’s search and the nightly crawl matches every new lot against it — the matches land here.'}
+      </p>
+    </>
+  );
   return (
     <section id="signals" className="ray-saved-section rail" aria-label="Your signals">
       <div className="ns-plate" style={{ paddingTop: 18 }}>
@@ -142,21 +182,19 @@ export default function YourSignals({ book, signedOut }: { book: readonly Auctio
         <div className="ck-sig-grid">
           <div>
             <FollowChips book={book} />
-            <OnDevice />
+            {inboxEmpty && <div id="inbox" className="ck-sig-block">{searchesNote}</div>}
           </div>
-          <div id="inbox" className="ck-sig-block">
-            <AlertsInbox embedded />
-            {ready && searches.length === 0 && (
-              <>
-                <div className="ck-reads-head"><span className="kicker">Saved searches</span><i className="ck-reads-rule" /></div>
-                <p className="ck-sig-note">
-                  {signedOut
-                    ? 'Sign in and the searches you save from any feed are matched nightly against every new lot — the matches land here.'
-                    : 'No saved searches yet. Save one from any feed’s search and the nightly crawl matches every new lot against it — the matches land here.'}
-                </p>
-              </>
-            )}
-          </div>
+          {inboxEmpty ? (
+            <div><OnDevice /></div>
+          ) : (
+            <div>
+              <div id="inbox" className="ck-sig-block">
+                <AlertsInbox embedded />
+                {ready && searches.length === 0 && searchesNote}
+              </div>
+              <OnDevice />
+            </div>
+          )}
         </div>
       </div>
     </section>

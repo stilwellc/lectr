@@ -22,7 +22,7 @@ import CountUp from '../components/CountUp';
 import Masthead, { Accent } from '../components/Masthead';
 import Flick from '../components/Flick';
 import CloseClock from '../components/CloseClock';
-import { WatchMark, RecordMark, CollectionMark, TapeMark, ArchiveMark, HorizonMark, RankMark, SignalMark } from '../components/marks';
+import { WatchMark, RecordMark, CollectionMark, TapeMark, ArchiveMark, HorizonMark, RankMark, SignalMark, AwayMark } from '../components/marks';
 import { FeedRow, belowSignalOf, feedTone } from '../components/LotBrowser';
 import { useReturnLoop, type ReturnLoop } from '../components/PickStrips';
 import { useLastVisit, houseBaselines } from '../lib/feed-filters';
@@ -37,13 +37,14 @@ import QuickStart from '../components/QuickStart';
 import { usePricePref, priceText } from '../lib/interests';
 import { CellGrid, Cell, ColorCell } from '../components/cells';
 import { HelpChip } from './help';
-import { PillRail, GutterIndex, useHashLanding, type RailItem } from './rail';
+import { PillRail, useHashLanding, type RailItem } from './rail';
 import TodayBand from './today';
 import YourSignals from './signals';
 import PickMenu from './pickmenu';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, median, overEstimatePct, isOnBlock } from '../utils';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
 import { makerLineOf, labelLineOf, drillLabelOf } from '../lib/lot-labels';
+import { displayMakerOf } from '../lib/maker-subjects';
 
 /* ============================================================
    MY PROFILE — THE COCKPIT (Aug 24 2026 rebuild). The page is
@@ -414,6 +415,25 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
   // rides inside the taste as a strong band (recs' statedFit) — named here only
   const pricePref = usePricePref();
   const [editing, setEditing] = useState(false);
+  // Tune keeps the reader's place: focus lands on the editor's head when it
+  // opens, and returns to Tune when it closes (Done / Cancel)
+  const tuneRef = useRef<HTMLButtonElement | null>(null);
+  const editRef = useRef<HTMLDivElement | null>(null);
+  const wasEditing = useRef(false);
+  useEffect(() => {
+    if (editing) {
+      const t = window.setTimeout(() => {
+        const root = editRef.current;
+        const head = root?.querySelector<HTMLElement>('.ray-feedsheet-head') ?? root?.querySelector<HTMLElement>('button, input');
+        if (!head) return; // phone: the sheet traps its own focus
+        if (!head.matches('button, input')) head.tabIndex = -1;
+        head.focus({ preventScroll: false });
+      }, 30);
+      wasEditing.current = true;
+      return () => window.clearTimeout(t);
+    }
+    if (wasEditing.current) { wasEditing.current = false; tuneRef.current?.focus(); }
+  }, [editing]);
   const below = useMemo(() => belowSignalOf(recs.map(r => r.lot), compLots), [recs, compLots]);
   const [narrow, setNarrow] = useState(false);
   useEffect(() => {
@@ -475,7 +495,7 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
             Everything that tunes the list is under <a href="#signals" className="ck-away-link">Your signals</a>.
           </HelpChip>
           {ready && !cold && !editing && (
-            <button type="button" className="ray-toolbar-pill ck-tune" aria-haspopup="dialog" onClick={() => setEditing(true)}>Tune</button>
+            <button ref={tuneRef} type="button" className="ray-toolbar-pill ck-tune" aria-haspopup="dialog" onClick={() => setEditing(true)}>Tune</button>
           )}
           {ready && !cold && (
             <span className="ck-room-sub ck-room-subline">
@@ -490,7 +510,7 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
         ) : cold ? (
           <QuickStart book={book} mode="cold" surface="profile" />
         ) : editing ? (
-          <div style={{ marginBottom: 20 }}>
+          <div ref={editRef} style={{ marginBottom: 20 }}>
             <QuickStart book={book} mode="edit" surface="profile" onClose={() => setEditing(false)} />
           </div>
         ) : null}
@@ -508,20 +528,24 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
               ? <UndoSeat key={`undo-${r.undoSeat.id}`} undo={r.undoSeat} onUndo={fb.undoIt} row />
               : (
                 <div key={r.lot.id} className="ck-pickrow" data-pick>
-                  <FeedRow lot={r.lot} onOpen={() => setOpenLot(r.lot)}
-                    tone={feedTone(r.lot, below.ids, below.hasSig)} note={recNote(r, { short: true })} />
+                  {/* the reason is the row's one line that never truncates
+                      (the honesty payload) — it wraps; the price rides under */}
+                  <FeedRow stack lot={r.lot} onOpen={() => setOpenLot(r.lot)}
+                    tone={feedTone(r.lot, below.ids, below.hasSig)} note={recNote(r)} />
                   <PickMenu lot={r.lot} mark={fb.marks.get(r.lot.id)} onMark={fb.mark} at={i} />
                 </div>
               )))}
           </div>
         ) : (
-          <div className="ray-saved-grid">
+          <div className="ray-saved-grid ck-picks">
             {seats.map((r, i) => ('undoSeat' in r
-              ? <UndoSeat key={`undo-${r.undoSeat.id}`} undo={r.undoSeat} onUndo={fb.undoIt} />
+              // the seat spans the grid's row as one slim strip (the grid packs
+              // densely around it) — a hidden pick never leaves a blank card slot
+              ? <div key={`undo-${r.undoSeat.id}`} className="ck-undoseat"><UndoSeat undo={r.undoSeat} onUndo={fb.undoIt} /></div>
               : (
               // the card fills its row; the pick's feedback rides under it
               <div key={r.lot.id} data-pick className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms`, display: 'grid', gridTemplateRows: 'minmax(0, 1fr) auto' } as React.CSSProperties}>
-                <LotCard lot={r.lot} showArtist allLots={compLots} saved={isSaved(r.lot.id)} onToggleSave={onToggleSave}
+                <LotCard lot={r.lot} showArtist subjectMaker allLots={compLots} saved={isSaved(r.lot.id)} onToggleSave={onToggleSave}
                   lastCrawl={lastCrawl} note={recNote(r)} />
                 <PickFeedback lot={r.lot} mark={fb.marks.get(r.lot.id)} onMark={fb.mark} at={i} />
               </div>
@@ -961,7 +985,12 @@ export default function SavedPage() {
     const totalAppraised = rows.reduce((s, r) => s + (r.appraised ?? r.paid ?? 0), 0);
     const appraisedOfPaid = rows.reduce((s, r) => s + (r.paid != null ? (r.appraised ?? r.paid) : 0), 0);
     const deltaPct = totalPaid > 0 ? Math.round((appraisedOfPaid / totalPaid - 1) * 100) : null;
-    return { rows, totalPaid, totalAppraised, deltaPct };
+    // pieces the engine actually appraised (a comp pool) — and of those, the
+    // ones with a bought price. With none, "appraised vs bought" compares cost
+    // with cost (every piece carries at its bought price): no measurement.
+    const appraisedN = rows.filter(r => r.appraised != null).length;
+    const appraisedPaidN = rows.filter(r => r.appraised != null && r.paid != null && r.paid > 0).length;
+    return { rows, totalPaid, totalAppraised, deltaPct, appraisedN, appraisedPaidN };
   }, [savedLots, ownedLotIds, allLots, fullLoaded, marketData, soldOrphans, ownedIdSet, savedMeta, metaFor, savedIdOf]);
 
   /* ── sub-market exposure — the MARKET's read, labeled as such ── */
@@ -1364,7 +1393,7 @@ export default function SavedPage() {
         <>{(sinceLast || unseenAlerts > 0) ? ' · ' : ''}{summary.closesToday} {summary.closesToday === 1 ? 'watch closes' : 'watches close'} today</>
       )}
       {unclaimedWins > 0 && (
-        <>{(sinceLast || unseenAlerts > 0 || summary.closesToday > 0) ? ' · ' : ''}<a href="#settled" className="ck-away-link">{unclaimedWins} settled {unclaimedWins === 1 ? 'win' : 'wins'} unclaimed — won any?</a></>
+        <>{(sinceLast || unseenAlerts > 0 || summary.closesToday > 0) ? ' · ' : ''}<a href="#settled" className="ck-away-link">{unclaimedWins === 1 ? '1 of your watches sold — did you win it?' : `${unclaimedWins} of your watches sold — did you win any?`}</a></>
       )}
       {sinceLast && <> · <a href="#settled" className="ck-away-go">See what happened <Flick size={9} /></a></>}
     </>
@@ -1373,13 +1402,33 @@ export default function SavedPage() {
   /* ── THE RAIL — one item per section that renders; counts replace the
      old gauge line's duplicate figures ── */
   const { follows: myFollows } = useFollows();
+  // signed out: a reader who already told lectr what they collect gets the
+  // STATE as the hero's sub-line, never the "tell lectr" prompt again
+  const statedPrice = usePricePref();
+  const tunedLine = useMemo(() => {
+    if (!myFollows.length) return null;
+    const lp = deal.loop;
+    const since = lp?.since && lp.since < localToday() ? lp.since : null;
+    const fresh = lp?.fresh.length ?? 0;
+    return [
+      `Tuned to ${myFollows.length} ${myFollows.length === 1 ? 'follow' : 'follows'}`,
+      priceText(statedPrice),
+      fresh > 0 ? `${fresh} new ${since ? `since ${new Date(`${since}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : 'today'}` : null,
+    ].filter(Boolean).join(' · ');
+  }, [myFollows.length, statedPrice, deal.loop]);
+  const coldOut = recsReady && recTaste.seeds.length === 0;
   const historyCount = settledCount + other.length + goneOrphans.length;
   const hasRecordRoom = !!(record && record.med != null) || collection.rows.length > 0 || settledCount > 0;
   const deskView = !signedOutView && !(savedLots.length === 0 && orphanIds.length === 0);
+  // the room order the page prints: Watching leads For you when the reader
+  // has live watches (their own lots, on a hammer clock, before lectr's
+  // suggestions); with nothing live, the picks lead
+  const watchFirst = deskView && upcoming.length > 0;
   const railItems: RailItem[] = useMemo(() => {
     const r: RailItem[] = [];
-    r.push({ id: 'for-you', label: 'For you', mark: <RankMark size={15} />, count: deal.recs.length || undefined });
-    if (deskView && upcoming.length > 0) r.push({ id: 'watching', label: 'Watching', mark: <WatchMark size={15} />, count: upcoming.length });
+    const forYou: RailItem = { id: 'for-you', label: 'For you', mark: <RankMark size={15} />, count: deal.recs.length || undefined };
+    if (watchFirst) r.push({ id: 'watching', label: 'Watching', mark: <WatchMark size={15} />, count: upcoming.length });
+    r.push(forYou);
     r.push({ id: 'signals', label: 'Signals', mark: <SignalMark size={15} />, count: myFollows.length || undefined, dot: unseenAlerts > 0 });
     if (deskView && hasRecordRoom) {
       const med = record && record.med != null ? Math.round(record.med) : null;
@@ -1388,7 +1437,13 @@ export default function SavedPage() {
     if (deskView && collection.rows.length > 0) r.push({ id: 'collection', label: 'Collection', mark: <CollectionMark size={15} />, count: formatPrice(collection.totalAppraised) });
     if (deskView && (historyCount > 0 || orphanIds.length > 0)) r.push({ id: 'history', label: 'History', mark: <TapeMark size={15} />, count: historyCount || undefined });
     return r;
-  }, [deal.recs.length, deskView, upcoming.length, myFollows.length, unseenAlerts, hasRecordRoom, record, collection, historyCount, orphanIds.length]);
+  }, [deal.recs.length, deskView, watchFirst, upcoming.length, myFollows.length, unseenAlerts, hasRecordRoom, record, collection, historyCount, orphanIds.length]);
+  // "Today" leads the rail wherever the band renders — TodayBand's own gate:
+  // the return loop answered, or there is an away fact, a closing watch or a read
+  const railWith = (band: { away: boolean; closing: number; reads: number }): RailItem[] =>
+    (deal.loop || band.away || band.closing > 0 || band.reads > 0)
+      ? [{ id: 'today', label: 'Today', mark: <AwayMark size={15} /> }, ...railItems]
+      : railItems;
 
   useHashLanding(recsReady && !loading && authReady && savedReady && (!deskNeedsCorpus || fullLoaded || !!fullError));
 
@@ -1434,7 +1489,7 @@ export default function SavedPage() {
           sub="Bookmark a lot anywhere on lectr and it tracks here to the hammer — comps, signals, your record once it settles, your collection when you win."
         />
       </section>
-      <PillRail items={railItems} />
+      <PillRail items={railWith({ away: unseenAlerts > 0 && !!awayLine, closing: 0, reads: 0 })} />
       <TodayBand loop={deal.loop} closingWatches={[]} reads={[]} away={unseenAlerts > 0 ? awayLine : null} />
       {recsRoom()}
       <YourSignals book={allLots} signedOut={false} />
@@ -1459,9 +1514,6 @@ export default function SavedPage() {
   return (
     <div className="terminal-shell ck-page" style={{ minHeight: '100vh', fontFamily: 'var(--font-sans), sans-serif' }}>
       <ArtistNav activeSlug="saved" savedCount={badgeCount} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
-      {/* the left-gutter index (≥1160px) — fixed, so it sits outside the
-          entrance wrapper's transforms */}
-      {!(loading || !authReady || !savedReady) || signedOutView ? <GutterIndex items={railItems} /> : null}
 
       {signedOutView ? (
         <RayEntrance animate>
@@ -1469,18 +1521,24 @@ export default function SavedPage() {
             <Masthead
               kicker="My desk"
               title={<>Your desk at <Accent>the auction</Accent>.</>}
-              sub="Tell lectr what you collect and live lots tied to it land below — no account needed."
+              sub={tunedLine ?? 'Tell lectr what you collect and live lots tied to it land below.'}
             />
           </section>
-          <PillRail items={railItems} />
+          <PillRail items={railWith({ away: false, closing: 0, reads: 0 })} />
           <TodayBand loop={deal.loop} closingWatches={[]} reads={[]} away={null} />
           {recsRoom(true)}
           {/* the slim sign-in line — after value, never before it */}
           <section className="rail ray-enter">
             <div className="ck-signin">
-              <button className="ray-call-btn ray-call-btn-primary" style={{ border: 'none', cursor: 'pointer' }} onClick={() => signInWithGoogle()}>
-                Sign in with Google
-              </button>
+              {/* a cold visit's one primary action is the quick start — sign-in
+                  rides as a text link under it, never a second black button */}
+              {coldOut ? (
+                <button type="button" className="ck-warn-btn ck-account-btn" onClick={() => signInWithGoogle()}>Sign in with Google</button>
+              ) : (
+                <button className="ray-call-btn ray-call-btn-primary" style={{ border: 'none', cursor: 'pointer' }} onClick={() => signInWithGoogle()}>
+                  Sign in with Google
+                </button>
+              )}
               <span>to keep this everywhere — your follows carry over. Free · one tap · nothing else on lectr is gated.</span>
             </div>
           </section>
@@ -1605,14 +1663,15 @@ export default function SavedPage() {
             )}
           </section>
 
-          <PillRail items={railItems} />
+          <PillRail items={railWith({ away: !!awayLine, closing: closingWatches.length, reads: reads.length })} />
 
           {/* ══ 1 · TODAY — new since, closing tonight, today's reads; the
               away facts ride its header line ══ */}
           <TodayBand loop={deal.loop} closingWatches={closingWatches} reads={reads} away={awayLine} />
 
-          {/* ══ 2 · LOTS YOU MAY LIKE — picked from the desk itself ══ */}
-          {recsRoom()}
+          {/* ══ 2 · LOTS YOU MAY LIKE — first only when nothing is live on the
+              desk; a reader with live watches sees their own lots first ══ */}
+          {!watchFirst && recsRoom()}
 
           {/* ══ 3 · WATCHING — the room, action-first, brief fused in ══ */}
           {upcoming.length > 0 && (
@@ -1672,7 +1731,7 @@ export default function SavedPage() {
                           {reason && <span className="ck-tag" data-tone={reason.tag === 'Below market' ? 'up' : reason.tag === 'Lands soon' ? 'hot' : undefined}>{reason.tag}</span>}
                         </span>
                         <span className="work">
-                          <span className="ck-workmaker">{makerLineOf(lot).name}</span>
+                          {displayMakerOf(lot) && <span className="ck-workmaker">{displayMakerOf(lot)!.name}</span>}
                           <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>
                             {craftTitle(lot.title, lot.auctionHouse)}
                           </Link>
@@ -1716,8 +1775,7 @@ export default function SavedPage() {
                         <span className="ck-mtitle">{craftTitle(lot.title, lot.auctionHouse)}</span>
                         <span className="ck-msub">
                           {reason && <span className="ck-tag" data-tone={reason.tag === 'Below market' ? 'up' : reason.tag === 'Lands soon' ? 'hot' : undefined}>{reason.tag}</span>}
-                          {makerLineOf(lot).name}
-                          {formatEstimate(lot) ? <> · {formatEstimate(lot)}</> : null}
+                          {[displayMakerOf(lot)?.name, formatEstimate(lot)].filter(Boolean).join(' · ')}
                         </span>
                       </span>
                       <span className="ck-mrow-right">
@@ -1748,6 +1806,9 @@ export default function SavedPage() {
             </section>
           )}
 
+          {/* ══ 3b · LOTS YOU MAY LIKE — after Watching on a live desk ══ */}
+          {watchFirst && recsRoom()}
+
           {/* ══ 4 · YOUR SIGNALS — follows, saved searches + inbox, what this
               device learned ══ */}
           <YourSignals book={allLots} signedOut={false} />
@@ -1773,7 +1834,10 @@ export default function SavedPage() {
                     as computed; zero or none → ink abstention); the quiet cells
                     are counts the page prints nowhere else now */}
                 <CellGrid min={200} className="ck-cells ck-figs">
-                  {collection.deltaPct != null && collection.totalPaid > 0 ? (
+                  {/* the lead is a MEASUREMENT: appraised vs bought only once ≥1
+                      piece with a bought price has a comp-based appraisal;
+                      until then the record's median vs estimate leads */}
+                  {collection.deltaPct != null && collection.totalPaid > 0 && collection.appraisedPaidN > 0 ? (
                     <ColorCell
                       dir={collection.deltaPct > 0 ? 'up' : collection.deltaPct < 0 ? 'down' : 'ink'}
                       stat={fmtSignedPct(collection.deltaPct)}
@@ -1797,7 +1861,9 @@ export default function SavedPage() {
                       stat={collection.rows.length.toLocaleString()}
                       statNote={collection.rows.length === 1 ? 'piece held' : 'pieces held'}
                       label="Collection"
-                      body={`${formatPrice(collection.totalAppraised)} at appraisal`}
+                      body={collection.appraisedN > 0
+                        ? `${formatPrice(collection.totalAppraised)} at appraisal`
+                        : `Not appraised yet · 0 of ${collection.rows.length} ${collection.rows.length === 1 ? 'piece has' : 'pieces have'} comps`}
                       href="#collection"
                     />
                   )}
@@ -1880,7 +1946,7 @@ export default function SavedPage() {
                     <div className="k">lectr appraisal</div>
                     <div className="v">{formatPrice(collection.totalAppraised)}</div>
                   </div>
-                  {collection.deltaPct != null && collection.deltaPct !== 0 && (
+                  {collection.deltaPct != null && collection.deltaPct !== 0 && collection.appraisedPaidN > 0 && (
                     <div>
                       <div className="k">Appraised vs bought</div>
                       <div className="v" style={{ fontWeight: 600, color: collection.deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
@@ -1927,7 +1993,7 @@ export default function SavedPage() {
                   </div>
                 )}
 
-                <div className="kicker" style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '14px 0 6px', color: 'var(--paper-muted, var(--color-text-muted))' }}>
+                <div className="kicker ck-piece-head" style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '14px 0 6px', color: 'var(--paper-muted, var(--color-text-muted))' }}>
                   <div style={{ flex: 1 }}>Piece</div>
                   <div style={{ width: 92, textAlign: 'right' }}>Bought</div>
                   <div style={{ width: 128, textAlign: 'right' }}><Term k="appraisal">lectr appraisal</Term></div>
@@ -1935,13 +2001,15 @@ export default function SavedPage() {
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   {collection.rows.map(({ lot, paid, paidIsOverride, note, savedId, appraised, basis, deltaPct, drill, drillSlug }) => (
                     <React.Fragment key={lot.id}>
-                      {/* the spec-sheet row — dotted hairline ledger (ns-ledger-row) */}
-                      <div className="ns-ledger-row" style={{ gap: 12 }}>
-                        <div style={{ minWidth: 0, flex: 1 }}>
+                      {/* the spec-sheet row — dotted hairline ledger (ns-ledger-row);
+                          a phone stacks it: title (2 lines), meta, then
+                          Bought · Appraisal side by side with their labels */}
+                      <div className="ns-ledger-row ck-piece" style={{ gap: 12 }}>
+                        <div className="ck-piece-main">
                           <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                            <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{craftTitle(lot.title, lot.auctionHouse)}</div>
+                            <div className="ck-piece-title">{craftTitle(lot.title, lot.auctionHouse)}</div>
                           </Link>
-                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                          <div className="ck-piece-meta">
                             <span>{[makerLineOf(lot).name, labelLineOf(lot), lot.auctionHouse, lot.saleDate ? formatDate(lot.saleDate) : ''].filter(Boolean).join(' · ')}</span>
                             {drill && drillSlug && (
                               <Link href={`/sub/${drillSlug.replace(':', '/')}`} className="ray-coll-chip">{drillLabelOf(drillSlug, drill.label)}</Link>
@@ -1955,13 +2023,15 @@ export default function SavedPage() {
                           </div>
                           {note && <div className="ck-piece-note">{note}</div>}
                         </div>
-                        <div style={{ width: 92, textAlign: 'right', flexShrink: 0, fontSize: 14.5, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
+                        <div className="ck-piece-paid"
                           title={paidIsOverride ? 'Your recorded cost basis' : 'Realized price — set what you paid to override'}>
+                          <span className="ck-piece-k kicker">Bought</span>
                           {paid != null ? formatPrice(paid) : '—'}
-                          {paidIsOverride && <span style={{ display: 'block', fontSize: 10, fontWeight: 500, color: 'var(--color-text-faint)' }}>your basis</span>}
+                          {paidIsOverride && <span className="ck-piece-basis">your basis</span>}
                         </div>
-                        <div style={{ width: 128, textAlign: 'right', flexShrink: 0 }}>
-                          <div style={{ fontSize: 14.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                        <div className="ck-piece-appr">
+                          <span className="ck-piece-k kicker">Appraisal</span>
+                          <div className="ck-piece-v">
                             {appraised != null ? formatPrice(appraised) : '—'}
                             {deltaPct != null && deltaPct !== 0 && (
                               <span style={{ marginLeft: 6, fontSize: 12, fontWeight: 600, color: deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
@@ -1969,7 +2039,7 @@ export default function SavedPage() {
                               </span>
                             )}
                           </div>
-                          <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                          <div className="ck-piece-src">
                             {basis ?? (fullLoaded ? 'no comps yet' : fullError ? 'couldn’t load comps' : 'appraising…')}
                           </div>
                         </div>
@@ -2001,7 +2071,8 @@ export default function SavedPage() {
             <section id="settled" className="ray-saved-section rail ray-enter" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
               <div className="ns-plate" style={{ paddingTop: 18 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px 14px', flexWrap: 'wrap', marginBottom: 4 }}>
-                <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><TapeMark size={17} /></span>Settled</h2>
+                {/* the rail's "History" lands here — one name for one room */}
+                <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><TapeMark size={17} /></span>History</h2>
                 <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
                   {sold.length + soldOrphans.length} settled {sold.length + soldOrphans.length === 1 ? 'watch' : 'watches'}
                   {record && <> · {record.n} judged vs estimate</>}

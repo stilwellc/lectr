@@ -5,6 +5,7 @@ import Link from 'next/link';
 import CloseClock from './CloseClock';
 import { AuctionLot } from '../types';
 import { makerLineOf, labelLineOf } from '../lib/lot-labels';
+import { displayMakerOf } from '../lib/maker-subjects';
 import { usePlayerDossiers } from '../lib/use-player-dossiers';
 import { houseColors, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg, sizedImg, localToday, isClosedPending } from '../utils';
 import ComparableModal from './ComparableModal';
@@ -100,13 +101,14 @@ function useLotCardStyles() {
 
 function LotCard({
   lot,
-  showArtist = false,
+  showArtist: showArtistProp = false,
   allLots = EMPTY_LOTS,
   saved = false,
   onToggleSave,
   lastCrawl,
   note,
   onNote,
+  subjectMaker = false,
 }: {
   lot: AuctionLot;
   showArtist?: boolean;
@@ -120,6 +122,10 @@ function LotCard({
   /** makes the note line itself pressable (the feed's folded grades: it
    *  searches the feed for the whole group) — same type, no new chrome */
   onNote?: () => void;
+  /** (Oct 11) a pick card: a collection lot's pseudo-maker ("Autographs",
+   *  "Entertainment & Icons") gives way to its subject, or the maker slot is
+   *  left out — never a category printed as a maker (maker-subjects.displayMakerOf) */
+  subjectMaker?: boolean;
 }) {
   useLotCardStyles();
   const [modalOpen, setModalOpen] = useState(false);
@@ -185,7 +191,9 @@ function LotCard({
   // label and the maker line already renders, the title says nothing twice.
   // pseudo-makers ("Sports Cards", "Pokémon") give way to the card's player / Pokémon (app/lib/lot-labels)
   usePlayerDossiers();
-  const maker = lot.artist ? makerLineOf(lot) : null;
+  const maker = !lot.artist ? null : subjectMaker ? displayMakerOf(lot) : makerLineOf(lot);
+  // no name to print (a pseudo-maker with no subject) → the title takes the head
+  const showArtist = showArtistProp && (!subjectMaker || !!maker);
   const makerLabel = maker ? maker.name : '';
   const titleText = craftTitle(lot.title, lot.auctionHouse);
   const titleDupesMaker = showArtist && !!lot.artist && titleText === makerLabel;

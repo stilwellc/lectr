@@ -22,7 +22,7 @@ import type { ReturnLoop } from '../components/PickStrips';
 import CloseClock from '../components/CloseClock';
 import { closeMsOf } from '../lib/priority';
 import { closeIsTimed } from '../lib/house-tz';
-import { makerLineOf } from '../lib/lot-labels';
+import { displayMakerOf } from '../lib/maker-subjects';
 import { craftTitle, localToday } from '../utils';
 import { formatEstimate } from '../components/LotCard';
 import { AwayMark } from '../components/marks';
@@ -41,10 +41,17 @@ function closeTag(l: AuctionLot): string {
   return closeIsTimed(l) ? new Date(c).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'Today';
 }
 
-function pickFact(r: Rec<AuctionLot>): string {
-  const maker = makerLineOf(r.lot).name;
-  const why = r.short || r.reason;
-  return why.toLowerCase().includes(maker.toLowerCase()) ? why : `${maker} · ${why}`;
+/** every row's fact starts with WHO (one grammar across the band): the
+ *  maker or the lot's subject — a pseudo-maker bucket is left out, never
+ *  printed as a name (maker-subjects.displayMakerOf) */
+const whoOf = (l: AuctionLot): string | null => displayMakerOf(l)?.name ?? null;
+const lead = (l: AuctionLot, rest: React.ReactNode): React.ReactNode => {
+  const who = whoOf(l);
+  return who ? <>{who} · {rest}</> : rest;
+};
+
+function pickFact(r: Rec<AuctionLot>): React.ReactNode {
+  return lead(r.lot, r.short || r.reason);
 }
 
 function useNarrow(): boolean {
@@ -97,7 +104,7 @@ export default function TodayBand({ loop, closingWatches, reads, away }: {
       const est = formatEstimate(l);
       closing.push({
         key: `cw-${l.id}`, group: 'closing', tone: 'hot', lot: l, tag: closeTag(l),
-        fact: <>{makerLineOf(l).name} · your watch{est ? <> · {est}</> : null}{l.saleDateTime ? <CloseClock iso={l.saleDateTime} windowHours={24} prefix=" · " /> : null}</>,
+        fact: lead(l, <>your watch{est ? <> · {est}</> : null}{l.saleDateTime ? <CloseClock iso={l.saleDateTime} windowHours={24} prefix=" · " /> : null}</>),
       });
     }
     for (const r of loop?.closing ?? []) {
@@ -112,7 +119,7 @@ export default function TodayBand({ loop, closingWatches, reads, away }: {
     const rest: Row[] = [];
     for (const x of reads) {
       if (!take(x.lot.id)) continue;
-      rest.push({ key: x.key, group: 'reads', tone: x.tone, lot: x.lot, tag: x.tag, fact: <>{makerLineOf(x.lot).name} · {x.fact}</> });
+      rest.push({ key: x.key, group: 'reads', tone: x.tone, lot: x.lot, tag: x.tag, fact: lead(x.lot, x.fact) });
     }
     return { closing, fresh, rest };
   }, [loop, closingWatches, reads]);
