@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import type { AuctionLot } from '../../types';
 import { makerLineOf, labelTagOf } from '../../lib/lot-labels';
-import { formatPrice, httpsImg, craftTitle, localToday } from '../../utils';
+import { formatPrice, httpsImg, sizedImg, craftTitle, localToday } from '../../utils';
 import { useInView } from './hooks';
 import styles from './style.module.css';
 
@@ -140,7 +140,7 @@ export default function TonightsWall({
           >
             <span className={styles.wallMat}>
               <img
-                src={httpsImg(it.lot.imageUrl!)}
+                src={sizedImg(httpsImg(it.lot.imageUrl!), 400)}
                 alt=""
                 loading="lazy"
                 decoding="async"

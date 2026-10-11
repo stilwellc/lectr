@@ -289,6 +289,13 @@ const STRIP = new Set([
   'premiumPrice', 'archived', 'auctionId', 'buyerPremium', '_pid', '_pname', '_card', 'photoMatched',
   // advisory LLM extraction (scripts/lib/extract) — corpus-only pipeline input
   'llm',
+  // the engine's cached IDF-vector norm (similarity.buildVectors). Its vector
+  // (`_v`) and the titleTokens it is built from are already stripped above, so
+  // on a served row the norm can never be read meaningfully: the client never
+  // calls buildVectors/compCandidates, and cosine() over a token-less row is 0
+  // whatever norm it is handed. Measured dead weight (perf wave W1, Oct 11):
+  // 87 KB brotli of the 1.2 MB eager upcoming.json — 7% of every first paint.
+  '_vn',
 ]);
 
 // The corpus files (lots.json.gz, sold-archive.json.gz) and segments are stored

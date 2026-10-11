@@ -49,7 +49,7 @@ import {
 // globals.css "THE CELL SYSTEM"): figure cells for the reads room, the
 // forced-color cell classes re-plate the call. Never redefined here.
 import { CellGrid, FigureCell, FigGate, FigReplay, FigPools } from '../components/cells';
-import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isOnBlock, trueSaleDay, toneOf } from '../utils';
+import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, sizedImg, fmtSignedPct, localToday, isOnBlock, trueSaleDay, toneOf } from '../utils';
 import { closeMs as closeAt } from '../lib/house-tz';
 import { dealScore, signalMagnitude, estUsdBand } from '../lib/comps';
 import { lotFace, FACE_LABEL } from '../lib/lot-face';
@@ -331,7 +331,7 @@ function GapAnnex({ rows, total, measured, receipts, activeKey, play, isSaved, o
           <span className="ray-value-row-thumb" aria-hidden style={{ position: 'relative' }}>
             <span className="vd-thumb-letter">{makerLineOf(lot).name.charAt(0)}</span>
             {lot.imageUrl && (
-              <img src={httpsImg(lot.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
+              <img src={sizedImg(httpsImg(lot.imageUrl), 120)} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async"
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
                 onError={e => e.currentTarget.remove()} />
             )}
@@ -536,7 +536,7 @@ function SleepersAnnex({ rows, total, queued, receipts, activeLabel, play, isSav
                   <span className="ray-value-row-thumb" aria-hidden style={{ position: 'relative' }}>
                     <span className="vd-thumb-letter">{makerLineOf(lot).name.charAt(0)}</span>
                     {lot.imageUrl && (
-                      <img src={httpsImg(lot.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
+                      <img src={sizedImg(httpsImg(lot.imageUrl), 120)} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async"
                         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
                         onError={e => e.currentTarget.remove()} />
                     )}
@@ -2233,7 +2233,7 @@ export default function ValuePage() {
                         {makerLineOf(d.lot).name.charAt(0)}
                       </span>
                       {d.lot.imageUrl && (
-                        <img src={httpsImg(d.lot.imageUrl)} alt="" referrerPolicy="no-referrer" loading="lazy"
+                        <img src={sizedImg(httpsImg(d.lot.imageUrl), 120)} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async"
                           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
                           onError={e => e.currentTarget.remove()} />
                       )}

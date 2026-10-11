@@ -287,6 +287,35 @@ export function sizedImg(u: string | null | undefined, width: number): string | 
   if (/cloudfront\.net\/public\/Lots\//i.test(u) && /@1x(?:$|[?#])/i.test(u)) {
     return width >= 900 ? u.replace(/@1x/i, '@2x') : u;
   }
+  // ── THE MASTERS (perf wave W1, Oct 11 2026). Measured on prod in real
+  // Chrome: the home book shipped 12 MB of images and /makers 40 MB, almost
+  // all of it masters drawn into 28–120 px wells — a Christie's 3200 px JPEG
+  // is 0.7–4.3 MB, an REA Cloudinary original 4.5 MB. Each of these hosts
+  // resizes on request (curl-verified 200, same picture, real Chrome UA):
+  //   christies.com  ?mode=max&w=240   669 KB → 9 KB   (never upscales)
+  //   res.cloudinary w_240,c_limit     4.5 MB → 10 KB  (c_limit never upscales)
+  //   dist.phillips  width/height=240  50 KB → 14 KB   (fit=bounds box)
+  // A width at or above the stored size leaves the URL alone.
+  const christies = u.match(/^(https?:\/\/(?:www\.)?christies\.com\/img\/lotimages\/[^?#]+)(\?[^#]*)?$/i);
+  if (christies) {
+    const q = christies[2] || '';
+    if (/[?&]w=\d/i.test(q)) return u;
+    return q ? `${u}&w=${width}` : `${u}?mode=max&w=${width}`;
+  }
+  // Cloudinary: a transform segment goes straight after /image/upload/. Only
+  // a URL whose next segment is the version (v123…/) or the public id — never
+  // one that already carries a (possibly named or signed) transform.
+  const cld = u.match(/^(https?:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)(.+)$/i);
+  if (cld) {
+    const next = cld[2].split('/')[0];
+    if (cld[2].includes('/') && !/^v\d+$/.test(next)) return u; // a transform (or folder) is already there
+    return `${cld[1]}w_${width},c_limit,q_auto/${cld[2]}`;
+  }
+  const phillips = u.match(/^https?:\/\/dist\.phillips\.com\/[^?#]+\?(?:[^#]*&)?width=(\d+)/i);
+  if (phillips) {
+    if (Number(phillips[1]) <= width) return u;
+    return u.replace(/([?&])width=\d+/i, `$1width=${width}`).replace(/([?&])height=\d+/i, `$1height=${width}`);
+  }
   // Sotheby's brightspot URLs carry a SIGNED transform chain (/dims4/default/
   // <hash>/): rewriting the resize segment invalidates the signature and the
   // CDN 500s (verified). They ship at 421px and must be left alone.
