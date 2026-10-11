@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useAlerts, useSavedSearches } from '../lib/alerts';
 import { supabase } from '../lib/supabase';
-import { closeDayOf, craftTitle, formatDate, formatPrice, fmtSignedPct, httpsImg } from '../utils';
+import { closeDayOf, craftTitle, formatDate, formatPrice, fmtSignedPct, httpsImg, sizedImg } from '../utils';
 import { makerLineOf } from '../lib/lot-labels';
 
 interface SlimLot {
@@ -209,7 +209,7 @@ export default function AlertsInbox({ embedded = false }: {
                       // instead of a broken-image glyph (the shared comp-thumb
                       // pattern — LotPage/ComparableModal/RefPage)
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img className="lectr-inbox-thumb" src={httpsImg(lot.imageUrl)} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e => e.currentTarget.remove()} />
+                      <img className="lectr-inbox-thumb" src={sizedImg(httpsImg(lot.imageUrl), 120)} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={e => e.currentTarget.remove()} />
                     )}
                     <span className="lectr-inbox-title">{lot ? craftTitle(lot.title || a.lot_id) : a.lot_id}</span>
                     <span className="lectr-inbox-meta" style={{ marginLeft: 'auto', flex: 'none' }}>

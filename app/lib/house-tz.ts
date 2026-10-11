@@ -170,9 +170,19 @@ function dayOnly(l: TzLot): string {
 /** The close instant in epoch ms, or null when the lot carries no usable date.
  *  A date-only sale closes when its day ends where the sale is held. */
 export function closeMs(l: TzLot): number | null {
-  if (closeIsTimed(l)) return Date.parse(l.saleDateTime as string);
-  return dayEndMs(dayOnly(l), houseTzOf(l));
+  // memoised per lot object (perf wave W1, Oct 11): the feed's sorts, filters
+  // and countdowns ask for the same lot's close many times per render, and
+  // each answer is two regexes + a Date.parse. The entry carries every input
+  // the answer reads, so a lot whose stamp is rewritten (normalizeCloseStamp,
+  // an overlay) misses and recomputes — never a stale close.
+  const key = `${l.saleDateTime ?? ''}|${l.saleDate ?? ''}|${l.auctionHouse ?? ''}|${l.saleName ?? ''}|${l.id ?? ''}|${l.nativeCurrency ?? ''}|${l.currency ?? ''}`;
+  const hit = closeMemo.get(l);
+  if (hit && hit.k === key) return hit.v;
+  const v = closeIsTimed(l) ? Date.parse(l.saleDateTime as string) : dayEndMs(dayOnly(l), houseTzOf(l));
+  closeMemo.set(l, { k: key, v });
+  return v;
 }
+const closeMemo = new WeakMap<object, { k: string; v: number | null }>();
 
 /** The close day where the sale is HELD — for prints with no reader behind
  *  them (build-time page metadata). A reader-facing print uses closeDayOf
