@@ -19,11 +19,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link';
 import type { Market } from '../constants';
 import type { AuctionLot } from '../types';
-import { closeDayOf, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, localToday, trueSaleDay, isClosedPending } from '../utils';
+import { closeDayOf, formatDate, craftTitle, httpsImg, sizedImg, localToday, trueSaleDay, isClosedPending } from '../utils';
 import LotCard, { lotSignal, confidenceMeter } from './LotCard';
-import { feedRowPrice } from '../lib/estimate-text';
+import { feedRowPrice, estimateOnly } from '../lib/estimate-text';
 import { signalMagnitude } from '../lib/comps';
-import { lotFace } from '../lib/lot-face';
+import { lotFace, fmtFace } from '../lib/lot-face';
 import ComparableModal from './ComparableModalLazy';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './FeedToolbar';
 import { houseBaselines, type HouseBaselines } from '../lib/feed-filters';
@@ -922,13 +922,14 @@ export default function LotBrowser({
                       {bidVel(lot) && <span className="ray-bidvel-sub">+{bidVel(lot)!.delta}/{bidVel(lot)!.hours}h</span>}
                     </td>
                     <td className="num t-est">
+                      {/* the lot page's money words (lot-face fmtFace — the cards
+                          read them too): "$6.9K–$9.2K", never a table-only
+                          "$7K–$9K" over a lot page that says otherwise */}
                       {lot.estimateLow && lot.estimateHigh
-                        ? (formatPrice(lot.estimateLow) === formatPrice(lot.estimateHigh)
-                            ? formatPrice(lot.estimateLow)
-                            : `${formatPrice(lot.estimateLow)}–${formatPrice(lot.estimateHigh)}`)
+                        ? estimateOnly(lot)
                         // no estimate (Goldin, REA, NFL): the live bid is the only
                         // price on the lot — the same "$402 bid" face the cards print
-                        : (lot.currentBid || 0) > 0 ? `${formatPrice(lot.currentBid as number)} bid` : '—'}
+                        : (lot.currentBid || 0) > 0 ? `${fmtFace(lot.currentBid as number)} bid` : '—'}
                     </td>
                     <td>
                       {sig
