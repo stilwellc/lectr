@@ -14,7 +14,8 @@ import {
 } from '../first-paint';
 import { reasonOf, closeMsOf } from '../priority';
 import { closeIsTimed } from '../house-tz';
-import { foldPage, slotify, normalize } from '../../../scripts/first-paint-postbuild';
+import { foldPage, slotify, normalize, deferImages } from '../../../scripts/first-paint-postbuild';
+import { entitiesFirst } from '../../../scripts/emit-first-screen';
 import type { AuctionLot } from '../../types';
 
 // the gate's slot function, exactly as the gate inlines it
@@ -122,4 +123,17 @@ test('slot markers inside an attribute stay plain words', () => {
   const h = `<a title="${fpSlot('r', [1, 1, ''], 'Closes in 2h')}">${fpSlot('r', [1, 1, ''], 'Closes in 2h')}</a>`;
   assert.equal(slotify(h), '<a title="Closes in 2h"><span data-fpr="r|1|1|">Closes in 2h</span></a>');
   assert.equal(normalize(slotify(h)), '<a title="Closes in 2h"><span data-fpr="r|1|1|">§</span></a>');
+});
+
+test("the copy's off-site photos (and their alt words) wait for the page's own render; same-site images stay", () => {
+  assert.equal(
+    deferImages('<img src="https://cdn.x/a.jpg" alt="Card" loading="lazy"><img src="/brand/m.png" alt="lectr"><img srcset="//c/x 2x" src="http://y/b" alt="">'),
+    '<img data-fp-src="https://cdn.x/a.jpg" alt="" data-fp-alt="Card" loading="lazy"><img src="/brand/m.png" alt="lectr"><img data-fp-srcset="//c/x 2x" data-fp-src="http://y/b" alt="">',
+  );
+});
+
+test("the total market's entities slice is the makers' columns of the same wire", () => {
+  const w = { v: 2, tier: 'main', tailN: 3, ds: ['a'], ml: [], c: { id: ['mk:a', 'pl:b', 'mk:c'], s: [1, 2, 3] }, vf: { 'mk:a': { x: 1 }, 'pl:b': { y: 1 } } };
+  assert.deepEqual(entitiesFirst(w), { v: 2, tier: 'main', tailN: 3, ds: ['a'], ml: [], c: { id: ['mk:a', 'mk:c'], s: [1, 3] }, vf: { 'mk:a': { x: 1 } } });
+  assert.equal(entitiesFirst({ v: 1, entities: [] }), null);
 });

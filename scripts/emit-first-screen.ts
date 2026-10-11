@@ -147,6 +147,26 @@ export function buildFirstScreens(input: FirstScreenInput): Map<string, Omit<Fir
   return out;
 }
 
+/** (W27) the total-market roster's first screen prints maker rows only:
+ *  their summaries ship as a slice of pages/entities-all.json — the makers'
+ *  columns of the same v2 wire, dictionaries whole — so the ledger's first
+ *  JS paint never waits on the whole file (~120KB brotli). null: not a v2
+ *  file (the client then reads the whole file, as before). */
+export function entitiesFirst(w: unknown): Record<string, unknown> | null {
+  const f = w as { v?: number; c?: Record<string, unknown>; vf?: Record<string, unknown> } | null;
+  if (!f || f.v !== 2 || !f.c || !Array.isArray(f.c.id)) return null;
+  const keep: number[] = [];
+  (f.c.id as unknown[]).forEach((id, i) => { if (typeof id === 'string' && id.startsWith('mk:')) keep.push(i); });
+  const c: Record<string, unknown[]> = {};
+  for (const [k, col] of Object.entries(f.c)) {
+    if (!Array.isArray(col)) return null;
+    c[k] = keep.map(i => col[i]);
+  }
+  const vf: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(f.vf || {})) if (k.startsWith('mk:')) vf[k] = v;
+  return { ...f, c, vf };
+}
+
 function readJson<T>(f: string): T | null {
   try { return JSON.parse(fs.readFileSync(f, 'utf8')) as T; } catch { return null; }
 }
@@ -172,6 +192,8 @@ export function emitFirstScreens(served = SERVED): { ver: string; files: number;
   const bodies = new Map<string, string>();
   const h = crypto.createHash('sha1');
   built.forEach((p, k) => { const s = JSON.stringify(p); bodies.set(k, s); h.update(k).update(s); });
+  const ents = entitiesFirst(readJson(path.join(served, 'pages', 'entities-all.json')));
+  if (ents) { const s = JSON.stringify(ents); bodies.set('entities-all', s); h.update('entities-all').update(s); }
   const ver = h.digest('hex').slice(0, 12);
   fs.mkdirSync(dir, { recursive: true });
   const bytes: Record<string, [number, number]> = {};

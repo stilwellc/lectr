@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { fsKeyOf, fsUrl, FS_VERSION } from '../lib/first-screen';
+import { fsKeyOf, fsUrl, FS_VERSION, fsVersion } from '../lib/first-screen';
 
 /**
  * Phase-1 data preloads — on every route that reads the live book
@@ -56,7 +56,10 @@ export default function RayDataPreloads() {
     return (
       <>
         <link rel="preload" href={fsUrl(fsKey)} as="fetch" crossOrigin="anonymous" />
-        {mk && <link rel="preload" href={`/data/ray/pages/entities-${mk}.json`} as="fetch" crossOrigin="anonymous" />}
+        {/* (W27) the total market's first screen reads the makers-only
+            entities slice (useEntities loadEntitiesFirst); the whole file
+            loads behind the paint */}
+        {mk && <link rel="preload" href={mk === 'all' ? `/data/ray/first/entities-all.json?v=${encodeURIComponent(fsVersion())}` : `/data/ray/pages/entities-${mk}.json`} as="fetch" crossOrigin="anonymous" />}
       </>
     );
   }

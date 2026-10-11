@@ -117,7 +117,7 @@ export function foldPage(html: string): FoldResult {
     if (Object.keys(zones).length) {
       res.shown++;
       out += `<div data-fsi="${m[1]}" hidden=""${m[2]} data-z='${JSON.stringify(zones)}'>`
-        + VARIANTS.map(v => `<div data-v="${v}">${copy[v]}</div>`).join('')
+        + VARIANTS.map(v => `<div data-v="${v}">${deferImages(copy[v])}</div>`).join('')
         + `<style>${FP_CSS}</style><script>${FP_GATE_JS}</script>`;
     } else {
       out += `<div data-fsi="${m[1]}" hidden=""${m[2]}>`;
@@ -126,6 +126,21 @@ export function foldPage(html: string): FoldResult {
   }
   res.html = out + html.slice(last);
   return res;
+}
+
+/** a copy's off-site images wait for the page's own render: the copy paints
+ *  every row's monogram plate (the face an unloaded photo already shows), and
+ *  the photos never take the pipe from the JS that replaces it — Chrome's
+ *  lazy-load reach on a slow connection is thousands of pixels, so even
+ *  loading="lazy" rows below the fold fetched at once and held the page's
+ *  own paint back by seconds */
+export function deferImages(h: string): string {
+  return h.replace(/<img\b[^>]*>/g, tag => {
+    if (!/\ssrc="(https?:)?\/\//.test(tag)) return tag;
+    // an image not yet loaded paints nothing in the page's own render; with
+    // no src its alt words would paint instead, so they wait with it
+    return tag.replace(/\s(src|srcset|alt)="([^"]*)"/g, (m, k: string, v: string) => (k === 'alt' ? (v ? ` alt="" data-fp-alt="${v}"` : m) : ` data-fp-${k}="${v}"`));
+  });
 }
 
 function htmlFiles(dir: string, acc: string[] = []): string[] {

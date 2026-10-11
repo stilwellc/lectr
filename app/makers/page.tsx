@@ -241,12 +241,16 @@ function MakersLedger() {
     namesAll: pool.namesAll, subs: wantSubs, sport: dSport,
     players: rowsBy === 'name' && (activeKey === 'all' || activeKey === 'sports'),
     tail: wantTail,
+    // (W27) while the page holds its first-screen slice, the total market's
+    // maker rows read the makers-only entities slice
+    first: partial,
   });
   const shownBy: RowsBy = rowsBy === 'cat' && !entities.subsReady ? 'name' : rowsBy;
   // a maker market's slice IS its whole live book (every count exact); the
   // total market's is not: there the first screen is the default ledger only
   // (a search, a lens, the lots body, a tray wait for the book)
-  const countsPending = partial && activeKey === 'all';
+  // (W27) …and the names wait for the whole entities file, not only the book
+  const countsPending = (partial || !entities.fileFull) && activeKey === 'all';
   const fsDefault = vw === 'names' && !q && !fLive && !fVerified && !fFlagged && !fFollowing
     && !sportPick && compare.length === 0 && sort === 'matters' && !isTriageActive(triage);
   const booting = loading || entities.source === 'pending' || (countsPending && !fsDefault);

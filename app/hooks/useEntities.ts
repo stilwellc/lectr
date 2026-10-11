@@ -43,6 +43,8 @@ import { MIN_MED_N } from '../lib/entity/stats';
 import { decodeEntities, isEntitiesWire, ledgerNamesBy } from '../lib/entity/wire';
 import { bestLotImage } from '../lib/img-host';
 import { useFirstPaint } from '../components/FirstPaint';
+import { fsVersion } from '../lib/first-screen';
+import { afterFirstPaint } from '../lib/after-first-paint';
 
 /** a summary + its detail when the source already holds it (the adapters do) */
 export interface EntityBundle {
@@ -75,7 +77,7 @@ async function getJson<T>(url: string): Promise<T | null> {
 }
 const verOf = (v?: string) => (v ? `?v=${encodeURIComponent(v)}` : '');
 /** a decoded entities file (main or tail) */
-export type LoadedEntities = EntitiesFile & { tier?: 'main' | 'tail'; tailN?: number; tailBy?: Record<string, number> };
+export type LoadedEntities = EntitiesFile & { tier?: 'main' | 'tail'; tailN?: number; tailBy?: Record<string, number>; first?: boolean };
 /** the v2 wire decoded; a v1 file (summaries inline) as-is; else null */
 export function readEntitiesFile(j: unknown): LoadedEntities | null {
   if (isEntitiesWire(j)) return decodeEntities(j);
@@ -94,6 +96,24 @@ export function loadEntities(market: Market, ver?: string): Promise<LoadedEntiti
         return ok;
       });
     entitiesP.set(market, p);
+  }
+  return p;
+}
+const firstP = new Map<string, Promise<LoadedEntities | null>>();
+/** (W27) the total market's first-screen entities slice (first/entities-
+ *  all.json — the makers' summaries only, hash-stamped with the deploy's
+ *  first-screen version): the roster's maker rows paint from it while the
+ *  page holds its first-screen slice. A miss reads the whole file. */
+export function loadEntitiesFirst(market: Market): Promise<LoadedEntities | null> {
+  const v = fsVersion();
+  if (!v || market !== 'all') return loadEntities(market);
+  let p = firstP.get(market);
+  if (!p) {
+    p = getJson<unknown>(`${BASE}/first/entities-${market}.json?v=${encodeURIComponent(v)}`).then(j => {
+      const ok = j && (j as { ver?: string }).ver === v ? readEntitiesFile(j) : null;
+      return ok ? { ...ok, first: true } : loadEntities(market);
+    });
+    firstP.set(market, p);
   }
   return p;
 }
@@ -337,6 +357,9 @@ export interface Entities {
    *  the idle prefetch lands). The ledger's name counts add it, so a count
    *  never jumps when a search pulls the tail in. */
   tailBy: Readonly<Record<string, number>> | null;
+  /** (W27) the summaries are the whole file's (false while the total
+   *  market reads its makers-only first-screen slice) */
+  fileFull: boolean;
 }
 
 const NO_SET: ReadonlySet<string> = new Set();
@@ -356,6 +379,10 @@ export interface UseEntitiesOpts {
    *  main list for sold-only entities). A row whose id the main file lacks
    *  fetches it regardless. */
   tail?: boolean;
+  /** (W27) the page holds its first-screen slice: the total market reads
+   *  the makers-only entities slice (loadEntitiesFirst) until this turns
+   *  false, then the whole file (the slice stands until it lands) */
+  first?: boolean;
 }
 
 /**
@@ -364,6 +391,7 @@ export interface UseEntitiesOpts {
  */
 export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entities {
   const { namesAll, subs: wantSubs = false, players: wantPlayers = false, sport = null, tail: wantTail = false } = opts;
+  const firstSlice = !!opts.first && market === 'all' && !!fsVersion();
   const { statsByArtist, market: marketData, lastCrawl } = useRayData();
 
   // 1. the nightly's file (absent on an older data build → the adapters).
@@ -371,13 +399,24 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
   // (public/_headers), so no ?v= is needed, and the ledger waits for the
   // answer (source 'pending') rather than paint adapter figures that the
   // file's would then replace
-  const loadFile = useMemo(() => () => loadEntities(market), [market]);
+  const loadFile = useMemo(() => (firstSlice ? () => loadEntitiesFirst(market) : () => loadEntities(market)), [market, firstSlice]);
   const fileQ = useLoad(loadFile, true);
   // (W27) a first-paint step (components/FirstPaint) reads the same served
   // files synchronously — the ledger as it stands once they have landed
   const fp = useFirstPaint();
-  const fpFile = useMemo(() => (fp ? readEntitiesFile(fp.read(`pages/entities-${market}.json`)) : undefined), [fp, market]);
+  const fpFile = useMemo(() => {
+    if (!fp) return undefined;
+    const sliced = firstSlice ? readEntitiesFile(fp.read(`first/entities-${market}.json`)) : null;
+    return sliced ? { ...sliced, first: true } : readEntitiesFile(fp.read(`pages/entities-${market}.json`));
+  }, [fp, market, firstSlice]);
   const file = fp ? fpFile : fileQ;
+  // the whole file loads behind the first paint (the slice's names wait on it)
+  useEffect(() => {
+    if (!firstSlice) return;
+    let on = true;
+    afterFirstPaint().then(() => { if (on) void loadEntities(market); });
+    return () => { on = false; };
+  }, [firstSlice, market]);
   const mainMap = useMemo(() => {
     if (!file) return null;
     if (file.lastCrawl && lastCrawl && file.lastCrawl !== lastCrawl) {
@@ -392,7 +431,8 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
   // the tail: only when asked, or when a live group's id is not in the main
   // file (the build's book and the reader's can differ by a crawl)
   const tailNeeded = useMemo(() => {
-    if (!file || !file.tailN || !mainMap) return false;
+    // the first-screen slice holds makers only: names wait for the whole file
+    if (!file || !file.tailN || !mainMap || file.first) return false;
     if (wantTail) return true;
     let miss = false;
     // only this market's live names (namesAll spans every market — a TCG
@@ -406,7 +446,7 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
   // a search finds it already decoded. The promise cache makes this the very
   // fetch the search would have made — never a second one.
   useEffect(() => {
-    if (!file || !file.tailN) return;
+    if (!file || !file.tailN || file.first) return;
     const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (h: number) => void };
     const run = () => { void loadEntitiesTail(market).then(t => setWarmTail({ market, t })); };
     if (w.requestIdleCallback) {
@@ -525,7 +565,7 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
     if (warmTail?.market === market && warmTail.t) return ledgerNamesBy(warmTail.t.entities.filter(e => !mainMap?.has(e.id)));
     return null;
   }, [file, tailNeeded, tailFile, market, warmTail, mainMap]);
-  return { source, makers, subs, names, subsReady, playersReady, dossiers, file: fileMap, tailReady, tailBy };
+  return { source, makers, subs, names, subsReady, playersReady, dossiers, file: fileMap, tailReady, tailBy, fileFull: !file?.first };
 }
 const loadPageStatsFn = () => loadPageStats();
 
