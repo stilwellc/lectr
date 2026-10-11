@@ -1,5 +1,5 @@
 import type { AuctionLot } from '../../app/types';
-import { subCatOf, spaceScienceDrillOf, sportSlugOf, sportOfSale, sportWordOf, cultureTextDomain, curatedDomainOf, watchRefKey, watchFamilyOf, nameKey, JUNK_PLAYER_SLUG_RE, NOT_PERSON_NAME_RE, type SubCatMaps } from './sub-cats';
+import { subCatOf, spaceScienceDrillOf, sportSlugOf, restampTitleSports, sportOfSale, sportWordOf, cultureTextDomain, curatedDomainOf, watchRefKey, watchFamilyOf, nameKey, JUNK_PLAYER_SLUG_RE, NOT_PERSON_NAME_RE, type SubCatMaps } from './sub-cats';
 import { SUBJECT_DOMAINS } from './subject-domains';
 import { subjectNameOf, personVoteKeys, settleNameDomains } from './subject-name';
 import { neighbourDomains, lotNumberOf, type NeighbourEntry } from './neighbour-domain';
@@ -1499,6 +1499,10 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   const cultureStamped = stampCultureAxes(ls);
   const datesFixed = reconcileSaleDates(ls);
   const restamped = restampIdentityKeys(ls);
+  // (r9) the title sport stamp, re-derived on every row before the drill and
+  // the learned player → sport maps read it (sub-cats restampTitleSports)
+  const sports = restampTitleSports(ls as unknown as Record<string, unknown>[]);
+  console.log(`[normalize] sport stamp re-derived on ${sports.changed} rows (${Object.entries(sports.byChange).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => `${k} ${v}`).join(', ') || 'none'})`);
   const sub = stampSubCats(ls);
   if (relic.total) {
     console.log(`[normalize] relic-card reroute: ${relic.total} game-used→sports-cards. e.g. ${relic.examples.slice(0, 3).map(s => JSON.stringify(s.slice(0, 70))).join(', ')}`);

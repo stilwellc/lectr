@@ -674,9 +674,8 @@ async function main() {
   const { classifyForm, objectClassOf, computeDeepSignal, isSportsScienceObject, extractSportsTags } =
     await import('../app/lib/comps');
   // sport tag (title-derived) for the SPORT filter on the sports vertical —
-  // sportOf lives in app/utils (pure, no client deps; same fn the UI uses).
-  const { sportOf } = await import('../app/utils');
-  const SPORT_SLUGS = new Set(['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia']);
+  // the ONE rule corpus-normalize also re-derives on every build (r9)
+  const { titleSportStamp } = await import('./lib/sub-cats');
   const categoryCounts: Record<string, number> = {};
   for (const lot of allLots) {
     lot.category = classifyLot(lot);
@@ -704,11 +703,14 @@ async function main() {
       if (lot.sportYear !== undefined) delete lot.sportYear;
     }
     // SPORT tag — which sport a sports-vertical lot belongs to, read from the
-    // title. Stamped on the three sports slugs only (null = no sport cue →
-    // "Other" in the UI filter); cleared when a lot lives outside the sports
-    // vertical, mirroring the entity/objectType cleanup above.
-    if (SPORT_SLUGS.has(lot.artist)) lot.sport = sportOf(lot.title);
-    else if (lot.sport !== undefined) delete lot.sport;
+    // title. Stamped on the five sports slugs only (null = no sport cue →
+    // "Other" in the UI filter); a house's own sport (NFL / MLB Auctions)
+    // kept; cleared elsewhere, mirroring the entity/objectType cleanup above.
+    {
+      const sp = titleSportStamp(lot);
+      if (sp !== undefined) lot.sport = sp;
+      else if (lot.sport !== undefined) delete lot.sport;
+    }
 
     // ── v2 IDENTITY STAMP ──────────────────────────────────────────────────
     // Persist what the value/similarity engine joins on, using the SAME pure

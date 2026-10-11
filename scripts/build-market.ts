@@ -39,6 +39,7 @@ import { servedLastCrawl } from './lib/served-stamp';
 import { taxonOf } from '../app/lib/taxonomy';
 import { refLineOf } from '../app/lib/watch-ref';
 import { sportOf, overEstimatePct } from '../app/utils';
+import { sportLabelOfDrill } from '../app/lib/submarkets';
 import type { MarketAnalytics } from '../app/types';
 
 // Build-time distribution aggregates over the FULL corpus for a market's lots,
@@ -975,9 +976,13 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         .map(l => ({ id: l.id, d: l.saleDate, p: Math.round(l.realizedUsd!), t: (l.title || '').slice(0, 80), cat: l.artist }));
       const recent = ls.slice(-8).reverse()
         .map(l => ({ id: l.id, d: l.saleDate, p: Math.round(l.realizedUsd!), t: (l.title || '').slice(0, 80), cat: l.artist }));
-      // sport: majority vote over the lots' stamped sport field
+      // sport: majority vote over the lots' sport — the DRILL first (normalize's
+      // full read: the title stamp, the sale, the learned player / set / name
+      // maps), the title stamp only where no drill was read (r9: the title
+      // stamp alone left Jordan Love "Basketball" off a stale bare-"Jordan" rule
+      // while his cards' own titles name no sport at all)
       const sportVotes = new Map<string, number>();
-      for (const l of ls) { const s = (l as AuctionLot & { sport?: string | null }).sport; if (s) sportVotes.set(s, (sportVotes.get(s) || 0) + 1); }
+      for (const l of ls) { const s = sportLabelOfDrill((l as AuctionLot & { drill?: string | null }).drill) || (l as AuctionLot & { sport?: string | null }).sport; if (s) sportVotes.set(s, (sportVotes.get(s) || 0) + 1); }
       const sport = Array.from(sportVotes.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
       // the record across EVERY category (a card included), with its scope
       const recLot = ls.reduce<PLot | null>((b, l) => (!b || l.realizedUsd! > b.realizedUsd! ? l : b), null);

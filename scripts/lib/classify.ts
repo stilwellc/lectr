@@ -404,6 +404,10 @@ export function scienceVerdict(l: ClassifyLot): string | null {
   // hardware, is space before any document or culture fallback below
   // ("SHEPARD, Alan (1923-1998), et al. Photograph signed")
   if (!SPACE_TOY_RE.test(t) && isSpaceLeadTitle(t, sale)) return a === 'space-exploration' ? null : 'space-exploration';
+  // (r9) a space lot whose only space word was a non-space "Moonwalk"
+  // (Michael Jackson's autobiography — the culture leak below filed it here)
+  // goes back to culture, never out of the corpus
+  if (a === 'space-exploration' && MOONWALK_RE.test(t)) return routeCulture(t, String(l.description || '').slice(0, 300)) ?? 'entertainment-memorabilia';
   if (isSignedDocument(t)) return SCIENTIST_RE.test(t) ? 'science-tech' : 'entertainment-memorabilia';
   if (CULTURE_SALE_NAME_RE.test(sale) && !(a === 'scientific-instruments' && INSTRUMENT_RE.test(t))) {
     return SCIENTIST_RE.test(t) ? 'science-tech' : (routeCulture(t, String(l.description || '').slice(0, 300)) ?? DROP);
@@ -500,8 +504,10 @@ export function entertainmentHouseFix(l: ClassifyLot): string | null {
 // ═══════════════════════════════════════════════════════════════════════════
 /** (Oct 8 sports audit, E4) + RIAA / BRIT certified sales awards, gold /
  *  platinum records, Grammys, animation cels, backstage / tour passes, studio
- *  photographs — Goldin's Thematic auctions filed them as trophies / game-used */
-export const GOLDIN_NON_SPORT_RE = /\b(?:vinyl|test pressing|cassette|laserdisc|8-track|production[- ](?:made|used|cels?)|screen[- ](?:used|worn|matched)|ursa authentic|movie poster|film poster|concert poster|tour poster|star wars|star trek|marvel|disney|beatles|elvis presley|rolling stones|nirvana|hollywood|actor|actress|filming|baywatch|(?:from|in) (?:the )?(?:film|movie|tv series|series)|riaa|brit certified|brit awards?|(?:gold|platinum|silver|diamond) (?:records?|albums?|singles?)|(?:multi-|double |triple )?platinum (?:sales )?awards?|(?:record |single |album )?sales awards?|grammys?|grammy awards?|animation cels?|cels?|animation drawings?|backstage pass(?:es)?|tour (?:pass(?:es)?|laminates?)|studio photo(?:graph)?s?)\b/i;
+ *  photographs — Goldin's Thematic auctions filed them as trophies / game-used.
+ *  (r9, QA4 C5) + a festival / concert ticket off the Tickets facet (a 1969
+ *  Woodstock three-day ticket was a Sports Ticket, and a rec pick) */
+export const GOLDIN_NON_SPORT_RE = /\b(?:vinyl|test pressing|cassette|laserdisc|8-track|production[- ](?:made|used|cels?)|screen[- ](?:used|worn|matched)|ursa authentic|movie poster|film poster|concert poster|tour poster|star wars|star trek|marvel|disney|beatles|elvis presley|rolling stones|nirvana|hollywood|actor|actress|filming|baywatch|(?:from|in) (?:the )?(?:film|movie|tv series|series)|riaa|brit certified|brit awards?|(?:gold|platinum|silver|diamond) (?:records?|albums?|singles?)|(?:multi-|double |triple )?platinum (?:sales )?awards?|(?:record |single |album )?sales awards?|grammys?|grammy awards?|animation cels?|cels?|animation drawings?|backstage pass(?:es)?|tour (?:pass(?:es)?|laminates?)|studio photo(?:graph)?s?|woodstock|music (?:and|&) arts? fair|(?:music|rock|folk|jazz) festival|concert tickets?)\b/i;
 /** Goldin's non-sport catch-all sale: its lots are sports only on evidence */
 const GOLDIN_NON_SPORT_SALE_RE = /\bthematic\b/i;
 /** explicit athlete-use language (not "worn by" / "used by": an actor's too) */
@@ -529,10 +535,25 @@ export function goldinNonSportFix(l: ClassifyLot): string | null {
   return cultureHome(t);
 }
 
+const MIXED_SPORTS_SALE_RE = /\bsports?\b.*\b(?:hollywood|music|film|entertainment|pop culture)\b|\b(?:hollywood|music|film|entertainment|pop culture)\b.*\bsports?\b/i;
 export function saleGateFix(l: ClassifyLot): string | null {
   const t = String(l.title || '');
   const sale = String(l.saleName || '');
   if ((l.auctionHouse === "Christie's" || l.auctionHouse === "Sotheby's") && SPORTS_SLUGS.has(l.artist)) {
+    // (r9, QA4 N9) a MIXED sports-and-Hollywood sale ("American Greats Vintage
+    // Sports And Hollywood From The Dr G B Espy Collection"): a lot whose own
+    // title names no sport is the Hollywood half — Margaret Mitchell's signed
+    // Gone with the Wind first edition sat under Trophies & Awards off its
+    // "National Book Award". A culture home or no change (never dropped).
+    // It moves on positive evidence only — a named non-athlete, a film / music
+    // word, a book — so an ambiguous name stays ("JOE JACKSON AUTOGRAPHED
+    // PROMISSORY NOTE … 1916" is Shoeless Joe's), as does LeRoy Neiman's
+    // "Alabama Handoff"
+    const culture = NON_ATHLETE_PERSON_RE.test(t) || cultureSlugOf(t) !== 'entertainment-memorabilia' || SCI_BOOK_RE.test(t);
+    if (MIXED_SPORTS_SALE_RE.test(sale) && culture && !SPORT_WORD_RE.test(t) && !hasSportsTitleEvidence(t)) {
+      const home = cultureHome(t, String(l.description || '').slice(0, 300));
+      return home === DROP ? null : home;
+    }
     if (!NON_SPORT_SALE_RE.test(sale) || SPORT_WORD_RE.test(t)) return null;
     if (/ocean ?liner|transport/i.test(sale)) return DROP; // no tracked home
     return isCultureSale(sale) ? (routeCulture(t) ?? DROP) : DROP;
@@ -1017,7 +1038,7 @@ export function ticketIsGameUsed(l: ClassifyLot): string | null {
 // jersey, an Elvis concert ticket) — and Goldin, and the photo / ticket /
 // game-used slugs. A HOF player's "Presidential Luncheon Invitation" stays
 // sports (lotg-19041): "(HOF)" and a quoted nickname no longer hide the athlete.
-const NON_ATHLETE_PERSON_RE = /\b(?:president(?:ial)?|first lady|vice president|obama|trump|biden|eisenhower|truman|kennedy|nixon|reagan|clinton|roosevelt|political|politicians?|coolidge|hoover|lincoln|sinatra|elvis|beatles|billy joel|orville wright|wright brothers|marilyn monroe|james stewart|jimmy stewart|john wayne|clint eastwood|bob hope|bing crosby|charlie sheen|marlon brando|humphrey bogart|james dean|charlie chaplin|walt disney|audrey hepburn|cary grant|gary cooper|clark gable|bette davis|shirley temple|tom hanks|kevin costner|bill murray|billy crystal|jack nicholson|will ferrell|adam sandler)\b/i;
+const NON_ATHLETE_PERSON_RE = /\b(?:president(?:ial)?|first lady|vice president|obama|trump|biden|eisenhower|truman|kennedy|nixon|reagan|clinton|roosevelt|political|politicians?|coolidge|hoover|lincoln|sinatra|elvis|beatles|billy joel|orville wright|wright brothers|marilyn monroe|james stewart|jimmy stewart|john wayne|clint eastwood|bob hope|bing crosby|charlie sheen|marlon brando|humphrey bogart|james dean|charlie chaplin|walt disney|audrey hepburn|cary grant|gary cooper|clark gable|bette davis|shirley temple|tom hanks|kevin costner|bill murray|billy crystal|jack nicholson|will ferrell|adam sandler|vivien leigh|katharine hepburn|louis armstrong|ginger rogers|natalie wood|lana turner|josephine baker|alfred hitchcock|buddy holly|margaret mitchell)\b/i;
 const NON_ATHLETE_HOUSES = new Set(['RR Auction', 'Goldin', ...Array.from(SPORTS_EXPANSION_HOUSES)]);
 const NON_ATHLETE_SLUGS = new Set(['autographs', 'sports-memorabilia', 'memorabilia', 'type-1-photos', 'tickets-passes', 'game-used']);
 export function nonAthleteAutograph(l: ClassifyLot): string | null {
@@ -1037,7 +1058,20 @@ export function nonAthleteAutograph(l: ClassifyLot): string | null {
 // re-audit dropped jugates too), toy accessory sets, and magazine runs
 // ("Beatles Monthly") are mass items.
 // ═══════════════════════════════════════════════════════════════════════════
-const SPACE_STRONG_RE = /\b(?:hubble )?space telescope\b|\bnasa\b|\bapollo \d|\bastronauts?\b|\bcosmonauts?\b|\bspace shuttle\b|\bskylab\b|\bgemini \d|\bmercury[- ]\d|\bmoon ?walk|\blunar (?:module|surface|landing)\b|\bbuzz aldrin\b|\bneil armstrong\b/i;
+const SPACE_STRONG_RE = /\b(?:hubble )?space telescope\b|\bnasa\b|\bapollo \d|\bastronauts?\b|\bcosmonauts?\b|\bspace shuttle\b|\bskylab\b|\bgemini \d|\bmercury[- ]\d|\blunar (?:module|surface|landing)\b|\bbuzz aldrin\b|\bneil armstrong\b/i;
+/** (r9) "Moonwalk" is Michael Jackson's dance, his 1988 autobiography and (as
+ *  "Moonwalker") his film as often as it is a walk on the Moon: a bare
+ *  moonwalk word made his twice-signed "Moonwalk" autobiography a space lot,
+ *  drilled Apollo and recommended to Apollo followers. The plural
+ *  "Moonwalkers" (the twelve) is space; any other moonwalk word needs a space
+ *  word beside it, and never one of Jackson's. */
+export const MOONWALK_RE = /\bmoon ?walk(?:s|ing|ed|ers?)?\b/i;
+const MOONWALK_SPACE_RE = /\b(?:apollo|nasa|astronauts?|lunar|moon landing|eva|flown|space|aldrin|armstrong|first man on the moon|tranquility|mission)\b/i;
+const MOONWALK_NOT_SPACE_RE = /\bmichael jackson\b|\bthriller\b|\bmotown\b|\bbillie jean\b|\bdanc(?:e|er|ers|ing)\b|\bjackson 5\b/i;
+export function isSpaceMoonwalk(t: string): boolean {
+  if (!MOONWALK_RE.test(t) || MOONWALK_NOT_SPACE_RE.test(t)) return false;
+  return /\bmoon ?walkers\b/i.test(t) || MOONWALK_SPACE_RE.test(t);
+}
 const SPACE_FICTION_RE = /\b(?:movie|film|screen[- ](?:used|worn)|production|props?|costume|replica|toy|model kit|star trek|star wars|cufflinks?|watch)\b/i;
 /** (wave 4) class 7 · the ASTRONAUTS an autograph house titles by bare name
  *  ("Jim Irwin Signed Photograph", "Edgar Mitchell Publication", "Sally Ride
@@ -1055,7 +1089,7 @@ const SCIENTIST_SURNAME_FIRST = 'einstein|newton|darwin|curie|tesla|edison|farad
 const SCIENTIST_LEAD_RE = new RegExp(String.raw`^\s*(?:(?:dr\.|sir|professor|prof\.)\s+)?(?:${SCIENTIST_NAMES})\b|^\s*(?:${SCIENTIST_SURNAME_FIRST}),\s+[^()]{2,40}\(\s*(?:b\.\s*)?1[5-9]\d\d`, 'i');
 export function isSpaceLeadTitle(t: string, sale = ''): boolean {
   if (SPACE_FICTION_RE.test(t)) return false;
-  if (SPACE_STRONG_RE.test(t) || SPACE_FLOWN_RE.test(t) || ASTRONAUT_RE.test(t)) return true;
+  if (SPACE_STRONG_RE.test(t) || SPACE_FLOWN_RE.test(t) || ASTRONAUT_RE.test(t) || isSpaceMoonwalk(t)) return true;
   return ASTRONAUT_AMBIG_RE.test(t) && (SPACE_CONTEXT_RE.test(t) || /\bspace\b/i.test(sale));
 }
 export function cultureLeakFix(l: ClassifyLot): string | null {
