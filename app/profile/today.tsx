@@ -92,13 +92,16 @@ function Head({ label }: { label: string }) {
   );
 }
 
-export default function TodayBand({ loop, closingWatches, reads, away }: {
+export default function TodayBand({ loop, closingWatches, reads, away, phoneRows = PER_COL }: {
   loop: ReturnLoop | null;
   /** live watches that hammer today, soonest first */
   closingWatches: AuctionLot[];
   reads: TodayRead[];
   /** the while-you-were-away facts (null = nothing happened) */
   away: React.ReactNode | null;
+  /** rows a phone opens on (a desk with live watches opens on 2, so its
+   *  own Watching room starts in the first screen) */
+  phoneRows?: number;
 }) {
   const narrow = useNarrow();
   const [all, setAll] = useState(false);
@@ -149,7 +152,7 @@ export default function TodayBand({ loop, closingWatches, reads, away }: {
   let shown: { closing: Row[]; fresh: Row[]; rest: Row[] };
   if (all) shown = { closing, fresh, rest };
   else if (narrow) {
-    let left = PER_COL;
+    let left = phoneRows;
     const cut = (xs: Row[]) => { const s = xs.slice(0, Math.max(0, left)); left -= s.length; return s; };
     shown = { closing: cut(closing), fresh: cut(fresh), rest: cut(rest) };
   } else {
@@ -193,7 +196,7 @@ export default function TodayBand({ loop, closingWatches, reads, away }: {
           )}
         </div>
       )}
-      {(hidden > 0 || all) && total > PER_COL && (
+      {(hidden > 0 || all) && total > (narrow ? phoneRows : PER_COL) && (
         <button type="button" className="ck-today-more" aria-expanded={all} onClick={() => setAll(v => !v)}>
           {all ? 'Show less' : `+${hidden} more today`}
         </button>

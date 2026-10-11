@@ -46,7 +46,7 @@ import PickMenu from './pickmenu';
 import PickOutcomes from './outcomes';
 import ForYourCollection from './collection';
 import { useLogPicks } from '../lib/pick-log';
-import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, median, overEstimatePct, isOnBlock } from '../utils';
+import { closeDayOf, getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, median, overEstimatePct, isOnBlock } from '../utils';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
 import { makerLineOf, labelLineOf, drillLabelOf } from '../lib/lot-labels';
 import { displayMakerOf } from '../lib/maker-subjects';
@@ -87,6 +87,9 @@ import DecisionLine from '../components/DecisionLine';
 /** Terminal's shared daysUntil, kept on this page's NaN convention (every
     comparison here is NaN-safe; a null would need `?? NaN` at 14 call sites) */
 const daysUntil = (dateStr: string): number => daysUntilOrNull(dateStr) ?? NaN;
+/** days to a lot's PRINTED close day (closeDayOf — the reader's true day,
+    never the crawl day a late-night close was stamped with) */
+const closeDays = (l: AuctionLot): number => daysUntil(closeDayOf(l));
 function hammerWord(days: number): string {
   if (isNaN(days)) return 'scheduled';
   if (days < 0) return `hammered ${-days} ${days === -1 ? 'day' : 'days'} ago`;
@@ -147,7 +150,7 @@ const TAG_SOON_DAYS = 2;      // "Lands soon": hammers within 2 days
 // fairness check) was a second sleeper classifier; one-source law.
 type WatchTag = { tag: 'Lands soon' | 'Below market' | 'Most bids' | 'Quiet'; rank: number };
 function watchTagOf(l: AuctionLot, sig: { label: string } | null | undefined, now = Date.now()): WatchTag | null {
-  const d = daysUntil(l.saleDate);
+  const d = closeDays(l);
   if (d >= 0 && d <= TAG_SOON_DAYS) return { tag: 'Lands soon', rank: 0 };
   if (sig?.label === 'Below Market') return { tag: 'Below market', rank: 1 };
   if (l.bidVelocity && l.bidVelocity.delta > 0) return { tag: 'Most bids', rank: 2 };
@@ -278,7 +281,7 @@ function RowDossier({ lot, meta, sig, allLots, fullLoaded, onRemove }: {
   // a client appraisal over the loaded slice
   const appr = useMemo(() => { const vd = lotVerdict(lot); return vd ? { value: vd.expectedAllIn, n: vd.compN } : null; }, [lot]);
   const call = signalCallOf(meta);
-  const days = daysUntil(lot.saleDate);
+  const days = closeDays(lot);
   const hasEst = (lot.estimateLow || 0) > 0 || (lot.estimateHigh || 0) > 0;
   return (
     <div className="ck-dossier" role="region" aria-label={`Details for ${lot.title}`}>
@@ -449,7 +452,7 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
   const narrow = cols === 1;
   // two full rows of the desk's card grid (3 across at the rail's width,
   // 2 from 600–899) — one row on a desk whose own watches lead the page
-  const page = compact ? (cols === 3 ? 3 : 4) : 6;
+  const page = compact ? (cols === 1 ? 3 : cols) : 6;
   const [shown, setShown] = useState<number | null>(null);
   const visible = shown ?? page;
   const [openLot, setOpenLot] = useLotModal<AuctionLot>();
@@ -615,7 +618,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
           <div className="ck-mtitle">{name}</div>
           <div className="ck-mline">
             <span className="ck-msub">
-              {meta?.artist ? makerLineOf({ artist: meta.artist, title: meta.title }).name : 'archive'}
+              {(meta?.artist ? makerLineOf({ artist: meta.artist, title: meta.title }).name : '') || 'archive'}
               {meta?.estMid != null && <> · est. {formatPrice(meta.estMid)} at save</>}
             </span>
             <span className="ck-mnum">
@@ -642,7 +645,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
     }
     return (
       <div className="ray-settled-cols ray-savedrow" style={{ display: 'grid' }}>
-        <span className="maker">{meta?.artist ? makerLineOf({ artist: meta.artist, title: meta.title }).name : '—'}</span>
+        <span className="maker">{(meta?.artist ? makerLineOf({ artist: meta.artist, title: meta.title }).name : '') || '—'}</span>
         <span className="work">{name}<span style={{ color: 'var(--color-text-faint)' }}> · archive</span></span>
         <span className="num" style={{ color: meta?.estMid != null ? undefined : 'var(--color-text-faint)' }}
           title={meta?.estMid != null ? 'The estimate as it stood when you saved the lot' : 'No estimate published'}>
@@ -709,7 +712,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
     <div className="ray-settled-cols ray-savedrow" style={{ display: 'grid' }}>
       <span className="maker">
         <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-          {makerLineOf(lot).name}
+          {makerLineOf(lot).name || '—'}
         </Link>
       </span>
       <span className="work">
@@ -1059,8 +1062,8 @@ export default function SavedPage() {
     const priced = withEst.length;
     const flagged = upcoming.filter(l => signalById.get(l.id)?.label === 'Below Market').length;
     const todayIso = localToday();
-    const next = upcoming.find(l => l.saleDate && l.saleDate.slice(0, 10) >= todayIso) || null;
-    const closesToday = upcoming.filter(l => daysUntil(l.saleDate) === 0).length;
+    const next = upcoming.find(l => { const d = closeDayOf(l).slice(0, 10); return !!d && d >= todayIso; }) || null;
+    const closesToday = upcoming.filter(l => closeDays(l) === 0).length;
     return { totalEst, priced, flagged, next, closesToday };
   }, [upcoming, signalById]);
 
@@ -1117,10 +1120,10 @@ export default function SavedPage() {
       .filter(l => !used.has(l.id))
       .map(l => ({ l, read: sleeperRead(l, nowMs) }))
       .filter((x): x is { l: AuctionLot; read: NonNullable<ReturnType<typeof sleeperRead>> } => !!x.read)
-      .sort((a, b) => daysUntil(a.l.saleDate) - daysUntil(b.l.saleDate))
+      .sort((a, b) => closeDays(a.l) - closeDays(b.l))
       .slice(0, 2);
     for (const { l, read } of quiet) {
-      const d = daysUntil(l.saleDate);
+      const d = closeDays(l);
       rows.push({
         key: `q-${claim(l).id}`, tag: 'Quietest', lot: l,
         fact: <>no bids yet · hammers {d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}{read.entry != null ? <> · opens at {formatPrice(read.entry)}</> : null} · appraised {formatPrice(read.cvu)}{read.anchor === 'fair-est' ? ', at estimate' : ''}</>,
@@ -1128,10 +1131,10 @@ export default function SavedPage() {
     }
     const soon = upcoming
       .filter(l => !used.has(l.id))
-      .filter(l => { const d = daysUntil(l.saleDate); return d >= 0 && d <= TAG_SOON_DAYS; })
+      .filter(l => { const d = closeDays(l); return d >= 0 && d <= TAG_SOON_DAYS; })
       .slice(0, 3);
     for (const l of soon) {
-      const d = daysUntil(l.saleDate);
+      const d = closeDays(l);
       // when formatEstimate prints the live-bid form ("$402 bid · 10 bids" —
       // it does this for ANY lot with a live bid and no two-sided estimate),
       // appending bid state again printed "· 10 bids · 10 bids". Gate on what
@@ -1190,7 +1193,7 @@ export default function SavedPage() {
       const ra = a.reason?.rank ?? 9;
       const rb = b.reason?.rank ?? 9;
       if (ra !== rb) return ra - rb;
-      if (ra === 0) return daysUntil(a.l.saleDate) - daysUntil(b.l.saleDate);
+      if (ra === 0) return closeDays(a.l) - closeDays(b.l);
       if (ra === 1) {
         const sa = signalById.get(a.l.id);
         const sb = signalById.get(b.l.id);
@@ -1198,7 +1201,7 @@ export default function SavedPage() {
         return dealScore(b.l, sb?.pct ?? 0) - dealScore(a.l, sa?.pct ?? 0);
       }
       if (ra === 2) return (b.l.bidVelocity?.delta ?? 0) - (a.l.bidVelocity?.delta ?? 0);
-      return new Date(a.l.saleDate).getTime() - new Date(b.l.saleDate).getTime();
+      return closeDayOf(a.l).localeCompare(closeDayOf(b.l));
     });
     return rows;
   }, [upcoming, signalById]);
@@ -1392,6 +1395,7 @@ export default function SavedPage() {
   // the record's lead cell is appraised-vs-bought only once it measures
   // something (≥1 piece with a bought price has a comp-based appraisal)
   const recordLedByAppraisal = collection.deltaPct != null && collection.totalPaid > 0 && collection.appraisedPaidN > 0;
+  const settledHasCall = useMemo(() => settledRows.some(r => !!signalCallOf(r.kind === 'lot' ? metaFor(r.lot.id) : savedMeta[r.o.id])), [settledRows, metaFor, savedMeta]);
   // the one settled count every surface prints (Settled head, the cell room)
   const settledCount = sold.length + soldOrphans.length;
 
@@ -1412,7 +1416,7 @@ export default function SavedPage() {
 
   /* ── TODAY: watches that hammer today, soonest first ── */
   const closingWatches = useMemo(() => upcoming
-    .filter(l => daysUntil(l.saleDate) === 0)
+    .filter(l => closeDays(l) === 0)
     .sort((a, b) => (closeMsOf(a) ?? Infinity) - (closeMsOf(b) ?? Infinity)), [upcoming]);
   /* ── the while-you-were-away facts, as the Today band's header line ── */
   const awayLine = (sinceLast || unseenAlerts > 0 || summary.closesToday > 0 || unclaimedWins > 0) ? (
@@ -1666,7 +1670,7 @@ export default function SavedPage() {
               sub={
                 <>
                   {summary.next && (
-                    <>Next hammer {hammerWord(daysUntil(summary.next.saleDate))}
+                    <>Next hammer {hammerWord(closeDays(summary.next))}
                       {summary.next.saleDateTime && <CloseClock iso={summary.next.saleDateTime} windowHours={24} prefix=" · " />}
                       {' '}·{' '}
                     </>
@@ -1727,7 +1731,7 @@ export default function SavedPage() {
 
           {/* ══ 1 · TODAY — new since, closing tonight, today's reads; the
               away facts ride its header line ══ */}
-          <TodayBand loop={deal.loop} closingWatches={closingWatches} reads={reads} away={awayLine} />
+          <TodayBand loop={deal.loop} closingWatches={closingWatches} reads={reads} away={awayLine} phoneRows={watchFirst ? 2 : 3} />
 
           {/* ══ 2 · LOTS YOU MAY LIKE — first only when nothing is live on the
               desk; a reader with live watches sees their own lots first ══ */}
@@ -1779,7 +1783,7 @@ export default function SavedPage() {
                   const flipped = call && sig && call.dir !== 'unknown' && !sameAxis;
                   const newBids = m?.bidCount != null && (lot.bidCount || 0) > m.bidCount
                     ? (lot.bidCount || 0) - m.bidCount : 0;
-                  const days = daysUntil(lot.saleDate);
+                  const days = closeDays(lot);
                   const vel = lot.bidVelocity && lot.bidVelocity.delta > 0 ? lot.bidVelocity : null;
                   // Δ ink: on the below axis deeper (+) is the deal deepening;
                   // on the above axis deeper (+) is it worsening
@@ -1839,7 +1843,7 @@ export default function SavedPage() {
               <div className="ck-mledger ray-enter">
                 {(allWatch ? room : room.slice(0, PHONE_ROWS)).map(({ l: lot, reason }) => {
                   const sig = signalById.get(lot.id) ?? null;
-                  const days = daysUntil(lot.saleDate);
+                  const days = closeDays(lot);
                   return (
                     <Link key={lot.id} href={`/lot?id=${encodeURIComponent(lot.id)}`} className="ck-mrow" data-nav-row>
                       <span className="ck-mrow-main">
@@ -2093,7 +2097,7 @@ export default function SavedPage() {
                             <div className="ck-piece-title">{craftTitle(lot.title, lot.auctionHouse)}</div>
                           </Link>
                           <div className="ck-piece-meta">
-                            <span>{[makerLineOf(lot).name, labelLineOf(lot), lot.auctionHouse, lot.saleDate ? formatDate(lot.saleDate) : ''].filter(Boolean).join(' · ')}</span>
+                            <span>{[makerLineOf(lot).name, labelLineOf(lot), lot.auctionHouse, closeDayOf(lot) ? formatDate(closeDayOf(lot)) : ''].filter(Boolean).join(' · ')}</span>
                             {drill && drillSlug && (
                               <Link href={`/sub/${drillSlug.replace(':', '/')}`} className="ray-coll-chip">{drillLabelOf(drillSlug, drill.label)}</Link>
                             )}
@@ -2162,7 +2166,8 @@ export default function SavedPage() {
                 </p>
               )}
 
-              <div className="ray-settled-desk" style={{ marginTop: 12 }}>
+              {/* "Your call" folds when no settled save recorded one */}
+              <div className="ray-settled-desk" style={{ marginTop: 12 }} data-nocall={settledHasCall ? undefined : ''}>
                 <div className="ray-settled-cols ray-settled-head kicker" style={{ padding: '0 2px 8px' }}>
                   <span>Maker</span>
                   <span>Work</span>
@@ -2277,7 +2282,7 @@ export default function SavedPage() {
                           <>
                             <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>
                               was: {m.title}
-                              {m.artist && <>, {makerLineOf({ artist: m.artist, title: m.title }).name}</>}
+                              {m.artist && makerLineOf({ artist: m.artist, title: m.title }).name ? <>, {makerLineOf({ artist: m.artist, title: m.title }).name}</> : null}
                             </span>
                             <span style={{ color: 'var(--color-text-faint)' }}>
                               {m.estMid != null && <> · est. {formatPrice(m.estMid)}</>}

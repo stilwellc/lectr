@@ -100,9 +100,9 @@ export default function ForYourCollection({ book, pool, compLots, ready, lastCra
 
   const cols = useGridCols();
   const narrow = cols === 1;
-  // a room inside the picks group: one row of cards (two on a phone),
+  // a room inside the picks group: one row of cards (three rows on a phone),
   // Show more deals the rest
-  const page = cols === 3 ? 3 : cols === 2 ? 4 : 3;
+  const page = cols === 1 ? 3 : cols;
   const [shown, setShown] = useState<number | null>(null);
   const visible = shown ?? page;
   const [openLot, setOpenLot] = useLotModal<AuctionLot>();

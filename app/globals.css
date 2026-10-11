@@ -4846,8 +4846,9 @@ button.ns-stat { cursor: pointer; }
 .ck-head-sub { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: var(--color-text-muted); max-width: 820px; }
 @media (max-width: 639.98px) {
   /* a phone: actions wrap under the title, never squeeze it */
-  .ck-head-actions { margin-left: 0; flex-basis: 100%; order: 4; }
   .ck-head-row .ck-helpbtn { margin-left: auto; }
+  .ck-head-actions { margin-left: 0; }
+  .ck-page .ck-head .ray-h2 { font-size: 24px; }
 }
 /* the sub-room head: the same row, lighter — no print rule */
 .ck-h3 {
@@ -4863,6 +4864,10 @@ html[data-lectr-light] .ray-band .ck-head[data-level='2'] h2.ray-h2 { padding-to
 html[data-lectr-light] .ray-band .ck-head[data-level='2'] h2.ray-h2::after { content: ''; position: absolute; top: 3px; left: 0; right: 0; border-top: 1px solid var(--hairline); }
 .ray-band .ck-head-sub { color: var(--paper-muted, var(--color-text-muted)); }
 
+/* the settled ledger folds "Your call" when no row recorded one */
+.ray-settled-desk[data-nocall] .ray-settled-cols > :nth-child(4) { display: none; }
+.ray-settled-desk[data-nocall] .ray-settled-cols { grid-template-columns: minmax(100px, 140px) minmax(0, 1fr) 110px 100px 88px 86px; }
+
 /* ── THE PICKS GROUP: Lots you may like + For your collection + How your
    picks did read as one room — one plate, the followers as sub-rooms ── */
 .ck-group { padding-bottom: 44px; }
@@ -4874,7 +4879,10 @@ html[data-lectr-light] .ray-band .ck-head[data-level='2'] h2.ray-h2::after { con
 .ck-outcome-line { margin: 12px 0 0; font-size: 13px; line-height: 1.55; color: var(--color-fg); max-width: 820px; }
 .ck-seg { display: inline-flex; gap: 6px; }
 @media (max-width: 639.98px) {
-  .ck-group { padding-bottom: 32px; }
+  /* a phone's rhythm: rooms sit closer (one thumb, less travel) */
+  .ck-page .ray-saved-section { padding-block: 26px 30px; }
+  .ck-page .ck-desk .ray-masthead-h1 { margin-bottom: 0; }
+  .ck-group { padding-bottom: 30px; }
   .ck-subroom { padding-top: 26px; }
 }
 
