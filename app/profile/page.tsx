@@ -22,7 +22,7 @@ import CountUp from '../components/CountUp';
 import Masthead, { Accent } from '../components/Masthead';
 import Flick from '../components/Flick';
 import CloseClock from '../components/CloseClock';
-import { WatchMark, RecordMark, CollectionMark, TapeMark, ArchiveMark, HorizonMark, RankMark, SignalMark, AwayMark } from '../components/marks';
+import { WatchMark, RecordMark, CollectionMark, TapeMark, ArchiveMark, HorizonMark, RankMark, SignalMark, AwayMark, MoversMark } from '../components/marks';
 import { FeedRow, belowSignalOf, feedTone } from '../components/LotBrowser';
 import { useReturnLoop, type ReturnLoop } from '../components/PickStrips';
 import { useLastVisit, houseBaselines } from '../lib/feed-filters';
@@ -40,6 +40,7 @@ import { HelpChip } from './help';
 import { PillRail, useHashLanding, type RailItem } from './rail';
 import TodayBand from './today';
 import YourSignals from './signals';
+import YourMarket from './YourMarket';
 import PickMenu from './pickmenu';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, median, overEstimatePct, isOnBlock } from '../utils';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
@@ -1409,6 +1410,9 @@ export default function SavedPage() {
   /* ── THE RAIL — one item per section that renders; counts replace the
      old gauge line's duplicate figures ── */
   const { follows: myFollows } = useFollows();
+  // YOUR MARKET (N5): the owned pieces' names join the follows
+  const marketOwned = useMemo(() => collection.rows.map(r => r.lot), [collection.rows]);
+  const hasMarket = myFollows.some(f => f.kind !== 'house') || marketOwned.length > 0;
   // signed out: a reader who already told lectr what they collect gets the
   // STATE as the hero's sub-line, never the "tell lectr" prompt again
   const statedPrice = usePricePref();
@@ -1436,6 +1440,7 @@ export default function SavedPage() {
     const forYou: RailItem = { id: 'for-you', label: 'For you', mark: <RankMark size={15} />, count: deal.recs.length || undefined };
     if (watchFirst) r.push({ id: 'watching', label: 'Watching', mark: <WatchMark size={15} />, count: upcoming.length });
     r.push(forYou);
+    if (hasMarket) r.push({ id: 'market', label: 'Market', mark: <MoversMark size={15} /> });
     r.push({ id: 'signals', label: 'Signals', mark: <SignalMark size={15} />, count: myFollows.length || undefined, dot: unseenAlerts > 0 });
     if (deskView && hasRecordRoom) {
       const med = record && record.med != null ? Math.round(record.med) : null;
@@ -1444,7 +1449,7 @@ export default function SavedPage() {
     if (deskView && collection.rows.length > 0) r.push({ id: 'collection', label: 'Collection', mark: <CollectionMark size={15} />, count: formatPrice(collection.totalAppraised) });
     if (deskView && (historyCount > 0 || orphanIds.length > 0)) r.push({ id: 'history', label: 'History', mark: <TapeMark size={15} />, count: historyCount || undefined });
     return r;
-  }, [deal.recs.length, deskView, watchFirst, upcoming.length, myFollows.length, unseenAlerts, hasRecordRoom, record, collection, historyCount, orphanIds.length]);
+  }, [deal.recs.length, deskView, watchFirst, upcoming.length, myFollows.length, hasMarket, unseenAlerts, hasRecordRoom, record, collection, historyCount, orphanIds.length]);
   // "Today" leads the rail wherever the band renders — TodayBand's own gate:
   // the return loop answered, or there is an away fact, a closing watch or a read
   const railWith = (band: { away: boolean; closing: number; reads: number }): RailItem[] =>
@@ -1507,6 +1512,7 @@ export default function SavedPage() {
       <PillRail items={railWith({ away: unseenAlerts > 0 && !!awayLine, closing: 0, reads: 0 })} />
       <TodayBand loop={deal.loop} closingWatches={[]} reads={[]} away={unseenAlerts > 0 ? awayLine : null} />
       {recsRoom()}
+      <YourMarket book={allLots} owned={marketOwned} />
       <YourSignals book={allLots} signedOut={authEnabled && !user} />
       <section className="rail ray-enter" style={{ paddingTop: 34 }}>
         <div className="ns-plate" style={{ paddingTop: 18 }}>
@@ -1557,7 +1563,8 @@ export default function SavedPage() {
               <span>to keep this everywhere — your follows and saves carry over. Free · one tap · nothing on lectr is gated.</span>
             </div>
           </section>
-          <YourSignals book={allLots} signedOut />
+          <YourMarket book={allLots} owned={marketOwned} />
+      <YourSignals book={allLots} signedOut />
           <section className="rail ray-enter" style={{ paddingTop: 34, paddingBottom: 8 }}>
             <div className="ns-plate" style={{ paddingTop: 18 }}>
               <div className="ns-split" style={{ marginBottom: 6 }}>
@@ -1826,7 +1833,8 @@ export default function SavedPage() {
 
           {/* ══ 4 · YOUR SIGNALS — follows, saved searches + inbox, what this
               device learned ══ */}
-          <YourSignals book={allLots} signedOut={authEnabled && !user} />
+          <YourMarket book={allLots} owned={marketOwned} />
+      <YourSignals book={allLots} signedOut={authEnabled && !user} />
 
           {/* ══ 5 · YOUR RECORD — the figures row (once), the receipt, the
               timeline ══ */}
