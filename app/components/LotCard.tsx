@@ -11,10 +11,10 @@ import { closeDayOf, houseColors, formatDate, craftTitle, formatPrice, httpsImg,
 import ComparableModal from './ComparableModalLazy';
 import { useBackClose } from '../lib/use-lot-modal';
 import Flick from './Flick';
-import { computeDeepSignal, FORM_LABEL, signalMagnitude } from '../lib/comps';
+import { FORM_LABEL, signalMagnitude } from '../lib/comps';
 import { safeHref } from '../lib/safe-href';
 import { cardCompsHammer } from '../lib/verdict';
-import { lotFace, fmtFace } from '../lib/lot-face';
+import { lotFace, fmtFace, liveSignalOf } from '../lib/lot-face';
 import { makerHref } from '../lib/entity/retired';
 import { formatEstimate } from '../lib/estimate-text';
 import { addLotToCalendar } from '../lib/remind';
@@ -43,11 +43,16 @@ export function LiveStamp({ iso }: { iso?: string }) {
 // feed row and the tests read them without the card's CSS); re-exported
 export { estimateOnly, formatEstimate } from '../lib/estimate-text';
 
-/** Prefer the crawl-time signal when present; else compute from history. */
+/** THE lot's live signal — ONE SOURCE (X5, Oct 11 2026): lot-face
+ *  liveSignalOf — the build's stamp (null included: an abstention), else the
+ *  engine's flag off the lot's own value (comps.engineFlagOf); the same read
+ *  lot-face makes for call.text. Never a client-side recompute over whatever
+ *  pool the page happens to hold (flags.ts law): the desk's signalById and
+ *  lot-face used to be two sources that could disagree. `_allLots` stays in
+ *  the signature for the callers; it is not read. */
 export type LotSignal = { label: string; pct: number; basis?: number; kind?: 'edition' | 'form'; form?: string; confidence?: 'very-high' | 'high' | 'medium' | 'low' } | null;
-export function lotSignal(lot: AuctionLot, allLots: AuctionLot[]): LotSignal {
-  if (lot.signal !== undefined) return lot.signal;
-  return computeBuySignal(lot, allLots);
+export function lotSignal(lot: AuctionLot, _allLots?: readonly AuctionLot[]): LotSignal {
+  return liveSignalOf(lot);
 }
 
 /** Confidence as a compact meter: filled dots out of four. */
@@ -58,11 +63,6 @@ export function confidenceMeter(c?: string): { dots: string; word: string } {
     case 'medium': return { dots: '●●○○', word: 'medium' };
     default: return { dots: '●○○○', word: 'low' };
   }
-}
-
-/** The deep comps engine decides what counts as a comp (see app/lib/comps). */
-export function computeBuySignal(lot: AuctionLot, allLots: AuctionLot[]) {
-  return computeDeepSignal(lot, allLots);
 }
 
 // The card's static CSS, injected into <head> exactly once — the home grid

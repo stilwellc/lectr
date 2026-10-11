@@ -16,7 +16,7 @@ import { test } from 'node:test';
 import * as assert from 'assert';
 import { readFileSync } from 'fs';
 import path from 'path';
-import { decisionOf, decisionParts, lotFace, fmtFace, DECISION_GAP_MIN } from '../lot-face';
+import { decisionOf, decisionParts, lotFace, fmtFace, DECISION_GAP_MIN, compsRuleFires, compsCountText } from '../lot-face';
 import { prioStatic, closeMsOf } from '../priority';
 import { setCloseK, resetCloseK } from '../close-k';
 import type { AuctionLot } from '../../types';
@@ -36,7 +36,7 @@ function liveBook(): AuctionLot[] | null {
 const figs = (s: string) => s.match(/\$[\d.,]+[KM]?/g) ?? [];
 
 function checkBook(book: AuctionLot[], label: string) {
-  const seen = { proj: 0, est: 0, worth: 0, gap: 0, abstained: 0, noWorth: 0, when: 0 };
+  const seen = { proj: 0, est: 0, worth: 0, comps: 0, gap: 0, abstained: 0, noWorth: 0, when: 0 };
   for (const lot of book) {
     const face = lotFace(lot);
     const d = decisionOf(lot, NOW);
@@ -65,13 +65,25 @@ function checkBook(book: AuctionLot[], label: string) {
       assert.ok(!p || p.over || (p.src !== 'proj' && p.src !== 'est'), `${lot.id}: an anchored lot prints its close figure`);
     }
 
-    // worth up to: lotFace's max bid — or nothing
+    // worth up to: lotFace's max bid — or, under the comps rule (X5), the
+    // flag's basis: lotFace's comps median with its n — or nothing
     if (face.maxBid) {
       seen.worth++;
       assert.ok(d.worth, `${lot.id}: a max bid prints`);
-      assert.equal(d.worth!.usd, face.maxBid.hammer, `${lot.id}: worth up to IS lotFace.maxBid`);
-      assert.equal(d.worth!.text, `worth up to ${fmtFace(face.maxBid.hammer)}`);
-      allowed.add(fmtFace(face.maxBid.hammer));
+      if (compsRuleFires(face)) {
+        seen.comps++;
+        assert.equal(d.worth!.kind, 'comps');
+        assert.equal(d.worth!.usd, face.comps!.med, `${lot.id}: the comps-rule worth IS lotFace.comps.med`);
+        assert.equal(d.worth!.text, `comps median ${face.comps!.text} · ${compsCountText(face.comps!.n, face.comps!.ids.length)}`);
+        assert.match(d.worth!.title, new RegExp(`walk-away bid ${face.maxBid.text.replace(/[$.]/g, '\\$&')}`), `${lot.id}: the max bid rides the tooltip`);
+        assert.equal(d.gap, null, `${lot.id}: no gap between an all-in median and a hammer close`);
+        allowed.add(fmtFace(face.comps!.med));
+      } else {
+        assert.equal(d.worth!.kind, 'max');
+        assert.equal(d.worth!.usd, face.maxBid.hammer, `${lot.id}: worth up to IS lotFace.maxBid`);
+        assert.equal(d.worth!.text, `worth up to ${fmtFace(face.maxBid.hammer)}`);
+        allowed.add(fmtFace(face.maxBid.hammer));
+      }
     } else {
       seen.noWorth++;
       assert.equal(d.worth, null, `${lot.id}: no engine max bid → no worth figure`);
@@ -93,7 +105,7 @@ function checkBook(book: AuctionLot[], label: string) {
         assert.ok(d.gap.usd > 0);
       }
       allowed.add(fmtFace(d.gap.usd));
-    } else if (d.close?.kind === 'proj' && d.worth) {
+    } else if (d.close?.kind === 'proj' && d.worth && d.worth.kind === 'max') {
       assert.ok(Math.abs(d.worth.usd - d.close.usd) < DECISION_GAP_MIN * d.close.usd, `${lot.id}: a ≥10% gap prints`);
     }
 
@@ -110,7 +122,7 @@ function checkBook(book: AuctionLot[], label: string) {
     for (const t of decisionParts(d)) for (const f of figs(t)) assert.ok(allowed.has(f), `${lot.id}: "${t}" prints ${f}, not a source figure`);
     // and nothing is printed for a figure that does not exist
     const line = decisionParts(d).join(' · ');
-    if (!face.maxBid) assert.doesNotMatch(line, /worth up to/);
+    if (!face.maxBid) assert.doesNotMatch(line, /worth up to|comps median/);
     if (!d.close) assert.doesNotMatch(line, /projected close|estimate \$/);
   }
   return seen;
