@@ -14,6 +14,12 @@
  *  5. Totals: Σ estimate midpoints over two-bounded rows; one-sided = unpriced.
  *  6. Closing now: watched closes inside 24h, the next one named.
  *  7. Words: countdown (minutes, never seconds), velocity, bids, day words.
+ *  8. The view (Oct 11 review): picks behind a toggle — viewOf cuts them
+ *     and re-reads every day's count / total; pickDefault shows picks only
+ *     when nothing else of yours is on the week or the device remembers;
+ *     the rail's count is YOURS (watches + picks), never the names' sales.
+ *  9. A name you own a piece by: the tag stays NAME, the row says
+ *     "you own N" (ownedWords), the count rides on the row (ownedN).
  */
 import { test } from 'node:test';
 import * as assert from 'assert';
@@ -22,7 +28,7 @@ import type { AuctionLot } from '../../../types';
 import type { Follow } from '../../../lib/follows';
 import {
   planWeek, closingNowOf, watchRows, markConflicts, localDayOf, addDays, dayKeysOf, dayOffsetOf, dayWords, offsetWord,
-  countdownText, velocityText, bidsText, estMidOf, weekNamesOf, byClose,
+  countdownText, velocityText, bidsText, estMidOf, weekNamesOf, byClose, viewOf, pickDefault, ownedWords,
   WEEK_DAYS, CONFLICT_MS, CLOSING_NOW_MS, type WeekRow,
 } from '../week';
 
@@ -100,7 +106,7 @@ test('a timed close lands on the reader’s local day of the instant; a date-onl
 
 test('timed rows sort by close ahead of the day-only tail; a tie keeps watch before pick before name', () => {
   const mk = (id: string, kind: WeekRow['kind'], closeMs: number, timed: boolean): WeekRow =>
-    ({ lot: lot({ id }), kind, name: null, owned: false, closeMs, timed, day: 'x', estMid: null, conflictWith: [] });
+    ({ lot: lot({ id }), kind, name: null, owned: false, ownedN: 0, closeMs, timed, day: 'x', estMid: null, conflictWith: [] });
   const rows = [mk('d', 'watch', NOW + 30 * H, false), mk('b', 'name', NOW + 2 * H, true), mk('a', 'watch', NOW + 2 * H, true), mk('c', 'pick', NOW + 5 * H, true)];
   rows.sort(byClose);
   assert.deepEqual(ids(rows), ['a', 'b', 'c', 'd']);
@@ -127,6 +133,11 @@ test('watch > pick > name, once each; names come from maker / subject follows an
   const n2 = p.rows.find(r => r.lot.id === 'n2')!;
   assert.equal(n1.name, 'Andy Warhol'); assert.equal(n1.owned, false);
   assert.equal(n2.name, 'KAWS'); assert.equal(n2.owned, true, 'an owned piece’s maker is a name you own');
+  assert.equal(n2.ownedN, 1, 'the row carries how many pieces'); assert.equal(n1.ownedN, 0);
+  assert.equal(ownedWords(n2), 'you own 1', 'the name line says what is yours — the tag stays NAME');
+  assert.equal(ownedWords(n1), null, 'a follow says nothing');
+  assert.equal(ownedWords({ kind: 'watch', ownedN: 3 }), null, 'only a name row');
+  assert.equal(ownedWords({ kind: 'name', ownedN: 3 }), 'you own 3');
   assert.ok(!kinds.h, 'a house follow pours no house onto the week');
   assert.equal(p.nameRows, 2); assert.equal(p.yours, 2);
   assert.deepEqual(p.names.sort(), ['Andy Warhol', 'KAWS']);
@@ -223,4 +234,39 @@ test('countdown prints minutes never seconds; velocity and bids only where measu
   assert.equal(addDays('2026-10-31', 1), '2026-11-01');
   assert.equal(offsetWord(0), 'today'); assert.equal(offsetWord(1), 'tomorrow'); assert.equal(offsetWord(2), null);
   assert.equal(dayOffsetOf(addDays(localDayOf(NOW), 5), NOW), 5);
+});
+
+/* ── 8. the view ── */
+test('the view: picks hidden cuts the pick rows and re-reads each day; the plan keeps the week’s facts', () => {
+  const w1 = lot({ id: 'w1', closeMs: NOW + 26 * H, estimateLow: 10_000, estimateHigh: 20_000 });
+  const p1 = lot({ id: 'p1', closeMs: NOW + 27 * H, estimateLow: 40_000, estimateHigh: 60_000 });
+  const p2 = lot({ id: 'p2', closeMs: NOW + 3 * 24 * H, estimateLow: 1_000, estimateHigh: 3_000 });
+  const warhol = lot({ id: 'n', closeMs: NOW + 27.5 * H, estimateLow: 1_000_000, estimateHigh: 2_000_000, ek: 'mk:andy-warhol' } as Partial<AuctionLot>);
+  const full = plan({ saved: [w1], recs: [{ lot: p1 }, { lot: p2 }], book: [warhol], follows: [{ kind: 'maker', key: 'andy-warhol', label: 'Andy Warhol' }] });
+  assert.equal(full.yours, 3, 'the rail’s count: watches + picks, never the names’ sales');
+  assert.equal(full.watches, 1); assert.equal(full.picks, 2); assert.equal(full.nameRows, 1);
+  assert.equal(full.rows.length, 4);
+  assert.equal(full.estTotal, 15_000 + 50_000 + 2_000); assert.equal(full.priced, 3);
+
+  assert.strictEqual(viewOf(full, { picks: true }), full, 'picks shown = the plan itself');
+  const v = viewOf(full, { picks: false });
+  assert.deepEqual(ids(v.rows).sort(), ['n', 'w1'], 'the pick rows are cut; watches and names stay');
+  assert.equal(v.yours, 1); assert.equal(v.picks, 0); assert.equal(v.watches, 1, 'the watch count is the plan’s');
+  assert.equal(v.estTotal, 15_000, 'the total is re-read over what shows'); assert.equal(v.priced, 1);
+  assert.equal(v.nameRows, 1, 'the names’ sales are untouched');
+  const d1 = v.days.find(d => d.day === localDayOf(NOW + 26 * H))!;
+  assert.equal(d1.rows.length, 2); assert.equal(d1.yours, 1); assert.equal(d1.estTotal, 15_000); assert.equal(d1.priced, 1); assert.equal(d1.names, 1);
+  const d3 = v.days.find(d => d.day === localDayOf(NOW + 3 * 24 * H))!;
+  assert.equal(d3.rows.length, 0, 'a day that held only a pick is empty in the view'); assert.equal(d3.yours, 0); assert.equal(d3.estTotal, 0);
+  assert.equal(v.first?.lot.id, 'w1');
+  assert.equal(v.days.length, WEEK_DAYS);
+  // the day caps are the day column's (PICK_ROWS_OPEN / NAME_ROWS_OPEN) — the view never changes them
+  assert.equal(full.days.find(d => d.day === d1.day)!.rows.length, 3);
+});
+
+test('pickDefault: the device’s memory wins; with no memory, picks show only when no watch is on the week', () => {
+  assert.equal(pickDefault({ watches: 3 }, null), false, 'watches on the week: picks sit behind the toggle');
+  assert.equal(pickDefault({ watches: 0 }, null), true, 'nothing else of yours: the picks are the week');
+  assert.equal(pickDefault({ watches: 3 }, true), true);
+  assert.equal(pickDefault({ watches: 0 }, false), false, 'a remembered hide holds even then (the toggle stays to undo it)');
 });

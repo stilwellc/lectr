@@ -7,12 +7,19 @@
  * membership (inside 24 hours or not) is read on the page's clock
  * (desk.now, ./week closingNowOf), never a clock of its own.
  *
+ * A card is a list item the j/k walk can land on (tabIndex −1 — never a
+ * second Tab stop); Enter / Space on a walked card opens the lot. Its Tab
+ * stops are the title (a link) and "Bid at <house>" — on a phone both are
+ * 40px targets.
+ *
  * With live watches but none inside 24h it says so in one line and names
  * the next close; with no live watch it prints nothing (the Watching room
  * is not on the page either).
  */
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import type { AuctionLot } from '../../types';
 import type { SectionProps } from '../desk/types';
 import CloseClock from '../../components/CloseClock';
 import DecisionLine from '../../components/DecisionLine';
@@ -25,7 +32,9 @@ import { houseTzOf } from '../../lib/house-tz';
 import './week.css';
 
 export function ClosingNow({ desk }: SectionProps) {
+  const router = useRouter();
   const read = useMemo(() => closingNowOf(desk.saved, desk.now), [desk.saved, desk.now]);
+  const onOpen = useCallback((lot: AuctionLot) => router.push(`/lot?id=${encodeURIComponent(lot.id)}`), [router]);
   if (read.live === 0) return null;
   if (read.rows.length === 0) {
     const n = read.next;
@@ -37,35 +46,44 @@ export function ClosingNow({ desk }: SectionProps) {
     );
   }
   return (
-    <div className="ck-week-cn" role="list" aria-label="Closing in the next 24 hours">
+    <div className="ck-week-cn">
       <div className="ck-reads-head">
         <span className="kicker">Closing now · {read.rows.length} of your {read.rows.length === 1 ? 'watch closes' : 'watches close'} in the next 24h</span>
         <i className="ck-reads-rule" />
       </div>
-      <div className="ck-week-cn-track">
+      <ul className="ck-week-cn-track" aria-label="Closing in the next 24 hours">
         {read.rows.map(r => {
           const { lot } = r;
           const href = safeHref(lot.url);
           const est = formatEstimate(lot);
           const bids = /\bbids?\b/.test(est) ? null : bidsText(lot);
           const vel = velocityText(lot);
+          const title = craftTitle(lot.title, lot.auctionHouse);
+          const onKey = (e: React.KeyboardEvent<HTMLLIElement>) => {
+            if (e.target !== e.currentTarget) return;
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(lot); }
+          };
           return (
-            <div key={lot.id} className="ck-week-cn-card" role="listitem" data-nav-row tabIndex={0}>
+            <li key={lot.id} className="ck-week-cn-card" data-nav-row tabIndex={-1} onKeyDown={onKey} aria-label={`Closing: ${title}`}>
               <div className="ck-week-cn-clock">
                 {r.timed && lot.saleDateTime
                   ? <CloseClock iso={lot.saleDateTime} windowHours={24} />
-                  : <span title={`The house published the sale day, not a close time — the day ends in ${cityOf(houseTzOf(lot))}`}>{countdownText(r.closeMs, desk.now)} · day only</span>}
+                  : <span title={`The house published the sale day, not a close time — the day ends in ${cityOf(houseTzOf(lot))}`}>day ends {countdownText(r.closeMs, desk.now)} · time TBC</span>}
               </div>
-              <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} className="ck-week-cn-title" tabIndex={-1}>{craftTitle(lot.title, lot.auctionHouse)}</Link>
+              <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} className="ck-week-cn-title">{title}</Link>
               <div className="ck-week-fact">
-                {lot.auctionHouse}{est ? <> · {est}</> : null}{bids ? <> · <b>{bids}</b></> : null}{vel ? <> · <span className="ck-week-vel">{vel}</span></> : null}
+                {lot.auctionHouse}{est ? <> · {est}</> : null}{bids ? <> · <b>{bids}</b></> : null}{vel ? <> · <span className="ck-week-vel"><i aria-hidden>↑</i>{vel.replace(/^\+/, '')}</span></> : null}
               </div>
               <DecisionLine lot={lot} estimate={false} when={false} abstain="quiet" nowMs={desk.now} className="ck-week-decision" />
-              {href && <a className="ck-week-act" href={href} target="_blank" rel="noopener noreferrer" tabIndex={-1}>Bid at {lot.auctionHouse} <Flick size={10} /></a>}
-            </div>
+              {href && (
+                <div className="ck-week-acts">
+                  <a className="ck-week-act" href={href} target="_blank" rel="noopener noreferrer" aria-label={`Bid at ${lot.auctionHouse} (opens the house’s page)`}>Bid at {lot.auctionHouse} <Flick size={10} /></a>
+                </div>
+              )}
+            </li>
           );
         })}
-      </div>
+      </ul>
     </div>
   );
 }
