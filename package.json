@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "tsx scripts/build-og.tsx && tsx scripts/gen-redirects.ts && next build && tsx scripts/csp-postbuild.ts",
+    "build": "tsx scripts/build-og.tsx && tsx scripts/gen-redirects.ts && tsx scripts/emit-first-screen.ts && next build && tsx scripts/csp-postbuild.ts",
     "start": "next start",
     "lint": "node scripts/ci/lint.mjs",
     "typecheck": "tsc --noEmit -p .",

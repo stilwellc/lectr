@@ -21,7 +21,9 @@ import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import Link from 'next/link';
 import { MARKETS, ROSTER, marketArtists, type Market } from '../../constants';
 import { useMarket } from '../../lib/market';
-import { useRayData, useSoldArchive, retryArchiveLoad, triggerFullLoad, retryFullLoad } from '../../hooks/useRayData';
+import { useRayDataFirst, useHouseBaselines, useSoldArchive, retryArchiveLoad, triggerFullLoad, retryFullLoad } from '../../hooks/useRayData';
+import { usePathname } from 'next/navigation';
+import { fsKeyOf } from '../../lib/first-screen';
 import { loadPageStats, type PageStats } from '../../lib/page-data';
 import { signalCallOf } from '../../lib/account';
 import { useSavedLots } from '../../hooks/useSavedLots';
@@ -36,7 +38,7 @@ import RayEntrance, { RayLoading } from '../../components/RayEntrance';
 import SettlementSlip from '../../components/SettlementSlip';
 import MarketSwitch from '../../components/MarketSwitch';
 import { FeedFilters, FEED_DEFAULTS, FEED_PARAM_KEYS, feedFromParams, feedToParams } from '../../components/FeedToolbar';
-import { useUrlState, useLastVisit, houseBaselines, memoryOf, restoreParams, readFeedMemory, writeFeedMemory } from '../../lib/feed-filters';
+import { useUrlState, useLastVisit, memoryOf, restoreParams, readFeedMemory, writeFeedMemory } from '../../lib/feed-filters';
 import { closeIsTimed } from '../../lib/house-tz';
 import { makerLineOf } from '../../lib/lot-labels';
 import { usePlayerDossiers } from '../../lib/use-player-dossiers';
@@ -170,7 +172,12 @@ function IcoDesk() { // the save mark — the same bookmark the feed prints
 const VERTICAL_COUNT = MARKETS.length - 1;
 
 export default function TerminalHomePage() {
-  const ray = useRayData();
+  // (perf W13) '/' paints its first screen — the hero, the tape, What
+  // matters — from a first-screen slice of the book (app/lib/first-screen);
+  // the whole book loads behind it and replaces it. Counts over the whole
+  // live book print '—' until then (`partial`).
+  const ray = useRayDataFirst(fsKeyOf(usePathname()));
+  const partial = ray.partial;
   usePlayerDossiers(); // athlete names on memorabilia rows link to /player once the dossier index lands
   const { allLots, statsByArtist, demand, realized, bidComp, recentSold, backtest, market: marketData, lastCrawl, loading, error, fromCache } = ray;
   const { market, setMarket } = useMarket();
@@ -225,7 +232,7 @@ export default function TerminalHomePage() {
   const prevVisitDay = useLastVisit();
   // a house's first-crawl flood is not "new" (feed-filters houseBaselines),
   // read off the whole loaded book so every market agrees
-  const baselines = useMemo(() => houseBaselines(allLots), [allLots]);
+  const baselines = useHouseBaselines(ray);
   // Oct 9 — "open my feed the way I left it": a bare visit (no feed param in
   // the URL) restores the reader's last triage + tab + sort on this device;
   // a URL with any feed param wins untouched. Runs after useUrlState's own
@@ -462,14 +469,14 @@ export default function TerminalHomePage() {
   // once, after the page has its feed; a hash or a restored scroll wins
   const tabLanded = useRef(false);
   useEffect(() => {
-    if (tabLanded.current || loading || upcoming.length === 0) return;
+    if (tabLanded.current || loading || partial || upcoming.length === 0) return;
     tabLanded.current = true;
     try {
       if (new URLSearchParams(window.location.search).get('tab') !== 'you' || window.location.hash || window.scrollY > 0) return;
     } catch { return; }
     const t = window.setTimeout(() => document.getElementById('on-the-block')?.scrollIntoView({ block: 'start' }), 250);
     return () => window.clearTimeout(t);
-  }, [loading, upcoming.length]);
+  }, [loading, partial, upcoming.length]);
 
   // The below-market lens: biggest gap first, at the feed.
   const openBelowLens = () => {
@@ -628,7 +635,7 @@ export default function TerminalHomePage() {
 
       {/* THE EXCHANGE RAIL — the door; re-scopes the WHOLE page in place */}
       <div className={`rail ${styles.switchStrip}`} style={{ paddingTop: 'var(--space-4)', position: 'relative', zIndex: 3 }}>
-        <MarketSwitch lit open={!fromCache} reads={railReads} />
+        <MarketSwitch lit open={!fromCache} reads={railReads} readsPending={loading || partial} />
       </div>
 
       {error ? (
@@ -663,7 +670,8 @@ export default function TerminalHomePage() {
               play={!fromCache}
               isMobile={mounted && isMobile}
               serial={lastCrawl}
-              closingNext={closingNext}
+              closingNext={partial ? undefined : closingNext}
+              countsPending={partial}
               onPersonalize={tasteReady && !hasSignals ? openForYou : undefined}
             />
 
@@ -671,14 +679,18 @@ export default function TerminalHomePage() {
                 ("What matters") is the first thing a reader triages, not
                 ~4,200px down beneath the wall, the board and the cells. */}
             {/* ══ THE FEED — On the block (full parity) ══ */}
-            {upcoming.length > 0 && (
+            {/* a first-screen slice paints only the default view (What
+                matters) — a remembered or linked view waits for the book */}
+            {partial && !viewIsDefault ? <RayLoading /> : upcoming.length > 0 && (
               <section id="on-the-block" className={`${styles.feedSection} ns-plate`}>
                 <div className={`ns-split ${styles.feedHead}`}>
                   <div>
                     <span className="ns-kicker">The live book</span>
                     <h2 className={styles.feedTitle}>On the block</h2>
                   </div>
-                  {nextHammer && (
+                  {partial ? (
+                    <p>Next hammer: —</p>
+                  ) : nextHammer && (
                     <p>
                       Next hammer: {nextHammer.word} · {nextHammer.lot.auctionHouse}
                     </p>
@@ -695,7 +707,7 @@ export default function TerminalHomePage() {
                   belowSignal={belowSignal}
                   follows={follows}
                   taste={hasSignals ? taste : null}
-                  youCold={tasteReady && !hasSignals ? <QuickStart book={allLots} mode="cold" surface="home" /> : null}
+                  youCold={tasteReady && !hasSignals && !partial ? <QuickStart book={allLots} mode="cold" surface="home" /> : null}
                   isSaved={isSaved}
                   onToggleSave={toggle}
                   lastCrawl={lastCrawl}
@@ -706,15 +718,18 @@ export default function TerminalHomePage() {
                   onOpenLot={setTableLot}
                   anchorId="on-the-block"
                   persistKey={`/home/${activeKey}`}
+                  slice={partial ? 'lots' : null}
                 />
 
-                {tableLot && (
+                {tableLot && !partial && (
                   <ComparableModal lot={tableLot} allLots={marketLots} onClose={() => setTableLot(null)} />
                 )}
               </section>
             )}
 
 
+            {partial && <RayLoading />}
+            {!partial && (<>
             {/* ══ TONIGHT'S WALL — the photographed front row (kept). The
                 section opens on a registration plate (north-star frame). ══ */}
             {wallEl && <div className={`${styles.wallSeparator} ns-plate`}>{wallEl}</div>}
@@ -990,6 +1005,7 @@ export default function TerminalHomePage() {
             </div>
             </section>
             </div>
+            </>)}
           </div>
 
         </RayEntrance>

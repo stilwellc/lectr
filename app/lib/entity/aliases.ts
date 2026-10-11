@@ -60,6 +60,15 @@ export function aliasOf(id: string): string | null {
   return aliases().get(id) ?? null;
 }
 
+/** the entity id a static alias path serves ('/e/charizard' → its id), or
+ *  null — the reverse of aliasOf (the first-screen preload names the slice
+ *  an alias page paints from) */
+export function idOfAlias(path: string): string | null {
+  let hit: string | null = null;
+  aliases().forEach((p, id) => { if (!hit && p === path) hit = id; });
+  return hit;
+}
+
 /** test seam: install an alias set (null → re-read the env) */
 export function setEntityAliasesForTest(xs: readonly AliasEntry[] | null): void {
   map = xs ? decodeAliases(encodeAliases(xs)) : null;

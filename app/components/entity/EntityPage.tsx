@@ -33,12 +33,13 @@ import FollowButton from '../FollowButton';
 import LotBrowser from '../LotBrowser';
 import PlateImg from '../PlateImg';
 import { FEED_DEFAULTS, feedFromParams, feedToParams, type FeedFilters } from '../FeedToolbar';
-import { useRayData } from '../../hooks/useRayData';
+import { useRayDataFirst, useHouseBaselines } from '../../hooks/useRayData';
+import { entityFsKey, FS_VERSION } from '../../lib/first-screen';
 import { useSavedLots } from '../../hooks/useSavedLots';
 import { useEntity } from '../../hooks/useEntities';
 import { useMarket } from '../../lib/market';
 import { useLearnVisit } from '../../lib/recs-signals';
-import { useUrlState, useLastVisit, houseBaselines } from '../../lib/feed-filters';
+import { useUrlState, useLastVisit } from '../../lib/feed-filters';
 import { useBackScroll } from '../../lib/use-back-scroll';
 import { livePool } from '../../lib/maker-pool';
 import { entityIdOf } from '../../lib/entity/live';
@@ -55,6 +56,7 @@ import { yoyIntervalText } from '../../lib/entity/ledger';
 import type { AuctionLot } from '../../types';
 import type { VerifiedMover } from '../../preview/terminal/verified';
 import { KindModule, YearlyLine, Results, Context } from './modules';
+import { RayLoading } from '../RayEntrance';
 import { recordOf } from '../../lib/entity/model';
 import { displayName, KIND_NOUN, entityDocTitle } from '../../lib/entity/display';
 import { useLotLinks } from '../../lib/lot-resolve';
@@ -87,12 +89,16 @@ const ENTITY_CSS = `
   .nsp-doss .nsp-byline .s.nsp-clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 }`;
 
+const NO_COUNTS: Record<string, number> = {};
 const MARKET_LABEL: Record<string, string> = Object.fromEntries(MARKETS.map(m => [m.key, m.key === 'tcg' ? 'TCG' : m.label]));
 
 export default function EntityPage({ id }: { id: string }) {
   const ref = useMemo(() => parseEntityId(id), [id]);
-  const ray = useRayData();
-  const { allLots, lastCrawl, totalLots, sources, market: marketData, fromCache, loading: booting } = ray;
+  // (perf W13) the header + live book paint from this entity's first-screen
+  // slice — every eager lot whose entity key shares its bucket, so `live`
+  // below is the book's exact list — then the whole book replaces it
+  const ray = useRayDataFirst(ref && FS_VERSION ? entityFsKey(id) : null);
+  const { allLots, lastCrawl, totalLots, sources, market: marketData, fromCache, loading: booting, partial } = ray;
   const { savedIds, toggle } = useSavedLots();
   const { setMarket } = useMarket();
   const { summary, detail, summaryPending, loading: detailLoading } = useEntity(ref ? id : null);
@@ -145,7 +151,7 @@ export default function EntityPage({ id }: { id: string }) {
 
   const [filters, setFilters] = useUrlState<FeedFilters>(FEED_DEFAULTS, feedFromParams, feedToParams);
   const prevVisitDay = useLastVisit();
-  const baselines = useMemo(() => houseBaselines(allLots), [allLots]);
+  const baselines = useHouseBaselines(ray);
   const scope = useMemo(() => {
     if (!ref) return null;
     if (ref.kind === 'maker') return { maker: ref.slug!, named: true };
@@ -179,13 +185,14 @@ export default function EntityPage({ id }: { id: string }) {
   }, [summary, detail]);
   const recLinkOf = useLotLinks(recRow);
 
-  const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
+  // the nav's per-maker live counts read the whole book: none while partial
+  const upcomingCounts = useMemo(() => (partial ? NO_COUNTS : getUpcomingCounts(allLots)), [allLots, partial]);
   const houseCount = sources.length || new Set(allLots.map(l => l.auctionHouse)).size;
   const nav = <ArtistNav activeSlug={ref?.kind === 'maker' ? ref.slug! : ''} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />;
   const colophon = <Colophon lotCount={totalLots || allLots.length} houseCount={houseCount} record={null} />;
 
   // nothing at this address: no summary, no sold history, nothing live
-  const settled = !booting && !summaryPending && !detailLoading;
+  const settled = !booting && !partial && !summaryPending && !detailLoading;
   if (!ref || (settled && !summary && !detail && live.length === 0)) {
     return (
       <div className="terminal-shell">
@@ -333,11 +340,12 @@ export default function EntityPage({ id }: { id: string }) {
               persistKey={`/entity/${id}`}
               pageSize={LIVE_PAGE}
               phonePageSize={LIVE_PAGE_PHONE}
+              slice={partial ? 'comps' : null}
             />
           </section>
         )}
 
-        {detail && (
+        {detail && !partial && (
           <>
             {/* §3 THE KIND MODULE */}
             <KindModule
@@ -350,11 +358,11 @@ export default function EntityPage({ id }: { id: string }) {
             <Results detail={detail} sold={summary?.sold ?? null} onEvery={ref.kind === 'maker' && !every ? () => setEvery(true) : null} />
           </>
         )}
-        {!detail && !detailLoading && !pending && (
+        {!detail && !partial && !detailLoading && !pending && (
           <p className="nsp-note" style={{ marginTop: 28 }}>No sold history is filed under {name} yet — the live book above is the whole record.</p>
         )}
         {/* §6 CONTEXT */}
-        <Context name={name} detail={detail} marketData={marketData} sportKey={sportKey} discipline={summary?.discipline ?? null} market={market} />
+        {partial ? <RayLoading /> : <Context name={name} detail={detail} marketData={marketData} sportKey={sportKey} discipline={summary?.discipline ?? null} market={market} />}
         <div className="nsp-links">
           <Link href={`/makers/m/${market}`} className="ray-call-btn ray-call-btn-quiet" style={{ textDecoration: 'none' }}>The {MARKET_LABEL[market] || market} roster</Link>
           <Link href={market === 'all' ? '/' : `/${market}`} className="ray-call-btn ray-call-btn-quiet" style={{ textDecoration: 'none' }}>The {MARKET_LABEL[market] || market} market</Link>

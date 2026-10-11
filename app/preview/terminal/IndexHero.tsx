@@ -189,6 +189,9 @@ interface Props {
   appreciation: number | null;
   /** lots on the block right now in the scoped market */
   onBlock: number;
+  /** (perf W13) the page painted from a first-screen slice: onBlock and
+   *  belowMkt are counts over the whole live book, not known yet — '—' */
+  countsPending?: boolean;
   /** gate the entrance animation — a cached back-nav renders resolved */
   play: boolean;
   /** mobile gets its OWN hero composition — not the desktop scaled down */
@@ -255,6 +258,7 @@ export default function IndexHero({
   play,
   isMobile,
   closingNext,
+  countsPending = false,
   onPersonalize,
 }: Props) {
   const reduce = useReducedMotion();
@@ -351,10 +355,10 @@ export default function IndexHero({
         <div className={styles.pulseBlock} data-lead="true">
           <span className={styles.pulseCellText}>
             <span className={styles.pulseLabel}>On the block</span>
-            <span className={styles.pulseSub}>{onBlock === 0 ? 'the room is quiet right now' : 'lots open across the room'}</span>
+            <span className={styles.pulseSub}>{onBlock === 0 && !countsPending ? 'the room is quiet right now' : 'lots open across the room'}</span>
           </span>
-          <span className={styles.pulseValLead} data-zero={onBlock === 0 ? 'true' : undefined}>
-            {fmtInt(onBlockShown)}
+          <span className={styles.pulseValLead} data-zero={onBlock === 0 && !countsPending ? 'true' : undefined}>
+            {countsPending ? '—' : fmtInt(onBlockShown)}
           </span>
         </div>
 
@@ -373,11 +377,11 @@ export default function IndexHero({
         )}
 
         {/* the one action on the board — butter, full width, unmissable */}
-        {belowMkt ? (
+        {belowMkt || countsPending ? (
           <button type="button" className={styles.pulseAction} data-below="true" onClick={onOpenBelow}>
             <span className={styles.pulseLabel}>Below market now</span>
             <span className={styles.pulseTag}>
-              <span className={styles.pulseTagVal}>{fmtInt(belowShown)}</span>
+              <span className={styles.pulseTagVal}>{countsPending ? '—' : fmtInt(belowShown)}</span>
             </span>
             <span className="sr-only"> lots — see them</span>
           </button>
@@ -403,14 +407,17 @@ export default function IndexHero({
 
   // the departures line — inside the board on desktop, after the search on
   // the phone (the shell decides; the element is one and the same)
-  const tickerEl = closes.length > 0 ? (
+  // (perf W13) while the counts are pending the line holds its place with
+  // one '—' chip: each house's next close is read off the whole live book
+  const tickerEl = closes.length > 0 || countsPending ? (
     <div className={styles.pulseTicker} role="group" aria-label="Auctions closing next">
       <div className={styles.pulseHead} aria-hidden>
         <span className={styles.pulseTitle}>Closing next</span>
         <i className={styles.pulseRule} />
       </div>
       <span className={styles.pulseTickerChips}>
-        {closes.map((c) => (
+        {countsPending && <span className={styles.pulseChip}>—</span>}
+        {!countsPending && closes.map((c) => (
           <span key={c.house} className={styles.pulseChip} data-tonight={['tonight', 'today'].includes(relDay(c.when, c.tonight)) ? 'true' : undefined}>
             {c.house}<em>{relDay(c.when, c.tonight)}</em>
           </span>
