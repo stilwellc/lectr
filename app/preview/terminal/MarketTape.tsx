@@ -204,9 +204,12 @@ function demandFig(v: number): { text: string; dir: 'up' | 'down' | undefined; w
 }
 
 /** (r8, QA3 N8) a demand read's OWN n: the estimated sales in its trailing
- *  12-month window, to the quarter it reads ("203 sales · 12 mo to Q3") —
- *  never the vertical's all-time corpus beside a one-window figure */
-const demandN = (r: { qN: number; q: string }) => `${fmtInt(r.qN)} ${r.qN === 1 ? 'sale' : 'sales'} · 12 mo to ${r.q.replace(/^\d{4} /, '')}`;
+ *  12-month window, and the quarter that window ends ("n 203 · Q3") — never
+ *  the vertical's all-time corpus beside a one-window figure. Short: it
+ *  shares the row with the sparkline; the full reading rides the title. */
+const demandN = (r: { qN: number; q: string }) => `n ${fmtInt(r.qN)} · ${r.q.replace(/^\d{4} /, '')}`;
+const demandNTitle = (r: { qN: number; q: string }) =>
+  `Median hammer over estimate across the ${fmtInt(r.qN)} estimated ${r.qN === 1 ? 'sale' : 'sales'} of the 12 months to the end of ${r.q}`;
 
 const fmtCI = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`;
 
@@ -292,7 +295,7 @@ export function TapeMonument({ row, play }: { row: TapeRowData; play: boolean })
           <span className={styles.mtMonBeam}>{r.series.length >= 2 && <DemandLine series={r.series} dir={demandFig(r.now).dir} />}</span>
           <span className={styles.mtMonMeta}>
             <span>demand · {demandFig(r.now).dir ? 'sold over estimate' : 'sold at estimate'}</span>
-            <span>{demandN(r)}</span>
+            <span title={demandNTitle(r)}>{demandN(r)}</span>
           </span>
         </>
       )}
@@ -368,7 +371,7 @@ export function MarketTape({ market, demandAll, realized, play, omit }: {
                   <span className={styles.tri} data-dir={demandFig(r.read.now).dir} aria-hidden />
                   {demandFig(r.read.now).text}<span className={styles.mtHz} aria-hidden />
                 </span>
-                <span className={styles.mtSub}>{demandFig(r.read.now).word} · {demandN(r.read)}</span>
+                <span className={styles.mtSub} title={demandNTitle(r.read)}>{demandFig(r.read.now).word} · {demandN(r.read)}</span>
               </>
             )}
             {r.read.kind === 'descriptive' && (
