@@ -288,7 +288,8 @@ export const POKE_VINTAGE_SET_RE = /\b(?:base set|jungle|fossil|team rocket(?! r
 /** a music / film object a science slug carries (Goldin's AC/DC single and
  *  Poison cassette as instruments, a Nirvana / Dinosaur Jr. flyer as a fossil,
  *  a Star Trek shooting model) — Pattern 13 */
-export const SCIENCE_MUSIC_RE = /\bvinyl (?:records?|lps?|albums?|singles?|only|pressings?|copy)\b|\b(?:sealed|signed|original) vinyl\b|\bcassettes?\b|\b8-track\b|\brecords\b(?=\s*(?:-|$))|\bdinosaur jr\b|\bflyers?\b(?=\s*[-–—,]?\s*(?:featuring|for (?:the|a)\b|advertising))/i;
+// (r9) + a record label's promo piece (Kanye West's signed "UMG iPod" read as an instrument)
+export const SCIENCE_MUSIC_RE = /\bumg\b|\buniversal music\b|\bvinyl (?:records?|lps?|albums?|singles?|only|pressings?|copy)\b|\b(?:sealed|signed|original) vinyl\b|\bcassettes?\b|\b8-track\b|\brecords\b(?=\s*(?:-|$))|\bdinosaur jr\b|\bflyers?\b(?=\s*[-–—,]?\s*(?:featuring|for (?:the|a)\b|advertising))/i;
 export const SCIENCE_FILM_RE = /\bstar trek\b|\bstar wars\b|\bshooting (?:scale )?models?\b|\bscreen[- ](?:used|worn)\b|\bproduction[- ](?:made|used)\b|\bursa authentic\b/i;
 /** the culture slug a science-slug lot's title names, or null */
 export function scienceCultureSlugOf(title: string | null | undefined): 'music-memorabilia' | 'movie-tv' | null {

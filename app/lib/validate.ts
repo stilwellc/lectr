@@ -176,7 +176,15 @@ export function assertInvariants(lots: AuctionLot[], now: number = Date.now()): 
       // compare as YYYY-MM-DD strings — timezone-proof for day-granularity
       // dates (new Date('2026-07-14') is UTC midnight and would read as
       // "yesterday" in a US-local comparison). A same-day sale is allowed.
-      const todayStr = new Date(now).toISOString().slice(0, 10);
+      // (r9) saleDate is the SALE-LOCAL day (lib/sale-day: Goldin's 10 PM ET
+      // close is that ET evening), and the UTC day runs ahead of every US
+      // evening: a crawl at 00:26Z Oct 11 read Goldin's Oct 10 Elite sale —
+      // still open, closing 22:00 ET — as 1,180 past-dated upcoming lots, the
+      // gate refused the whole Goldin leg, and the house rode last-good for
+      // the night (stale stamps, closed-sale lots still "live" in the shards).
+      // "Today" is the earliest calendar day still running anywhere a house
+      // sells (UTC-12), so only a sale day that has ended everywhere is past.
+      const todayStr = new Date(now - 12 * 3600_000).toISOString().slice(0, 10);
       const saleStr = l.saleDate.slice(0, 10);
       if (/^\d{4}-\d{2}-\d{2}$/.test(saleStr) && saleStr < todayStr) {
         fatal.push(`[3] ${id}: upcoming lot has a past saleDate (${l.saleDate})`);

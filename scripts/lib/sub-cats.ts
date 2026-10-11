@@ -19,6 +19,7 @@ import { subjectNameOf } from './subject-name';
 import { NON_SPORT_TCG_RE } from './classify';
 import { isCardLotTitle } from '../../app/lib/cards';
 import { leadYearOf } from '../../app/lib/lead-year';
+import { sportOf } from '../../app/utils';
 import { CRIME_EXTRA_RE, isCrimeTitle, HIST_MUSIC_RE, MERCURY_CAPSULE_RE, POKE_VINTAGE_SET_RE, isShowbizTitle, sportsMemSubOf } from '../../app/lib/taxonomy';
 
 type Lot = Record<string, unknown>;
@@ -50,6 +51,52 @@ const SPORT_SLUG: Record<string, string> = {
 };
 export const sportSlugOf = (raw: unknown): string | null =>
   typeof raw === 'string' ? SPORT_SLUG[raw] ?? null : null;
+
+/** (r9) THE `sport` STAMP: one rule for the crawl and every build.
+ *  `sport` is a TITLE read (app/utils sportOf) on the five sports slugs the
+ *  crawler tags, except where the HOUSE names the sport (NFL Auction, MLB
+ *  Auctions stamp it from the source). It used to be written only by
+ *  ray-crawl, for the house it crawled that night, so a rule fix reached a row
+ *  only when its house next crawled cleanly: the r8 full-name fix never
+ *  reached Goldin's Jordan Love / Walker / Lawlar cards (the Goldin leg failed
+ *  its invariant gate and the segment rode last-good), and an archive segment
+ *  is never crawled at all. The stale bare-"Jordan" stamp fed every reader
+ *  downstream: the drill (subCatOf reads `sport` first), the learned player →
+ *  sport map (an REA "Mosaic Football" Jordan Love card read basketball off
+ *  it), the entity discipline and players.json. corpus-normalize re-reads
+ *  every stamp on every build (restampTitleSports); ray-crawl stamps with the
+ *  same rule (titleSportStamp). */
+export const HOUSE_SPORT_HOUSES: ReadonlySet<string> = new Set(['NFL Auction', 'MLB Auctions']);
+export const TITLE_SPORT_SLUGS: ReadonlySet<string> = new Set(['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia']);
+/** the sport stamp a row should carry: a label, null (a title-read slug whose
+ *  title names no sport), or undefined (no stamp) */
+export function titleSportStamp(l: { artist?: unknown; auctionHouse?: unknown; title?: unknown; sport?: unknown }): string | null | undefined {
+  if (HOUSE_SPORT_HOUSES.has(String(l.auctionHouse || ''))) return typeof l.sport === 'string' || l.sport === null ? l.sport as string | null : undefined;
+  if (TITLE_SPORT_SLUGS.has(String(l.artist || ''))) return sportOf(String(l.title || ''));
+  return undefined;
+}
+/** re-derive, in place, every stamp the crawler wrote (idempotent): a row that
+ *  carries `sport` is re-read with today's rule — on the sports market from its
+ *  title (it may since have moved slug: a Goldin game-used row the classifier
+ *  re-filed as an autograph keeps a title read), off it cleared, as the crawl
+ *  clears it. A row the crawler never stamped stays unstamped (its drill reads
+ *  the learned maps, as before). Counts by old → new. */
+export function restampTitleSports(lots: Lot[]): { changed: number; byChange: Record<string, number> } {
+  let changed = 0;
+  const byChange: Record<string, number> = {};
+  for (const l of lots) {
+    if (!('sport' in l) || HOUSE_SPORT_HOUSES.has(String(l.auctionHouse || ''))) continue;
+    const want = ARTIST_MARKET[l.artist as keyof typeof ARTIST_MARKET] === 'sports' ? sportOf(String(l.title || '')) : undefined;
+    const had = l.sport;
+    if (want === undefined) { if (had === undefined) continue; delete l.sport; }
+    else { if (had === want) continue; l.sport = want; }
+    if ((had ?? null) === (want ?? null)) continue;
+    changed++;
+    const k = `${had ?? '∅'}→${want ?? '∅'}`;
+    byChange[k] = (byChange[k] || 0) + 1;
+  }
+  return { changed, byChange };
+}
 
 // (wave 2) the sport a sports lot's OWN words name, when no house stamp or
 // learned player says so — the expansion houses (REA / H&S / Lelands / LOTG /
@@ -262,7 +309,9 @@ const CULT_SALE_DOMAIN: [RegExp, string][] = [
   [/marvels of modern music|rock n'? ?roll|music/i, 'music'],
   [/hollywood|movie|film|entertainment/i, 'hollywood'],
   [/president|political|white house/i, 'political'],
-  [/space|aviation/i, 'space-science'],
+  // (r9) Christie's "The Origins Of Cyberspace" is a computing sale, not a space one
+  [/cyberspace|computing|computers?\b/i, 'science'],
+  [/\bspace\b|aviation/i, 'space-science'],
 ];
 
 // ── science ─────────────────────────────────────────────────────────────────
@@ -283,8 +332,12 @@ const SPACE_PROGRAM: [string, RegExp][] = [
   // (wave 2) RR's space catalogue titles a lot by the astronaut alone ("Neil
   // Armstrong Signed Photograph", "Gus Grissom Check"): the program of the
   // astronaut's era — Apollo crews and moon words first, then the Mercury /
-  // Gemini-only names (a Schirra + Cunningham photo is Apollo 7)
-  ['apollo', /\b(?:neil armstrong|buzz aldrin|michael collins|alan bean|edgar mitchell|(?:jim|james) irwin|(?:charlie|charles) duke|(?:gene|eugene) cernan|harrison schmitt|(?:al|alfred) worden|fred haise|jack swigert|stuart roosa|(?:ron|ronald) evans|walt(?:er)? cunningham|donn eisele|(?:bill|william) anders|(?:dave|david) scott|(?:pete|charles) conrad|rusty schweickart|moonwalkers?|moon ?walk|first man on the moon|lunar|saturn v|command module)\b/i],
+  // Gemini-only names (a Schirra + Cunningham photo is Apollo 7). (r9) A
+  // moonwalk word on a space lot ("ALDRIN'S MOONWALK", "Twelve Moonwalker
+  // Signed Photographs") is Apollo — never one of Michael Jackson's (his
+  // "Moonwalk" autobiography sat under Apollo; classify isSpaceMoonwalk)
+  ['apollo', /\b(?:neil armstrong|buzz aldrin|michael collins|alan bean|edgar mitchell|(?:jim|james) irwin|(?:charlie|charles) duke|(?:gene|eugene) cernan|harrison schmitt|(?:al|alfred) worden|fred haise|jack swigert|stuart roosa|(?:ron|ronald) evans|walt(?:er)? cunningham|donn eisele|(?:bill|william) anders|(?:dave|david) scott|(?:pete|charles) conrad|rusty schweickart|first man on the moon|lunar|saturn v|command module)\b/i],
+  ['apollo', /^(?!.*\b(?:michael jackson|jackson 5|thriller|motown|billie jean|danc(?:e|er|ers|ing))\b).*\bmoon ?walk/i],
   // (Oct 8) the Mercury names with a middle initial or alone ("Alan B.
   // Shepard", "John H. Glenn", "Grissom")
   ['mercury-gemini', /\b(?:john (?:h\.? )?glenn|(?:gus|virgil) (?:i\.? )?grissom|grissom|scott carpenter|(?:wally|walter) (?:m\.? )?schirra|schirra|deke slayton|(?:gordon|l\.? gordon) (?:l\.? )?cooper|(?:alan (?:b\.? )?)?shepard|liberty bell 7|friendship 7|freedom 7|ham the chimp|mercury (?:7|seven)|original seven)\b/i],
@@ -693,7 +746,17 @@ export function subCatOf(l: Lot, sportMaps?: SubCatMaps): SubCatStamp {
     }
     if (!drill) drill = textDomain(descHeadOf(l, 260));
     if (!drill) {
-      for (const [re, d] of CULT_SALE_DOMAIN) if (re.test(sale)) { drill = d; break; }
+      for (const [re, d] of CULT_SALE_DOMAIN) {
+        if (!re.test(sale)) continue;
+        // (r9, QA4 D4n5) a space / aviation SALE names the domain only of a lot
+        // that names a program, an aviator or a scientist: the culture lots left
+        // in RR's "Space Exploration" sale are the ones the space router read as
+        // not space (an astronaut's 1967 Plymouth GTX sat under Space & Science);
+        // an AVIATION sale's unnamed hardware (a B-58 escape-capsule oxygen
+        // system, a pressure suit) is aviation
+        if (d === 'space-science' && spaceScienceDrillOf(`${title} ${(subjects || []).join(' ')}`) === 'space-science') { if (/aviation/i.test(sale)) drill = 'aviation'; break; }
+        drill = d; break;
+      }
     }
     // (Oct 9) the last resort: the person a bare-name title leads with ("Paul
     // Newman", "Huey Long Signature") takes the domain their worded lots carry

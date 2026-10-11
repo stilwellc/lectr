@@ -168,7 +168,9 @@ function read(l: SubjectLot): LotSubject | null {
     // "The Rolling Stones" / "Rolling Stones") — one row, the facet's
     const bare = (x: string) => norm(x).replace(/^the-/, '');
     const act = franchiseOf(l);
-    if (act && !SOLO_ACT[act] && FACET_LABEL[act] && bare(FACET_LABEL[act]) === bare(s.name)) return { key: `fr:${act}`, name: FACET_LABEL[act], kind: 'franchise', playerSlug: null };
+    // (r9) …and the act with its nickname run on ("The Beatles Fab Four Type I Original Photo" —
+    // a "The Beatles Fab Four" person sat beside the franchise)
+    if (act && !SOLO_ACT[act] && FACET_LABEL[act] && (bare(FACET_LABEL[act]) === bare(s.name) || bare(s.name).startsWith(`${bare(FACET_LABEL[act])}-`))) return { key: `fr:${act}`, name: FACET_LABEL[act], kind: 'franchise', playerSlug: null };
     // "The Clash Signed…" and "Clash Band-Signed…" are one act — the row key drops a leading "The"
     // sports memorabilia names an athlete — the same row as their cards (r7: one athlete,
     // canonical; a one-word signer — "Pele Signed…" — or an owner's possessive keeps its read)

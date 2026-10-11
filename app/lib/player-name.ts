@@ -195,6 +195,9 @@ const PUBLIC_FIGURES: ReadonlySet<string> = new Set([
   'fidel castro', 'rosa parks', 'dalai lama', 'ernest hemingway', 'charles schulz', 'matt groening', 'mick jagger',
   'janis joplin', 'boris karloff', 'bela lugosi', 'bud abbott', 'lou costello', 'alfred hitchcock', 'greta garbo',
   'jean harlow', 'sib hashian', 'humphrey bogart', 'james dean', 'marlon brando', 'audrey hepburn', 'lucille ball',
+  // (r9, QA4 D4) a magician's cuffs and autographs, a child film star's "Cinema Stars" card,
+  // a film star's set photos at a sports house
+  'harry houdini', 'jackie coogan', 'bruce lee',
 ]);
 const foldName = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[.'’]/g, '').replace(/\s+/g, ' ').trim();
 /** the famous non-athlete a name run names (PUBLIC_FIGURES), in the run's own spelling — also

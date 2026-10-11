@@ -42,6 +42,10 @@ const DRILL_SPORT: Record<string, string> = {
   wrestling: 'Wrestling',
 };
 
+/** a sports drill slug → its sport label ('boxing-mma' → 'Boxing / MMA') */
+export const sportLabelOfDrill = (drill: string | null | undefined): string | null =>
+  (drill && DRILL_SPORT[drill]) || null;
+
 /** Goldin sport string → drill slug ('Boxing / MMA' → 'boxing-mma') */
 export const sportDrillOf = (sport: string | null | undefined): string | null => {
   if (!sport) return null;

@@ -193,6 +193,11 @@ export function splitTitle(raw: string, house?: string | null): { short: string;
 const SPORT_RULES: [string, RegExp][] = [
   ['Soccer', /\b(soccer|fifa|world cup|uefa|premier league|la liga|serie a|bundesliga|ligue 1|champions league|barcelona|real madrid|manchester|arsenal|chelsea|liverpool|psg|paris saint|juventus|benfica|honved|la galaxy|messi|ronaldo|ronaldinho|mbappe|haaland|neymar|pele|maradona|salah|yamal|pedri|busquets|fabregas|thierry henry|edouard mendy|benjamin mendy|john terry|bobby moore|beckham|bobby charlton|jack charlton|eusebio|puskas|puskás|tostão|tostao|trinity rodman|luka modric|meazza|figc|santos fc)\b/i],
   ['Basketball', /\b(nba|basketball|lakers|celtics|bulls|warriors|miami heat|nuggets|knicks|76ers|clippers|brooklyn nets|new jersey nets|ncaa|final four|lebron|michael jordan|air jordan|jordan brand|kobe|jokic|stephen curry|steph curry|kevin durant|anthony edwards|luka doncic|shai gilgeous)\b/i],
+  // (r9) a bare "Jordan" is Michael only beside his own world: paired with an
+  // NBA name ("Magic vs. Jordan", "Jordan/Bird Cover", "J.Starks/M.Jordan",
+  // "Jordan, Ewing, Olajuwon") or a product of his (Space Jam, The Jordan
+  // Experience). Never alone: Jordan Love, Walker, Lawlar, Addison, Spieth
+  ['Basketball', /\b(?:space jam|jordan'?s? (?:experience|viewpoints)|m\.\s?jordan|(?:magic|bird|lebron|james|bryant|kobe|pippen|rodman|erving|ewing|olajuwon|malone|barkley|garnett|o'neal|shaq|starks|drexler|stockton|iverson|carter|johnson|wilkins|isiah)\s*(?:\/|,|&|and|vs\.?)\s*jordan|jordan\s*(?:\/|,|&|and|vs\.?)\s*(?:magic|bird|lebron|james|bryant|kobe|pippen|rodman|erving|ewing|olajuwon|malone|barkley|garnett|o'neal|shaq|starks|drexler|stockton|iverson|carter|johnson|wilkins|isiah))\b/i],
   ['Baseball', /\b(mlb|baseball|yankees|dodgers|red sox|cubs|world series|ohtani|jeter|mariano rivera|mickey mantle|babe ruth|hank aaron|home run|no-hitter|cy young)\b/i],
   ['Football', /\b(nfl|super bowl|quarterback|touchdown|heisman|patriots|chiefs|cowboys|packers|49ers|tom brady|mahomes|amendola|lombardi)\b/i],
   ['Hockey', /\b(nhl|hockey|stanley cup|gretzky|ovechkin|crosby|maple leafs|canadiens|bruins|goal no\.)\b/i],
