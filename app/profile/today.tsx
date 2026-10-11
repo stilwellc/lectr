@@ -18,7 +18,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import type { Rec } from '../lib/recs';
-import type { ReturnLoop } from '../components/PickStrips';
+import { nextCloseText, type ReturnLoop } from '../components/PickStrips';
 import CloseClock from '../components/CloseClock';
 import { closeMsOf } from '../lib/priority';
 import { closeIsTimed } from '../lib/house-tz';
@@ -131,7 +131,7 @@ export default function TodayBand({ loop, closingWatches, reads, away }: {
   const newLabel = since ? `New since your last visit · ${dayWord(since)}` : 'New today in your picks';
   // the honest empty line for the picks side (never padded)
   const quietPicks = loop && !closing.length && !fresh.length
-    ? <p className="ck-today-empty">Nothing new in your picks {since ? `since ${dayWord(since)}` : 'today'}, and none close tonight{loop.nextClose != null ? ` — the next closes ${new Date(loop.nextClose).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}` : ''}.</p>
+    ? <p className="ck-today-empty">Nothing new in your picks {since ? `since ${dayWord(since)}` : 'today'}, and none close tonight{nextCloseText(loop)}.</p>
     : null;
 
   // the fold: desktop 3 per column, phone 3 in one list

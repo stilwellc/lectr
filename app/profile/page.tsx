@@ -459,7 +459,9 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
     c.owned ? `${c.owned} owned` : null,
     c.follows ? `${c.follows} ${c.follows === 1 ? 'follow' : 'follows'}` : null,
     c.searches ? `${c.searches} saved ${c.searches === 1 ? 'search' : 'searches'}` : null,
-    c.signals ? `${c.signals} ${c.signals === 1 ? 'look' : 'looks'} here` : null,
+    // what this browser learned (visits, searches AND More like this marks —
+    // not all of them "looks", R4 P3-15)
+    c.signals ? `${c.signals} ${c.signals === 1 ? 'signal' : 'signals'} on this device` : null,
   ].filter(Boolean).join(', ');
   const cold = ready && taste.seeds.length === 0;
   // a pick you just asked "More like this" of keeps its seat: the list re-reads
@@ -493,7 +495,7 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
             nearest kin — another Pokémon, another player of the same sport and era — and each such pick says that is why
             it is here. Lots on your desk never come back here. The line under each lot says why it is here; the picks
             re-read with every crawl and every save. Below all of that, what you open and search on this device leans the
-            list a little, and More like this / Not for me steer it at once — kept in this browser only, never sent.
+            list a little, and More like this / Not for me steer it at once — kept in this browser, never uploaded.
             Everything that tunes the list is under <a href="#signals" className="ck-away-link">Your signals</a>.
           </HelpChip>
           {ready && !cold && !editing && (
@@ -529,7 +531,7 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
             {seats.map((r, i) => ('undoSeat' in r
               ? <UndoSeat key={`undo-${r.undoSeat.id}`} undo={r.undoSeat} onUndo={fb.undoIt} row />
               : (
-                <div key={r.lot.id} className="ck-pickrow" data-pick>
+                <div key={r.lot.id} className="ck-pickrow" data-pick data-nav-row>
                   {/* the reason is the row's one line that never truncates
                       (the honesty payload) — it wraps; the price rides under */}
                   <FeedRow stack lot={r.lot} onOpen={() => setOpenLot(r.lot)}
@@ -546,7 +548,7 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
               ? <div key={`undo-${r.undoSeat.id}`} className="ck-undoseat"><UndoSeat undo={r.undoSeat} onUndo={fb.undoIt} /></div>
               : (
               // the card fills its row; the pick's feedback rides under it
-              <div key={r.lot.id} data-pick className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms`, display: 'grid', gridTemplateRows: 'minmax(0, 1fr) auto' } as React.CSSProperties}>
+              <div key={r.lot.id} data-pick data-nav-row className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms`, display: 'grid', gridTemplateRows: 'minmax(0, 1fr) auto' } as React.CSSProperties}>
                 <LotCard lot={r.lot} showArtist subjectMaker allLots={compLots} saved={isSaved(r.lot.id)} onToggleSave={onToggleSave}
                   lastCrawl={lastCrawl} note={recNote(r)} />
                 <PickFeedback lot={r.lot} mark={fb.marks.get(r.lot.id)} onMark={fb.mark} at={i} />
@@ -798,10 +800,15 @@ export default function SavedPage() {
       if (e.key !== 'j' && e.key !== 'k') return;
       const rowEls = Array.from(document.querySelectorAll<HTMLElement>('[data-nav-row]'));
       if (!rowEls.length) return;
-      const cur = rowEls.indexOf(document.activeElement as HTMLElement);
+      // a pick (data-pick) is a wrapper: its card / row button takes focus,
+      // so "where am I" is the row that CONTAINS focus (signed-out j/k, R4 P3-14)
+      const active = document.activeElement as HTMLElement | null;
+      const cur = rowEls.findIndex(r => r === active || (!!active && r.contains(active)));
       const next = e.key === 'j' ? Math.min(cur + 1, rowEls.length - 1) : Math.max(cur - 1, 0);
-      rowEls[next]?.focus();
-      rowEls[next]?.scrollIntoView({ block: 'nearest' });
+      const row = rowEls[next];
+      const target = row?.hasAttribute('data-pick') ? row.querySelector<HTMLElement>('button, a[href]') ?? row : row;
+      target?.focus();
+      row?.scrollIntoView({ block: 'nearest' });
       e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
@@ -1270,20 +1277,13 @@ export default function SavedPage() {
     return { n: judged.length, realized, med, split, series };
   }, [sold, metaFor]);
 
-  /* ── since your last visit ── */
-  const [prevVisit, setPrevVisit] = useState<string | null | undefined>(undefined);
-  const capturedVisit = useRef<string | null | undefined>(undefined);
-  useEffect(() => {
-    if (capturedVisit.current !== undefined) return;
-    try {
-      capturedVisit.current = localStorage.getItem('lectr-lastvisit');
-      localStorage.setItem('lectr-lastvisit', new Date().toISOString());
-      setPrevVisit(capturedVisit.current);
-    } catch { capturedVisit.current = null; setPrevVisit(null); }
-  }, []);
+  /* ── since your last visit — the site's ONE last-visit clock (feed-filters
+     useLastVisit: the previous visit DAY, any page, stable for the session),
+     so this line and the Today band's "New since" can never disagree ── */
+  const prevVisit = useLastVisit();
   const sinceLast = useMemo(() => {
     if (!fullLoaded || !prevVisit) return null;
-    const prevDay = prevVisit.slice(0, 10);
+    const prevDay = prevVisit;
     const fresh = sold.filter(l => (l.saleDate || '').slice(0, 10) > prevDay);
     if (!fresh.length) return null;
     const pcts = fresh.map(l => overEstimatePct(l)).filter((x): x is number => x != null);

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { resetLectrStorage } from './lib/safe-storage';
 
 /** Root error boundary — a last resort so an uncaught client exception shows a
  *  branded, recoverable screen instead of Next's unstyled "Application error"
@@ -9,6 +10,16 @@ export default function GlobalError({ error, reset }: { error: Error; reset: () 
   // Surface the crash instead of swallowing it — the only place we'd learn a
   // real user hit a fatal error. (Wire to a RUM beacon here when one is added.)
   useEffect(() => { console.error('[lectr] fatal:', error?.message, error?.stack); }, [error]);
+  // the last resort when a reload does not clear it: what lectr keeps in this
+  // browser (follows made signed out, what it learned, interests, view
+  // memory) may be what breaks the page — clear it and start clean. The
+  // sign-in session and anything saved to an account are not touched.
+  const [resetting, setResetting] = useState(false);
+  const resetDevice = () => {
+    setResetting(true);
+    resetLectrStorage();
+    window.location.reload();
+  };
   return (
     <html lang="en">
       <body style={{ margin: 0, background: '#FDFCFC', color: '#1C1917', fontFamily: 'Inter, system-ui, sans-serif' }}>
@@ -25,6 +36,13 @@ export default function GlobalError({ error, reset }: { error: Error; reset: () 
               Back to the market
             </a>
           </div>
+          <p style={{ fontSize: 13, color: '#6B655D', margin: '26px 0 8px', maxWidth: 400, lineHeight: 1.5 }}>
+            Still stuck after a reload? Clear what lectr keeps in this browser — follows made while signed out, what it
+            learned here, your quick-start answers and view settings. Saved lots and your account are not touched.
+          </p>
+          <button onClick={resetDevice} disabled={resetting} style={{ background: 'transparent', color: '#1C1917', border: '1px solid rgba(28,25,23,0.18)', padding: '9px 18px', borderRadius: 8, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>
+            {resetting ? 'Resetting…' : 'Reset this device’s lectr data'}
+          </button>
         </main>
       </body>
     </html>

@@ -21,6 +21,7 @@ import { recommend, pickStrips, tonightEndMs, type Rec, type RecLot, type Taste 
 import { isNewLot, type HouseBaselines } from '../lib/feed-filters';
 import { closeMsOf } from '../lib/priority';
 import { closeIsTimed } from '../lib/house-tz';
+import { closeWhenText } from '../lib/close-time';
 import { makerLineOf } from '../lib/lot-labels';
 import { craftTitle, localToday } from '../utils';
 import type { AuctionLot } from '../types';
@@ -35,6 +36,16 @@ export interface ReturnLoop {
   since: string | null;
   /** the soonest close among the picks after tonight (the closing strip's empty line) */
   nextClose: number | null;
+  /** that close carries a real clock time (else a date-only sale day) */
+  nextCloseTimed?: boolean;
+  /** when the loop was cut (the wording of nextClose is relative to it) */
+  at?: number;
+}
+
+/** "the next closes tomorrow at 9 PM" — the reader's own calendar words
+ *  (app/lib/close-time), never a bare date that turns out to be today */
+export function nextCloseText(loop: Pick<ReturnLoop, 'nextClose' | 'nextCloseTimed' | 'at'>): string {
+  return loop.nextClose != null ? ` — the next closes ${closeWhenText(loop.nextClose, loop.at ?? Date.now(), loop.nextCloseTimed ?? false)}` : '';
 }
 
 /** the two strips for one taste over one pool (the pool the picks read) */
@@ -48,9 +59,12 @@ export function useReturnLoop(pool: readonly AuctionLot[], taste: Taste | null, 
     const today = localToday();
     const by = tonightEndMs(now);
     const s = pickStrips(deep, { nowMs: now, closesBy: by, isNew: l => isNewLot(l, { today, prevVisitDay, baselines }) });
-    let nextClose: number | null = null;
-    for (const r of deep) { const c = closeMsOf(r.lot); if (c != null && c > by && (nextClose == null || c < nextClose)) nextClose = c; }
-    return { ...s, since: prevVisitDay, nextClose };
+    let nextClose: number | null = null, nextCloseTimed = false;
+    for (const r of deep) {
+      const c = closeMsOf(r.lot);
+      if (c != null && c > by && (nextClose == null || c < nextClose)) { nextClose = c; nextCloseTimed = closeIsTimed(r.lot); }
+    }
+    return { ...s, since: prevVisitDay, nextClose, nextCloseTimed, at: now };
   }, [pool, taste, ready, prevVisitDay, baselines]);
 }
 
@@ -110,7 +124,7 @@ export function ClosingTonightPicks({ loop, max = 3 }: { loop: ReturnLoop; max?:
       <StripHead label="Closing tonight from your picks" />
       {loop.closing.length
         ? loop.closing.slice(0, max).map(r => <StripRow key={r.lot.id} r={r} tag={closeTag(r.lot)} tone="hot" />)
-        : <p style={emptyStyle}>None of your picks close tonight{loop.nextClose != null ? ` — the next closes ${new Date(loop.nextClose).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}` : ''}.</p>}
+        : <p style={emptyStyle}>None of your picks close tonight{nextCloseText(loop)}.</p>}
     </div>
   );
 }

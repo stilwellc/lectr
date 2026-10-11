@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from './account';
 import { useSavedSearches, type SavedQuery } from './alerts';
 import { taxonOf, subMatches, CAT_LABEL, subLabel, type CatKey } from './taxonomy';
+import { storageGet, storageSet } from './safe-storage';
 
 export type FollowKind = 'maker' | 'cat' | 'house' | 'entity';
 export interface Follow {
@@ -62,12 +63,42 @@ export function followOf(q: SavedQuery): Follow | null {
 }
 
 const LS_KEY = 'lectr-follows';
-function readLocal(): Follow[] {
-  try { const v = JSON.parse(window.localStorage.getItem(LS_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
+const FOLLOW_KINDS = new Set<string>(['maker', 'cat', 'house', 'entity']);
+
+/** one stored follow, checked: an object with a known kind and a non-empty
+ *  string key + label. Anything else (a null, a number label, a foreign
+ *  kind) is dropped on read — bad device data must never crash a page. */
+export function isFollow(x: unknown): x is Follow {
+  if (!x || typeof x !== 'object') return false;
+  const f = x as Record<string, unknown>;
+  return typeof f.kind === 'string' && FOLLOW_KINDS.has(f.kind)
+    && typeof f.key === 'string' && f.key.length > 0 && f.key.length <= 200
+    && typeof f.label === 'string';
 }
-function writeLocal(f: Follow[]) {
-  try { window.localStorage.setItem(LS_KEY, JSON.stringify(f)); } catch { /* storage blocked */ }
-  window.dispatchEvent(new Event(LS_KEY));
+
+/** the device's follows from their stored text: valid entries only, once each */
+export function parseFollows(raw: string | null | undefined): Follow[] {
+  if (!raw) return [];
+  let v: unknown;
+  try { v = JSON.parse(raw); } catch { return []; }
+  if (!Array.isArray(v)) return [];
+  const out: Follow[] = [];
+  for (const x of v) {
+    if (!isFollow(x) || out.some(o => o.kind === x.kind && o.key === x.key)) continue;
+    out.push({ kind: x.kind, key: x.key, label: x.label.slice(0, 120) || x.key });
+  }
+  return out;
+}
+
+function readLocal(): Follow[] {
+  return parseFollows(storageGet(LS_KEY));
+}
+/** false when the browser refused the write (blocked / full) — the page's
+ *  "Couldn't save that on this device" note is raised by safe-storage */
+function writeLocal(f: Follow[]): boolean {
+  const ok = storageSet(LS_KEY, JSON.stringify(f), { announce: true });
+  try { window.dispatchEvent(new Event(LS_KEY)); } catch { /* no window */ }
+  return ok;
 }
 
 export const sameFollow = (a: Follow, b: Follow) => a.kind === b.kind && a.key === b.key;
@@ -83,7 +114,7 @@ let migratedFor: string | null = null;
 export function migrationPlan(local: readonly Follow[], cloud: readonly Follow[]): Follow[] {
   const out: Follow[] = [];
   for (const f of local) {
-    if (!f || typeof f.key !== 'string' || !f.kind) continue;
+    if (!isFollow(f)) continue;
     if (cloud.some(c => same(c, f)) || out.some(o => same(o, f))) continue;
     out.push(f);
   }

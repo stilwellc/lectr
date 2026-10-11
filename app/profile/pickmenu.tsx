@@ -11,6 +11,7 @@ import type { AuctionLot } from '../types';
 import type { MarkKind } from '../lib/recs-signals';
 import { FEEDSHEET_CSS } from '../components/FeedToolbar';
 import { useDialogFocus } from '../components/useDialogFocus';
+import { useBackClose } from '../lib/use-lot-modal';
 import { craftTitle } from '../utils';
 
 export default function PickMenu({ lot, mark, onMark, at }: {
@@ -25,7 +26,8 @@ export default function PickMenu({ lot, mark, onMark, at }: {
   return (
     <>
       <button ref={btn} type="button" className="ck-pick-more" aria-haspopup="dialog" aria-expanded={open}
-        aria-label={`Tune picks from ${t}`} data-on={mark === 'more' || undefined}
+        aria-label={`Tune picks from ${t}${mark === 'more' ? ' — More like this is on' : ''}`}
+        title={mark === 'more' ? 'More like this is on' : undefined} data-on={mark === 'more' || undefined}
         onClick={e => { e.stopPropagation(); setOpen(true); }}>
         <span aria-hidden>⋯</span>
       </button>
@@ -39,6 +41,8 @@ function Sheet({ title, mark, onClose, onPick }: { title: string; mark: MarkKind
   const ref = useRef<HTMLDivElement | null>(null);
   const id = useId();
   useDialogFocus(true, ref, { initial: 'first' });
+  // Back closes the sheet, never the page (R4 P2-3)
+  useBackClose(onClose);
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', key);
@@ -60,7 +64,7 @@ function Sheet({ title, mark, onClose, onPick }: { title: string; mark: MarkKind
             </button>
             <button type="button" className="ray-toolbar-pill" onClick={() => onPick('less')}>Not for me</button>
           </div>
-          <p className="ck-sig-note" style={{ margin: '12px 0 0' }}>Kept on this device only — never sent to lectr.</p>
+          <p className="ck-sig-note" style={{ margin: '12px 0 0' }}>Kept in this browser — never uploaded to lectr.</p>
         </div>
         <div className="ray-feedsheet-foot">
           <button type="button" className="ray-feedsheet-clear" onClick={onClose}>Cancel</button>

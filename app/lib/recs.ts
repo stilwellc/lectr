@@ -64,6 +64,7 @@ import { lotFacets, FACET_LABEL } from './facets';
 import { entityKeyOf } from './entity/key';
 import { parseCard, cardLadderKey, cardSetKey, cardYearKey, type CardId } from './cards';
 import { prioStatic, priorityOf, closeMsOf, saleKeyOf } from './priority';
+import { tonightEndMs } from './close-time';
 import { matchesSavedQuery, unmatchableReason } from './saved-query';
 import { makerLineOf } from './lot-labels';
 import { craftTitle, isClosedPending } from '../utils';
@@ -1208,14 +1209,11 @@ export function recNote(r: Pick<Rec, 'reason' | 'why'> & { short?: string }, opt
 
 /* ── the return loop ────────────────────────────────────────────────────── */
 
-/** "tonight" ends at 4am local after `nowMs` (an evening close at a West
- *  Coast or Asian house still lands before the reader's morning) */
-export function tonightEndMs(nowMs: number): number {
-  const d = new Date(nowMs);
-  const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 4, 0, 0, 0);
-  if (end.getTime() <= nowMs) end.setDate(end.getDate() + 1);
-  return end.getTime();
-}
+/** "tonight" ends at the 4am after the reader's evening (an evening close at
+ *  a West Coast or Asian house still lands before their morning), on the
+ *  reader's calendar: 00:40 Sunday's tonight is Sunday night. The one
+ *  definition lives in app/lib/close-time. */
+export { tonightEndMs };
 
 export interface PickStrips<L extends RecLot = RecLot> {
   /** picks the reader has not been shown before: first seen after their

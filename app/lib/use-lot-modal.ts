@@ -72,3 +72,49 @@ export function useLotModal<L>(): [L | null, (lot: L | null) => void] {
   }, []);
   return [lot, setLot];
 }
+
+/**
+ * useBackClose — the same history contract for an overlay that is open
+ * while it is MOUNTED (a bottom sheet): mounting pushes one history entry,
+ * so Back (and the phone's back gesture) closes the overlay instead of
+ * leaving the page; closing it any other way pops that entry again — only
+ * while it is still the live one (a navigation made from inside the
+ * overlay is never undone). (Oct 11 2026, R4 P2-3: the profile's ⋯
+ * feedback sheet and the quick-start / Tune sheet.)
+ *
+ * StrictMode-safe: a dev double mount re-adopts the entry it just pushed
+ * rather than pushing a second one — the unmount's pop waits a tick so the
+ * re-mount can cancel it.
+ */
+let backCloseSeq = 0;
+export function useBackClose(onClose: () => void): void {
+  const closeRef = useRef(onClose);
+  useEffect(() => { closeRef.current = onClose; }, [onClose]);
+  const token = useRef<number | null>(null);
+  const popTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (popTimer.current) { clearTimeout(popTimer.current); popTimer.current = null; }
+    if (token.current == null) {
+      const t = ++backCloseSeq;
+      try { window.history.pushState({ ...window.history.state, lectrSheet: t }, ''); token.current = t; } catch { /* ignore */ }
+    }
+    const onPop = (e: PopStateEvent) => {
+      const t = token.current;
+      if (t == null) return;
+      if ((e.state as { lectrSheet?: number } | null)?.lectrSheet === t) return; // Forward onto our own entry
+      token.current = null; // the reader's Back consumed our entry
+      closeRef.current();
+    };
+    window.addEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      const t = token.current;
+      if (t == null) return;
+      popTimer.current = setTimeout(() => {
+        popTimer.current = null;
+        token.current = null;
+        if (window.history.state?.lectrSheet === t) { try { window.history.back(); } catch { /* ignore */ } }
+      }, 0);
+    };
+  }, []);
+}
