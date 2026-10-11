@@ -67,6 +67,15 @@ const nextConfig = {
   // build-time modules (generateStaticParams / metadata / sitemap / OG), never
   // by a client component, so no browser alias is needed.
   compress: true,
+  // SCOPE HOISTING OFF (perf wave W18, Oct 11 2026). Turbopack's production
+  // scope hoisting merges a module into its importer's factory; across an
+  // import CYCLE (lot-labels <-> maker-subjects) the merged module's exports
+  // were still unset when the cycle read them — moving the lot modal into
+  // its own chunk merged facets.ts into maker-subjects and home crashed
+  // ("cardBadgesOf is not a function"). `next dev` never hoists, so this
+  // class of bug is invisible locally; off, prod evaluates modules the way
+  // dev does. Cost: ~8 KB brotli on the heaviest route.
+  experimental: { turbopackScopeHoisting: false },
   generateEtags: true,
 };
 

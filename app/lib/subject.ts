@@ -15,6 +15,7 @@
  *   mission — space: "Apollo 11", "Gemini 4", "Mercury-Atlas 9"
  */
 
+import { isShouting, unshoutTitle } from '../utils';
 import { teamOf, teamCardOf, productLineOf, pokemonSetOf, POKE_SETLIKE, programOf, instrumentBrandOf } from './subject-groups';
 
 const MONTH = '(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\\.?';
@@ -124,6 +125,22 @@ export function personOf(title: string, knownName?: string | null): string | nul
   // member is the signer. A PERSON topic ("Al Capone: Courtland Butler Typed Letter…") is not
   // stripped: there the topic is the subject and the signer a correspondent.
   const topic = t0.match(/^((?:The )?[A-Z][\w'’.&-]*(?: [A-Z][\w'’.&-]*)?): (?=[A-Z])/);
+  // (W21) a PERSON topic is the subject ("Al Capone: Frank Galluccio Original
+  // … Mug Shot", "William Shakespeare: The Life and Death of King John") — the
+  // comment above said so, but the word scan below then read "Capone:" as no name
+  // A signer under the topic still wins when the topic is not the one signing
+  // ("Led Zeppelin: Robert Plant Signed Photograph", "Iwo Jima: John Bradley
+  // and Rene Gagnon Signed First Day Cover") — unless the topic's own name
+  // recurs ("Al Capone: Sonny Capone's … Revolver")
+  if (topic && nameTokensOk(topic[1].split(' ')) && !/^The /.test(topic[1])) {
+    const inner = t0.slice(topic[0].length);
+    const surname = topic[1].split(' ').pop()!;
+    if (/\b(?:Signed|Signature|Signatures|Autographed|Autograph)\b/.test(inner) && !new RegExp(`\\b${surname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(inner)) {
+      const signer = personOf(inner);
+      if (signer) return signer;
+    }
+    return topic[1];
+  }
   if (topic && !nameTokensOk(topic[1].split(' '))) {
     const inner = personOf(t0.slice(topic[0].length));
     if (inner) return inner;
@@ -371,7 +388,12 @@ export function cardGroupOf(lot: { artist: string; title?: string | null }): Sub
 /** the subject a pseudo-maker lot names, or null */
 export function subjectOf(lot: { artist: string; title?: string | null; playerName?: string | null }): Subject | null {
   const order = READERS[lot.artist];
-  const title = String(lot.title || '');
+  // (W21) a SHOUTED title (Hake's "KEVIN EASTMAN LETTER TO LAWRENCE KLEIN",
+  // Christie's "THREE MARILYN MONROE CONTACT SHEETS FROM THE SET OF THE
+  // MISFITS (1961)") has no capitals to find a name by: read it in the
+  // title case it prints in (utils.craftTitle)
+  const raw = String(lot.title || '');
+  const title = isShouting(raw) ? unshoutTitle(raw) : raw;
   if (!order || !title) return null;
   for (const kind of order) {
     const hit = readOne(kind, title, lot.playerName);

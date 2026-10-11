@@ -2241,23 +2241,28 @@ export function stampCultureAxes(lots: Lot[]): number {
 
 // ── ★5 · restampIdentityKeys — formKey re-derivation, every lot, every build.
 //    MUST run LAST (after every category flip, with the current classifyForm).
-const SPORTS_SLUGS_NORM = new Set(['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia', 'graded-cards', 'memorabilia', 'autographs', 'unopened-wax', 'type-1-photos', 'programs-publications', 'equipment-artifacts']);
-const SPORTS_FORMKEY_BLOCK = new Set(['jewelry', 'wristwatch', 'pocket-watch', 'clock', 'mineral', 'fossil', 'space', 'instrument', 'tech']);
+// (W21) + pokemon: a card from the "Rocket" / "Fossil" sets read space / fossil
+const SPORTS_SLUGS_NORM = new Set(['sports-cards', 'game-used', 'trophies-awards', 'tickets-passes', 'sports-memorabilia', 'graded-cards', 'memorabilia', 'autographs', 'unopened-wax', 'type-1-photos', 'programs-publications', 'equipment-artifacts', 'pokemon']);
+const SPORTS_FORMKEY_BLOCK = new Set(['jewelry', 'wristwatch', 'pocket-watch', 'clock', 'meteorite', 'mineral', 'fossil', 'space', 'instrument', 'tech']);
 
 export function restampIdentityKeys(lots: Lot[]): number {
   let restamped = 0;
   for (const l of lots) {
     const fresh = classifyForm({ title: l.title, medium: l.medium, category: l.category });
     const cur = (l as Lot & { formKey?: string }).formKey;
+    // sports-slug shield: never stamp cross-vertical classes on sports lots —
+    // 'jewelry' from the set-of gate ("complete set of chicago bulls
+    // championship rings"), 'wristwatch'/'mineral' etc. from watch-brand or
+    // material words in memorabilia titles (measured garbage in served rows).
+    // (W21) checked whatever the stored stamp: a crawl-time 'space' on a
+    // Pokémon "Rocket" card equals the fresh read and used to stay
+    if (SPORTS_SLUGS_NORM.has(l.artist) && SPORTS_FORMKEY_BLOCK.has(fresh)) {
+      const w = l as Lot & { formKey?: string; objectClass?: string };
+      if (w.formKey !== undefined) w.formKey = undefined;
+      if (w.objectClass && w.objectClass !== 'object') w.objectClass = 'object';
+      continue;
+    }
     if (cur !== fresh) {
-      // sports-slug shield: never stamp cross-vertical classes on sports lots —
-      // 'jewelry' from the set-of gate ("complete set of chicago bulls
-      // championship rings"), 'wristwatch'/'mineral' etc. from watch-brand or
-      // material words in memorabilia titles (measured garbage in served rows)
-      if (SPORTS_SLUGS_NORM.has(l.artist) && SPORTS_FORMKEY_BLOCK.has(fresh)) {
-        (l as Lot & { formKey?: string }).formKey = undefined;
-        continue;
-      }
       (l as Lot & { formKey?: string }).formKey = fresh;
       if (l.category === 'object') {
         (l as Lot & { objectClass?: string }).objectClass = objectClassOf({ title: l.title, medium: l.medium, category: l.category });

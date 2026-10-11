@@ -45,7 +45,7 @@ export default function Greeting() {
 
   return (
     <div className={`ray-greeting${leaving ? ' ray-greeting-out' : ''}`} aria-hidden="true">
-      <img src="/brand/lectr.png" alt="" className="ray-greeting-mark" />
+      <img src="/brand/lectr-ink-lg.png" alt="" className="ray-greeting-mark" />
     </div>
   );
 }

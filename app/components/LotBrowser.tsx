@@ -24,7 +24,7 @@ import LotCard, { lotSignal, confidenceMeter } from './LotCard';
 import { feedRowPrice } from '../lib/estimate-text';
 import { signalMagnitude } from '../lib/comps';
 import { lotFace } from '../lib/lot-face';
-import ComparableModal from './ComparableModal';
+import ComparableModal from './ComparableModalLazy';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './FeedToolbar';
 import { houseBaselines, type HouseBaselines } from '../lib/feed-filters';
 import { reasonOf } from '../lib/priority';

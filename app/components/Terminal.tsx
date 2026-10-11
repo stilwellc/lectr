@@ -414,7 +414,7 @@ export function CallPlate({
 
           <div className="ray-deckcall-cta">See how we called it <Flick size={13} /></div>
           <img
-            src="/brand/lectr-nav.png"
+            src="/brand/lectr-ink-nav.png"
             alt=""
             style={{ height: 18, width: 'auto', opacity: 0.55, display: 'block', marginLeft: 'auto', marginTop: 10 }}
           />
@@ -649,7 +649,7 @@ export function Colophon({ lotCount, houseCount, record, lastCrawl }: {
         {/* the imprint — the maker signs last, small, next to the edition line */}
         <div className="ray-close-base">
           <span className="ray-close-stamp">
-            {near && <img src="/brand/lectr.png" alt="lectr" className="ray-close-mark" />}
+            {near && <img src="/brand/lectr-ink-lg.png" alt="lectr" className="ray-close-mark" />}
             <span suppressHydrationWarning>© {new Date().getFullYear()} lectr · auction intelligence</span>
           </span>
           <span className="ray-close-method">
