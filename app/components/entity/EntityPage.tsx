@@ -47,7 +47,7 @@ import { catFollow, entityFollow } from '../../lib/follows';
 import { lotSubjectOf } from '../../lib/maker-subjects';
 import { isFlagged } from '../../lib/flags';
 import { taxonOf, SPORTS, type CatKey } from '../../lib/taxonomy';
-import { ARTIST_LABEL, ARTIST_MARKET, MARKETS, type Market } from '../../constants';
+import { ARTIST_LABEL, ARTIST_MARKET, MAKER_MARKETS, MARKETS, type Market } from '../../constants';
 import { closeCut, formatDate, formatPrice, getUpcomingCounts, httpsImg, sizedImg, trueSaleDay } from '../../utils';
 import { signedPct } from '../SubMarketDirectory';
 import { yoyIntervalText } from '../../lib/entity/ledger';
@@ -120,10 +120,18 @@ export default function EntityPage({ id }: { id: string }) {
   // THE LIVE BOOK — every live lot whose entity key is this id (the /makers
   // row's exact pool: the build's `ek` stamp, else the same entityKeyOf), in
   // hammer order; the lot browser applies the reader's filters
-  // (a maker's lots carry its slug and a subject's sit in its market — the
-  // cheap test first, so an unstamped book reads only those lots' keys)
+  // (a stamped lot compares its `ek`; on an unstamped book the cheap test runs
+  // first — a maker's lots carry its slug or sit on a collectibles desk (r8: a
+  // tracked artist's signed pieces there are the maker's), a subject's sit on a
+  // collection desk (r8: a public figure's sports-desk piece is their person's)
   const live = useMemo(() => livePool(allLots)
-    .filter(l => (ref?.kind === 'maker' ? l.artist === ref.slug : ARTIST_MARKET[l.artist] === market) && entityIdOf(l) === id)
+    .filter(l => {
+      const ek = (l as AuctionLot & { ek?: string | null }).ek;
+      if (ek !== undefined) return ek === id;
+      const m = ARTIST_MARKET[l.artist];
+      const near = ref?.kind === 'maker' ? l.artist === ref.slug || !MAKER_MARKETS.has(m) : !MAKER_MARKETS.has(m);
+      return near && entityIdOf(l) === id;
+    })
     .sort((a, b) => (trueSaleDay(a) < trueSaleDay(b) ? -1 : trueSaleDay(a) > trueSaleDay(b) ? 1 : 0)), [allLots, id, ref, market]);
 
   // the name: the summary's, else (before it lands, or a live-only subject)

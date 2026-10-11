@@ -13,7 +13,7 @@ import Link from 'next/link';
 import { formatPrice } from '../../utils';
 import { liveBookHref } from '../../lib/lot-browser';
 import { fmtPct, lastQuarterOf, yoyDir, yoyTitle, type Row } from '../../lib/entity/ledger';
-import { Spark, medianTitle } from './EntityRow';
+import { Spark, medianTitle, sparkTitle } from './EntityRow';
 import { LiveLotRow } from './EntityPanel';
 
 export default function CompareTray({ picked, search, onRemove, onClear, onSeeLots }: {
@@ -74,8 +74,11 @@ export default function CompareTray({ picked, search, onRemove, onClear, onSeeLo
                     {r.spark ? (r.bundle.s.sparkBasis === 'matched'
                       // (r7) a same-items line: its height is scaled to the typical sale, so a
                       // quarter's dollar figure is not a sale anyone made — the basis is said instead
-                      ? <>12 complete quarters · same items, chained</>
-                      : <>12 complete quarters{lq ? <> · last {lq.q.replace('-', ' ')} {formatPrice(lq.v)}</> : null}</>) : null}
+                      ? <>12 quarters, each the trailing year · same items, chained</>
+                      : r.bundle.s.sparkBasis === 'median'
+                        ? <>12 quarters, each the trailing year&rsquo;s median{lq ? <> · year to {lq.q.replace('-', ' ')} {formatPrice(lq.v)}</> : null}</>
+                        : <>12 complete quarters{lq ? <> · last {lq.q.replace('-', ' ')} {formatPrice(lq.v)}</> : null}</>) : null}
+                    {r.spark && r.bundle.s.sparkYoyOff != null ? <> · <span title={sparkTitle(r.bundle.s.sparkBasis, r.bundle.s.sparkYoyOff, r.yoy?.basis)}>line {fmtPct(r.bundle.s.sparkYoyOff)} over the year, outside the YoY&rsquo;s interval</span></> : null}
                     {r.yoy ? <> · YoY <b data-dir={yoyDir(r.yoy)} title={yoyTitle(r.yoy)}>{fmtPct(r.yoy.pct)}</b> <span title={yoyTitle(r.yoy)}>{r.yoy.basis === 'matched' ? `${r.yoy.n.toLocaleString()} matched` : `n ${r.yoy.n.toLocaleString()}`}</span></> : null}
                   </span>
                 </div>

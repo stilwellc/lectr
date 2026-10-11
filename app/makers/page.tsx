@@ -35,7 +35,7 @@ import {
   useMakersView, viewSearch, DEFAULT_COLS, COMPARE_MAX, COL_KEYS, LOT_ORDERS,
   type SortKey, type LiveSort, type RowsBy, type LotOrder, type ViewBody, type MakersView,
 } from '../lib/entity/view-state';
-import { buildRow, sortRows, searchRow, flaggedRow, followedRow, needleOf, lotMatches, gradePlusOf, fmtPct, type Row } from '../lib/entity/ledger';
+import { buildRow, sortRows, searchRow, flaggedRow, followedRow, needleOf, lotMatches, gradePlusOf, fmtPct, NO_MOVERS, type Row } from '../lib/entity/ledger';
 import EntityRow, { COLS, colSpec, gridTemplateOf } from '../components/entity/EntityRow';
 import CompareTray from '../components/entity/CompareTray';
 import './makers.css';
@@ -74,6 +74,8 @@ const SORTS: { k: SortKey; label: string; note: string }[] = [
   { k: 'sold12', label: 'Sold 12 mo', note: 'Sales tracked in the last 12 months' },
   { k: 'name', label: 'A–Z', note: 'Alphabetical' },
 ];
+/** (r8) why Pop Culture and Science have no Movers (app/lib/entity/ledger NO_MOVERS) */
+const MOVERS_NOTE = 'Pop Culture and Science have no Movers: their pieces are one of a kind, so almost nothing sells twice to compare like for like, and a median of whatever sold moves with the mix, not with prices. Their rows keep the Matters order.';
 const LOT_ORDER_LABEL: Record<LotOrder, string> = {
   priority: 'Matters', soonest: 'Closing', 'est-desc': 'Estimate', 'gap-desc': 'Gap', newest: 'Newest',
 };
@@ -843,7 +845,9 @@ export default function MakersPage() {
               {vw === 'names' ? (
                 <select className="ray-toolbar-pill ray-toolbar-select mk-sortsel" aria-label="Order the ledger" data-active={sort !== 'matters'}
                   value={sort} onChange={e => set({ sort: e.target.value as SortKey })} title={SORTS.find(s => s.k === sort)?.note}>
-                  {SORTS.map(s => <option key={s.k} value={s.k}>Sort · {s.label}</option>)}
+                  {SORTS.map(s => (s.k === 'movers' && NO_MOVERS.has(activeKey)
+                    ? <option key={s.k} value={s.k} disabled>Sort · Movers (none here)</option>
+                    : <option key={s.k} value={s.k}>Sort · {s.label}</option>))}
                 </select>
               ) : (
                 <select className="ray-toolbar-pill ray-toolbar-select mk-sortsel" aria-label="Order the lots" data-active={lo !== 'priority'}
@@ -936,6 +940,9 @@ export default function MakersPage() {
                     <span className="mk-lotsrow-go">See the lots <span aria-hidden>→</span></span>
                   </button>
                 )}
+                {sort === 'movers' && (activeKey === 'all' || NO_MOVERS.has(activeKey)) && (
+                  <p className="mk-lots-q">{MOVERS_NOTE}</p>
+                )}
                 {gradePlus && (
                   <button type="button" className="mk-lotsrow" onClick={() => set({ q: gradePlus.q })}>
                     <span className="mk-mono" aria-hidden>+</span>
@@ -970,7 +977,8 @@ export default function MakersPage() {
                         <span /><span className="mk-col-name">{nameHead(g.key)}</span>
                         {cols.map(k => {
                           const c = colSpec(k);
-                          return c.sort
+                          // (r8) no Movers on Pop Culture / Science (ledger NO_MOVERS): the head does not sort there
+                          return c.sort && !(c.sort === 'movers' && NO_MOVERS.has(g.key))
                             ? <button key={k} type="button" className="mk-col-k" data-on={sort === c.sort || undefined} title={c.note} onClick={() => set({ sort: sort === c.sort ? 'matters' : c.sort })}>{c.label}</button>
                             : <span key={k} className="mk-col-k" title={c.note}>{c.label}</span>;
                         })}

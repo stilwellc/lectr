@@ -70,7 +70,8 @@ test('maker-pool: the feed search link carries the query and the triage', () => 
 });
 
 test('maker-subjects (r5): teams, sets, programs and instrument makers get their own rows', () => {
-  assert.equal(subjectRowKeyOf(lot('autographs', '1986 New York Mets Team-Signed Baseball (25 Signatures)')), 'sports|t:1986-new-york-mets');
+  // (r8) one team row, every season (the season is the team entity's facet)
+  assert.equal(subjectRowKeyOf(lot('autographs', '1986 New York Mets Team-Signed Baseball (25 Signatures)')), 'sports|t:new-york-mets');
   assert.equal(subjectRowKeyOf(lot('unopened-wax', '1986 Fleer Basketball Unopened Wax Box (36 Packs)')), 'sports|s:1986-fleer-basketball');
   // a set lot of the same product shares the wax row
   assert.equal(subjectRowKeyOf(lot('sports-cards', '1986 Fleer Basketball Complete Set (132)')), 'sports|s:1986-fleer-basketball');

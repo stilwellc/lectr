@@ -63,6 +63,9 @@ export interface SoldPoint {
    *  card + grade, a Pokémon card + grade, a watch reference + material, a
    *  print edition) — the unit the matched yoy pairs on; absent = none */
   k?: string | null;
+  /** (r8, grade-ladder entities only) the same card WITHOUT its grade — the
+   *  unit the matched grade ladder prices across grades (facets gradeLadder) */
+  kg?: string | null;
 }
 
 export interface Labels { lens: (k: string) => string; coarse: (k: string) => string }
@@ -77,10 +80,15 @@ export interface EntityFigures {
   record: { p: number; d: string; t: string; h: string; id: string; img: string | null } | null;
   spark: (number | null)[] | null;
   sparkN: number[] | null;
-  /** (r7) what the spark reads: 'median' = the lens's quarterly median sale;
+  /** (r7) what the spark reads: 'median' = the lens's trailing-year median sale at each quarter (r8);
    *  'matched' = an identity-keyed lens (cards, Pokémon, references,
-   *  editions) — the same items' price level, chained (sameItemSpark) */
+   *  editions) — the same items' trailing-year price level, chained (sameItemSpark) */
   sparkBasis: 'median' | 'matched' | null;
+  /** (r8) the line's own change over its last four quarters (percent), set
+   *  ONLY when it falls outside the YoY's 90% interval — the two then read
+   *  the year differently (sparkYoyOff), and the row says so. null = agrees,
+   *  or nothing to compare */
+  sparkYoyOff: number | null;
   sparkQ: string[];
   yoy: Yoy | null;
   quarters: { q: string; med: number | null; n: number; high: number }[];
@@ -268,11 +276,21 @@ export function yoyOf(scoped: readonly SoldPoint[], today: string): Yoy | null {
  * ratios, least squares for one level per quarter (the first anchored at 0).
  * A quarter prints only when at least MIN_Q_N repeat-sold identities price it
  * (the pooled spark's own gate);
- * the levels are then scaled so the newest four printed quarters average the
+ * (r8) Each printed point is the TRAILING YEAR's level — the mean log level
+ * of the quarter and the three before it (at least three of the four priced)
+ * — so the line's change over four quarters is the same comparison the YoY
+ * makes (the last four complete quarters against the four before, the same
+ * items): Jordan's quarter-to-quarter endpoints read +145% against a +105%
+ * YoY whose 90% interval stopped at +119%; the trailing-year line reads
+ * the year blocks the YoY reads.
+ * The levels are then scaled so the newest four printed points average the
  * lens's typical sale — the line's SHAPE is the same items, its height the
  * dollars a reader already sees beside it. null = too few repeat sales.
  */
-export function sameItemSpark(scoped: readonly SoldPoint[], quarters: readonly string[], anchor: number | null): { v: (number | null)[]; n: number[] } | null {
+export function sameItemSpark(scoped: readonly SoldPoint[], printedQ: readonly string[], anchor: number | null): { v: (number | null)[]; n: number[] } | null {
+  // the index runs over the printed quarters and the SPARK_ROLL − 1 before them
+  const lead = SPARK_ROLL - 1;
+  const quarters = withLeadQuarters(printedQ, lead);
   const qi = new Map(quarters.map((q, i) => [q, i] as const));
   const byK = new Map<string, Map<number, number[]>>();
   for (const r of scoped) {
@@ -326,13 +344,54 @@ export function sameItemSpark(scoped: readonly SoldPoint[], quarters: readonly s
   }
   const lvl = [0, ...beta];
   const ok = lvl.map((_, i) => touch[i] >= MIN_Q_N);
-  const printed = lvl.map((b, i) => (ok[i] ? b : null)).filter((b): b is number => b != null);
+  // the trailing year at each printed quarter: its own level priced, and at least
+  // three of the window's four — the mean of the priced levels
+  const roll = printedQ.map((_, j) => {
+    const i = j + lead;
+    if (!ok[i]) return null;
+    let s = 0, c = 0;
+    for (let w = i - lead; w <= i; w++) if (ok[w]) { s += lvl[w]; c++; }
+    return c >= SPARK_ROLL - 1 ? s / c : null;
+  });
+  const printed = roll.filter((b): b is number => b != null);
   if (printed.length < MIN_SPARK_POINTS) return null;
-  // the newest four printed quarters average the typical sale
+  // the newest four printed points average the typical sale
   const recent = printed.slice(-4);
   const base = recent.reduce((x, y) => x + y, 0) / recent.length;
   const scale = anchor && anchor > 0 ? anchor : Math.exp(medianSorted(scoped.map(r => Math.log(r.p)).sort((x, y) => x - y)));
-  return { v: lvl.map((b, i) => (ok[i] ? Math.round(scale * Math.exp(b - base)) : null)), n: touch };
+  return { v: roll.map(b => (b != null ? Math.round(scale * Math.exp(b - base)) : null)), n: touch.slice(lead) };
+}
+
+/** (r8) a spark point reads the trailing year: its quarter and the three before */
+export const SPARK_ROLL = 4;
+/** the quarter before 'YYYY-Qn' */
+function prevQuarter(q: string): string {
+  const y = Number(q.slice(0, 4)), n = Number(q.slice(6));
+  return n > 1 ? `${y}-Q${n - 1}` : `${y - 1}-Q4`;
+}
+/** `quarters` with the `lead` quarters before its first prepended (oldest first) */
+export function withLeadQuarters(quarters: readonly string[], lead: number): string[] {
+  const out = quarters.slice();
+  for (let i = 0; i < lead && out.length; i++) out.unshift(prevQuarter(out[0]));
+  return out;
+}
+
+/**
+ * (r8) Where the trend line and the YoY disagree. Both read the trailing year
+ * on one lens, so the line's change over its last four points (the last four
+ * complete quarters against the four before) is the YoY's comparison — exact
+ * on a median basis. On a same-items basis the line is a repeat-sales index
+ * (every repeat sale, quarter to quarter) and the YoY the median item's
+ * year-on-year ratio: the two agree within the YoY's 90% interval on ~85% of
+ * entities (measured Oct 10 2026 on the full corpus), and where they do not,
+ * the build says so rather than let a +145% line sit silent beside a +105% cell.
+ */
+export function sparkYoyOff(spark: readonly (number | null)[], yoy: Yoy | null): number | null {
+  if (!yoy || spark.length < 5) return null;
+  const a = spark[spark.length - 5], b = spark[spark.length - 1];
+  if (a == null || b == null || !(a > 0)) return null;
+  const ch = Math.round(((b / a) - 1) * 1000) / 10;
+  return ch < yoy.lo - 0.5 || ch > yoy.hi + 0.5 ? ch : null;
 }
 
 export const TITLE_MAX = 120;
@@ -381,15 +440,28 @@ export function entityFigures(rows: readonly SoldPoint[], today: string, labels:
   const spSet = new Set(spQ);
   const inWin = scoped.filter(r => spSet.has(quarterOf(r.d)));
   const keyedLens = inWin.length > 0 && inWin.filter(r => r.k).length >= YOY_KEYED_SHARE * inWin.length;
-  const same = keyedLens ? sameItemSpark(scoped, spQ, gated(scoped12, MIN_MED_N)) : null;
+  // (r8) …and so does a lens whose YoY pairs the same items (yoyOf 'matched'),
+  // keyed majority or not: the line then reads the basis the YoY beside it reads
+  const yoy = yoyOf(scoped, today);
+  const same = keyedLens || yoy?.basis === 'matched' ? sameItemSpark(scoped, spQ, gated(scoped12, MIN_MED_N)) : null;
   let sparkN = spQ.map(q => byQ.get(q)?.length || 0);
-  let sparkV: (number | null)[] = spQ.map(q => gated(byQ.get(q) || [], MIN_Q_N));
+  // (r8) each point the TRAILING YEAR's median sale (the quarter and the three
+  // before it), drawn where the quarter itself holds MIN_Q_N sales and the
+  // year MIN_MED_N — so the line's change over four quarters is exactly the
+  // median YoY's comparison (the last four complete quarters against the four
+  // before), and one quarter's mix cannot spike it
+  const extQ = withLeadQuarters(spQ, SPARK_ROLL - 1);
+  let sparkV: (number | null)[] = spQ.map((q, j) => {
+    if ((byQ.get(q)?.length || 0) < MIN_Q_N) return null;
+    const win: number[] = [];
+    for (let w = j; w < j + SPARK_ROLL; w++) win.push(...(byQ.get(extQ[w]) || []));
+    return gated(win, MIN_MED_N);
+  });
   // …and where too few items repeat to chain, the quarterly median stands — said as such
   // (sparkBasis 'median'; the row and the compare tray name the basis)
   if (same) { sparkV = same.v; sparkN = same.n; }
   const sparkOk = sparkV.filter(v => v != null).length >= MIN_SPARK_POINTS;
 
-  const yoy = yoyOf(scoped, today);
 
   // the record: every lot, every lens
   let rec: SoldPoint | null = null;
@@ -437,6 +509,7 @@ export function entityFigures(rows: readonly SoldPoint[], today: string, labels:
     spark: sparkOk ? sparkV : null,
     sparkN: sparkOk ? sparkN : null,
     sparkBasis: sparkOk ? (same ? 'matched' : 'median') : null,
+    sparkYoyOff: sparkOk ? sparkYoyOff(sparkV, yoy) : null,
     sparkQ: spQ,
     yoy,
     quarters,

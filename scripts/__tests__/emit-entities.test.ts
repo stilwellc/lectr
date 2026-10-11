@@ -7,6 +7,7 @@ import { buildEntities, emitEntities, checkEntityFiles, faceValueOf, MIN_SOLD } 
 import { bucketOf } from '../../app/lib/page-data';
 import { normalizeArtCategory } from '../lib/corpus-normalize';
 import type { AuctionLot } from '../../app/types';
+import { ARTISTS, MAKER_MARKETS, type Market } from '../../app/constants';
 
 const TODAY = '2026-10-09';
 let n = 0;
@@ -35,8 +36,12 @@ const run = (b = book()) => buildEntities({ eachSold: v => b.sold.forEach(v), li
 
 test('emit-entities: inclusion = ≥1 live OR ≥ MIN_SOLD sold; one id per lot, deduped', () => {
   const { summaries, details, unkeyed } = run();
-  const ids = summaries.map(s => s.id).sort();
+  // (r8) every roster maker ships a summary (a thin one prints no median) — the rest by the gate
+  const ids = summaries.filter(s => s.sold || !s.id.startsWith('mk:')).map(s => s.id).sort();
   assert.deepEqual(ids, ['mk:andy-warhol', 'pl:mickey-mantle', 'sj:tcg|k:charizard']);
+  const thin = summaries.find(s => s.id === 'mk:fab-5-freddy')!;
+  assert.equal(thin.sold, 0);
+  assert.equal(thin.med12m, null);
   assert.equal(unkeyed, 1, 'the Pettibone row is filed under no entity');
   const w = summaries.find(s => s.id === 'mk:andy-warhol')!;
   assert.equal(w.sold, 13);
@@ -77,8 +82,10 @@ test('emit-entities: writes 8 market files + 256 stamped buckets, and the nightl
   b.live.push(lot('rolex', 'Rolex Submariner', { status: 'upcoming', saleDate: '2026-10-20', category: 'object', subCat: undefined }));
   b.live.push(lot('jean-prouve', 'Jean Prouvé Standard Chair', { status: 'upcoming', saleDate: '2026-10-20', category: 'design', subCat: 'seating' }));
   const rep = emitEntities({ eachSold: v => b.sold.forEach(v), live: b.live, lastCrawl: crawl, market: null, today: TODAY, outDir: path.join(dir, 'pages') });
-  assert.equal(rep.perMarket.all, 5);
-  assert.equal(rep.perMarket.art, 1);
+  // (r8) every roster maker + the player and the Pokémon
+  const roster = ARTISTS.filter(a => MAKER_MARKETS.has(a.market as Market));
+  assert.equal(rep.perMarket.all, roster.length + 2);
+  assert.equal(rep.perMarket.art, roster.filter(a => a.market === 'art').length);
   const all = JSON.parse(fs.readFileSync(path.join(dir, 'pages', 'entities-all.json'), 'utf8'));
   assert.equal(all.lastCrawl, crawl);
   assert.equal(all.sparkQ.length, 12);

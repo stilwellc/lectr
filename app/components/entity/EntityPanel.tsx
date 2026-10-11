@@ -20,6 +20,7 @@ import { makerLineOf, labelLineOf } from '../../lib/lot-labels';
 import { subLabelOf } from '../../lib/taxonomy';
 import { liveBookHref } from '../../lib/lot-browser';
 import { recordOf, type EntityDetail } from '../../lib/entity/model';
+import { ladderNote } from '../../lib/entity/facets';
 import type { RowKind } from '../../lib/entity/kinds';
 import type { LiveSort } from '../../lib/entity/view-state';
 import { useEntity } from '../../hooks/useEntities';
@@ -53,7 +54,7 @@ export function gradeLadderOf(det: EntityDetail | null | undefined) {
   if (!g) return null;
   const rows = g.rows.filter(r => r.key !== 'graded-other' && (r.med12m != null || (LADDER_CORE.has(r.key) && r.n12 > 0)));
   if (rows.filter(r => r.med12m != null).length < 2) return null;
-  return { rows, scope: g.scope ?? null, top: Math.max(...rows.map(r => r.med12m ?? 0)) };
+  return { rows, scope: g.scope ?? null, top: Math.max(...rows.map(r => r.med12m ?? 0)), matched: g.basis === 'matched', group: g };
 }
 
 function PanelLadder({ det }: { det: EntityDetail }) {
@@ -62,10 +63,14 @@ function PanelLadder({ det }: { det: EntityDetail }) {
   const scope = lad.scope ? det.cats.find(c => c.key === lad.scope)?.label ?? null : null;
   return (
     <div>
-      <span className="kicker" title={`Median of the past 12 months per grade, n beside it${scope ? ` — ${scope} only` : ''}`}>By grade · 12 mo</span>
+      <span className="kicker" title={lad.matched
+        ? `${ladderNote(lad.group)}${scope ? ` — ${scope} only` : ''}`
+        : `Median of the past 12 months per grade, n beside it${scope ? ` — ${scope} only` : ''}`}>{lad.matched ? 'By grade · same cards' : 'By grade · 12 mo'}</span>
       <div className="mkx-houses">
         {lad.rows.map(r => (
-          <div key={r.key} className="mkx-house" title={`${r.label}: ${r.n12.toLocaleString()} sold in 12 mo${r.med12m != null ? ` · median ${formatPrice(r.med12m)}` : ' — under 5, no median'}`}>
+          <div key={r.key} className="mkx-house" title={lad.matched
+            ? `${r.label}: ${r.n12.toLocaleString()} matched ${r.n12 === 1 ? 'card' : 'cards'}${r.med12m != null ? ` · ${formatPrice(r.med12m)} on the same cards` : ' — under 5, no price'}`
+            : `${r.label}: ${r.n12.toLocaleString()} sold in 12 mo${r.med12m != null ? ` · median ${formatPrice(r.med12m)}` : ' — under 5, no median'}`}>
             <span className="mkx-house-name">{r.label} · n {r.n12.toLocaleString()}</span>
             <span className="mkx-house-track" aria-hidden><span style={{ width: `${r.med12m != null ? Math.max(2, Math.round((r.med12m / Math.max(1, lad.top)) * 100)) : 0}%` }} /></span>
             <span className="mkx-house-n">{r.med12m != null ? fmtUsd(r.med12m) : '—'}</span>

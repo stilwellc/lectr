@@ -183,14 +183,14 @@ export function splitTitle(raw: string, house?: string | null): { short: string;
  * identifies the sport (kept as "Other" in the filter).
  */
 const SPORT_RULES: [string, RegExp][] = [
-  ['Soccer', /\b(soccer|fifa|world cup|uefa|premier league|la liga|serie a|bundesliga|ligue 1|champions league|barcelona|real madrid|manchester|arsenal|chelsea|liverpool|psg|paris saint|juventus|benfica|honved|galaxy|messi|ronaldo|ronaldinho|mbappe|haaland|neymar|pele|maradona|salah|yamal|pedri|busquets|fabregas|thierry henry|mendy|john terry|bobby moore|beckham|charlton|eusebio|puskas|puskás|tostão|tostao|trinity rodman|luka modric|meazza|figc|santos)\b/i],
-  ['Basketball', /\b(nba|basketball|lakers|celtics|bulls|warriors|heat\b|nuggets|knicks|76ers|clippers|nets\b|ncaa|final four|lebron|jordan|kobe|jokic|curry|durant|anthony edwards|luka doncic|shai gilgeous)\b/i],
-  ['Baseball', /\b(mlb|baseball|yankees|dodgers|red sox|cubs|world series|ohtani|jeter|rivera|mantle|ruth|hank aaron|home run|no-hitter|cy young)\b/i],
+  ['Soccer', /\b(soccer|fifa|world cup|uefa|premier league|la liga|serie a|bundesliga|ligue 1|champions league|barcelona|real madrid|manchester|arsenal|chelsea|liverpool|psg|paris saint|juventus|benfica|honved|la galaxy|messi|ronaldo|ronaldinho|mbappe|haaland|neymar|pele|maradona|salah|yamal|pedri|busquets|fabregas|thierry henry|edouard mendy|benjamin mendy|john terry|bobby moore|beckham|bobby charlton|jack charlton|eusebio|puskas|puskás|tostão|tostao|trinity rodman|luka modric|meazza|figc|santos fc)\b/i],
+  ['Basketball', /\b(nba|basketball|lakers|celtics|bulls|warriors|miami heat|nuggets|knicks|76ers|clippers|brooklyn nets|new jersey nets|ncaa|final four|lebron|michael jordan|air jordan|jordan brand|kobe|jokic|stephen curry|steph curry|kevin durant|anthony edwards|luka doncic|shai gilgeous)\b/i],
+  ['Baseball', /\b(mlb|baseball|yankees|dodgers|red sox|cubs|world series|ohtani|jeter|mariano rivera|mickey mantle|babe ruth|hank aaron|home run|no-hitter|cy young)\b/i],
   ['Football', /\b(nfl|super bowl|quarterback|touchdown|heisman|patriots|chiefs|cowboys|packers|49ers|tom brady|mahomes|amendola|lombardi)\b/i],
   ['Hockey', /\b(nhl|hockey|stanley cup|gretzky|ovechkin|crosby|maple leafs|canadiens|bruins|goal no\.)\b/i],
-  ['Racing', /\b(formula 1|f1\b|grand prix|nascar|leclerc|hamilton|verstappen|senna|ferrari|mclaren|race-worn|racing)\b/i],
+  ['Racing', /\b(formula 1|f1\b|grand prix|nascar|leclerc|lewis hamilton|verstappen|senna|ferrari|mclaren|race-worn|racing)\b/i],
   ['Boxing / MMA', /\b(boxing|ufc\b|mma\b|title belt|heavyweight|muhammad ali|mike tyson|mayweather|fight-worn)\b/i],
-  ['Golf', /\b(golf|pga\b|masters|green jacket|tiger woods|the open|ryder cup)\b/i],
+  ['Golf', /\b(golf|pga\b|masters(?! of the universe)|green jacket|tiger woods|the open|ryder cup)\b/i],
   ['Tennis', /\b(tennis|wimbledon|us open tennis|roland garros|federer|nadal|djokovic|serena)\b/i],
   ['Olympics', /\b(olympic|olympics|torch|gold medal.*(games|olympic))\b/i],
 ];

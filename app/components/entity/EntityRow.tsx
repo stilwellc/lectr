@@ -23,7 +23,7 @@ export const COLS: ColSpec[] = [
   { k: 'live', label: 'Live', width: '72px', note: 'Live lots on the block that pass the filters (the dot: some are flagged below their comparables)', sort: 'live' },
   { k: 'median', label: 'Median · 12 mo', width: '128px', note: 'Median sale over the trailing 12 months, with its n (hover a cell for the scope it covers)', sort: 'median' },
   { k: 'sold12', label: 'Sold · 12 mo', width: '92px', note: 'Sales tracked in the last 12 months', sort: 'sold12' },
-  { k: 'curve', label: 'Trend · 12 q', width: '96px', note: 'The last 12 complete quarters: the quarterly median sale — for cards, Pokémon, watch references and print editions, the same items\u2019 price level, chained (a repeat-sales line scaled to the typical sale). A gap is a quarter too thin to read' },
+  { k: 'curve', label: 'Trend · 12 q', width: '96px', note: 'The last 12 complete quarters, each point the trailing year to that quarter (so four points apart is the year-over-year comparison): the median sale — for cards, Pokémon, watch references and print editions, the same items\u2019 price level, chained (a repeat-sales line scaled to the typical sale). A gap is a quarter too thin to read' },
   { k: 'yoy', label: 'YoY', width: '64px', note: 'Year over year, like for like: the median price ratio of the same items sold in both years, else the median sale when both years sold a similar number (n ≥ 10 each side). Printed only with a 90% interval within about ±30%, or one clear of no change; colored only for a clear move. Movers ranks by the move the interval guarantees', sort: 'movers' },
   { k: 'flags', label: 'Flags', width: '56px', note: 'Live lots the engine prices below their comparables', sort: 'flags' },
   { k: 'sold', label: 'Sold · all', width: '88px', note: 'Sales tracked, all time' },
@@ -38,6 +38,19 @@ export const gridTemplateOf = (cols: readonly ColKey[]) =>
   `30px minmax(0,1fr) ${cols.map(k => colSpec(k).width).join(' ')} 18px`;
 
 /* ── THE TREND — complete quarters; a thin quarter (null) breaks the line ── */
+/** (r8) what a row's trend line reads, by its basis — and, where the line's
+ *  year change falls outside the YoY's interval, how the two differ */
+export function sparkTitle(basis: 'median' | 'matched' | null | undefined, off?: number | null, yoyBasis?: string | null): string {
+  const head = basis === 'matched' ? 'Same items, the trailing year at each quarter, chained: a repeat-sales line scaled to the typical sale — four points apart is the year-over-year comparison'
+    : basis === 'median' ? 'The trailing year\u2019s median sale at each quarter — four points apart is the year-over-year comparison'
+      : 'Quarterly median sale';
+  if (off == null) return head;
+  const why = basis === 'median' && yoyBasis === 'matched'
+    ? 'the line is the median sale, the YoY pairs the same items'
+    : 'the line averages every repeat sale quarter to quarter, the YoY reads the median item\u2019s year';
+  return `${head}. Its year change, ${fmtPct(off)}, falls outside the YoY\u2019s 90% interval: ${why}`;
+}
+
 export function Spark({ values, w = 90, h = 22 }: { values: readonly (number | null)[]; w?: number; h?: number }) {
   const nums = values.filter((v): v is number => v != null && v > 0);
   if (nums.length < 2) return null;
@@ -123,7 +136,7 @@ const EntityRow = React.memo(function EntityRow({
           {r.sold12 > 0 ? (r.sold12Since ? `${r.sold12.toLocaleString()} since ${r.sold12Since}` : r.sold12.toLocaleString()) : '—'}
         </span>
       );
-      case 'curve': return <span key={k} className="mk-cell mk-spark" aria-hidden title={r.spark ? (r.bundle.s.sparkBasis === 'matched' ? 'Same items, chained: a repeat-sales line scaled to the typical sale' : 'Quarterly median sale') : undefined}>{r.spark ? <Spark values={r.spark} /> : <span className="mk-sparkgap" />}</span>;
+      case 'curve': return <span key={k} className="mk-cell mk-spark" aria-hidden title={r.spark ? sparkTitle(r.bundle.s.sparkBasis, r.bundle.s.sparkYoyOff, r.yoy?.basis) : undefined}>{r.spark ? <Spark values={r.spark} /> : <span className="mk-sparkgap" />}</span>;
       case 'yoy': return (
         <span key={k} className="mk-cell mk-delta" data-dir={yoyDir(r.yoy)} title={yoyTitle(r.yoy)}>
           {r.yoy ? fmtPct(r.yoy.pct) : '—'}

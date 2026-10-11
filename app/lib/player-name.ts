@@ -214,6 +214,51 @@ export function publicFigureOf(name: string | null | undefined): string | null {
 export function isPublicFigure(name: string | null | undefined): boolean {
   return !!publicFigureOf(name);
 }
+/** (r8) the public figures whose home desk is Science (astronauts, scientists,
+ *  inventors — where the science desk already files them) — every other public
+ *  figure's is Pop Culture (aviators included: their pieces file as history) */
+const SCIENCE_FIGURES: ReadonlySet<string> = new Set([
+  'neil armstrong', 'buzz aldrin', 'john glenn', 'alan shepard', 'sally ride',
+  'albert einstein', 'thomas edison',
+]);
+/** (r8) the ONE market a famous non-athlete's person entity lives in — a
+ *  president's signed baseball, a Beatle's autograph at a sports house, an
+ *  astronaut's photo at a culture house all file under the same person (never
+ *  a sports person, never a second desk's twin). null = not a public figure. */
+export function publicFigureHome(name: string | null | undefined): 'culture' | 'science' | null {
+  const pf = publicFigureCanon(name);
+  if (!pf) return null;
+  return SCIENCE_FIGURES.has(foldName(pf)) ? 'science' : 'culture';
+}
+/** (r8) the capitalized caption words a subject run may carry after a name (never a surname) */
+const CAPTION_AFTER_NAME = /^(?:Signed|Autographed|Autograph|Typed|Handwritten|Letter|Document|Photo|Photograph|Check|Cut|Book|Collection|Archive|Lot|Group|Pair|Original|Vintage|Rare|Personal|Owned|Worn|Used|Signature|Signatures|Card|Note|Manuscript|Speech|Draft|Portrait|Bust|Medal|Pin|Button|Ticket|Program|Poster|Print|Engraving|Sketch|Drawing|Typewritten|Albumen|Inscribed|Carte|Cabinet|Framed|Matted|Display|Telegram|Envelope|Cover|Free|Frank|Appointment|Commission|Pardon|Presidential|Campaign|Inaugural|Military|Jr\.?|Sr\.?)$/;
+/** (r8) one spelling per public figure — "Harry Truman" / "Harry S. Truman", "FDR" spelled
+ *  three ways were each their own person entity */
+const PF_ALIAS: Record<string, string> = {
+  'harry truman': 'harry s truman', 'dwight eisenhower': 'dwight d eisenhower',
+  'franklin delano roosevelt': 'franklin d roosevelt', 'franklin roosevelt': 'franklin d roosevelt',
+  'teddy roosevelt': 'theodore roosevelt', 'george h w bush': 'george hw bush', 'richard m nixon': 'richard nixon',
+  'lyndon johnson': 'lyndon b johnson',
+};
+/** (r8) the canonical name of the public figure a run names ("Harry Truman" → "Harry S Truman"), or null.
+ *  `strict`: only a run that IS the figure — never a completion of a shorter run ("Martin Luther"
+ *  is not Martin Luther King Jr.) nor a longer name that starts with one ("George Washington
+ *  Carver" is not George Washington); a caption after the name still reads ("Dwight D.
+ *  Eisenhower Hand-Corrected") */
+export function publicFigureCanon(name: string | null | undefined, strict = false): string | null {
+  const pf = publicFigureOf(name);
+  if (!pf) return null;
+  if (strict) {
+    const run = bareName(String(name || '')).split(' ');
+    const k = pf.split(' ').length;
+    if (run.length < k) return null;
+    if (foldName(run.slice(0, k).join(' ')) !== foldName(pf)) return null;
+    const next = run[k];
+    if (next && /^[A-Z][a-z]+\.?$/.test(next) && !CAPTION_AFTER_NAME.test(next)) return null;
+  }
+  const a = PF_ALIAS[foldName(pf)];
+  return a ? a.split(' ').map(w => (w.length <= 2 && w !== 'of' ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1))).join(' ') : pf;
+}
 /** athletes the hobby files under ONE name */
 const MONONYMS: Record<string, string> = {
   pele: 'Pelé', garrincha: 'Garrincha', eusebio: 'Eusébio', ronaldinho: 'Ronaldinho', kaka: 'Kaká', neymar: 'Neymar',

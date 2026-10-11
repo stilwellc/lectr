@@ -15,6 +15,7 @@ import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import type { EntityDetail, EntityResultRow, EntityKind } from '../../lib/entity/model';
+import { ladderNote } from '../../lib/entity/facets';
 import type { MarketData, SubMarketRead } from '../../hooks/useRayData';
 import { useRefs, refsForMaker } from '../../hooks/useRefs';
 import { encodeRefPath } from '../../ref/ref-path';
@@ -45,7 +46,17 @@ function SectionHead({ kicker, title, ctx }: { kicker: string; title: React.Reac
 }
 
 /** one median cell — the figure with its n, or why there is none */
-function MedCell({ med, n }: { med: number | null; n: number }) {
+function MedCell({ med, n, matched }: { med: number | null; n: number; matched?: boolean }) {
+  // (r8) a matched grade rung: its n is the cards priced at that grade AND another
+  if (matched) {
+    return (
+      <span className="nsp-lval">
+        {med != null
+          ? <><span className="nsp-lsub" style={{ marginLeft: 0 }}>{n.toLocaleString()} {n === 1 ? 'card' : 'cards'}</span><span className="nsp-lv">{formatPrice(med)}</span></>
+          : <span className="nsp-lsub" style={{ marginLeft: 0 }}>{n ? `${n} matched ${n === 1 ? 'card' : 'cards'}, too few to price` : 'no card matched'}</span>}
+      </span>
+    );
+  }
   return (
     <span className="nsp-lval">
       {med != null
@@ -78,7 +89,7 @@ function ShowAll({ total, open, onToggle, noun }: { total: number; open: boolean
 /** a split row under this many sales all-time, with no 12-month median, folds into the note */
 const FOLD_N = 100;
 
-export interface SplitRow { key: string; label: string; n: number; med: number | null; n12: number; href?: string | null; live?: number }
+export interface SplitRow { key: string; label: string; n: number; med: number | null; n12: number; href?: string | null; live?: number; matched?: boolean }
 
 /** a split ledger: one row per lens / facet — sales all-time, the trailing
  *  year's median with its n, and the live lots in that cut (a tap narrows the
@@ -100,7 +111,7 @@ function SplitLedger({ rows, onLive, noun = '' }: { rows: SplitRow[]; onLive?: (
               </button>
             ) : null}
           </span>
-          <MedCell med={r.med} n={r.n12} />
+          <MedCell med={r.med} n={r.n12} matched={r.matched} />
         </div>
       ))}
     </div>
@@ -156,11 +167,12 @@ export function KindModule({ id, kind, subKind, market, slug, label, detail, mar
       {facets.map((g, i) => (
         <div key={g.key} style={{ marginTop: rows.length >= 2 || i > 0 ? 18 : 0 }}>
           {rows.length >= 2 || i > 0 || g.label !== head.kicker ? (
-            <span className="ns-kicker">
-              {g.label}{g.scope ? ` · ${shortLens(g.scope, detail.cats.find(c => c.key === g.scope)?.label || g.scope)} only` : ''}
+            <span className="ns-kicker" title={g.basis === 'matched' ? ladderNote(g) : undefined}>
+              {g.label}{g.scope ? ` · ${shortLens(g.scope, detail.cats.find(c => c.key === g.scope)?.label || g.scope)} only` : ''}{g.basis === 'matched' ? ' · same cards at each grade' : ''}
             </span>
           ) : null}
-          <SplitLedger rows={g.rows.map(r => ({ key: `${g.key}:${r.key}`, label: r.label, n: r.n, med: r.med12m, n12: r.n12 }))} />
+          <SplitLedger rows={g.rows.map(r => ({ key: `${g.key}:${r.key}`, label: r.label, n: r.n, med: r.med12m, n12: r.n12, matched: g.basis === 'matched' }))} />
+          {g.basis === 'matched' ? <p className="nsp-note">{ladderNote(g)}.</p> : null}
         </div>
       ))}
       {id.startsWith('mk:') && market === 'art' ? (

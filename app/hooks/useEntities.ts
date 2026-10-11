@@ -34,10 +34,11 @@ import {
   type EntitySummary, type EntityDetail, type EntitiesFile, type EntityRecord,
 } from '../lib/entity/model';
 import {
-  DISCIPLINE, COLLECTION_CATS, PLAYER_CAT, REST_TAG, FR_DOMAIN, pageHrefOf, followKeyOf, KIND,
+  DISCIPLINE, COLLECTION_CATS, REST_TAG, FR_DOMAIN, pageHrefOf, followKeyOf, KIND,
 } from '../lib/entity/kinds';
 import type { NameEntry } from '../lib/entity/live';
 import { parseEntityId } from '../lib/entity/key';
+import { MIN_MED_N } from '../lib/entity/stats';
 import { decodeEntities, isEntitiesWire, ledgerNamesBy } from '../lib/entity/wire';
 import { bestLotImage } from '../lib/img-host';
 
@@ -190,8 +191,10 @@ export function makerBundle(slug: string, market: Market, st: MarketStats | null
     sold,
     sold12m: velocityTrue ? st12!.sold12m! : tailCount,
     sold12mSince: velocityTrue ? null : (tail.length ? String(tail[0].date).slice(0, 4) : null),
-    med12m: st?.medianPriceLast12Months || null,
-    med12mN: null,
+    // (r8) a median prints only with its n, at n ≥ MIN_MED_N: stats.json's
+    // 12-month median reads the same 365 days its sold12m counts
+    med12m: velocityTrue && st12!.sold12m! >= MIN_MED_N ? st?.medianPriceLast12Months || null : null,
+    med12mN: velocityTrue && st12!.sold12m! >= MIN_MED_N ? st12!.sold12m! : null,
     medScope: null,
     record,
     spark: sparkVals.length >= 4 ? sparkVals : null,
@@ -222,8 +225,9 @@ export function subBundle(cat: CatKey, sub: string, label: string, market: Marke
     page: pageHrefOf(id),
     sold: st?.sold ?? null,
     sold12m: st?.sold12m ?? 0,
-    med12m: st?.median12m || null,
-    med12mN: null, medScope: null,
+    // (r8) n-gated, its n beside it
+    med12m: st && st.sold12m >= MIN_MED_N ? st.median12m || null : null,
+    med12mN: st && st.sold12m >= MIN_MED_N ? st.sold12m : null, medScope: null,
     record: st?.record ? { p: st.record.price, d: st.record.date, t: st.record.title, h: st.record.house } : null,
     spark: meds.length >= 4 ? meds : null,
     sparkN: null, yoy: null, verified: null,
@@ -247,19 +251,16 @@ function topKey(m: Map<string, number>): string | null {
 export function nameBundle(id: string, g: NameEntry, players: Map<string, PlayerRec> | null, dossiers: ReadonlySet<string>): EntityBundle {
   const rest = id.startsWith('~:');
   const s0 = g.subject;
-  const artN = new Map<string, number>(), subN = new Map<string, number>(), sportN = new Map<string, number>();
+  const subN = new Map<string, number>(), sportN = new Map<string, number>();
   for (const l of g.lots) {
-    artN.set(l.artist, (artN.get(l.artist) || 0) + 1);
     const t = taxonOf(l);
     const sk = `${t.cat}:${t.sub}`; subN.set(sk, (subN.get(sk) || 0) + 1);
     if (t.sport) sportN.set(t.sport, (sportN.get(t.sport) || 0) + 1);
   }
-  const domArt = topKey(artN), domSub = topKey(subN), domSport = topKey(sportN);
+  const domSub = topKey(subN), domSport = topKey(sportN);
   const subTag = domSub ? subLabel(domSub.split(':')[0] as CatKey, domSub.split(':')[1]).replace(/ \(.*\)$/, '') : null;
   const isPlayer = s0?.kind === 'player' && !!s0.playerSlug;
   const pr = isPlayer ? players?.get(s0!.playerSlug!) : undefined;
-  const catKey = domArt ? (PLAYER_CAT[domArt] ?? domArt) : null;
-  const catRow = pr && catKey ? pr.cats[catKey] : undefined;
   const rec = pr?.objects?.[0];
   let discipline: string | null;
   if (!s0) discipline = REST_TAG[g.market] ?? 'no subject named';
@@ -272,7 +273,7 @@ export function nameBundle(id: string, g: NameEntry, players: Map<string, Player
   const page = rest ? subjectFeedHref(g.market, '~')
     : dossier ? `/player?id=${encodeURIComponent(s0!.playerSlug!)}`
     : (() => { const p = subjectPartsOf(id); return p ? subjectFeedHref(p.market, p.key) : pageHrefOf(id); })();
-  const med = catRow?.ttmMedUsd || null;
+
   const s: EntitySummary = {
     id, kind: rest ? 'subject' : kind, market: g.market,
     label: s0 ? g.name : 'Other lots',
@@ -282,11 +283,11 @@ export function nameBundle(id: string, g: NameEntry, players: Map<string, Player
     page,
     sold: pr ? pr.n : null,
     sold12m: null,
-    med12m: med,
+    // (r8) players.json's trailing-year medians ship no n — a median never
+    // prints without its n, so the fail-soft row prints none
+    med12m: null,
     med12mN: null,
-    // the row's median is one category's (the one most of their live lots
-    // sit in) while Sold is every category — the scope rides the cell's note
-    medScope: med && catKey ? (ARTIST_LABEL[catKey] || catKey).toLowerCase() : null,
+    medScope: null,
     record: rec ? { p: rec.p, d: rec.d, t: rec.t, h: '', id: rec.id } : null,
     spark: null, sparkN: null, yoy: null, verified: null,
     thin: !!pr && pr.n < 50,
@@ -555,7 +556,7 @@ export function useEntity(id: string | null, enabled = true, known?: EntityBundl
         return {
           ...EMPTY_DETAIL,
           yearly: pr.yearly || [],
-          cats: Object.entries(pr.cats).map(([key, c]) => ({ key, label: ARTIST_LABEL[key] || key, n: c.n, med12m: c.ttmMedUsd, med12mN: 0 })),
+          cats: Object.entries(pr.cats).map(([key, c]) => ({ key, label: ARTIST_LABEL[key] || key, n: c.n, med12m: null, med12mN: 0 })),
           top: pr.objects.map(o => ({ id: o.id, img: null, p: o.p, d: o.d, t: o.t, h: '', cat: o.cat })),
           recent: (pr.recent || []).map(o => ({ id: o.id || '', img: null, p: o.p, d: o.d, t: o.t, h: '', cat: o.cat })),
         };
