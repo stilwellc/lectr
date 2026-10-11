@@ -18,9 +18,9 @@ import { safeHref } from '../lib/safe-href';
 import { splitTitle, deglue, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
 import { isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand, contextComps } from '../lib/comps';
 import { enginePoolOf } from '../lib/engine-pool';
-import { lotFace, fmtFace, medianRowId, FACE_LABEL } from '../lib/lot-face';
+import { lotFace, fmtFace, medianRowId, FACE_LABEL, projectedCloseFace } from '../lib/lot-face';
 import { lotAllInFactor } from '../lib/premiums';
-import { lotFloor, lotProjectedClose } from '../lib/verdict';
+import { lotFloor } from '../lib/verdict';
 import { formatEstimate, estimateOnly, lotSignal, confidenceMeter } from './LotCard';
 import { daysWord, Colophon } from './Terminal';
 import ArtistNav from './ArtistNav';
@@ -1112,23 +1112,28 @@ export default function LotPage({ lotId, initialLot }: {
                 if (!mb) return null;
                 return <LeaderRow k="Max bid" v={mb.text} sub={mb.sub} />;
               })()}
-              {isUpcoming && lotProjectedClose(lot) != null && (() => {
-                // (Oct 6 2026, wave 3) only a projection whose cell is
-                // validated on the graded tape (bidProj.ok) prints.
-                // the build stamps bidProj.floor UNGATED (value.low at any
-                // confidence); the floor a reader may lean on is the gated
-                // one — no gated floor, no "under the floor" and no lamp
-                const proj = lotProjectedClose(lot)!;
+              {isUpcoming && mounted && (() => {
+                // (Oct 11 2026) THE ONE PROJECTED CLOSE — lot-face
+                // projectedCloseFace, the figure the decision line, the reason
+                // line and the Gap print: the live bid × this room's measured
+                // close multiple (close-k), hammer; the all-in rides beside it,
+                // labelled. Read at the reader's clock (after mount — the SSG
+                // HTML was built on another day). The old served growth-curve
+                // figure (bidProj, all-in) ran ~3–4× this one off Goldin.
+                // The floor a reader may lean on is the gated one (lotFloor);
+                // it is all-in, so the all-in is what is held against it.
+                const pc = projectedCloseFace(lot);
+                if (!pc) return null;
                 const floor = gatedFloor(lot);
-                const below = !!floor && proj < floor;
+                const below = !!floor && pc.allIn < floor;
                 return (
                   <LeaderRow
                     k="Projected close"
-                    v={`~${formatPrice(proj)}`}
+                    v={pc.text}
                     tone={below ? 'up' : undefined}
                     sub={floor
-                      ? (below ? `still under the ${formatPrice(floor)} floor` : `vs ${formatPrice(floor)} floor`)
-                      : 'bid × close-day curve · all-in'}
+                      ? (below ? `${pc.allInText} · still under the ${formatPrice(floor)} floor` : `${pc.allInText} vs ${formatPrice(floor)} floor`)
+                      : `hammer · ${pc.allInText} with ~${pc.premiumPct}% premium`}
                   />
                 );
               })()}

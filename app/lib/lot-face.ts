@@ -35,7 +35,7 @@ import { engineFlagOf, signalMagnitude } from './comps';
 import { enginePoolOf } from './engine-pool';
 import { lotHammerFromAllIn } from './premiums';
 import { fmtUsd, lotMaxBid, lotVerdict } from './verdict';
-import { prioStatic } from './priority';
+import { prioStatic, projectedCloseOf } from './priority';
 import { closeMs as houseCloseMs, closeIsTimed, localDayIn, houseTzOf } from './house-tz';
 import { closeWhenText, calendarDaysBetween } from './close-time';
 
@@ -250,9 +250,11 @@ export function medianRowId<T extends { id: string; priceUsd?: number | null }>(
    something, and when it closes —
      "projected close ~$34K · worth up to $38K · $4K headroom · closes Thu 10 PM"
    Every number is read from one source, never re-derived here:
-     close  bid rooms: the ranker's own anchor (priority.prioStatic, src
-            'proj' — the live bid × the room's close multiple, close-k.ts,
-            narrowed by a sound engine read), hammer basis. Estimate houses:
+     close  bid rooms: THE projected close (priority.projectedCloseOf — the
+            ranker's own anchor, src 'proj': the live bid × the room's close
+            multiple, close-k.ts, narrowed by a sound engine read), hammer
+            basis; projectedCloseFace below is the lot page's read of the
+            same figure. Estimate houses:
             the house estimate, labelled as such. A bid already past its
             anchor, an engine-only or a bare-bid anchor prints no close
             figure (the reason line and the card already say those).
@@ -268,6 +270,9 @@ export interface DecisionClose {
   kind: 'proj' | 'est';
   /** hammer-basis USD: the projection, or the estimate midpoint (the anchor) */
   usd: number;
+  /** a projection's all-in (usd × the lot's premium factor) — printed only
+   *  labelled "all-in"; null on an estimate */
+  allIn: number | null;
   lo: number | null;
   hi: number | null;
   /** an estimate with one published bound (the hosts print the live bid
@@ -325,16 +330,46 @@ function decisionWhen(lot: AuctionLot, nowMs: number): DecisionWhen | null {
   return { ms, timed, text: `closes ${when}` };
 }
 
+/** what a projected close is, in full (the decision line's tooltip, the lot page's row) */
+export const PROJ_TITLE = 'The live bid projected to its close by this room’s measured close multiple (days out × bid size) — hammer, before premium';
+
+export interface ProjectedCloseFace {
+  hammer: number;
+  allIn: number;
+  /** the buyer's premium the all-in carries, whole % */
+  premiumPct: number;
+  /** "~$34K" (hammer) */
+  text: string;
+  /** "~$41K all-in" — the labelled derivative */
+  allInText: string;
+}
+
+/** THE PROJECTED CLOSE as every surface prints it — priority.projectedCloseOf
+ *  formatted once. The figure is hammer; the all-in is the same figure × the
+ *  lot's premium factor and never prints without "all-in" beside it. */
+export function projectedCloseFace(lot: AuctionLot, nowMs: number = Date.now(),
+  st: ReturnType<typeof prioStatic> = prioStatic(lot as Parameters<typeof prioStatic>[0], nowMs)): ProjectedCloseFace | null {
+  const pc = projectedCloseOf(lot as Parameters<typeof projectedCloseOf>[0], nowMs, st);
+  if (!pc) return null;
+  return {
+    hammer: pc.hammer, allIn: pc.allIn,
+    premiumPct: Math.round((pc.factor - 1) * 100),
+    text: `~${fmtFace(pc.hammer)}`,
+    allInText: `~${fmtFace(pc.allIn)} all-in`,
+  };
+}
+
 /** THE DECISION — the lot's projected close, the engine's walk-away, the gap
  *  and the close; each part null when it does not exist. */
 export function decisionOf(lot: AuctionLot, nowMs: number = Date.now(), face: LotFace = lotFace(lot)): Decision {
   const p = prioStatic(lot as Parameters<typeof prioStatic>[0], nowMs);
   let close: DecisionClose | null = null;
-  if (p && !p.over && p.src === 'proj' && p.a > 0) {
+  const pc = projectedCloseFace(lot, nowMs, p);
+  if (pc) {
     close = {
-      kind: 'proj', usd: p.a, lo: null, hi: null, oneSided: false,
-      text: `projected close ~${fmtFace(p.a)}`,
-      title: 'The live bid projected to its close by this room’s measured close multiple (days out × bid size) — hammer, before premium',
+      kind: 'proj', usd: pc.hammer, allIn: pc.allIn, lo: null, hi: null, oneSided: false,
+      text: `projected close ${pc.text}`,
+      title: `${PROJ_TITLE} · ${pc.allInText}`,
     };
   } else if (p && !p.over && p.src === 'est') {
     // a one-sided estimate says which side the house put on paper
@@ -345,7 +380,7 @@ export function decisionOf(lot: AuctionLot, nowMs: number = Date.now(), face: Lo
       const text = lo > 0 && hi > 0
         ? (fmtFace(lo) === fmtFace(hi) ? fmtFace(lo) : `${fmtFace(lo)}–${fmtFace(hi)}`)
         : lo > 0 ? `from ${fmtFace(lo)}` : `to ${fmtFace(hi)}`;
-      close = { kind: 'est', usd: p.a, lo: lo || null, hi: hi || null, oneSided: !(lo > 0 && hi > 0),
+      close = { kind: 'est', usd: p.a, allIn: null, lo: lo || null, hi: hi || null, oneSided: !(lo > 0 && hi > 0),
         text: `estimate ${text}`, title: 'The house estimate — hammer, before premium' };
     }
   }
