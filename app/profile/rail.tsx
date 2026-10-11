@@ -14,6 +14,7 @@
  * section's own null gate — the page passes only what renders.
  */
 import React, { useEffect, useRef, useState } from 'react';
+import { HelpChip } from './help';
 
 export interface RailItem {
   id: string;
@@ -28,9 +29,16 @@ export interface RailItem {
   dot?: boolean;
   /** the page's grouping (now · picks · desk) — a hairline parts the groups */
   group?: string;
+  /** the pill's title — the `g`-chord that lands here ("g then w") */
+  hint?: string;
+  /** the section has nothing to say on this desk: the pill folds (muted,
+   *  no count) but stays reachable — the room is mounted and says so */
+  quiet?: boolean;
 }
 
-function jump(id: string) {
+/** scroll a section into view and stamp its hash (replaceState — Back
+ *  leaves the page rather than walking sections) */
+export function jump(id: string) {
   const el = document.getElementById(id);
   if (!el) return;
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -70,7 +78,9 @@ const toneInk = (t?: 'up' | 'down') => (t === 'up' ? 'var(--color-up)' : t === '
 
 /** the sticky pill rail. Place it as a direct child of the page-long
  *  wrapper so it stays pinned past every section. */
-export function PillRail({ items }: { items: RailItem[] }) {
+export function PillRail({ items, help }: { items: RailItem[];
+  /** the how-to-read strip behind the rail's (?) — the keys legend */
+  help?: React.ReactNode }) {
   const active = useActive(items.map(i => i.id));
   // keep the active pill in view inside the rail's own sideways scroll
   useEffect(() => {
@@ -109,14 +119,17 @@ export function PillRail({ items }: { items: RailItem[] }) {
           <React.Fragment key={it.id}>
           {i > 0 && it.group && items[i - 1].group && it.group !== items[i - 1].group && <i className="ck-rail-sep" aria-hidden />}
           <a href={`#${it.id}`} data-id={it.id} className="ck-rail-pill" aria-current={active === it.id ? 'true' : undefined}
+            data-quiet={it.quiet || undefined} title={it.quiet ? `${it.hint ? `${it.hint} · ` : ''}nothing here yet` : it.hint}
             onClick={e => { e.preventDefault(); jump(it.id); }}>
             {it.label}
-            {it.count != null && <b style={{ color: toneInk(it.tone) }}>{it.count}</b>}
+            {it.count != null && !it.quiet && <b style={{ color: toneInk(it.tone) }}>{it.count}</b>}
             {it.dot && <i className="ck-rail-dot" aria-label="new matches" />}
           </a>
           </React.Fragment>
         ))}
       </div>
+      {/* the keys legend rides outside the scroller, so it never scrolls away */}
+      {help && <div className="ck-rail-help"><HelpChip name="the keys" stripStyle={{ position: 'absolute', left: 0, right: 0, top: '100%', margin: 0 }}>{help}</HelpChip></div>}
     </nav>
   );
 }
@@ -130,6 +143,11 @@ export function useHashLanding(ready: boolean) {
     const id = decodeURIComponent(window.location.hash.slice(1));
     if (!id) { done.current = true; return; }
     let tries = 0;
+    let settle = 0;
+    let moved = false;
+    // the reader taking the wheel ends the re-landing at once
+    const onIntent = () => { moved = true; };
+    const intents: (keyof WindowEventMap)[] = ['wheel', 'touchstart', 'keydown', 'pointerdown'];
     const t = window.setInterval(() => {
       const el = document.getElementById(id);
       if (el) {
@@ -137,8 +155,20 @@ export function useHashLanding(ready: boolean) {
         window.clearInterval(t);
         // after layout settles (images, the Today band) — instant, no animation
         requestAnimationFrame(() => el.scrollIntoView({ block: 'start', behavior: 'auto' }));
+        // (desk3) the rooms above a deep link keep growing after it lands —
+        // Your week's columns, Names' sold-history reads — and the anchor
+        // drifts down the screen. Re-land while the page settles (8s), unless
+        // the reader has started scrolling.
+        for (const ev of intents) window.addEventListener(ev, onIntent, { passive: true });
+        const margin = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+        settle = window.setInterval(() => {
+          if (moved) { window.clearInterval(settle); return; }
+          const top = el.getBoundingClientRect().top - margin;
+          if (Math.abs(top) > 24) el.scrollIntoView({ block: 'start', behavior: 'auto' });
+        }, 250);
+        window.setTimeout(() => window.clearInterval(settle), 8000);
       } else if (++tries > 40) { done.current = true; window.clearInterval(t); }
     }, 150);
-    return () => window.clearInterval(t);
+    return () => { window.clearInterval(t); window.clearInterval(settle); for (const ev of intents) window.removeEventListener(ev, onIntent); };
   }, [ready]);
 }

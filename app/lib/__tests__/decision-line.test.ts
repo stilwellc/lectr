@@ -181,7 +181,9 @@ test('surfaces print the decision through DecisionLine → decisionOf, no figure
   const c = src('app/components/DecisionLine.tsx');
   assert.match(c, /import \{[^}]*\bdecisionOf\b[^}]*\} from '..\/lib\/lot-face'/);
   assert.doesNotMatch(c, /\b(maxBidUsd|expectedHammerUsd|currentBid|estimateLow|estimateHigh|closeKOf|fmtUsd|formatPrice)\b/);
-  for (const f of ['app/profile/page.tsx', 'app/profile/today.tsx', 'app/components/LotBrowser.tsx']) {
+  // (desk3) the /profile rooms moved out of page.tsx into desk/rooms — the
+  // picks, the Watching ledger and the cockpit's Next-hammer cell print it
+  for (const f of ['app/profile/desk/rooms/picks.tsx', 'app/profile/desk/rooms/watching.tsx', 'app/profile/desk/cockpit.tsx', 'app/profile/today.tsx', 'app/components/LotBrowser.tsx']) {
     assert.match(src(f), /<DecisionLine lot=/, `${f} renders DecisionLine`);
   }
 });

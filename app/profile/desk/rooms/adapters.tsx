@@ -1,0 +1,67 @@
+'use client';
+/**
+ * The rooms that already live in their own files (../today, ../YourMarket,
+ * ../signals), mounted through the registry: each adapter maps the desk's
+ * internals to the props the room was written against — the wiring
+ * page.tsx did inline, kept exactly.
+ */
+import React from 'react';
+import TodayBand from '../../today';
+import YourMarket from '../../YourMarket';
+import YourSignals from '../../signals';
+import { useDeskInternals, type DeskInternals } from '../provider';
+import type { SectionProps, SectionMeta, DeskData } from '../types';
+
+/* ── TODAY ── */
+export function todayMeta(_desk: DeskData, i: DeskInternals): SectionMeta | null {
+  return i.todayShows ? { id: 'today', label: 'Today' } : null;
+}
+export function Today(_p: SectionProps) {
+  const i = useDeskInternals();
+  const { deal, deskView, signedOutView, closingWatches, reads, awayLine, unseenAlerts, todayTop, watchFirst, recsReady } = i;
+  if (deskView) {
+    return <TodayBand loop={deal.loop} closingWatches={closingWatches} reads={reads} away={awayLine} top={todayTop} topLoading={watchFirst && !recsReady} phoneRows={watchFirst ? 2 : 3} />;
+  }
+  // signed out: no away facts; a signed-in empty desk keeps its inbox count
+  return <TodayBand loop={deal.loop} closingWatches={[]} reads={[]} away={signedOutView ? null : (unseenAlerts > 0 ? awayLine : null)} />;
+}
+
+/* ── YOUR MARKET ── */
+export function marketMeta(_desk: DeskData, i: DeskInternals): SectionMeta | null {
+  return i.hasMarket ? { id: 'market', label: 'Market' } : null;
+}
+export function Market(_p: SectionProps) {
+  const { allLots, marketOwned } = useDeskInternals();
+  return <YourMarket book={allLots} owned={marketOwned} />;
+}
+
+/* ── YOUR SIGNALS ── */
+export function signalsMeta(desk: DeskData, i: DeskInternals): SectionMeta {
+  return { id: 'signals', label: 'Signals', count: desk.follows.length || undefined, dot: i.unseenAlerts > 0 };
+}
+export function Signals(_p: SectionProps) {
+  const { allLots, auth, signedOutView } = useDeskInternals();
+  return <YourSignals book={allLots} signedOut={signedOutView ? true : auth.authEnabled && !auth.user} />;
+}
+
+/* ── the slim sign-in line (signed out only) — after value, never before it ── */
+export function signinWhen(_desk: DeskData, i: DeskInternals): boolean { return i.signedOutView; }
+export function SignIn(_p: SectionProps) {
+  const { coldOut, auth } = useDeskInternals();
+  return (
+    <section className="rail ray-enter">
+      <div className="ck-signin">
+        {/* a cold visit's one primary action is the quick start — sign-in
+            rides as a text link under it, never a second black button */}
+        {coldOut ? (
+          <button type="button" className="ck-warn-btn ck-account-btn" onClick={() => auth.signInWithGoogle()}>Sign in with Google</button>
+        ) : (
+          <button className="ray-call-btn ray-call-btn-primary" style={{ border: 'none', cursor: 'pointer' }} onClick={() => auth.signInWithGoogle()}>
+            Sign in with Google
+          </button>
+        )}
+        <span>to keep this everywhere — your follows and saves carry over. Free · one tap · nothing on lectr is gated.</span>
+      </div>
+    </section>
+  );
+}

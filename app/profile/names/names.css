@@ -1,0 +1,95 @@
+/* ── NAMES CALENDAR & BLIND SPOTS (#names) — layout only: every color, face
+   and size is a desk token / an existing desk size (13.5 / 13 / 12.5 / 11.5) ── */
+.nm-group { margin-top: 22px; }
+.nm-group + .nm-group { margin-top: 28px; }
+.nm-group .ck-reads-head { padding-top: 0; }
+
+.nm-row {
+  padding: 12px 2px 14px;
+  border-bottom: 1px solid var(--hairline);
+}
+.nm-row:last-child { border-bottom: none; }
+
+/* the head: name · who · follow · the figure right */
+.nm-head { display: flex; align-items: baseline; gap: 10px; min-height: 28px; }
+.nm-name {
+  font-size: 13.5px; font-weight: 600; color: var(--color-fg); text-decoration: none;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nm-name:hover { text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px; }
+.nm-who { font-size: 11.5px; color: var(--color-text-muted); white-space: nowrap; }
+.nm-fig { margin-left: auto; flex: none; display: flex; align-items: baseline; gap: 6px; }
+.nm-fig b { font-family: var(--font-mono), monospace; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--color-fg); }
+.nm-row:not([data-live]) .nm-fig b { color: var(--color-text-muted); }
+
+/* the one quiet action — a pill in the desk's secondary grammar */
+.nm-follow {
+  font: inherit; font-size: 11.5px; font-weight: 500; line-height: 1;
+  padding: 5px 10px; border-radius: 999px; min-height: 26px;
+  border: 1px solid var(--color-border); background: transparent; color: var(--color-text-secondary); cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-signature), color var(--duration-fast) var(--ease-signature), transform var(--duration-fast) var(--ease-signature);
+}
+.nm-follow:hover { color: var(--color-fg); border-color: var(--color-border-mid); }
+.nm-follow:active { transform: scale(0.98); }
+
+/* the pulse: one text run that wraps; numerals in the mono register */
+.nm-pulse {
+  margin: 5px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--color-text-muted);
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 7px;
+}
+.nm-num { font-family: var(--font-mono), monospace; font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--color-fg); }
+.nm-n { font-family: var(--font-mono), monospace; font-size: 11px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; margin-left: 2px; }
+.nm-scope { font-size: 11.5px; color: var(--color-text-muted); margin-left: 4px; }
+.nm-dot { color: var(--color-text-muted); }
+.nm-spark { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; }
+.nm-spark svg { display: block; }
+
+/* the calendar: when · house + fact · action */
+.nm-sales { list-style: none; margin: 8px 0 0; padding: 0; }
+.nm-sale {
+  display: grid; grid-template-columns: 112px minmax(0, 1fr) auto; column-gap: 14px; align-items: baseline;
+  padding: 7px 0; border-top: 1px solid var(--hairline-soft, var(--hairline));
+}
+.nm-sale-when { display: grid; gap: 1px; }
+.nm-sale-when b { font-family: var(--font-mono), monospace; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--color-fg); white-space: nowrap; }
+.nm-sale[data-soon] .nm-sale-when b { color: var(--color-fg); }
+.nm-sale-main { display: grid; gap: 1px; min-width: 0; }
+.nm-sale-house { font-size: 13px; font-weight: 600; color: var(--color-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nm-sale-name { font-weight: 400; color: var(--color-text-secondary); }
+.nm-sale-fact {
+  font-size: 12.5px; color: var(--color-text-muted); line-height: 1.5;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.nm-sale-title { color: var(--color-text-secondary); }
+.nm-flag { color: var(--color-fg); font-weight: 600; }
+.nm-sale-act { white-space: nowrap; }
+.nm-sale-more { grid-template-columns: 1fr; padding-top: 8px; }
+.nm-link {
+  font: inherit; font-size: 12.5px; font-weight: 600; color: var(--color-fg);
+  background: none; border: none; padding: 0; cursor: pointer;
+  text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px;
+}
+.nm-link:hover { text-decoration-color: var(--color-fg); }
+
+/* the blind spot */
+.nm-blind {
+  margin: 6px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--color-text-muted);
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 7px;
+}
+.nm-blind .nm-when { color: var(--color-fg); font-weight: 600; }
+
+/* two columns of markets side by side is too dense for the calendar rows —
+   one column everywhere; a wide desk lets the sale fact breathe */
+@media (min-width: 900px) {
+  .nm-sale { grid-template-columns: 132px minmax(0, 1fr) auto; }
+}
+/* the phone: the head wraps the figure under the name, sales stack */
+@media (max-width: 639.98px) {
+  .nm-head { flex-wrap: wrap; row-gap: 4px; }
+  .nm-fig { margin-left: auto; }
+  .nm-sale { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; }
+  .nm-sale-when { grid-column: 1 / -1; display: flex; gap: 8px; align-items: baseline; }
+  .nm-sale-main { grid-column: 1; }
+  .nm-sale-act { grid-column: 2; align-self: end; }
+  .nm-sale-house { white-space: normal; }
+}

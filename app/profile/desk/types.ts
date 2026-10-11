@@ -77,4 +77,8 @@ export interface SectionMeta {
   /** true when the section has nothing to say on this desk — the page
    *  still mounts it (never removes a feature) but folds it */
   quiet?: boolean;
+  /** signed ink for a measured delta in `count` (lamp law: only a real sign) */
+  tone?: 'up' | 'down';
+  /** unseen matches waiting (the inbox dot — ink, never a lamp) */
+  dot?: boolean;
 }
