@@ -178,6 +178,12 @@ export interface SleeperRead {
   /** the opening ask when a min-bid book posts one */
   entry: number | null;
   closes: string;
+  /** (Oct 11) the fairness test's OWN ratio (fair-est only): the pool's
+   *  comps median over the estimate midpoint grossed to all-in — the number
+   *  the 0.75–1.3 band was applied to, so a surface never prints another */
+  ratio: number | null;
+  /** the comps median that ratio read (all-in), when the pool carried one */
+  poolMed: number | null;
 }
 
 /** Verified-fair lots with a DEAD room (bidCount === 0 — median on bid-
@@ -192,6 +198,8 @@ export function sleeperRead(lot: AuctionLot, now: number): SleeperRead | null {
   const est = estUsdBand(lot);
   const estMid = est.low && est.high ? (est.low + est.high) / 2 : (est.low ?? est.high);
   let anchor: SleeperRead['anchor'];
+  let fairRatio: number | null = null;
+  const poolMed = (lot.value as { compMedianUsd?: number } | null | undefined)?.compMedianUsd;
   if (estMid) {
     // BASIS-CONSISTENT (P2): the comps are all-in (median of premium-inclusive
     // realized), estMid is hammer-basis — gross the estimate to all-in
@@ -200,10 +208,10 @@ export function sleeperRead(lot: AuctionLot, now: number): SleeperRead | null {
     // fairness test reads the POOL's own median (value.compMedianUsd) — on
     // estimate lots compValueUsd is now the house-anchored prediction, and a
     // number built from the estimate cannot verify the estimate.
-    const poolMed = (lot.value as { compMedianUsd?: number } | null | undefined)?.compMedianUsd;
     const ratio = (poolMed && poolMed > 0 ? poolMed : cvu) / (estMid * lotAllInFactor(lot, estMid));
     if (ratio < 0.75 || ratio > 1.3) return null; // the engine's own at-market band
     anchor = 'fair-est';
+    fairRatio = ratio;
   } else {
     const conf = lot.value?.confidence;
     if (conf !== 'high' && conf !== 'medium') return null;
@@ -216,7 +224,10 @@ export function sleeperRead(lot: AuctionLot, now: number): SleeperRead | null {
   const closeMs = closeAt(lot) ?? NaN;
   if (isNaN(closeMs) || closeMs <= now) return null;
   if ((closeMs - now) / 86400000 > 7) return null; // attention only means something near hammer
-  return { anchor, cvu, estMid: estMid ?? null, entry, closes: lot.saleDate || iso.slice(0, 10) };
+  return {
+    anchor, cvu, estMid: estMid ?? null, entry, closes: lot.saleDate || iso.slice(0, 10),
+    ratio: fairRatio, poolMed: poolMed && poolMed > 0 ? poolMed : null,
+  };
 }
 
 /* ── the cockpit's lane counters ────────────────────────────────────────── */
