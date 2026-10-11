@@ -52,6 +52,8 @@ import { CellGrid, FigureCell, FigGate, FigReplay, FigPools } from '../component
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isOnBlock, trueSaleDay, toneOf } from '../utils';
 import { closeMs as closeAt } from '../lib/house-tz';
 import { dealScore, signalMagnitude, estUsdBand } from '../lib/comps';
+import { lotFace, FACE_LABEL } from '../lib/lot-face';
+import { recordLead, recordScope, RECORD_MIN_N } from '../lib/record-lead';
 import { medianOr } from '../lib/stats';
 import { gapRead, sleeperRead, valueFloor, type GapRead, type SleeperRead } from '../lib/lanes';
 import TriageBar from '../components/TriageBar';
@@ -1082,10 +1084,10 @@ export default function ValuePage() {
   // calls. Measured: 80/83 live call candidates recompute to NULL client-side
   // because their pools live in the corpus-only tier — the stamp is the band.
   const callStamp = useMemo(() => {
-    const ev = call?.lot.value as { compValueUsd?: number; compMedianUsd?: number | null; poolIds?: string[] } | undefined | null;
-    const med = ev?.compMedianUsd ?? ev?.compValueUsd;
-    // the band's median is the COMPS median (compMedianUsd), never the blended prediction
-    return med && (ev!.poolIds?.length ?? 0) >= 3 ? { ...ev!, compValueUsd: med } : null;
+    // (r8) the band's median is lot-face's comps median — the plate row's
+    // and the modal's exact figure — never the blended prediction
+    const comps = call ? lotFace(call.lot).comps : null;
+    return comps && comps.ids.length >= 3 ? { poolIds: comps.ids, compValueUsd: comps.med } : null;
   }, [call]);
   // evidence rows arrive from the 540KB sidecar well before the corpus
   const [evidence, setEvidence] = useState<EvidenceMap | null>(evidenceCache);
@@ -1250,34 +1252,20 @@ export default function ValuePage() {
       });
     }
     if (backtest) {
-      // the SCOPED record when the replay has published this market's median
-      // (n≥50 gate lives in the build; medPct is null under it) — a sports
-      // user deserves the sports number, not the art-heavy global
-      const scoped = activeKey !== 'all'
-        ? (backtest as Backtest & { byMarket?: Record<string, { flagged: { n: number; medPct: number | null } }> }).byMarket?.[activeKey]?.flagged
-        : null;
-      if (scoped?.medPct != null && scoped.n >= 50) {
-        out.push({
-          k: 'The record',
-          v: fmtSignedPct(scoped.medPct),
-          tone: toneOf(scoped.medPct) === 'up' ? 'up' : undefined,
-          sub: <>{activeLabel} flags realized vs estimate, all-in, bought-ins counted · n&nbsp;{scoped.n.toLocaleString()}</>,
-        });
-      } else out.push(backtest.flagged.n >= 100 ? (backtest.flagged.hammerMedianPct != null ? {
-        // (wave 3) lead with the HAMMER — the basis the Flags are called on
+      // THE RECORD — lib/record-lead, the one figure and label /analytics,
+      // the colophon and this dial share: the SCOPED all-in median when the
+      // replay published this market's (n≥50), else the hammer median with
+      // all-in in the sub (the basis the Flags are called on)
+      const lead = recordLead(backtest as Parameters<typeof recordLead>[0], recordScope(activeKey));
+      out.push(lead ? {
         k: 'The record',
-        v: fmtSignedPct(backtest.flagged.hammerMedianPct),
-        tone: toneOf(backtest.flagged.hammerMedianPct) === 'up' ? 'up' : undefined,
-        sub: <>hammer vs estimate · all-in {fmtSignedPct(backtest.flagged.medianPerfPct)} · n&nbsp;{backtest.flagged.n.toLocaleString()}</>,
+        v: fmtSignedPct(lead.pct),
+        tone: toneOf(lead.pct) === 'up' ? 'up' : undefined,
+        sub: <>{lead.sub}</>,
       } : {
         k: 'The record',
-        v: fmtSignedPct(backtest.flagged.medianPerfPct),
-        tone: toneOf(backtest.flagged.medianPerfPct) === 'up' ? 'up' : undefined,
-        sub: <>realized vs estimate, all-in, bought-ins counted · n&nbsp;{backtest.flagged.n.toLocaleString()}</>,
-      }) : {
-        k: 'The record',
         v: '—',
-        sub: <>n {backtest.flagged.n.toLocaleString()} · publishes at 100</>,
+        sub: <>n {backtest.flagged.n.toLocaleString()} · publishes at {RECORD_MIN_N}</>,
       });
     }
     if (coverage) {
@@ -2224,12 +2212,10 @@ export default function ValuePage() {
               ) : (
                 gridDeals.slice(0, shown).map((d, i) => {
                   const conf = d.lot.value?.signal ? null : (d.lot.signal?.confidence ?? d.signal?.confidence);
-                  const rowMed = (d.signal as { med?: number } | null)?.med ?? (() => {
-                    const lo = d.lot.estimateLow || d.lot.estimateHigh || 0;
-                    const hi = d.lot.estimateHigh || d.lot.estimateLow || 0;
-                    const mid = (lo + hi) / 2;
-                    return mid > 0 ? mid * (1 + d.signal!.pct / 100) : null;
-                  })();
+                  // ONE LOT, ONE NUMBER (r8): the row prints lib/lot-face's
+                  // figures — the plate's, the modal's, the lot page's
+                  const face = lotFace(d.lot);
+                  const gapText = face.call?.text ?? signalMagnitude('Below Market', Math.round(d.signal!.pct));
                   return (
                   <div key={d.lot.id} className="ray-value-rowwrap ray-enter-card" data-flip-id={d.lot.id}
                     style={{ '--enter-delay': `${Math.min(i, 8) * 40}ms` } as React.CSSProperties}>
@@ -2291,7 +2277,7 @@ export default function ValuePage() {
                     </span>
                     <span className="ray-value-cell ray-value-cell-num ray-value-cell-est">{estimateOnly(d.lot)}</span>
                     <span className="ray-value-cell ray-value-cell-num">
-                      {rowMed ? formatPrice(rowMed) : '—'}
+                      {face.comps ? face.comps.text : '—'}
                     </span>
                     <span className="ray-value-cell ray-value-cell-num ray-value-cell-odds">
                       {uniformOdds != null
@@ -2303,13 +2289,13 @@ export default function ValuePage() {
                           : '—'}
                     </span>
                     <span className="ray-value-cell ray-value-cell-num ray-value-cell-gap">
-                      {signalMagnitude('Below Market', Math.round(d.signal!.pct))}
+                      {gapText}
                       <CellTrack pct={d.signal!.pct / 4} tone="up" />
                     </span>
                     {/* MOBILE stack — the audited-good phone composition */}
                     <span className="ray-value-mob" style={{ textAlign: 'right' }}>
                       <span className="ray-value-row-sig" style={{ display: 'block' }}>
-                        {signalMagnitude('Below Market', Math.round(d.signal!.pct))}
+                        {gapText}
                       </span>
                       {d.lot.value?.signal?.beatRatePct != null && (
                         <span className="ray-value-row-est" style={{ display: 'block', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
@@ -2324,9 +2310,9 @@ export default function ValuePage() {
                     {/* row-hover leader — the certificate sentence, the same
                         statistic the modal shows; mono only on the figure */}
                     <span className="ray-value-leader" aria-hidden="true">
-                      {rowMed
-                        ? <>comps median <b>{formatPrice(rowMed)}</b> vs {estimateOnly(d.lot)} estimate · <span className="up">{signalMagnitude('Below Market', Math.round(d.signal!.pct))}</span> over{d.signal!.basis ? <> · {d.signal!.basis} sales</> : null}</>
-                        : <>{signalMagnitude('Below Market', Math.round(d.signal!.pct))} over ask{d.signal!.basis ? <> · {d.signal!.basis} sales</> : null}</>}
+                      {face.comps
+                        ? <>comps median <b>{face.comps.text}</b> ({face.comps.sub}) vs {estimateOnly(d.lot)} estimate · <span className="up">{gapText}</span> over{face.call?.derivation ? <> · {face.call.derivation}</> : null}{face.value ? <> · {FACE_LABEL.value} <b>{face.value.text}</b></> : null}</>
+                        : <>{gapText} over ask{d.signal!.basis ? <> · {d.signal!.basis} sales</> : null}</>}
                     </span>
                   </button>
                   {/* save — sibling of the row button (both interactive) */}

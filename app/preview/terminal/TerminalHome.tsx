@@ -968,7 +968,7 @@ export default function TerminalHomePage() {
           simply fills in when the backtest lands — one line of text, not a
           whole footer. /makers already resolved it this way. */}
       <Colophon
-        record={backtest?.flagged ? { n: backtest.flagged.n, medianPerfPct: backtest.flagged.hammerMedianPct ?? backtest.flagged.medianPerfPct } : null}
+        record={backtest?.flagged ? { n: backtest.flagged.n, medianPerfPct: backtest.flagged.medianPerfPct, hammerMedianPct: backtest.flagged.hammerMedianPct ?? null } : null}
       />
     </div>
     </>
