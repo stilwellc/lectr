@@ -4,6 +4,7 @@ import LotPage from '../../components/LotPage';
 import { splitTitle, formatDate, httpsImg, formatPrice } from '../../utils';
 import { signalMagnitude } from '../../lib/comps';
 import { makerLineOf } from '../../lib/lot-labels';
+import { houseCloseDayOf } from '../../lib/house-tz';
 
 /**
  * The STATIC flagged set — /lot/<id> prerendered for every lot the crawl
@@ -35,9 +36,9 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
       ? `${formatPrice((lot.estimateLow || lot.estimateHigh)!)} est.`
       : null;
   const description = [
-    `${maker} — flagged Below Market: comps run ${sig ? signalMagnitude(sig.label, sig.pct) : 'over'} the ask${sig?.basis ? ` across ${sig.basis} comparable sales` : ''}.`,
+    `${maker || title} — flagged Below Market: comps run ${sig ? signalMagnitude(sig.label, sig.pct) : 'over'} the ask${sig?.basis ? ` across ${sig.basis} comparable sales` : ''}.`,
     est,
-    `Hammers ${formatDate(lot.saleDate)} at ${lot.auctionHouse}.`,
+    `Hammers ${formatDate(houseCloseDayOf(lot) || lot.saleDate)} at ${lot.auctionHouse}.`,
   ].filter(Boolean).join(' ');
 
   // the lot's own photograph carries the share; https-forced (mixed-content),
@@ -45,18 +46,18 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
   const image = httpsImg(lot.imageUrl) || 'https://lectr.bid/opengraph-image';
 
   return {
-    title: `${title} — ${maker}`,
+    title: maker ? `${title} — ${maker}` : title,
     description,
     alternates: { canonical: `/lot/${lot.id}` },
     openGraph: {
-      title: `${title} — ${maker} — lectr`,
+      title: `${maker ? `${title} — ${maker}` : title} — lectr`,
       description,
       images: [image],
       type: 'article',
     },
     twitter: {
       card: 'summary_large_image',
-      title: `${title} — ${maker}`,
+      title: maker ? `${title} — ${maker}` : title,
       description,
       images: [image],
     },

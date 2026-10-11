@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { AuctionLot } from '../types';
 import { marketOf } from '../constants';
 import { makerLineOf, labelLineOf, drillLabelOf } from '../lib/lot-labels';
-import { houseColors, categoryColors, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText } from '../utils';
+import { closeDayOf, houseColors, categoryColors, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText } from '../utils';
 import { contextComps, isSportsScienceObject, FORM_LABEL, signalMagnitude, type Form } from '../lib/comps';
 import { enginePoolOf } from '../lib/engine-pool';
 import { lotFace, fmtFace, medianRowId, valueSentence, FACE_LABEL } from '../lib/lot-face';
@@ -918,7 +918,7 @@ export default function ComparableModal({
                 the "View at <house>" CTA only. The two CTAs read as near-
                 duplicates until the house is named: one opens lectr's lot
                 page, the other leaves for the auctioneer. */}
-            <Link
+            {maker.name && <Link
               href={maker.href}
               className="comp-modal-maker"
               onClick={e => e.stopPropagation()}
@@ -934,7 +934,7 @@ export default function ComparableModal({
               }}
             >
               {maker.name}
-            </Link>
+            </Link>}
 
             {/* "Pablo Picasso / Pablo Picasso" — skip the title when it
                 merely repeats the maker line above it */}
@@ -956,7 +956,7 @@ export default function ComparableModal({
             <LotValueBlock lot={lot} allLots={allLots} market={market} backtest={backtest} />
             <CardCompsBlock lot={lot} />
             <div style={{ fontSize: 12.5, color: 'var(--color-text-faint)' }}>
-              {formatDate(lot.saleDate, { month: 'long', day: 'numeric', year: 'numeric' })}
+              {formatDate(closeDayOf(lot), { month: 'long', day: 'numeric', year: 'numeric' })}
               {lot.saleName ? ` · ${lot.saleName}` : ''}
             </div>
 
