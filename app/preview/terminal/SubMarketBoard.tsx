@@ -9,6 +9,7 @@ import { makerLineOf } from '../../lib/lot-labels';
 import { median as statsMedian } from '../../lib/stats';
 import type { AuctionLot } from '../../types';
 import { formatPrice, httpsImg } from '../../utils';
+import { lotFace, fmtFace } from '../../lib/lot-face';
 import { countSubMarkets } from '../../lib/submarkets';
 import { fmtInt, fmtMoneyCompact, useInView, useReducedMotion } from './hooks';
 import { fmtPct } from './verified';
@@ -402,12 +403,12 @@ function EngineHero({ h, onOpen }: { h: EngineHeroData; onOpen?: (lot: AuctionLo
   const askText = estLo != null
     ? (estLo === estHi ? `${formatPrice(estLo)}` : `${formatPrice(estLo!)}–${formatPrice(estHi!)}`)
     : lot.currentBid ? `${formatPrice(lot.currentBid)} bid` : '—';
-  // comps median: the engine's shipped value, else the vetted derivation from
-  // the estimate midpoint × the measured gap (the old CallPlate's exact rule)
-  const estMid = estLo != null && estHi != null ? (estLo + estHi) / 2 : (lot.currentBid ?? null);
-  const med = (signal as { med?: number }).med
-    ?? (estMid != null ? Math.round(estMid * (1 + signal.pct / 100)) : null);
-  const ratioText = signal.pct > 400 ? '5×+' : `${(signal.pct / 100 + 1).toFixed(1)}×`;
+  // ONE LOT, ONE NUMBER (r8): lib/lot-face's comps median and call — the
+  // plate's, the modal's, the lot page's (the estMid × (1 + pct) derivation
+  // printed a median the engine never made)
+  const face = lotFace(lot);
+  const med = face.comps?.med ?? null;
+  const ratioText = face.call?.text ?? (signal.pct > 400 ? '5×+' : `${(signal.pct / 100 + 1).toFixed(1)}×`);
   const conf = confidenceMeter(signal.confidence);
   return (
     <button type="button" className={styles.engineHero} onClick={() => onOpen?.(lot)}>
@@ -439,7 +440,7 @@ function EngineHero({ h, onOpen }: { h: EngineHeroData; onOpen?: (lot: AuctionLo
         <span className={styles.ehRows}>
           <span className={styles.ehRow}><span>The ask</span><span className={styles.ehDots} /><span>{askText}</span></span>
           {med != null && (
-            <span className={styles.ehRow}><span>Comps median</span><span className={styles.ehDots} /><span>{formatPrice(med)}{signal.basis ? ` · ${signal.basis} sales` : ''}</span></span>
+            <span className={styles.ehRow}><span>Comps median</span><span className={styles.ehDots} /><span>{fmtFace(med)}{face.comps ? ` · ${face.comps.sub}` : ''}</span></span>
           )}
           <span className={styles.ehRow}><span>Confidence</span><span className={styles.ehDots} /><span><b className={styles.ehConfDots}>{conf.dots}</b> {conf.word}</span></span>
         </span>

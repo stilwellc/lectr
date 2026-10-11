@@ -22,6 +22,7 @@ import type { AuctionLot } from '../types';
 import { formatDate, formatPrice, craftTitle, httpsImg, sizedImg, localToday, trueSaleDay, isClosedPending } from '../utils';
 import LotCard, { lotSignal, confidenceMeter } from './LotCard';
 import { signalMagnitude } from '../lib/comps';
+import { lotFace } from '../lib/lot-face';
 import ComparableModal from './ComparableModal';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './FeedToolbar';
 import { houseBaselines, type HouseBaselines } from '../lib/feed-filters';
@@ -694,7 +695,7 @@ export default function LotBrowser({
                     <td>
                       {sig
                         ? <span className={sig.label === 'Below Market' ? 't-sig-up' : 't-sig-down'}>
-                            {signalMagnitude(sig.label, sig.pct)}{/* the qualifier on its own line: inline it overflowed the last column and clipped ('2.4× unde') */}<span style={{ display: 'block', color: 'var(--color-text-faint)', fontSize: 10.5 }}>{sig.label === 'Below Market' ? 'under comps' : 'over comps'}</span>
+                            {lotFace(lot).call?.text ?? signalMagnitude(sig.label, sig.pct)}{/* the qualifier on its own line: inline it overflowed the last column and clipped ('2.4× unde') */}<span style={{ display: 'block', color: 'var(--color-text-faint)', fontSize: 10.5 }}>{sig.label === 'Below Market' ? 'under comps' : 'over comps'}</span>
                             <span title={`${confidenceMeter(sig.confidence).word} confidence`} style={{ marginLeft: 6, fontSize: 10, letterSpacing: 1, opacity: 0.8 }}>
                               {confidenceMeter(sig.confidence).dots}
                             </span>

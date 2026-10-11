@@ -9,6 +9,8 @@ import { makerLineOf, labelLineOf, drillLabelOf } from '../lib/lot-labels';
 import { houseColors, categoryColors, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText } from '../utils';
 import { contextComps, isSportsScienceObject, FORM_LABEL, signalMagnitude, type Form } from '../lib/comps';
 import { enginePoolOf } from '../lib/engine-pool';
+import { lotFace, fmtFace, medianRowId, valueSentence, FACE_LABEL } from '../lib/lot-face';
+import { lotHammerFromAllIn } from '../lib/premiums';
 import type { SoldComp } from '../types';
 import { drillRowFor, drillSlugFor } from '../lib/submarkets';
 import { signedPct, dirOf } from './SubMarketDirectory';
@@ -94,10 +96,12 @@ function LotValueBlock({ lot, allLots, market, backtest }: { lot: AuctionLot; al
           </span>
         </div>
       )}
-      {v && !dir && v.estimateUsd != null && (
+      {v && !dir && v.estimateUsd != null && lotFace(lot).value && (
         <div style={{ fontSize: 13.5 }}>
+          {/* (r8) lot-face's value — the plate's, the lot page's, the stats
+              strip's: expected hammer + likely range, one format */}
           <span style={{ color: 'var(--color-fg)', fontWeight: 500 }}>
-            lectr value {v.low === v.high ? usd(v.estimateUsd) : `${usd(v.low)}–${usd(v.high)}`}
+            {valueSentence(lotFace(lot).value!)}
           </span>
           {/* card-comp value: a point estimate from same-card / same-player sales
               (build-market §3), so it reads "from N same-card sales" not a band */}
@@ -239,7 +243,8 @@ export function PriceBand({
   if (lo <= 0 || hi <= lo) return null;
   const x = (v: number) => ((Math.log(v) - Math.log(lo)) / (Math.log(hi) - Math.log(lo))) * 100;
   const bandColor = below === true ? 'var(--color-up)' : 'var(--color-text-faint)';
-  const fmt = (n: number) => formatPrice(n);
+  // (r8) the face formatter — the strip's median reads exactly as the plate's row
+  const fmt = (n: number) => fmtFace(n);
   return (
     <div style={{ padding: '20px 28px 6px' }}>
       <svg width="100%" height="76" style={{ display: 'block', overflow: 'visible' }} aria-label="Comparable sales vs estimate">
@@ -409,7 +414,7 @@ export default function ComparableModal({
   // client signalWithPool fallback is gone); 'at comparable market' means the
   // engine looked and called it fair — no call, no client second-guessing.
   const called = useMemo(() => {
-    const ev = (lot as AuctionLot & { value?: { signal?: { label: string } | null; compRatio?: number | null; flagRatio?: number | null; compValueUsd?: number; compMedianUsd?: number | null; n?: number; confidence?: string; poolIds?: string[] } | null }).value;
+    const ev = (lot as AuctionLot & { value?: { signal?: { label: string } | null; compRatio?: number | null; flagRatio?: number | null; compValueUsd?: number; n?: number; confidence?: string; poolIds?: string[] } | null }).value;
     // ×5 ESTIMATE-BAND SANITY (mirrors scripts/build-upcoming.ts): a compRatio
     // outside [1/5, 5] is a data fault the build killed at the source — the
     // modal must never resurrect it. Treat it as no engine call and fall
@@ -431,7 +436,8 @@ export default function ComparableModal({
           // ratio the signal was called on (comps.engineFlagOf), not the raw
           pct: Math.round((below ? (ev.flagRatio ?? ev.compRatio) - 1 : 1 - (ev.flagRatio ?? ev.compRatio)) * 100),
           basis: ev.n || pool.length,
-          med: ev.compMedianUsd ?? ev.compValueUsd,
+          // (r8) lot-face's comps median — the plate's and the lot page's
+          med: lotFace(lot).comps?.med,
           kind: 'form' as 'form' | 'edition',
           form: ((lot as { formKey?: string }).formKey || 'unknown') as Form,
           confidence: (ev.confidence === 'high' ? 'high' : ev.confidence === 'medium' ? 'medium' : 'low') as 'high' | 'medium' | 'low',
@@ -443,6 +449,9 @@ export default function ComparableModal({
     // client never makes a directional call of its own — 'no read' renders
     return null;
   }, [lot, allLots]);
+
+  // ONE LOT, ONE NUMBER (r8): the strip's figures are lib/lot-face's
+  const face = useMemo(() => lotFace(lot), [lot]);
 
   // (r7, QA2 Q3 — one lot, one number) the engine VALUED the lot without a
   // below / above call ("at comparable market", or a flag it held back):
@@ -469,8 +478,12 @@ export default function ComparableModal({
   // engine call with an unresolvable pool, OR a crawl-stamped signal with no
   // call at all (its fallback pool also lives in the full corpus) — both have
   // build-shipped evidence. Sports/science objects keep their archive band.
-  const needEvidence = (!!called && called.pool.length === 0)
-    || (!!valued && valued.pool.length === 0)
+  // (r8) a PARTLY resolved pool fetches too: the rows are the pool behind
+  // the median, all of it ("4 comparable lots · 1 shown" with three in the
+  // evidence file)
+  const poolIdN = enginePoolOf((lot as AuctionLot & { value?: Parameters<typeof enginePoolOf>[0] }).value)?.ids.length ?? 1;
+  const needEvidence = (!!called && called.pool.length < poolIdN)
+    || (!!valued && valued.pool.length < poolIdN)
     || (!called && !valued && !isSportsScienceObject(lot) && lot.status === 'upcoming' && !!lot.signal && (lot.signal.basis || 0) > 0);
   useEffect(() => {
     if (!needEvidence) { setEvRows(null); return; }
@@ -528,7 +541,11 @@ export default function ComparableModal({
       // the call's own pool, most recent first — this IS the statistic.
       // When the on-wire corpus can't resolve the ids, the build-shipped
       // evidence rows are the same pool (deep-corpus sales), not a substitute.
-      const poolRows = engine.pool.length ? engine.pool : (evRows || []);
+      // resolved rows completed by the evidence rows, both held to the
+      // engine's pool ids (r8)
+      const ids = face.comps && face.comps.ids.length ? new Set(face.comps.ids) : null;
+      const seen = new Set(engine.pool.map(r => r.id));
+      const poolRows = [...engine.pool, ...(evRows || []).filter(r => !seen.has(r.id) && (!ids || ids.has(r.id)))];
       return [...poolRows]
         .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
         .map(l => ({ lot: l, score: 1 }));
@@ -554,7 +571,7 @@ export default function ComparableModal({
         .map(l => ({ lot: l, score: 1 }));
     }
     return ctx.map(l => ({ lot: l, score: 1 }));
-  }, [lot, allLots, called, valued, band, evRows]);
+  }, [lot, allLots, called, valued, band, evRows, face]);
 
   const compStats = useMemo(() => {
     if (comparables.length === 0) return null;
@@ -578,12 +595,20 @@ export default function ComparableModal({
   // reader can actually see below, calling it "Median" is a self-contradiction
   // — label it "lectr value" (the LotValueBlock term) instead.
   const medianLabel = useMemo(() => {
+    // (r8) the engine's median is the WEIGHTED median of these very rows —
+    // labelled as what it is (it was relabelled "lectr value" when it
+    // differed from the rows' plain median: a second number's name)
+    if ((called || valued) && face.comps) return `${FACE_LABEL.comps} · ${face.comps.sub}`;
     if (!compStats || comparables.length === 0) return 'Median';
     const prices = comparables.map(c => c.lot.priceUsd).filter((p): p is number => !!p).sort((a, b) => a - b);
     if (prices.length === 0) return 'Median';
     const poolMed = medianSorted(prices);
-    return poolMed > 0 && Math.abs(compStats.median - poolMed) / poolMed > 0.1 ? 'lectr value' : 'Median';
-  }, [compStats, comparables]);
+    return poolMed > 0 && Math.abs(compStats.median - poolMed) / poolMed > 0.1 ? 'Median of the pool' : 'Median';
+  }, [compStats, comparables, called, valued, face]);
+  // the engine's value cell (r8): the SAME object the plate prints — never
+  // the min/max of whichever rows resolved
+  const engineValue = (called || valued) && !band ? face.value : null;
+  const medId = (called || valued) && face.comps ? medianRowId(comparables.map(c => c.lot), face.comps.med) : null;
 
   const houseColor = houseColors[lot.auctionHouse] || 'var(--color-text-secondary)';
   // the home feed's label line (app/lib/lot-labels): "Pokémon · Vintage ·
@@ -982,14 +1007,21 @@ export default function ComparableModal({
             gap: 0,
           }}>
             <div style={{ flex: 1, textAlign: 'center' }}>
-              <div className="nsp-modal-stat">{formatPrice(compStats.median)}</div>
+              <div className="nsp-modal-stat">{fmtFace(compStats.median)}</div>
               <div className="nsp-modal-stat-k">{medianLabel}</div>
             </div>
             <div style={{ width: 1, background: 'var(--color-border)', margin: '0 4px' }} />
-            <div style={{ flex: 1, textAlign: 'center' }}>
-              <div className="nsp-modal-stat">{formatPrice(compStats.low)} — {formatPrice(compStats.high)}</div>
-              <div className="nsp-modal-stat-k">Range</div>
-            </div>
+            {engineValue ? (
+              <div style={{ flex: 1, textAlign: 'center' }}>
+                <div className="nsp-modal-stat">{engineValue.text}</div>
+                <div className="nsp-modal-stat-k">{FACE_LABEL.value} · {FACE_LABEL.range} {engineValue.range}</div>
+              </div>
+            ) : (
+              <div style={{ flex: 1, textAlign: 'center' }}>
+                <div className="nsp-modal-stat">{fmtFace(compStats.low)} — {fmtFace(compStats.high)}</div>
+                <div className="nsp-modal-stat-k">Range</div>
+              </div>
+            )}
             {/* THE CALL — the engine's own comps-vs-ask read (label + pct
                 from the signal the card already printed), never a ratio
                 this modal computed. Green ONLY for Below Market (the lamp:
@@ -1002,10 +1034,10 @@ export default function ComparableModal({
                 <div style={{ flex: 1, textAlign: 'center' }}>
                   <div className={`nsp-modal-stat mono${called.signal.label === 'Below Market' ? ' up' : ''}`}>
                     {/* signalMagnitude caps broken percents — never "+5976%" */}
-                    {signalMagnitude(called.signal.label, called.signal.pct)}
+                    {face.call?.text ?? signalMagnitude(called.signal.label, called.signal.pct)}
                   </div>
                   <div className="nsp-modal-stat-k">
-                    comps vs. ask · {called.signal.label.toLowerCase()}
+                    {face.call?.derivation ?? 'comps vs. ask'} · {called.signal.label.toLowerCase()}
                   </div>
                 </div>
               </>
@@ -1025,7 +1057,7 @@ export default function ComparableModal({
                 basis, say so rather than shrink the call */}
             {called
               ? (() => {
-                  const n = called.signal.basis || comparables.length;
+                  const n = face.comps?.n || called.signal.basis || comparables.length;
                   const shown = comparables.length < n ? ` · ${comparables.length} shown` : '';
                   return called.signal.kind === 'edition'
                     ? `The call — this exact work, sold ${n} times${shown}`
@@ -1113,9 +1145,15 @@ export default function ComparableModal({
                 const estMid = lot.estimateLow && lot.estimateHigh
                   ? (lot.estimateLow + lot.estimateHigh) / 2
                   : null;
-                const ratio = estMid && comp.priceUsd
-                  ? comp.priceUsd / estMid
-                  : null;
+                // (r8) on the call's own basis when there is one: the comp's
+                  // hammer over the house-adjusted ask — the median row then
+                  // reads exactly the call's ratio
+                const askAdj = face.call?.askAdj ?? null;
+                const ratio = comp.priceUsd && askAdj
+                  ? lotHammerFromAllIn(lot, comp.priceUsd) / askAdj
+                  : estMid && comp.priceUsd
+                    ? comp.priceUsd / estMid
+                    : null;
 
                 return (
                   <a
@@ -1192,6 +1230,7 @@ export default function ComparableModal({
                           <span style={{ color: compHouseColor, fontWeight: 500 }}>{comp.auctionHouse}</span>
                           <span>&middot;</span>
                           <span>{formatDate(comp.saleDate, { month: 'short', year: 'numeric' })}</span>
+                          {comp.id === medId && (<><span>&middot;</span><span>the median</span></>)}
                           {comp.medium && (
                             <>
                               <span>&middot;</span>
@@ -1219,7 +1258,7 @@ export default function ComparableModal({
                           fontWeight: 500,
                           color: 'var(--color-fg)',
                         }}>
-                          {comp.priceUsd ? formatPrice(comp.priceUsd) : '—'}
+                          {comp.priceUsd ? fmtFace(comp.priceUsd) : '—'}
                         </div>
                         {ratio !== null && (
                           <div style={{
@@ -1227,9 +1266,11 @@ export default function ComparableModal({
                             color: 'var(--color-text-secondary)',
                             fontWeight: 500,
                           }}>
-                            {ratio >= 1
-                              ? signalMagnitude('Below Market', Math.round((ratio - 1) * 100))
-                              : signalMagnitude('Above Market', Math.round((1 - ratio) * 100))} vs est.
+                            {Math.round(Math.abs(ratio - 1) * 100) === 0
+                              ? (askAdj ? 'at the call\u2019s ask' : 'at est.')
+                              : <>{ratio >= 1
+                                ? signalMagnitude('Below Market', Math.round((ratio - 1) * 100))
+                                : signalMagnitude('Above Market', Math.round((1 - ratio) * 100))} {askAdj ? 'vs the call\u2019s ask' : 'vs est.'}</>}
                           </div>
                         )}
                       </div>
