@@ -102,8 +102,11 @@ export type RecLot = {
   value?: any; signal?: any; bidProj?: any;
 };
 
-export type SeedKind = 'owned' | 'saved' | 'follow' | 'search';
-export const SEED_WEIGHT: Record<SeedKind, number> = { owned: 1, saved: 0.75, follow: 0.55, search: 0.35 };
+export type SeedKind = 'owned' | 'saved' | 'follow' | 'search' | 'signal';
+/** 'signal' = an on-device implicit signal (app/lib/recs-signals): its
+ *  weight arrives with it (a lot view .25, an entity page .2, "More like
+ *  this" .7 — already decayed), so the kind weight is 1 */
+export const SEED_WEIGHT: Record<SeedKind, number> = { owned: 1, saved: 0.75, follow: 0.55, search: 0.35, signal: 1 };
 const HALF_LIFE_DAYS = 120;
 const RECENCY_FLOOR = 0.4;
 
@@ -121,10 +124,32 @@ export interface SavedInput {
 }
 export interface SearchInput { id?: string; name: string; query: SavedQuery; createdAt?: string | null }
 
+/** (Oct 11) ONE on-device signal (app/lib/recs-signals → use-recs): a lot
+ *  the reader looked at or asked "more like", an entity page they visited
+ *  (as a follow-shaped seed), or a term they searched. `weight` is final
+ *  (kind × decay); `reason` is the verb the pick's line speaks ("looked
+ *  at", "asked for more like", "searched"). Never stored server-side. */
+export interface ExtraInput {
+  lot?: RecLot | null;
+  follow?: Follow;
+  text?: string;
+  weight: number;
+  reason: string;
+}
+/** "Not for me": these lot ids never come back; their entity / card
+ *  identity (`keys`: an entity id, or `card:<identity>`; repeated once per
+ *  mark) is down-weighted — the card hard (×0.3), the entity softly (×0.6
+ *  per mark: one print you pass on does not erase its maker) */
+export interface NegativeInput { ids?: Iterable<string>; keys?: Iterable<string> }
+
 export interface TasteInput {
   saved: SavedInput[];
   follows: Follow[];
   searches?: SearchInput[];
+  /** on-device implicit signals (optional; weigh below a save) */
+  extra?: ExtraInput[];
+  /** on-device "Not for me" marks */
+  negative?: NegativeInput;
   nowMs?: number;
 }
 
@@ -162,6 +187,8 @@ export interface Seed {
   who?: string;
   follow?: Follow;
   query?: SavedQuery;
+  /** a 'signal' seed's verb ("looked at", "asked for more like", "searched") */
+  verb?: string;
 }
 
 export interface Taste {
@@ -170,7 +197,9 @@ export interface Taste {
   exclude: Set<string>;
   /** card identities / titles on the desk (relists and twins never come back) */
   excludeKeys: Set<string>;
-  counts: { owned: number; saved: number; follows: number; searches: number };
+  /** "Not for me" entity ids / card identities → marks — down-weighted, not banned */
+  down?: Map<string, number>;
+  counts: { owned: number; saved: number; follows: number; searches: number; signals?: number };
   /** the reader's comfortable price band per category, learned from what
    *  they own and save (learnBands) — a category with < BAND_MIN priced
    *  lots on the desk has none */
@@ -322,7 +351,36 @@ export function buildTaste(input: TasteInput): Taste {
     searches++;
     seeds.push({ kind: 'search', w: SEED_WEIGHT.search * recency(q.createdAt, nowMs), label: q.name, query: q.query });
   }
-  return { seeds, exclude, excludeKeys, counts: { owned, saved, follows: input.follows.length, searches }, bands: learnBands(seeds) };
+  // (Oct 11) on-device signals + "Not for me" — app/lib/recs-signals
+  const neg = input.negative;
+  const down = new Map<string, number>();
+  for (const k of Array.from(neg?.keys ?? [])) down.set(k, (down.get(k) ?? 0) + 1);
+  for (const id of Array.from(neg?.ids ?? [])) for (const a of idAliases(id)) exclude.add(a);
+  let signals = 0;
+  const followed = new Set(input.follows.map(fo => `${fo.kind}:${fo.key}`));
+  for (const x of input.extra || []) {
+    if (!(x.weight > 0)) continue;
+    if (x.lot) {
+      // a save already speaks louder; a lot marked "not for me" says nothing good
+      if (exclude.has(x.lot.id)) continue;
+      const f = featOf(x.lot, nowMs);
+      signals++;
+      seeds.push({
+        kind: 'signal', w: x.weight, verb: x.reason, label: shortTitle(x.lot.title, x.lot.auctionHouse), f, lotId: x.lot.id,
+        live: x.lot.status === 'upcoming', who: makerLineOf(x.lot).name,
+      });
+    } else if (x.follow) {
+      if (followed.has(`${x.follow.kind}:${x.follow.key}`)) continue;
+      signals++;
+      seeds.push({ kind: 'signal', w: x.weight, verb: x.reason, label: x.follow.label, follow: x.follow });
+    } else if (x.text && x.text.trim()) {
+      const query: SavedQuery = { text: x.text.trim() };
+      if (unmatchableReason(query as Record<string, unknown>)) continue;
+      signals++;
+      seeds.push({ kind: 'signal', w: x.weight, verb: x.reason, label: x.text.trim(), query });
+    }
+  }
+  return { seeds, exclude, excludeKeys, down, counts: { owned, saved, follows: input.follows.length, searches, signals }, bands: learnBands(seeds) };
 }
 
 /* ── price-band learning ────────────────────────────────────────────────── */
@@ -718,7 +776,10 @@ export function scoreLots<L extends RecLot>(pool: readonly L[], taste: Taste, op
     const q = pr ? pr.score / 100 : 0.1;
     const band = bandFit(f, taste.bands);
     const flagged = isFlagged(l as Parameters<typeof isFlagged>[0]);
-    const score = tasteV * (0.45 + 0.55 * q) * windowFactor(close, nowMs) * band.fit * (flagged ? ENGINE_LIFT : 1);
+    // "Not for me" on a lot quiets its entity and its card in any grade
+    const quiet = !taste.down?.size ? 1
+      : (f.card && taste.down.has(`card:${f.card}`) ? 0.3 : 1) * Math.pow(0.6, (f.ek && taste.down.get(f.ek)) || 0);
+    const score = tasteV * (0.45 + 0.55 * q) * windowFactor(close, nowMs) * band.fit * (flagged ? ENGINE_LIFT : 1) * quiet;
     return { score, flagged, inBand: band.inside };
   };
   for (const l of pool) {
@@ -743,6 +804,8 @@ export function scoreLots<L extends RecLot>(pool: readonly L[], taste: Taste, op
 
     const contribs: { seed: Seed; c: number; parts?: SimParts }[] = [];
     for (const s of lotSeeds) {
+      // a lot you only looked at never explains itself
+      if (s.kind === 'signal' && s.lotId === l.id) continue;
       const p = lotSim(f, s.f!);
       if (p.sim < LOT_SIM_MIN) continue;
       contribs.push({ seed: s, c: s.w * p.sim, parts: p });
@@ -783,6 +846,8 @@ export function scoreLots<L extends RecLot>(pool: readonly L[], taste: Taste, op
     if (!o.f && deskTwin(l, f)) continue;
     let bestTier: LadderTier | 0 = 0, bestC = 0, bestA: LadderAnchor | null = null;
     for (const a of anchors) {
+      // a looked-at lot never stands in as its own kin
+      if (a.seed.kind === 'signal' && a.seed.lotId === l.id) continue;
       const t = ladderTier(f, a);
       if (!t) continue;
       // inside a rung, the anchor's price level leads (a $420K Kobe is a
@@ -933,6 +998,10 @@ function twinNoteOf(kept: RecLot, twin: RecLot): string | null {
 function explain(l: RecLot, f: Feat, best: { seed: Seed; parts?: SimParts; ladder?: LadderHit }, lotSeeds: Seed[], bands?: ReadonlyMap<CatKey, PriceBand>, inBand = false): { reason: string; why: string[]; short?: string } {
   const s = best.seed;
   const why: string[] = [];
+  // an on-device signal speaks as what the reader did ("Because you looked
+  // at Andy Warhol", "Because you searched “kaws”") — never as "your" desk
+  if (s.kind === 'signal' && !s.f) return { reason: `Because you ${s.verb} ${s.query ? `“${s.label}”` : s.label}`, why: [] };
+  lotSeeds = lotSeeds.filter(x => x.kind !== 'signal');
   if (best.ladder) return ladderReason(l, f, best.ladder, s);
   if (s.follow) {
     const word = s.follow.kind === 'house' ? 'house' : s.follow.kind === 'cat' ? 'category' : s.follow.kind === 'entity' ? 'subject' : 'name';
@@ -952,6 +1021,10 @@ function explain(l: RecLot, f: Feat, best: { seed: Seed; parts?: SimParts; ladde
   if (bandWords) why.push(`in your ${bandWords} range`);
   else if (p.price != null && p.price >= 0.6) why.push('in your price range');
   if (!why.length && p.sub) why.push(`also ${subLabel(f.cat, f.sub)}`);
+  if (s.kind === 'signal') {
+    const lead = why[0] ? why[0].charAt(0).toUpperCase() + why[0].slice(1) : null;
+    return { reason: `Because you ${s.verb} ${s.label}`, why, short: lead ? `${lead} · you ${s.verb} ${s.label}` : undefined };
+  }
 
   // several things on the desk share this lot's named entity and kind →
   // speak about the group ("Like your Andy Warhol prints · $20K–40K")
@@ -1014,8 +1087,9 @@ function familyWord(a: LadderAnchor): string {
  *   "More basketball cards at Patrick Ewing's prices · $200–900") */
 function ladderReason(l: RecLot, f: Feat, hit: LadderHit, s: Seed): { reason: string; why: string[]; short: string } {
   const a = hit.anchor;
-  const src = s.follow ? `you follow ${s.label}` : `you ${s.kind === 'owned' ? 'own' : s.live ? 'saved' : 'watched'} ${s.label}`;
-  const whose = s.follow ? s.label : 'your save';
+  // an on-device signal anchors as what the reader did, never as a follow or a save
+  const src = s.kind === 'signal' ? `you ${s.verb} ${s.label}` : s.follow ? `you follow ${s.label}` : `you ${s.kind === 'owned' ? 'own' : s.live ? 'saved' : 'watched'} ${s.label}`;
+  const whose = s.follow || s.kind === 'signal' ? s.label : 'your save';
   const sport = f.sport ? SPORT_WORD[f.sport] : null;
   const noun = f.cat === 'sports-cards' ? `${sport && sport !== 'other sports' ? `${sport} ` : ''}cards`
     : f.cat === 'tcg' ? 'Pokémon cards'

@@ -16,6 +16,7 @@ import { loadEntities } from '../hooks/useEntities';
 import { entityIdOf } from '../lib/entity/live';
 import { pageHrefOf } from '../lib/entity/kinds';
 import { isOnBlock, localToday } from '../utils';
+import { recordSignal } from '../lib/recs-signals';
 
 interface Item {
   label: string;
@@ -335,6 +336,8 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
   }, [idx]);
 
   function go(item: Item) {
+    // the typed term only (never the pick) — on-device (app/lib/recs-signals)
+    if (q.trim().length >= 3) recordSignal('search', q);
     setOpen(false);
     router.push(item.path);
   }
