@@ -361,6 +361,11 @@ export interface LotBrowserProps {
   /** (r8) rows per page on a phone (640px and under), when it should scan
    *  shorter than `pageSize` — the entity page's 8 */
   phonePageSize?: number;
+  /** (perf W13) the page painted from a first-screen slice (app/lib/
+   *  first-screen): 'comps' — `lots` is the exact live list but `compLots`
+   *  is a slice, so the comps modal opens once the book lands; 'lots' —
+   *  `lots` is a slice too, so every count over it prints '—' as well */
+  slice?: 'lots' | 'comps' | null;
 }
 
 export default function LotBrowser({
@@ -389,7 +394,9 @@ export default function LotBrowser({
   bare = false,
   pageSize: pageSizeProp,
   phonePageSize,
+  slice = null,
 }: LotBrowserProps) {
+  const countsPending = slice === 'lots';
   const crawlDay = (lastCrawl || new Date().toISOString()).slice(0, 10);
   const savedSet = useMemo(() => new Set(savedIds ?? []), [savedIds]);
   const isSaved = isSavedProp ?? ((id: string) => savedSet.has(id));
@@ -721,7 +728,7 @@ export default function LotBrowser({
           data-active={!topTab && !youTab}
           onClick={() => handleFilters({ ...feedFilters, tab: 'all' })}
         >
-          All lots <i>{countOf(feedAll).toLocaleString()}</i>
+          All lots <i>{countsPending ? '—' : countOf(feedAll).toLocaleString()}</i>
         </button>
       </div>
 
@@ -748,7 +755,8 @@ export default function LotBrowser({
         scopeSubj={scope?.subj ?? null}
         // a tab that shows a picked subset names it — "What matters 20" over
         // "9,667 lots" read as if the tab held the whole book
-        countLabel={(youTab && youTaste) || topTab ? <>{feed.length.toLocaleString()} picked from {onBlock.length.toLocaleString()} lots</> : null}
+        countLabel={(youTab && youTaste) || topTab ? <>{feed.length.toLocaleString()} picked from {countsPending ? '—' : onBlock.length.toLocaleString()} lots</> : null}
+        pending={countsPending}
       />}
       </>}
 
@@ -998,7 +1006,7 @@ export default function LotBrowser({
       </div>
       )}
 
-      {!onOpenLot && ownLot && (
+      {!onOpenLot && ownLot && !slice && (
         <ComparableModal lot={ownLot} allLots={compLots} onClose={() => setOwnLot(null)} />
       )}
 
