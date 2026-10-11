@@ -319,6 +319,15 @@ export interface EngineFlags {
    *  measured worse or level (docs/ENGINE_LANES.md §22) — but the comps a
    *  page lists can say which rows are the same object */
   otherWorkMark?: boolean;
+  /** (Oct 11 2026, W32) THE ESTIMATE CARRIED THROUGH TIME: an estimate lot's
+   *  anchor (the estimate mid in blendPredict, the staleFloor's low, the W24
+   *  target scale) is carried from its sale quarter to the index's asOf by
+   *  the market index the comps already ride (estimateCarryOf). A live lot
+   *  carries ×1 by construction; a settled row (W31) read years after its
+   *  hammer is marked at today's level of its market, n-gated (thin index →
+   *  confidence demotes a notch, `value.estCarry.thin`), and abstains
+   *  ('no-index') when its market has no index to carry with */
+  estCarry?: boolean;
 }
 /** The engine before the Oct 3 pass (raw-estimate Flags, premium-only
  *  anchor, ungated card tiers) — kept so the harnesses can replay it. */
@@ -453,6 +462,22 @@ export const ENGINE_FLAGS_W24: EngineFlags = {
   ...ENGINE_FLAGS_WAVE10,
   version: '2026.10.11-w24',
   uniqueSupport: true, uniqueSize: true, maxBidOwn: true, otherWorkMark: true,
+};
+/** (Oct 11 2026, W32) THE ESTIMATE CARRIED THROUGH TIME (estCarry): the
+ *  settled appraisal's anchor moved with the market index. Live values are
+ *  byte-identical to W24 (the carry is ×1 on a live lot). MEASURED AND NOT
+ *  ADOPTED: on 13,339 repeat-sale pairs (the same object / work / reference
+ *  / edition sold at t1 and again at t2, the t1 row valued as of t2 against
+ *  the t2 price) the carried value was worse at every age gap under 4 years
+ *  (object-level medErr 0–1y 30.6 → 32.7%, 1–2y 34.3 → 37.8%, 2–4y 39.7 →
+ *  42.2%, 4y+ 102.5 → 102.1%) — the market index's move carries no
+ *  information about one object's own move (slope 0.03, corr 0.01).
+ *  docs/ENGINE_LANES.md §24. Kept as a replayable flag set for the harness
+ *  (scripts/oneoff/qa/w32-repeat-pairs.ts); never served. */
+export const ENGINE_FLAGS_W32: EngineFlags = {
+  ...ENGINE_FLAGS_W24,
+  version: '2026.10.11-w32',
+  estCarry: true,
 };
 export const ENGINE_FLAGS_CURRENT: EngineFlags = ENGINE_FLAGS_W24;
 /** The candidate under evaluation. Equal to CURRENT's flags when nothing is
@@ -765,6 +790,14 @@ export interface ValueResult {
    *  market × tier × confidence cell over the trailing year, out of sample:
    *  graded n, share within ±30%, median realized / value */
   gate?: { n: number; within30Pct: number | null; bias: number | null };
+  /** (Oct 11 2026, W32) THE ESTIMATE CARRY on an estimate lot read after its
+   *  sale quarter (the settled appraisal): the multiplier the anchor was
+   *  carried by (market index at asOf / at the sale quarter), the smaller of
+   *  the two quarters' sale counts, the quarters, and `thin` when the index
+   *  was under EST_CARRY.minN at either end or fell back past the sale
+   *  quarter (confidence was demoted a notch). Absent when nothing was
+   *  carried (a live lot, a no-estimate lot). */
+  estCarry?: { f: number; n: number; from: string; to: string; thin?: true };
 }
 
 /** Why the engine declined to value a lot (P1-6). Stable, greppable codes —
@@ -780,6 +813,7 @@ export type AbstainReason =
   | 'identity-less'     // (Oct 6, wave 3) an art title naming no object, comps spanning > ID_LESS.spread×
   | 'pool-scale'        // (Oct 6, wave 4) comp median outside ×/÷ POOL_SCALE.ratio of the estimate
   | 'pool-mixed'        // (Oct 11, W24) most of the top pool is other works (another estimate scale / date)
+  | 'no-index'          // (Oct 11, W32) an estimate lot read after its sale quarter whose market has no index to carry the estimate with
   | 'card:pool<2'       // card tiers: exact/ladder pools too thin, no player pool
   | 'card:player<5'     // card tier 3: player pool under the floor (legacy)
   | 'card:player-tier'  // (Sep 27) only a PLAYER median exists — abstains (2.87× live)
@@ -872,6 +906,10 @@ export interface TimeIndex {
   levels: Record<string, Record<string, number>>;
   /** market → the last quarter with a level strictly before asOf's quarter */
   lastQ: Record<string, string>;
+  /** (Oct 11 2026, W32) market → quarter → the sales the quarter's level
+   *  rests on — the n-gate of the estimate carry (estimateCarryOf). Absent
+   *  on an index built before W32: every carry then reads as thin. */
+  n?: Record<string, Record<string, number>>;
 }
 let TIDX: TimeIndex | null = null;
 export function setTimeIndex(ti: TimeIndex | null) { TIDX = ti; }
@@ -900,6 +938,73 @@ export function timeFactor(market: string | null | undefined, saleDate: string, 
   }
   if (!(l > 0)) return 1;
   return Math.min(TIME_ADJ_CLAMP[1], Math.max(TIME_ADJ_CLAMP[0], lv[last] / l));
+}
+
+/* ── THE ESTIMATE CARRY (Oct 11 2026, W32) ───────────────────────────────
+   The estimate-lot prediction anchors on the house estimate (blendPredict:
+   blendW 0.10–0.25 toward the comps). The comps are carried to the index's
+   asOf by timeFactor; the ESTIMATE was not — so a settled row (W31: a 2023
+   sale valued today) read "its 2023 estimate × premium" at every sale age
+   (docs/ENGINE_LANES.md §23: realized / value ≈ 1.03 with the same IQR in
+   every cohort). EngineFlags.estCarry carries the anchor by the SAME market
+   index the comps ride: estimate × index(asOf) / index(sale quarter).
+   On a live lot (or the replay's point-in-time index) the lot's own quarter
+   is ≥ the index's last quarter, so the factor is exactly 1 — the live path
+   and the engine gate are untouched by construction. */
+export interface EstimateCarry {
+  /** the multiplier on the estimate (1 when nothing is carried) */
+  f: number;
+  /** 'current' = the sale sits in or after the index's last quarter (no
+   *  carry); 'ok' = carried on a quarter with ≥ EST_CARRY.minN sales at both
+   *  ends; 'thin' = carried on a thin or fallen-back quarter (confidence
+   *  demotes one notch); 'none' = a carry is needed and the market has no
+   *  index (the engine abstains: 'no-index') */
+  status: 'current' | 'ok' | 'thin' | 'none';
+  /** the smaller of the two quarters' sale counts (0 when unknown) */
+  n: number;
+  /** the quarter the estimate was carried from (the sale's, or the nearest
+   *  earlier quarter with a level) and to (the index's last quarter) */
+  from: string;
+  to: string;
+}
+/** EngineFlags.estCarry's bars: `minN` sales under BOTH the sale quarter's
+ *  and the last quarter's level, else thin; a sale quarter with no level of
+ *  its own may fall back at most `maxFallbackQ` quarters before it reads
+ *  thin. A sale older than the index window (24 quarters) is carried from
+ *  the window's first level and always reads thin. */
+export const EST_CARRY = { minN: 30, maxFallbackQ: 2 };
+const prevQuarter = (q: string): string => { let y = +q.slice(0, 4), n = +q.slice(5); n--; if (n < 1) { n = 4; y--; } return `${y}Q${n}`; };
+const quartersBetween = (a: string, b: string): number => (+b.slice(0, 4) - +a.slice(0, 4)) * 4 + (+b.slice(5) - +a.slice(5));
+/** The estimate carry of a sale in `market` on `saleDate` to the index's asOf. */
+export function estimateCarryOf(market: string | null | undefined, saleDate: string | null | undefined, ti: TimeIndex | null = TIDX): EstimateCarry {
+  const q = quarterKey(saleDate);
+  const none = (from: string): EstimateCarry => ({ f: 1, status: 'none', n: 0, from, to: '' });
+  const current = (): EstimateCarry => ({ f: 1, status: 'current', n: 0, from: q, to: q });
+  // no index loaded at all: the pre-W32 engine everywhere (no clock to carry to)
+  if (!ti || !q) return current();
+  const lv = market ? ti.levels[market] : undefined;
+  const last = market ? ti.lastQ[market] : undefined;
+  if (!lv || !last || !(lv[last] > 0)) {
+    // the market has no index: nothing to carry WITH — current when the sale
+    // sits in the quarter before asOf's or later (timeFactor would return 1
+    // for a market with an index too), else no figure
+    const asOfQ = quarterKey(ti.asOf);
+    return !asOfQ || q >= prevQuarter(asOfQ) ? current() : none(q);
+  }
+  if (q >= last) return current();
+  const qs = Object.keys(lv).filter(k => lv[k] > 0).sort();
+  let from = q;
+  if (!(lv[from] > 0)) {
+    let pick: string | null = null;
+    for (const k of qs) { if (k <= q) pick = k; else break; }
+    from = pick || qs[0];
+  }
+  const f = Math.min(TIME_ADJ_CLAMP[1], Math.max(TIME_ADJ_CLAMP[0], lv[last] / lv[from]));
+  const nf = ti.n?.[market!]?.[from] ?? 0, nl = ti.n?.[market!]?.[last] ?? 0;
+  const n = Math.min(nf, nl);
+  const fellBack = from > q || quartersBetween(from, q) > EST_CARRY.maxFallbackQ;
+  const thin = n < EST_CARRY.minN || fellBack;
+  return { f, status: thin ? 'thin' : 'ok', n, from, to: last };
 }
 
 /**
@@ -1257,7 +1362,16 @@ export function estimateValueEx(
   // (Oct 11 2026, W24) THE OBJECT A COMP IS: its own estimate's scale, a
   // unique work's support and size, the work's date (comp-purity W24)
   const w24mk = CAL?.marketBySlug?.[lot.artist] ?? TIDX?.marketBySlug?.[lot.artist] ?? 'other';
-  const w24tMid = (EST_SCALE as Record<string, number>)[w24mk === 'art' || w24mk === 'design' ? w24mk : 'other'] ? estMidUsdOf(lot) : 0;
+  // (Oct 11 2026, W32, FLAGS.estCarry) THE ESTIMATE CARRY: the house
+  // estimate is evidence AS OF ITS SALE; read after that quarter (the settled
+  // appraisal) it is carried to the index's asOf by the market index the
+  // comps ride — ×1 on a live lot. A market with no index cannot carry an
+  // old estimate: no figure.
+  const hasEst = (lot.estLowUsd || 0) > 0 || (lot.estHighUsd || 0) > 0;
+  const carry: EstimateCarry | null = FLAGS.estCarry && hasEst ? estimateCarryOf(TIDX?.marketBySlug?.[lot.artist] ?? CAL?.marketBySlug?.[lot.artist], lot.saleDate) : null;
+  if (carry && carry.status === 'none') return { value: null, abstain: 'no-index' };
+  const cf = carry && carry.status !== 'current' ? carry.f : 1;
+  const w24tMid = (EST_SCALE as Record<string, number>)[w24mk === 'art' || w24mk === 'design' ? w24mk : 'other'] ? estMidUsdOf(lot) * cf : 0;
   /** another work by its own estimate's scale or its date (W24 readers) */
   const otherWork = (c: Comp, scale: boolean, year: boolean): boolean => {
     const cl = c.lot;
@@ -1592,8 +1706,12 @@ export function estimateValueEx(
     let habitShrink = 0;
     if (FLAGS.partialHabit && estKind === 'p' && flagRatio != null && flagRatio < PARTIAL_HABIT.fr
         && pureOf(top).length >= PURITY.minPure) habitShrink = PARTIAL_HABIT.s;
-    const bp = blendPredict(lot, estMid, estKind, compAdjUsd, confidence, CAL, nExact, minW, habitShrink);
+    // (W32) the anchor at the index's asOf: estimate mid × the estimate carry
+    const bp = blendPredict(lot, estMid * cf, estKind, compAdjUsd, confidence, CAL, nExact, minW, habitShrink);
     predUsd = bp.value; blendW = bp.w;
+    // (W32) a carry on a thin or fallen-back index earns one notch less
+    // confidence — the band widens with it (valueBand by confidence)
+    if (carry && carry.status === 'thin' && confidence !== 'low') confidence = confidence === 'high' ? 'medium' : 'low';
   } else {
     // The no-estimate market×tier bias (calibration.bias) is FITTED and
     // published but NOT applied: re-scored live (Sep 14 → 27, the same 187
@@ -1620,7 +1738,9 @@ export function estimateValueEx(
   if (FLAGS.staleFloor && eLo && eLo > 0) {
     const medAge = weightedMedian(top.map(c => [ageYOf(c), (c.match.cosine ** 2) * decay(c)] as [number, number]));
     if (medAge > STALE_FLOOR.ageY) {
-      const loAllIn = STALE_FLOOR.allIn ? eLo * lotAllInFactor(lot, eLo) : eLo;
+      // (W32) the printed low at the index's asOf — the estimate carry
+      const loC = eLo * cf;
+      const loAllIn = STALE_FLOOR.allIn ? loC * lotAllInFactor(lot, loC) : loC;
       if (predUsd < loAllIn) predUsd = loAllIn;
     }
   }
@@ -1683,6 +1803,7 @@ export function estimateValueEx(
     ...(blendW != null ? { blendW: Math.round(blendW * 100) / 100 } : {}),
     ...(flagRatio != null ? { flagRatio: Math.round(flagRatio * 1000) / 1000 } : {}),
     ...(houseF != null ? { houseFactor: Math.round(houseF * 1000) / 1000 } : {}),
+    ...(carry && carry.status !== 'current' && estMid ? { estCarry: { f: Math.round(carry.f * 1000) / 1000, n: carry.n, from: carry.from, to: carry.to, ...(carry.status === 'thin' ? { thin: true as const } : {}) } } : {}),
     ...buyerFields(lot, predUsd, bandLow, bandHigh, mbAllIn),
   }, abstain: null };
 }

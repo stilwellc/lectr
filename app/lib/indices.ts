@@ -215,6 +215,7 @@ export function makeTimeIndexer(lots: AuctionLot[], marketBySlug: Record<string,
     const window = new Set(quarterSeq(asOfQ, TI_WINDOW_Q));
     const levels: Record<string, Record<string, number>> = {};
     const lastQ: Record<string, string> = {};
+    const n: Record<string, Record<string, number>> = {};
     byMarket.forEach((rows, m) => {
       const cohorts = new Map<string, Map<string, number[]>>();
       const volByQ = new Map<string, number>();
@@ -248,8 +249,12 @@ export function makeTimeIndexer(lots: AuctionLot[], marketBySlug: Record<string,
       });
       levels[m] = lv;
       lastQ[m] = raw[raw.length - 1].q;
+      // (W32) the sales under each level — the estimate carry's n-gate
+      const nq: Record<string, number> = {};
+      for (const p of raw) nq[p.q] = volByQ.get(p.q) || 0;
+      n[m] = nq;
     });
-    return { asOf, marketBySlug, levels, lastQ };
+    return { asOf, marketBySlug, levels, lastQ, n };
   };
 }
 
