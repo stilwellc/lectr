@@ -23,8 +23,11 @@
  *        by days out × bid size), blended with a sound engine read. Cards
  *        40% median error vs 67% under the old est → engine → bid order,
  *        whose engine read ran 198% and whose raw bid ran 46% low.
- *      · then estimate, engine expected hammer, a validated bid projection,
- *        the live bid (a floor, not a value).
+ *      · then estimate, engine expected hammer, the live bid (a floor, not a
+ *        value). (Oct 11) The old served growth-curve projection (bidProj,
+ *        bid × close-day curve) is gone: it overshot the non-Goldin rooms by
+ *        70–150% and the lot page printed it beside this one — ONE projected
+ *        close now, projectedCloseOf below.
  *  - Edge: the certified "Below Market" flag, ONLY in the categories where the
  *    backtest measured a real edge (art, design, culture, science: ~+21pt
  *    all-in margin). Sports/watches flags are held by the engine and TCG/cards
@@ -39,6 +42,8 @@ import { parseCard, cardLadderKey } from './cards';
 import { trueSaleDay } from '../utils';
 import { closeMs, closeIsTimed } from './house-tz';
 import { closeKOf, closeKRoomOf } from './close-k';
+import { lotAllInFactor } from './premiums';
+import { fmtUsd } from './fmt-usd';
 
 /** per-market Size scale, hammer USD: [Size 0, Size 1] on a log axis */
 const SCALE: Record<CatKey, [number, number]> = {
@@ -88,7 +93,7 @@ type ScoreLot = {
   id?: string | null;
   value?: { expectedHammerUsd?: number | null; confidence?: string | null; abstain?: string | null; signal?: { beatRatePct?: number | null } | null } | null;
   signal?: { label?: string | null } | null;
-  bidProj?: { ok?: boolean; allIn?: number } | null;
+  buyerPremiumPct?: number | null;
 };
 
 /**
@@ -147,8 +152,6 @@ function baseAnchor(l: ScoreLot, nowMs: number): { a: number; src: AnchorSrc } |
   }
   if (lo > 0) return { a: (lo + hi) / 2, src: 'est' };
   if (eh && eh > 0) return { a: eh, src: 'engine' };
-  // validated projection only; allIn carries the buyer's premium (~1.22×) — back it out to hammer
-  if (l.bidProj?.ok === true && (l.bidProj.allIn || 0) > 0) return { a: (l.bidProj.allIn as number) / 1.22, src: 'proj' };
   if ((l.currentBid || 0) > 0) return { a: l.currentBid as number, src: 'bid' };
   return null;
 }
@@ -179,6 +182,30 @@ export function prioStatic(l: ScoreLot, nowMs: number = Date.now()): PrioStatic 
   const out: PrioStatic = { a: Math.round(an.a), src: an.src, size: r2(size), edge: r2(edge), ev: r2(ev) };
   if (an.over) out.over = true;
   return out;
+}
+
+/** THE PROJECTED CLOSE (Oct 11 2026) — the ONE projection every surface
+ *  prints: the decision line, the lot page's "Projected close" row, the
+ *  ranker's reason line, the Gap lane and the calls ledger. It IS the
+ *  ranker's anchor (src 'proj': the live bid × the room's measured close
+ *  multiple, close-k.ts, narrowed by a sound engine read), hammer basis; the
+ *  all-in is the same figure × the lot's buyer's-premium factor
+ *  (premiums.lotAllInFactor) and prints only labelled "all-in". null when
+ *  the anchor is not a projection (estimate house, engine-only, bare bid) or
+ *  the live bid already passed it. */
+export interface ProjectedClose {
+  /** hammer USD (the anchor) */
+  hammer: number;
+  /** hammer × factor, rounded */
+  allIn: number;
+  /** the lot's buyer's-premium factor at that hammer */
+  factor: number;
+}
+export function projectedCloseOf(l: ScoreLot, nowMs: number = Date.now(), st: PrioStatic | null = prioStatic(l, nowMs)): ProjectedClose | null {
+  if (!st || st.over || st.src !== 'proj' || !(st.a > 0)) return null;
+  const hammer = st.a;
+  const factor = lotAllInFactor(l, hammer);
+  return { hammer, allIn: Math.round(hammer * factor), factor };
 }
 
 /** Close time in ms. A date-only sale closes at the end of that day, in the house's zone. */
@@ -363,7 +390,6 @@ export function spread<T extends ShortlistLot>(list: T[], win = 12, max = 3, hea
   return list.length > head ? out.concat(list.slice(head)) : out;
 }
 
-const fmtUsd = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${Math.round(n)}`);
 
 /**
  * The one-line "why it's here" for a shortlisted lot — the same inputs the
@@ -396,9 +422,12 @@ export function reasonOf(l: ScoreLot, nowMs: number = Date.now()): string | null
   // it came from somewhere else (engine comps, a projection, the live bid)
   if (p.over) {
     parts.push(p.src === 'est' ? 'Bid past the estimate' : 'Bid past its value');
+  } else if (p.src === 'proj') {
+    // the one projected close (projectedCloseOf), printed as the decision line prints it
+    const pc = projectedCloseOf(l, nowMs, p);
+    if (pc) parts.push(`~${fmtUsd(pc.hammer)} projected close`);
   } else if (p.src !== 'est') {
-    const basis = p.src === 'engine' ? 'engine value' : p.src === 'proj' ? 'projected close' : 'current bid';
-    parts.push(`${fmtUsd(p.a)} ${basis}`);
+    parts.push(`${fmtUsd(p.a)} ${p.src === 'engine' ? 'engine value' : 'current bid'}`);
   }
   if (p.edge > 0) parts.push('Below market');
   return parts.length ? parts.join(' · ') : null;

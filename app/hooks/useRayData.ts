@@ -22,8 +22,6 @@ export type RealizedByMarket = Record<string, RealizedPoint[]>;
     demand (%) and realized ($) so it never renders as a price or a percent. */
 export type BidCompByMarket = Record<string, BidCompetitionPoint[]>;
 export type RecentSoldByMarket = Record<string, unknown[]>;
-export type DeepValueRow = { id: string; depth: number; allIn: number; floor: number; closes: string };
-export type DeepValueByMarket = Record<string, DeepValueRow[]>;
 export interface Backtest {
   flagged: BacktestBucket;
   unflagged: BacktestBucket;
@@ -67,7 +65,6 @@ export interface RayData {
   /** lightweight last-N Goldin closes per sports/science market so the home
       Recent-results row paints without the 10MB archive. Eager. */
   recentSold: RecentSoldByMarket;
-  deepValue: DeepValueByMarket;
   backtest: Backtest | null;
   market: MarketData | null;
   /** the forward calls ledger's public accrual meter (receipts.json, 1KB,
@@ -233,7 +230,6 @@ interface RayPayload {
   realized: RealizedByMarket;
   bidComp: BidCompByMarket;
   recentSold: RecentSoldByMarket;
-  deepValue: DeepValueByMarket;
   backtest: Backtest | null;
   lastCrawl: string;
   overlayAt?: string;
@@ -380,7 +376,6 @@ function loadRayData(): Promise<RayPayload> {
           realized?: RealizedByMarket;
           bidComp?: BidCompByMarket;
           recentSold?: RecentSoldByMarket;
-          deepValue?: DeepValueByMarket;
           lots?: AuctionLot[];
         })
       : null;
@@ -391,12 +386,12 @@ function loadRayData(): Promise<RayPayload> {
     if (up?.lots) for (const l of up.lots) normalizeCloseStamp(l);
 
     // ── CLOSE-BOARD OVERLAY — intraday bid refresh for lots closing <24h.
-    // Newer-generatedAt only; overrides currentBid/bidCount/bidProj and the
-    // affected markets' deep-value rows so every surface reads close-fresh.
+    // Overrides currentBid/bidCount so every surface reads close-fresh — the
+    // projected close is read off the bid at view time (priority.projectedCloseOf),
+    // so a fresh bid is a fresh projection (Oct 11 2026: no served projection).
     const cb = cbR.status === 'fulfilled' ? (cbR.value as {
       generatedAt?: string;
-      bids?: Record<string, { b: number; n: number; proj?: number; floor?: number; below?: boolean }>;
-      deepValue?: Array<{ id: string; depth: number; allIn: number; floor: number; closes: string; m?: string }>;
+      bids?: Record<string, { b: number; n: number }>;
     }) : null;
     const upGen = (up as { generatedAt?: string } | null)?.generatedAt;
     // ACCEPT RULE (Sep 2 2026). The overlay used to be applied only when its
@@ -415,7 +410,7 @@ function loadRayData(): Promise<RayPayload> {
       for (const l of up.lots) {
         const o = cb.bids[String((l as { id?: string }).id)] as (typeof cb.bids)[string] & { t?: string } | undefined;
         if (!o) continue;
-        const lw = l as AuctionLot & { bidProj?: { g: number; allIn: number; floor?: number; below?: boolean } };
+        const lw = l as AuctionLot;
         const baseBid = lw.currentBid ?? 0;
         const baseN = lw.bidCount ?? 0;
         const entryNewer = overlayNewer
@@ -432,20 +427,11 @@ function loadRayData(): Promise<RayPayload> {
           if (o.b > baseBid && lw.value && lw.value.compValueUsd > 0) lw.value = floorAtBid(lw.value as unknown as Parameters<typeof floorAtBid>[0], lw, Date.now()) as unknown as typeof lw.value;
         }
         if (o.n > 0 && o.n >= baseN) lw.bidCount = o.n;
-        // (Oct 6) keep the build's cell validation (bidProj.ok) across the overlay
-        if (o.proj) lw.bidProj = { g: lw.bidProj?.g ?? 1, allIn: o.proj, ...(o.floor ? { floor: o.floor, below: o.below } : {}), ...(lw.bidProj?.ok ? { ok: true } : {}) };
         // the lot's bid state is now INTRADAY-fresh — stamp the overlay's
         // generatedAt so surfaces can say "LIVE · refreshed Nh ago" instead
         // of letting close-day bids read as last night's numbers
         const stamp = o.t || cb.generatedAt;
         if (stamp) lw.overlayAt = stamp;
-      }
-      // the market-level deep-value rows are a snapshot of the overlay's
-      // moment — only a newer overlay may replace the base's per-market lists
-      if (overlayNewer && cb.deepValue?.length && up.deepValue) {
-        const byM: Record<string, typeof cb.deepValue> = {};
-        for (const r of cb.deepValue) { const m = r.m || 'sports'; (byM[m] || (byM[m] = [])).push(r); }
-        for (const m of Object.keys(byM)) (up.deepValue as DeepValueByMarket)[m] = byM[m] as DeepValueRow[];
       }
     }
 
@@ -462,7 +448,6 @@ function loadRayData(): Promise<RayPayload> {
         realized: up.realized || {},
         bidComp: up.bidComp || {},
         recentSold: up.recentSold || {},
-        deepValue: up.deepValue || {},
         backtest,
         market,
         receipts,
@@ -512,7 +497,7 @@ function loadRayData(): Promise<RayPayload> {
               // THE LIVE POOL IS THE EAGER BOOK (r9, QA4 B1 — app/lib/live-pool).
               // Each eager lot is laid OVER its shard row: the eager copy wins on
               // every field it carries (signal incl. explicit null, soldComp,
-              // bidVelocity, saleDateTime, bidProj/currentBid/bidCount/overlayAt —
+              // bidVelocity, saleDateTime, gapOk/currentBid/bidCount/overlayAt —
               // all stripped from or nightly-stale on the shards), the shard only
               // fills what the eager row lacks. A shard row still saying
               // 'upcoming' for a lot the eager book closed out settles to
@@ -562,7 +547,6 @@ function loadRayData(): Promise<RayPayload> {
       realized: {},
       bidComp: {},
       recentSold: {},
-      deepValue: {},
       market: null,
       receipts: null,
       backtest,
@@ -787,7 +771,6 @@ export function useRayData(): RayData {
     realized: data?.realized || {},
     bidComp: data?.bidComp || {},
     recentSold: data?.recentSold || {},
-    deepValue: data?.deepValue || {},
     backtest: data?.backtest || null,
     market: data?.market || null,
     receipts: data?.receipts || null,

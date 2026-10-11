@@ -8,7 +8,8 @@ import { floorAtBid, BID_FLOOR_LATE_LIFT, setEngineFlags, ENGINE_FLAGS_WAVE3, ty
 import { lotAllInFactor } from '../../app/lib/premiums';
 import { engineFlagOf, computeDeepSignal } from '../../app/lib/comps';
 import type { AuctionLot } from '../../app/types';
-import { gapRead, validateGapCells, gapCellKey, GAP_CELL_GATE } from '../../app/lib/lanes';
+import { gapRead, validateGapCells, gapCellKey, GAP_CELL_GATE, PROJ_CALL_MARK } from '../../app/lib/lanes';
+import { projectedCloseOf } from '../../app/lib/priority';
 
 const NOW = Date.parse('2026-10-05T13:00:00Z');
 const v = (o: Partial<ValueResult> = {}): ValueResult => ({
@@ -79,18 +80,28 @@ test('engineFlagOf / computeDeepSignal: no engine value → no flag (never a cli
 
 test('the Gap seats only a validated projection cell; the forming shelf is frozen', () => {
   const now = Date.parse('2026-10-05T12:00:00Z');
-  const calls: { id: string; d: string; k: string; p: number; f: number; r: number; sd: string }[] = [];
-  for (let i = 0; i < 60; i++) calls.push({ id: `goldin-a${i}`, d: '2026-09-01', k: 'vsbid', p: 100, f: 300, r: i < 40 ? 95 : 110, sd: '2026-09-03' }); // 2 days out, p/f 0.33: realizes ~1×
-  for (let i = 0; i < 60; i++) calls.push({ id: `goldin-b${i}`, d: '2026-09-01', k: 'vsbid', p: 100, f: 300, r: 450, sd: '2026-09-07' }); // 6 days out: 4.5×
+  const calls: { id: string; d: string; k: string; s?: string; p: number; f: number; r: number; sd: string }[] = [];
+  for (let i = 0; i < 60; i++) calls.push({ id: `goldin-a${i}`, d: '2026-09-01', k: 'vsbid', s: PROJ_CALL_MARK, p: 100, f: 300, r: i < 40 ? 95 : 110, sd: '2026-09-03' }); // 2 days out, p/f 0.33: realizes ~1×
+  for (let i = 0; i < 60; i++) calls.push({ id: `goldin-b${i}`, d: '2026-09-01', k: 'vsbid', s: PROJ_CALL_MARK, p: 100, f: 300, r: 450, sd: '2026-09-07' }); // 6 days out: 4.5×
+  // (Oct 11) calls logged on the retired growth curve (no 'k' mark) validate nothing
+  for (let i = 0; i < 60; i++) calls.push({ id: `goldin-c${i}`, d: '2026-09-01', k: 'vsbid', p: 100, f: 100, r: 100, sd: '2026-09-03' });
   const cells = validateGapCells(calls);
+  assert.equal(cells['goldin|2-3|>=1'], undefined, 'an unmarked (growth-curve) call validates no cell');
   assert.equal(cells['goldin|2-3|<0.5'].pass, true);
   assert.equal(cells['goldin|4-8|<0.5'].pass, false);
   assert.equal(cells['goldin|4-8|<0.5'].ratio, 4.5);
   assert.equal(GAP_CELL_GATE.minN, 50);
-  const lot = (closes: string, ok?: boolean) => ({ id: 'goldin-x', status: 'upcoming', title: 'Card', estimateLow: null, estimateHigh: null, saleDate: closes.slice(0, 10), saleDateTime: closes,
-    value: { low: 1000, confidence: 'medium', compValueUsd: 1500 }, bidProj: { g: 1.5, allIn: 300, floor: 1000, below: true, ...(ok ? { ok } : {}) } }) as unknown as AuctionLot;
+  const lot = (closes: string, ok?: boolean) => ({ id: 'goldin-x', status: 'upcoming', title: 'Card', artist: 'sports-cards', auctionHouse: 'Goldin', saleName: 'Goldin Weekly',
+    estimateLow: null, estimateHigh: null, saleDate: closes.slice(0, 10), saleDateTime: closes, currentBid: 50,
+    value: { low: 1000, confidence: 'medium', compValueUsd: 1500 }, ...(ok ? { gapOk: true } : {}) }) as unknown as AuctionLot;
   assert.equal(gapRead(lot('2026-10-07T12:00:00Z'), now), null, 'unvalidated cell never seats');
-  assert.equal(gapRead(lot('2026-10-07T12:00:00Z', true), now)?.shelf, 'wire');
+  const g = gapRead(lot('2026-10-07T12:00:00Z', true), now);
+  assert.equal(g?.shelf, 'wire');
+  // the Gap reads THE projected close — the same figure every surface prints
+  const pc = projectedCloseOf(lot('2026-10-07T12:00:00Z', true) as never, now)!;
+  assert.equal(g?.hammer, pc.hammer);
+  assert.equal(g?.allIn, pc.allIn);
+  assert.equal(g?.depth, 1 - pc.allIn / 1000);
   assert.equal(gapRead(lot('2026-10-11T12:00:00Z', true), now), null, 'forming frozen');
   assert.equal(gapCellKey('goldin-x', 2, 300, 1000), 'goldin|2-3|<0.5');
 });

@@ -600,3 +600,10 @@ Live (production calibration, Sep 14 book with the Phillips backfill, 925 values
 The tier tails close most of wave 9's band gap. The promoted high-tier lots now cover at the tier's rate (78.7% both arms). The watch band drop falls from 1.7 to 0.7pt and the Phillips drop from 4.1 to 2.3pt. Live improves, but holdout coverage is still lower (all −0.1pt, watches −0.7pt), and Phillips' own lots are still worse (21.2 → 21.6%). Two of the three bars fail, so the flag stays off.
 
 `validate-engine` passes all gates. Harness additions: `oneoff/qa/band-tier-fit.ts` (the table, `--split` for the training window's own out-of-sample check), `oneoff/qa/band-tier-sim.ts` (re-fits only the band per quarter and rescores an `engine-ab.ts` run, which reproduces the run's own coverage), and `engine-ab.ts --a wave10`. Tests: `scripts/__tests__/pricing-wave10.test.ts`.
+
+## Oct 11 2026 — one projected close (supersedes F5's `bidProj` spine)
+
+The served growth-curve projection (`bidProj`: bid × the close-day curve, all-in) is retired. On the 495 live lots that printed it, the lot page's "Projected close" ran a median 3.96× the decision line's figure (0.83–8.67×; REA 413 lots, Goldin 82) — the curve overshot the non-Goldin rooms. Every surface now prints `priority.projectedCloseOf` (the ranker's anchor: bid × the room's measured close multiple, `close-k.ts`, refit nightly), hammer basis, with the all-in = hammer × `lotAllInFactor` printed only labelled "all-in" (`lot-face.projectedCloseFace`).
+
+- Gap: `depth = 1 − projectedCloseOf(lot).allIn / floor`; the per-lot cell gate ships as `gapOk` (no projection is stamped). Cells validate only on `vsbid` calls marked `s: 'k'` (logged on the new projection) — the growth-curve tape validates nothing, so the lane seats nothing until a cell earns ≥50 graded calls.
+- close-board.json carries bids only (`{b, n}`); the projection is read off the fresh bid at view time. `deepValue` (built and served, rendered nowhere) is gone. `closeGrowth` is gone; the curve stays in market.json for the Lab figure.

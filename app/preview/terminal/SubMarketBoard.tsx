@@ -594,6 +594,13 @@ export default function SubMarketBoard({
   // drills taxonomy itself (every vertical, deduped by slug), the same list
   // /analytics enumerates from market.json.
   const subMarketCount = useMemo(() => countSubMarkets(market, activeKey), [market, activeKey]);
+  // (Oct 11) the total view's tape also carries the per-maker reads (its
+  // tail, behind "Show more") — the intro names them, so "149 sub-markets
+  // tracked" never sits over a "Show 195 more" that counts 54 others too
+  const makerReadCount = useMemo(
+    () => (activeKey === 'all' ? rows.length - (market?.drills ? Object.values(market.drills as Record<string, SubMarketRead[]>).flat().length : 0) : 0),
+    [rows, market, activeKey],
+  );
 
   const CAP = 8;
   const [expanded, setExpanded] = useState(false);
@@ -679,7 +686,7 @@ export default function SubMarketBoard({
             {/* the cross-market enumeration is true only at full scope — a
                 scoped lander (culture: 17 sub-markets) must not claim cards
                 and watch families it doesn't show */}
-            {fmtInt(subMarketCount)} sub-markets tracked{activeKey === 'all' ? ' — cards by era and sport, watch model families, art and design kinds —' : ','} each read at the strength its data supports:{' '}
+            {fmtInt(subMarketCount)} sub-markets tracked{activeKey === 'all' ? ` — cards by era and sport, watch model families, art and design kinds —${makerReadCount > 0 ? ` plus ${fmtInt(makerReadCount)} maker reads,` : ''}` : ','} each read at the strength its data supports:{' '}
             <svg className={styles.legendGlyph} viewBox="0 0 34 12" aria-label="confidence-range glyph">
               <line x1="3" y1="6" x2="31" y2="6" /><line x1="3" y1="2.5" x2="3" y2="9.5" /><line x1="31" y1="2.5" x2="31" y2="9.5" />
               <path d="M20 2.8 L23.2 6 L20 9.2 L16.8 6 Z" className={styles.legendFill} />
