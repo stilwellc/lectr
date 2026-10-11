@@ -24,6 +24,7 @@ import { cultureObjectAt, WORN_RE } from '../../app/lib/taxonomy';
 import { saleDayOf, SALE_DAY_HOUSES } from './sale-day';
 import { seasonToDate } from './sports-crawl';
 import { saleCloseFor, galleryStubClose, GALLERY_HOUSES } from './sale-close-dates';
+import { dedupeChristiesIdSchemes } from './id-aliases';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    corpus-normalize.ts — build-time corpus-hygiene passes.
@@ -1456,6 +1457,8 @@ export function fixFamilyHammerEqualsPrice(lots: Lot[]): { recomputed: number; n
 
 export type HygieneReport = {
   rrStubs: number; rrDupes: number; urlDupes: number;
+  /** Christie's objects carried under both crawlers' ids, collapsed (W16) */
+  christiesTwins: number;
   bruun: { dropped: number; relabelled: number; restamped: number };
   fx: { saleroom: number; quarantined: number; restamped: number };
   foreignMaker: { rerouted: number; dropped: number };
@@ -1492,6 +1495,11 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   const mirrorDupes = dedupeWrightFamilyMirrors(ls);
   // the Sep 27 dedupe family (next to the Wright mirrors — same compaction):
   const rrDupes = dedupeRRSameSaleItems(ls);
+  // (W16, Oct 11 2026) one Christie's object, one id — keyed by object id
+  // (no URL needed), canonical `christies-<objectId>` whatever the status;
+  // BEFORE the URL dedupe, whose status-ranked survivor flipped the id the
+  // night a lot sold (lib/id-aliases)
+  const christiesTwins = dedupeChristiesIdSchemes(ls as never).pairs;
   const urlDupes = dedupeUrlSchemeCollisions(ls);
   const bruun = { ...dedupeBruunUnderBonhams(ls), restamped: restampBruunCurrency(ls) };
   const nflRelists = markNflRelists(ls);
@@ -1504,7 +1512,7 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   console.log(`[normalize] saleDate → sale-local day: ${localized.total} (${Object.entries(localized.byHouse).map(([k, v]) => `${k}=${v}`).join(' ') || 'none'})`);
   const fx = { saleroom: saleroom.restamped, quarantined: saleroom.quarantined, restamped: restampFx(ls) };
   console.log(`[normalize] fx: christie's saleroom currency re-labelled=${fx.saleroom} quarantined=${fx.quarantined} · USD fields re-derived from native on ${fx.restamped} rows`);
-  console.log(`[normalize] dedupe: rr stub rows=${rrStubs} · rr same-sale item dupes=${rrDupes} · sotheby's/christie's/phillips url-scheme dupes=${urlDupes} · bruun-under-bonhams dropped=${bruun.dropped} relabelled=${bruun.relabelled} DKK-restamped=${bruun.restamped} · nfl relists (earlier sale unpaid)=${nflRelists.marked} ($${Math.round(nflRelists.usd)})`);
+  console.log(`[normalize] dedupe: rr stub rows=${rrStubs} · rr same-sale item dupes=${rrDupes} · christie's object-id twins=${christiesTwins} · sotheby's/christie's/phillips url-scheme dupes=${urlDupes} · bruun-under-bonhams dropped=${bruun.dropped} relabelled=${bruun.relabelled} DKK-restamped=${bruun.restamped} · nfl relists (earlier sale unpaid)=${nflRelists.marked} ($${Math.round(nflRelists.usd)})`);
   // drop misattributed lots AFTER healExpansionRows cleans titles below? No —
   // isMisattributed reads the raw title (car marques / life-dates survive any
   // title clean), and dropping early shrinks every pass that follows.
@@ -1584,7 +1592,7 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
     `datePrecision month=${datePrecision.month} year=${datePrecision.year} · ` +
     `wright-family hammer==all-in recomputed=${hammer.recomputed} nulled=${hammer.nulled}`
   );
-  return { rrStubs, rrDupes, urlDupes, bruun, fx, foreignMaker, setCodeCards, staleUpcoming, staleHouse, compExclude, images, datePrecision, seasonDates, hammer };
+  return { rrStubs, rrDupes, urlDupes, christiesTwins, bruun, fx, foreignMaker, setCodeCards, staleUpcoming, staleHouse, compExclude, images, datePrecision, seasonDates, hammer };
 }
 
 /* ── CULTURE→SCIENCE REROUTE (Aug 14) — Apple/computing lots filed under the

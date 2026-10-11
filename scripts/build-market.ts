@@ -183,6 +183,17 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   // same pass in assemble.ts (which persists the fixes into the corpus gz).
   const { normalizeCorpus } = require('./lib/corpus-normalize');
   normalizeCorpus(all, { now: new Date(NOW_MS) });
+  // (W16, Oct 11 2026) THE LOT-ID ALIAS MAP — every id a collapsed lot was
+  // also carried under (normalize stamps `idAliases` on the one row it keeps:
+  // Christie's object-id twins) → the canonical id. Read by the /lot route,
+  // and by sync-lots-db (stale twin rows leave the Supabase table).
+  if (!opts.evalOnly) {
+    const { aliasMapOf } = require('./lib/id-aliases') as typeof import('./lib/id-aliases');
+    const aliases = aliasMapOf(all as never);
+    fs.mkdirSync(SERVED, { recursive: true });
+    fs.writeFileSync(path.join(SERVED, 'id-aliases.json'), JSON.stringify({ generatedAt: new Date(NOW_MS).toISOString().slice(0, 10), aliases }));
+    console.log(`[market] id-aliases.json: ${Object.keys(aliases).length} alias ids`);
+  }
 
   // load the auto-calibration the previous backtest emitted (per-market
   // beatRate relevel + conformal band multipliers) — displayed figures only,
@@ -857,6 +868,32 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     const cardPlayerNames: (string | null)[] = [];
     for (const l of all) if (CARD_SLUGS.has(l.artist)) cardPlayerNames.push(parseCardCached(l.title || '').player);
     const knownPlayers: Set<string> = knownPlayerSet(cardPlayerNames);
+    // (W16, Oct 11 2026) THE PLAYER-ID KEEP RULE (scripts/lib/player-stamp): a
+    // confident id a row already carries is never cleared, only replaced by
+    // the build's read; with neither, the title is re-read against the keep
+    // roster (≥3-card players ∪ the athletes the object reader names with no
+    // roster at all). Every sports object/card stamp below goes through it.
+    const { stampPlayer, keepRoster, NO_ROSTER } = require('./lib/player-stamp') as typeof import('./lib/player-stamp');
+    const rosterFree: (string | null)[] = [];
+    for (const l of all) if (SPORT_SET.has(l.artist) && !CARD_SLUGS.has(l.artist)) rosterFree.push(athleteOf(playerOf(l.title || '', l.artist, NO_ROSTER), l.title || '').playerSlug);
+    const keepPlayers = keepRoster(knownPlayers, rosterFree);
+    rosterFree.length = 0;
+    const keepStats: Record<string, number> = {};
+    /** the published player of a sports OBJECT lot: the build's read, else a
+     *  confident existing id, else the keep-roster re-read (never written to
+     *  the row here — the caller stamps it) */
+    const objectPlayerOf = (l: AuctionLot): { player: string | null; playerSlug: string | null } => {
+      const t = l.title || '';
+      const lw = l as AuctionLot & { playerSlug?: string | null; playerName?: string | null };
+      const w = { title: t, playerSlug: lw.playerSlug ?? null, playerName: lw.playerName ?? null };
+      const how = stampPlayer(w, athleteOf(playerOf(t, l.artist, knownPlayers), t), keepPlayers,
+        () => athleteOf(playerOf(t, l.artist, keepPlayers), t));
+      keepStats[how] = (keepStats[how] || 0) + 1;
+      return { player: w.playerName ?? null, playerSlug: w.playerSlug ?? null };
+    };
+    /** the sold object rows §3 read (their _pid is this build's, not a
+     *  previous build's corpus carry-over) */
+    const objectsRead = new Set<AuctionLot>();
     const byCardKey = new Map<string, AuctionLot[]>();
     const byLadderKey = new Map<string, AuctionLot[]>();
     for (const l of sportsSold as PLot[]) {
@@ -870,8 +907,9 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         const ck = cardKey(c); if (ck) (byCardKey.get(ck) || byCardKey.set(ck, []).get(ck)!).push(l);
         const lk = cardLadderKey(c); if (lk) (byLadderKey.get(lk) || byLadderKey.set(lk, []).get(lk)!).push(l);
       } else {
-        const p = athleteOf(playerOf(l.title || '', l.artist, knownPlayers), l.title || '');
+        const p = objectPlayerOf(l);
         l._pid = p.playerSlug; l._pname = p.player;
+        objectsRead.add(l);
       }
       if (l._pid && l._pname) {
         const e = byPlayer.get(l._pid) || byPlayer.set(l._pid, { name: l._pname, lots: [] }).get(l._pid)!;
@@ -1328,8 +1366,10 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
       // re-audit counted bought-in lots with no player as missing)
       if (l.status !== 'upcoming' && !CARD_SLUGS.has(l.artist)) {
         const sw = l as AuctionLot & { _pid?: string | null; _pname?: string | null; playerSlug?: string | null; playerName?: string | null };
+        // §3 stamped _pid through the keep rule on the sold rows it read; a
+        // row §3 skipped (no price / date) gets the same rule here
         let pid = sw._pid ?? null, pname = sw._pname ?? null;
-        if (pid == null) { const p = athleteOf(playerOf(l.title || '', l.artist, knownPlayers), l.title || ''); pid = p.playerSlug; pname = p.player; }
+        if (!objectsRead.has(l)) { const p = objectPlayerOf(l); pid = p.playerSlug; pname = p.player; }
         sw.playerSlug = pid; sw.playerName = pname;
         if (pid) soldStamped++;
         continue;
@@ -1340,13 +1380,15 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         if (l.subCat === 'tcg-other') continue;
         const c = cardIdOf(l);
         const ca = athleteOf(c, l.title || '');
-        lw.playerSlug = ca.playerSlug; lw.playerName = ca.player;
         // (r6) a single the slot readers can't name — a numberless pre-war /
         // oddball issue ("1954 Red Heart Stan Musial"), or a slot run that is
         // not a person ("#50 Jackie Robinson Inaugural Bowman Card"): the one
         // KNOWN player it names. A known slot read is never overridden.
         const np = athleteOf(rosterCardPlayerOf(l.title || '', knownPlayers), l.title || '');
-        if (np.player) { lw.playerSlug = np.playerSlug; lw.playerName = np.player; }
+        // (W16) no read → a confident existing id stays (no re-read: a card's
+        // player is its slot)
+        const how = stampPlayer(lw, np.player ? np : ca, keepPlayers);
+        keepStats[`card-${how}`] = (keepStats[`card-${how}`] || 0) + 1;
         // a condition-flagged lot must not wear a clean-comp floor: no
         // cardComps → no deep-value seat, no misleading "med" on the page
         if (hasConditionFlag(l.title) || llmConditionFlag(l)) continue;
@@ -1459,10 +1501,11 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
           }
         }
       } else {
-        const p = athleteOf(playerOf(l.title || '', l.artist, knownPlayers), l.title || '');
+        const p = objectPlayerOf(l);
         lw.playerSlug = p.playerSlug; lw.playerName = p.player;
       }
     }
+    console.log(`[market] player-id keep rule (W16): ${JSON.stringify(keepStats)} · keep roster ${keepPlayers.size}`);
     console.log(`[market] live-card comps: ${stamped} cards stamped (${laddered} w/ grade ladder) · ${soldStamped} sold sports-object lots player-stamped · players+cards pass ${((Date.now() - tPl) / 1000).toFixed(0)}s`);
     const cardValued = tierCounts.exact + tierCounts['grade-adj'] + tierCounts.player;
     const cardBidOnly = cardValued + tierCounts.none + tierCounts.gated;
@@ -1637,8 +1680,13 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     // result, or VANISHED from it grades as a miss 7 days after its close
     const statusById = new Map<string, { status?: string; saleDate?: string | null }>();
     for (const l of all) {
-      statusById.set(String(l.id), { status: l.status, saleDate: l.saleDate });
-      if (l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate) soldById.set(String(l.id), { realizedUsd: l.realizedUsd!, saleDate: l.saleDate });
+      // (W16) a call logged under an id the build has since collapsed into
+      // this row (a Christie's twin) grades on this row — never "vanished"
+      const ids = [String(l.id)].concat(((l as { idAliases?: unknown }).idAliases as string[] | undefined) || []);
+      for (const id of ids) {
+        statusById.set(id, { status: l.status, saleDate: l.saleDate });
+        if (l.status === 'sold' && (l.realizedUsd || 0) > 0 && l.saleDate) soldById.set(id, { realizedUsd: l.realizedUsd!, saleDate: l.saleDate });
+      }
     }
     const rec = gradeCalls(soldById, statusById, TODAY);
     (markets.all.analytics as unknown as Record<string, unknown>).callsRecord = rec;
@@ -1756,7 +1804,13 @@ async function persistMarket(all: AuctionLot[], t0: number): Promise<AuctionLot[
     const sd = (lot.saleDate || '').slice(0, 10);
     if (!sd || sd < LEDGER_CUT) continue;         // window excludes the deep archives
     const px = lot.priceUsd || lot.realizedUsd || 0;
-    if (px > 0) ledger[lot.id] = lot.priceBasis === 'last-tracked-bid' ? [px, sd, 1] : [px, sd];
+    if (px > 0) {
+      const e: [number, string] | [number, string, 1] = lot.priceBasis === 'last-tracked-bid' ? [px, sd, 1] : [px, sd];
+      ledger[lot.id] = e;
+      // (W16) a save keyed under an id collapsed into this lot (a Christie's
+      // twin) resolves its outcome too — on every reader, alias-aware or not
+      for (const a of ((lot as { idAliases?: unknown }).idAliases as string[] | undefined) || []) ledger[a] = e;
+    }
   }
   const ledgerEntries = Object.entries(ledger);
   const LEDGER_SHARD = 15 * 1048576;              // ~15 MiB raw per shard, cap-safe

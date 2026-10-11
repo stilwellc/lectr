@@ -1,9 +1,10 @@
 'use client';
 
-import { Suspense, useEffect } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import LotPage, { LotPageSkeleton } from '../components/LotPage';
 import BookIndex from '../components/BookIndex';
+import { canonicalLotId, mayBeAliasId } from '../lib/id-aliases';
 
 /**
  * The UNIVERSAL permalink — /lot?id=<lotId>. A pure client page: any lot in
@@ -25,21 +26,36 @@ function LotFromQuery() {
   const pathId = typeof window !== 'undefined'
     ? decodeURIComponent((window.location.pathname.match(/^\/lot\/(.+?)\/?$/) || [])[1] || '')
     : '';
-  const id = queryId || pathId;
+  const asked = queryId || pathId;
+  // (W16) ONE LOT, ONE ID: an id the build collapsed into another lot's row
+  // (a Christie's `christies-auc-<n>` twin → `christies-<n>`) resolves to the
+  // canonical id through the served alias map — an old link or save opens
+  // the live row, never a frozen copy. Only alias-shaped ids wait on the map.
+  const [canon, setCanon] = useState<{ asked: string; id: string } | null>(null);
+  useEffect(() => {
+    if (!mayBeAliasId(asked)) return;
+    let dead = false;
+    canonicalLotId(asked).then(c => { if (!dead) setCanon({ asked, id: c }); });
+    return () => { dead = true; };
+  }, [asked]);
+  const pending = mayBeAliasId(asked) && canon?.asked !== asked;
+  const id = mayBeAliasId(asked) && canon?.asked === asked ? canon.id : asked;
   // CANONICAL ADDRESS: in-app links keep ?id= as the TRANSPORT (soft
   // navigation — path links to non-static routes would full-reload), but the
   // address bar should show the canonical path form for sharing.
   useEffect(() => {
-    if (queryId && typeof window !== 'undefined') {
-      try { window.history.replaceState(window.history.state, '', `/lot/${encodeURIComponent(queryId)}`); } catch { /* ignore */ }
+    if (pending || typeof window === 'undefined') return;
+    if (queryId || id !== asked) {
+      try { window.history.replaceState(window.history.state, '', `/lot/${encodeURIComponent(id)}`); } catch { /* ignore */ }
     }
-  }, [queryId]);
+  }, [queryId, id, asked, pending]);
   // key={id}: client-side navigation between lots must REMOUNT the page —
   // otherwise dbLot/dbSettled/imgFailed state from the previous lot leaks
   // under the new URL (a stale certificate, a false "isn't on the book"
   // flash, a sticky monogram fallback).
   // bare /lot is the certificate directory, never a dead-end "not on the book"
   if (!id) return <BookIndex kind="lot" />;
+  if (pending) return <LotPageSkeleton />;
   return <LotPage key={id} lotId={id} />;
 }
 

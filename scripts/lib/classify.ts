@@ -388,7 +388,11 @@ const SPACE_TOY_RE = /battery[- ]operated|tin toy|\brobot\b|masudaya|yonezawa|\b
 const SCI_BOOK_RE = /\b(4to|8vo|12mo|16mo|folio|2°|4°|8°|vols?\.|volumes?|first edition|edited by|translated|london:|paris:|leipzig:|amsterdam:|berlin:|printed|treatise|monograph|edition|the life and letters|book of hours|illuminated manuscript|on vellum|atlas|journal|proceedings|transactions|offprint|pamphlet|essay|elements of)\b/i;
 const SCI_LETTER_RE = /\b(autograph letters? signed|letters? signed|typed letters? signed|autograph (?:note|manuscript|document) signed|document signed|als|tls)\b/i;
 const SCI_DOC_RE = /\b(autograph letter|letter signed|signed letter|typed letter|document signed|als|tls|manuscript|notebook|signed photograph|signed photo|autograph|inscribed|signature|letters?)\b/i;
-export const SCIENTIST_RE = /einstein|newton|darwin|curie|tesla|edison|galile[oi]|kepler|copernic|pascal|laplace|faraday|\bbohr\b|oppenheimer|feynman|hawking|lovelace|babbage|turing|euclid|novum organum|boyle|hooke|huygens|leibniz|lavoisier|vesalius|harvey, william|halley|herschel|maxwell|planck|heisenberg|schr[oö]dinger|fermi|von neumann|wozniak|steve jobs|bill gates|marconi|alexander graham bell|bell, alexander|wright brothers|orville wright|wilbur wright|wright, orville|pasteur|freud|hubble|carl sagan|crick|benjamin franklin|franklin, benjamin|brah[eé]|ptolemy|lister|jenner|nobel|rabi\b|bernoulli|euler|helmholtz|gauss|samuel (?:f\. ?b\. )?morse|morse, samuel|volta\b|amp[eè]re|kelvin|joule|rutherford|dirac|pauli\b|hertz\b|uranometria|principia/i;
+// (W16) `newton` only as Isaac Newton: "FRANCIS NEWTON SOUZA (1924-2002) View
+// From The Studio" (Souza signed F. N. Souza) read as a scientist and kept five
+// of his paintings in science-tech; Helmut Newton (photographer) and Olivia
+// Newton-John never were scientists either
+export const SCIENTIST_RE = /einstein|(?<!\b(?:francis|helmut|olivia|wayne|huey|cam|thandiwe|juice|robert)\s)\bnewton\b(?!-john)|darwin|curie|tesla|edison|galile[oi]|kepler|copernic|pascal|laplace|faraday|\bbohr\b|oppenheimer|feynman|hawking|lovelace|babbage|turing|euclid|novum organum|boyle|hooke|huygens|leibniz|lavoisier|vesalius|harvey, william|halley|herschel|maxwell|planck|heisenberg|schr[oö]dinger|fermi|von neumann|wozniak|steve jobs|bill gates|marconi|alexander graham bell|bell, alexander|wright brothers|orville wright|wilbur wright|wright, orville|pasteur|freud|hubble|carl sagan|crick|benjamin franklin|franklin, benjamin|brah[eé]|ptolemy|lister|jenner|nobel|rabi\b|bernoulli|euler|helmholtz|gauss|samuel (?:f\. ?b\. )?morse|morse, samuel|volta\b|amp[eè]re|kelvin|joule|rutherford|dirac|pauli\b|hertz\b|uranometria|principia/i;
 const INSTRUMENT_RE = /sph[eè]res? armillaires?|globe (?:terrestre|c[ée]leste)|longue[- ]vue|lunette|telescope|microscope|astrolab|sextant|octant|orrery|armillary|barometer|thermometer|theodolite|chronometer|slide rule|(?:terrestrial|celestial|library|pocket|table|lunar|relief|manuscript|floor|armillary|mars) globes?|globes? (?:by|maker)|enigma|cipher machine|calculating machine|calculator|computer|macintosh|apple[- ]?(?:1|i\b|ii)|altair|typewriter|scientific instrument|quadrant|planetarium|tellurion|sundial|diptych dial|compendium|nocturnal|circumferentor|graphometer|spectroscope|electrometer|galvanometer|electrical machine|air[- ]pump|magic lantern|phonograph|telegraph|transistor|integrated circuit|microprocessor|patent model|difference engine|punch card|mainframe|kenbak|trs-80|abacus|surveying|dip circle|planimeter|hydrometer|gyroscope|ophthalmoscope|stethoscope|surgical|apothecary|anatomical model|camera\b|\blens\b/i;
 const INSTRUMENT_WEAK_RE = /globe|prototype|model of|clock|regulator|engine|radio|television|telephone|balance|compass|level|instrument|medical|dental|anatomical/i;
 const SCI_SALE_RE = /scien|instrument|travel|natural history|technolog|camera|photographic|mechanical|cyber|computing|horolog|medicine|engineering|space/i;
@@ -1377,6 +1381,29 @@ export function cultureSubSlugFix(l: ClassifyLot): string | null {
 // ═══════════════════════════════════════════════════════════════════════════
 const objectCatchAll = (house: string | null | undefined): 'memorabilia' | 'sports-memorabilia' =>
   SPORTS_EXPANSION_HOUSES.has(house || '') ? 'memorabilia' : 'sports-memorabilia';
+/** (W16, Oct 11 2026) A generalist house's 'trophies-awards' lot that is no
+ *  sporting award: the pre-Oct-6 crawl routed on the description, and the
+ *  trophy rule's bare "green jacket" / "trophy" words filed paintings ("Circle
+ *  of Louis-Léopold Boilly … Portrait of a man … in a green jacket" — one of
+ *  the Christie's wrong-sale rows), antique gems (a Roman carnelian ringstone,
+ *  Ancient Jewelry 2012) and decorative "trophies" (a carved hunting / military
+ *  / wall trophy, a trophy frame) as awards. None has a tracked home → evicted.
+ *  A green jacket WITH golf (the Masters' own), every medal / cup / plate and
+ *  any title or sale with sports evidence stay — Christie's Sporting
+ *  Memorabilia medals are real awards. */
+const PORTRAIT_RE = /\bportrait\b|\bhalf[- ]length\b|\bbust[- ]length\b|\bthree[- ]quarter[- ]length\b|\boil on (?:canvas|panel|board)\b/i;
+const ANTIQUE_GEM_RE = /\bring[- ]?stones?\b|\bintaglios?\b|\bcameos?\b|\b(?:roman|greek|hellenistic|etruscan|egyptian|byzantine|sasanian|parthian)\b[^.;]{0,40}\b(?:rings?|gems?|seals?|carnelian|jasper|chalcedony|garnet)\b/i;
+const DECORATIVE_TROPHY_RE = /\b(?:military|hunting|game|wall|musical|deer|stag|sheep|antler|boar|chamois)\s+troph(?:y|ies)\b|\btroph(?:y|ies)\s+(?:frame|relief|of arms|mount)\b|\btroph[ée]es?\s+(?:militaire|d'armes|de chasse)\b|\bantlers?\b/i;
+export function generalistNotATrophy(l: ClassifyLot): string | null {
+  if (l.artist !== 'trophies-awards' || !GENERALIST_HOUSES.has(l.auctionHouse || '')) return null;
+  const t = String(l.title || '');
+  // an athlete / sports-sale piece stays a sports lot (a Beckham print)
+  if (isSportsEvidence(t, String(l.saleName || ''))) return null;
+  if (/\bgreen jacket\b/i.test(t) && !/\b(?:masters|augusta|golf)\b/i.test(t)) return DROP;
+  if (PORTRAIT_RE.test(t) || ANTIQUE_GEM_RE.test(t) || DECORATIVE_TROPHY_RE.test(t)) return DROP;
+  return null;
+}
+
 export function trophyIsTicketOrPhoto(l: ClassifyLot): string | null {
   if (l.artist !== 'trophies-awards') return null;
   const k = sportsObjectKind(l.title, objectCatchAll(l.auctionHouse));
@@ -1459,6 +1486,9 @@ export const RECLASS_RULES: ReclassRule[] = [
     cls: 'science-title-object-noun',
     apply: l => (GENERALIST_HOUSES.has(l.auctionHouse || '') ? scienceVerdict(l) : null),
   },
+  // (W16) a painting / antique gem / decorative "trophy" a generalist house's
+  // description-routed lot was filed under trophies-awards
+  { cls: 'generalist-not-a-trophy', apply: generalistNotATrophy },
   // (Oct 9 labels audit, Pattern 13) a record / cassette / gig flyer / iPod or
   // a Star Trek shooting model under a science slug (Goldin's AC/DC single
   // read as an instrument, a "Dinosaur Jr." flyer as a fossil) is culture —

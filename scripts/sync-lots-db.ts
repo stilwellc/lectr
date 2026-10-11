@@ -125,6 +125,27 @@ async function main() {
   });
   await upsert(rows, 'upcoming');
 
+  // ── 1b. ONE LOT, ONE ROW (W16, Oct 11 2026) ──────────────────────────────
+  // A lot the build collapsed from two ids (Christie's christies-auc-<n> twin
+  // of christies-<n> — scripts/lib/id-aliases) left its other id behind in
+  // this table: the corpus no longer knows it, so step 2 never refreshed it and
+  // it sat here as a frozen 'upcoming' row until the 24-month sweep (44 such
+  // objects held both ids on Oct 11, 40 of them a stale live twin). The alias
+  // ids leave the table; /lot resolves them to the canonical id through the
+  // served id-aliases.json.
+  {
+    const known = new Set<string>(lots.map(l => String(l.id)));
+    const aliasIds = Array.from(new Set(lots.flatMap(l => (Array.isArray(l.idAliases) ? l.idAliases.map(String) : []))))
+      .filter(a => !known.has(a));
+    let removed = 0;
+    for (let i = 0; i < aliasIds.length; i += 100) {
+      const list = aliasIds.slice(i, i + 100).map(a => `"${a.replace(/"/g, '')}"`).join(',');
+      const r = await rest(`lots?id=in.(${encodeURIComponent(list)})`, { method: 'DELETE', headers: { Prefer: 'return=minimal,count=exact' } });
+      removed += Number((r.headers.get('content-range') || '').split('/')[1]) || 0;
+    }
+    console.log(`[sync-lots] alias ids (collapsed into a canonical lot): ${aliasIds.length} in the corpus map, ${removed} rows removed from the table`);
+  }
+
   // ── 2. settle the rows that left the live book ───────────────────────────
   // Everything not refreshed above was upcoming last night and is not now.
   // Refresh each from the corpus into a SLIM settled row so its permalink
