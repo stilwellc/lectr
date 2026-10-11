@@ -21,6 +21,7 @@ import { isLiveUpcoming, isOnBlock, localToday, trueSaleDay } from '../utils';
 import { subjectRowKeyOf } from './maker-subjects';
 import { type Market } from '../constants';
 import { searchTextOf } from './lot-labels';
+import { feedQueryMatcher } from './search-query';
 import { passesTriage, triageToParams, TRIAGE_DEFAULTS, type TriageFilters, type NewLensOpts } from './feed-filters';
 import { byPriority, priorityOf, closeMsOf } from './priority';
 
@@ -58,13 +59,12 @@ type SubjectPoolLot = Parameters<typeof subjectRowKeyOf>[0] & Parameters<typeof 
 
 type FeedLot = Parameters<typeof searchTextOf>[0];
 
-/** the home feed's text search, verbatim (TerminalHome feedAll): a lowercase
- *  substring over the label vocabulary + maker · title · house · sale
- *  (app/lib/lot-labels searchTextOf) */
+/** the home feed's text search for one lot (app/lib/palette-search
+ *  feedQueryMatcher — folded words over the label vocabulary + maker ·
+ *  title · house · sale; typo repair needs a book, so none here) */
 export function feedQueryMatches(l: FeedLot, q: string): boolean {
-  const needle = q.trim().toLowerCase();
-  if (!needle) return true;
-  return searchTextOf(l).includes(needle);
+  if (!q.trim()) return true;
+  return feedQueryMatcher(q, [l])(l);
 }
 
 /** the home feed (every lot, not the top tab) searched for `q` inside the

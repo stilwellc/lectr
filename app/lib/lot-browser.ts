@@ -6,7 +6,7 @@
  * maker page's lot browser.
  */
 import { marketArtists } from '../constants';
-import { searchTextOf } from './lot-labels';
+import { feedQueryMatcher } from './search-query';
 import type { AuctionLot } from '../types';
 import { trueSaleDay, isClosedPending } from '../utils';
 import { dealScore } from './comps';
@@ -79,8 +79,10 @@ export function feedPass(upcoming: AuctionLot[], f: FeedFilters, o: FeedPassOpts
   if (q) {
     // the haystack carries the printed label vocabulary — the player, "PSA
     // 10", "Signed", "Rookie", "Apollo" (app/lib/lot-labels searchTextOf,
-    // memoised per lot: 10K lots a keystroke)
-    arr = arr.filter(l => searchTextOf(l).includes(q));
+    // memoised per lot: 10K lots a keystroke); words match anywhere, folded,
+    // with nicknames + typo repair against the whole book (palette-search)
+    const hit = feedQueryMatcher(q, upcoming);
+    arr = arr.filter(hit);
   }
   const est = (l: AuctionLot) => l.estimateHigh || l.estimateLow || l.currentBid || 0;
   // results pending: a past sale day, or (r7) a sale that closed earlier today
