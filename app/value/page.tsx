@@ -52,7 +52,7 @@ import { CellGrid, FigureCell, FigGate, FigReplay, FigPools } from '../component
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, fmtSignedPct, localToday, isOnBlock, trueSaleDay, toneOf } from '../utils';
 import { closeMs as closeAt } from '../lib/house-tz';
 import { dealScore, signalMagnitude, estUsdBand } from '../lib/comps';
-import { lotFace, FACE_LABEL } from '../lib/lot-face';
+import { lotFace, FACE_LABEL, fmtFace } from '../lib/lot-face';
 import { recordLead, recordScope, RECORD_MIN_N } from '../lib/record-lead';
 import { medianOr } from '../lib/stats';
 import { gapRead, sleeperRead, valueFloor, type GapRead, type SleeperRead } from '../lib/lanes';
@@ -283,7 +283,8 @@ function WitnessTrack({ at }: { at: number }) {
 }
 
 /* ── ROOM 2c · THE GAP — "the bidding is behind the value" on no-estimate
-   lots: the growth-projected close vs the value floor. Two shelves — AT THE
+   lots: THE projected close (priority.projectedCloseOf; all-in, the floor's
+   basis) vs the value floor. Two shelves — AT THE
    WIRE (≤3.5d, depth ≥25%) and FORMING (3.5–8d, ≥40%). A PROJECTION product:
    neutral ink, every entry logs to the forward tape, publishes at 20 graded.
    Same ledger grammar as the Flags board — sibling boards, one language. ── */
@@ -360,7 +361,7 @@ function GapAnnex({ rows, total, measured, receipts, activeKey, play, isSaved, o
           {/* mobile stack */}
           <span className="vd-lane-mob">
             <span className="vd-cell-strong" style={{ display: 'block' }}>−{Math.round(g.depth * 100)}% under floor</span>
-            <span style={{ display: 'block' }}>{formatPrice(g.allIn)} proj → floor {formatPrice(g.floor)}</span>
+            <span style={{ display: 'block' }}>{formatPrice(g.allIn)} all-in proj → floor {formatPrice(g.floor)}</span>
             <span style={{ display: 'block' }}>closes {formatDate(lot.saleDate)}</span>
           </span>
         </div>
@@ -368,7 +369,7 @@ function GapAnnex({ rows, total, measured, receipts, activeKey, play, isSaved, o
         <div className="vd-lane-detail">
           <div className="vd-lane-detail-in">
             <p className="vd-detail-lead">
-              The room projects <b>{formatPrice(g.allIn)}</b> all-in at the close — <b>{Math.round(g.depth * 100)}%</b> under
+              The room projects a close of <b>~{fmtFace(g.hammer)}</b> hammer, <b>~{fmtFace(g.allIn)}</b> all-in — <b>{Math.round(g.depth * 100)}%</b> under
               the <b>{formatPrice(g.floor)}</b> floor.
             </p>
             <div className="vd-detail-grid">
@@ -448,7 +449,7 @@ function GapAnnex({ rows, total, measured, receipts, activeKey, play, isSaved, o
           <span />
           <span className="kicker">Lot</span>
           <span className="kicker" style={{ textAlign: 'right' }}>Under floor</span>
-          <span className="kicker" style={{ textAlign: 'right' }}>Proj → floor</span>
+          <span className="kicker" style={{ textAlign: 'right' }}>All-in proj → floor</span>
           <span className="kicker" style={{ textAlign: 'right' }}>Bid now</span>
           <span className="kicker" style={{ textAlign: 'right' }}>Closes</span>
         </div>
@@ -845,8 +846,9 @@ export default function ValuePage() {
 
   // ── THE GAP + THE SLEEPERS: the two uncertified lanes, computed from the
   // SAME readers the nightly ledger logs from (app/lib/lanes) — one lot,
-  // one statistic. The close-board overlay refreshes currentBid/bidProj
-  // every ~4h, so these client reads inherit that freshness for free.
+  // one statistic. The close-board overlay refreshes currentBid every ~4h
+  // and the projected close is read off it here (priority.projectedCloseOf),
+  // so these client reads inherit that freshness for free.
   const gapRows = useMemo(() => {
     const now = Date.now();
     return liveLots
@@ -875,11 +877,11 @@ export default function ValuePage() {
   }, [liveLots]);
 
   // the Gap's measurable inventory in scope: no-estimate live lots whose
-  // projection passed the graded-tape cell check (bidProj.ok) and carry a
+  // projected close passed the graded-tape cell check (gapOk) and carry a
   // floor by THE floor rule (lanes.valueFloor) — the empty lane's honest
   // denominator, never a statistic of its own
   const gapPool = useMemo(() => liveLots.filter(l => {
-    if (l.bidProj?.ok !== true || !(l.bidProj.allIn > 0)) return false;
+    if (l.gapOk !== true) return false;
     const est = estUsdBand(l);
     if (est.low != null || est.high != null) return false;
     return valueFloor(l) != null;
@@ -1146,16 +1148,6 @@ export default function ValuePage() {
 
   const hasFlags = deals.length > 0;
   const coverage = ray.market?.markets?.[activeKey]?.n;
-
-  // ── the reads room's one live figure: the Gap curve's fitted population,
-  // summed from the served closeCurve buckets (LabFigures' own precedent —
-  // "fitted from N bid histories"). Read from data, never a typed constant.
-  const curveSnaps = useMemo(() => {
-    const cc = (ray.market?.markets?.all?.analytics as {
-      closeCurve?: { n?: number[] };
-    } | undefined)?.closeCurve;
-    return Array.isArray(cc?.n) && cc!.n!.length ? cc!.n!.reduce((a, b) => a + b, 0) : null;
-  }, [ray.market]);
 
   // ── FLIP — a sort flip re-RANKS the same rows, so they should visibly
   // travel, not teleport. Animate only when the id set is unchanged (pure
@@ -2359,8 +2351,7 @@ export default function ValuePage() {
               no longer stands between a reader and the board) — the cell grammar: split
               head (quiet kicker, light headline) over three patent-figure
               cells, one per lane. Copy states each lane's real gates
-              (pickCall/comps ladder, lanes.ts) in the lanes' own words; the
-              bid-history count reads live from the served closeCurve. No
+              (pickCall/comps ladder, lanes.ts) in the lanes' own words. No
               thresholds invented, no new signal labels. ════ */}
           <section id="reads" className="rail ray-enter vd-room ns-plate vd-reads" style={{ '--enter-delay': '20ms', paddingTop: 'calc(var(--space-4) + var(--space-2))' } as React.CSSProperties}>
             <div className="ns-split">
@@ -2387,8 +2378,8 @@ export default function ValuePage() {
                 figure={<FigReplay />}
                 label="The Gap"
                 body={<>No-estimate lots where the projected close sits at least 25% under the
-                  value floor — the close-day growth curve fitted
-                  from {curveSnaps != null ? `${compactCount(curveSnaps)} ` : ''}Goldin bid histories.</>}
+                  value floor — the live bid times its room&rsquo;s close multiple, measured
+                  nightly on bids that went on to sell.</>}
               />
               <FigureCell
                 figure={<FigPools />}

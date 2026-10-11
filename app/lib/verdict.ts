@@ -1,6 +1,7 @@
 import type { AuctionLot } from '../types';
 import { lotAllInFactor, maxHammerFor } from './premiums';
 import { valueFloor } from './lanes';
+import { fmtUsd } from './fmt-usd';
 
 /**
  * LotVerdict — the lot's "why", in ONE coherent frame (Oct 3 2026).
@@ -98,14 +99,6 @@ export function lotMaxBid(lot: AuctionLot): { hammer: number; allIn: number } | 
   return { hammer, allIn: Math.round(hammer * lotAllInFactor(lot, hammer)) };
 }
 
-/** THE PROJECTED CLOSE (all-in): only a projection whose house × days-out ×
- *  band cell is validated on the graded tape (build-upcoming stamps
- *  bidProj.ok) — an unvalidated cell ran 1.3–4.7× off. */
-export function lotProjectedClose(lot: AuctionLot): number | null {
-  const p = lot.bidProj;
-  return p && p.ok === true && p.allIn > 0 ? p.allIn : null;
-}
-
 /** THE CARD'S COMPS FIGURE on the BID's basis (hammer): a live bid is a
  *  hammer bid, so "comps ~$X" over "$Y bid" must be the comps' hammer — the
  *  card printed the all-in comp value over the hammer bid. A value the build
@@ -167,14 +160,8 @@ export function lotVerdict(lot: AuctionLot): Verdict | null {
   };
 }
 
-/** $6.5K / $18K / $1.2M / $850 — one decimal under $10K so close numbers
-    stay distinguishable (formatPrice rounds $6,548 and $7,400 both to $7K) */
-export function fmtUsd(n: number): string {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(n >= 10_000_000 ? 1 : 2)}M`;
-  if (n >= 10_000) return `$${Math.round(n / 1000)}K`;
-  if (n >= 1_000) return `$${(n / 1000).toFixed(1).replace(/\.0$/, '')}K`;
-  return `$${Math.round(n).toLocaleString()}`;
-}
+/** $6.5K / $18K / $1.2M / $850 — the one face formatter (app/lib/fmt-usd) */
+export { fmtUsd };
 
 /** "Confidence: medium, 2 of 4" — the accessible name for every dot meter */
 export function confidenceA11y(c?: string | null): string {

@@ -44,10 +44,12 @@ test('priority: anchor uses USD estimates as-is (no FX re-conversion)', () => {
   assert.equal(p?.src, 'est');
 });
 
-test('priority: anchor order est → engine → validated projection → bid; none → null', () => {
+test('priority: anchor order est → engine → bid; none → null (outside a bid room)', () => {
   assert.equal(prioStatic({ artist: 'sports-cards', value: { expectedHammerUsd: 9000 }, currentBid: 100 })?.src, 'engine');
-  assert.equal(prioStatic({ artist: 'sports-cards', bidProj: { ok: true, allIn: 12200 }, currentBid: 100 })?.a, 10000);
-  assert.equal(prioStatic({ artist: 'sports-cards', bidProj: { allIn: 12200 }, currentBid: 100 })?.src, 'bid');
+  // (Oct 11) the retired growth-curve stamp is never an anchor: outside a
+  // measured bid room the live bid is the anchor, whatever a stale payload carries
+  assert.equal(prioStatic({ artist: 'sports-cards', bidProj: { ok: true, allIn: 12200 }, currentBid: 100 } as never)?.src, 'bid');
+  assert.equal(prioStatic({ artist: 'sports-cards', bidProj: { ok: true, allIn: 12200 }, currentBid: 100 } as never)?.a, 100);
   assert.equal(prioStatic({ artist: 'sports-cards' }), null);
 });
 
@@ -180,7 +182,8 @@ test('priority (Oct 9 anchors): a bid room projects the live bid to its close', 
   // a closed lot / unknown house: no projection (the old order holds)
   assert.equal(prioStatic({ ...wk, saleDateTime: inHours(-1) }, NOW)!.src, 'bid');
   assert.equal(prioStatic({ ...wk, auctionHouse: 'Somewhere' }, NOW)!.src, 'bid');
-  assert.equal(reasonOf(wk, NOW), 'Closes in 6 days · $3K projected close');
+  // (Oct 11) printed as the decision line prints it (one formatter): $3,378 is ~$3.4K, never "$3K"
+  assert.equal(reasonOf(wk, NOW), 'Closes in 6 days · ~$3.4K projected close');
 });
 
 test('priority (Oct 9 anchors): the engine narrows a projection only when it earned it', () => {
