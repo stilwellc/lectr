@@ -82,10 +82,11 @@ Flow:
   is the fallback and skips itself when a Worker run already started
   (`scripts/ci/run-guard.mjs`). plan (guard) → crawl (one job per house,
   `continue-on-error`: pull-segment → crawl → push-segment [per-house gate +
-  segment version] → handoff-put) → assemble (unit tests, `assemble-segments`,
-  house ledger, sanity gate + stale-house rule, engine, gate report → R2,
-  `status.json`, `push`, ledger → R2) → deploy / sync / backtest (all read
-  assemble's exact version via `pull-version`) → health (warn-only) →
+  segment version] → handoff-put) ∥ tests (gate-logic unit tests, beside the
+  crawl) → assemble (`assemble-segments`, house ledger, sanity gate +
+  stale-house rule, engine, gate report → R2, `status.json`, `push`, ledger →
+  R2) → deploy / lot-api (advisory) / sync / backtest (all read assemble's
+  exact version via `pull-version`) → health (warn-only) →
   verdict (names the night; publish-missed + per-house issues) →
   handoff-cleanup. R2 `latest/` is the recovery source and tomorrow's
   baseline. What each colour means: docs/RUNBOOK.md.
@@ -489,8 +490,10 @@ Then `scripts/r2/warm-api.ts` waits for lectr.bid to serve the new version
 page 0 and settled flags, plus 10 big makers' summary and first page). It is
 read-only, never fails the nightly, and prints a timing table.
 
-Add to `.github/workflows/nightly.yml`, job `assemble`, right after the
-`Push corpus + served to R2` step (`id: push`):
+In `.github/workflows/nightly.yml` these two steps run in their own advisory
+`lot-api` job (needs: assemble), after `data-store.sh pull-version` of the
+version assemble pushed — off the deploy path since Oct 11 2026 (they were
+the last 4-8 min of assemble). The steps, as they ran inside assemble before:
 
 ```yaml
       # THE LOT API (docs/data-pipeline.md §3): everything the /api/* Pages

@@ -13,7 +13,9 @@ name: Nightly (segmented)
 #     → reunions every segment (fresh OR last-good), runs the engine, and a
 #       SANITY GATE refuses to publish a corpus that shrank >10%. The only
 #       full-corpus job → carries the big heap.
+#   tests  (needs: plan, beside the crawl)  →  gate-logic unit tests; assemble needs it
 #   deploy (needs: assemble)  →  pinned served payload → build → ship
+#   lot-api (needs: assemble, advisory, beside deploy)  →  emit + push + warm the R2 lot API
 #   sync   (needs: assemble, non-blocking)  →  supabase + alerts
 #   backtest-leg / backtest  →  the point-in-time record (not on the deploy path)
 #   health (needs: crawl, non-blocking)  →  leg-health table, ⚠ on ok=false
@@ -313,11 +315,35 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
+  # THE GATE LOGIC'S UNIT TESTS (moved out of assemble, Oct 11 2026): the
+  # sentinel decision table etc. must hold before they are trusted to gate
+  # tonight's publish — run beside the crawl legs instead of on assemble's
+  # critical path (~25-30s saved per night). A red here skips assemble, which
+  # the verdict job reads as a missed publish — the same outcome as before.
+  # Typecheck runs in deploy.yml, where the served JSON the app imports is present.
+  tests:
+    needs: plan
+    if: ${{ needs.plan.outputs.go == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Unit tests
+        run: npm test
+
   assemble:
-    needs: [plan, crawl]
+    needs: [plan, crawl, tests]
     # build from fresh-or-last-good segments even if some crawls failed (or
-    # were skipped) — but not on a cancelled run, nor one the guard skipped
-    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.go == 'true' }}
+    # were skipped) — but not on a cancelled run, nor one the guard skipped,
+    # nor one whose gate-logic tests failed
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.go == 'true' && needs.tests.result == 'success' }}
     runs-on: ubuntu-latest
     # 60→120 (Aug 4) → 180 (Sep 9): measured 76–89m on a growing corpus. A kill
     # here costs a whole night and publishes nothing (the R2 push is last).
@@ -343,11 +369,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci --ignore-scripts
-      # cheap (~1s): the gate logic under test (sentinel decision table) must
-      # hold before it is trusted to gate tonight's publish. Typecheck runs in
-      # deploy.yml, where the served JSON the app imports is present.
-      - name: Unit tests
-        run: npm test
+      # (the gate logic's unit tests run in the `tests` job, beside the crawl)
       - name: Segments — this run's crawl handoff, else R2 last-good
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
@@ -441,6 +463,10 @@ jobs:
           # ubuntu-latest (public repo) has 16GB — headroom, not a budget.
           NODE_OPTIONS: --max-old-space-size=6144
           RAY_SENTINEL_WARN_ONLY: ${{ github.event.inputs.sentinel_warn_only == 'true' && '1' || '' }}
+          # the columnar corpus.parquet twin: nothing in CI reads it and the
+          # push leaves it out of the tar — skipping it halves the persist
+          # phase (build-market.ts); the gz NDJSON bytes are unchanged
+          RAY_CORPUS_PARQUET: '0'
       - name: Check the entity files (advisory)
         continue-on-error: true
         run: npx tsx scripts/emit-entities.ts --check
@@ -505,26 +531,8 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash scripts/data-store.sh push-closek
-      # THE LOT API (docs/data-pipeline.md §3): everything the /api/* Pages
-      # Functions serve, precomputed (Free plan: no compute at the edge).
-      # Uploaded write-once under api/v/<version>/, pointer flipped LAST.
-      # Best-effort: a failure keeps the API on the previous version.
-      - name: Emit + push the lot-API index → R2
-        id: lotapi
-        if: ${{ steps.push.outcome == 'success' }}
-        continue-on-error: true
-        timeout-minutes: 25
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          NODE_OPTIONS=--max-old-space-size=12288 npx tsx scripts/emit-r2-index.ts --served public/data/ray --corpus data/corpus --out data/r2-api
-          bash scripts/r2-api-push.sh data/r2-api
-      - name: Warm the lot API
-        if: ${{ steps.lotapi.outcome == 'success' }}
-        continue-on-error: true
-        timeout-minutes: 8
-        run: npx tsx scripts/r2/warm-api.ts --out data/r2-api --base https://lectr.bid --wait 300
+      # (the lot-API index is emitted by the `lot-api` job, off the deploy
+      # path — it reads exactly the version pushed above)
       # The ledger is CRAWL truth, independent of publish: persist it even on a
       # night assemble failed, so tomorrow's stale clock is right.
       - name: Persist the house ledger → R2
@@ -692,6 +700,53 @@ jobs:
             console.log(`[backtest] rowsOnVersionPct ${pct}% · engine ${bt.engineVersion} · state engine ${bt.stateEngineVersion ?? "?"}`);
             if (!(pct >= 90)) { console.error(`::error title=backtest not on current engine::rowsOnVersionPct ${pct}% < 90% after a FULL replay`); process.exit(1); }
           '
+
+  # ── THE LOT API (docs/data-pipeline.md §3) ────────────────────────────────
+  # Everything the /api/* Pages Functions serve, precomputed (Free plan: no
+  # compute at the edge), uploaded write-once under api/v/<version>/, pointer
+  # flipped LAST. Its own job since Oct 11 2026: it was the last 4-8 min of
+  # assemble, so deploy/sync/backtest all waited on it. It reads ONLY the
+  # served payload + corpus gz (emit-r2-index.ts is a pure read of those), so
+  # it runs on exactly the bytes assemble pushed (pull-version), beside deploy.
+  # The API is self-contained (functions read api/current.json from R2; the
+  # client never names a version), so the brief skew is now "new site, last
+  # night's API answers for a few minutes" instead of the reverse.
+  # ADVISORY, as the step was: a failure keeps the API on the previous version
+  # and never reddens the run.
+  lot-api:
+    needs: assemble
+    if: ${{ !cancelled() && needs.assemble.result == 'success' }}
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Pull tonight's published version (corpus + served)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_READ_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VERSION: ${{ needs.assemble.outputs.version }}
+        run: bash scripts/data-store.sh pull-version "$VERSION"
+      - name: Emit + push the lot-API index → R2
+        id: lotapi
+        timeout-minutes: 25
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_WRITE_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          NODE_OPTIONS=--max-old-space-size=12288 npx tsx scripts/emit-r2-index.ts --served public/data/ray --corpus data/corpus --out data/r2-api
+          bash scripts/r2-api-push.sh data/r2-api
+      - name: Warm the lot API
+        continue-on-error: true
+        timeout-minutes: 8
+        run: npx tsx scripts/r2/warm-api.ts --out data/r2-api --base https://lectr.bid --wait 300
 
   deploy:
     needs: assemble
