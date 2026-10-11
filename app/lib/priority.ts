@@ -542,6 +542,7 @@ export function reasonOf(l: ScoreLot, nowMs: number = Date.now()): string | null
   if (!p) return null;
   const parts: string[] = [];
   const close = closeMsOf(l);
+  const when0 = parts.length;
   if (close != null && !closeIsTimed(l) && l.saleDate) {
     // date-only sale (RR, Phillips, Wright…): the hour is unknown — say the day, never invent "in 8h"
     const t = new Date(nowMs);
@@ -557,6 +558,7 @@ export function reasonOf(l: ScoreLot, nowMs: number = Date.now()): string | null
     else if (h > 0 && h < 48) parts.push('Closes tomorrow');
     else if (h > 0 && h < SECOND_WEEK_H) parts.push(`Closes in ${Math.round(h / 24)} days`);
   }
+  const timing = parts.splice(when0).join('') || null;
   // (W26) then what drives the rank. The card already prints the house
   // estimate — only name the value when it came from somewhere else (engine
   // comps, a projection, the live bid); an estimate lot names its standing.
@@ -582,12 +584,17 @@ export function reasonOf(l: ScoreLot, nowMs: number = Date.now()): string | null
     // a rank means something only in a real field: Top 5 of 12 is not news
     const when = b?.weeks === 2 ? 'in the next two weeks' : 'this week';
     const top = !b ? 0 : [1, 5, 10, 20].find(k => b.rank <= k && b.field >= k * RANK_FIELD * (k === 1 ? 2 : 1)) ?? 0;
-    if (b && top === 1) parts.push(`Top ${CAT_LABEL[b.cat]} estimate ${when}`);
+    if (b && top === 1) parts.push(`Largest ${CAT_LABEL[b.cat]} estimate ${when}`);
     else if (b && top) parts.push(`Top ${top} ${CAT_LABEL[b.cat]} estimate ${when}`);
   }
   // competition, when it is part of the evidence (bids on an estimate lot)
   if (!p.over && p.src === 'est' && (l.bidCount || 0) >= 2) parts.push(`${l.bidCount} bids`);
-  return parts.length ? parts.join(' · ') : null;
+  // what drives the rank leads; the close (the row's date column prints it
+  // too) trails, so a phone's clamped line keeps the reason, not the timing
+  // (an urgent close — under 48h — still leads: then timing IS the reason)
+  const urgent = close != null && close - nowMs < 48 * 3_600_000;
+  if (timing && parts.length) { if (urgent) parts.unshift(timing); else parts.push(timing); }
+  return parts.length ? parts.join(' · ') : timing;
 }
 
 /**

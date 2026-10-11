@@ -90,14 +90,14 @@ test('4 · the projection knee: k ≤ 3 stands, past it bid·√(3k); the refit 
 
 test('5 · the reason line names what drives the rank', () => {
   // the certified flag: its magnitude, pool and confidence
-  assert.equal(reasonOf(ROWS.hibou, NOW), 'Sells in 2 days · Below market +42% · 14 comps, high confidence');
+  assert.equal(reasonOf(ROWS.hibou, NOW), 'Below market +42% · 14 comps, high confidence · Sells in 2 days');
   // an estimate lot names its standing on the board that seated it — in a real field only
   const bacon = clone(ROWS.baconFigure, {});
   const field = Array.from({ length: 12 }, (_, i) => clone(ROWS.baconFigure, { id: `fa-${i}`, title: `Work ${i}`, artist: `maker-${i}`, estimateLow: 200_000 + i * 10_000, estimateHigh: 300_000 + i * 10_000 }));
   assert.equal(reasonOf(bacon, NOW), 'Sells in 3 days', 'no board, no claim');
   const seated = shortlist([bacon, ...field], NOW, 20);
   assert.ok(seated.includes(bacon));
-  assert.equal(reasonOf(bacon, NOW), 'Sells in 3 days · Top Fine Art estimate this week');
+  assert.equal(reasonOf(bacon, NOW), 'Largest Fine Art estimate this week · Sells in 3 days');
   const thin = clone(ROWS.baconFigure, { id: 'thin' });
   shortlist([thin, field[0], field[1]], NOW, 20);
   assert.equal(reasonOf(thin, NOW), 'Sells in 3 days', 'Top of 3 is not news');
@@ -109,7 +109,7 @@ test('6 · a thin week reaches into the second: the $3.47M Trophy Pikachu seats'
   assert.ok(h > 168 && h < 360, `${h}h out`);
   const week = [ROWS.charizardPsa10, ROWS.ohtaniGold];
   assert.ok(shortlist([trophy, ...week], NOW, 20).includes(trophy));
-  assert.match(reasonOf(trophy, NOW)!, /^Closes in 14 days · ~\$/);
+  assert.match(reasonOf(trophy, NOW)!, /^~\$.* projected close · Closes in 14 days$/);
   // a week that fills every seat never reaches past it
   assert.ok(!shortlist([trophy, ...week], NOW, 1).includes(trophy));
 });

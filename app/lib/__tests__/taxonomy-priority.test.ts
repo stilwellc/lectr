@@ -184,7 +184,7 @@ test('priority (Oct 9 anchors): a bid room projects the live bid to its close', 
   assert.equal(prioStatic({ ...wk, saleDateTime: inHours(-1) }, NOW)!.src, 'bid');
   assert.equal(prioStatic({ ...wk, auctionHouse: 'Somewhere' }, NOW)!.src, 'bid');
   // (Oct 11) printed as the decision line prints it (one formatter): $2,865 is ~$2.9K, never "$3K"
-  assert.equal(reasonOf(wk, NOW), 'Closes in 6 days · ~$2.9K projected close');
+  assert.equal(reasonOf(wk, NOW), '~$2.9K projected close · Closes in 6 days');
 });
 
 test('priority (Oct 9 anchors): the engine narrows a projection only when it earned it', () => {
