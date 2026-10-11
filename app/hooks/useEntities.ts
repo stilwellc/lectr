@@ -42,6 +42,7 @@ import { playerHrefOf } from '../lib/entity/aliases';
 import { MIN_MED_N } from '../lib/entity/stats';
 import { decodeEntities, isEntitiesWire, ledgerNamesBy } from '../lib/entity/wire';
 import { bestLotImage } from '../lib/img-host';
+import { useFirstPaint } from '../components/FirstPaint';
 
 /** a summary + its detail when the source already holds it (the adapters do) */
 export interface EntityBundle {
@@ -371,7 +372,12 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
   // answer (source 'pending') rather than paint adapter figures that the
   // file's would then replace
   const loadFile = useMemo(() => () => loadEntities(market), [market]);
-  const file = useLoad(loadFile, true);
+  const fileQ = useLoad(loadFile, true);
+  // (W27) a first-paint step (components/FirstPaint) reads the same served
+  // files synchronously — the ledger as it stands once they have landed
+  const fp = useFirstPaint();
+  const fpFile = useMemo(() => (fp ? readEntitiesFile(fp.read(`pages/entities-${market}.json`)) : undefined), [fp, market]);
+  const file = fp ? fpFile : fileQ;
   const mainMap = useMemo(() => {
     if (!file) return null;
     if (file.lastCrawl && lastCrawl && file.lastCrawl !== lastCrawl) {
@@ -422,7 +428,8 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
   const source: Entities['source'] = file === undefined ? 'pending' : file ? 'entities' : 'adapter';
 
   // page-stats: maker faces + the athletes with a dossier
-  const pageStats = useLoad(loadPageStatsFn) as PageStats | null | undefined;
+  const pageStatsQ = useLoad(loadPageStatsFn) as PageStats | null | undefined;
+  const pageStats = fp ? fp.read<PageStats>('pages/page-stats.json') : pageStatsQ;
   const dossiers = useMemo(() => (pageStats?.playerIndex ? new Set(pageStats.playerIndex.map(p => p.slug)) : NO_SET), [pageStats]);
 
   // 2a. makers — stats.json is phase-1 eager, so this path is always ready

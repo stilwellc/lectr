@@ -27,7 +27,9 @@ import { lotFace } from '../lib/lot-face';
 import ComparableModal from './ComparableModalLazy';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './FeedToolbar';
 import { houseBaselines, type HouseBaselines } from '../lib/feed-filters';
-import { reasonOf } from '../lib/priority';
+import { reasonOf, closeMsOf } from '../lib/priority';
+import { closeIsTimed } from '../lib/house-tz';
+import { fpSlot } from '../lib/first-paint';
 import { mattersList } from './home/matters';
 import DecisionLine from './DecisionLine';
 import { makerLineOf, labelTagOf, subColumnOf } from '../lib/lot-labels';
@@ -41,6 +43,7 @@ import { isFlagged, FLAG_SIGNAL } from '../lib/flags';
 import { useLotModal } from '../lib/use-lot-modal';
 import { cameBack } from '../lib/use-back-scroll';
 import Flick from './Flick';
+import { useFirstPaint, useWidthQuery } from './FirstPaint';
 import { recordSignal } from '../lib/recs-signals';
 import { useLogPicks, LOG_MAX_PER_PASS } from '../lib/pick-log';
 import { PickFeedback, UndoSeat, usePickFeedback, withUndoSeat } from './PickFeedback';
@@ -287,6 +290,21 @@ export function FeedRow({ lot, onOpen, tone, note, onNote, feedback, decision, s
   return <div style={{ borderBottom: '1px solid var(--hairline-soft)' }}>{row}{feedback}</div>;
 }
 
+// (W27) a first-paint step's reason: its clock-relative timing phrase is a
+// slot the first-paint gate rewrites for the reader's clock (app/lib/
+// first-paint FP_SLOT_JS kind 'r' — reasonOf's timing part)
+const TIMING_RE = /^(?:Closes within the hour|Closes in \d+h|Closes tomorrow|Closes in \d+ days|Sells today|Sells tomorrow|Sells in \d+ days)$/;
+function fpReason(lot: AuctionLot): string | null {
+  const r = reasonOf(lot);
+  if (!r) return r;
+  const close = closeMsOf(lot);
+  if (close == null) return r;
+  const timed = closeIsTimed(lot);
+  return r.split(' · ').map(part => (TIMING_RE.test(part)
+    ? fpSlot('r', [close, timed ? 1 : 0, timed ? '' : (lot.saleDate || '').slice(0, 10)], part)
+    : part)).join(' · ');
+}
+
 // the feed grid — global ray-* classes the reused LotCard renders into
 // (page.tsx carried these in an inline style block; then TerminalHome).
 // __html, not a text child: '+' / '>' combinators must not be escaped in SSR.
@@ -418,8 +436,17 @@ export default function LotBrowser({
   const widePage = pageSizeProp ?? 24;
   const narrowPage = Math.min(12, widePage);
   const phonePage = Math.min(phonePageSize ?? narrowPage, narrowPage);
-  const [pageSize, setPageSize] = useState(widePage);
-  const [vis, setVis] = useState<{ sig: string; n: number }>({ sig: '', n: widePage });
+  // (W27) the width-driven state starts where its mount effects would land
+  // it whenever this render can know the width: a browser mount that is not
+  // a hydration (the feed mounts once its data is in — it used to paint the
+  // 24-card grid and flip to the ledger table a frame later), or a first-
+  // paint step at its viewport class (components/FirstPaint). A hydration
+  // keeps the SSR defaults and the effects below, as before.
+  const fp = useFirstPaint();
+  const mq = useWidthQuery(fp);
+  const firstPage = !mq ? widePage : mq('(max-width: 640px)') ? phonePage : mq('(max-width: 899px)') ? narrowPage : widePage;
+  const [pageSize, setPageSize] = useState(firstPage);
+  const [vis, setVis] = useState<{ sig: string; n: number }>({ sig: '', n: firstPage });
   const visibleUpcoming = vis.sig === filterSig ? vis.n : pageSize;
   const visKey = persistKey ? `lectr-lb-vis:${persistKey}` : null;
   useEffect(() => {
@@ -455,7 +482,16 @@ export default function LotBrowser({
   // The layout choice persists — read after mount (SSR renders the default).
   // A stored preference always wins; with none, desktop (≥900px) earns the
   // ledger table by default while mobile keeps the cards.
-  const [feedView, setFeedView] = useState<'grid' | 'table'>('grid');
+  const [feedView, setFeedView] = useState<'grid' | 'table'>(() => {
+    if (!mq) return 'grid';
+    if (!fp) {
+      try {
+        const v = localStorage.getItem('ray-feedview');
+        if (v === 'grid' || v === 'table') return v;
+      } catch { /* storage blocked — the width default */ }
+    }
+    return mq('(min-width: 900px)') ? 'table' : 'grid';
+  });
   useEffect(() => {
     try {
       const v = localStorage.getItem('ray-feedview');
@@ -470,7 +506,7 @@ export default function LotBrowser({
     try { localStorage.setItem('ray-feedview', v); } catch { /* storage blocked */ }
   };
   // Below 640px force the card view (persisted preference survives for desktop).
-  const [narrowView, setNarrowView] = useState(false);
+  const [narrowView, setNarrowView] = useState(() => !!mq && mq('(max-width: 639px)'));
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 639px)');
     const apply = () => setNarrowView(mq.matches);
@@ -596,7 +632,7 @@ export default function LotBrowser({
   };
   // `short` = a one-line phone row: the For-you reason leads with its fact
   const noteOf = (lot: AuctionLot, short = false): string | null =>
-    [youTab ? (short ? youNote.get(lot.id)?.short : youNote.get(lot.id)?.full) ?? null : topTab ? reasonOf(lot) : null, alsoOf(lot)].filter(Boolean).join(' · ') || null;
+    [youTab ? (short ? youNote.get(lot.id)?.short : youNote.get(lot.id)?.full) ?? null : topTab ? (fp ? fpReason(lot) : reasonOf(lot)) : null, alsoOf(lot)].filter(Boolean).join(' · ') || null;
   // pressing a folded note → the whole group, by the feed's own search (one
   // stable callback per group member so memoized cards don't re-render)
   const filtersRef = useRef(feedFilters);
@@ -877,7 +913,7 @@ export default function LotBrowser({
                     </td>
                     <td>{lot.auctionHouse}</td>
                     <td className="t-cat">{subColumnOf(lot)}</td>
-                    <td className="t-date" title={saleWhenTitle(lot)}>{formatDate(hammerDay(lot))}</td>
+                    <td className="t-date" title={fp ? undefined /* a reader-zone clock: the page's own render adds it (W27) */ : saleWhenTitle(lot)}>{formatDate(hammerDay(lot))}</td>
                     <td className="num t-days">
                       {isClosedPending(lot) ? 'closed' : dth == null ? '—' : dth <= 0 ? 'today' : `${dth}d`}
                     </td>

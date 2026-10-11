@@ -60,6 +60,7 @@ import SubMarketBoard from './SubMarketBoard';
 import TonightsWall, { type WallItem, gapMultiple } from './TonightsWall';
 import { CellGrid, Cell, ColorCell, FigGate, FigCorpus, FigPools, FigTape } from '../../components/cells';
 import { useMediaQuery, useMounted } from './hooks';
+import FirstPaintIsland, { useFirstPaint, useFirstPaintShown } from '../../components/FirstPaint';
 import styles from './style.module.css';
 
 // W13 contract: useSavedLots grows a savedMeta record (hook agent's edit).
@@ -173,18 +174,35 @@ function IcoDesk() { // the save mark — the same bookmark the feed prints
 const VERTICAL_COUNT = MARKETS.length - 1;
 
 export default function TerminalHomePage() {
+  return <TerminalHome />;
+}
+
+/** the page; `snap` (FirstPaint's build-time step) prints only the first
+ *  screen's body — what replaces the loading line — from the snapshot */
+function TerminalHome() {
   // (perf W13) '/' paints its first screen — the hero, the tape, What
   // matters — from a first-screen slice of the book (app/lib/first-screen);
   // the whole book loads behind it and replaces it. Counts over the whole
   // live book print '—' until then (`partial`).
-  const ray = useRayDataFirst(fsKeyOf(usePathname()));
+  const fsKey = fsKeyOf(usePathname());
+  // (W27) the build's first paint renders this page per step from a pinned
+  // snapshot of the same slice (components/FirstPaint) — never a fetch
+  const snap = useFirstPaint();
+  const live = useRayDataFirst(snap ? null : fsKey);
+  const ray = snap ? snap.ray : live;
   const partial = ray.partial;
+  // the first-paint copy is already on screen: this render replaces it in
+  // place, resolved — an entrance from nothing would blank it first
+  const fpShown = useFirstPaintShown(fsKey);
   usePlayerDossiers(); // athlete names on memorabilia rows link to /player once the dossier index lands
   const { allLots, statsByArtist, demand, realized, bidComp, recentSold, backtest, market: marketData, lastCrawl, loading, error, fromCache } = ray;
   const { market, setMarket } = useMarket();
   const marketMeta = MARKETS.find(m => m.key === market)!;
-  const mounted = useMounted();
-  const isMobile = useMediaQuery('(max-width: 820px)', false);
+  const mountedQ = useMounted();
+  const isMobileQ = useMediaQuery('(max-width: 820px)', false);
+  // a first-paint step is the page after mount, at its viewport class
+  const mounted = snap ? true : mountedQ;
+  const isMobile = snap ? snap.variant === 'm' : isMobileQ;
 
   // ONE TODAY, ONE SERIAL — the crawl day is the data's "today".
   const crawlDay = (lastCrawl || new Date().toISOString()).slice(0, 10);
@@ -258,7 +276,10 @@ export default function TerminalHomePage() {
   const { follows } = useFollows();
   // the reader's taste — the SAME recommender the profile's "Lots you may
   // like" room reads (app/lib/use-recs), so the two lists agree
-  const { taste, hasSignals, ready: tasteReady } = useTaste(allLots);
+  const { taste, hasSignals, ready: tasteReadyQ } = useTaste(allLots);
+  // a first paint is shown only on a device with no reader state (the gate),
+  // where the reader's taste resolves at mount to none
+  const tasteReady = snap ? true : tasteReadyQ;
   // the comps modal, joined to history (app/lib/use-lot-modal) — shared by
   // the feed, Tonight's Wall and the verified board
   const [tableLot, setTableLot] = useLotModal<AuctionLot>();
@@ -624,44 +645,10 @@ export default function TerminalHomePage() {
   // below-market count for the hero stat (scoped to the live book)
   const belowMktCount = belowIds.size;
 
-  return (
-    <>
-    {/* the page's primary heading — visually hidden (the hero leads with the
-        market number, not a title) but present for crawlers/AT. */}
-    <h1 style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>
-      lectr — auction intelligence for the collectibles market
-    </h1>
-    <Greeting />
-    <div className={`${styles.root} terminal-shell`} data-mounted={mounted}>
-      {/* (the feed grid's rules ride with the feed — components/LotBrowser) */}
-      <style>{`
-        /* the reused paper/record bands are self-contained; let them breathe
-           full-width inside the dark shell rather than fight the deskShell rail */
-        .terminal-shell .ray-recordband { border-radius: 14px; }
-      `}</style>
-      <div className={styles.bgField} aria-hidden />
-      <div className={styles.grain} aria-hidden />
-
-      {/* REAL CHROME — ArtistNav mounts CommandK (⌘K search, alerts, mobile sheet) */}
-      <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
-
-      {/* THE EXCHANGE RAIL — the door; re-scopes the WHOLE page in place */}
-      <div className={`rail ${styles.switchStrip}`} style={{ paddingTop: 'var(--space-4)', position: 'relative', zIndex: 3 }}>
-        <MarketSwitch lit open={!fromCache} reads={railReads} readsPending={loading || partial} />
-      </div>
-
-      {error ? (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '120px 20px', gap: 12, position: 'relative', zIndex: 2 }}>
-          <Flick size={28} draw style={{ color: 'var(--color-text-faint)' }} />
-          <p style={{ fontSize: 13.5, color: 'var(--tt-muted)', textAlign: 'center', margin: 0 }}>{error}</p>
-          <button className="ray-show-more" style={{ marginTop: 4 }} onClick={() => window.location.reload()}>
-            Try again
-          </button>
-        </div>
-      ) : loading ? (
-        <RayLoading />
-      ) : (
-        <RayEntrance animate={!fromCache}>
+  // the first screen's body — what replaces the loading line (and, at build,
+  // the one thing a first-paint step prints)
+  const body = (
+        <RayEntrance animate={!fromCache && !fpShown}>
           <div className={styles.deskShell}>
 
             {/* ══ HERO — the market-scoped index glyph + chart draw-in ══ */}
@@ -679,7 +666,7 @@ export default function TerminalHomePage() {
               onCommand={openCommandK}
               appreciation={appreciation}
               onBlock={onBlockLots.length}
-              play={!fromCache}
+              play={!fromCache && !fpShown}
               isMobile={mounted && isMobile}
               serial={lastCrawl}
               closingNext={partial ? undefined : closingNext}
@@ -723,7 +710,7 @@ export default function TerminalHomePage() {
                   isSaved={isSaved}
                   onToggleSave={toggle}
                   lastCrawl={lastCrawl}
-                  fromCache={fromCache}
+                  fromCache={fromCache || fpShown}
                   prevVisitDay={prevVisitDay}
                   baselines={baselines}
                   onResetView={restoredView && !viewIsDefault ? resetView : undefined}
@@ -1021,6 +1008,52 @@ export default function TerminalHomePage() {
           </div>
 
         </RayEntrance>
+  );
+  if (snap) return body;
+
+  return (
+    <>
+    {/* the page's primary heading — visually hidden (the hero leads with the
+        market number, not a title) but present for crawlers/AT. */}
+    <h1 style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>
+      lectr — auction intelligence for the collectibles market
+    </h1>
+    <Greeting />
+    <div className={`${styles.root} terminal-shell`} data-mounted={mounted}>
+      {/* (the feed grid's rules ride with the feed — components/LotBrowser) */}
+      <style>{`
+        /* the reused paper/record bands are self-contained; let them breathe
+           full-width inside the dark shell rather than fight the deskShell rail */
+        .terminal-shell .ray-recordband { border-radius: 14px; }
+      `}</style>
+      <div className={styles.bgField} aria-hidden />
+      <div className={styles.grain} aria-hidden />
+
+      {/* REAL CHROME — ArtistNav mounts CommandK (⌘K search, alerts, mobile sheet) */}
+      <ArtistNav activeSlug={null} savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
+
+      {/* THE EXCHANGE RAIL — the door; re-scopes the WHOLE page in place */}
+      <div className={`rail ${styles.switchStrip}`} style={{ paddingTop: 'var(--space-4)', position: 'relative', zIndex: 3 }}>
+        <MarketSwitch lit open={!fromCache} reads={railReads} readsPending={loading || partial} />
+      </div>
+
+      {error ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '120px 20px', gap: 12, position: 'relative', zIndex: 2 }}>
+          <Flick size={28} draw style={{ color: 'var(--color-text-faint)' }} />
+          <p style={{ fontSize: 13.5, color: 'var(--tt-muted)', textAlign: 'center', margin: 0 }}>{error}</p>
+          <button className="ray-show-more" style={{ marginTop: 4 }} onClick={() => window.location.reload()}>
+            Try again
+          </button>
+        </div>
+      ) : loading ? (
+        <>
+          {/* (W27) the first screen, drawn into the HTML at build time; the
+              loading line right after it shows only when the gate drops it */}
+          <FirstPaintIsland fsKey={fsKey} render={() => <TerminalHome />} />
+          <RayLoading />
+        </>
+      ) : (
+        body
       )}
 
       {/* ══ THE COLOPHON — full route map (nav/SEO) ══

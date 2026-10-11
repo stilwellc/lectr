@@ -157,8 +157,11 @@ export function emitFirstScreens(served = SERVED): { ver: string; files: number;
   const dir = path.join(served, 'first');
   fs.rmSync(dir, { recursive: true, force: true });
   if (!up || !Array.isArray(up.lots) || !meta) { console.log('emit-first-screen: no served book — no payloads (the site waits for the book, as before)'); return null; }
+  // the sweep's start — also where the build's first paint (app/lib/
+  // first-paint) starts proving its copy, so both read one instant
+  const fromMs = Date.now();
   const built = buildFirstScreens({
-    up, meta,
+    up, meta, fromMs,
     market: readJson(path.join(served, 'market.json')),
     backtest: readJson(path.join(served, 'backtest.json')),
     receipts: readJson(path.join(served, 'receipts.json')),
@@ -178,7 +181,7 @@ export function emitFirstScreens(served = SERVED): { ver: string; files: number;
     fs.writeFileSync(path.join(dir, `${k}.json`), body);
     if (!k.startsWith('ent-')) bytes[k] = [body.length, zlib.brotliCompressSync(body).length];
   });
-  fs.writeFileSync(path.join(dir, 'index.json'), JSON.stringify({ ver, lastCrawl: meta.lastCrawl || '', keys: Array.from(bodies.keys()), generatedAt: new Date().toISOString() }));
+  fs.writeFileSync(path.join(dir, 'index.json'), JSON.stringify({ ver, fromMs, lastCrawl: meta.lastCrawl || '', keys: Array.from(bodies.keys()), generatedAt: new Date().toISOString() }));
   return { ver, files: bodies.size, bytes };
 }
 

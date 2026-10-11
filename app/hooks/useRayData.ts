@@ -1011,6 +1011,13 @@ export function useRayDataFirst(key: string | null): FirstScreenData {
     return () => cancelAnimationFrame(raf);
   }, [partial, fs, key]);
   if (!partial || !fs) return { ...base, partial: false, baselineStats: null };
+  return fsView(fs);
+}
+
+/** the view a page paints from a first-screen slice — ONE shape for the
+ *  live hook (useRayDataFirst) and the build's prerendered first paint
+ *  (app/components/FirstPaint), so the two can never drift */
+function fsView(fs: FsPayload): FirstScreenData {
   return {
     statsByArtist: fs.statsByArtist,
     allLots: fs.allLots,
@@ -1035,6 +1042,11 @@ export function useRayDataFirst(key: string | null): FirstScreenData {
     partial: true,
     baselineStats: fs.baselineStats,
   };
+}
+
+/** a first-screen payload as the page paints it (app/components/FirstPaint) */
+export function firstScreenView(p: FirstScreenPayload): FirstScreenData {
+  return fsView(payloadToRay(p));
 }
 
 /** the house baselines a page passes its feed: the whole book's — from the

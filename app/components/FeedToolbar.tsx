@@ -14,6 +14,7 @@ import { subChipsOf, MARKET_CATS, type SubChip } from '../lib/taxonomy';
 import { WINDOWS, VALUE_FLOORS, VALUE_CEILINGS, fmtCeiling, valueOptionOf, valuePatchOf, TRIAGE_DEFAULTS, isTriageActive, passesTriage, patchTriage, triageToParams, triageFromParams, houseBaselines, type TriageFilters, type HouseBaselines } from '../lib/feed-filters';
 import { facetCatOf, facetChips, toggleFacet } from '../lib/facets';
 import { lotSubjectOf, subjectKeyOf, OTHER as OTHER_SUBJECT } from '../lib/maker-subjects';
+import { useFirstPaint, useWidthQuery } from './FirstPaint';
 
 /** a sport chip's display copy where the stored lens value (sportOfLot's
  *  label, kept in saved searches as `sp=`) reads differently from the
@@ -411,7 +412,12 @@ export default function FeedToolbar({
   // lead row (lens · category · "Sort & filter") and everything else moves
   // into a bottom sheet. matchMedia lives in an effect, never a useState
   // initializer — the SSR pass must render the desktop markup both sides.
-  const [isMobile, setIsMobile] = useState(false);
+  // (W27) a first-paint step (components/FirstPaint) is the page after
+  // mount at its viewport class
+  // (and a client mount that is not a hydration starts at its width)
+  const fp = useFirstPaint();
+  const mq = useWidthQuery(fp);
+  const [isMobile, setIsMobile] = useState(() => !!mq && mq('(max-width: 767px)'));
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
     const sync = () => setIsMobile(mq.matches);

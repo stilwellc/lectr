@@ -12,6 +12,7 @@ import { useSavedLots } from '../hooks/useSavedLots';
 import { useSavedSearches } from '../lib/alerts';
 import ArtistNav from '../components/ArtistNav';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
+import FirstPaintIsland, { useFirstPaint, useFirstPaintShown } from '../components/FirstPaint';
 import { formatDate, getUpcomingCounts, localToday } from '../utils';
 import { signedPct, dirOf } from '../lib/signed';
 import { FigureCell, FigGate } from '../components/cells';
@@ -134,13 +135,25 @@ function useForeignPicks(ids: readonly string[], active: Market): Map<string, En
 }
 
 export default function MakersPage() {
+  return <MakersLedger />;
+}
+
+function MakersLedger() {
   // (perf W13) the maker rows paint from the roster's first-screen slice —
   // every live lot of every maker-market maker (app/lib/first-screen), so a
   // maker row's live, flags and order are the book's own — then the whole
   // book replaces it. On the total market the collection rows (players,
   // Pokémon, films …) and every count over the whole book wait (`partial`).
-  const ray = useRayDataFirst(fsKeyOf(usePathname()));
-  const { allLots, lastCrawl, loading, fromCache, demand, partial } = ray;
+  const fsKey = fsKeyOf(usePathname());
+  // (W27) the build's first paint renders this ledger per step from a pinned
+  // snapshot of the same slice (components/FirstPaint) — never a fetch
+  const snap = useFirstPaint();
+  const live = useRayDataFirst(snap ? null : fsKey);
+  const ray = snap ? snap.ray : live;
+  const { allLots, lastCrawl, loading, demand, partial } = ray;
+  // the first-paint copy already on screen is replaced in place, resolved
+  const fpShown = useFirstPaintShown(fsKey);
+  const fromCache = ray.fromCache || fpShown;
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const activeLabel = activeKey === 'all' ? 'full' : activeKey === 'tcg' ? 'TCG' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
@@ -765,13 +778,9 @@ export default function MakersPage() {
   const vSlug = topVerified ? makerSlugOf(topVerified.id) : null;
   const vHref = vSlug ? makerHref(vSlug) : null;
 
-  return (
-    <div className="terminal-shell mk-shell">
-      <ArtistNav activeSlug="artists" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
-
-      {booting ? (
-        <RayLoading />
-      ) : (
+  // the ledger's first screen — what replaces the loading line (and, at
+  // build, the one thing a first-paint step prints)
+  const body = (
         <RayEntrance animate={!fromCache}>
           {/* ── THE HEADER — the market switch, then ONE line: the statement,
               the counts, the one verified read ── */}
@@ -1048,6 +1057,22 @@ export default function MakersPage() {
             )}
           </section>
         </RayEntrance>
+  );
+  if (snap) return booting ? null : body;
+
+  return (
+    <div className="terminal-shell mk-shell">
+      <ArtistNav activeSlug="artists" savedCount={savedIds.length} upcomingCounts={upcomingCounts} lastCrawl={lastCrawl ? formatDate(lastCrawl) : undefined} />
+
+      {booting ? (
+        <>
+          {/* (W27) the first screen, drawn into the HTML at build time; the
+              loading line right after it shows only when the gate drops it */}
+          <FirstPaintIsland fsKey={fsKey} render={() => <MakersLedger />} />
+          <RayLoading />
+        </>
+      ) : (
+        body
       )}
 
       {picked.length > 0 && !booting && (

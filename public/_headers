@@ -3,9 +3,10 @@
 # scripts/csp-postbuild.ts parses it and fails the build if any inline script
 # left in out/ is not hash-listed here, or if the baked Supabase origin is not
 # in connect-src.
-#   script-src  'self' + ONE hash: the porcelain theme boot in app/layout.tsx
-#               (edit that script → the build prints the new hash to paste
-#               here). Next's per-page inline RSC flight scripts (3,600+ unique
+#   script-src  'self' + TWO hashes: the porcelain theme boot in app/layout.tsx
+#               and the first-paint gate (app/lib/first-paint FP_GATE_JS, one
+#               constant body on every page that carries a first paint) —
+#               edit either and the build prints the new hash to paste here. Next's per-page inline RSC flight scripts (3,600+ unique
 #               bodies) are moved into /_next/static/chunks/flight/<hash>.js by
 #               csp-postbuild, so no 'unsafe-inline' and no per-page hashes.
 #   style-src   'unsafe-inline' is required: the export carries ~13.5K style=""
@@ -29,7 +30,7 @@
 # is Collin's call — it is hard to undo.
 /*
   X-Frame-Options: DENY
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-HE/v6bj/M7TOjC32nQkQiq+zDWeWUOfe3gzeMhLIQqA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://tiwrdomqydtnmgljsqsi.supabase.co; media-src 'self'; frame-src 'none'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-HE/v6bj/M7TOjC32nQkQiq+zDWeWUOfe3gzeMhLIQqA=' 'sha256-Q4UTxz+OGPxoR+PVumcM1e471DOzgys1GJvwxMOTZ5Y='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://tiwrdomqydtnmgljsqsi.supabase.co; media-src 'self'; frame-src 'none'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin

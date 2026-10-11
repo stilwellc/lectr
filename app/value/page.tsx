@@ -37,6 +37,7 @@ const HeroChart = dynamic(() => import('../preview/terminal/HeroChart'), {
 import { CIBeam } from '../preview/terminal/CIBeam';
 import { useReducedMotion } from '../preview/terminal/hooks';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
+import FirstPaintIsland, { useFirstPaint, useFirstPaintShown } from '../components/FirstPaint';
 import FigCap from '../components/FigCap';
 import RecordBand from '../components/RecordBand';
 import Masthead, { Accent } from '../components/Masthead';
@@ -709,6 +710,10 @@ function OutcomeDistribution({ backtest }: { backtest: Backtest }) {
  * settled tape, the engine's plate. Every figure names its basis.
  */
 export default function ValuePage() {
+  return <ValueDesk />;
+}
+
+function ValueDesk() {
   // useRayData + sentinel: the cockpit/board/record all paint from phase 1;
   // the corpus loads only on approach to the settled tape or on modal open.
   // (perf W13) the cockpit, the call, the Flags and the Sleepers paint from
@@ -716,8 +721,17 @@ export default function ValuePage() {
   // flag, every dead-room appraised lot, every gapOk lot — the exact rows
   // those lanes read); the whole book replaces it. Counts over the whole
   // live book ("of N live") print '—' until then (`partial`).
-  const ray = useRayDataFirst(fsKeyOf(usePathname()));
-  const { allLots, backtest, lastCrawl, loading, fullLoaded, fullError, fromCache, receipts, partial } = ray;
+  const fsKey = fsKeyOf(usePathname());
+  // (W27) the build's first paint renders this desk per step from a pinned
+  // snapshot of the same slice (components/FirstPaint) — never a fetch
+  const snap = useFirstPaint();
+  const live = useRayDataFirst(snap ? null : fsKey);
+  const ray = snap ? snap.ray : live;
+  const { allLots, backtest, lastCrawl, loading, fullLoaded, fullError, receipts, partial } = ray;
+  // the first-paint copy already on screen is replaced in place, resolved:
+  // every entrance (rises, count-ups) plays only when nothing was painted
+  const fpShown = useFirstPaintShown(fsKey);
+  const fromCache = ray.fromCache || fpShown;
   const { market, setMarket } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
   const activeLabel = activeKey === 'all' ? 'collectible' : activeKey === 'tcg' ? 'TCG' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
@@ -1324,6 +1338,627 @@ export default function ValuePage() {
     }
     return out;
   }, [deals.length, hasFlags, liveLots.length, summary.medianGap, nextHammer, backtest, coverage, activeKey, activeLabel, fromCache, gapRows, sleeperRows.length, sleeperQueue, partial]);
+
+  // the desk's first screen — what replaces the loading line (and, at
+  // build, the one thing a first-paint step prints)
+  const body = (
+        <RayEntrance animate={!fromCache}>
+          <div className="rail ray-enter" style={{ paddingTop: 'var(--space-4)' }}><MarketSwitch compact /></div>
+
+
+          {/* ════ ROOM 1 · THE COCKPIT ════ */}
+          <section id="desk" className="rail ray-enter vd-room" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))' }}>
+            <div className="vd-cockpit">
+              <div className="vd-cockpit-main">
+                <Masthead
+                  kicker=""
+                  title={hasFlags
+                    ? <>Priced <Accent>under</Accent> where the {activeLabel === 'collectible' ? 'market' : `${activeLabel} market`} clears.</>
+                    : <>The {activeLabel === 'collectible' ? 'whole' : activeLabel} book is read. <Accent>No lot</Accent> clears the bar tonight.</>}
+                  sub={hasFlags
+                    ? <>
+                        <b style={{ color: 'var(--color-fg)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{deals.length}</b> flags live ·{' '}
+                        <span style={{ color: 'var(--color-up)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                          median gap {signalMagnitude('Below Market', Math.round(summary.medianGap))}
+                        </span>{' '}
+                        · {formatPrice(summary.totalEst)} at estimate · {summary.artists} makers
+                        {summary.soonest && <> · <span style={{ whiteSpace: 'nowrap' }}>first hammer {formatDate(trueSaleDay(summary.soonest.lot))}</span></>}
+                      </>
+                    : partial ? <>The engine abstains rather than force a thin call · — live lots read in scope</>
+                    : <>The engine abstains rather than force a thin call · {appraisedCount > 0 ? <>{appraisedCount.toLocaleString()} live lots read in scope</> : <>{liveLots.length.toLocaleString()} live lots in scope, none read yet</>}{nextHammer && <> · next hammer {formatDate(trueSaleDay(nextHammer))}</>}</>}
+                />
+              </div>
+              <div className="vd-cockpit-pulse">
+                <MarketPulse ray={ray} activeKey={activeKey} activeLabel={activeLabel} play={!fromCache} />
+              </div>
+              <div className="vd-dials-wrap">
+                <DialStrip dials={dials} />
+              </div>
+            </div>
+          </section>
+
+          {/* ════ ROOM 2 · THE BOARD ════ */}
+          {/* phase-2 failed: the ledger stands on the precomputed stamps —
+              say what's missing instead of blanking the page */}
+          {fullError && (
+            <div className="rail ray-enter" style={{ paddingTop: 12, textAlign: 'center' }}>
+              <button className="ray-call-btn ray-call-btn-quiet" style={{ cursor: 'pointer' }} onClick={() => retryFullLoad()}>
+                Part of the book didn&rsquo;t load — comps depth is missing · try again
+              </button>
+            </div>
+          )}
+
+          {/* the triage row leads the lanes (Oct 9 r6): it narrows the call,
+              the Flags, the Gap and the Sleepers — so it sits above all four,
+              on the phone's first screen instead of four screens down */}
+          <div id="narrow" className="rail ray-enter vd-room" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))' }}>
+            <TriageBar
+              lots={flagLots}
+              cats={activeKey === 'all' ? undefined : MARKET_CATS[activeKey]}
+              filters={triage}
+              onChange={setTriage}
+              prevVisitDay={prevVisitDay}
+              baselines={baselines}
+              shown={dealsView.length}
+              total={deals.length}
+              label="Narrow the lanes"
+            />
+          </div>
+
+          {callShown && call && (
+            <section id="call" className="rail ray-enter vd-room ns-plate" style={{ '--enter-delay': '40ms', paddingTop: 'var(--space-2)' } as React.CSSProperties}>
+              {/* THE CALL AS COLOR — the ONE forced-color cell on the desk:
+                  the plate's face rides the ns-cell-color grammar (grained
+                  signal gradient, text goes paper) while its DOM, data and
+                  CTAs stay byte-identical inside. dir is the call's actual
+                  direction — pickCall admits only Below-Market flags (comps
+                  over ask), the same 'up' the plate already stamps on its
+                  gap row — so the ground is lamp-lawful by construction;
+                  any non-directional call falls to ink. The gold .lit halo
+                  yields to the color ground: still one lit element, the
+                  signal itself is now the marquee. */}
+              <div
+                className="ns-cell ns-cell-color vd-call-cell"
+                data-dir={call.signal?.label === 'Below Market' ? 'up' : 'ink'}
+              >
+              <CallPlate
+                lots={marketLots}
+                allLots={marketLots}
+                market={activeKey}
+                density="compact"
+                isSaved={isSaved}
+                onToggleSave={toggle}
+                onSeeComps={l => setModalLot(l)}
+                band={callBand ? (
+                  <PriceBand
+                    prices={callBand.prices}
+                    median={callBand.median}
+                    estLow={call.lot.estimateLow}
+                    estHigh={call.lot.estimateHigh}
+                    below={true}
+                  />
+                ) : ((callStamp || callPack === undefined) && !fullLoaded && !fullError ? <div style={{ height: 102 }} aria-hidden /> : null)}
+              />
+              </div>
+            </section>
+          )}
+
+
+          <section id="flags" className="ray-value-section rail vd-room ns-plate">
+            <div className="ray-enter">
+              <LaneHead
+                mark={<FlagsMark />}
+                name="The Flags"
+                count={dealsView.length}
+                play={!fromCache}
+                tag={sortMode === 'priority' ? 'comps vs estimate · what matters most first: size, measured edge, evidence, closing time' : sortMode === 'odds' ? 'comps vs estimate · calibrated odds first, the deepest gap breaks ties' : 'comps vs estimate · soonest hammer first'}
+                help={
+                  <>Each row is a live lot whose <Term k="comps">comps median</Term> clears its
+                  estimate by at least 1.3×. <Term k="odds">Odds</Term> rank the board — the share of
+                  historical calls at that ratio which beat the high estimate — and the deepest gap
+                  breaks ties. Click a row for the full comps case; j/k walk the rows, s saves.</>
+                }
+                right={
+                  <span className="vd-sort" role="tablist" aria-label="Board order">
+                    <button type="button" role="tab" aria-selected={sortMode === 'priority'} data-on={sortMode === 'priority' || undefined} onClick={() => setSortMode('priority')}>Matters most</button>
+                    <button type="button" role="tab" aria-selected={sortMode === 'odds'} data-on={sortMode === 'odds' || undefined} onClick={() => setSortMode('odds')}>Odds</button>
+                    <button type="button" role="tab" aria-selected={sortMode === 'closing'} data-on={sortMode === 'closing' || undefined} onClick={() => setSortMode('closing')}>Closing next</button>
+                  </span>
+                }
+              />
+            </div>
+            <div ref={boardRef} className="glass glass-quiet ray-enter" style={{ overflow: 'clip' }}>
+              <div className="ray-value-head" aria-hidden="true">
+                <span />
+                <span className="kicker">Lot</span>
+                <span className="kicker">House</span>
+                <span className="kicker">Hammers</span>
+                <span className="kicker" style={{ textAlign: 'right' }}>Estimate</span>
+                <span className="kicker" style={{ textAlign: 'right' }}>Comps med</span>
+                <span className="kicker" style={{ textAlign: 'right' }}>Odds{uniformOdds != null && <><br />{uniformOdds}%</>}</span>
+                <span className="kicker" style={{ textAlign: 'right' }}>Gap</span>
+              </div>
+              {!hasFlags ? (
+                /* zero flags: the instrument keeps its frame — abstention is
+                   stated, the doors stay open, no apology, no coral */
+                <div className="vd-empty ray-enter">
+                  <p>
+                    The engine abstains in the {activeLabel} market tonight — {partial ? <>— live lots read</> : appraisedCount > 0
+                      ? <>{appraisedCount.toLocaleString()} live lots read, none clears the 1.3× flag bar</>
+                      : <>none of its {liveLots.length.toLocaleString()} live lots carries a comps read yet</>}. A blank beats a wrong number.
+                  </p>
+                  <div className="vd-empty-links">
+                    {activeKey !== 'all' && (
+                      /* /value bare resolves to the STORED market, so a plain
+                         href is a no-op here — the switch must go through
+                         setMarket (pushStates the bare path, flips storage) */
+                      <Link href="/value" className="link-action" style={{ color: 'var(--color-fg)' }}
+                        onClick={e => { e.preventDefault(); setMarket('all'); }}>
+                        Watch all markets · {allFlagCount} flags live <span className="arrow"><Flick size={10} style={{ marginLeft: 5 }} /></span>
+                      </Link>
+                    )}
+                    <Link href={activeKey === 'all' ? '/' : `/analytics/${activeKey}`} className="link-action" style={{ color: 'var(--color-fg)' }}>
+                      {activeKey === 'all' ? 'Browse everything live' : `The ${activeLabel} research desk`} <span className="arrow"><Flick size={10} style={{ marginLeft: 5 }} /></span>
+                    </Link>
+                  </div>
+                </div>
+              ) : gridDeals.length === 0 ? (
+                /* flags exist, the triage row cut them all: say which filters,
+                   when the nearest flag hammers, and offer each filter back */
+                <div className="vd-empty ray-enter">
+                  <p>
+                    {!isTriageActive(triage)
+                      ? <>Today&rsquo;s call above is the only flag live in the {activeLabel} market.</>
+                      : dealsView.length > 0
+                        ? <>Only today&rsquo;s call above passes these filters ({filterWords}) — {deals.length.toLocaleString()} {deals.length === 1 ? 'flag is' : 'flags are'} live in the {activeLabel} market.</>
+                        : <>No flag passes these filters ({filterWords}) — {deals.length.toLocaleString()} {deals.length === 1 ? 'is' : 'are'} live in the {activeLabel} market{soonestOutsideWindow ? <>; the soonest one that fits the other filters hammers {formatDate(soonestOutsideWindow)}</> : null}.</>}
+                  </p>
+                  <div className="vd-empty-links">
+                    {relaxations.map(r => (
+                      <button key={r.k} type="button" className="link-action"
+                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--color-fg)' }}
+                        onClick={() => setTriage(r.next)}>
+                        {r.label} · {r.n} {r.n === 1 ? 'flag' : 'flags'} <span className="arrow"><Flick size={10} style={{ marginLeft: 5 }} /></span>
+                      </button>
+                    ))}
+                    {isTriageActive(triage) && (
+                      <button type="button" className="link-action"
+                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--color-fg)' }}
+                        onClick={() => setTriage(TRIAGE_DEFAULTS)}>
+                        Clear the filters <span className="arrow"><Flick size={10} style={{ marginLeft: 5 }} /></span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                gridDeals.slice(0, shown).map((d, i) => {
+                  const conf = d.lot.value?.signal ? null : (d.lot.signal?.confidence ?? d.signal?.confidence);
+                  // ONE LOT, ONE NUMBER (r8): the row prints lib/lot-face's
+                  // figures — the plate's, the modal's, the lot page's
+                  const face = lotFace(d.lot);
+                  const gapText = face.call?.text ?? signalMagnitude('Below Market', Math.round(d.signal!.pct));
+                  return (
+                  <div key={d.lot.id} className="ray-value-rowwrap ray-enter-card" data-flip-id={d.lot.id}
+                    style={{ '--enter-delay': `${Math.min(i, 8) * 40}ms` } as React.CSSProperties}>
+                  <button
+                    type="button"
+                    className="ray-value-row"
+                    data-nav-row
+                    onClick={() => setModalLot(d.lot)}
+                    aria-haspopup="dialog"
+                  >
+                    {/* Thumbnail — monogram plate always behind, photo overlays;
+                        on a hotlink-block the plate shows through, never a gap */}
+                    <span className="ray-value-row-thumb" aria-hidden="true" style={{ position: 'relative' }}>
+                      <span className="vd-thumb-letter">
+                        {(makerLineOf(d.lot).name || craftTitle(d.lot.title, d.lot.auctionHouse)).charAt(0)}
+                      </span>
+                      {d.lot.imageUrl && (
+                        <img src={sizedImg(httpsImg(d.lot.imageUrl), 120)} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async"
+                          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                          onError={e => e.currentTarget.remove()} />
+                      )}
+                    </span>
+                    <span style={{ minWidth: 0 }}>
+                      <span className="ray-value-row-maker" style={{ display: 'block' }}>
+                        {makerLineOf(d.lot).name}
+                        <LabelSuffix lot={d.lot} />
+                      </span>
+                      <span className="ray-value-row-title" style={{ display: 'block' }}>
+                        {craftTitle(d.lot.title, d.lot.auctionHouse)}
+                      </span>
+                      {/* its own line: inside the nowrap/ellipsis title the date was the first thing cut */}
+                      <span className="ray-value-mobdate">
+                        <span className="ray-value-mobdate-in">
+                          {(() => {
+                            const day = trueSaleDay(d.lot) || d.lot.saleDate;
+                            const past = trueSaleDay(d.lot) && trueSaleDay(d.lot) < localToday();
+                            const dU = daysUntil(day);
+                            if (!past && dU != null && dU <= 0) {
+                              const tonight = !!d.lot.saleDateTime && new Date(d.lot.saleDateTime).getHours() >= 17;
+                              return <><span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>
+                                {tonight ? 'closes tonight' : 'closes today'}
+                                {d.lot.saleDateTime && <> · <CloseClock iso={d.lot.saleDateTime} windowHours={24} /></>}
+                              </span></>;
+                            }
+                            return <>{past ? 'hammered' : 'hammers'} {formatDate(day)}</>;
+                          })()}
+                        </span>
+                      </span>
+                    </span>
+                    <span className="ray-value-cell">{d.lot.auctionHouse}</span>
+                    <span className="ray-value-cell">
+                      {(() => {
+                        const iso = d.lot.saleDateTime;
+                        const ms = iso ? Date.parse(iso) - Date.now() : null;
+                        return ms != null && ms > 0 && ms < 24 * 3600e3
+                          ? <span className="vd-breathe" style={{ color: 'var(--color-fg)', fontWeight: 600 }}><CloseClock iso={iso!} windowHours={24} /></span>
+                          : formatDate(trueSaleDay(d.lot) || d.lot.saleDate);
+                      })()}
+                    </span>
+                    <span className="ray-value-cell ray-value-cell-num ray-value-cell-est">{estimateOnly(d.lot)}</span>
+                    <span className="ray-value-cell ray-value-cell-num">
+                      {face.comps ? face.comps.text : '—'}
+                    </span>
+                    <span className="ray-value-cell ray-value-cell-num ray-value-cell-odds">
+                      {uniformOdds != null
+                        ? null
+                        : d.lot.value?.signal?.beatRatePct != null
+                        ? `${Math.round(d.lot.value.signal.beatRatePct)}%`
+                        : conf
+                          ? <span className="ray-value-conf"><span aria-hidden="true">{confidenceMeter(conf).dots}</span><span className="sr-only">{confidenceMeter(conf).word} confidence</span></span>
+                          : '—'}
+                    </span>
+                    <span className="ray-value-cell ray-value-cell-num ray-value-cell-gap">
+                      {gapText}
+                      <CellTrack pct={d.signal!.pct / 4} tone="up" />
+                    </span>
+                    {/* MOBILE stack — the audited-good phone composition */}
+                    <span className="ray-value-mob" style={{ textAlign: 'right' }}>
+                      <span className="ray-value-row-sig" style={{ display: 'block' }}>
+                        {gapText}
+                      </span>
+                      {d.lot.value?.signal?.beatRatePct != null && (
+                        <span className="ray-value-row-est" style={{ display: 'block', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
+                          {Math.round(d.lot.value.signal.beatRatePct)}% odds
+                        </span>
+                      )}
+                      <span className="ray-value-row-est" style={{ display: 'block' }}>
+                        {/* a FLAG is read against the estimate — print that, not the bid */}
+                        {(d.lot.estimateLow || d.lot.estimateHigh) ? `${estimateOnly(d.lot)} est.` : formatEstimate(d.lot)}
+                      </span>
+                    </span>
+                    {/* row-hover leader — the certificate sentence, the same
+                        statistic the modal shows; mono only on the figure */}
+                    <span className="ray-value-leader" aria-hidden="true">
+                      {face.comps
+                        ? <>comps median <b>{face.comps.text}</b> ({face.comps.sub}) vs {estimateOnly(d.lot)} estimate · <span className="up">{gapText}</span> over{face.call?.derivation ? <> · {face.call.derivation}</> : null}{face.value ? <> · {FACE_LABEL.value} <b>{face.value.text}</b></> : null}</>
+                        : <>{gapText} over ask{d.signal!.basis ? <> · {d.signal!.basis} sales</> : null}</>}
+                    </span>
+                  </button>
+                  {/* save — sibling of the row button (both interactive) */}
+                  <button
+                    type="button"
+                    className="ray-value-save"
+                    data-save-btn
+                    data-saved={isSaved(d.lot.id)}
+                    onClick={() => toggle(d.lot.id, d.lot)}
+                    aria-label={isSaved(d.lot.id) ? 'Remove from saved' : 'Save lot'}
+                    aria-pressed={isSaved(d.lot.id)}
+                  >
+                    <span className="ray-value-save-glyph">
+                      <svg width="10" height="12" viewBox="0 0 12 14" fill="none" aria-hidden="true">
+                        <path d="M1 1.5C1 1.22386 1.22386 1 1.5 1H10.5C10.7761 1 11 1.22386 11 1.5V12.5C11 12.6894 10.8862 12.8625 10.7096 12.9472C10.533 13.0319 10.3239 13.0136 10.1646 12.8994L6 9.91421L1.83541 12.8994C1.67614 13.0136 1.46698 13.0319 1.29037 12.9472C1.11377 12.8625 1 12.6894 1 12.5V1.5Z"
+                          fill={isSaved(d.lot.id) ? 'var(--color-bg)' : 'var(--color-text-faint)'} />
+                      </svg>
+                    </span>
+                  </button>
+                  </div>
+                  );
+                })
+              )}
+            </div>
+            {hasFlags && gridDeals.length > shown && (
+              <div className="ray-enter" style={{ textAlign: 'center', marginTop: 20 }}>
+                <button
+                  className="ray-call-btn ray-call-btn-quiet"
+                  onClick={() => setShown(s => s + ROWS_PAGE)}
+                >
+                  Show {Math.min(ROWS_PAGE, gridDeals.length - shown)} more · {gridDeals.length - shown} below
+                </button>
+              </div>
+            )}
+          </section>
+
+          {/* ── ROOM 2c · THE GAP ── (its measurable inventory counts the whole
+              live book: the lane waits for it) */}
+          {!partial && <GapAnnex rows={gapRowsView} total={gapRows.length} measured={gapMeasured} validated={gapValidated} receipts={receipts} activeKey={activeKey} play={!ray.fromCache} isSaved={isSaved} onToggleSave={toggle} />}
+
+          {/* ── ROOM 2d · THE SLEEPERS ── */}
+          <SleepersAnnex rows={sleeperRowsView} total={sleeperRows.length} queued={sleeperQueue} receipts={receipts} activeLabel={activeLabel} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />
+
+          {partial && <RayLoading />}
+          {!partial && (<>
+          {/* ════ HOW THE DESK READS (Oct 9 r6: after the lanes — the explainer
+              no longer stands between a reader and the board) — the cell grammar: split
+              head (quiet kicker, light headline) over three patent-figure
+              cells, one per lane. Copy states each lane's real gates
+              (pickCall/comps ladder, lanes.ts) in the lanes' own words. No
+              thresholds invented, no new signal labels. ════ */}
+          <section id="reads" className="rail ray-enter vd-room ns-plate vd-reads" style={{ '--enter-delay': '20ms', paddingTop: 'calc(var(--space-4) + var(--space-2))' } as React.CSSProperties}>
+            <div className="ns-split">
+              <div>
+                <span className="ns-kicker">Three lanes, one question each</span>
+                <h2 className="ray-h2" style={{ margin: 0 }}>How the desk reads</h2>
+              </div>
+              <p>
+                Every claim on this desk belongs to one lane. Each lane asks one question,
+                prints one statistic, and keeps its own record — the Flags on the certified
+                replay, the Gap and the Sleepers accruing theirs on the forward tape. When
+                the data runs thin, a lane abstains out loud.
+              </p>
+            </div>
+            <CellGrid min={250} className="vd-reads-grid">
+              <FigureCell
+                figure={<FigGate />}
+                label="The Flags"
+                body={<>Live lots whose comps median clears the estimate by at least 1.3&times; —
+                  ranked by calibrated odds, confidence-gated, and the engine abstains rather
+                  than print a thin call.</>}
+              />
+              <FigureCell
+                figure={<FigReplay />}
+                label="The Gap"
+                body={<>No-estimate lots where the projected close sits at least 25% under the
+                  value floor — the live bid times its room&rsquo;s close multiple, measured
+                  nightly on bids that went on to sell.</>}
+              />
+              <FigureCell
+                figure={<FigPools />}
+                label="The Sleepers"
+                body={<>Verified-fair lots with no printed bid yet, closing inside seven days —
+                  fairness measured against the engine&rsquo;s own appraisal, never inferred
+                  from a missing signal.</>}
+              />
+            </CellGrid>
+          </section>
+
+          {/* ════ ROOM 3 · THE RECORD (paper certificate) ════ */}
+          {backtest && backtest.flagged.n >= 100 && (
+            <div id="record" className="ray-band vd-room" style={{ marginTop: 34, paddingBlock: '28px 30px' }}>
+              <section className="rail ray-enter" style={{ '--enter-delay': '60ms', paddingTop: 0 } as React.CSSProperties}>
+                {/* DUAL BASIS, premium-led: headline medians are all-in with
+                    the hammer read as sub — EXCEPT beat-the-estimate, where
+                    estimates are hammer-basis so the hammer figure is the
+                    only honest lead. Every cell names its basis. */}
+                <RecordBand
+                  title="The record"
+                  context="every call replayed against history"
+                  serial={(lastCrawl || '').slice(0, 10).replace(/-/g, '') || undefined}
+                  footer="each figure names its basis · refit nightly from the full replay"
+                  cells={[
+                    // (wave 3) lead with the HAMMER — the basis the Flags are
+                    // called on; all-in rides the sub line
+                    ...(() => {
+                      const F = backtest.flagged, U = backtest.unflagged;
+                      const ham = F.hammerMedianPct != null && U.hammerMedianPct != null;
+                      const f = ham ? F.hammerMedianPct! : F.medianPerfPct;
+                      const u = ham ? U.hammerMedianPct! : U.medianPerfPct;
+                      return [
+                        {
+                          k: 'Flagged calls',
+                          v: fmtSignedPct(f),
+                          signed: f,
+                          sub: ham
+                            ? `hammer vs estimate · all-in ${fmtSignedPct(F.medianPerfPct)} · n ${F.n.toLocaleString()}`
+                            : `realized vs estimate, all-in · n ${F.n.toLocaleString()}`,
+                        },
+                        {
+                          k: 'The edge',
+                          v: `${f - u >= 0 ? '+' : '−'}${Math.abs(f - u)} pts`,
+                          signed: f - u,
+                          sub: <>over {U.n.toLocaleString()} unflagged ({fmtSignedPct(u)} {ham ? 'hammer' : 'all-in'})</>,
+                        },
+                      ];
+                    })(),
+                    {
+                      k: 'Beat the high',
+                      v: `${Math.round(backtest.flagged.hammerBeatPct ?? backtest.flagged.beatHighPct)}%`,
+                      // the label names whichever basis the figure actually is
+                      sub: backtest.flagged.hammerBeatPct != null
+                        ? `at the hammer · vs ${backtest.unflagged.hammerBeatPct ?? backtest.unflagged.beatHighPct}% unflagged`
+                        : `all-in · vs ${backtest.unflagged.beatHighPct}% unflagged`,
+                    },
+                    backtest.flagged.failToSellPct != null && backtest.above.failToSellPct != null
+                      ? {
+                          k: 'Failed to sell',
+                          v: `${backtest.flagged.failToSellPct.toFixed(1)}%`,
+                          sub: <>of flagged lots · vs {backtest.above.failToSellPct}% of &ldquo;above market&rdquo;</>,
+                        }
+                      : {
+                          k: '“Above market” calls',
+                          v: fmtSignedPct(backtest.above.medianPerfPct),
+                          signed: backtest.above.medianPerfPct,
+                          sub: 'underperformed both — the ordering holds',
+                        },
+                  ]}
+                />
+              </section>
+
+              <RecordByYear backtest={backtest} />
+
+              <OutcomeDistribution backtest={backtest} />
+
+              {/* the honesty ledger — the record's fine print, led by the low */}
+              <section className="rail ray-enter vd-honesty" style={{ paddingTop: 0 }}>
+                {worstYear && (
+                  <div className="vd-honesty-row">
+                    <span>Worst flagged year since 2000</span>
+                    <span className="vd-honesty-fill" aria-hidden />
+                    <span><b>{worstYear.year}</b> <span className={toneOf(worstYear.flaggedMedianPct!) === 'up' ? 'vd-honesty-up' : 'vd-honesty-down'}>{fmtSignedPct(worstYear.flaggedMedianPct!)}</span> · {worstYear.nFlagged.toLocaleString()} calls</span>
+                  </div>
+                )}
+                {ytd && (
+                  <div className="vd-honesty-row">
+                    <span>{ytd.year} to date</span>
+                    <span className="vd-honesty-fill" aria-hidden />
+                    <span>flagged <span className={toneOf(ytd.flaggedMedianPct!) === 'up' ? 'vd-honesty-up' : 'vd-honesty-down'}>{fmtSignedPct(ytd.flaggedMedianPct!)}</span> vs unflagged {fmtSignedPct(ytd.unflaggedMedianPct!)} · n {ytd.nFlagged.toLocaleString()}</span>
+                  </div>
+                )}
+                {tiers?.main && tiers?.fallback && (
+                  <div className="vd-honesty-row">
+                    <span>Both arms carry edge</span>
+                    <span className="vd-honesty-fill" aria-hidden />
+                    <span>main {fmtSignedPct(tiers.main.medianPerfPct)} (n {tiers.main.n.toLocaleString()}) · fallback {fmtSignedPct(tiers.fallback.medianPerfPct)} (n {tiers.fallback.n.toLocaleString()})</span>
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
+
+          {/* ════ ROOM 4 · THE SETTLED TAPE ════
+              (REDUCE AUDIT Aug 25 2026, Collin's call: /value is ONLY the
+              value engine's metrics and data. The odds-ladder room and the
+              conditions room were cut here — the calibration curve renders
+              on /analytics under "The engine's record", and house
+              calibration + the calendar are /analytics rooms outright.) */}
+
+          {/* settled tape — calls logged before the hammer, then graded (the
+              forward ledger; no corpus, no sentinel — page-stats.json) */}
+          <section id="tape" className="rail ray-enter vd-room ns-plate" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))', paddingBottom: 'var(--space-4)' }}>
+              {/* THE FLAGS, GRADED — the live answer to "did the last flags
+                  beat the estimate?", lot by lot (hammer basis, graded on the
+                  last value served before the sale; counts = the window) */}
+              {flagGraded && (
+                <div id="graded" className="vd-room" style={{ marginBottom: 26 }}>
+                  <div className="vd-sect-head">
+                    <span className="vd-sect-mark" aria-hidden><FlagsMark size={16} /></span>
+                    <span className="ns-kicker">The Flags, graded</span>
+                    <span className="vd-pulse-rule" aria-hidden />
+                    <span className="vd-sect-cap">
+                      {flagGraded.n > 0
+                        ? <>{flagGraded.hits} of {flagGraded.n} {flagGraded.n === 1 ? 'flag' : 'flags'} hammered above the high · last {flagGraded.days} days · graded on the last value served before the sale</>
+                        : <>graded nightly on the last value served before the sale</>}
+                    </span>
+                  </div>
+                  {flagGraded.rows.length > 0 ? flagGraded.rows.map(r => {
+                    const delta = r.ham > 0 && r.top > 0 ? Math.round((r.ham / r.top - 1) * 100) : null;
+                    return (
+                      <Link key={r.id} href={`/lot/${encodeURIComponent(r.id)}`} className="vd-tape-row">
+                        <span style={{ minWidth: 0 }}>
+                          <span className="vd-tape-title" style={{ display: 'block', color: 'var(--color-fg)', fontWeight: 600 }}>{r.t ? craftTitle(r.t) : r.id}</span>
+                          <span className="vd-tape-maker" style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>{r.a ? (ARTIST_LABEL[r.a] || r.a) : ''}{r.h ? `${r.a ? ' · ' : ''}${r.h}` : ''}</span>
+                        </span>
+                        <span className="vd-tape-cells">
+                          <span className="vd-tape-real">{r.ham > 0 ? <>hammered {fmtFace(r.ham)}</> : <>bought in</>}{r.sd ? ` · ${formatDate(r.sd)}` : ''}</span>
+                          <span className="vd-tape-vs">
+                            high {fmtFace(r.top)} · {r.ham > 0 && delta != null
+                              ? <><span data-tone={r.hit ? 'up' : 'down'}>{fmtSignedPct(delta)}</span> {r.hit ? 'beat it' : 'short of it'}</>
+                              : <span data-tone="down">a counted miss</span>}
+                          </span>
+                        </span>
+                      </Link>
+                    );
+                  }) : (
+                    <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>
+                      No {activeLabel === 'collectible' ? '' : `${activeLabel} `}flag has settled in the last {flagGraded.days} days — each one grades here the night its lot hammers.
+                    </p>
+                  )}
+                  {flagGraded.rows.length > 0 && (
+                    <div className="vd-annex-meter">
+                      {flagGraded.n > flagGraded.rows.length ? <>the {flagGraded.rows.length} newest of {flagGraded.n} graded · </> : null}hammer basis · &ldquo;high&rdquo; is the house-adjusted top the odds are fit to · a bought-in lot is a miss
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="vd-sect-head">
+                <span className="vd-sect-mark" aria-hidden><TapeMark size={16} /></span>
+                <span className="ns-kicker">Settled calls</span>
+                <span className="vd-pulse-rule" aria-hidden />
+                <span className="vd-sect-cap">comps and projection calls, logged before the hammer, graded at it · the Flags grade on the replayed record above — <Link href="/receipts" style={{ color: 'inherit' }}>the full record</Link></span>
+              </div>
+              {settled === null ? (
+                <div aria-hidden>
+                  {Array.from({ length: 3 }, (_, i) => <div key={i} className="vd-tape-ghost" />)}
+                </div>
+              ) : settled.length > 0 ? (
+                /* one row per LOT (Oct 9 r6): a lot the tape called twice (its
+                   comps read and its bid projection) printed twice, back to
+                   back — every call stays, stacked under the one realized price */
+                settledByLot.map(({ id, calls }) => {
+                  const s0 = calls[0];
+                  return (
+                    <Link key={id} href={`/lot/${encodeURIComponent(id)}`} className="vd-tape-row">
+                      <span style={{ minWidth: 0 }}>
+                        <span className="vd-tape-title" style={{ display: 'block', color: 'var(--color-fg)', fontWeight: 600 }}>{s0.t ? craftTitle(s0.t) : id}</span>
+                        <span className="vd-tape-maker" style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>{s0.a ? (ARTIST_LABEL[s0.a] || s0.a) : ''}{s0.h ? ` · ${s0.h}` : ''}</span>
+                      </span>
+                      <span className="vd-tape-cells">
+                        <span className="vd-tape-real">realized {formatPrice(s0.r)} all-in{s0.sd ? ` · ${formatDate(s0.sd)}` : ''}</span>
+                        {calls.map(s => {
+                          const delta = s.p > 0 ? Math.round((s.r / s.p - 1) * 100) : null;
+                          const kind = ({ card: 'comps', vsbid: 'proj', gap: 'gap', quiet: 'quiet' } as Record<string, string>)[s.k] || s.k;
+                          return (
+                            <span key={s.k} className="vd-tape-vs">
+                              called {formatPrice(s.p)} <span style={{ textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.06em' }}>{kind}</span>
+                              {delta != null && <> · <span data-tone={toneOf(delta)}>{fmtSignedPct(delta)}</span> vs the call</>}
+                            </span>
+                          );
+                        })}
+                      </span>
+                    </Link>
+                  );
+                })
+              ) : (
+                <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>
+                  No {activeLabel} calls have hammered yet this cycle — the tape fills as the board settles.
+                </p>
+              )}
+            </section>
+
+          {/* ════ ROOM 5 · THE ENGINE CARD (paper #2, the closer) ════ */}
+          <section id="engine" className="rail ray-enter vd-room ns-plate" style={{ paddingBlock: '18px 8px' }}>
+            <div className="ray-engine-card">
+              <h2 className="ray-engine-head">
+                <span className="vd-sect-mark" style={{ verticalAlign: -3, marginRight: 10 }} aria-hidden><EngineMark size={19} /></span>
+                Every flag here earned its ink.
+              </h2>
+              <p className="ray-engine-body">
+                A read is comps, not opinion: same maker, same form, size-banded —
+                medians, never means. Each vertical carries its own gate (a jersey
+                only comps that player&rsquo;s jerseys; a Daytona only same-reference,
+                same-metal Daytonas), and where the data can&rsquo;t carry a call, the
+                engine abstains rather than guesses.
+              </p>
+              {backtest && backtest.flagged.n > 500 && (
+                <div className="ray-engine-stats">
+                  <span><b>{backtest.flagged.n.toLocaleString()}</b> calls replayed</span>
+                  <span className="ray-engine-dot" aria-hidden />
+                  <span>flagged realized <b className="up">{fmtSignedPct(backtest.flagged.medianPerfPct)}</b> all-in vs estimate</span>
+                  <span className="ray-engine-dot" aria-hidden />
+                  <span>the edge: <b>{backtest.flagged.medianPerfPct - backtest.unflagged.medianPerfPct} pts</b></span>
+                </div>
+              )}
+              <Link href="/blog/how-we-built-the-pricing-engine" className="ray-engine-cta">
+                Read how it&rsquo;s built &rarr;
+              </Link>
+            </div>
+          </section>
+
+          </>)}
+
+          {modalLot && !partial && (
+            <ComparableModal
+              lot={modalLot}
+              allLots={marketLots}
+              onClose={() => setModalLot(null)}
+              saved={isSaved(modalLot.id)}
+              onToggleSave={id => toggle(id, modalLot)}
+            />
+          )}
+        </RayEntrance>
+  );
+  if (snap) return body;
 
   return (
     <div className="ray-mobnav-pad terminal-shell" style={{
@@ -2075,623 +2710,14 @@ export default function ValuePage() {
           extras (call-plate band, settled tape, modal comp rows) hydrate in
           behind without ever swapping a printed figure. */}
       {loading ? (
-        <RayLoading />
+        <>
+          {/* (W27) the first screen, drawn into the HTML at build time; the
+              loading line right after it shows only when the gate drops it */}
+          <FirstPaintIsland fsKey={fsKey} render={() => <ValueDesk />} />
+          <RayLoading />
+        </>
       ) : (
-        <RayEntrance animate={!fromCache}>
-          <div className="rail ray-enter" style={{ paddingTop: 'var(--space-4)' }}><MarketSwitch compact /></div>
-
-
-          {/* ════ ROOM 1 · THE COCKPIT ════ */}
-          <section id="desk" className="rail ray-enter vd-room" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))' }}>
-            <div className="vd-cockpit">
-              <div className="vd-cockpit-main">
-                <Masthead
-                  kicker=""
-                  title={hasFlags
-                    ? <>Priced <Accent>under</Accent> where the {activeLabel === 'collectible' ? 'market' : `${activeLabel} market`} clears.</>
-                    : <>The {activeLabel === 'collectible' ? 'whole' : activeLabel} book is read. <Accent>No lot</Accent> clears the bar tonight.</>}
-                  sub={hasFlags
-                    ? <>
-                        <b style={{ color: 'var(--color-fg)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{deals.length}</b> flags live ·{' '}
-                        <span style={{ color: 'var(--color-up)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                          median gap {signalMagnitude('Below Market', Math.round(summary.medianGap))}
-                        </span>{' '}
-                        · {formatPrice(summary.totalEst)} at estimate · {summary.artists} makers
-                        {summary.soonest && <> · <span style={{ whiteSpace: 'nowrap' }}>first hammer {formatDate(trueSaleDay(summary.soonest.lot))}</span></>}
-                      </>
-                    : partial ? <>The engine abstains rather than force a thin call · — live lots read in scope</>
-                    : <>The engine abstains rather than force a thin call · {appraisedCount > 0 ? <>{appraisedCount.toLocaleString()} live lots read in scope</> : <>{liveLots.length.toLocaleString()} live lots in scope, none read yet</>}{nextHammer && <> · next hammer {formatDate(trueSaleDay(nextHammer))}</>}</>}
-                />
-              </div>
-              <div className="vd-cockpit-pulse">
-                <MarketPulse ray={ray} activeKey={activeKey} activeLabel={activeLabel} play={!fromCache} />
-              </div>
-              <div className="vd-dials-wrap">
-                <DialStrip dials={dials} />
-              </div>
-            </div>
-          </section>
-
-          {/* ════ ROOM 2 · THE BOARD ════ */}
-          {/* phase-2 failed: the ledger stands on the precomputed stamps —
-              say what's missing instead of blanking the page */}
-          {fullError && (
-            <div className="rail ray-enter" style={{ paddingTop: 12, textAlign: 'center' }}>
-              <button className="ray-call-btn ray-call-btn-quiet" style={{ cursor: 'pointer' }} onClick={() => retryFullLoad()}>
-                Part of the book didn&rsquo;t load — comps depth is missing · try again
-              </button>
-            </div>
-          )}
-
-          {/* the triage row leads the lanes (Oct 9 r6): it narrows the call,
-              the Flags, the Gap and the Sleepers — so it sits above all four,
-              on the phone's first screen instead of four screens down */}
-          <div id="narrow" className="rail ray-enter vd-room" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))' }}>
-            <TriageBar
-              lots={flagLots}
-              cats={activeKey === 'all' ? undefined : MARKET_CATS[activeKey]}
-              filters={triage}
-              onChange={setTriage}
-              prevVisitDay={prevVisitDay}
-              baselines={baselines}
-              shown={dealsView.length}
-              total={deals.length}
-              label="Narrow the lanes"
-            />
-          </div>
-
-          {callShown && call && (
-            <section id="call" className="rail ray-enter vd-room ns-plate" style={{ '--enter-delay': '40ms', paddingTop: 'var(--space-2)' } as React.CSSProperties}>
-              {/* THE CALL AS COLOR — the ONE forced-color cell on the desk:
-                  the plate's face rides the ns-cell-color grammar (grained
-                  signal gradient, text goes paper) while its DOM, data and
-                  CTAs stay byte-identical inside. dir is the call's actual
-                  direction — pickCall admits only Below-Market flags (comps
-                  over ask), the same 'up' the plate already stamps on its
-                  gap row — so the ground is lamp-lawful by construction;
-                  any non-directional call falls to ink. The gold .lit halo
-                  yields to the color ground: still one lit element, the
-                  signal itself is now the marquee. */}
-              <div
-                className="ns-cell ns-cell-color vd-call-cell"
-                data-dir={call.signal?.label === 'Below Market' ? 'up' : 'ink'}
-              >
-              <CallPlate
-                lots={marketLots}
-                allLots={marketLots}
-                market={activeKey}
-                density="compact"
-                isSaved={isSaved}
-                onToggleSave={toggle}
-                onSeeComps={l => setModalLot(l)}
-                band={callBand ? (
-                  <PriceBand
-                    prices={callBand.prices}
-                    median={callBand.median}
-                    estLow={call.lot.estimateLow}
-                    estHigh={call.lot.estimateHigh}
-                    below={true}
-                  />
-                ) : ((callStamp || callPack === undefined) && !fullLoaded && !fullError ? <div style={{ height: 102 }} aria-hidden /> : null)}
-              />
-              </div>
-            </section>
-          )}
-
-
-          <section id="flags" className="ray-value-section rail vd-room ns-plate">
-            <div className="ray-enter">
-              <LaneHead
-                mark={<FlagsMark />}
-                name="The Flags"
-                count={dealsView.length}
-                play={!fromCache}
-                tag={sortMode === 'priority' ? 'comps vs estimate · what matters most first: size, measured edge, evidence, closing time' : sortMode === 'odds' ? 'comps vs estimate · calibrated odds first, the deepest gap breaks ties' : 'comps vs estimate · soonest hammer first'}
-                help={
-                  <>Each row is a live lot whose <Term k="comps">comps median</Term> clears its
-                  estimate by at least 1.3×. <Term k="odds">Odds</Term> rank the board — the share of
-                  historical calls at that ratio which beat the high estimate — and the deepest gap
-                  breaks ties. Click a row for the full comps case; j/k walk the rows, s saves.</>
-                }
-                right={
-                  <span className="vd-sort" role="tablist" aria-label="Board order">
-                    <button type="button" role="tab" aria-selected={sortMode === 'priority'} data-on={sortMode === 'priority' || undefined} onClick={() => setSortMode('priority')}>Matters most</button>
-                    <button type="button" role="tab" aria-selected={sortMode === 'odds'} data-on={sortMode === 'odds' || undefined} onClick={() => setSortMode('odds')}>Odds</button>
-                    <button type="button" role="tab" aria-selected={sortMode === 'closing'} data-on={sortMode === 'closing' || undefined} onClick={() => setSortMode('closing')}>Closing next</button>
-                  </span>
-                }
-              />
-            </div>
-            <div ref={boardRef} className="glass glass-quiet ray-enter" style={{ overflow: 'clip' }}>
-              <div className="ray-value-head" aria-hidden="true">
-                <span />
-                <span className="kicker">Lot</span>
-                <span className="kicker">House</span>
-                <span className="kicker">Hammers</span>
-                <span className="kicker" style={{ textAlign: 'right' }}>Estimate</span>
-                <span className="kicker" style={{ textAlign: 'right' }}>Comps med</span>
-                <span className="kicker" style={{ textAlign: 'right' }}>Odds{uniformOdds != null && <><br />{uniformOdds}%</>}</span>
-                <span className="kicker" style={{ textAlign: 'right' }}>Gap</span>
-              </div>
-              {!hasFlags ? (
-                /* zero flags: the instrument keeps its frame — abstention is
-                   stated, the doors stay open, no apology, no coral */
-                <div className="vd-empty ray-enter">
-                  <p>
-                    The engine abstains in the {activeLabel} market tonight — {partial ? <>— live lots read</> : appraisedCount > 0
-                      ? <>{appraisedCount.toLocaleString()} live lots read, none clears the 1.3× flag bar</>
-                      : <>none of its {liveLots.length.toLocaleString()} live lots carries a comps read yet</>}. A blank beats a wrong number.
-                  </p>
-                  <div className="vd-empty-links">
-                    {activeKey !== 'all' && (
-                      /* /value bare resolves to the STORED market, so a plain
-                         href is a no-op here — the switch must go through
-                         setMarket (pushStates the bare path, flips storage) */
-                      <Link href="/value" className="link-action" style={{ color: 'var(--color-fg)' }}
-                        onClick={e => { e.preventDefault(); setMarket('all'); }}>
-                        Watch all markets · {allFlagCount} flags live <span className="arrow"><Flick size={10} style={{ marginLeft: 5 }} /></span>
-                      </Link>
-                    )}
-                    <Link href={activeKey === 'all' ? '/' : `/analytics/${activeKey}`} className="link-action" style={{ color: 'var(--color-fg)' }}>
-                      {activeKey === 'all' ? 'Browse everything live' : `The ${activeLabel} research desk`} <span className="arrow"><Flick size={10} style={{ marginLeft: 5 }} /></span>
-                    </Link>
-                  </div>
-                </div>
-              ) : gridDeals.length === 0 ? (
-                /* flags exist, the triage row cut them all: say which filters,
-                   when the nearest flag hammers, and offer each filter back */
-                <div className="vd-empty ray-enter">
-                  <p>
-                    {!isTriageActive(triage)
-                      ? <>Today&rsquo;s call above is the only flag live in the {activeLabel} market.</>
-                      : dealsView.length > 0
-                        ? <>Only today&rsquo;s call above passes these filters ({filterWords}) — {deals.length.toLocaleString()} {deals.length === 1 ? 'flag is' : 'flags are'} live in the {activeLabel} market.</>
-                        : <>No flag passes these filters ({filterWords}) — {deals.length.toLocaleString()} {deals.length === 1 ? 'is' : 'are'} live in the {activeLabel} market{soonestOutsideWindow ? <>; the soonest one that fits the other filters hammers {formatDate(soonestOutsideWindow)}</> : null}.</>}
-                  </p>
-                  <div className="vd-empty-links">
-                    {relaxations.map(r => (
-                      <button key={r.k} type="button" className="link-action"
-                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--color-fg)' }}
-                        onClick={() => setTriage(r.next)}>
-                        {r.label} · {r.n} {r.n === 1 ? 'flag' : 'flags'} <span className="arrow"><Flick size={10} style={{ marginLeft: 5 }} /></span>
-                      </button>
-                    ))}
-                    {isTriageActive(triage) && (
-                      <button type="button" className="link-action"
-                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--color-fg)' }}
-                        onClick={() => setTriage(TRIAGE_DEFAULTS)}>
-                        Clear the filters <span className="arrow"><Flick size={10} style={{ marginLeft: 5 }} /></span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                gridDeals.slice(0, shown).map((d, i) => {
-                  const conf = d.lot.value?.signal ? null : (d.lot.signal?.confidence ?? d.signal?.confidence);
-                  // ONE LOT, ONE NUMBER (r8): the row prints lib/lot-face's
-                  // figures — the plate's, the modal's, the lot page's
-                  const face = lotFace(d.lot);
-                  const gapText = face.call?.text ?? signalMagnitude('Below Market', Math.round(d.signal!.pct));
-                  return (
-                  <div key={d.lot.id} className="ray-value-rowwrap ray-enter-card" data-flip-id={d.lot.id}
-                    style={{ '--enter-delay': `${Math.min(i, 8) * 40}ms` } as React.CSSProperties}>
-                  <button
-                    type="button"
-                    className="ray-value-row"
-                    data-nav-row
-                    onClick={() => setModalLot(d.lot)}
-                    aria-haspopup="dialog"
-                  >
-                    {/* Thumbnail — monogram plate always behind, photo overlays;
-                        on a hotlink-block the plate shows through, never a gap */}
-                    <span className="ray-value-row-thumb" aria-hidden="true" style={{ position: 'relative' }}>
-                      <span className="vd-thumb-letter">
-                        {(makerLineOf(d.lot).name || craftTitle(d.lot.title, d.lot.auctionHouse)).charAt(0)}
-                      </span>
-                      {d.lot.imageUrl && (
-                        <img src={sizedImg(httpsImg(d.lot.imageUrl), 120)} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async"
-                          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-                          onError={e => e.currentTarget.remove()} />
-                      )}
-                    </span>
-                    <span style={{ minWidth: 0 }}>
-                      <span className="ray-value-row-maker" style={{ display: 'block' }}>
-                        {makerLineOf(d.lot).name}
-                        <LabelSuffix lot={d.lot} />
-                      </span>
-                      <span className="ray-value-row-title" style={{ display: 'block' }}>
-                        {craftTitle(d.lot.title, d.lot.auctionHouse)}
-                      </span>
-                      {/* its own line: inside the nowrap/ellipsis title the date was the first thing cut */}
-                      <span className="ray-value-mobdate">
-                        <span className="ray-value-mobdate-in">
-                          {(() => {
-                            const day = trueSaleDay(d.lot) || d.lot.saleDate;
-                            const past = trueSaleDay(d.lot) && trueSaleDay(d.lot) < localToday();
-                            const dU = daysUntil(day);
-                            if (!past && dU != null && dU <= 0) {
-                              const tonight = !!d.lot.saleDateTime && new Date(d.lot.saleDateTime).getHours() >= 17;
-                              return <><span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>
-                                {tonight ? 'closes tonight' : 'closes today'}
-                                {d.lot.saleDateTime && <> · <CloseClock iso={d.lot.saleDateTime} windowHours={24} /></>}
-                              </span></>;
-                            }
-                            return <>{past ? 'hammered' : 'hammers'} {formatDate(day)}</>;
-                          })()}
-                        </span>
-                      </span>
-                    </span>
-                    <span className="ray-value-cell">{d.lot.auctionHouse}</span>
-                    <span className="ray-value-cell">
-                      {(() => {
-                        const iso = d.lot.saleDateTime;
-                        const ms = iso ? Date.parse(iso) - Date.now() : null;
-                        return ms != null && ms > 0 && ms < 24 * 3600e3
-                          ? <span className="vd-breathe" style={{ color: 'var(--color-fg)', fontWeight: 600 }}><CloseClock iso={iso!} windowHours={24} /></span>
-                          : formatDate(trueSaleDay(d.lot) || d.lot.saleDate);
-                      })()}
-                    </span>
-                    <span className="ray-value-cell ray-value-cell-num ray-value-cell-est">{estimateOnly(d.lot)}</span>
-                    <span className="ray-value-cell ray-value-cell-num">
-                      {face.comps ? face.comps.text : '—'}
-                    </span>
-                    <span className="ray-value-cell ray-value-cell-num ray-value-cell-odds">
-                      {uniformOdds != null
-                        ? null
-                        : d.lot.value?.signal?.beatRatePct != null
-                        ? `${Math.round(d.lot.value.signal.beatRatePct)}%`
-                        : conf
-                          ? <span className="ray-value-conf"><span aria-hidden="true">{confidenceMeter(conf).dots}</span><span className="sr-only">{confidenceMeter(conf).word} confidence</span></span>
-                          : '—'}
-                    </span>
-                    <span className="ray-value-cell ray-value-cell-num ray-value-cell-gap">
-                      {gapText}
-                      <CellTrack pct={d.signal!.pct / 4} tone="up" />
-                    </span>
-                    {/* MOBILE stack — the audited-good phone composition */}
-                    <span className="ray-value-mob" style={{ textAlign: 'right' }}>
-                      <span className="ray-value-row-sig" style={{ display: 'block' }}>
-                        {gapText}
-                      </span>
-                      {d.lot.value?.signal?.beatRatePct != null && (
-                        <span className="ray-value-row-est" style={{ display: 'block', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-                          {Math.round(d.lot.value.signal.beatRatePct)}% odds
-                        </span>
-                      )}
-                      <span className="ray-value-row-est" style={{ display: 'block' }}>
-                        {/* a FLAG is read against the estimate — print that, not the bid */}
-                        {(d.lot.estimateLow || d.lot.estimateHigh) ? `${estimateOnly(d.lot)} est.` : formatEstimate(d.lot)}
-                      </span>
-                    </span>
-                    {/* row-hover leader — the certificate sentence, the same
-                        statistic the modal shows; mono only on the figure */}
-                    <span className="ray-value-leader" aria-hidden="true">
-                      {face.comps
-                        ? <>comps median <b>{face.comps.text}</b> ({face.comps.sub}) vs {estimateOnly(d.lot)} estimate · <span className="up">{gapText}</span> over{face.call?.derivation ? <> · {face.call.derivation}</> : null}{face.value ? <> · {FACE_LABEL.value} <b>{face.value.text}</b></> : null}</>
-                        : <>{gapText} over ask{d.signal!.basis ? <> · {d.signal!.basis} sales</> : null}</>}
-                    </span>
-                  </button>
-                  {/* save — sibling of the row button (both interactive) */}
-                  <button
-                    type="button"
-                    className="ray-value-save"
-                    data-save-btn
-                    data-saved={isSaved(d.lot.id)}
-                    onClick={() => toggle(d.lot.id, d.lot)}
-                    aria-label={isSaved(d.lot.id) ? 'Remove from saved' : 'Save lot'}
-                    aria-pressed={isSaved(d.lot.id)}
-                  >
-                    <span className="ray-value-save-glyph">
-                      <svg width="10" height="12" viewBox="0 0 12 14" fill="none" aria-hidden="true">
-                        <path d="M1 1.5C1 1.22386 1.22386 1 1.5 1H10.5C10.7761 1 11 1.22386 11 1.5V12.5C11 12.6894 10.8862 12.8625 10.7096 12.9472C10.533 13.0319 10.3239 13.0136 10.1646 12.8994L6 9.91421L1.83541 12.8994C1.67614 13.0136 1.46698 13.0319 1.29037 12.9472C1.11377 12.8625 1 12.6894 1 12.5V1.5Z"
-                          fill={isSaved(d.lot.id) ? 'var(--color-bg)' : 'var(--color-text-faint)'} />
-                      </svg>
-                    </span>
-                  </button>
-                  </div>
-                  );
-                })
-              )}
-            </div>
-            {hasFlags && gridDeals.length > shown && (
-              <div className="ray-enter" style={{ textAlign: 'center', marginTop: 20 }}>
-                <button
-                  className="ray-call-btn ray-call-btn-quiet"
-                  onClick={() => setShown(s => s + ROWS_PAGE)}
-                >
-                  Show {Math.min(ROWS_PAGE, gridDeals.length - shown)} more · {gridDeals.length - shown} below
-                </button>
-              </div>
-            )}
-          </section>
-
-          {/* ── ROOM 2c · THE GAP ── (its measurable inventory counts the whole
-              live book: the lane waits for it) */}
-          {!partial && <GapAnnex rows={gapRowsView} total={gapRows.length} measured={gapMeasured} validated={gapValidated} receipts={receipts} activeKey={activeKey} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />}
-
-          {/* ── ROOM 2d · THE SLEEPERS ── */}
-          <SleepersAnnex rows={sleeperRowsView} total={sleeperRows.length} queued={sleeperQueue} receipts={receipts} activeLabel={activeLabel} play={!fromCache} isSaved={isSaved} onToggleSave={toggle} />
-
-          {partial && <RayLoading />}
-          {!partial && (<>
-          {/* ════ HOW THE DESK READS (Oct 9 r6: after the lanes — the explainer
-              no longer stands between a reader and the board) — the cell grammar: split
-              head (quiet kicker, light headline) over three patent-figure
-              cells, one per lane. Copy states each lane's real gates
-              (pickCall/comps ladder, lanes.ts) in the lanes' own words. No
-              thresholds invented, no new signal labels. ════ */}
-          <section id="reads" className="rail ray-enter vd-room ns-plate vd-reads" style={{ '--enter-delay': '20ms', paddingTop: 'calc(var(--space-4) + var(--space-2))' } as React.CSSProperties}>
-            <div className="ns-split">
-              <div>
-                <span className="ns-kicker">Three lanes, one question each</span>
-                <h2 className="ray-h2" style={{ margin: 0 }}>How the desk reads</h2>
-              </div>
-              <p>
-                Every claim on this desk belongs to one lane. Each lane asks one question,
-                prints one statistic, and keeps its own record — the Flags on the certified
-                replay, the Gap and the Sleepers accruing theirs on the forward tape. When
-                the data runs thin, a lane abstains out loud.
-              </p>
-            </div>
-            <CellGrid min={250} className="vd-reads-grid">
-              <FigureCell
-                figure={<FigGate />}
-                label="The Flags"
-                body={<>Live lots whose comps median clears the estimate by at least 1.3&times; —
-                  ranked by calibrated odds, confidence-gated, and the engine abstains rather
-                  than print a thin call.</>}
-              />
-              <FigureCell
-                figure={<FigReplay />}
-                label="The Gap"
-                body={<>No-estimate lots where the projected close sits at least 25% under the
-                  value floor — the live bid times its room&rsquo;s close multiple, measured
-                  nightly on bids that went on to sell.</>}
-              />
-              <FigureCell
-                figure={<FigPools />}
-                label="The Sleepers"
-                body={<>Verified-fair lots with no printed bid yet, closing inside seven days —
-                  fairness measured against the engine&rsquo;s own appraisal, never inferred
-                  from a missing signal.</>}
-              />
-            </CellGrid>
-          </section>
-
-          {/* ════ ROOM 3 · THE RECORD (paper certificate) ════ */}
-          {backtest && backtest.flagged.n >= 100 && (
-            <div id="record" className="ray-band vd-room" style={{ marginTop: 34, paddingBlock: '28px 30px' }}>
-              <section className="rail ray-enter" style={{ '--enter-delay': '60ms', paddingTop: 0 } as React.CSSProperties}>
-                {/* DUAL BASIS, premium-led: headline medians are all-in with
-                    the hammer read as sub — EXCEPT beat-the-estimate, where
-                    estimates are hammer-basis so the hammer figure is the
-                    only honest lead. Every cell names its basis. */}
-                <RecordBand
-                  title="The record"
-                  context="every call replayed against history"
-                  serial={(lastCrawl || '').slice(0, 10).replace(/-/g, '') || undefined}
-                  footer="each figure names its basis · refit nightly from the full replay"
-                  cells={[
-                    // (wave 3) lead with the HAMMER — the basis the Flags are
-                    // called on; all-in rides the sub line
-                    ...(() => {
-                      const F = backtest.flagged, U = backtest.unflagged;
-                      const ham = F.hammerMedianPct != null && U.hammerMedianPct != null;
-                      const f = ham ? F.hammerMedianPct! : F.medianPerfPct;
-                      const u = ham ? U.hammerMedianPct! : U.medianPerfPct;
-                      return [
-                        {
-                          k: 'Flagged calls',
-                          v: fmtSignedPct(f),
-                          signed: f,
-                          sub: ham
-                            ? `hammer vs estimate · all-in ${fmtSignedPct(F.medianPerfPct)} · n ${F.n.toLocaleString()}`
-                            : `realized vs estimate, all-in · n ${F.n.toLocaleString()}`,
-                        },
-                        {
-                          k: 'The edge',
-                          v: `${f - u >= 0 ? '+' : '−'}${Math.abs(f - u)} pts`,
-                          signed: f - u,
-                          sub: <>over {U.n.toLocaleString()} unflagged ({fmtSignedPct(u)} {ham ? 'hammer' : 'all-in'})</>,
-                        },
-                      ];
-                    })(),
-                    {
-                      k: 'Beat the high',
-                      v: `${Math.round(backtest.flagged.hammerBeatPct ?? backtest.flagged.beatHighPct)}%`,
-                      // the label names whichever basis the figure actually is
-                      sub: backtest.flagged.hammerBeatPct != null
-                        ? `at the hammer · vs ${backtest.unflagged.hammerBeatPct ?? backtest.unflagged.beatHighPct}% unflagged`
-                        : `all-in · vs ${backtest.unflagged.beatHighPct}% unflagged`,
-                    },
-                    backtest.flagged.failToSellPct != null && backtest.above.failToSellPct != null
-                      ? {
-                          k: 'Failed to sell',
-                          v: `${backtest.flagged.failToSellPct.toFixed(1)}%`,
-                          sub: <>of flagged lots · vs {backtest.above.failToSellPct}% of &ldquo;above market&rdquo;</>,
-                        }
-                      : {
-                          k: '“Above market” calls',
-                          v: fmtSignedPct(backtest.above.medianPerfPct),
-                          signed: backtest.above.medianPerfPct,
-                          sub: 'underperformed both — the ordering holds',
-                        },
-                  ]}
-                />
-              </section>
-
-              <RecordByYear backtest={backtest} />
-
-              <OutcomeDistribution backtest={backtest} />
-
-              {/* the honesty ledger — the record's fine print, led by the low */}
-              <section className="rail ray-enter vd-honesty" style={{ paddingTop: 0 }}>
-                {worstYear && (
-                  <div className="vd-honesty-row">
-                    <span>Worst flagged year since 2000</span>
-                    <span className="vd-honesty-fill" aria-hidden />
-                    <span><b>{worstYear.year}</b> <span className={toneOf(worstYear.flaggedMedianPct!) === 'up' ? 'vd-honesty-up' : 'vd-honesty-down'}>{fmtSignedPct(worstYear.flaggedMedianPct!)}</span> · {worstYear.nFlagged.toLocaleString()} calls</span>
-                  </div>
-                )}
-                {ytd && (
-                  <div className="vd-honesty-row">
-                    <span>{ytd.year} to date</span>
-                    <span className="vd-honesty-fill" aria-hidden />
-                    <span>flagged <span className={toneOf(ytd.flaggedMedianPct!) === 'up' ? 'vd-honesty-up' : 'vd-honesty-down'}>{fmtSignedPct(ytd.flaggedMedianPct!)}</span> vs unflagged {fmtSignedPct(ytd.unflaggedMedianPct!)} · n {ytd.nFlagged.toLocaleString()}</span>
-                  </div>
-                )}
-                {tiers?.main && tiers?.fallback && (
-                  <div className="vd-honesty-row">
-                    <span>Both arms carry edge</span>
-                    <span className="vd-honesty-fill" aria-hidden />
-                    <span>main {fmtSignedPct(tiers.main.medianPerfPct)} (n {tiers.main.n.toLocaleString()}) · fallback {fmtSignedPct(tiers.fallback.medianPerfPct)} (n {tiers.fallback.n.toLocaleString()})</span>
-                  </div>
-                )}
-              </section>
-            </div>
-          )}
-
-          {/* ════ ROOM 4 · THE SETTLED TAPE ════
-              (REDUCE AUDIT Aug 25 2026, Collin's call: /value is ONLY the
-              value engine's metrics and data. The odds-ladder room and the
-              conditions room were cut here — the calibration curve renders
-              on /analytics under "The engine's record", and house
-              calibration + the calendar are /analytics rooms outright.) */}
-
-          {/* settled tape — calls logged before the hammer, then graded (the
-              forward ledger; no corpus, no sentinel — page-stats.json) */}
-          <section id="tape" className="rail ray-enter vd-room ns-plate" style={{ paddingTop: 'calc(var(--space-4) + var(--space-2))', paddingBottom: 'var(--space-4)' }}>
-              {/* THE FLAGS, GRADED — the live answer to "did the last flags
-                  beat the estimate?", lot by lot (hammer basis, graded on the
-                  last value served before the sale; counts = the window) */}
-              {flagGraded && (
-                <div id="graded" className="vd-room" style={{ marginBottom: 26 }}>
-                  <div className="vd-sect-head">
-                    <span className="vd-sect-mark" aria-hidden><FlagsMark size={16} /></span>
-                    <span className="ns-kicker">The Flags, graded</span>
-                    <span className="vd-pulse-rule" aria-hidden />
-                    <span className="vd-sect-cap">
-                      {flagGraded.n > 0
-                        ? <>{flagGraded.hits} of {flagGraded.n} {flagGraded.n === 1 ? 'flag' : 'flags'} hammered above the high · last {flagGraded.days} days · graded on the last value served before the sale</>
-                        : <>graded nightly on the last value served before the sale</>}
-                    </span>
-                  </div>
-                  {flagGraded.rows.length > 0 ? flagGraded.rows.map(r => {
-                    const delta = r.ham > 0 && r.top > 0 ? Math.round((r.ham / r.top - 1) * 100) : null;
-                    return (
-                      <Link key={r.id} href={`/lot/${encodeURIComponent(r.id)}`} className="vd-tape-row">
-                        <span style={{ minWidth: 0 }}>
-                          <span className="vd-tape-title" style={{ display: 'block', color: 'var(--color-fg)', fontWeight: 600 }}>{r.t ? craftTitle(r.t) : r.id}</span>
-                          <span className="vd-tape-maker" style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>{r.a ? (ARTIST_LABEL[r.a] || r.a) : ''}{r.h ? `${r.a ? ' · ' : ''}${r.h}` : ''}</span>
-                        </span>
-                        <span className="vd-tape-cells">
-                          <span className="vd-tape-real">{r.ham > 0 ? <>hammered {fmtFace(r.ham)}</> : <>bought in</>}{r.sd ? ` · ${formatDate(r.sd)}` : ''}</span>
-                          <span className="vd-tape-vs">
-                            high {fmtFace(r.top)} · {r.ham > 0 && delta != null
-                              ? <><span data-tone={r.hit ? 'up' : 'down'}>{fmtSignedPct(delta)}</span> {r.hit ? 'beat it' : 'short of it'}</>
-                              : <span data-tone="down">a counted miss</span>}
-                          </span>
-                        </span>
-                      </Link>
-                    );
-                  }) : (
-                    <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>
-                      No {activeLabel === 'collectible' ? '' : `${activeLabel} `}flag has settled in the last {flagGraded.days} days — each one grades here the night its lot hammers.
-                    </p>
-                  )}
-                  {flagGraded.rows.length > 0 && (
-                    <div className="vd-annex-meter">
-                      {flagGraded.n > flagGraded.rows.length ? <>the {flagGraded.rows.length} newest of {flagGraded.n} graded · </> : null}hammer basis · &ldquo;high&rdquo; is the house-adjusted top the odds are fit to · a bought-in lot is a miss
-                    </div>
-                  )}
-                </div>
-              )}
-              <div className="vd-sect-head">
-                <span className="vd-sect-mark" aria-hidden><TapeMark size={16} /></span>
-                <span className="ns-kicker">Settled calls</span>
-                <span className="vd-pulse-rule" aria-hidden />
-                <span className="vd-sect-cap">comps and projection calls, logged before the hammer, graded at it · the Flags grade on the replayed record above — <Link href="/receipts" style={{ color: 'inherit' }}>the full record</Link></span>
-              </div>
-              {settled === null ? (
-                <div aria-hidden>
-                  {Array.from({ length: 3 }, (_, i) => <div key={i} className="vd-tape-ghost" />)}
-                </div>
-              ) : settled.length > 0 ? (
-                /* one row per LOT (Oct 9 r6): a lot the tape called twice (its
-                   comps read and its bid projection) printed twice, back to
-                   back — every call stays, stacked under the one realized price */
-                settledByLot.map(({ id, calls }) => {
-                  const s0 = calls[0];
-                  return (
-                    <Link key={id} href={`/lot/${encodeURIComponent(id)}`} className="vd-tape-row">
-                      <span style={{ minWidth: 0 }}>
-                        <span className="vd-tape-title" style={{ display: 'block', color: 'var(--color-fg)', fontWeight: 600 }}>{s0.t ? craftTitle(s0.t) : id}</span>
-                        <span className="vd-tape-maker" style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>{s0.a ? (ARTIST_LABEL[s0.a] || s0.a) : ''}{s0.h ? ` · ${s0.h}` : ''}</span>
-                      </span>
-                      <span className="vd-tape-cells">
-                        <span className="vd-tape-real">realized {formatPrice(s0.r)} all-in{s0.sd ? ` · ${formatDate(s0.sd)}` : ''}</span>
-                        {calls.map(s => {
-                          const delta = s.p > 0 ? Math.round((s.r / s.p - 1) * 100) : null;
-                          const kind = ({ card: 'comps', vsbid: 'proj', gap: 'gap', quiet: 'quiet' } as Record<string, string>)[s.k] || s.k;
-                          return (
-                            <span key={s.k} className="vd-tape-vs">
-                              called {formatPrice(s.p)} <span style={{ textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.06em' }}>{kind}</span>
-                              {delta != null && <> · <span data-tone={toneOf(delta)}>{fmtSignedPct(delta)}</span> vs the call</>}
-                            </span>
-                          );
-                        })}
-                      </span>
-                    </Link>
-                  );
-                })
-              ) : (
-                <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>
-                  No {activeLabel} calls have hammered yet this cycle — the tape fills as the board settles.
-                </p>
-              )}
-            </section>
-
-          {/* ════ ROOM 5 · THE ENGINE CARD (paper #2, the closer) ════ */}
-          <section id="engine" className="rail ray-enter vd-room ns-plate" style={{ paddingBlock: '18px 8px' }}>
-            <div className="ray-engine-card">
-              <h2 className="ray-engine-head">
-                <span className="vd-sect-mark" style={{ verticalAlign: -3, marginRight: 10 }} aria-hidden><EngineMark size={19} /></span>
-                Every flag here earned its ink.
-              </h2>
-              <p className="ray-engine-body">
-                A read is comps, not opinion: same maker, same form, size-banded —
-                medians, never means. Each vertical carries its own gate (a jersey
-                only comps that player&rsquo;s jerseys; a Daytona only same-reference,
-                same-metal Daytonas), and where the data can&rsquo;t carry a call, the
-                engine abstains rather than guesses.
-              </p>
-              {backtest && backtest.flagged.n > 500 && (
-                <div className="ray-engine-stats">
-                  <span><b>{backtest.flagged.n.toLocaleString()}</b> calls replayed</span>
-                  <span className="ray-engine-dot" aria-hidden />
-                  <span>flagged realized <b className="up">{fmtSignedPct(backtest.flagged.medianPerfPct)}</b> all-in vs estimate</span>
-                  <span className="ray-engine-dot" aria-hidden />
-                  <span>the edge: <b>{backtest.flagged.medianPerfPct - backtest.unflagged.medianPerfPct} pts</b></span>
-                </div>
-              )}
-              <Link href="/blog/how-we-built-the-pricing-engine" className="ray-engine-cta">
-                Read how it&rsquo;s built &rarr;
-              </Link>
-            </div>
-          </section>
-
-          </>)}
-
-          {modalLot && !partial && (
-            <ComparableModal
-              lot={modalLot}
-              allLots={marketLots}
-              onClose={() => setModalLot(null)}
-              saved={isSaved(modalLot.id)}
-              onToggleSave={id => toggle(id, modalLot)}
-            />
-          )}
-        </RayEntrance>
+        body
       )}
       <Colophon record={null} />
     </div>
