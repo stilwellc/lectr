@@ -1,7 +1,11 @@
 /**
  * priority.ts — the "matters most" order for live lots (Oct 8).
  *
- *   S = 40·Size + 25·Edge + 20·Evidence + 15·Urgency      (0–100)
+ *   S = 40·Size + 20·Evidence + d·(25·Edge⁺ + 15·Urgency) − 25·Edge⁻
+ *   d = min(1, Size / 0.25)                                (0–100)
+ *
+ * W26 (Oct 11): the boosts scale with size (scoreOf) — a flag or a close
+ * tonight lifts a lot only as far as it is big enough to matter.
  *
  * Oct 9: Size is read on each MARKET's own scale (a $40K rookie is a big card,
  * a $40K painting is a minor one) — on one $2.5K–$1M scale 87% of sports cards
@@ -37,13 +41,14 @@
  *    never goes stale intraday. Nothing is stamped on the payload: every input
  *    is already on the served lot (build-upcoming only logs the counts).
  */
-import { taxonOf, type CatKey } from './taxonomy';
+import { taxonOf, CAT_LABEL, type CatKey } from './taxonomy';
 import { parseCard, cardLadderKey } from './cards';
 import { trueSaleDay } from '../utils';
 import { closeMs, closeIsTimed } from './house-tz';
 import { closeKOf, closeKRoomOf } from './close-k';
 import { lotAllInFactor } from './premiums';
 import { fmtUsd } from './fmt-usd';
+import { signalMagnitude } from './comps';
 
 /** per-market Size scale, hammer USD: [Size 0, Size 1] on a log axis */
 const SCALE: Record<CatKey, [number, number]> = {
@@ -92,7 +97,7 @@ type ScoreLot = {
   saleDate?: string | null; saleDateTime?: string | null;
   id?: string | null;
   value?: { expectedHammerUsd?: number | null; confidence?: string | null; abstain?: string | null; signal?: { beatRatePct?: number | null } | null } | null;
-  signal?: { label?: string | null } | null;
+  signal?: { label?: string | null; pct?: number | null; basis?: number | null; confidence?: string | null } | null;
   buyerPremiumPct?: number | null;
 };
 
@@ -123,7 +128,25 @@ function bidProjection(l: ScoreLot, cat: CatKey, nowMs: number): { a: number; ro
   const close = closeMsOf(l);
   if (!room || close == null || close <= nowMs) return null;
   const days = (close - nowMs) / 864e5;
-  return { a: bid * closeKOf(room, days, bid), room, days };
+  return { a: bid * projectionK(closeKOf(room, days, bid)), room, days };
+}
+
+/** THE PROJECTION KNEE (W26, Oct 11 2026). close-k's measured multiple is a
+ *  median over a wide spread, and past 3× it runs away: a $68 Goldin Weekly
+ *  TCG bid a week out printed "~$1.8K projected close" (26.4×, no engine read
+ *  behind it). Up to 3× the multiple stands; past it the projection grows as
+ *  bid·√(3k) — continuous at the knee, 26.4× → 8.9×. Graded on the corpus'
+ *  44,387 bid-history sightings (scripts' close-k eval obs, served
+ *  close-k.json): every cell projecting ≥$1K — the lots a seat can see — goes
+ *  from 84% → 80% median error, its bias from +22% → −2%, and projections
+ *  landing 2× over the hammer from 30% → 20% of lots; 3–12× cells improve
+ *  (79 → 77%, 120 → 110%). It costs the 12×+ cells (sub-$100 bids days out,
+ *  145% → 217%): those hammers really do run 12–30× the bid, but no single
+ *  number there is a projection a reader can act on. The close-k table and its
+ *  nightly refit are untouched — the knee reads whatever multiple is installed. */
+export const PROJ_KNEE = 3;
+export function projectionK(k: number): number {
+  return k <= PROJ_KNEE ? k : Math.sqrt(PROJ_KNEE * k);
 }
 
 function anchorOf(l: ScoreLot, nowMs: number): { a: number; src: AnchorSrc; over?: boolean } | null {
@@ -229,8 +252,21 @@ export function priorityOf(l: ScoreLot, nowMs: number = Date.now()): Priority | 
   const st = prioStatic(l, nowMs);
   if (!st) return null;
   const urg = urgencyOf(closeMsOf(l), nowMs);
-  const score = 40 * st.size + 25 * st.edge + 20 * st.ev + 15 * urg;
-  return { ...st, urg, score: Math.round(score * 10) / 10 };
+  return { ...st, urg, score: scoreOf(st, urg) };
+}
+
+/** Size gates the boosts (W26, Oct 11 2026): a Below-Market flag and a close
+ *  tonight lift a lot only as far as it is big enough to matter — full lift
+ *  from Size 0.25 up (fine art ≈ $33K, cards ≈ $1.5K, memorabilia ≈ $4K),
+ *  scaled down below it, none at Size 0. A $2K flagged print closing in 3
+ *  days took 25 + 15·0.25 points and sat above a $3M canvas closing beside
+ *  it (Art "All lots" #10–11: two $2K Rago prints; "What matters" #5: a $5K
+ *  Picasso poster). An Above-Market flag still costs its full 6¼ points. */
+export const BOOST_SIZE = 0.25;
+export function scoreOf(st: Pick<PrioStatic, 'size' | 'edge' | 'ev'>, urg: number): number {
+  const d = Math.min(1, st.size / BOOST_SIZE);
+  const score = 40 * st.size + 20 * st.ev + d * (25 * Math.max(st.edge, 0) + 15 * urg) - 25 * Math.max(-st.edge, 0);
+  return Math.round(score * 10) / 10;
 }
 
 /** Sort comparator: score desc, then sooner close, then bigger anchor. Unanchored lots sink. */
@@ -267,7 +303,7 @@ const GENERIC_MAKERS = new Set([
 ]);
 
 type ShortlistLot = ScoreLot & { id?: string; auctionHouse?: string | null; saleName?: string | null; title?: string | null;
-  crossLive?: { id: string; house: string; bid: number }[] | null };
+  crossLive?: { id: string; house: string; bid: number }[] | null; resultsPending?: boolean | null };
 
 /** `id:<sibling>` for the same card live at ANOTHER house (the build's
  *  crossLive match; same-house entries are copies the card identity covers) */
@@ -287,16 +323,36 @@ export function saleKeyOf(l: { auctionHouse?: string | null; saleDate?: string |
 const CARD_CATS: ReadonlySet<CatKey> = new Set<CatKey>(['sports-cards', 'tcg']);
 const normTitle = (t: string | null | undefined) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
+/** " - PSA NM-MT 8 (OC)", " BGS 9.5", " - CGC PRISTINE 10" … to the end */
+const GRADE_TAIL = /\s*[-–—]?\s*\b(?:PSA|BGS|SGC|CGC|BVG|HGA|TAG|ISA|GMA)\b.*$/i;
+/** a card number in a title: "#3", "#H9", "#104", "#SV107" */
+const CARD_NO = /#\s?[A-Za-z]{0,4}\d+[A-Za-z]?\b/;
+
+/** A card with no ladder key (most Pokémon titles name no "player"): its
+ *  title with the grade tail cut IS the card — when that title names a card
+ *  number. The number is what makes a raw copy and its slabs one card (W26:
+ *  a raw "#3 Charizard" and its PSA 10 took two What-matters seats); without
+ *  it a gradeless title is too loose to call the same card. Shared with
+ *  fold.ts, so the fold and the shortlist agree on what one card is. */
+export function gradelessCardKey(title: string, id: { multi?: boolean; notCard?: boolean }): string | null {
+  if (id.multi || id.notCard) return null;
+  const cut = title.replace(GRADE_TAIL, '');
+  const bare = normTitle(cut);
+  return CARD_NO.test(cut) && bare.length >= 16 && bare.split(' ').length >= 3 ? bare : null;
+}
+
 /** The thing being bought, grade aside: a card's ladder key (year·set·#·player),
- *  else the real maker per lot. Seven PSA grades of one Fleer Jordan are one
- *  pick, not seven. */
+ *  else its gradeless numbered title, else the real maker per lot. Seven PSA
+ *  grades of one Fleer Jordan are one pick, not seven. */
 function identityOf(l: ShortlistLot): { thing: string; who: string } {
   const cat = taxonOf(l).cat;
   if (CARD_CATS.has(cat) && l.title) {
     const id = parseCard(l.title);
     const k = cardLadderKey(id);
     if (k) return { thing: `card:${k}`, who: id.playerSlug ? `p:${id.playerSlug}` : `id:${l.id}` };
-    if (id.playerSlug) return { thing: `id:${l.id}`, who: `p:${id.playerSlug}` };
+    const g = gradelessCardKey(l.title, id);
+    if (id.playerSlug) return { thing: g ? `g:${l.auctionHouse}|${g}` : `id:${l.id}`, who: `p:${id.playerSlug}` };
+    if (g) return { thing: `g:${l.auctionHouse}|${g}`, who: `id:${l.id}` };
   }
   const maker = l.artist && !GENERIC_MAKERS.has(l.artist) ? l.artist : `id:${l.id}`;
   return { thing: `id:${l.id}`, who: maker };
@@ -337,7 +393,8 @@ function fill<T extends ShortlistLot>(rows: { l: T; s: number }[], n: number, ca
 
 /**
  * The anonymous "What matters today" shortlist: clears its market's anchor
- * floor, closes within 7 days, has evidence, earns SEAT_MIN; top `n` with caps
+ * floor, closes within 7 days (a thin week reaches through the 14th day),
+ * is not results-pending, has evidence, earns SEAT_MIN; top `n` with caps
  * (≤5 per category, ≤3 per sale, ≤2 per maker or player, one per object or
  * card identity) so one mass close or one house can't fill the board. Seats
  * the caps leave empty go to the next-best lots under looser caps — never to
@@ -347,26 +404,83 @@ export function shortlist<T extends ShortlistLot>(lots: T[], nowMs: number = Dat
   // a pool that IS one maker (a maker page's live book) can't diversify
   // across makers — the caller lifts the per-maker cap there (opts.who)
   const who = opts.who ?? 2;
-  const rows: { l: T; s: number; close: number; a: number }[] = [];
+  const week: { l: T; s: number; close: number; a: number }[] = [];
+  const next: typeof week = [];
   for (const l of lots) {
+    // (W26) a lot the crawler marks results-pending has hammered — the house
+    // just hasn't posted. It is not "Sells today" (a Christie's Ruth bat and
+    // a Patek sat in the seats after their sale closed).
+    if (l.resultsPending) continue;
     const p = priorityOf(l, nowMs);
     const close = closeMsOf(l);
     if (!p || close == null) continue;
     const h = (close - nowMs) / 3_600_000;
-    if (h <= 0 || h > 168) continue;
+    if (h <= 0 || h > SECOND_WEEK_H) continue;
     if (p.a < SEAT_FLOOR[taxonOf(l).cat]) continue;
     if (p.ev <= 0 && p.src !== 'est') continue;
     if (p.score < SEAT_MIN) continue;
-    rows.push({ l, s: p.score, close, a: p.a });
+    (h <= 168 ? week : next).push({ l, s: p.score, close, a: p.a });
   }
-  rows.sort((x, y) => (y.s - x.s) || (x.close - y.close) || (y.a - x.a));
-  const out = fill(rows, n, { cat: 5, sale: 3, who }, [], nowMs);
-  if (out.length < n) fill(rows, n, { cat: 8, sale: 3, who }, out, nowMs);
-  // a reader narrowed to one market (PSA cards: ~all Goldin) asked for that
-  // room — once every other sale is spent, its best lots may take more seats
-  if (out.length < n) fill(rows, n, { cat: Infinity, sale: 8, who }, out, nowMs);
+  const order = (x: typeof week[number], y: typeof week[number]) => (y.s - x.s) || (x.close - y.close) || (y.a - x.a);
+  week.sort(order);
+  const passes = (rows: typeof week, out: T[]) => {
+    fill(rows, n, { cat: 5, sale: 3, who }, out, nowMs);
+    if (out.length < n) fill(rows, n, { cat: 8, sale: 3, who }, out, nowMs);
+    // a reader narrowed to one market (PSA cards: ~all Goldin) asked for that
+    // room — once every other sale is spent, its best lots may take more seats
+    if (out.length < n) fill(rows, n, { cat: Infinity, sale: 8, who }, out, nowMs);
+    return out;
+  };
+  const out = passes(week, []);
+  // (W26) a thin week (TCG: one Goldin night filled 8 seats) reaches into the
+  // second week rather than leave seats empty — the $3.47M Trophy Pikachu
+  // closing in 9 days is the market's biggest lot and never showed. The
+  // week's seats stand; the second week only fills what is left.
+  if (out.length < n && next.length) passes(week.concat(next).sort(order), out);
+  stampBoard(out, lots, nowMs);
   return out;
 }
+
+/** (W26) What the reason line may say about a seated lot's SIZE — the term
+ *  that seats most estimate-house lots, which the reason line used to leave
+ *  unsaid (18 of 20 Art lines read only "Sells in 3 days"): its rank by value
+ *  among the lots of its category the board ranked, closing inside the same
+ *  week. Stamped per seated lot by the shortlist that seated it. */
+const BOARD = new WeakMap<object, { rank: number; field: number; cat: CatKey; weeks: 1 | 2 }>();
+function stampBoard<T extends ShortlistLot>(out: T[], pool: T[], nowMs: number): void {
+  if (!out.length) return;
+  const cats = new Set<CatKey>(out.map(l => taxonOf(l).cat));
+  const by = new Map<CatKey, { a: number; h: number }[]>();
+  for (const l of pool) {
+    if (l.resultsPending) continue;
+    const cat = taxonOf(l).cat;
+    if (!cats.has(cat)) continue;
+    const close = closeMsOf(l);
+    if (close == null || close <= nowMs) continue;
+    const h = (close - nowMs) / 3_600_000;
+    if (h > SECOND_WEEK_H) continue;
+    const a = prioStatic(l, nowMs)?.a;
+    if (!a) continue;
+    const arr = by.get(cat) ?? []; arr.push({ a, h }); by.set(cat, arr);
+  }
+  for (const l of out) {
+    const cat = taxonOf(l).cat;
+    const a = prioStatic(l, nowMs)?.a ?? 0;
+    const close = closeMsOf(l) ?? nowMs;
+    const weeks: 1 | 2 = (close - nowMs) / 3_600_000 <= 168 ? 1 : 2;
+    const lim = weeks === 1 ? 168 : SECOND_WEEK_H;
+    let rank = 1, field = 0;
+    for (const r of by.get(cat) ?? []) if (r.h <= lim) { field++; if (r.a > a) rank++; }
+    BOARD.set(l, { rank, field, cat, weeks });
+  }
+}
+/** how far a thin week may reach: through the 14th day out (hours) */
+const SECOND_WEEK_H = 15 * 24;
+/** a "Top N" rank claim needs a field this many times N (rank 1: 10 lots) */
+const RANK_FIELD = 5;
+
+/** the score share the lot taking a capped lot's place must hold (spread) */
+const SPREAD_PEER = 0.75;
 
 /**
  * Break up runs in an already-ranked list: within any `win` consecutive lots,
@@ -374,10 +488,10 @@ export function shortlist<T extends ShortlistLot>(lots: T[], nowMs: number = Dat
  * the overflow slides down to the next window, order otherwise kept. A
  * 3,489-lot sale can't wall the first screens of "Matters most".
  */
-export function spread<T extends ShortlistLot>(list: T[], win = 12, max = 3, head = 600): T[] {
+export function spread<T extends ShortlistLot>(list: T[], win = 12, max = 3, head = 600, nowMs: number = Date.now()): T[] {
   if (list.length <= max) return list;
   // only the screens a reader actually scrolls are re-dealt; keys computed once
-  const pool0 = list.slice(0, head).map(l => ({ l, sk: saleKeyOf(l), wk: identityOf(l).who, self: `id:${l.id}`, cross: crossIds(l) }));
+  const pool0 = list.slice(0, head).map(l => ({ l, sk: saleKeyOf(l), wk: identityOf(l).who, self: `id:${l.id}`, cross: crossIds(l), s: priorityOf(l, nowMs)?.score ?? 0 }));
   const out: T[] = [];
   let pool = pool0;
   while (pool.length) {
@@ -387,15 +501,27 @@ export function spread<T extends ShortlistLot>(list: T[], win = 12, max = 3, hea
     // into this window, its cross-house twin follows without spending a cap
     const twins = new Set<string>();
     let taken = 0, i = 0;
-    for (; i < pool.length && taken < win; i++) {
-      const r = pool[i];
-      if (twins.has(r.self)) { out.push(r.l); for (const c of r.cross) twins.add(c); continue; }
-      if ((sale.get(r.sk) ?? 0) >= max || (who.get(r.wk) ?? 0) >= max) { rest.push(r); continue; }
+    const capped = (r: typeof pool[number]) => (sale.get(r.sk) ?? 0) >= max || (who.get(r.wk) ?? 0) >= max;
+    const deal = (r: typeof pool[number]) => {
       out.push(r.l); taken++;
       for (const c of r.cross) twins.add(c);
       // a twin already pushed down this window comes back up beside it
       for (let k = rest.length - 1; k >= 0; k--) if (twins.has(rest[k].self)) out.push(rest.splice(k, 1)[0].l);
       sale.set(r.sk, (sale.get(r.sk) ?? 0) + 1); who.set(r.wk, (who.get(r.wk) ?? 0) + 1);
+    };
+    for (; i < pool.length && taken < win; i++) {
+      const r = pool[i];
+      if (twins.has(r.self)) { out.push(r.l); for (const c of r.cross) twins.add(c); continue; }
+      if (capped(r)) { rest.push(r); continue; }
+      // (W26) a capped lot yields its place only to a near peer: once the
+      // lot about to be dealt scores under SPREAD_PEER × the best one held
+      // back, the held-back lot is dealt first, past its cap. A run of one
+      // 3,489-lot REA night still breaks up (its lots are peers), but a
+      // $500K Goldin card no longer gives page 1 to a $2.8K NFL jersey
+      // scoring 0.7× as high.
+      while (rest.length && taken < win && r.s < SPREAD_PEER * rest[0].s) deal(rest.shift()!);
+      if (taken >= win) { i--; continue; }
+      deal(r);
     }
     if (!taken) { for (const r of pool) out.push(r.l); break; }
     pool = rest.concat(pool.slice(i));
@@ -423,16 +549,26 @@ export function reasonOf(l: ScoreLot, nowMs: number = Date.now()): string | null
     const d = Math.round((Date.parse(`${l.saleDate.slice(0, 10)}T00:00:00Z`) - today) / 864e5);
     if (d === 0) parts.push('Sells today');
     else if (d === 1) parts.push('Sells tomorrow');
-    else if (d > 1 && d < 7) parts.push(`Sells in ${d} days`);
+    else if (d > 1 && d <= 14) parts.push(`Sells in ${d} days`);
   } else if (close != null) {
     const h = (close - nowMs) / 3_600_000;
     if (h > 0 && h < 1) parts.push('Closes within the hour');
     else if (h > 0 && h < 24) parts.push(`Closes in ${Math.round(h)}h`);
     else if (h > 0 && h < 48) parts.push('Closes tomorrow');
-    else if (h > 0 && h < 168) parts.push(`Closes in ${Math.round(h / 24)} days`);
+    else if (h > 0 && h < SECOND_WEEK_H) parts.push(`Closes in ${Math.round(h / 24)} days`);
   }
-  // the card already prints the house estimate — only name the value when
-  // it came from somewhere else (engine comps, a projection, the live bid)
+  // (W26) then what drives the rank. The card already prints the house
+  // estimate — only name the value when it came from somewhere else (engine
+  // comps, a projection, the live bid); an estimate lot names its standing.
+  if (p.edge > 0) {
+    // the certified flag (THE FLAGS — the chip's own label and magnitude,
+    // comps/signalMagnitude) with its pool and the engine's confidence
+    const sig = l.signal;
+    const mag = sig?.pct != null && sig.pct > 0 ? ` ${signalMagnitude('Below Market', sig.pct)}` : '';
+    const n = sig?.basis && sig.basis > 0 ? `${sig.basis} comps` : null;
+    const conf = sig?.confidence ?? l.value?.confidence;
+    parts.push([`Below market${mag}`, n && conf ? `${n}, ${conf} confidence` : n ?? (conf ? `${conf} confidence` : null)].filter(Boolean).join(' · '));
+  }
   if (p.over) {
     parts.push(p.src === 'est' ? 'Bid past the estimate' : 'Bid past its value');
   } else if (p.src === 'proj') {
@@ -441,8 +577,16 @@ export function reasonOf(l: ScoreLot, nowMs: number = Date.now()): string | null
     if (pc) parts.push(`~${fmtUsd(pc.hammer)} projected close`);
   } else if (p.src !== 'est') {
     parts.push(`${fmtUsd(p.a)} ${p.src === 'engine' ? 'engine value' : 'current bid'}`);
+  } else if (p.edge <= 0) {
+    const b = l.id != null ? BOARD.get(l) : undefined;
+    // a rank means something only in a real field: Top 5 of 12 is not news
+    const when = b?.weeks === 2 ? 'in the next two weeks' : 'this week';
+    const top = !b ? 0 : [1, 5, 10, 20].find(k => b.rank <= k && b.field >= k * RANK_FIELD * (k === 1 ? 2 : 1)) ?? 0;
+    if (b && top === 1) parts.push(`Top ${CAT_LABEL[b.cat]} estimate ${when}`);
+    else if (b && top) parts.push(`Top ${top} ${CAT_LABEL[b.cat]} estimate ${when}`);
   }
-  if (p.edge > 0) parts.push('Below market');
+  // competition, when it is part of the evidence (bids on an estimate lot)
+  if (!p.over && p.src === 'est' && (l.bidCount || 0) >= 2) parts.push(`${l.bidCount} bids`);
   return parts.length ? parts.join(' · ') : null;
 }
 

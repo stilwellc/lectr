@@ -345,8 +345,12 @@ export function memoryOf(params: URLSearchParams, market: string): FeedMemory {
   return { m: market, p: out.toString() };
 }
 
-/** the params to restore on `market`, or null when nothing applies */
-export function restoreParams(mem: FeedMemory | null | undefined, market: string): URLSearchParams | null {
+/** the params to restore on `market`, or null when nothing applies.
+ *  `liveHouses` (W26): the houses with a live lot in `market`, when the
+ *  caller has the book — a remembered house with no lot there is dropped
+ *  (NFL Auction remembered from Sports opened Art on "0 of 437"). Without
+ *  it the house travels; a slice of the book can't prove a house absent. */
+export function restoreParams(mem: FeedMemory | null | undefined, market: string, liveHouses?: ReadonlySet<string> | null): URLSearchParams | null {
   if (!mem || typeof mem.p !== 'string' || typeof mem.m !== 'string') return null;
   const src = new URLSearchParams(mem.p);
   const out = new URLSearchParams();
@@ -354,9 +358,23 @@ export function restoreParams(mem: FeedMemory | null | undefined, market: string
     const v = src.get(k);
     if (!v) continue;
     if (mem.m !== market && MARKET_SCOPED.has(k)) continue;
+    if (k === 'house' && liveHouses && liveHouses.size && !liveHouses.has(v)) continue;
     out.set(k, v);
   }
   return out.toString() ? out : null;
+}
+
+/** The house dropdown's options: every house in the pool by lot count, and
+ *  the picked house even when the pool has none of it (W26) — a select whose
+ *  value is missing from its options paints its first option, "All houses",
+ *  while the filter still empties the list. It shows its 0 instead, like a
+ *  picked chip. */
+export function houseOptions(lots: readonly { auctionHouse?: string | null }[], picked: string | null): [string, number][] {
+  const c = new Map<string, number>();
+  for (const l of lots) { const h = String(l.auctionHouse || ''); if (h) c.set(h, (c.get(h) || 0) + 1); }
+  const out = Array.from(c.entries()).sort((a, b) => b[1] - a[1]);
+  if (picked && !c.has(picked)) out.push([picked, 0]);
+  return out;
 }
 
 export function readFeedMemory(): FeedMemory | null {

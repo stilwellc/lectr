@@ -25,7 +25,8 @@ test('What matters reads best-first even when a later pass seats the stronger lo
     art('c', 'roy-lichtenstein', "Christie's", 2_000_000),
     art('d', 'keith-haring', "Christie's", 1_800_000),
     art('e', 'jean-michel-basquiat', "Christie's", 1_600_000),
-    art('weak', 'george-condo', 'Rago', 12_000, 6),
+    // (W26) big enough that its close tonight still lifts it (size gates the boosts)
+    art('weak', 'george-condo', 'Rago', 120_000, 6),
   ];
   const seated = shortlist(lots, NOW, 20);
   const listed = mattersList(lots, NOW, 20);
