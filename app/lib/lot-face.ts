@@ -35,6 +35,9 @@ import { engineFlagOf, signalMagnitude } from './comps';
 import { enginePoolOf } from './engine-pool';
 import { lotHammerFromAllIn } from './premiums';
 import { fmtUsd, lotMaxBid, lotVerdict } from './verdict';
+import { prioStatic } from './priority';
+import { closeMs as houseCloseMs, closeIsTimed, localDayIn, houseTzOf } from './house-tz';
+import { closeWhenText, calendarDaysBetween } from './close-time';
 
 /** the one set of labels — a surface that prints a face figure prints its label */
 export const FACE_LABEL = {
@@ -239,4 +242,151 @@ export function medianRowId<T extends { id: string; priceUsd?: number | null }>(
     if (d < bestD) { best = r; bestD = d; }
   }
   return best && bestD <= 0.05 ? best.id : null;
+}
+
+/* ── THE DECISION LINE (N2, Oct 11 2026) ─────────────────────────────────
+   One compact line per pick: what the room is expected to pay, what the
+   engine says it is worth up to, the gap between them when it means
+   something, and when it closes —
+     "projected close ~$34K · worth up to $38K · $4K headroom · closes Thu 10 PM"
+   Every number is read from one source, never re-derived here:
+     close  bid rooms: the ranker's own anchor (priority.prioStatic, src
+            'proj' — the live bid × the room's close multiple, close-k.ts,
+            narrowed by a sound engine read), hammer basis. Estimate houses:
+            the house estimate, labelled as such. A bid already past its
+            anchor, an engine-only or a bare-bid anchor prints no close
+            figure (the reason line and the card already say those).
+     worth  lotFace(lot).maxBid — the engine's max bid (hammer), the lot
+            page's "Max bid". No max bid → nothing; "no engine read" only
+            when the engine abstained in so many words. Never invented.
+     gap    only between two figures printed on the same line, same basis
+            (hammer), and only when they sit ≥10% apart.
+     when   the house-tz close clock (priority.closeMsOf's), in the reader's
+            words; a date-only sale names the day, never an invented hour. */
+
+export interface DecisionClose {
+  kind: 'proj' | 'est';
+  /** hammer-basis USD: the projection, or the estimate midpoint (the anchor) */
+  usd: number;
+  lo: number | null;
+  hi: number | null;
+  /** an estimate with one published bound (the hosts print the live bid
+   *  in its place — formatEstimate — so the line names it) */
+  oneSided: boolean;
+  /** "projected close ~$34K" / "estimate $20K–$30K" */
+  text: string;
+  /** what the figure is, in full (a tooltip) */
+  title: string;
+}
+export interface DecisionWorth { usd: number; text: string; title: string }
+export interface DecisionGap { usd: number; dir: 'room' | 'over'; text: string }
+export interface DecisionWhen { ms: number; timed: boolean; text: string }
+export interface Decision {
+  close: DecisionClose | null;
+  worth: DecisionWorth | null;
+  /** no max bid, and the engine abstained explicitly ("no engine read") */
+  abstained: boolean;
+  gap: DecisionGap | null;
+  when: DecisionWhen | null;
+}
+
+/** a gap prints only when the two figures are at least this far apart */
+export const DECISION_GAP_MIN = 0.10;
+
+const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function decisionWhen(lot: AuctionLot, nowMs: number): DecisionWhen | null {
+  const ms = houseCloseMs(lot);
+  if (ms == null || ms <= nowMs) return null;
+  const timed = closeIsTimed(lot);
+  if (!timed) {
+    // a date-only sale is a DAY where it is sold (its close is that day's
+    // end in the house's zone — past midnight on a reader's clock to the
+    // east or west): name that day, never the reader-local day of the instant
+    const day = localDayIn(ms - 1000, houseTzOf(lot));
+    const n = new Date(nowMs);
+    const today = Date.UTC(n.getFullYear(), n.getMonth(), n.getDate());
+    const at = Date.parse(`${day}T12:00:00Z`);
+    const dd = Math.round((at - 12 * 3_600_000 - today) / 864e5);
+    const wd = new Date(at);
+    const when = dd <= 0 ? 'today' : dd === 1 ? 'tomorrow' : dd < 7 ? WD[wd.getUTCDay()]
+      : wd.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+    return { ms, timed, text: `sells ${when}` };
+  }
+  const days = calendarDaysBetween(nowMs, ms);
+  let when: string;
+  // a timed close on the reader's clock: "tonight at 10:00 PM", "Thu 10 PM",
+  // past a week the date alone
+  if (days <= 1) when = closeWhenText(ms, nowMs, true);
+  else if (days < 7) {
+    const d = new Date(ms);
+    when = `${WD[d.getDay()]} ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(':00 ', ' ')}`;
+  } else when = closeWhenText(ms, nowMs, false);
+  return { ms, timed, text: `closes ${when}` };
+}
+
+/** THE DECISION — the lot's projected close, the engine's walk-away, the gap
+ *  and the close; each part null when it does not exist. */
+export function decisionOf(lot: AuctionLot, nowMs: number = Date.now(), face: LotFace = lotFace(lot)): Decision {
+  const p = prioStatic(lot as Parameters<typeof prioStatic>[0], nowMs);
+  let close: DecisionClose | null = null;
+  if (p && !p.over && p.src === 'proj' && p.a > 0) {
+    close = {
+      kind: 'proj', usd: p.a, lo: null, hi: null, oneSided: false,
+      text: `projected close ~${fmtFace(p.a)}`,
+      title: 'The live bid projected to its close by this room’s measured close multiple (days out × bid size) — hammer, before premium',
+    };
+  } else if (p && !p.over && p.src === 'est') {
+    // a one-sided estimate says which side the house put on paper
+    // (estimate-text's rule) — never a range it did not publish
+    const lo = (lot.estLowUsd ?? lot.estimateLow) || 0;
+    const hi = (lot.estHighUsd ?? lot.estimateHigh) || 0;
+    if (lo > 0 || hi > 0) {
+      const text = lo > 0 && hi > 0
+        ? (fmtFace(lo) === fmtFace(hi) ? fmtFace(lo) : `${fmtFace(lo)}–${fmtFace(hi)}`)
+        : lo > 0 ? `from ${fmtFace(lo)}` : `to ${fmtFace(hi)}`;
+      close = { kind: 'est', usd: p.a, lo: lo || null, hi: hi || null, oneSided: !(lo > 0 && hi > 0),
+        text: `estimate ${text}`, title: 'The house estimate — hammer, before premium' };
+    }
+  }
+  const mb = face.maxBid;
+  const worth: DecisionWorth | null = mb && mb.hammer > 0
+    ? { usd: mb.hammer, text: `worth up to ${fmtFace(mb.hammer)}`, title: `lectr’s max bid ${mb.text} — ${mb.sub}` }
+    : null;
+  const ab = (lot.value as { abstain?: string | null } | null | undefined)?.abstain;
+  const abstained = !worth && typeof ab === 'string' && ab.length > 0;
+
+  let gap: DecisionGap | null = null;
+  if (close && worth) {
+    if (close.kind === 'proj') {
+      const d = worth.usd - close.usd;
+      if (Math.abs(d) >= DECISION_GAP_MIN * close.usd) {
+        gap = d > 0
+          ? { usd: d, dir: 'room', text: `${fmtFace(d)} headroom` }
+          : { usd: -d, dir: 'over', text: `${fmtFace(-d)} past worth` };
+      }
+    } else {
+      if (close.hi != null && worth.usd >= close.hi * (1 + DECISION_GAP_MIN)) {
+        const d = worth.usd - close.hi;
+        gap = { usd: d, dir: 'room', text: `${fmtFace(d)} over the high estimate` };
+      } else if (close.lo != null && worth.usd <= close.lo * (1 - DECISION_GAP_MIN)) {
+        const d = close.lo - worth.usd;
+        gap = { usd: d, dir: 'over', text: `${fmtFace(d)} under the low estimate` };
+      }
+    }
+  }
+  return { close, worth, abstained, gap, when: decisionWhen(lot, nowMs) };
+}
+
+/** the line's parts, in order — what DecisionLine prints (and the tests read).
+ *  `when: false` drops the close time (a surface with its own Hammers
+ *  column); `close: false` drops the projection/estimate figure. */
+export function decisionParts(d: Decision, opts: { when?: boolean; close?: boolean } = {}): string[] {
+  const out: string[] = [];
+  if (d.close && opts.close !== false) out.push(d.close.text);
+  if (d.worth) out.push(d.worth.text);
+  else if (d.abstained) out.push('no engine read');
+  if (d.gap) out.push(d.gap.text);
+  if (d.when && opts.when !== false) out.push(d.when.text);
+  return out;
 }

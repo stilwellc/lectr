@@ -47,6 +47,7 @@ import { makerLineOf, labelLineOf, drillLabelOf } from '../lib/lot-labels';
 import { displayMakerOf } from '../lib/maker-subjects';
 import PushOptIn from '../components/retention/PushOptIn';
 import { TrackOnMount } from '../components/retention/trackers';
+import DecisionLine from '../components/DecisionLine';
 
 /* ============================================================
    MY PROFILE — THE COCKPIT (Aug 24 2026 rebuild). The page is
@@ -538,7 +539,8 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
                   {/* the reason is the row's one line that never truncates
                       (the honesty payload) — it wraps; the price rides under */}
                   <FeedRow stack lot={r.lot} onOpen={() => setOpenLot(r.lot)}
-                    tone={feedTone(r.lot, below.ids, below.hasSig)} note={recNote(r)} />
+                    tone={feedTone(r.lot, below.ids, below.hasSig)} note={recNote(r)}
+                    decision={<DecisionLine lot={r.lot} estimate={false} />} />
                   <PickMenu lot={r.lot} mark={fb.marks.get(r.lot.id)} onMark={fb.mark} at={i} />
                 </div>
               )))}
@@ -553,7 +555,7 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
               // the card fills its row; the pick's feedback rides under it
               <div key={r.lot.id} data-pick data-nav-row className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms`, display: 'grid', gridTemplateRows: 'minmax(0, 1fr) auto' } as React.CSSProperties}>
                 <LotCard lot={r.lot} showArtist subjectMaker allLots={compLots} saved={isSaved(r.lot.id)} onToggleSave={onToggleSave}
-                  lastCrawl={lastCrawl} note={recNote(r)} />
+                  lastCrawl={lastCrawl} note={recNote(r)} decision={<DecisionLine lot={r.lot} estimate={false} />} />
                 <PickFeedback lot={r.lot} mark={fb.marks.get(r.lot.id)} onMark={fb.mark} at={i} />
               </div>
             )))}
@@ -1750,6 +1752,8 @@ export default function SavedPage() {
                           <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>
                             {craftTitle(lot.title, lot.auctionHouse)}
                           </Link>
+                          {/* (N2) the decision: the Est and Hammers columns print the rest */}
+                          <DecisionLine lot={lot} estimate={false} when={false} style={{ marginTop: 3 }} />
                         </span>
                         <span className="num">{formatEstimate(lot) || '—'}</span>
                         <span className="num" style={sig ? { color: sigInk(sig.label), fontWeight: 700 } : { color: 'var(--color-text-faint)' }}
@@ -1792,6 +1796,7 @@ export default function SavedPage() {
                           {reason && <span className="ck-tag" data-tone={reason.tag === 'Below market' ? 'up' : reason.tag === 'Lands soon' ? 'hot' : undefined}>{reason.tag}</span>}
                           {[displayMakerOf(lot)?.name, formatEstimate(lot)].filter(Boolean).join(' · ')}
                         </span>
+                        <DecisionLine lot={lot} estimate={false} when={false} style={{ marginTop: 2 }} />
                       </span>
                       <span className="ck-mrow-right">
                         {sig && <b style={{ color: sigInk(sig.label) }} aria-label={`${sig.label}, ${Math.abs(Math.round(sig.pct))} percent`}>{sigText(sig)}</b>}
@@ -1811,7 +1816,7 @@ export default function SavedPage() {
                 <div className="ray-saved-grid">
                   {room.map(({ l: lot }, i) => (
                     <div key={lot.id} className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms` } as React.CSSProperties}>
-                      <LotCard lot={lot} showArtist allLots={allLots} saved={isSaved(savedIdOf(lot.id)) || isSaved(lot.id)} onToggleSave={onCardToggle} />
+                      <LotCard lot={lot} showArtist allLots={allLots} saved={isSaved(savedIdOf(lot.id)) || isSaved(lot.id)} onToggleSave={onCardToggle} decision={<DecisionLine lot={lot} estimate={false} />} />
                       <SavedDelta lot={lot} meta={metaFor(lot.id)} sig={signalById.get(lot.id) ?? null} />
                     </div>
                   ))}
@@ -2161,7 +2166,7 @@ export default function SavedPage() {
                 <div className="ray-saved-grid" style={{ display: 'grid' }}>
                   {other.map((lot, i) => (
                     <div key={lot.id} className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms` } as React.CSSProperties}>
-                      <LotCard lot={lot} showArtist allLots={allLots} saved={isSaved(savedIdOf(lot.id)) || isSaved(lot.id)} onToggleSave={onCardToggle} />
+                      <LotCard lot={lot} showArtist allLots={allLots} saved={isSaved(savedIdOf(lot.id)) || isSaved(lot.id)} onToggleSave={onCardToggle} decision={<DecisionLine lot={lot} estimate={false} />} />
                     </div>
                   ))}
                 </div>
