@@ -314,11 +314,12 @@ export interface AuctionLot {
   overlayAt?: string;
   /** cross-house live collisions: this exact cardKey live elsewhere NOW */
   crossLive?: { id: string; house: string; bid: number }[];
-  /** projected close (bid × close-day growth curve, all-in) vs the value floor */
-  /** ok (Oct 6 2026): the projection's house × days-out × projection/floor
-      cell is VALIDATED on the graded tape (lanes.validateGapCells) — the Gap
-      seats only such lots */
-  bidProj?: { g: number; allIn: number; floor?: number; below?: boolean; ok?: boolean };
+  /** (Oct 11 2026) THE GAP'S CELL GATE, stamped at build: THE projected
+      close (priority.projectedCloseOf, all-in) sits in a house × days-out ×
+      projection/floor cell VALIDATED on the graded tape (lanes.validateGapCells)
+      — the Gap seats only such lots. Replaces the served growth-curve
+      projection (bidProj), which no surface prints any more. */
+  gapOk?: boolean;
   playerName?: string | null;
   /** parsed trading-card identity — the composite fingerprint keying the card
       repeat-sales index (same player+year+set+cardNo+grade = the same product).

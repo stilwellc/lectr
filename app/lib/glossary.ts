@@ -34,7 +34,7 @@ export const GLOSSARY: GlossaryEntry[] = [
     id: 'gap',
     term: 'the Gap',
     short: 'No-estimate lots whose projected closing price is still well under the value floor. A projection, not a certified call.',
-    long: 'For lots with no house estimate (mostly bid-only card and memorabilia houses), lectr projects the closing price from today’s bid using a close-day growth curve fitted from past bid histories, then compares that projection to the value floor. A lot sits in the Gap when the projected close is 25–90% under the floor and it closes within 3.5 days (“at the wire”), or 40–90% under and 3.5–8 days out (“forming”). Lots with an estimate, condition flags or no gated floor never enter. The Gap keeps its own record, separate from the Flags.',
+    long: 'For lots with no house estimate (mostly bid-only card and memorabilia houses), lectr projects the closing price from today’s bid — the bid times its room’s close multiple (the hammer-to-bid ratio measured on lots that sold, by days to close and bid size), refit every night — then compares that projection, with the buyer’s premium added, to the value floor. A lot sits in the Gap when the projected close is 25–90% under the floor and it closes within 3.5 days (“at the wire”), or 40–90% under and 3.5–8 days out (“forming”). Lots with an estimate, condition flags or no gated floor never enter. The Gap keeps its own record, separate from the Flags.',
     seeAlso: { label: 'The value desk', href: '/value' },
   },
   {

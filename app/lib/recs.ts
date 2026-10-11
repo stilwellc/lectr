@@ -120,7 +120,7 @@ export type RecLot = {
   objectClass?: string | null;
   itemClass?: string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  value?: any; signal?: any; bidProj?: any;
+  value?: any; signal?: any;
 };
 
 export type SeedKind = 'owned' | 'saved' | 'follow' | 'search' | 'signal';
