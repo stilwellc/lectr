@@ -17,6 +17,7 @@ import { safeHref } from '../lib/safe-href';
 import { splitTitle, deglue, formatDate, formatPrice, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
 import { isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand, contextComps } from '../lib/comps';
 import { enginePoolOf } from '../lib/engine-pool';
+import { lotFace, fmtFace, medianRowId, FACE_LABEL } from '../lib/lot-face';
 import { lotAllInFactor } from '../lib/premiums';
 import { lotFloor, lotMaxBid, lotProjectedClose } from '../lib/verdict';
 import { formatEstimate, estimateOnly, lotSignal, confidenceMeter } from './LotCard';
@@ -508,6 +509,8 @@ export default function LotPage({ lotId, initialLot }: {
   // (r7) the engine VALUED this lot (any call, or none): its pool, n and
   // median are stamped — app/lib/engine-pool, one lot one number
   const enginePool = useMemo(() => enginePoolOf(lot?.value), [lot]);
+  // ONE LOT, ONE NUMBER (r8): every value figure this page prints
+  const face = useMemo(() => (lot ? lotFace(lot) : null), [lot]);
   const engineCalled = !!enginePool;
   const needsCorpusRead = useMemo(() => {
     // last-resort resolution — only when the build ships no lot index
@@ -572,7 +575,12 @@ export default function LotPage({ lotId, initialLot }: {
     if (!lot || band) return null;
     if (hasPack && pack!.c) {
       const c = pack!.c;
-      return { pool: packRowsToLots(c.rows), n: c.n, med: c.med ?? undefined, form: c.form, kind: c.kind as 'form' | 'edition' };
+      // the pack is the build's read of the SAME pool; its rows are held to
+      // the pool's ids and its n / median to the stamp (lot-face) — a pack
+      // from a neighbouring build can never add a row or move the median
+      const ids = enginePool ? new Set(enginePool.ids) : null;
+      const rows = packRowsToLots(c.rows).filter(r => !ids || ids.has(r.id));
+      return { pool: rows, n: enginePool?.n ?? c.n, med: enginePool?.med ?? c.med ?? undefined, form: c.form, kind: c.kind as 'form' | 'edition' };
     }
     // (r7, QA2 Q3) THE ENGINE'S POOL whenever the engine valued the lot —
     // a below / above call, "at comparable market", or no direction (it
@@ -608,7 +616,10 @@ export default function LotPage({ lotId, initialLot }: {
   // build-shipped evidence rows for engine calls whose poolIds aren't on-wire
   // (undefined = loading · null = fetched, nothing there)
   const [evRows, setEvRows] = useState<AuctionLot[] | null | undefined>(undefined);
-  const needEvidence = (!!lot && !!called && called.pool.length === 0 && !band)
+  // (r8) a PARTLY resolved engine pool fetches its evidence too — the rows
+  // are the pool behind the median, all of it (the modal showed "4 sales · 1
+  // shown" while the evidence file carried three)
+  const needEvidence = (!!lot && !!called && !band && called.pool.length < (enginePool?.ids.length ?? 1))
     || (!!lot && !called && !band && !ctx?.rows.length && !isSportsScienceObject(lot) && lot.status === 'upcoming' && !!lot.signal && (lot.signal.basis || 0) > 0);
   useEffect(() => {
     if (!needEvidence || !lot) { setEvRows(null); return; }
@@ -623,11 +634,19 @@ export default function LotPage({ lotId, initialLot }: {
   }, [needEvidence, lot]);
 
   const compRows = useMemo(() => {
-    const pool = band ? band.pool : called ? (called.pool.length ? called.pool : (evRows || [])) : ctx?.rows.length ? ctx.rows : (evRows || []);
+    let calledRows: AuctionLot[] = [];
+    if (called) {
+      // the resolved pool rows, completed by the evidence rows — both held
+      // to the pool's own ids when the engine stamped them
+      const ids = enginePool ? new Set(enginePool.ids) : null;
+      const seen = new Set(called.pool.map(r => r.id));
+      calledRows = [...called.pool, ...(evRows || []).filter(r => !seen.has(r.id) && (!ids || ids.has(r.id)))];
+    }
+    const pool = band ? band.pool : called ? calledRows : ctx?.rows.length ? ctx.rows : (evRows || []);
     return [...pool]
       .sort((a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime())
       .slice(0, 12);
-  }, [band, called, ctx, evRows]);
+  }, [band, called, ctx, evRows, enginePool]);
 
   // ── provenance: the same physical object across the book ──
   // repeatSaleGroupId is the engine's strict physical-match verdict (photo/
@@ -673,14 +692,16 @@ export default function LotPage({ lotId, initialLot }: {
   // abstained one an unguarded read over rows the page never showed.
   const compsMed = useMemo(() => {
     if (!lot) return null;
+    if (calledIsHonest && face?.comps && enginePool) return face.comps.med;
     if (calledIsHonest && called?.med != null) return called.med;
     if (band) return band.median;
     const sigMed = (sig as (NonNullable<typeof sig> & { med?: number }) | null)?.med;
     if (sigMed != null) return sigMed;
     if (ctx?.median != null && ctx.rows.length) return ctx.median;
     return null;
-  }, [lot, sig, called, calledIsHonest, band, ctx]);
-  const compsN = (calledIsHonest && called ? called.n : null) ?? (band ? band.n : null) ?? sig?.basis ?? (ctx?.median != null && ctx.rows.length ? ctx.rows.length : null);
+  }, [lot, sig, called, calledIsHonest, band, ctx, face, enginePool]);
+  const compsN = (calledIsHonest && face?.comps && enginePool ? face.comps.n : null)
+    ?? (calledIsHonest && called ? called.n : null) ?? (band ? band.n : null) ?? sig?.basis ?? (ctx?.median != null && ctx.rows.length ? ctx.rows.length : null);
 
   // ── reference comps: a low-confidence measured RANGE, never a flag ──
   // scienceReferenceBand/cultureReferenceBand scan the whole corpus, so gate
@@ -1002,7 +1023,7 @@ export default function LotPage({ lotId, initialLot }: {
                 {/* "vs. estimate", not "the gap" — THE GAP is the no-estimate
                     lane's name (lanes.ts); this cell is the FLAGS read */}
                 <span className="ns-cell-label">vs. estimate · {sig.label.toLowerCase()}</span>
-                <span className="lectr-lot-read-stat">{signalMagnitude(sig.label, sig.pct)}</span>
+                <span className="lectr-lot-read-stat">{face?.call?.text ?? signalMagnitude(sig.label, sig.pct)}</span>
                 <span className="ns-cell-body">
                   {beatRate != null
                     ? `${beatRate}% of flags like this beat their estimate`
@@ -1014,13 +1035,15 @@ export default function LotPage({ lotId, initialLot }: {
                 {/* the engine's buyer fields (hammer basis, same as the
                     estimate) — one secondary line, only the fields served */}
                 {(() => {
-                  const ev = lot.value as { expectedHammerUsd?: number; bandLowUsd?: number; bandHighUsd?: number; maxBidUsd?: number } | null | undefined;
-                  const pos = (n?: number) => (typeof n === 'number' && n > 0 ? n : null);
-                  const xh = pos(ev?.expectedHammerUsd), lo = pos(ev?.bandLowUsd), hi = pos(ev?.bandHighUsd), mb = pos(ev?.maxBidUsd);
+                  // (r8) lot-face: the ratio's own derivation from printed
+                  // numbers, then the engine's value — the plate's and the
+                  // modal's exact figures and labels
+                  const mb = lotMaxBid(lot);
                   const parts = [
-                    xh ? `expected hammer ${formatPrice(xh)}` : null,
-                    lo && hi ? `likely ${formatPrice(lo)}–${formatPrice(hi)}` : null,
-                    mb ? `max bid ${formatPrice(mb)}` : null,
+                    face?.call?.derivation ?? null,
+                    face?.value ? `${FACE_LABEL.value} ${face.value.text}` : null,
+                    face?.value ? `${FACE_LABEL.range} ${face.value.range}` : null,
+                    mb ? `max bid ${fmtFace(mb.hammer)}` : null,
                   ].filter((x): x is string => !!x);
                   // each figure keeps its words together — a wrap lands on a separator
                   return parts.length ? (
@@ -1038,7 +1061,15 @@ export default function LotPage({ lotId, initialLot }: {
               ) : null}
 
               {compsMed != null && (
-                <LeaderRow k="Comps median" v={formatPrice(compsMed)} sub={compsN != null ? `${compsN} sales` : undefined} />
+                <LeaderRow k={FACE_LABEL.comps} v={fmtFace(compsMed)}
+                  sub={calledIsHonest && face?.comps && enginePool ? face.comps.sub : compsN != null ? `${compsN} sales` : undefined} />
+              )}
+
+              {/* (r8) the engine's value on a valued lot without a read cell —
+                  the modal's and the plate's figure (the read cell carries it
+                  when there is a call) */}
+              {isUpcoming && face?.value && lot.value?.basis !== 'card-comp' && !(sig && !!(lot.estimateLow || lot.estimateHigh)) && (
+                <LeaderRow k={FACE_LABEL.value} v={face.value.text} sub={`${FACE_LABEL.valueSub} · ${FACE_LABEL.range} ${face.value.range}`} />
               )}
 
               {isUpcoming && !sig && band && (
@@ -1061,8 +1092,8 @@ export default function LotPage({ lotId, initialLot }: {
                 return (
                   <LeaderRow
                     k="Max bid"
-                    v={`≤ ${formatPrice(mb.hammer)} hammer`}
-                    sub={`walk-away price · ${formatPrice(mb.allIn)} all-in`}
+                    v={`≤ ${fmtFace(mb.hammer)} hammer`}
+                    sub={`walk-away price · ${fmtFace(mb.allIn)} all-in`}
                   />
                 );
               })()}
@@ -1237,11 +1268,11 @@ export default function LotPage({ lotId, initialLot }: {
                   : headCalled
                     ? headCalled.kind === 'edition'
                       ? `This exact work, sold ${headCalled.n} times`
-                      : `${headCalled.n} comparable ${formLabel}`
+                      : `${headCalled.n} comparable ${formLabel}${!compsPending && compRows.length && compRows.length < headCalled.n && compRows.length < 12 ? ` · ${compRows.length} shown` : ''}`
                     : 'Comparable sales'}
               </h2>
             </div>
-            <span className="lectr-lot-shctx">medians, never means</span>
+            <span className="lectr-lot-shctx">{!band && calledIsHonest && face?.comps && enginePool ? 'weighted median: closest, most recent count most' : 'medians, never means'}</span>
           </div>
           {/* explanation copy rides a cream well — the printed-bid gate
               language below is preserved verbatim */}
@@ -1275,7 +1306,7 @@ export default function LotPage({ lotId, initialLot }: {
             </div>
           ) : (
             <div style={{ marginTop: 6 }}>
-              {compRows.map((comp, i) => (
+              {compRows.map((comp, i, all) => (
                 // safe-href: undefined renders a non-navigating row — the
                 // comp's facts still read, no javascript:-shaped click
                 <a key={comp.id} href={safeHref(comp.url)} target="_blank" rel="noopener noreferrer" className="lectr-lot-comp">
@@ -1292,9 +1323,11 @@ export default function LotPage({ lotId, initialLot }: {
                       <span style={{ color: houseColors[comp.auctionHouse] || 'var(--color-text-faint)', fontWeight: 600 }}>{comp.auctionHouse}</span>
                       {' · '}{formatDate(comp.saleDate, { month: 'short', year: 'numeric' })}
                       {comp.medium ? ` · ${deglue(cleanText(comp.medium))}` : ''}
+                      {/* (r8) the weighted median IS one of these sales — name it */}
+                      {!band && compsMed != null && face?.comps && enginePool && comp.id === medianRowId(all, compsMed) ? ' · the median' : ''}
                     </span>
                   </span>
-                  <span className="lectr-lot-comp-p">{comp.priceUsd ? formatPrice(comp.priceUsd) : '—'}</span>
+                  <span className="lectr-lot-comp-p">{comp.priceUsd ? fmtFace(comp.priceUsd) : '—'}</span>
                 </a>
               ))}
             </div>

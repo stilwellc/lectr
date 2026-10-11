@@ -12,6 +12,7 @@ import Flick from './Flick';
 import { computeDeepSignal, FORM_LABEL, signalMagnitude } from '../lib/comps';
 import { safeHref } from '../lib/safe-href';
 import { cardCompsHammer } from '../lib/verdict';
+import { lotFace, fmtFace } from '../lib/lot-face';
 import { makerHref } from '../lib/entity/retired';
 
 // stable empty-array identity — a fresh `[]` default each render would defeat
@@ -388,7 +389,7 @@ function LotCard({
         {buySignal && (
           <div className="ray-sigrow" data-tone={buySignal.label === 'Below Market' ? 'up' : 'down'} style={{ margin: 0, justifyContent: 'flex-end' }}>
             <span className="ray-sigrow-pct">
-              {signalMagnitude(buySignal.label, buySignal.pct)}
+              {lotFace(lot).call?.text ?? signalMagnitude(buySignal.label, buySignal.pct)}
             </span>
           </div>
         )}
@@ -406,7 +407,7 @@ function LotCard({
               fontWeight: 600,
             }}
           >
-            {cardComp.conf === 'low' ? 'player cards ~' : 'comps ~'}{formatPrice(cardComp.value)}
+            {cardComp.conf === 'low' ? 'player cards ~' : 'comps ~'}{fmtFace(cardComp.value)}
           </div>
         )}
         <span className="ray-lot-est" style={{ display: 'block' }}>{isNoSale ? 'Bought in' : formatEstimate(lot)}</span>
@@ -610,7 +611,7 @@ function LotCard({
           {buySignal && (
             <div className="ray-sigrow" data-tone={buySignal.label === 'Below Market' ? 'up' : 'down'}>
               <span className="ray-sigrow-pct">
-                {signalMagnitude(buySignal.label, buySignal.pct)}
+                {lotFace(lot).call?.text ?? signalMagnitude(buySignal.label, buySignal.pct)}
               </span>
               <span className="ray-sigrow-ctx">
                 {buySignal.kind === 'edition'
@@ -674,7 +675,7 @@ function LotCard({
                 fontWeight: 600,
               }}
             >
-              {cardComp.conf === 'low' ? 'player cards ~' : 'comps ~'}{formatPrice(cardComp.value)}
+              {cardComp.conf === 'low' ? 'player cards ~' : 'comps ~'}{fmtFace(cardComp.value)}
               <span style={{ color: 'var(--color-text-faint)', fontWeight: 400, letterSpacing: '0.06em', marginLeft: 6 }}>
                 {confidenceMeter(cardComp.conf).dots}
               </span>
