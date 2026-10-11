@@ -13,7 +13,7 @@ import FollowChip from './FollowChip';
 import { catFollow, houseFollow } from '../lib/follows';
 import { facetCatOf, facetChips, toggleFacet } from '../lib/facets';
 import {
-  WINDOWS, VALUE_FLOORS, VALUE_CEILINGS, fmtCeiling, valueOptionOf, valuePatchOf, TRIAGE_DEFAULTS, isTriageActive, passesTriage, patchTriage, type TriageFilters, type HouseBaselines,
+  WINDOWS, VALUE_FLOORS, VALUE_CEILINGS, fmtCeiling, houseOptions, valueOptionOf, valuePatchOf, TRIAGE_DEFAULTS, isTriageActive, passesTriage, patchTriage, type TriageFilters, type HouseBaselines,
 } from '../lib/feed-filters';
 
 type TriageLot = Parameters<typeof passesTriage>[0];
@@ -82,11 +82,9 @@ export default function TriageBar({
       .map(([cat, n]): SubChip => ({ key: `${cat}:`, cat, sub: null, label: CAT_LABEL[cat], n }));
     return { level: 'cat' as const, items: cats, deeper: cf.cat ? subChipsOf(pool, cf, [cf.cat]) : [] };
   }, [lots, cf, onlyCats, prevVisitDay, baselines]);
-  const houses = useMemo(() => {
-    const c = new Map<string, number>();
-    for (const l of lots) { const h = String((l as { auctionHouse?: string }).auctionHouse || ''); if (h) c.set(h, (c.get(h) || 0) + 1); }
-    return Array.from(c.entries()).sort((a, b) => b[1] - a[1]);
-  }, [lots]);
+  // every house in the pool, plus the picked one at 0 when the pool has none
+  // of it — the select never reads "All houses" while a house cuts the list
+  const houses = useMemo(() => houseOptions(lots as { auctionHouse?: string | null }[], filters.house), [lots, filters.house]);
   const newCount = useMemo(
     () => lots.filter(l => passesTriage(l, { ...TRIAGE_DEFAULTS, newOnly: true }, { prevVisitDay, baselines })).length,
     [lots, prevVisitDay, baselines]
@@ -173,7 +171,7 @@ export default function TriageBar({
             {prevVisitDay ? 'New since last visit' : 'New today'} <i>{newCount}</i>
           </button>
         )}
-        {houses.length > 1 && !pending && (
+        {(houses.length > 1 || filters.house != null) && !pending && (
           <select className="ray-toolbar-pill ray-toolbar-select" aria-label="Auction house" data-active={filters.house != null}
             value={filters.house ?? ''} onChange={e => set({ house: e.target.value || null })}>
             <option value="">All houses</option>
