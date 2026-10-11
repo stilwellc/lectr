@@ -63,8 +63,8 @@ test('assignSlugs: a shared name is qualified on BOTH sides (order-independent);
   assert.equal(a.get('sj:culture|p:michael-jordan'), 'michael-jordan-culture-person');
   assert.equal(a.get('sj:sports|t:michael-jordan'), 'michael-jordan-sports-team');
   assert.equal(a.get('st:tcg|s:151'), '151-tcg-set');
-  for (const [k, v] of a) assert.equal(b.get(k), v, `stable across order: ${k}`);
-  assert.equal(new Set(a.values()).size, a.size);
+  a.forEach((v, k) => assert.equal(b.get(k), v, `stable across order: ${k}`));
+  assert.equal(new Set(Array.from(a.values())).size, a.size);
 });
 
 test('entity facts: the median prints with its n and lens; nothing invented when absent', () => {
