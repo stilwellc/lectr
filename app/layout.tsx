@@ -7,6 +7,7 @@ import { MarketProvider } from './lib/market';
 import { AccountProvider } from './lib/account';
 import { ROSTER_PHRASE } from './constants';
 import { DelegatedTrackers } from './components/retention/trackers';
+import RayDataPreloads from './components/RayDataPreloads';
 
 // One voice. Inter carries everything — display numerals, labels, body —
 // with tabular figures for anything that counts money.
@@ -69,21 +70,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning className={`${inter.variable} ${serifDisplay.variable} ${plexMono.variable}`}>
       <head>
-        {/* Phase-1 data preloads: useRayData fetches these eagerly (no ?v=)
-            after hydration — preloading starts the ~1 MB br transfer at t=0.
-            crossOrigin="anonymous" matches fetch()'s default cors/same-origin
-            credentials mode so the browser reuses the preload (no double
-            fetch). upcoming.json dominates phase 1; meta.json versions the
-            phase-2 shard URLs, so it must land before phase 2 can start.
-            ALL FIVE are preloaded because useRayData awaits them in a single
-            Promise.allSettled — first paint gates on the SLOWEST of the set, so
-            preloading a subset just makes the unlisted ones (market.json at
-            ~243 KB br, stats.json ~65 KB) start late and become the gate. */}
-        <link rel="preload" href="/data/ray/upcoming.json" as="fetch" crossOrigin="anonymous" />
-        <link rel="preload" href="/data/ray/market.json" as="fetch" crossOrigin="anonymous" />
-        <link rel="preload" href="/data/ray/stats.json" as="fetch" crossOrigin="anonymous" />
-        <link rel="preload" href="/data/ray/meta.json" as="fetch" crossOrigin="anonymous" />
-        <link rel="preload" href="/data/ray/backtest.json" as="fetch" crossOrigin="anonymous" />
+        {/* Phase-1 data preloads live with the routes that read the live
+            book (app/components/RayDataPreloads) — React hoists them here
+            into <head>. /about and /blog read none, so they preload none. */}
+        <RayDataPreloads />
         {/* THE PORCELAIN is the shipped default. This runs synchronously in
             <head> so the first paint is already light — no dark flash.
             `?light=0` opts a session back to the dark catalogue (stored),

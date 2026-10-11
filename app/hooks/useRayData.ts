@@ -748,6 +748,20 @@ export function useSoldLedger(): LedgerState {
 }
 
 export function useRayData(): RayData {
+  return useRayDataImpl(true);
+}
+
+/** The same view as useRayData(), but it never STARTS the phase-1 load on
+ *  its own until `enabled`: it subscribes, so it fills the moment any other
+ *  surface (or a later `enabled`) loads the book. For chrome mounted on every
+ *  page — the ⌘K palette, closed — so a page that reads no live data (/about,
+ *  /blog) never pays the ~1.7 MB eager payload for a palette nobody opened
+ *  (perf wave W1, Oct 11). */
+export function useRayDataWhen(enabled: boolean): RayData {
+  return useRayDataImpl(enabled);
+}
+
+function useRayDataImpl(load: boolean): RayData {
   const [data, setData] = useState<RayPayload | null>(cached);
   // "cache warm at mount" per the doc contract — phase-1 presence, NOT
   // phase-2 completion (ANDing fullLoaded made entrance choreography replay
@@ -759,9 +773,10 @@ export function useRayData(): RayData {
     let active = true;
     const listener = (p: RayPayload) => { if (active) setData(p); };
     listeners.add(listener);
-    loadRayData().then(listener);
+    // a payload that landed between render and subscribe still reaches us
+    if (load || cached || inflight) loadRayData().then(listener);
     return () => { active = false; listeners.delete(listener); };
-  }, []);
+  }, [load]);
 
   return {
     statsByArtist: data?.statsByArtist || {},

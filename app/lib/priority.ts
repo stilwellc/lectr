@@ -235,11 +235,24 @@ export function priorityOf(l: ScoreLot, nowMs: number = Date.now()): Priority | 
 
 /** Sort comparator: score desc, then sooner close, then bigger anchor. Unanchored lots sink. */
 export function byPriority(nowMs: number = Date.now()) {
+  // Each lot's score is computed ONCE per comparator (perf wave W1, Oct 11):
+  // a sort calls the comparator ~2·n·log n times, and priorityOf (anchor,
+  // taxonomy, close clock) recomputed for both sides of every comparison was
+  // ~2 s of main thread on a 4×-throttled phone sorting the 10K-lot book.
+  // priorityOf is a pure function of (lot, nowMs) and nowMs is fixed for the
+  // comparator, so the order is identical.
+  const memo = new WeakMap<ScoreLot, { p: Priority | null; c: number }>();
+  const read = (l: ScoreLot) => {
+    let m = memo.get(l);
+    if (!m) { m = { p: priorityOf(l, nowMs), c: closeMsOf(l) ?? Infinity }; memo.set(l, m); }
+    return m;
+  };
   return (x: ScoreLot, y: ScoreLot): number => {
-    const px = priorityOf(x, nowMs), py = priorityOf(y, nowMs);
+    const mx = read(x), my = read(y);
+    const px = mx.p, py = my.p;
     if (!px || !py) return px ? -1 : py ? 1 : 0;
     if (py.score !== px.score) return py.score - px.score;
-    const cx = closeMsOf(x) ?? Infinity, cy = closeMsOf(y) ?? Infinity;
+    const cx = mx.c, cy = my.c;
     if (cx !== cy) return cx - cy;
     return py.a - px.a;
   };

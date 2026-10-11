@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { ARTISTS, ARTIST_LABEL, MARKETS } from '../constants';
 import { makerLineOf, labelLineOf, labelTagOf, searchTextOf, drillLabelOf } from '../lib/lot-labels';
 import { useMarket, MARKET_PATH } from '../lib/market';
-import { useRayData } from '../hooks/useRayData';
+import { useRayDataWhen } from '../hooks/useRayData';
 import { craftTitle, formatPrice, formatDate, refLabel } from '../utils';
 import { loadRefList, matchRefs, refHref, searchSold, type RefRow, type SoldHit } from '../lib/search-index';
 import ArtistAvatar from './ArtistAvatar';
@@ -87,7 +87,8 @@ export default function CommandK({ upcomingCounts, savedCount = 0 }: { upcomingC
   const router = useRouter();
   const { market } = useMarket();
   const homePath = MARKET_PATH[market] || '/';
-  const { allLots, market: marketData } = useRayData();
+  // the live book loads only once the palette opens (or any page loaded it)
+  const { allLots, market: marketData } = useRayDataWhen(open);
   const upcomingLots = useMemo(() => allLots.filter(l => l.status === 'upcoming' && l.title), [allLots]);
 
   // THE ARCHIVE (Oct 8): the static search index (scripts/emit-search-index)
