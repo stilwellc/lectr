@@ -35,7 +35,7 @@ import {
 } from '../lib/your-market';
 import { MoversMark } from '../components/marks';
 import { localToday } from '../utils';
-import { HelpChip } from './help';
+import { RoomHead } from './head';
 
 export type MarketMode = 'week' | 'since';
 
@@ -235,38 +235,34 @@ export default function YourMarket({ book, owned = [], mode: modeProp, since: si
   return (
     <section id="market" ref={sectionRef} className="ray-saved-section rail" aria-label="Your market">
       <div className="ns-plate" style={{ paddingTop: 18 }}>
-        <div className="ray-enter" style={{ display: 'flex', alignItems: 'baseline', gap: '4px 14px', flexWrap: 'wrap', marginBottom: 6 }}>
-          <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><MoversMark size={17} /></span>Your market</h2>
-          <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>the names you follow and own, {when}</span>
-          <HelpChip name="Your market">
-            One row per name you follow or own, newsworthy first: a <b>new all-time record</b> (or a top-eight result on
+        <RoomHead className="ray-enter" mark={<MoversMark size={17} />} title="Your market"
+          help={{ name: 'Your market', body: <>            One row per name you follow or own, newsworthy first: a <b>new all-time record</b> (or a top-eight result on
             file) dated in the window, then a <b>clear year-over-year move</b> — printed with its 90% interval and the
             number of sales it rests on, and toned only when the interval leaves zero out; <b>matched</b> compares the
             same items sold in both years, <b>median sale</b> the pooled medians. Then <b>below-market</b> live lots
             (the engine prices them under their comparables) and what is live and closing within seven days. The
             biggest sale is the window&rsquo;s largest on file; where the published rows cover only part of the window
             it says from which day. No figure here is computed in your browser — each is the nightly build&rsquo;s.
-          </HelpChip>
-          {canSince && (
-            <span style={{ display: 'inline-flex', gap: 6, marginLeft: 'auto' }} role="group" aria-label="Digest window">
+          </> }}
+          actions={canSince ? (
+            <span className="ck-seg" role="group" aria-label="Digest window">
               <button type="button" className="ray-toolbar-pill" data-active={mode === 'week'} aria-pressed={mode === 'week'} onClick={() => setMode('week')}>This week</button>
               <button type="button" className="ray-toolbar-pill" data-active={mode === 'since'} aria-pressed={mode === 'since'} onClick={() => setMode('since')}>Since {dayWord(sinceDay!)}</button>
             </span>
-          )}
-        </div>
-        <p className="ck-sig-note" style={{ marginTop: 4 }} role="status">
-          {loading
-            ? 'Reading the sold history for your names…'
-            : news
-              ? <>{[
-                  t.records ? `${t.records} ${t.records === 1 ? 'name set a record or top result' : 'names set records or top results'}` : null,
-                  t.moves ? `${t.moves} clear ${t.moves === 1 ? 'move' : 'moves'} year over year` : null,
-                  t.flagged ? `${t.flagged} below-market ${t.flagged === 1 ? 'lot' : 'lots'} live` : null,
-                ].filter(Boolean).join(' · ')}.</>
-              : <>Nothing moved enough to say so {when}.</>}
-        </p>
+          ) : null}
+          sub={<span role="status">
+            {loading
+              ? <>The names you follow and own, {when} · reading their sold history…</>
+              : news
+                ? <>{[
+                    t.records ? `${t.records} ${t.records === 1 ? 'name set a record or top result' : 'names set records or top results'}` : null,
+                    t.moves ? `${t.moves} clear ${t.moves === 1 ? 'move' : 'moves'} year over year` : null,
+                    t.flagged ? `${t.flagged} below-market ${t.flagged === 1 ? 'lot' : 'lots'} live` : null,
+                  ].filter(Boolean).join(' · ')} — the names you follow and own, {when}</>
+                : <>Nothing moved enough to say so {when} — the names you follow and own</>}
+          </span>} />
         {shown.length > 0 && (
-          <div className="ck-reads" role="list" aria-label={`Your names, ${when}`} style={{ marginTop: 10 }}>
+          <div className="ck-reads ck-market-rows" role="list" aria-label={`Your names, ${when}`}>
             {shown.map(d => <Row key={d.name.key} d={d} mode={mode} sinceDay={sinceDay} />)}
           </div>
         )}

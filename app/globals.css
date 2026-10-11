@@ -4830,5 +4830,106 @@ button.ns-stat { cursor: pointer; }
 }
 
 
+/* ════════════════════════════════════════════════════════════════════
+   /profile POLISH (Oct 11 2026) — one page, one grammar. Tokens, type,
+   hairlines and pills only; nothing here adds a color, font or border
+   style the cockpit doesn't already use.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* every hash target lands under the nav + the pill rail */
+.ck-page :is(#for-collection, #pick-outcomes, #market) { scroll-margin-top: 116px; }
+
+/* ── THE ROOM HEAD (app/profile/head.tsx): title · ? · actions right, one
+   muted figure line under it that wraps and is never cut ── */
+.ck-head { min-width: 0; }
+.ck-head-row { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; }
+.ck-head-t { margin: 0 !important; }
+.ck-head-row .ck-helpbtn { align-self: center; }
+.ck-head-row .ck-help { order: 5; }
+.ck-head-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; align-self: center; }
+.ck-head-sub { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: var(--color-text-muted); max-width: 820px; }
+@media (max-width: 639.98px) {
+  /* a phone: actions wrap under the title, never squeeze it */
+  .ck-head-row .ck-helpbtn { margin-left: auto; }
+  .ck-head-actions { margin-left: 0; }
+  .ck-page .ck-head .ray-h2 { font-size: 24px; }
+}
+/* the sub-room head: the same row, lighter — no print rule */
+.ck-h3 {
+  margin: 0; font-size: 22px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.2;
+  color: var(--color-fg);
+}
+html[data-lectr-light] .ck-h3 .ray-sect-mark { width: 23px; height: 23px; border-radius: 6px; vertical-align: -4px; margin-right: 10px; }
+html[data-lectr-light] .ck-h3 .ray-sect-mark svg { width: 13px; height: 13px; }
+@media (max-width: 639.98px) { .ck-h3 { font-size: 20px; } }
+
+/* the collection band's head keeps the print rule it had as a bare h2 */
+html[data-lectr-light] .ray-band .ck-head[data-level='2'] h2.ray-h2 { padding-top: 14px; border-top: 2px solid var(--color-fg); position: relative; }
+html[data-lectr-light] .ray-band .ck-head[data-level='2'] h2.ray-h2::after { content: ''; position: absolute; top: 3px; left: 0; right: 0; border-top: 1px solid var(--hairline); }
+.ray-band .ck-head-sub { color: var(--paper-muted, var(--color-text-muted)); }
+
+/* the settled ledger folds "Your call" when no row recorded one */
+.ray-settled-desk[data-nocall] .ray-settled-cols > :nth-child(4) { display: none; }
+.ray-settled-desk[data-nocall] .ray-settled-cols { grid-template-columns: minmax(100px, 140px) minmax(0, 1fr) 110px 100px 88px 86px; }
+
+/* ── THE PICKS GROUP: Lots you may like + For your collection + How your
+   picks did read as one room — one plate, the followers as sub-rooms ── */
+.ck-group { padding-bottom: 44px; }
+.ck-group > .ck-foryou.ray-saved-section { padding-bottom: 6px; }
+.ck-subroom { padding-top: 34px; }
+.ck-subroom > div:not(:empty) { border-top: 1px solid var(--hairline); padding-top: 20px; }
+.ck-more-row { display: flex; justify-content: center; margin-top: 22px; }
+.ck-kinds { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.ck-outcome-line { margin: 12px 0 0; font-size: 13px; line-height: 1.55; color: var(--color-fg); max-width: 820px; }
+.ck-seg { display: inline-flex; gap: 6px; }
+@media (max-width: 639.98px) {
+  /* a phone's rhythm: rooms sit closer (one thumb, less travel) */
+  .ck-page .ray-saved-section { padding-block: 26px 30px; }
+  .ck-page .ck-desk .ray-masthead-h1 { margin-bottom: 0; }
+  .ck-group { padding-bottom: 30px; }
+  .ck-subroom { padding-top: 26px; }
+}
+
+/* ── loading seats — the shape of what lands (no jump when it does) ── */
+.ck-sk-card { display: grid; gap: 10px; align-content: start; }
+.ck-sk-card > i, .ck-sk-row i { display: block; }
+.ck-sk-card > i:nth-child(1) { height: 240px; border-radius: 12px; }
+.ck-sk-card > i:nth-child(2) { height: 14px; width: 55%; }
+.ck-sk-card > i:nth-child(3) { height: 12px; width: 85%; }
+.ck-sk-card > i:nth-child(4) { height: 12px; width: 40%; margin-top: 18px; }
+.ck-sk-row { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--hairline-soft, var(--hairline)); }
+.ck-sk-row > i { height: 64px; border-radius: 10px; }
+.ck-sk-row > span { display: grid; gap: 8px; align-content: start; padding-top: 4px; }
+.ck-sk-row > span > i { height: 11px; }
+.ck-sk-row > span > i:nth-child(1) { width: 50%; }
+.ck-sk-row > span > i:nth-child(2) { width: 90%; }
+.ck-sk-row > span > i:nth-child(3) { width: 35%; }
+@media (min-width: 600px) and (max-width: 899.98px) { .ck-sk-card > i:nth-child(1) { height: 230px; } }
+
+/* ── THE RAIL scales: groups parted by a hairline, a soft fade on the side
+   that scrolls, the active pill brought to the middle (rail.tsx) ── */
+.ck-rail-sep { flex: none; width: 1px; height: 16px; background: var(--color-border-mid); margin: 0 5px; opacity: 0.7; }
+.ck-rail[data-fade-r] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); }
+.ck-rail[data-fade-l] { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 36px), transparent); }
+.ck-rail[data-fade-l][data-fade-r] {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+}
+
+/* ── YOUR MARKET: two columns of names on a desktop (a full-width row left
+   a 900px gap between the name and its figure) ── */
+.ck-market-rows { margin-top: 12px; }
+@media (min-width: 900px) {
+  .ck-market-rows { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 40px; }
+}
+
+/* ── the watching ledger folds a column that is empty on every row ── */
+.ray-saved-ledger[data-nosig] .ray-saved-cols > :nth-child(4),
+.ray-saved-ledger[data-nodelta] .ray-saved-cols > :nth-child(5) { display: none; }
+.ray-saved-ledger[data-nosig] .ray-saved-cols { grid-template-columns: 92px minmax(0, 1fr) 120px 104px 104px; }
+.ray-saved-ledger[data-nodelta] .ray-saved-cols { grid-template-columns: 92px minmax(0, 1fr) 120px 96px 104px; }
+.ray-saved-ledger[data-nosig][data-nodelta] .ray-saved-cols { grid-template-columns: 92px minmax(0, 1fr) 140px 120px; }
+
+
 /* home: a jump to the feed (/?tab=you, the below lens) lands its head under the nav */
 #on-the-block { scroll-margin-top: 72px; }

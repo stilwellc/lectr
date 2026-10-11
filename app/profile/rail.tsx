@@ -13,7 +13,7 @@
  * sections), and the active item tracks the scroll. Items follow each
  * section's own null gate — the page passes only what renders.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 export interface RailItem {
   id: string;
@@ -26,6 +26,8 @@ export interface RailItem {
   tone?: 'up' | 'down';
   /** unseen matches waiting (the inbox dot — ink, never a lamp) */
   dot?: boolean;
+  /** the page's grouping (now · picks · desk) — a hairline parts the groups */
+  group?: string;
 }
 
 function jump(id: string) {
@@ -77,19 +79,42 @@ export function PillRail({ items }: { items: RailItem[] }) {
     const rail = pill?.parentElement;
     if (!pill || !rail || rail.scrollWidth <= rail.clientWidth) return;
     const l = pill.offsetLeft - rail.offsetLeft, r = l + pill.offsetWidth;
-    if (l < rail.scrollLeft || r > rail.scrollLeft + rail.clientWidth) rail.scrollTo({ left: Math.max(0, l - 16), behavior: 'auto' });
+    // near or past either edge (under the fade): bring it to the middle
+    if (l < rail.scrollLeft + 32 || r > rail.scrollLeft + rail.clientWidth - 32) {
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      rail.scrollTo({ left: Math.max(0, l - (rail.clientWidth - pill.offsetWidth) / 2), behavior: reduce ? 'auto' : 'smooth' });
+    }
   }, [active]);
+  // the rail scrolls sideways on itself when its pills outrun the width: a
+  // soft fade on the side that has more says so (never a cut pill edge)
+  const railRef = useRef<HTMLDivElement | null>(null);
+  const [edge, setEdge] = useState<{ l: boolean; r: boolean }>({ l: false, r: false });
+  useEffect(() => {
+    const el = railRef.current;
+    if (!el) return;
+    const read = () => {
+      const l = el.scrollLeft > 4, r = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+      setEdge(e => (e.l === l && e.r === r ? e : { l, r }));
+    };
+    read();
+    el.addEventListener('scroll', read, { passive: true });
+    window.addEventListener('resize', read, { passive: true });
+    return () => { el.removeEventListener('scroll', read); window.removeEventListener('resize', read); };
+  }, [items.length]);
   if (items.length < 2) return null;
   return (
     <nav className="ck-rail-wrap" aria-label="Sections on this page">
-      <div className="ck-rail rail">
-        {items.map(it => (
-          <a key={it.id} href={`#${it.id}`} data-id={it.id} className="ck-rail-pill" aria-current={active === it.id ? 'true' : undefined}
+      <div ref={railRef} className="ck-rail rail" data-fade-l={edge.l || undefined} data-fade-r={edge.r || undefined}>
+        {items.map((it, i) => (
+          <React.Fragment key={it.id}>
+          {i > 0 && it.group && items[i - 1].group && it.group !== items[i - 1].group && <i className="ck-rail-sep" aria-hidden />}
+          <a href={`#${it.id}`} data-id={it.id} className="ck-rail-pill" aria-current={active === it.id ? 'true' : undefined}
             onClick={e => { e.preventDefault(); jump(it.id); }}>
             {it.label}
             {it.count != null && <b style={{ color: toneInk(it.tone) }}>{it.count}</b>}
             {it.dot && <i className="ck-rail-dot" aria-label="new matches" />}
           </a>
+          </React.Fragment>
         ))}
       </div>
     </nav>

@@ -25,7 +25,7 @@ import AlertsInbox from '../components/AlertsInbox';
 import QuickStart from '../components/QuickStart';
 import { SignalMark } from '../components/marks';
 import { craftTitle } from '../utils';
-import { HelpChip } from './help';
+import { RoomHead } from './head';
 
 const KIND_ORDER: FollowKind[] = ['maker', 'entity', 'cat', 'house'];
 const KIND_LABEL: Record<FollowKind, string> = { maker: 'Makers & players', entity: 'Subjects', cat: 'Categories', house: 'Houses' };
@@ -63,7 +63,7 @@ export function FollowChips({ book, onAdd }: { book: readonly AuctionLot[]; onAd
     <div className="ck-sig-block">
       <div className="ck-reads-head"><span className="kicker">Follows{follows.length ? ` · ${follows.length}` : ''}</span><i className="ck-reads-rule" /></div>
       {groups.length === 0 && (
-        <p className="ck-sig-note">Nothing followed yet. Follow a maker, player, subject, category or house and its live lots lead your picks.</p>
+        <p className="ck-sig-note">Nothing followed yet — a maker, player, subject, category or house you follow leads your picks.</p>
       )}
       <Stated onEdit={add} />
       {/* every kind on one wrapping line — the kind a small prefix, not a row */}
@@ -178,7 +178,7 @@ export function OnDevice() {
         </>
       ) : (
         <p className="ck-sig-note">
-          {cleared ? 'Cleared. Picks now read only what you save, own, follow and search.' : 'Nothing learned here yet.'} The lots and pages you open in this browser, what you search, and your More like this / Not for me marks lean your picks. lectr keeps that record in this browser and never uploads it.
+          {cleared ? 'Cleared. Picks now read only what you save, own, follow and search.' : 'Nothing learned here yet — what you open, search and mark in this browser leans your picks; that record stays in this browser.'}
         </p>
       )}
     </div>
@@ -196,24 +196,21 @@ export default function YourSignals({ book, signedOut }: { book: readonly Auctio
       <div className="ck-reads-head"><span className="kicker">Saved searches</span><i className="ck-reads-rule" /></div>
       <p className="ck-sig-note">
         {signedOut
-          ? 'Sign in and the searches you save from any feed are matched nightly against every new lot — the matches land here.'
-          : 'No saved searches yet. Save one from any feed’s search and the nightly crawl matches every new lot against it — the matches land here.'}
+          ? 'Sign in and a search you save from any feed is matched nightly against every new lot — matches land here.'
+          : 'None yet — save a search from any feed and every new lot is matched against it nightly.'}
       </p>
     </>
   );
   return (
     <section id="signals" className="ray-saved-section rail" aria-label="Your signals">
       <div className="ns-plate" style={{ paddingTop: 18 }}>
-        <div className="ray-enter" style={{ display: 'flex', alignItems: 'baseline', gap: '4px 14px', flexWrap: 'wrap', marginBottom: 14 }}>
-          <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><SignalMark size={17} /></span>Your signals</h2>
-          <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>what tunes your picks</span>
-          <HelpChip name="Your signals">
-            Your picks read, in order of weight: what you <b>own</b>, <b>save</b>, <b>follow</b> and <b>search</b>, then what
+        <RoomHead className="ray-enter" mark={<SignalMark size={17} />} title="Your signals" style={{ marginBottom: 6 }}
+          help={{ name: 'Your signals', body: <>            Your picks read, in order of weight: what you <b>own</b>, <b>save</b>, <b>follow</b> and <b>search</b>, then what
             you open in this browser. Follows and saved searches live {signedOut ? 'on this device until you sign in, then in your account' : 'in your account'};
             what this device learned is kept in this browser and never uploaded (the pages themselves load from lectr,
             like any site). Remove anything here and the picks re-read at once.
-          </HelpChip>
-        </div>
+          </> }}
+          sub="What tunes your picks — remove anything here and they re-read at once" />
         <div className="ck-sig-grid">
           <div>
             <FollowChips book={book} />

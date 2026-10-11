@@ -36,7 +36,8 @@ import { PickFeedback, UndoSeat, usePickFeedback, withUndoSeat } from '../compon
 import QuickStart from '../components/QuickStart';
 import { usePricePref, priceText } from '../lib/interests';
 import { CellGrid, Cell, ColorCell } from '../components/cells';
-import { HelpChip } from './help';
+import { RoomHead } from './head';
+import { useGridCols, PickSkeleton } from './grid';
 import { PillRail, useHashLanding, type RailItem } from './rail';
 import TodayBand from './today';
 import YourSignals from './signals';
@@ -45,7 +46,7 @@ import PickMenu from './pickmenu';
 import PickOutcomes from './outcomes';
 import ForYourCollection from './collection';
 import { useLogPicks } from '../lib/pick-log';
-import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, median, overEstimatePct, isOnBlock } from '../utils';
+import { closeDayOf, getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, median, overEstimatePct, isOnBlock } from '../utils';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
 import { makerLineOf, labelLineOf, drillLabelOf } from '../lib/lot-labels';
 import { displayMakerOf } from '../lib/maker-subjects';
@@ -86,6 +87,9 @@ import DecisionLine from '../components/DecisionLine';
 /** Terminal's shared daysUntil, kept on this page's NaN convention (every
     comparison here is NaN-safe; a null would need `?? NaN` at 14 call sites) */
 const daysUntil = (dateStr: string): number => daysUntilOrNull(dateStr) ?? NaN;
+/** days to a lot's PRINTED close day (closeDayOf — the reader's true day,
+    never the crawl day a late-night close was stamped with) */
+const closeDays = (l: AuctionLot): number => daysUntil(closeDayOf(l));
 function hammerWord(days: number): string {
   if (isNaN(days)) return 'scheduled';
   if (days < 0) return `hammered ${-days} ${days === -1 ? 'day' : 'days'} ago`;
@@ -146,7 +150,7 @@ const TAG_SOON_DAYS = 2;      // "Lands soon": hammers within 2 days
 // fairness check) was a second sleeper classifier; one-source law.
 type WatchTag = { tag: 'Lands soon' | 'Below market' | 'Most bids' | 'Quiet'; rank: number };
 function watchTagOf(l: AuctionLot, sig: { label: string } | null | undefined, now = Date.now()): WatchTag | null {
-  const d = daysUntil(l.saleDate);
+  const d = closeDays(l);
   if (d >= 0 && d <= TAG_SOON_DAYS) return { tag: 'Lands soon', rank: 0 };
   if (sig?.label === 'Below Market') return { tag: 'Below market', rank: 1 };
   if (l.bidVelocity && l.bidVelocity.delta > 0) return { tag: 'Most bids', rank: 2 };
@@ -277,7 +281,7 @@ function RowDossier({ lot, meta, sig, allLots, fullLoaded, onRemove }: {
   // a client appraisal over the loaded slice
   const appr = useMemo(() => { const vd = lotVerdict(lot); return vd ? { value: vd.expectedAllIn, n: vd.compN } : null; }, [lot]);
   const call = signalCallOf(meta);
-  const days = daysUntil(lot.saleDate);
+  const days = closeDays(lot);
   const hasEst = (lot.estimateLow || 0) > 0 || (lot.estimateHigh || 0) > 0;
   return (
     <div className="ck-dossier" role="region" aria-label={`Details for ${lot.title}`}>
@@ -413,9 +417,11 @@ function useDeal(book: AuctionLot[], taste: Taste, ready: boolean): Deal {
   return { pool, recs, loop };
 }
 
-function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onToggleSave, signedOut = false }: {
+function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onToggleSave, signedOut = false, compact = false }: {
   book: AuctionLot[]; deal: Deal; compLots: AuctionLot[]; taste: Taste; ready: boolean; lastCrawl?: string;
   isSaved: (id: string) => boolean; onToggleSave: (id: string, lot?: AuctionLot) => void; signedOut?: boolean;
+  /** a desk with live watches: the picks open as one row, Show more deals the rest */
+  compact?: boolean;
 }) {
   const { pool, recs } = deal;
   // (Oct 11) the reader's stated price range (quick start, app/lib/interests)
@@ -442,16 +448,11 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
     if (wasEditing.current) { wasEditing.current = false; tuneRef.current?.focus(); }
   }, [editing]);
   const below = useMemo(() => belowSignalOf(recs.map(r => r.lot), compLots), [recs, compLots]);
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 639px)');
-    const on = () => setNarrow(mq.matches);
-    on();
-    mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
-  }, []);
-  // two full rows of the desk's card grid (3 across at the rail's width)
-  const page = 6;
+  const cols = useGridCols();
+  const narrow = cols === 1;
+  // two full rows of the desk's card grid (3 across at the rail's width,
+  // 2 from 600–899) — one row on a desk whose own watches lead the page
+  const page = compact ? (cols === 1 ? 3 : cols) : 6;
   const [shown, setShown] = useState<number | null>(null);
   const visible = shown ?? page;
   const [openLot, setOpenLot] = useLotModal<AuctionLot>();
@@ -489,10 +490,8 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
   return (
     <section id="for-you" className="ray-saved-section rail ray-enter ck-foryou" aria-label="Lots you may like">
       <div className="ns-plate" style={{ paddingTop: 18 }}>
-        <div className="ck-room-head" style={{ marginBottom: cold ? 4 : 16 }}>
-          <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><RankMark size={17} /></span>Lots you may like</h2>
-          <HelpChip name="Lots you may like">
-            Every lot on the block is read against what you <b>own</b>, <b>save</b>, <b>follow</b> and <b>search</b> — in
+        <RoomHead mark={<RankMark size={17} />} title="Lots you may like" style={{ marginBottom: cold ? 4 : 16 }}
+          help={{ name: 'Lots you may like', body: <>            Every lot on the block is read against what you <b>own</b>, <b>save</b>, <b>follow</b> and <b>search</b> — in
             that order of weight, recent saves louder than old ones. A lot qualifies only through a real tie: the same
             maker, player, Pokémon or subject; the same card in another grade; the same franchise or model line; or,
             inside one category, the same era, grader or language at a price like yours. A category you follow counts
@@ -507,20 +506,22 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
             for it), and More like this / Not for me steer it at once — Not for me also quiets what led to that pick.
             Kept in this browser, never uploaded.
             Everything that tunes the list is under <a href="#signals" className="ck-away-link">Your signals</a>.
-          </HelpChip>
-          {ready && !cold && !editing && (
-            <button ref={tuneRef} type="button" className="ray-toolbar-pill ck-tune" aria-haspopup="dialog" onClick={() => setEditing(true)}>Tune</button>
-          )}
-          {ready && !cold && (
-            <span className="ck-room-sub ck-room-subline">
+          </> }}
+          actions={ready && !cold && !editing
+            ? <button ref={tuneRef} type="button" className="ray-toolbar-pill ck-tune" aria-haspopup="dialog" onClick={() => setEditing(true)}>Tune</button>
+            : null}
+          sub={ready && !cold ? (
+            <>
               {recs.length > 0 ? <>{recs.length} picked</> : <>nothing ties yet</>}<span className="ck-wide"> from {pool.length.toLocaleString()} live lots</span>
               {pricePref ? <> · {priceText(pricePref)}</> : null} · <span className="ck-wide">tuning </span>from {from}
-            </span>
-          )}
-        </div>
+            </>
+          ) : null} />
 
         {!ready ? (
-          <p className="ck-sig-note" aria-busy="true">Reading the block against your desk…</p>
+          <div aria-busy="true">
+            <p className="ck-sig-note" style={{ margin: '0 0 14px' }}>Reading the block against your desk…</p>
+            <PickSkeleton cols={cols} n={page} />
+          </div>
         ) : cold ? (
           <QuickStart book={book} mode="cold" surface="profile" />
         ) : editing ? (
@@ -569,13 +570,12 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
         )}
 
         {ready && visible < recs.length && (
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 28 }}>
-            <button className="ray-show-more" onClick={() => setShown(Math.min(recs.length, visible + page))}>
+          <div className="ck-more-row">
+            <button className="ray-show-more" onClick={() => setShown(Math.min(recs.length, visible + 6))}>
               Show more ({recs.length - visible} more {recs.length - visible === 1 ? 'pick' : 'picks'})
             </button>
           </div>
         )}
-        {signedOut && null}
       </div>
       {openLot && <ComparableModal lot={openLot} allLots={compLots} onClose={() => setOpenLot(null)} />}
     </section>
@@ -583,6 +583,8 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
 }
 
 type SavedView = 'ledger' | 'cards';
+/** rows a phone shows of a long room before "Show all" */
+const PHONE_ROWS = 6;
 const SAVEDVIEW_KEY = 'lectr-savedview';
 
 /* ── SETTLED — one row implementation for both shells ── */
@@ -616,7 +618,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
           <div className="ck-mtitle">{name}</div>
           <div className="ck-mline">
             <span className="ck-msub">
-              {meta?.artist ? makerLineOf({ artist: meta.artist, title: meta.title }).name : 'archive'}
+              {(meta?.artist ? makerLineOf({ artist: meta.artist, title: meta.title }).name : '') || 'archive'}
               {meta?.estMid != null && <> · est. {formatPrice(meta.estMid)} at save</>}
             </span>
             <span className="ck-mnum">
@@ -643,7 +645,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
     }
     return (
       <div className="ray-settled-cols ray-savedrow" style={{ display: 'grid' }}>
-        <span className="maker">{meta?.artist ? makerLineOf({ artist: meta.artist, title: meta.title }).name : '—'}</span>
+        <span className="maker">{(meta?.artist ? makerLineOf({ artist: meta.artist, title: meta.title }).name : '') || '—'}</span>
         <span className="work">{name}<span style={{ color: 'var(--color-text-faint)' }}> · archive</span></span>
         <span className="num" style={{ color: meta?.estMid != null ? undefined : 'var(--color-text-faint)' }}
           title={meta?.estMid != null ? 'The estimate as it stood when you saved the lot' : 'No estimate published'}>
@@ -710,7 +712,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
     <div className="ray-settled-cols ray-savedrow" style={{ display: 'grid' }}>
       <span className="maker">
         <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-          {makerLineOf(lot).name}
+          {makerLineOf(lot).name || '—'}
         </Link>
       </span>
       <span className="work">
@@ -798,6 +800,9 @@ export default function SavedPage() {
      the page, Enter/Space toggles the row's dossier (native on links).
      Typing surfaces and overlays keep their own keys. ── */
   const [openRow, setOpenRow] = useState<string | null>(null);
+  // phone folds: the long rooms open on their first rows (desktop shows all)
+  const [allWatch, setAllWatch] = useState(false);
+  const [allSettled, setAllSettled] = useState(false);
   // which collection piece has its cost-basis/note editor open
   const [editPiece, setEditPiece] = useState<string | null>(null);
   const toggleRow = useCallback((id: string) => setOpenRow(o => (o === id ? null : id)), []);
@@ -1057,8 +1062,8 @@ export default function SavedPage() {
     const priced = withEst.length;
     const flagged = upcoming.filter(l => signalById.get(l.id)?.label === 'Below Market').length;
     const todayIso = localToday();
-    const next = upcoming.find(l => l.saleDate && l.saleDate.slice(0, 10) >= todayIso) || null;
-    const closesToday = upcoming.filter(l => daysUntil(l.saleDate) === 0).length;
+    const next = upcoming.find(l => { const d = closeDayOf(l).slice(0, 10); return !!d && d >= todayIso; }) || null;
+    const closesToday = upcoming.filter(l => closeDays(l) === 0).length;
     return { totalEst, priced, flagged, next, closesToday };
   }, [upcoming, signalById]);
 
@@ -1115,10 +1120,10 @@ export default function SavedPage() {
       .filter(l => !used.has(l.id))
       .map(l => ({ l, read: sleeperRead(l, nowMs) }))
       .filter((x): x is { l: AuctionLot; read: NonNullable<ReturnType<typeof sleeperRead>> } => !!x.read)
-      .sort((a, b) => daysUntil(a.l.saleDate) - daysUntil(b.l.saleDate))
+      .sort((a, b) => closeDays(a.l) - closeDays(b.l))
       .slice(0, 2);
     for (const { l, read } of quiet) {
-      const d = daysUntil(l.saleDate);
+      const d = closeDays(l);
       rows.push({
         key: `q-${claim(l).id}`, tag: 'Quietest', lot: l,
         fact: <>no bids yet · hammers {d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}{read.entry != null ? <> · opens at {formatPrice(read.entry)}</> : null} · appraised {formatPrice(read.cvu)}{read.anchor === 'fair-est' ? ', at estimate' : ''}</>,
@@ -1126,10 +1131,10 @@ export default function SavedPage() {
     }
     const soon = upcoming
       .filter(l => !used.has(l.id))
-      .filter(l => { const d = daysUntil(l.saleDate); return d >= 0 && d <= TAG_SOON_DAYS; })
+      .filter(l => { const d = closeDays(l); return d >= 0 && d <= TAG_SOON_DAYS; })
       .slice(0, 3);
     for (const l of soon) {
-      const d = daysUntil(l.saleDate);
+      const d = closeDays(l);
       // when formatEstimate prints the live-bid form ("$402 bid · 10 bids" —
       // it does this for ANY lot with a live bid and no two-sided estimate),
       // appending bid state again printed "· 10 bids · 10 bids". Gate on what
@@ -1188,7 +1193,7 @@ export default function SavedPage() {
       const ra = a.reason?.rank ?? 9;
       const rb = b.reason?.rank ?? 9;
       if (ra !== rb) return ra - rb;
-      if (ra === 0) return daysUntil(a.l.saleDate) - daysUntil(b.l.saleDate);
+      if (ra === 0) return closeDays(a.l) - closeDays(b.l);
       if (ra === 1) {
         const sa = signalById.get(a.l.id);
         const sb = signalById.get(b.l.id);
@@ -1196,10 +1201,24 @@ export default function SavedPage() {
         return dealScore(b.l, sb?.pct ?? 0) - dealScore(a.l, sa?.pct ?? 0);
       }
       if (ra === 2) return (b.l.bidVelocity?.delta ?? 0) - (a.l.bidVelocity?.delta ?? 0);
-      return new Date(a.l.saleDate).getTime() - new Date(b.l.saleDate).getTime();
+      return closeDayOf(a.l).localeCompare(closeDayOf(b.l));
     });
     return rows;
   }, [upcoming, signalById]);
+
+  /* which ledger columns carry anything (an all-dash column folds away) */
+  const ledgerCols = useMemo(() => {
+    let sig = false, delta = false;
+    for (const { l } of room) {
+      const sg = signalById.get(l.id) ?? null;
+      if (sg) sig = true;
+      const m = metaFor(l.id);
+      const call = signalCallOf(m);
+      if ((call && sg && call.dir !== 'unknown') || (l.bidVelocity && l.bidVelocity.delta > 0)
+        || (m?.bidCount != null && (l.bidCount || 0) > m.bidCount)) delta = true;
+    }
+    return { sig, delta };
+  }, [room, signalById, metaFor]);
 
   /* ── FLIP — the action-first ledger re-ranks when data moves; rows should
      visibly travel, not teleport. BOARD-relative tops (never viewport), a
@@ -1360,17 +1379,23 @@ export default function SavedPage() {
   const deal = useDeal(allLots, recTaste, recsReady);
   // the picks, then how the ones shown before did (N4, app/profile/outcomes),
   // then what the block would do to what you hold (N3, app/profile/collection)
-  const [collectionN, setCollectionN] = useState(0);
-  const recsRoom = (signedOut = false) => (
-    <>
+    // THE PICKS GROUP — one room in three parts: what lectr picks for you,
+  // what the block would do to what you hold, and how the picks it showed
+  // you closed. One plate, one rail pill; the two followers are sub-rooms.
+  const recsRoom = (signedOut = false, compact = false) => (
+    <div className="ck-group" data-compact={compact || undefined}>
       <RecsRoom book={allLots} deal={deal} compLots={allLots} taste={recTaste} ready={recsReady} lastCrawl={lastCrawl || undefined}
-        isSaved={isSaved} onToggleSave={toggle} signedOut={signedOut} />
-      <PickOutcomes book={allLots} />
+        isSaved={isSaved} onToggleSave={toggle} signedOut={signedOut} compact={compact} />
       <ForYourCollection book={allLots} pool={deal.pool} compLots={allLots} ready={recsReady} lastCrawl={lastCrawl || undefined}
-        isSaved={isSaved} onToggleSave={toggle} onCount={setCollectionN} />
-    </>
+        isSaved={isSaved} onToggleSave={toggle} />
+      <PickOutcomes book={allLots} />
+    </div>
   );
 
+  // the record's lead cell is appraised-vs-bought only once it measures
+  // something (≥1 piece with a bought price has a comp-based appraisal)
+  const recordLedByAppraisal = collection.deltaPct != null && collection.totalPaid > 0 && collection.appraisedPaidN > 0;
+  const settledHasCall = useMemo(() => settledRows.some(r => !!signalCallOf(r.kind === 'lot' ? metaFor(r.lot.id) : savedMeta[r.o.id])), [settledRows, metaFor, savedMeta]);
   // the one settled count every surface prints (Settled head, the cell room)
   const settledCount = sold.length + soldOrphans.length;
 
@@ -1391,7 +1416,7 @@ export default function SavedPage() {
 
   /* ── TODAY: watches that hammer today, soonest first ── */
   const closingWatches = useMemo(() => upcoming
-    .filter(l => daysUntil(l.saleDate) === 0)
+    .filter(l => closeDays(l) === 0)
     .sort((a, b) => (closeMsOf(a) ?? Infinity) - (closeMsOf(b) ?? Infinity)), [upcoming]);
   /* ── the while-you-were-away facts, as the Today band's header line ── */
   const awayLine = (sinceLast || unseenAlerts > 0 || summary.closesToday > 0 || unclaimedWins > 0) ? (
@@ -1452,25 +1477,26 @@ export default function SavedPage() {
   const watchFirst = deskView && upcoming.length > 0;
   const railItems: RailItem[] = useMemo(() => {
     const r: RailItem[] = [];
-    const forYou: RailItem = { id: 'for-you', label: 'For you', mark: <RankMark size={15} />, count: deal.recs.length || undefined };
-    if (watchFirst) r.push({ id: 'watching', label: 'Watching', mark: <WatchMark size={15} />, count: upcoming.length });
+    const forYou: RailItem = { id: 'for-you', label: 'For you', mark: <RankMark size={15} />, count: deal.recs.length || undefined, group: 'picks' };
+    // grouped as the page is: now (Today, Watching) · picks (For you,
+    // Market, Signals) · the desk's record (Record, Collection, History)
+    if (watchFirst) r.push({ id: 'watching', label: 'Watching', mark: <WatchMark size={15} />, count: upcoming.length, group: 'now' });
     r.push(forYou);
-    if (collectionN > 0) r.push({ id: 'for-collection', label: 'For your collection', mark: <CollectionMark size={15} />, count: collectionN });
-    if (hasMarket) r.push({ id: 'market', label: 'Market', mark: <MoversMark size={15} /> });
-    r.push({ id: 'signals', label: 'Signals', mark: <SignalMark size={15} />, count: myFollows.length || undefined, dot: unseenAlerts > 0 });
+    if (hasMarket) r.push({ id: 'market', label: 'Market', mark: <MoversMark size={15} />, group: 'picks' });
+    r.push({ id: 'signals', label: 'Signals', mark: <SignalMark size={15} />, count: myFollows.length || undefined, dot: unseenAlerts > 0, group: 'picks' });
     if (deskView && hasRecordRoom) {
       const med = record && record.med != null ? Math.round(record.med) : null;
-      r.push({ id: 'record', label: 'Record', mark: <RecordMark size={15} />, count: med != null ? fmtSignedPct(med) : undefined, tone: med != null && med > 0 ? 'up' : med != null && med < 0 ? 'down' : undefined });
+      r.push({ id: 'record', label: 'Record', mark: <RecordMark size={15} />, count: med != null ? fmtSignedPct(med) : undefined, tone: med != null && med > 0 ? 'up' : med != null && med < 0 ? 'down' : undefined, group: 'desk' });
     }
-    if (deskView && collection.rows.length > 0) r.push({ id: 'collection', label: 'Collection', mark: <CollectionMark size={15} />, count: formatPrice(collection.totalAppraised) });
-    if (deskView && (historyCount > 0 || orphanIds.length > 0)) r.push({ id: 'history', label: 'History', mark: <TapeMark size={15} />, count: historyCount || undefined });
+    if (deskView && collection.rows.length > 0) r.push({ id: 'collection', label: 'Collection', mark: <CollectionMark size={15} />, count: formatPrice(collection.totalAppraised), group: 'desk' });
+    if (deskView && (historyCount > 0 || orphanIds.length > 0)) r.push({ id: 'history', label: 'History', mark: <TapeMark size={15} />, count: historyCount || undefined, group: 'desk' });
     return r;
-  }, [deal.recs.length, collectionN, deskView, watchFirst, upcoming.length, myFollows.length, hasMarket, unseenAlerts, hasRecordRoom, record, collection, historyCount, orphanIds.length]);
+  }, [deal.recs.length, deskView, watchFirst, upcoming.length, myFollows.length, hasMarket, unseenAlerts, hasRecordRoom, record, collection, historyCount, orphanIds.length]);
   // "Today" leads the rail wherever the band renders — TodayBand's own gate:
   // the return loop answered, or there is an away fact, a closing watch or a read
   const railWith = (band: { away: boolean; closing: number; reads: number }): RailItem[] =>
     (deal.loop || band.away || band.closing > 0 || band.reads > 0)
-      ? [{ id: 'today', label: 'Today', mark: <AwayMark size={15} /> }, ...railItems]
+      ? [{ id: 'today', label: 'Today', mark: <AwayMark size={15} />, group: 'now' }, ...railItems]
       : railItems;
 
   useHashLanding(recsReady && !loading && authReady && savedReady && (!deskNeedsCorpus || fullLoaded || !!fullError));
@@ -1644,7 +1670,7 @@ export default function SavedPage() {
               sub={
                 <>
                   {summary.next && (
-                    <>Next hammer {hammerWord(daysUntil(summary.next.saleDate))}
+                    <>Next hammer {hammerWord(closeDays(summary.next))}
                       {summary.next.saleDateTime && <CloseClock iso={summary.next.saleDateTime} windowHours={24} prefix=" · " />}
                       {' '}·{' '}
                     </>
@@ -1705,7 +1731,7 @@ export default function SavedPage() {
 
           {/* ══ 1 · TODAY — new since, closing tonight, today's reads; the
               away facts ride its header line ══ */}
-          <TodayBand loop={deal.loop} closingWatches={closingWatches} reads={reads} away={awayLine} />
+          <TodayBand loop={deal.loop} closingWatches={closingWatches} reads={reads} away={awayLine} phoneRows={watchFirst ? 2 : 3} />
 
           {/* ══ 2 · LOTS YOU MAY LIKE — first only when nothing is live on the
               desk; a reader with live watches sees their own lots first ══ */}
@@ -1716,20 +1742,29 @@ export default function SavedPage() {
             <section id="watching" className="ray-saved-section rail" data-view={savedView}>
               {/* the room as a framed plate — ns-plate draws the top rule + crop marks */}
               <div className="ns-plate" style={{ paddingTop: 18 }}>
-              <div className="ray-enter" style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 14px', flexWrap: 'wrap', marginBottom: 16 }}>
-                <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><WatchMark size={17} /></span>Watching · on the block</h2>
-                <div className="ray-savedview-toggle" role="group" aria-label="Watching view">
-                  <button className="ray-savedview-btn" data-active={savedView === 'ledger'} aria-pressed={savedView === 'ledger'} onClick={() => pickView('ledger')}>Ledger</button>
-                  <button className="ray-savedview-btn" data-active={savedView === 'cards'} aria-pressed={savedView === 'cards'} onClick={() => pickView('cards')}>Cards</button>
-                </div>
-                <HelpChip name="Watching">
+              <RoomHead className="ray-enter" mark={<WatchMark size={17} />} title="Watching · on the block" style={{ marginBottom: 14 }}
+                help={{ name: 'Watching', body: <>
                   Every bookmarked lot still on the block, sorted action-first: lands soon, then flagged below
                   market, then bid momentum, then quiet. Click a row (or press Enter on it) to open its dossier
                   in place — <b>j</b>/<b>k</b> walks the rows. The tag on each row says why it needs you now.
-                </HelpChip>
-              </div>
+                </> }}
+                sub={<>
+                  {upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}
+                  {summary.closesToday > 0 && <> · {summary.closesToday} {summary.closesToday === 1 ? 'closes' : 'close'} today</>}
+                  {summary.flagged > 0 && <> · {summary.flagged} below market</>}
+                  {summary.totalEst > 0 && <><span className="ck-wide"> · {formatPrice(summary.totalEst)} at estimate midpoint</span></>}
+                </>}
+                actions={
+                  <div className="ray-savedview-toggle" role="group" aria-label="Watching view">
+                    <button className="ray-savedview-btn" data-active={savedView === 'ledger'} aria-pressed={savedView === 'ledger'} onClick={() => pickView('ledger')}>Ledger</button>
+                    <button className="ray-savedview-btn" data-active={savedView === 'cards'} aria-pressed={savedView === 'cards'} onClick={() => pickView('cards')}>Cards</button>
+                  </div>
+                } />
               {/* desktop ledger */}
-              <div className="ray-saved-ledger ray-enter" ref={boardRef}>
+              {/* a column with nothing in it on any row folds away (legacy saves
+                  carry no direction, so Δ saved can be all dashes) */}
+              <div className="ray-saved-ledger ray-enter" ref={boardRef}
+                data-nosig={ledgerCols.sig ? undefined : ''} data-nodelta={ledgerCols.delta ? undefined : ''}>
                 <div className="ray-saved-cols ray-saved-ledger-head">
                   <span className="kicker">Why now</span>
                   <span className="kicker">Work</span>
@@ -1748,7 +1783,7 @@ export default function SavedPage() {
                   const flipped = call && sig && call.dir !== 'unknown' && !sameAxis;
                   const newBids = m?.bidCount != null && (lot.bidCount || 0) > m.bidCount
                     ? (lot.bidCount || 0) - m.bidCount : 0;
-                  const days = daysUntil(lot.saleDate);
+                  const days = closeDays(lot);
                   const vel = lot.bidVelocity && lot.bidVelocity.delta > 0 ? lot.bidVelocity : null;
                   // Δ ink: on the below axis deeper (+) is the deal deepening;
                   // on the above axis deeper (+) is it worsening
@@ -1806,9 +1841,9 @@ export default function SavedPage() {
 
               {/* mobile: the glance rows — same facts, thumb scale */}
               <div className="ck-mledger ray-enter">
-                {room.map(({ l: lot, reason }) => {
+                {(allWatch ? room : room.slice(0, PHONE_ROWS)).map(({ l: lot, reason }) => {
                   const sig = signalById.get(lot.id) ?? null;
-                  const days = daysUntil(lot.saleDate);
+                  const days = closeDays(lot);
                   return (
                     <Link key={lot.id} href={`/lot?id=${encodeURIComponent(lot.id)}`} className="ck-mrow" data-nav-row>
                       <span className="ck-mrow-main">
@@ -1830,6 +1865,12 @@ export default function SavedPage() {
                     </Link>
                   );
                 })}
+                {/* a phone opens on the most urgent rows; the rest are one tap */}
+                {room.length > PHONE_ROWS && (
+                  <button type="button" className="ck-today-more" aria-expanded={allWatch} onClick={() => setAllWatch(v => !v)}>
+                    {allWatch ? 'Show fewer' : `Show all ${room.length} watching`}
+                  </button>
+                )}
               </div>
 
               {/* cards — desktop opt-in only; mounted only when shown */}
@@ -1848,7 +1889,7 @@ export default function SavedPage() {
           )}
 
           {/* ══ 3b · LOTS YOU MAY LIKE — after Watching on a live desk ══ */}
-          {watchFirst && recsRoom()}
+          {watchFirst && recsRoom(false, true)}
 
           {/* ══ 4 · YOUR SIGNALS — follows, saved searches + inbox, what this
               device learned ══ */}
@@ -1860,17 +1901,15 @@ export default function SavedPage() {
           {hasRecordRoom && (
             <section id="record" className="ray-saved-section rail ray-enter" aria-label="Your record">
               <div className="ns-plate" style={{ paddingTop: 18 }}>
-                <div className="ck-room-head" style={{ marginBottom: 16 }}>
-                  <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><RecordMark size={17} /></span>Your record</h2>
-                  <HelpChip name="Your record">
-                    <b>Appraised vs bought</b>: the engine&rsquo;s appraisal of your pieces against what you paid — only pieces with a
+                <RoomHead mark={<RecordMark size={17} />} title="Your record" style={{ marginBottom: 16 }}
+                  help={{ name: 'Your record', body: <>                    <b>Appraised vs bought</b>: the engine&rsquo;s appraisal of your pieces against what you paid — only pieces with a
                     recorded price enter the read. <b>Your record</b>: each settled watch judged against its estimate, median, all-in.
                     The signed figure is green only when it is a real gain, red only when it is a real loss; with no signed read
                     yet it stays ink. <b>Collection</b>: pieces held, at the engine&rsquo;s appraisal — pieces without a usable comp
                     pool carry at their bought price. <b>On the block</b>: your live watches, at estimate midpoint over the lots
                     that carry one. <b>Settled</b>: every watch that has hammered — the line-item receipts are under History.
-                  </HelpChip>
-                </div>
+                  </> }}
+                  sub={!record && settledCount > 0 ? <>{settledCount} settled · awaiting judgment</> : null} />
                 {/* THE DESK IN FIGURES — one forced-color cell carries the
                     desk's signed read (collection.deltaPct / record.med exactly
                     as computed; zero or none → ink abstention); the quiet cells
@@ -1879,7 +1918,7 @@ export default function SavedPage() {
                   {/* the lead is a MEASUREMENT: appraised vs bought only once ≥1
                       piece with a bought price has a comp-based appraisal;
                       until then the record's median vs estimate leads */}
-                  {collection.deltaPct != null && collection.totalPaid > 0 && collection.appraisedPaidN > 0 ? (
+                  {recordLedByAppraisal && collection.deltaPct != null ? (
                     <ColorCell
                       dir={collection.deltaPct > 0 ? 'up' : collection.deltaPct < 0 ? 'down' : 'ink'}
                       stat={fmtSignedPct(collection.deltaPct)}
@@ -1932,9 +1971,13 @@ export default function SavedPage() {
                   <div className="ck-record" style={{ marginTop: 26 }}>
                     <div className="ck-record-lead">
                       <span className="kicker">Median vs estimate</span>
-                      <span className="ck-record-fig" style={{ color: record.med > 0 ? 'var(--color-up)' : record.med < 0 ? 'var(--color-down-text)' : 'var(--color-fg)' }}>
-                        {fmtSignedPct(Math.round(record.med))}
-                      </span>
+                      {/* the display figure prints once: when the lead cell above
+                          already carries this median, the line below is enough */}
+                      {recordLedByAppraisal && (
+                        <span className="ck-record-fig" style={{ color: record.med > 0 ? 'var(--color-up)' : record.med < 0 ? 'var(--color-down-text)' : 'var(--color-fg)' }}>
+                          {fmtSignedPct(Math.round(record.med))}
+                        </span>
+                      )}
                       <span className="ck-record-s">
                         {record.n} {record.n === 1 ? 'watch' : 'watches'} <Term k="judged">judged</Term> <Term k="vs estimate">vs estimate</Term> · median, all-in · {formatPrice(record.realized)} realized ·{' '}
                         <a href="#settled" className="ck-away-link">receipts below</a>
@@ -1954,8 +1997,9 @@ export default function SavedPage() {
                     ) : (
                       <div className="ck-record-split">
                         <span className="kicker">Flagged vs the rest</span>
-                        <span className="ck-record-splitline" style={{ color: 'var(--color-text-muted)' }}>
-                          publishes once 3 watches saved while flagged below market and 3 saved while showing above settle — saves with no live signal at save time count toward neither; direction recorded since Aug&nbsp;2026
+                        <span className="ck-record-splitline" style={{ color: 'var(--color-text-muted)' }}
+                          title="Saves with no live signal at save time count toward neither side; direction recorded since Aug 2026.">
+                          publishes once 3 flagged-below and 3 above-market saves settle
                         </span>
                       </div>
                     )}
@@ -1970,7 +2014,8 @@ export default function SavedPage() {
           {collection.rows.length > 0 && (
             <div id="collection" className="ray-band ray-enter" style={{ marginTop: 30, paddingBlock: '28px 30px' }}>
               <section className="rail" aria-label="Your collection">
-                <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><CollectionMark size={17} /></span>Your collection</h2>
+                <RoomHead mark={<CollectionMark size={17} />} title="Your collection"
+                  sub={<>{collection.rows.length} {collection.rows.length === 1 ? 'piece' : 'pieces'} held · {collection.appraisedN > 0 ? `${collection.appraisedN} appraised from comps` : 'none appraised from comps yet'}</>} />
                 {/* the certificate's provenance ledger — gray label over black
                     value, dotted closing rule; the signed delta keeps its ink */}
                 <div className="ns-byline" style={{ margin: '14px 0 2px' }}>
@@ -2052,7 +2097,7 @@ export default function SavedPage() {
                             <div className="ck-piece-title">{craftTitle(lot.title, lot.auctionHouse)}</div>
                           </Link>
                           <div className="ck-piece-meta">
-                            <span>{[makerLineOf(lot).name, labelLineOf(lot), lot.auctionHouse, lot.saleDate ? formatDate(lot.saleDate) : ''].filter(Boolean).join(' · ')}</span>
+                            <span>{[makerLineOf(lot).name, labelLineOf(lot), lot.auctionHouse, closeDayOf(lot) ? formatDate(closeDayOf(lot)) : ''].filter(Boolean).join(' · ')}</span>
                             {drill && drillSlug && (
                               <Link href={`/sub/${drillSlug.replace(':', '/')}`} className="ray-coll-chip">{drillLabelOf(drillSlug, drill.label)}</Link>
                             )}
@@ -2112,21 +2157,17 @@ export default function SavedPage() {
           {(sold.length > 0 || soldOrphans.length > 0) && (
             <section id="settled" className="ray-saved-section rail ray-enter" style={{ '--enter-delay': '90ms' } as React.CSSProperties}>
               <div className="ns-plate" style={{ paddingTop: 18 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px 14px', flexWrap: 'wrap', marginBottom: 4 }}>
-                {/* the rail's "History" lands here — one name for one room */}
-                <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><TapeMark size={17} /></span>History</h2>
-                <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-                  {sold.length + soldOrphans.length} settled {sold.length + soldOrphans.length === 1 ? 'watch' : 'watches'}
-                  {record && <> · {record.n} judged vs estimate</>}
-                </span>
-              </div>
+              {/* the rail's "History" lands here — one name for one room */}
+              <RoomHead mark={<TapeMark size={17} />} title="History" style={{ marginBottom: 4 }}
+                sub={<>{settledCount} settled {settledCount === 1 ? 'watch' : 'watches'}{record && <> · {record.n} judged vs estimate</>}</>} />
               {unclaimedWins > 0 && (
                 <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: '0 0 14px' }}>
                   Won any of these? Mark it <b style={{ color: 'var(--color-fg)' }}>I won it</b> and the piece joins your collection, appraised against the live market.
                 </p>
               )}
 
-              <div className="ray-settled-desk" style={{ marginTop: 12 }}>
+              {/* "Your call" folds when no settled save recorded one */}
+              <div className="ray-settled-desk" style={{ marginTop: 12 }} data-nocall={settledHasCall ? undefined : ''}>
                 <div className="ray-settled-cols ray-settled-head kicker" style={{ padding: '0 2px 8px' }}>
                   <span>Maker</span>
                   <span>Work</span>
@@ -2154,7 +2195,7 @@ export default function SavedPage() {
                 })}
               </div>
               <div className="ray-settled-mobile">
-                {settledRows.map(row => {
+                {(allSettled ? settledRows : settledRows.slice(0, PHONE_ROWS)).map(row => {
                   const key = row.kind === 'lot' ? row.lot.id : row.o.id;
                   const meta = row.kind === 'lot' ? metaFor(row.lot.id) : savedMeta[row.o.id];
                   return (
@@ -2170,6 +2211,11 @@ export default function SavedPage() {
                     />
                   );
                 })}
+                {settledRows.length > PHONE_ROWS && (
+                  <button type="button" className="ck-today-more" aria-expanded={allSettled} onClick={() => setAllSettled(v => !v)}>
+                    {allSettled ? 'Show fewer' : `Show all ${settledRows.length} settled`}
+                  </button>
+                )}
               </div>
               </div>
             </section>
@@ -2179,7 +2225,7 @@ export default function SavedPage() {
             <section className="ray-saved-section rail ck-fold-section">
               <details className="ns-plate ck-fold" open={isDesktop !== false}>
                 <summary className="ck-fold-sum">
-                  <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><ArchiveMark size={17} /></span>Concluded &amp; other</h2>
+                  <h3 className="ck-h3"><span className="ray-sect-mark" aria-hidden><ArchiveMark size={15} /></span>Concluded &amp; other</h3>
                   <span className="ck-fold-n">{other.length}</span>
                 </summary>
                 <p className="ck-fold-dek">
@@ -2220,7 +2266,7 @@ export default function SavedPage() {
             <section className="ray-saved-section rail ray-enter ck-fold-section">
               <details className="ns-plate ck-fold" open={isDesktop !== false}>
                 <summary className="ck-fold-sum">
-                  <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><HorizonMark size={17} /></span>No longer on the block</h2>
+                  <h3 className="ck-h3"><span className="ray-sect-mark" aria-hidden><HorizonMark size={15} /></span>No longer on the block</h3>
                   <span className="ck-fold-n">{goneOrphans.length}</span>
                 </summary>
                 <p className="ck-fold-dek">
@@ -2236,7 +2282,7 @@ export default function SavedPage() {
                           <>
                             <span style={{ color: 'var(--color-fg)', fontWeight: 600 }}>
                               was: {m.title}
-                              {m.artist && <>, {makerLineOf({ artist: m.artist, title: m.title }).name}</>}
+                              {m.artist && makerLineOf({ artist: m.artist, title: m.title }).name ? <>, {makerLineOf({ artist: m.artist, title: m.title }).name}</> : null}
                             </span>
                             <span style={{ color: 'var(--color-text-faint)' }}>
                               {m.estMid != null && <> · est. {formatPrice(m.estMid)}</>}
