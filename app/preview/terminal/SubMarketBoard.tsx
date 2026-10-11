@@ -331,7 +331,7 @@ function ReplaySeal({ n, play }: { n: number; play: boolean }) {
     return { x1: 48 + Math.cos(a) * r1, y1: 48 + Math.sin(a) * r1, x2: 48 + Math.cos(a) * r2, y2: 48 + Math.sin(a) * r2 };
   });
   return (
-    <div className={styles.seal} aria-label={`Replayed against ${fmtInt(n)} historical sales`}>
+    <div className={styles.seal} role="img" aria-label={`Replayed against ${fmtInt(n)} historical sales`}>
       <svg viewBox="0 0 96 96">
         <m.circle cx="48" cy="48" r="46" {...draw(0)} />
         <m.circle cx="48" cy="48" r="38" {...draw(0.15)} />
@@ -519,11 +519,10 @@ function TapeRow({ r, active, onPick }: { r: SubMarketRead; active: boolean; onP
     <div
       className={styles.tapeRow}
       data-scoped={active || undefined}
-      role="button"
-      tabIndex={0}
-      aria-pressed={active}
+      // the row is a POINTER convenience; the keyboard/AT control is the
+      // real button on the figures below (a role=button row wrapping the
+      // dossier link was nested-interactive — the link vanished for AT)
       onClick={onPick}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(); } }}
     >
       {active && <m.span layoutId="brassRule" className={styles.brassRule} transition={{ duration: 0.25, ease: EASE }} />}
       {/* #3 · the label is a direct link to its dossier — one fewer tap than
@@ -552,7 +551,9 @@ function TapeRow({ r, active, onPick }: { r: SubMarketRead; active: boolean; onP
           <span className={styles.tapeAbstain}>—</span>
         )}
       </span>
-      <span className={styles.tapeRight}>
+      <button type="button" className={styles.tapeRight} aria-pressed={active}
+        style={{ background: 'none', border: 0, padding: 0, margin: 0, font: 'inherit', color: 'inherit', cursor: 'pointer' }}>
+        <span className="sr-only">{r.label}, open the read: </span>
         {isIndex ? (
           <>
             <span className={`${styles.tapeFigure} ${styles.pctData}`} data-dir={dir}>
@@ -575,7 +576,7 @@ function TapeRow({ r, active, onPick }: { r: SubMarketRead; active: boolean; onP
             <span className={styles.tapeSub}>{fmtInt(r.lots)} lots</span>
           </>
         )}
-      </span>
+      </button>
       <span className={styles.tapeChevron} aria-hidden />
     </div>
   );

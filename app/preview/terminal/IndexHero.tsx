@@ -374,12 +374,12 @@ export default function IndexHero({
 
         {/* the one action on the board — butter, full width, unmissable */}
         {belowMkt ? (
-          <button type="button" className={styles.pulseAction} data-below="true" onClick={onOpenBelow}
-            aria-label={`${belowMkt} below-market lots — see them`}>
+          <button type="button" className={styles.pulseAction} data-below="true" onClick={onOpenBelow}>
             <span className={styles.pulseLabel}>Below market now</span>
             <span className={styles.pulseTag}>
               <span className={styles.pulseTagVal}>{fmtInt(belowShown)}</span>
             </span>
+            <span className="sr-only"> lots — see them</span>
           </button>
         ) : activeKey === 'all' ? (
           // the empty state keeps the object language: blank tag stock,
@@ -404,7 +404,7 @@ export default function IndexHero({
   // the departures line — inside the board on desktop, after the search on
   // the phone (the shell decides; the element is one and the same)
   const tickerEl = closes.length > 0 ? (
-    <div className={styles.pulseTicker} aria-label="Auctions closing next">
+    <div className={styles.pulseTicker} role="group" aria-label="Auctions closing next">
       <div className={styles.pulseHead} aria-hidden>
         <span className={styles.pulseTitle}>Closing next</span>
         <i className={styles.pulseRule} />

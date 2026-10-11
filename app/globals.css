@@ -916,6 +916,7 @@ h1 {
   border: none;
   background: none;
   cursor: pointer;
+  text-decoration: none; /* the section links are <a> (Oct 11 a11y) */
   padding: 7px 11px;
   border-radius: 100px;
   white-space: nowrap;
@@ -2132,6 +2133,9 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-feedtable .t-artist { display: block; color: var(--color-fg); font-weight: 600; text-decoration: none; }
 .ray-feedtable a.t-artist:hover { text-decoration: underline; text-underline-offset: 2px; }
 .ray-feedtable .t-title { color: var(--color-text-muted); max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+/* WCAG 2.5.8: the stacked maker link / comps button / fold line are each a
+   >=24px target (they sat 17-21px tall, touching) */
+.ray-feedtable .t-artist, .ray-feedtable .t-title, .ray-feedtable .t-fold { min-height: 24px; line-height: 24px; }
 /* desktop: the ten columns FIT the rail (Oct 9 — at 1440 they ran 132px past
    it and clipped the Signal + save columns). The maker / work column takes
    what the data columns leave and ellipsizes inside it; the category label
@@ -3063,7 +3067,7 @@ html .lectr-recplate-k {
   font-variant-numeric: tabular-nums;
 }
 .ray-engine-stats b { color: var(--paper-ink, #1C1712); font-weight: 650; }
-.ray-engine-stats b.up { color: #1e7a4d; }
+.ray-engine-stats b.up { color: #186b43; } /* AA on the paper band (4.6:1) */
 .ray-engine-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--pa-3, rgba(28, 23, 18, 0.3)); align-self: center; }
 .ray-engine-cta {
   display: inline-block;

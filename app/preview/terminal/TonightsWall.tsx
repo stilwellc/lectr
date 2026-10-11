@@ -136,12 +136,12 @@ export default function TonightsWall({
             data-tone={it.flagged ? 'up' : undefined}
             style={{ ['--wall-i' as string]: i, ['--wall-base' as string]: `${base}ms` }}
             onClick={() => onOpen(it.lot)}
-            aria-label={`Comps for ${craftTitle(it.lot.title, it.lot.auctionHouse)}`}
+            aria-haspopup="dialog"
           >
             <span className={styles.wallMat}>
               <img
                 src={httpsImg(it.lot.imageUrl!)}
-                alt=""
+                alt={craftTitle(it.lot.title, it.lot.auctionHouse)}
                 loading="lazy"
                 decoding="async"
                 referrerPolicy="no-referrer"

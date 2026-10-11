@@ -158,7 +158,7 @@ function StackRow({ lot, onOpen, tone, note, est, decision }: { lot: AuctionLot;
   const label = labelTagOf(lot);
   const title = craftTitle(lot.title, lot.auctionHouse);
   return (
-    <button type="button" className="ray-feedrow ray-feedrow-stack" onClick={onOpen} aria-label={`Comps for ${title}`}>
+    <button type="button" className="ray-feedrow ray-feedrow-stack" onClick={onOpen} aria-haspopup="dialog">
       <span className="ray-feedrow-thumb" data-tone={tone} aria-hidden>
         {(lot.title || '?').charAt(0)}
         {lot.imageUrl && (
@@ -208,9 +208,8 @@ export function FeedRow({ lot, onOpen, tone, note, onNote, feedback, decision, s
   // the label's lead word (its lead badge, else the sub) — the full line
   // ellipsized the maker away at 390px
   const label = labelTagOf(lot);
-  const row = (
-    <button type="button" className="ray-feedrow" onClick={onOpen} aria-label={`Comps for ${craftTitle(lot.title, lot.auctionHouse)}`}
-      style={feedback ? { borderBottom: 'none' } : undefined}>
+  const title = craftTitle(lot.title, lot.auctionHouse);
+  const thumb = (
       <span className="ray-feedrow-thumb" data-tone={tone} aria-hidden>
         {(lot.title || '?').charAt(0)}
         {lot.imageUrl && (
@@ -228,7 +227,8 @@ export function FeedRow({ lot, onOpen, tone, note, onNote, feedback, decision, s
           />
         )}
       </span>
-      <span className="ray-feedrow-main">
+  );
+  const makerLine = (
         <span className="ray-feedrow-maker">
           {makerLineOf(lot).name}
           {/* the label rides the maker line's spare width in the title tier's
@@ -236,28 +236,50 @@ export function FeedRow({ lot, onOpen, tone, note, onNote, feedback, decision, s
               maker line (a pseudo-maker lot with no subject) it leads */}
           {label && <span style={{ fontWeight: 400, fontSize: '12.5px', color: 'var(--color-text-muted)' }}>{makerLineOf(lot).name ? ' · ' : ''}{label}</span>}
         </span>
-        <span className="ray-feedrow-title">{craftTitle(lot.title, lot.auctionHouse)}</span>
-        {note && (onNote ? (
-          // the row is itself a button: the folded note presses as a link
-          // inside it (same type as the plain note — no new chrome)
-          <span
-            className="ray-feedrow-title"
-            role="link"
-            tabIndex={0}
-            style={{ color: 'var(--color-text-secondary)', fontSize: '0.86em', cursor: 'pointer', ...NOTE_WRAP }}
-            onClick={e => { e.preventDefault(); e.stopPropagation(); onNote(); }}
-            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onNote(); } }}
-          >
-            {note}
-          </span>
-        ) : <span className="ray-feedrow-title" style={{ color: 'var(--color-text-secondary)', fontSize: '0.86em', ...NOTE_WRAP }}>{note}</span>)}
-        {decision}
-      </span>
+  );
+  const right = (
       <span className="ray-feedrow-right">
         <b>{est}</b>
         <span>{formatDate(hammerDay(lot))}</span>
         <BidVelChip lot={lot} />
       </span>
+  );
+  // a pressable folded note: the row can't be ONE button any more (a
+  // control inside a button is invisible to AT and unreachable by Tab), so
+  // the row stays a pointer target and the maker/title and the note are two
+  // sibling buttons — same type, same places, no new chrome
+  const row = note && onNote ? (
+    <div className="ray-feedrow" onClick={onOpen} style={feedback ? { borderBottom: 'none' } : undefined}>
+      {thumb}
+      <span className="ray-feedrow-main">
+        <button type="button" aria-haspopup="dialog" onClick={e => { e.stopPropagation(); onOpen(); }}
+          style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, background: 'none', border: 0, padding: 0, margin: 0, font: 'inherit', color: 'inherit', textAlign: 'left', cursor: 'pointer' }}>
+          {makerLine}
+          <span className="ray-feedrow-title">{title}</span>
+        </button>
+        <button
+          type="button"
+          className="ray-feedrow-title"
+          style={{ color: 'var(--color-text-secondary)', fontSize: '0.86em', cursor: 'pointer', background: 'none', border: 0, padding: 0, margin: 0, fontFamily: 'inherit', textAlign: 'left', minHeight: 24, ...NOTE_WRAP }}
+          onClick={e => { e.preventDefault(); e.stopPropagation(); onNote(); }}
+        >
+          {note}
+        </button>
+        {decision}
+      </span>
+      {right}
+    </div>
+  ) : (
+    <button type="button" className="ray-feedrow" onClick={onOpen} aria-haspopup="dialog"
+      style={feedback ? { borderBottom: 'none' } : undefined}>
+      {thumb}
+      <span className="ray-feedrow-main">
+        {makerLine}
+        <span className="ray-feedrow-title">{title}</span>
+        {note && <span className="ray-feedrow-title" style={{ color: 'var(--color-text-secondary)', fontSize: '0.86em', ...NOTE_WRAP }}>{note}</span>}
+        {decision}
+      </span>
+      {right}
     </button>
   );
   if (!feedback) return row;
@@ -743,7 +765,7 @@ export default function LotBrowser({
           <table className="ray-feedtable">
             <thead>
               <tr>
-                <th></th>
+                <th><span className="sr-only">Image</span></th>
                 <th>Maker / work</th>
                 <th>House</th>
                 <th>Cat.</th>
@@ -752,7 +774,7 @@ export default function LotBrowser({
                 <th className="num">Bids</th>
                 <th className="num">Estimate</th>
                 <th>Signal</th>
-                <th></th>
+                <th><span className="sr-only">Save</span></th>
               </tr>
             </thead>
             <tbody>
@@ -789,7 +811,7 @@ export default function LotBrowser({
                             // the seconds a 600KB Bonhams master took to land
                             // (the four white Patek squares on the block)
                             src={sizedImg(httpsImg(lot.imageUrl), 120)}
-                            alt=""
+                            alt={craftTitle(lot.title, lot.auctionHouse)}
                             loading="lazy"
                             decoding="async"
                             referrerPolicy="no-referrer"
@@ -832,7 +854,7 @@ export default function LotBrowser({
                         const open = foldOpeners.get(lot.id);
                         const st = { display: 'block', color: 'var(--color-text-faint)', fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' } as const;
                         return open
-                          ? <button type="button" onClick={e => { e.stopPropagation(); open(); }} style={{ ...st, background: 'none', border: 0, padding: 0, fontFamily: 'inherit', textAlign: 'left', cursor: 'pointer' }}>{n}</button>
+                          ? <button type="button" className="t-fold" onClick={e => { e.stopPropagation(); open(); }} style={{ ...st, background: 'none', border: 0, padding: 0, fontFamily: 'inherit', textAlign: 'left', cursor: 'pointer' }}>{n}</button>
                           : <span style={st}>{n}</span>;
                       })()}
                       {youTab && <DecisionLine lot={lot} estimate={false} when={false} style={{ fontSize: 10.5, marginTop: 2 }} />}

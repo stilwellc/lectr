@@ -320,7 +320,7 @@ export function CallPlate({
                 <div className="lectr-cpc-img">
                   <img
                     src={httpsImg(lot.imageUrl)}
-                    alt=""
+                    alt={craftTitle(lot.title, lot.auctionHouse)}
                     loading="lazy"
                     referrerPolicy="no-referrer"
                     onError={() => setFailedImgId(lot.id)}
@@ -365,7 +365,7 @@ export function CallPlate({
               <div className="ray-plate-img">
                 <img
                   src={httpsImg(lot.imageUrl)}
-                  alt=""
+                  alt={craftTitle(lot.title, lot.auctionHouse)}
                   loading="lazy"
                   referrerPolicy="no-referrer"
                   onError={() => setFailedImgId(lot.id)}

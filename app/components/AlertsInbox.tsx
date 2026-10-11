@@ -202,7 +202,7 @@ export default function AlertsInbox({ embedded = false }: {
                 const sig = lot?.signal;
                 return (
                   <Link key={a.id} href={`/lot?id=${encodeURIComponent(a.lot_id)}`} className="lectr-inbox-row">
-                    {!a.seen && <span className="lectr-inbox-dot" aria-label="new" />}
+                    {!a.seen && <span className="lectr-inbox-dot"><span className="sr-only">new</span></span>}
                     {lot?.imageUrl && (
                       // no-referrer + remove-on-error: the houses hotlink-block
                       // on referer, and a dead thumb collapses out of the row

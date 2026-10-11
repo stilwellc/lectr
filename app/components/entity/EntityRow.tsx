@@ -122,7 +122,7 @@ const EntityRow = React.memo(function EntityRow({
       case 'live': return (
         <span key={k} className="mk-cell mk-livecell" data-live={r.live > 0 || undefined}
           title={r.flags > 0 ? `${r.live.toLocaleString()} live · ${r.flags} flagged below comparables` : undefined}>
-          {r.flags > 0 && <span className="mk-flagdot" aria-label={`${r.flags} flagged`} />}
+          {r.flags > 0 && <span className="mk-flagdot"><span className="sr-only">{r.flags} flagged, </span></span>}
           {r.live > 0 ? r.live.toLocaleString() : '—'}
         </span>
       );
@@ -166,7 +166,6 @@ const EntityRow = React.memo(function EntityRow({
       <div
         role="button" tabIndex={0} data-mk-row data-slug={r.id}
         className="mk-row" aria-expanded={isOpen}
-        aria-label={`${r.label} — open the read`}
         onClick={() => onToggleOpen(r.id)}
         onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleOpen(r.id); } }}
       >
@@ -190,7 +189,7 @@ const EntityRow = React.memo(function EntityRow({
         <span className="mk-go" aria-hidden data-open={isOpen || undefined}><Flick size={10} /></span>
         <span className="mk-mob">
           <span className="mk-mob-live" data-live={r.live > 0 || undefined}>
-            {r.flags > 0 && <span className="mk-flagdot" aria-label={`${r.flags} flagged`} />}
+            {r.flags > 0 && <span className="mk-flagdot"><span className="sr-only">{r.flags} flagged, </span></span>}
             {r.live > 0 ? <>{r.live.toLocaleString()}<i> live</i></> : <i>none live</i>}
           </span>
           <span className="mk-mob-sub">{r.median ? `median ${formatPrice(r.median)}` : r.sold12 > 0 ? `${r.sold12.toLocaleString()} sold 12 mo` : ''}</span>

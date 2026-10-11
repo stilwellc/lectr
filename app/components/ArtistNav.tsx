@@ -156,6 +156,13 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
     setOpen(false);
     router.push(path);
   }
+  /** a real <a href>: modified clicks (new tab/window) keep the browser's
+   *  default; a plain click routes client-side like the old buttons did */
+  function linkNav(e: React.MouseEvent<HTMLAnchorElement>, path: string) {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    navigate(path);
+  }
 
   // Makers opens where the reader left it: bare /makers is the all-market
   // roster (its links get shared), so the nav carries the market in the path.
@@ -211,7 +218,6 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
       {filteredGroups.map(({ market: m, makers }) => (
         <React.Fragment key={m.key}>
           <button
-            role="menuitem"
             className="ray-artist-dropdown-label"
             onClick={() => navigate(MARKET_PATH[m.key])}
           >
@@ -220,8 +226,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           {makers.map(a => (
             <button
               key={a.slug}
-              role="menuitem"
-              className="ray-artist-dropdown-item"
+                className="ray-artist-dropdown-item"
               data-active={activeSlug === a.slug ? 'true' : 'false'}
               onClick={() => navigate(makerHref(a.slug))}
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
@@ -539,6 +544,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           border: none;
           background: transparent;
           cursor: pointer;
+          text-decoration: none;
           font-family: var(--font-sans), sans-serif;
           font-size: 17px;
           font-weight: 500;
@@ -559,7 +565,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
       `}</style>
 
       <div className="ray-artist-nav-inner rail">
-        <a href={homePath} onClick={e => { e.preventDefault(); navigate(homePath); }} className="ray-wordmark" aria-label="lectr — home">
+        <a href={homePath} onClick={e => linkNav(e, homePath)} className="ray-wordmark" aria-label="lectr — home">
           {/* the script mark stands alone — the mark IS the name; its upward tilt is intentional */}
           <img className={`ray-mark-r${lit ? ' lectr-on' : ''}`} src="/brand/lectr-nav.png" alt="lectr" />
         </a>
@@ -567,25 +573,27 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         {/* Desktop quick links — one click to each room; the dropdown stays
             the artist index. Hidden on mobile where the dropdown covers all. */}
         <nav className="ray-nav-links" aria-label="Sections">
-          <button className="ray-nav-link" data-active={activeSlug === null} onClick={() => navigate(homePath)}>{NAV_ICONS.overview}Overview</button>
-          <button className="ray-nav-link ray-nav-link-value" data-active={activeSlug === 'value'} onClick={() => navigate('/value')}>{NAV_ICONS.value}Value</button>
-          <button className="ray-nav-link" data-active={activeSlug === 'artists'} onClick={() => navigate(makersPath)}>{NAV_ICONS.makers}Makers</button>
-          <button className="ray-nav-link" data-active={activeSlug === 'analytics'} onClick={() => navigate('/analytics')}>{NAV_ICONS.analytics}Analytics</button>
-          <button className="ray-nav-link" data-active={activeSlug === 'blog'} onClick={() => navigate('/blog')}>{NAV_ICONS.blog}Blog</button>
+          {/* real links (open-in-new-tab, AT link list, aria-current); a plain
+              click still routes client-side */}
+          <a href={homePath} className="ray-nav-link" data-active={activeSlug === null} aria-current={activeSlug === null ? 'page' : undefined} onClick={e => linkNav(e, homePath)}>{NAV_ICONS.overview}Overview</a>
+          <a href="/value" className="ray-nav-link ray-nav-link-value" data-active={activeSlug === 'value'} aria-current={activeSlug === 'value' ? 'page' : undefined} onClick={e => linkNav(e, '/value')}>{NAV_ICONS.value}Value</a>
+          <a href={makersPath} className="ray-nav-link" data-active={activeSlug === 'artists'} aria-current={activeSlug === 'artists' ? 'page' : undefined} onClick={e => linkNav(e, makersPath)}>{NAV_ICONS.makers}Makers</a>
+          <a href="/analytics" className="ray-nav-link" data-active={activeSlug === 'analytics'} aria-current={activeSlug === 'analytics' ? 'page' : undefined} onClick={e => linkNav(e, '/analytics')}>{NAV_ICONS.analytics}Analytics</a>
+          <a href="/blog" className="ray-nav-link" data-active={activeSlug === 'blog'} aria-current={activeSlug === 'blog' ? 'page' : undefined} onClick={e => linkNav(e, '/blog')}>{NAV_ICONS.blog}Blog</a>
           {/* My profile for everyone; signed out, Sign in rides beside it */}
-          <button className="ray-nav-link" data-active={activeSlug === 'saved'} onClick={() => navigate('/profile')} title={user?.email || undefined}>
+          <a href="/profile" className="ray-nav-link" data-active={activeSlug === 'saved'} aria-current={activeSlug === 'saved' ? 'page' : undefined} onClick={e => linkNav(e, '/profile')} title={user?.email || undefined}>
             {NAV_ICONS.profile}My profile{savedCount > 0 ? ` · ${savedCount}` : ''}
             {unseenAlerts > 0 && (
               // ink marker: "something new happened" is a verb — the lamp
               // law keeps green for the market's up-read only
-              <span aria-label={`${unseenAlerts} new matches`} style={{
+              <span style={{
                 display: 'inline-block', width: 5, height: 5, borderRadius: '50%',
                 background: 'var(--color-fg)', marginLeft: 6, verticalAlign: '2px',
-              }} />
+              }}><span className="sr-only">, {unseenAlerts} new matches</span></span>
             )}
-          </button>
+          </a>
           {authEnabled && !user && (
-            <button className="ray-nav-link" onClick={openLogin}>{NAV_ICONS.signin}Sign in</button>
+            <button className="ray-nav-link" onClick={openLogin} aria-haspopup="dialog">{NAV_ICONS.signin}Sign in</button>
           )}
         </nav>
 
@@ -600,9 +608,8 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           className="ray-artist-select-btn glass glass-pill glass-quiet"
           onClick={() => window.dispatchEvent(new Event(OPEN_CK_EVENT))}
           aria-haspopup="dialog"
-          aria-label="Search — find a maker or a past lot"
         >
-          <span>Find a maker</span>
+          <span>Find a maker<span className="sr-only"> — search makers and past lots</span></span>
           <kbd className="ray-nav-kbd" aria-hidden="true">&#8984;K</kbd>
         </button>
         </div>
@@ -613,6 +620,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         <button
           className="ray-nav-search"
           aria-label="Search"
+          aria-haspopup="dialog"
           onClick={() => window.dispatchEvent(new Event(OPEN_CK_EVENT))}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -625,8 +633,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
             + maker finder). Desktop uses the links + Find a maker above. */}
         <button
           className="ray-nav-burger"
-          aria-label="Open menu"
-          aria-haspopup="menu"
+          aria-haspopup="dialog"
           aria-expanded={open}
           onClick={() => setOpen(o => !o)}
         >
@@ -638,6 +645,10 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
       </div>
 
     </div>
+      {/* the skip link's landing (layout.tsx "Skip to content"): just past the
+          bar, so Tab after skipping starts on the page, not the nav again.
+          scroll-margin keeps the sticky bar from covering where it lands. */}
+      <div id="content" tabIndex={-1} style={{ outline: 'none', scrollMarginTop: 80 }} />
 
       {/* The mobile bottom tab bar was retired — the hamburger sheet now
           carries every section, so the bar was redundant chrome. */}
@@ -659,21 +670,23 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
             <div className="ray-maker-sheet-list" ref={dropdownRef}>
               <nav className="ray-maker-sheet-nav" aria-label="Sections">
                 {sections.map(s => (
-                  <button
+                  <a
                     key={s.path}
+                    href={s.path}
                     className="ray-maker-navitem"
                     data-active={s.active ? 'true' : 'false'}
-                    onClick={() => navigate(s.path)}
+                    aria-current={s.active ? 'page' : undefined}
+                    onClick={e => linkNav(e, s.path)}
                   >
                     <span className="ray-navitem-mark" aria-hidden>{s.icon}</span>
                     {s.label}
                     {s.path === '/profile' && unseenAlerts > 0 && (
-                      <span aria-label={`${unseenAlerts} new matches`} style={{
+                      <span style={{
                         display: 'inline-block', width: 5, height: 5, borderRadius: '50%',
                         background: 'var(--color-fg)', marginLeft: 7, verticalAlign: '2px',
-                      }} />
+                      }}><span className="sr-only">, {unseenAlerts} new matches</span></span>
                     )}
-                  </button>
+                  </a>
                 ))}
                 {authEnabled && !user && (
                   /* signed-out only — for signed-in users the account (and
@@ -697,8 +710,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
                   {topMakers.map(a => (
                     <button
                       key={a.slug}
-                      role="menuitem"
-                      className="ray-artist-dropdown-item"
+                                className="ray-artist-dropdown-item"
                       data-active={activeSlug === a.slug ? 'true' : 'false'}
                       onClick={() => navigate(makerHref(a.slug))}
                       style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
@@ -710,8 +722,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
                   {/* the disclosure — unrolls the full grouped roster IN the
                       sheet; the down Flick flips while it is open */}
                   <button
-                    role="menuitem"
-                    className="ray-artist-dropdown-item"
+                            className="ray-artist-dropdown-item"
                     aria-expanded={showAll}
                     onClick={() => setShowAll(s => !s)}
                     style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 600, color: 'var(--color-fg)' }}
@@ -728,8 +739,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
                   </button>
                   {showAll && groupList}
                   <button
-                    role="menuitem"
-                    className="ray-artist-dropdown-item"
+                            className="ray-artist-dropdown-item"
                     onClick={() => navigate('/makers')}
                     style={{ display: 'flex', alignItems: 'center', gap: 7, fontWeight: 600, color: 'var(--color-fg)' }}
                   >

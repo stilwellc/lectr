@@ -563,7 +563,7 @@ function HeroLot({ c }: { c: typeof proof.cases[number] }) {
     <section className="deck-hero">
       <div className="rail dk-s">
         <div className="hero-plate">
-          <PlateImg src={img} alt="" loading="lazy" referrerPolicy="no-referrer" />
+          <PlateImg src={img} alt={craftTitle(c.title)} loading="lazy" referrerPolicy="no-referrer" />
         </div>
         <p className="hero-cap">
           <b>{craftTitle(c.title)}</b> · {c.house} · {String(c.saleDate).slice(0, 10)} — lectr priced it at{' '}

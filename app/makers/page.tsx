@@ -791,6 +791,11 @@ export default function MakersPage() {
                 {q ? <button type="button" className="mk-clear" onClick={() => set({ q: '' })} aria-label="Clear search">×</button>
                   : <kbd className="mk-kbd" aria-hidden>/</kbd>}
               </label>
+              {/* what a search lands on, said once it settles (the tab counts
+                  update silently) — persistent, so the change is announced */}
+              <span className="sr-only" role="status" aria-live="polite">
+                {q.trim() ? `${shownTotal.toLocaleString()} ${bodyNoun.toLowerCase()}, ${lensCounts.shown.toLocaleString()} live lots` : ''}
+              </span>
               <div className="ray-seg mk-seg mk-body" role="tablist" aria-label="Show">
                 {([['names', `${bodyNoun}`, shownTotal], ['lots', 'Lots', lensCounts.shown]] as [ViewBody, string, number][]).map(([k, label, n]) => (
                   <button key={k} type="button" role="tab" className="ray-seg-btn" data-active={vw === k} aria-selected={vw === k}
