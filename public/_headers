@@ -81,3 +81,12 @@
   Cache-Control: public, max-age=31536000, immutable
 /data/ray/sold-ledger-*
   Cache-Control: public, max-age=31536000, immutable
+
+# First-screen payloads (perf W13/W18, Oct 11 2026): fetched ONLY at
+# ?v=<content hash> (app/lib/first-screen fsUrl — the hash the HTML of the
+# same deploy bakes), and a body at a given hash never changes, so a repeat
+# visit on the same deploy reads them from the browser cache instead of
+# revalidating (a 400 ms RTT round trip on a slow phone). first/index.json
+# is build-time only (next.config reads it from disk); nothing fetches it.
+/data/ray/first/*
+  Cache-Control: public, max-age=31536000, immutable

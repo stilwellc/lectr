@@ -31,7 +31,7 @@ import { closeDayOf, formatDate, formatPrice, getUpcomingCounts, craftTitle, fmt
 import ArtistNav from '../../components/ArtistNav';
 import { lotSignal } from '../../components/LotCard';
 import { dealScore } from '../../lib/comps';
-import ComparableModal from '../../components/ComparableModal';
+import ComparableModal from '../../components/ComparableModalLazy';
 import type { AuctionLot } from '../../types';
 import PastResults from '../../components/PastResults';
 import RayEntrance, { RayLoading } from '../../components/RayEntrance';
@@ -52,6 +52,7 @@ import { OPEN_CK_EVENT } from '../../components/CommandK';
 import LotBrowser, { belowSignalOf } from '../../components/LotBrowser';
 import { useLotModal } from '../../lib/use-lot-modal';
 import { useBackScroll } from '../../lib/use-back-scroll';
+import { staleHouse } from '../../components/home/matters';
 
 // Terminal design assets (the DESIGN win)
 import IndexHero from './IndexHero';
@@ -312,6 +313,15 @@ export default function TerminalHomePage() {
   // results-pending lot whose sale closed lists in the feed (sunk, "results
   // pending") but is no longer live in any number (the same isOnBlock the
   // nav, /makers and /value count with)
+  // (W20) a house lens with no live lot in THIS market (it travelled in from
+  // another market's URL or the feed memory) emptied the feed behind an
+  // "All houses" dropdown: once the whole book is in, drop it. A slice can't
+  // prove a house absent, so the check waits on the book.
+  useEffect(() => {
+    if (partial || !staleHouse(feedFilters.house, upcoming)) return;
+    setFeedFilters(f => (f.house ? { ...f, house: null } : f));
+  }, [partial, upcoming, feedFilters.house, setFeedFilters]);
+
   const onBlockLots = useMemo(() => {
     const now = Date.now();
     return upcoming.filter(l => !isClosedPending(l, now));
@@ -320,8 +330,10 @@ export default function TerminalHomePage() {
   // (r7, QA2 Q14) Back from a lot lands where the reader left the feed: the
   // filters come back from the URL, the paged depth from the browser's
   // persistKey, and the scroll here (the feed mounts after the book loads,
-  // so the browser's own restoration lands on a short page)
-  useBackScroll(upcoming.length > 0);
+  // so the browser's own restoration lands on a short page). Ready = the
+  // whole book: a row found in the first-screen slice is re-landed when the
+  // book re-lays the feed (W20 — Back from 5,200px used to land near 1,400px)
+  useBackScroll(!partial && upcoming.length > 0);
 
   // THE RAIL'S MICRO-READS — one standardized read per cell: live lots on
   // the block (Collin, Aug 22 2026: no % in the rail — one grammar, eight

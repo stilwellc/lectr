@@ -34,7 +34,9 @@ import { athleteName, notOnePerson } from './player-name';
 
 const CARD_MAKERS = new Set(['sports-cards', 'graded-cards']);
 const POKE_NAME = /#[\w-]+\s+(.+?)(?:\s+-\s|\s*$)/;
-const POKE_NOISE = /\b(?:Holo|Reverse Holo|1st Edition|Shadowless|Unlimited)\b/g;
+const POKE_NOISE = /\b(?:Reverse Holo|Holographic|Holo|Non-Holo|1st Edition|Shadowless|Unlimited|Full Art|Alt(?:ernate)? Art|Special Art Rare|Illustration Rare|Secret Rare|Rainbow Rare|Hyper Rare|Ultra Rare|Rare Holo|Promo)\b/g;
+/** (W21) a slab grade riding the name ("#113 Chansey Holographic PSA NM 7" — REA prints no " - ") */
+const POKE_GRADE_TAIL = /\s+(?:PSA|BGS|CGC|SGC|Beckett|ARS|TAG)\b.*$/;
 /** a person's name, 2–4 words — the parser sometimes runs on into card words ("Jackie Robinson Inaugural Bowman") */
 const PERSON = /^[A-Z][\w.'’-]*(?: (?:[A-Z][\w.'’-]*|Jr\.?|Sr\.?|II|III|IV|de|van|da|del|la)){1,3}$/;
 const CARD_WORD = /\b(?:Inaugural|Bowman|Topps|Fleer|Donruss|Panini|Prizm|Chrome|Refractor|Upper|Deck|Rookie|Card|Cards|Signed|Auto|Autograph|Autographs|Set|Team|Lot|Box|Pack|Base|Promo|Edition|Series|Parallel|Insert|Patch|Relic|Jersey|Gold|Silver|Black|Red|Blue|Green|Orange|Purple)\b/;
@@ -114,7 +116,7 @@ export function catalogMakerLineOf(lot: NamedLot): MakerLine {
     }
   } else if (title && lot.artist === 'pokemon') {
     const m = title.match(POKE_NAME);
-    const name = m?.[1].replace(POKE_NOISE, '').replace(/\s+/g, ' ').trim();
+    const name = m?.[1].replace(POKE_GRADE_TAIL, '').replace(POKE_NOISE, '').replace(/\s+/g, ' ').trim();
     if (name && name.split(' ').length <= 4 && /^[A-Z]/.test(name)) out = { name, href: fallback.href };
   } else if (title) {
     const sub = subjectOf(lot);

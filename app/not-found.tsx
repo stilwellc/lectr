@@ -27,7 +27,7 @@ export default function NotFound() {
         fontFamily: 'var(--font-sans), sans-serif',
       }}
     >
-      <img src="/brand/lectr.png" alt="lectr" style={{ height: 40, opacity: 0.9, marginBottom: 20 }} />
+      <img src="/brand/lectr-ink-lg.png" alt="lectr" loading="lazy" style={{ height: 40, opacity: 0.9, marginBottom: 20 }} />
       <h1 style={{ fontSize: 34, fontWeight: 700, letterSpacing: '-0.02em', margin: 0 }}>
         This page isn&rsquo;t on the block
       </h1>

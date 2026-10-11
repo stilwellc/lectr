@@ -29,7 +29,9 @@ export interface R2ObjectBodyLike {
 export interface R2BucketLike {
   get(key: string, options?: { range?: { offset: number; length: number } }): Promise<R2ObjectBodyLike | null>;
 }
-export interface Env { CORPUS?: R2BucketLike }
+/** CORPUS: the R2 index. ASSETS: the Pages static-asset binding (present in
+ *  every Pages Function) — the lot-id alias map is read through it (aliases.ts). */
+export interface Env { CORPUS?: R2BucketLike; ASSETS?: { fetch(req: Request): Promise<Response> } }
 
 /** Cache API surface (caches.default in Workers) — optional so Node tests run. */
 export interface EdgeCache { match(req: Request): Promise<Response | undefined>; put(req: Request, res: Response): Promise<void> }

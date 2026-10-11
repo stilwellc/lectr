@@ -24,10 +24,11 @@ import LotCard, { lotSignal, confidenceMeter } from './LotCard';
 import { feedRowPrice } from '../lib/estimate-text';
 import { signalMagnitude } from '../lib/comps';
 import { lotFace } from '../lib/lot-face';
-import ComparableModal from './ComparableModal';
+import ComparableModal from './ComparableModalLazy';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './FeedToolbar';
 import { houseBaselines, type HouseBaselines } from '../lib/feed-filters';
-import { shortlist, reasonOf } from '../lib/priority';
+import { reasonOf } from '../lib/priority';
+import { mattersList } from './home/matters';
 import DecisionLine from './DecisionLine';
 import { makerLineOf, labelTagOf, subColumnOf } from '../lib/lot-labels';
 import { displayMakerOf } from '../lib/maker-subjects';
@@ -439,7 +440,11 @@ export default function LotBrowser({
     const apply = () => {
       const size = mqPhone.matches ? phonePage : mq.matches ? narrowPage : widePage;
       setPageSize(size);
-      setVis(v => (v.n === phonePage || v.n === narrowPage || v.n === widePage ? { ...v, n: size } : v));
+      // only the untouched first page follows the width: a depth the reader
+      // paged to (or Back restored — sig set) stays. (W20: a phone's 2 pages
+      // = 24 rows equalled the desktop page size and was cut back to 12 on
+      // every Back, so the reader's row was gone)
+      setVis(v => (v.sig === '' ? { ...v, n: size } : v));
     };
     apply();
     mq.addEventListener('change', apply);
@@ -529,7 +534,8 @@ export default function LotBrowser({
   const youColdOn = youTab && !youTaste;
   const wantTop = !youTab && feedFilters.sort === 'priority' && (feedFilters.tab ?? 'top') !== 'all';
   const top = useMemo(
-    () => (wantTop || scoped ? shortlist(feedAll, Date.now(), 20, { who: whoCap }) : null),
+    // seated by the shortlist, printed in score order (components/home/matters)
+    () => (wantTop || scoped ? mattersList(feedAll, Date.now(), 20, { who: whoCap }) : null),
     [wantTop, scoped, feedAll, whoCap]
   );
   // a scoped book with nothing that clears the shortlist bar opens on every
@@ -802,6 +808,7 @@ export default function LotBrowser({
                   // button for AT and ignored Space — B3 finding 6)
                   <tr
                     key={lot.id}
+                    data-lot-row={lot.id}
                     data-pick={youTab || undefined}
                     onClick={() => setTableLot(lot)}
                     style={{ cursor: 'pointer' }}
@@ -964,6 +971,7 @@ export default function LotBrowser({
             narrowView ? (
               <div
                 key={lot.id}
+                data-lot-row={lot.id}
                 data-pick={youTab || undefined}
                 className={fromCache ? 'ray-feeditem-row' : 'ray-feed-rekey ray-feeditem-row'}
                 style={{ animationDelay: fromCache ? undefined : `${Math.min(i, 10) * 40}ms`, minWidth: 0 }}
@@ -982,6 +990,7 @@ export default function LotBrowser({
             ) : (
               <div
                 key={lot.id}
+                data-lot-row={lot.id}
                 data-pick={youTab || undefined}
                 className={fromCache ? 'ray-feeditem-card' : 'ray-feed-rekey ray-feeditem-card'}
                 style={{ animationDelay: fromCache ? undefined : `${Math.min(i, 10) * 40}ms`, minWidth: 0, ...(youTab ? { display: 'grid', gridTemplateRows: 'minmax(0, 1fr) auto' } : null) }}
