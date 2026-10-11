@@ -394,7 +394,7 @@ function GapAnnex({ rows, total, measured, validated, receipts, activeKey, play,
               </div>
             </div>
             {/* the close on the curve's 8-day fitted window */}
-            <div className="vd-curve" aria-label={`Closes in ${g.daysOut.toFixed(1)} days — the lane reads to 8`}>
+            <div className="vd-curve" role="group" aria-label={`Closes in ${g.daysOut.toFixed(1)} days — the lane reads to 8`}>
               <span className="vd-curve-rail" aria-hidden>
                 <span className="vd-curve-wire" style={{ width: `${(3.5 / 8) * 100}%` }} />
                 <span className="vd-curve-dot" style={{ left: `${Math.min(100, (g.daysOut / 8) * 100)}%` }} />
@@ -670,7 +670,7 @@ function OutcomeDistribution({ backtest }: { backtest: Backtest }) {
           share of each cohort by realized vs estimate, all-in — the flagged mass sits to the right
         </span>
       </div>
-      <div className="vd-dist" aria-label="Outcome distribution: flagged vs unflagged share by result bucket">
+      <div className="vd-dist" role="group" aria-label="Outcome distribution: flagged vs unflagged share by result bucket">
         {rows.map(r => (
           <div key={r.label} className="vd-dist-col">
             <div className="vd-dist-bars" aria-hidden>
@@ -2268,7 +2268,7 @@ export default function ValuePage() {
                     className="ray-value-row"
                     data-nav-row
                     onClick={() => setModalLot(d.lot)}
-                    aria-label={`${makerLineOf(d.lot).name || craftTitle(d.lot.title, d.lot.auctionHouse)} — see the comps`}
+                    aria-haspopup="dialog"
                   >
                     {/* Thumbnail — monogram plate always behind, photo overlays;
                         on a hotlink-block the plate shows through, never a gap */}
@@ -2329,7 +2329,7 @@ export default function ValuePage() {
                         : d.lot.value?.signal?.beatRatePct != null
                         ? `${Math.round(d.lot.value.signal.beatRatePct)}%`
                         : conf
-                          ? <span className="ray-value-conf" aria-label={`${confidenceMeter(conf).word} confidence`}>{confidenceMeter(conf).dots}</span>
+                          ? <span className="ray-value-conf"><span aria-hidden="true">{confidenceMeter(conf).dots}</span><span className="sr-only">{confidenceMeter(conf).word} confidence</span></span>
                           : '—'}
                     </span>
                     <span className="ray-value-cell ray-value-cell-num ray-value-cell-gap">

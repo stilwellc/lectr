@@ -1303,8 +1303,8 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .tapeAbstain { font-size: 28px; color: var(--paper-muted, #5A5240); }
 .tapeRight { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; min-width: 0; text-align: right; }
 .tapeFigure { font-size: clamp(15px, 1.4vw, 20px); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.tapeFigure[data-dir='up'] { color: var(--tape-up, #1e7a4d); }
-.tapeFigure[data-dir='down'] { color: var(--tape-down, #a03d2e); }
+.tapeFigure[data-dir='up'] { color: var(--tape-up, #17663f); } /* AA on the darkest cream cell (#dcd2bb 4.65) */
+.tapeFigure[data-dir='down'] { color: var(--tape-down, #933729); }
 .tapeFigureDesc { font-size: clamp(14px, 1.2vw, 17px); font-weight: 600; font-variant-numeric: tabular-nums; }
 .tapeSub { font-size: 12.5px; color: var(--paper-muted, #5A5240); font-variant-numeric: tabular-nums; }
 .tri {
@@ -1712,7 +1712,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   margin-top: 10px;
   font-size: 11px;
   line-height: 1.5;
-  color: var(--pa-5, rgba(28, 23, 18, 0.5));
+  color: var(--pa-5, rgba(28, 23, 18, 0.68)); /* AA on cream (was 0.5 = 3.2:1) */
 }
 .ehCta {
   margin-top: auto;
@@ -2793,7 +2793,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .cmdKbd {
   position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
   font-family: var(--font-inter), sans-serif; font-size: 11px; line-height: 1.4;
-  color: var(--tt-muted);
+  color: #a3a8b0; /* dark: AA through the bar's 0.86 opacity */
   padding: 1px 6px;
   border: 1px solid var(--lw-12, rgba(255, 255, 255, 0.12));
   border-radius: 5px;
@@ -2819,6 +2819,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 
 /* THE CATALOGUE — pen-weight display numerals on paper (light only) */
 :global(html[data-lectr-light]) .pulseValLead { font-weight: 430; }
+:global(html[data-lectr-light]) .cmdKbd { color: var(--tt-muted); }
 :global(html[data-lectr-light]) .mStatVal { font-weight: 430; }
 
 /* LAB DISCIPLINE — light: grid rules become solid whisper-hairlines,

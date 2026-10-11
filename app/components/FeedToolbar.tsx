@@ -1035,7 +1035,7 @@ ${FEEDSHEET_CSS}
       )}
 
       {!isMobile && facets.length > 0 && (
-        <div className="ray-toolbar-row ray-toolbar-row-filters ray-markets-fade" aria-label="Narrow">
+        <div className="ray-toolbar-row ray-toolbar-row-filters ray-markets-fade" role="group" aria-label="Narrow">
           {facetPillsOf(true)}
         </div>
       )}
@@ -1043,17 +1043,19 @@ ${FEEDSHEET_CSS}
       {/* Count + Clear live OUTSIDE the masked scroll row — the fade mask
           must never dissolve the one control that undoes a filter. */}
       <span className="ray-toolbar-count">
+        {/* ONE persistent polite region (a region that mounts with its text
+            is never announced): the count a filter change lands on */}
+        <span role="status" aria-live="polite">
+          {isFiltered ? <>{shown.toLocaleString()} of {total.toLocaleString()}</> : (countLabel ?? <>{total.toLocaleString()} lots</>)}
+        </span>
         {isFiltered ? (
           <>
-            {shown.toLocaleString()} of {total.toLocaleString()}
             <button className="ray-toolbar-reset" onClick={() => onChange(clearedFilters(filters))}>
               Clear
             </button>
             {saveable && <SaveSearch filters={scopeMaker ? { ...filters, maker: scopeMaker } : filters} market={effectiveMarket} />}
           </>
-        ) : (
-          countLabel ?? <>{total.toLocaleString()} lots</>
-        )}
+        ) : null}
         {onResetView && (
           <button className="ray-toolbar-reset" onClick={onResetView} title="This view was restored from your last visit">
             Reset view

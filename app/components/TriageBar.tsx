@@ -216,7 +216,7 @@ export default function TriageBar({
         </div>
       )}
       {facets.length > 0 && (
-        <div className="ray-triagebar-row ray-triagebar-subs ray-markets-fade" aria-label="Refine">
+        <div className="ray-triagebar-row ray-triagebar-subs ray-markets-fade" role="group" aria-label="Refine">
           {facets.map((c, i) => (
             <span key={c.key} style={{ display: 'contents' }}>
               {i > 0 && facets[i - 1].group !== c.group && <span className="ray-toolbar-divider" aria-hidden="true" />}

@@ -121,7 +121,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         `}</style>
       </head>
       <body style={{ margin: 0, padding: 0 }}>
-        <a href="#main" className="skip-link">Skip to content</a>
+        <a href="#content" className="skip-link">Skip to content</a>
         <ThemeProvider>
           <MarketProvider>
             <AccountProvider>
