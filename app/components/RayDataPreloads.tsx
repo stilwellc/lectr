@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import { fsKeyOf, fsUrl, FS_VERSION } from '../lib/first-screen';
 
 /**
  * Phase-1 data preloads — on every route that reads the live book
@@ -35,9 +36,30 @@ export function routeReadsLiveBook(pathname: string | null | undefined): boolean
   return !NO_DATA.test(pathname || '/');
 }
 
+/** routes whose first screen paints from a first-screen slice (app/lib/
+ *  first-screen): they preload ONLY the slice — the book loads behind the
+ *  paint (useRayDataFirst holds phase 1 until then), so preloading it here
+ *  would hand the slice's bandwidth back to the 1.6 MB it exists to dodge.
+ *  The player/entity routes name their entity in the query string (unknown
+ *  at prerender): they preload nothing and fetch the slice on hydration. */
+const QUERY_FS = /^\/(player|entity)\/?$/;
+
 export default function RayDataPreloads() {
   const pathname = usePathname();
   if (!routeReadsLiveBook(pathname)) return null;
+  if (FS_VERSION && QUERY_FS.test(pathname || '')) return null;
+  const fsKey = fsKeyOf(pathname);
+  if (fsKey) {
+    // the roster's ledger also waits on its market's entity summaries
+    // (useEntities, source 'pending') — fetched beside the slice, not after
+    const mk = fsKey === 'makers' ? ((pathname || '').match(/^\/makers\/m\/([a-z]+)/)?.[1] ?? 'all') : null;
+    return (
+      <>
+        <link rel="preload" href={fsUrl(fsKey)} as="fetch" crossOrigin="anonymous" />
+        {mk && <link rel="preload" href={`/data/ray/pages/entities-${mk}.json`} as="fetch" crossOrigin="anonymous" />}
+      </>
+    );
+  }
   return (
     <>
       {RAY_PRELOADS.map(href => (

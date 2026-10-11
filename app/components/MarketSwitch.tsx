@@ -39,6 +39,7 @@ export default function MarketSwitch({
   lit = false,
   open = false,
   reads,
+  readsPending = false,
 }: {
   /** inner-page variant: the rail dimmed to navigation duty — no reads, no
    *  flap, no halo. Home omits it and gets the full door. */
@@ -51,6 +52,9 @@ export default function MarketSwitch({
   /** per-market live-lot counts (door only) — the one standardized read.
    *  Missing key → the cell simply prints no read. */
   reads?: Partial<Record<Market, number>>;
+  /** the reads are counts over the whole live book and it has not landed
+   *  yet (a first-screen slice, or still loading): each prints '—' */
+  readsPending?: boolean;
 }) {
   const { market, setMarket } = useMarket();
   const railRef = useRef<HTMLDivElement>(null);
@@ -93,8 +97,9 @@ export default function MarketSwitch({
   const active = MARKETS.find(m => m.key === market) ?? MARKETS[0];
 
   /** the cell's micro-read — one grammar for all eight: "N live" */
-  const readOf = (key: Market): number | null => {
+  const readOf = (key: Market): number | '—' | null => {
     if (!door) return null;
+    if (readsPending) return '—';
     const n = reads?.[key];
     return n ?? null;
   };
@@ -105,7 +110,8 @@ export default function MarketSwitch({
     if (!door) return null;
     const tokens: string[] = [active.label.toUpperCase()];
     const n = reads?.[active.key];
-    if (n != null) tokens.push(`${fmtCount(n)} LIVE ${n === 1 ? 'LOT' : 'LOTS'}`);
+    if (readsPending) tokens.push('— LIVE LOTS');
+    else if (n != null) tokens.push(`${fmtCount(n)} LIVE ${n === 1 ? 'LOT' : 'LOTS'}`);
     return tokens;
   })();
 
@@ -143,7 +149,7 @@ export default function MarketSwitch({
             </span>
             {readCount != null && (
               <span className="ray-rail-read">
-                <b>{fmtCount(readCount)}</b> live
+                <b>{readCount === '—' ? '—' : fmtCount(readCount)}</b> live
               </span>
             )}
           </button>

@@ -22,7 +22,7 @@ const fmtFloor = (n: number) => (n >= 1000 ? `$${n / 1000}K+` : `$${n}+`);
 
 export default function TriageBar({
   lots, filters, countFilters, onChange, prevVisitDay = null, baselines = null, shown, total, showSubs = true, label = 'Narrow the board', cats: onlyCats,
-  lead, omit,
+  lead, omit, pending = false,
 }: {
   lots: TriageLot[];
   filters: TriageFilters;
@@ -49,6 +49,10 @@ export default function TriageBar({
   lead?: ReactNode;
   /** first-row chips the page's `lead` already offers */
   omit?: readonly ('today' | 'new')[];
+  /** (perf W13) `lots` is a first-screen slice, not the live book: the
+   *  windows and value stand (no counts), the counted chips wait — their row
+   *  holds its place with one '—' pill */
+  pending?: boolean;
 }) {
   const set = (patch: Partial<TriageFilters>) => onChange(patchTriage(filters, patch));
   const cf = countFilters ?? filters;
@@ -163,13 +167,13 @@ export default function TriageBar({
             {w.label}
           </button>
         ))}
-        {newCount > 0 && !omit?.includes('new') && (
+        {newCount > 0 && !pending && !omit?.includes('new') && (
           <button type="button" className="ray-toolbar-pill" data-active={filters.newOnly} aria-pressed={filters.newOnly}
             onClick={() => set({ newOnly: !filters.newOnly })}>
             {prevVisitDay ? 'New since last visit' : 'New today'} <i>{newCount}</i>
           </button>
         )}
-        {houses.length > 1 && (
+        {houses.length > 1 && !pending && (
           <select className="ray-toolbar-pill ray-toolbar-select" aria-label="Auction house" data-active={filters.house != null}
             value={filters.house ?? ''} onChange={e => set({ house: e.target.value || null })}>
             <option value="">All houses</option>
@@ -193,7 +197,12 @@ export default function TriageBar({
       </div>
       {/* a market strip shows even one chip (subChipsOf already dropped the
           ones that cut nothing — "Pocket & Pendant 1" is a real cut) */}
-      {showSubs && chips.items.length > (chips.level === 'cat' ? 1 : 0) && (
+      {showSubs && pending && (
+        <div className="ray-triagebar-row ray-triagebar-subs ray-markets-fade" aria-hidden>
+          <span className="ray-toolbar-pill">—</span>
+        </div>
+      )}
+      {showSubs && !pending && chips.items.length > (chips.level === 'cat' ? 1 : 0) && (
         <div className="ray-triagebar-row ray-triagebar-subs ray-markets-fade">
           {chips.level === 'cat'
             ? chips.items.map(c => (
@@ -210,12 +219,12 @@ export default function TriageBar({
             ))}
         </div>
       )}
-      {showSubs && chips.level === 'cat' && chips.deeper.length > 0 && (
+      {showSubs && !pending && chips.level === 'cat' && chips.deeper.length > 0 && (
         <div className="ray-triagebar-row ray-triagebar-subs ray-markets-fade">
           {chips.deeper.map(c => subPill(c, true))}
         </div>
       )}
-      {facets.length > 0 && (
+      {facets.length > 0 && !pending && (
         <div className="ray-triagebar-row ray-triagebar-subs ray-markets-fade" role="group" aria-label="Refine">
           {facets.map((c, i) => (
             <span key={c.key} style={{ display: 'contents' }}>

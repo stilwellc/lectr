@@ -98,35 +98,49 @@ export type HouseBaselines = ReadonlyMap<string, string>;
 type BaselineLot = { auctionHouse?: string | null; firstSeen?: string | null; status?: string | null };
 
 const baselineCache = new WeakMap<object, { today: string; map: HouseBaselines }>();
+/** The book-wide, clock-free half of houseBaselines: each house's earliest
+ *  firstSeen day and its live (upcoming) lots per firstSeen day. Serializable
+ *  — the first-screen payloads (app/lib/first-screen) ship it so a page that
+ *  paints from a slice of the book reads the SAME baselines the whole book
+ *  gives (baselinesFromStats below is the other half, on the reader's day). */
+export interface BaselineStats { earliest: Record<string, string>; live: Record<string, Record<string, number>> }
+export function houseBaselineStats(lots: readonly BaselineLot[]): BaselineStats {
+  const earliest: Record<string, string> = {};
+  const live: Record<string, Record<string, number>> = {};
+  for (const l of lots) {
+    const h = l.auctionHouse;
+    const d = (l.firstSeen || '').slice(0, 10);
+    if (!h || !d) continue;
+    const e = earliest[h];
+    if (!e || d < e) earliest[h] = d;
+    if (l.status && l.status !== 'upcoming') continue;
+    const byDay = live[h] || (live[h] = {});
+    byDay[d] = (byDay[d] || 0) + 1;
+  }
+  return { earliest, live };
+}
+/** house → onboarding day from the stats, on `today` (the reader's day). */
+export function baselinesFromStats(stats: BaselineStats, today: string = localToday()): HouseBaselines {
+  const cutoff = addDays(today, -BASELINE_RECENT_DAYS);
+  const map = new Map<string, string>();
+  for (const h of Object.keys(stats.earliest)) {
+    const day = stats.earliest[h];
+    if (day < cutoff) continue;
+    const byDay = stats.live[h];
+    if (!byDay) continue;
+    let total = 0;
+    for (const k of Object.keys(byDay)) total += byDay[k];
+    const n = byDay[day] || 0;
+    if (n >= BASELINE_MIN && n / total > BASELINE_SHARE) map.set(h, day);
+  }
+  return map;
+}
 /** house → onboarding day (YYYY-MM-DD). Cached per pool array + day, so every
  *  call site can pass the page's whole pool without re-scanning it. */
 export function houseBaselines(lots: readonly BaselineLot[], today: string = localToday()): HouseBaselines {
   const hit = baselineCache.get(lots);
   if (hit && hit.today === today) return hit.map;
-  const earliest = new Map<string, string>();
-  const live = new Map<string, Map<string, number>>();
-  for (const l of lots) {
-    const h = l.auctionHouse;
-    const d = (l.firstSeen || '').slice(0, 10);
-    if (!h || !d) continue;
-    const e = earliest.get(h);
-    if (!e || d < e) earliest.set(h, d);
-    if (l.status && l.status !== 'upcoming') continue;
-    let byDay = live.get(h);
-    if (!byDay) live.set(h, (byDay = new Map()));
-    byDay.set(d, (byDay.get(d) || 0) + 1);
-  }
-  const cutoff = addDays(today, -BASELINE_RECENT_DAYS);
-  const map = new Map<string, string>();
-  earliest.forEach((day, h) => {
-    if (day < cutoff) return;
-    const byDay = live.get(h);
-    if (!byDay) return;
-    let total = 0;
-    byDay.forEach(n => { total += n; });
-    const n = byDay.get(day) || 0;
-    if (n >= BASELINE_MIN && n / total > BASELINE_SHARE) map.set(h, day);
-  });
+  const map = baselinesFromStats(houseBaselineStats(lots), today);
   baselineCache.set(lots, { today, map });
   return map;
 }

@@ -553,17 +553,27 @@ export function Colophon({ lotCount, houseCount, record, lastCrawl }: {
   record?: { n: number; medianPerfPct: number; hammerMedianPct?: number | null } | null;
 }) {
   const [inView, setInView] = useState(false);
+  // (perf W13) the signature mark (~80KB of script raster: the cream PNG plus
+  // its light-mode ink swap) is fetched only as the footer approaches — it
+  // used to download in the first second of every page, against the slow
+  // phone's first screen, for a mark that is clipped until the footer is read
+  const [near, setNear] = useState(false);
   const ref = useRef<HTMLElement | null>(null);
   const meta = useColophonMeta();
   useEffect(() => {
     const el = ref.current;
-    if (!el || typeof IntersectionObserver === 'undefined') { setInView(true); return; }
+    if (!el || typeof IntersectionObserver === 'undefined') { setInView(true); setNear(true); return; }
     const io = new IntersectionObserver(
       entries => { if (entries.some(e => e.isIntersecting)) { setInView(true); io.disconnect(); } },
       { threshold: 0.2 }
     );
+    const pre = new IntersectionObserver(
+      entries => { if (entries.some(e => e.isIntersecting)) { setNear(true); pre.disconnect(); } },
+      { rootMargin: '800px 0px' }
+    );
     io.observe(el);
-    return () => io.disconnect();
+    pre.observe(el);
+    return () => { io.disconnect(); pre.disconnect(); };
   }, []);
 
   const lots = meta?.lots || lotCount || null;
@@ -639,7 +649,7 @@ export function Colophon({ lotCount, houseCount, record, lastCrawl }: {
         {/* the imprint — the maker signs last, small, next to the edition line */}
         <div className="ray-close-base">
           <span className="ray-close-stamp">
-            <img src="/brand/lectr.png" alt="lectr" className="ray-close-mark" />
+            {near && <img src="/brand/lectr.png" alt="lectr" className="ray-close-mark" />}
             <span suppressHydrationWarning>© {new Date().getFullYear()} lectr · auction intelligence</span>
           </span>
           <span className="ray-close-method">
