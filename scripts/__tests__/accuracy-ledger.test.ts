@@ -211,3 +211,39 @@ test('scanSettlements: joins served lots (settled row wins) and finds unsold-cap
   assert.deepEqual(Array.from(r.capturedCells), ['HouseA|2026Q4']);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('flag outcomes: every graded flag of the window, newest first, with its bar and hammer — sliced per market for page-stats', async () => {
+  const { flagOutcomesOf, FLAG_OUTCOME_DAYS } = await import('../accuracy-ledger');
+  const { flagOutcomesByMarket } = await import('../../app/lib/page-data');
+  const tape = [
+    row('hit', '2026-10-01', { s: 'b', o: 55 }),
+    row('miss', '2026-10-01', { s: 'b', o: 55, m: 'sports' }),
+    row('in', '2026-10-01', { s: 'b', o: 55 }),
+    row('plain', '2026-10-01'),                           // not flagged → never listed
+    row('old', '2026-08-01', { s: 'b', o: 55 }),          // settled outside the window
+  ];
+  const soldMap = new Map<string, SoldInfo>([
+    ['hit', sold('hit', '2026-10-12', 1500)],             // beats the 1,200 high
+    ['miss', sold('miss', '2026-10-15', 1000, { market: 'sports' })],
+    ['in', sold('in', '2026-10-10', 0, { status: 'bought_in', r: 0, house: 'HouseA' })],
+    ['plain', sold('plain', '2026-10-12', 5000)],
+    ['old', sold('old', '2026-08-20', 5000)],
+  ]);
+  const meta = new Map([['hit', { t: 'A Hit', a: 'kaws' }]]);
+  const l = buildLedger({ tape, sold: soldMap, capturedCells: new Set(['HouseA|2026Q4']), asOf: AS_OF, now: new Date('2026-10-20T12:00:00Z'), meta });
+  const f = l.flagged!;
+  assert.deepEqual(f.map(r => r.id), ['miss', 'hit', 'in']);              // newest sale first, window only
+  assert.deepEqual(f.map(r => r.hit), [false, true, false]);              // bought-in = a counted miss
+  assert.equal(f[1].top, 1200); assert.equal(f[1].ham, 1500);
+  assert.equal(f[2].ham, 0);
+  assert.equal(f[1].t, 'A Hit'); assert.equal(f[1].a, 'kaws');
+  // the window agrees with the rollups' flags cell
+  const cell = l.rollups['30'].overall.flags;
+  assert.deepEqual([f.length, f.filter(r => r.hit).length], [cell.n, cell.hits]);
+  assert.equal(FLAG_OUTCOME_DAYS, 30);
+  assert.equal(flagOutcomesOf([], AS_OF).length, 0);
+  const by = flagOutcomesByMarket(l, 2);
+  assert.deepEqual([by.all.n, by.all.hits, by.all.rows.length], [3, 1, 2]);   // counts = the window; rows = a slice
+  assert.deepEqual([by.sports.n, by.sports.hits], [1, 0]);
+  assert.deepEqual([by.art.n, by.art.hits], [2, 1]);
+});

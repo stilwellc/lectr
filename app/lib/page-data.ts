@@ -56,6 +56,42 @@ export interface PageStats {
   refIndex: RefIndexRow[];
   playerIndex: PlayerIndexRow[];
   settled: Record<string, SettledCallRow[]>;
+  /** (Oct 11) the graded Flags per market — scripts/accuracy-ledger patches
+   *  this in the same nightly run (absent on an older data build) */
+  flagOutcomes?: Record<string, FlagOutcomes>;
+}
+
+/** one graded Flag (the live accuracy ledger, hammer basis, graded on the
+ *  last value served before the sale — no lookahead) */
+export interface FlagOutcomeRow {
+  id: string; sd: string; m: string; h: string;
+  /** realized hammer USD (0 = bought in, a counted miss) */
+  ham: number;
+  /** the bar: the house-adjusted high the hammer had to clear (hammer USD) */
+  top: number;
+  hit: boolean;
+  t?: string; a?: string;
+}
+export interface FlagOutcomes {
+  asOf: string;
+  /** the trailing window the counts cover */
+  days: number;
+  /** graded flags in the window · how many cleared the bar */
+  n: number; hits: number;
+  /** the newest graded flags (display slice) */
+  rows: FlagOutcomeRow[];
+}
+/** THE per-market slice of a ledger's graded flags ('all' + every market a
+ *  graded flag settled in) — the counts are the WHOLE window, rows a slice */
+export function flagOutcomesByMarket(ledger: { asOf: string; flagged?: FlagOutcomeRow[] }, show = 8, days = 30): Record<string, FlagOutcomes> {
+  const rows = ledger.flagged || [];
+  const keys = ['all', ...Array.from(new Set(rows.map(r => r.m)))];
+  const out: Record<string, FlagOutcomes> = {};
+  for (const k of keys) {
+    const rs = k === 'all' ? rows : rows.filter(r => r.m === k);
+    out[k] = { asOf: ledger.asOf, days, n: rs.length, hits: rs.filter(r => r.hit).length, rows: rs.slice(0, show) };
+  }
+  return out;
 }
 
 /** a display-grade comp row — the fields the certificate's comps/provenance
