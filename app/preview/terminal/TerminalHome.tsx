@@ -523,10 +523,27 @@ export default function TerminalHomePage() {
     // "today / tomorrow / in Nd" reads to the USER — count from the reader's
     // local day, the same clock the feed filter runs on (never the crawl day,
     // which can lag and print "in 2d" for tomorrow's hammer).
+    // (Oct 11) judged on the TRUE sale day — the same day the table's "In"
+    // column and the hero's "Closing next" read (the crawl-day saleDate
+    // printed "in 2d · Christie's" over a table saying Goldin closes first)
+    // — and only a clock that has not run out; within the day, the earliest
+    // published close names the house
     const today = localToday();
-    const lot = onBlockLots.find(l => l.saleDate && l.saleDate.slice(0, 10) >= today) || null;
+    const now = Date.now();
+    const closeAt = (l: AuctionLot) => (closeIsTimed(l) ? Date.parse(l.saleDateTime as string) : Infinity);
+    let lot: AuctionLot | null = null;
+    let day = '';
+    for (const l of onBlockLots) {
+      if (l.resultsPending) continue;
+      const d = trueSaleDay(l);
+      if (!d || d < today) continue;
+      if (closeAt(l) !== Infinity && closeAt(l) <= now) continue;
+      if (!lot) { lot = l; day = d; continue; }
+      if (d > day) break; // sorted by true day: the first day is settled
+      if (closeAt(l) < closeAt(lot)) lot = l;
+    }
     if (!lot) return null;
-    const d = Math.round((Date.parse(`${lot.saleDate.slice(0, 10)}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
+    const d = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
     const word = d <= 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d}d`;
     return { lot, word };
   }, [onBlockLots]);
