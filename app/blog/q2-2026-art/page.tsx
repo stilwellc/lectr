@@ -1,14 +1,19 @@
 import type { Metadata } from 'next';
+import JsonLd from '../../components/JsonLd';
+import { postMeta, postLd } from '../posts';
 import QuarterInsight, { P, H, B } from '../../components/blog/QuarterInsight';
 import { PullQuote } from '../../components/blog/Editorial';
 
-export const metadata: Metadata = {
+const POST = {
   title: 'Q2 2026 art market in review — the trophies cleared, the middle got picky',
   description: 'A half-billion-dollar quarter split between two houses, led by a $48M Matisse and a $48M Picasso — with Picasso alone half the tracked value. Masterpieces cleared, a third of everything offered bought in, and KAWS kept repricing. Why the engine abstains on art appreciation. The Q2 2026 art numbers.',
 };
+export const metadata: Metadata = postMeta('q2-2026-art', POST);
 
 export default function Q2Art() {
   return (
+    <>
+      <JsonLd data={postLd('q2-2026-art', POST)} />
     <QuarterInsight
       market="art"
       date="July 16, 2026"
@@ -123,5 +128,6 @@ export default function Q2Art() {
         see through the gap.
       </P>
     </QuarterInsight>
+    </>
   );
 }

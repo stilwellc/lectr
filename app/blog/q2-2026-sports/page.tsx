@@ -1,14 +1,19 @@
 import type { Metadata } from 'next';
+import JsonLd from '../../components/JsonLd';
+import { postMeta, postLd } from '../posts';
 import QuarterInsight, { P, H, B } from '../../components/blog/QuarterInsight';
 import { PullQuote } from '../../components/blog/Editorial';
 
-export const metadata: Metadata = {
+const POST = {
   title: 'Q2 2026 sports market in review — a $126M quarter led by the cards',
   description: 'A $2.93M LeBron rookie patch auto on top, a $2.81M Gretzky jersey behind it, and 19,000-plus lots through Goldin. The Q2 2026 sports market, reported as the descriptive tape it is: cards set the ceiling, game-used held the marquee, and we read it by volume and record — not a manufactured return.',
 };
+export const metadata: Metadata = postMeta('q2-2026-sports', POST);
 
 export default function Q2Sports() {
   return (
+    <>
+      <JsonLd data={postLd('q2-2026-sports', POST)} />
     <QuarterInsight
       market="sports"
       date="July 16, 2026"
@@ -120,5 +125,6 @@ export default function Q2Sports() {
         is not a nicety — it&rsquo;s the check.
       </P>
     </QuarterInsight>
+    </>
   );
 }
