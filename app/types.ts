@@ -342,8 +342,17 @@ export interface AuctionLot {
       hash-joined at build against the sold-card corpus (never similarity) */
   cardComps?: {
     med: number | null; n: number;
-    lastSales: { d: string | null; p: number }[];
-    gradeLadder: { g: string; med: number; n: number }[];
+    /** newest first; `id` (W17) names the sold row, so the rows the value
+     *  read (value.poolIds) are marked from the stamp */
+    lastSales: { id?: string; d: string | null; p: number }[];
+    /** rn/rmed (W17): the rung's sales in the card pricer's window (the last
+     *  year as of the build) and their median; y0/y1 the years on file, m0–m1
+     *  the shortest run of years holding most of them */
+    gradeLadder: { g: string; med: number; n: number; rn?: number; rmed?: number | null; y0?: number; y1?: number; m0?: number; m1?: number }[];
+    /** (W17) the card's own sales in the pricer's window: median + n */
+    r?: { med: number | null; n: number };
+    /** (W17) the years the card's sales on file span (app/lib/card-record CardSpan) */
+    s?: { y0: number; y1: number; m0: number; m1: number };
   } | null;
   /** Part-2 engine output, stamped at build time on upcoming lots. See
       app/lib/value.ts ValueResult. Structural to avoid a types↔value cycle. */

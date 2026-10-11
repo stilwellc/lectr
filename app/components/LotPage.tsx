@@ -37,6 +37,7 @@ import { addLotToCalendar } from '../lib/remind';
 import { closeMs as houseCloseMs, closeIsTimed } from '../lib/house-tz';
 import DecisionLine, { decisionLineShows } from './DecisionLine';
 import { decisionOf } from '../lib/lot-face';
+import { ladderBasisText, rungView, valueRowFlags } from '../lib/card-record';
 
 /**
  * LotPage — one lot as a CATALOGUE PAGE in the north-star grammar: the
@@ -347,8 +348,10 @@ function ReferenceRow({ maker, reference }: { maker: string; reference: string }
 /** One sold row in the paper-trail sections (same card, same reference, same
     edition) — the comp ledger's row grammar; a row with a lot id links to its
     own certificate. */
-function TrailRow({ id, when, house, title, img, price }: {
+function TrailRow({ id, when, house, title, img, price, note }: {
   id?: string | null; when: string; house?: string | null; title?: string | null; img?: string | null; price: number;
+  /** a same-card row's meta, in place of "same card, same grade" */
+  note?: string;
 }) {
   const inner = (
     <>
@@ -362,7 +365,7 @@ function TrailRow({ id, when, house, title, img, price }: {
         <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{title ? craftTitle(title) : when}</span>
         <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>
           {house && <span style={{ color: houseColors[house] || 'var(--color-text-faint)', fontWeight: 600 }}>{house}</span>}
-          {title ? `${house ? ' · ' : ''}${when}` : house ? '' : 'same card, same grade'}
+          {title ? `${house ? ' · ' : ''}${when}` : house ? '' : (note ?? 'same card, same grade')}
         </span>
       </span>
       <span className="lectr-lot-comp-p">{fmtFace(price)}</span>
@@ -1016,6 +1019,9 @@ export default function LotPage({ lotId, initialLot }: {
   })();
   // the same card & grade, sold before (build-stamped cardComps.lastSales)
   const cardSales = (lot.cardComps?.lastSales || []).filter(s => s.p > 0);
+  // (W17) the rows the card value was read from — the engine's pool (its
+  // stamped ids; on older data the exact tier's newest value.n rows)
+  const cardUsed = valueRowFlags(lot, cardSales);
   // the same edition's record — not when the comps ARE this edition already
   const editionShow = headCalled?.kind === 'edition' ? [] : editionRows.slice(0, 8);
   const editionMed = editionRows.length >= 3
@@ -1116,18 +1122,28 @@ export default function LotPage({ lotId, initialLot }: {
                   <span className="ns-kicker">{ownRungOf(lot) ?? 'Same card, same grade'}</span>
                   <h2 className="lectr-lot-h2">This card, sold before</h2>
                 </div>
+                {/* (W17) dated: the last year's median beside a value read
+                    from the last year, the all-time figure with its years */}
                 <span className="lectr-lot-shctx">
-                  {face?.card?.text && face.card.n >= 3
-                    ? `${face.card.text} median · ${face.card.n} sales`
-                    : `${face?.card?.n || cardSales.length} ${(face?.card?.n || cardSales.length) === 1 ? 'sale' : 'sales'} on file`}
+                  {face?.card?.head || `${cardSales.length} ${cardSales.length === 1 ? 'sale' : 'sales'} on file`}
                 </span>
               </div>
               <div style={{ marginTop: 6 }}>
                 {cardSales.map((s, i) => (
                   <TrailRow key={`${s.d}-${i}`} price={s.p}
-                    when={s.d ? formatDate(s.d, { month: 'long', day: 'numeric', year: 'numeric' }) : 'date not published'} />
+                    when={s.d ? formatDate(s.d, { month: 'long', day: 'numeric', year: 'numeric' }) : 'date not published'}
+                    note={cardUsed[i] ? 'same card, same grade · in the last year · in the value' : undefined} />
                 ))}
               </div>
+              {face?.card?.window === 'year' && face.card.allTime && (face.card.n < (lot.cardComps?.n || 0)) && (
+                <p className="lectr-lot-shctx" style={{ margin: '8px 0 0' }}>All-time: {face.card.allTime}</p>
+              )}
+              {face?.card?.note && (
+                <div className="ns-well lectr-lot-note">
+                  <div className="ns-well-label">How these prices read</div>
+                  <div className="ns-well-body">{face.card.note}</div>
+                </div>
+              )}
             </section>
           )}
 
@@ -1170,18 +1186,20 @@ export default function LotPage({ lotId, initialLot }: {
                   <span className="ns-kicker">The grade ladder</span>
                   <h2 className="lectr-lot-h2">This card, every grade</h2>
                 </div>
-                <span className="lectr-lot-shctx">medians, never means</span>
+                {/* (W17) each rung says which window its median reads */}
+                <span className="lectr-lot-shctx">{ladderBasisText(ladder)}</span>
               </div>
               <div style={{ marginTop: 6 }}>
                 {ladderView.map(r => {
                   const own = r.g === ownRung;
+                  const rv = rungView(r, fmtFace);
                   return (
                     <span key={r.g} className="lectr-lot-comp" style={{ cursor: 'default' }} aria-current={own ? 'true' : undefined}>
                       <span className="lectr-lot-comp-t">
                         <span className="lectr-lot-comp-title" style={{ display: 'block' }}>{r.g}{own ? ' — this lot' : ''}</span>
-                        <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>{r.n} {r.n === 1 ? 'sale' : 'sales'}</span>
+                        <span className="lectr-lot-comp-meta" style={{ display: 'block' }}>{rv.meta}</span>
                       </span>
-                      <span className="lectr-lot-comp-p">{formatPrice(r.med)}</span>
+                      <span className="lectr-lot-comp-p">{formatPrice(rv.price)}</span>
                     </span>
                   );
                 })}

@@ -35,7 +35,7 @@ const MANTLE = {
     estimateUsd: 23989, vsBid: null, confidence: 'medium', exact: null, basis: 'card-comp', cardTier: 'exact',
     expectedHammerUsd: 19663, bandLowUsd: 12742, bandHighUsd: 30891, maxBidUsd: 17028, premiumFactor: 1.22,
   },
-  cardComps: { med: 10370, n: 11, lastSales: [{ d: '2026-08-16', p: 24600 }, { d: '2023-11-02', p: 10370 }], gradeLadder: [] },
+  cardComps: { med: 10370, n: 11, lastSales: [{ d: '2026-08-16', p: 24600 }, { d: '2026-04-19', p: 21525 }, { d: '2023-11-02', p: 10370 }], gradeLadder: [] },
   signal: null,
 } as unknown as AuctionLot;
 
@@ -47,9 +47,13 @@ test('B2: a card lot has one value, one max bid, and its same-card record beside
   assert.strictEqual(f.maxBid!.hammer, 17028);
   assert.ok(f.maxBid!.hammer <= f.value!.hi, 'the max bid sits inside the value it is read from');
   assert.ok(f.card);
-  assert.strictEqual(f.card!.basis, 'from 2 comparable card sales');
-  assert.strictEqual(f.card!.med, 10370);
-  assert.match(f.card!.sub, /^median · 11 sales, same card & grade$/);
+  // (W17) the value's basis in the engine's own count and window, and the
+  // card's figure beside it from the same window — the all-time median rides
+  // along labelled all-time (card-record.test.ts pins the rest)
+  assert.strictEqual(f.card!.basis, 'from 2 sales of this card & grade in the last year');
+  assert.strictEqual(f.card!.med, 23063);
+  assert.strictEqual(f.card!.window, 'year');
+  assert.match(f.card!.sub, /^median · 2 sales in the last year · all-time \$10K, 11 sales$/);
   assert.deepStrictEqual(f.card!.last, { p: 24600, d: '2026-08-16' });
 });
 

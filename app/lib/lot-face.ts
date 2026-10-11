@@ -38,6 +38,7 @@ import { fmtUsd, lotMaxBid, lotVerdict } from './verdict';
 import { prioStatic, projectedCloseOf } from './priority';
 import { closeMs as houseCloseMs, closeIsTimed, localDayIn, houseTzOf } from './house-tz';
 import { closeWhenText, calendarDaysBetween } from './close-time';
+import { allInNote, cardRecordOf, cardValueBasis, spanText } from './card-record';
 
 /** the one set of labels — a surface that prints a face figure prints its label */
 export const FACE_LABEL = {
@@ -103,17 +104,30 @@ export interface FaceCall {
  *  bid derived from the hidden value: 1951 Bowman Mantle read "This card
  *  $10K · Max bid ≤ $17K" while the modal said "lectr value $20K". */
 export interface FaceCard {
-  /** "from 2 comparable card sales" — what the value was read from */
+  /** "from 2 sales of this card & grade in the last year" — what the value
+   *  was read from, in the engine's own count and window (card-record) */
   basis: string | null;
-  /** the same-card, same-grade median (all-in realized), every sale on file */
+  /** the printed same-card, same-grade figure (all-in realized): the
+   *  last-year median when the card sold in the window, else all-time */
   med: number | null;
+  /** the n beside `med` (in its window) */
   n: number;
-  /** "$10K" */
+  /** "$23K" */
   text: string | null;
-  /** "median · 11 sales, same card & grade" */
+  /** which window `med` reads: 'year' (the pricer's window) or 'all' */
+  window: 'year' | 'all';
+  /** the leader row's short line: "median · 2 sales in the last year ·
+   *  all-time $10K, 11 sales since 2021" */
   sub: string;
+  /** the section head's short line: "$23K median · 2 sales in the last year" */
+  head: string;
+  /** the all-time record, dated: "$10K median · since 2021 · 11 sales, most 2021–23" */
+  allTime: string | null;
   /** the most recent same-card sale */
   last: { p: number; d: string | null } | null;
+  /** realized sales are all-in, the value is hammer — the sentence that
+   *  makes "$19K" beside "$21.5K / $24.6K" read right (null without a value) */
+  note: string | null;
 }
 
 export interface FaceMaxBid {
@@ -212,16 +226,40 @@ function cardFaceOf(lot: AuctionLot, value: FaceValue | null): FaceCard | null {
   const cc = lot.cardComps;
   const isCard = lot.value?.basis === 'card-comp';
   if (!isCard && !(cc && cc.n > 0)) return null;
-  const n = cc?.n || 0;
-  const med = cc && cc.med != null && cc.med > 0 ? cc.med : null;
-  const vn = lot.value?.n || 0;
+  // (W17) the card's record DATED: the value reads the last year's sales of
+  // this card & grade, so the figure beside it does too when it can — the
+  // all-time median (1951 Bowman Mantle SGC 3: $10K, mostly 2021–23) prints
+  // labelled all-time, with its years, never bare beside a 2026 value
+  const rec = cardRecordOf(lot);
+  const allN = rec?.all.n ?? (cc?.n || 0);
+  const allMed = rec?.all.med ?? null;
+  const dated = spanText(allN, rec?.all.span);
+  const recent = rec?.recent && rec.recent.n > 0 && rec.recent.med != null && rec.recent.med > 0 ? rec.recent : null;
+  const yearWord = (k: number) => `${k} ${k === 1 ? 'sale' : 'sales'} in the last year`;
+  const allTime = allMed != null ? `${fmtFace(allMed)} median · ${dated}` : null;
+  let med: number | null, n: number, sub: string, head: string;
+  if (recent) {
+    med = recent.med; n = recent.n;
+    // short: it rides a leader row; the all-time record, dated, is `allTime`
+    sub = `${n === 1 ? yearWord(1) : `median · ${yearWord(n)}`}${allMed != null && allN > n ? ` · all-time ${fmtFace(allMed)}, ${allN} ${allN === 1 ? 'sale' : 'sales'}${rec?.all.span ? ` since ${rec.all.span.y0}` : ''}` : ''}`;
+    head = `${fmtFace(recent.med!)}${n === 1 ? '' : ' median'} · ${yearWord(n)}`;
+  } else {
+    med = allMed; n = allN;
+    // "none in the last year" only when the record proves it
+    const none = rec?.recent && rec.recent.n === 0 ? ' · none in the last year' : '';
+    sub = `all-time median · ${dated}${none}`;
+    head = allMed != null && allN >= 3 ? `${fmtFace(allMed)} all-time median · ${dated}${none}` : `${dated}${none}`;
+  }
   const last = cc?.lastSales?.find(s => s.p > 0) || null;
+  const pf = (lot.value as { premiumFactor?: number } | null | undefined)?.premiumFactor;
   return {
-    basis: isCard && value && vn > 0 ? `from ${vn} comparable card ${vn === 1 ? 'sale' : 'sales'}` : null,
+    basis: isCard && value ? cardValueBasis(lot.value as Parameters<typeof cardValueBasis>[0]) : null,
     med, n,
     text: med != null ? fmtFace(med) : null,
-    sub: `median · ${n} ${n === 1 ? 'sale' : 'sales'}, same card & grade`,
+    window: recent ? 'year' : 'all',
+    sub, head, allTime,
     last: last ? { p: last.p, d: last.d } : null,
+    note: isCard && value ? allInNote(value.text, fmtFace(value.allIn), pf && pf > 1 ? Math.round((pf - 1) * 100) : null) : null,
   };
 }
 

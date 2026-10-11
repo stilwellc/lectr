@@ -48,21 +48,26 @@ function SectionHead({ kicker, title, ctx }: { kicker: string; title: React.Reac
 }
 
 /** one median cell — the figure with its n, or why there is none */
-function MedCell({ med, n, matched }: { med: number | null; n: number; matched?: boolean }) {
+function MedCell({ med, n, matched, days }: { med: number | null; n: number; matched?: boolean; days?: number }) {
   // (r8) a matched grade rung: its n is the cards priced at that grade AND another
+  // (W17) each cell names its window — a matched rung reads the ladder's
+  // years (LADDER_DAYS), a plain cell the past 12 months — beside a row
+  // count that is all-time
   if (matched) {
+    const yrs = days ? Math.round(days / 365) : null;
+    const win = yrs ? `, ${yrs === 1 ? 'past year' : `past ${yrs} yrs`}` : '';
     return (
       <span className="nsp-lval">
         {med != null
-          ? <><span className="nsp-lsub" style={{ marginLeft: 0 }}>{n.toLocaleString()} {n === 1 ? 'card' : 'cards'}</span><span className="nsp-lv">{formatPrice(med)}</span></>
-          : <span className="nsp-lsub" style={{ marginLeft: 0 }}>{n ? `${n} matched ${n === 1 ? 'card' : 'cards'}, too few to price` : 'no card matched'}</span>}
+          ? <><span className="nsp-lsub" style={{ marginLeft: 0 }}>{n.toLocaleString()} {n === 1 ? 'card' : 'cards'}{win}</span><span className="nsp-lv">{formatPrice(med)}</span></>
+          : <span className="nsp-lsub" style={{ marginLeft: 0 }}>{n ? `${n} matched ${n === 1 ? 'card' : 'cards'}${win}, too few to price` : 'no card matched'}</span>}
       </span>
     );
   }
   return (
     <span className="nsp-lval">
       {med != null
-        ? <><span className="nsp-lsub" style={{ marginLeft: 0 }}>n={n.toLocaleString()}</span><span className="nsp-lv">{formatPrice(med)}</span></>
+        ? <><span className="nsp-lsub" style={{ marginLeft: 0 }}>n={n.toLocaleString()} in 12 mo</span><span className="nsp-lv">{formatPrice(med)}</span></>
         : <span className="nsp-lsub" style={{ marginLeft: 0 }}>{n ? `${n} in 12 mo, too few to typify` : 'none in 12 mo'}</span>}
     </span>
   );
@@ -97,7 +102,7 @@ function ShowAll({ total, open, onToggle, noun, cap = CAP }: { total: number; op
 /** a split row under this many sales all-time, with no 12-month median, folds into the note */
 const FOLD_N = 100;
 
-export interface SplitRow { key: string; label: string; n: number; med: number | null; n12: number; href?: string | null; live?: number; matched?: boolean }
+export interface SplitRow { key: string; label: string; n: number; med: number | null; n12: number; href?: string | null; live?: number; matched?: boolean; days?: number }
 
 /** a split ledger: one row per lens / facet — sales all-time, the trailing
  *  year's median with its n, and the live lots in that cut (a tap narrows the
@@ -112,7 +117,7 @@ function SplitLedger({ rows, onLive, noun = '' }: { rows: SplitRow[]; onLive?: (
         <div key={r.key} className="ns-ledger-row">
           <span className="nsp-lk">
             {r.href ? <Link href={r.href} className="t" style={{ textDecoration: 'none' }}>{r.label}</Link> : <span className="t">{r.label}</span>}
-            <span className="nsp-lsub">{r.n.toLocaleString()} {r.n === 1 ? 'sale' : 'sales'}</span>
+            <span className="nsp-lsub">{r.n.toLocaleString()} {r.n === 1 ? 'sale' : 'sales'} all-time</span>
             {r.live && onLive ? (
               <button type="button" className="nsp-more" onClick={() => onLive(r.key)}
                 style={{ marginLeft: 10, marginTop: 0, background: 'none', border: 0, padding: 0, cursor: 'pointer' }}>
@@ -120,7 +125,7 @@ function SplitLedger({ rows, onLive, noun = '' }: { rows: SplitRow[]; onLive?: (
               </button>
             ) : null}
           </span>
-          <MedCell med={r.med} n={r.n12} matched={r.matched} />
+          <MedCell med={r.med} n={r.n12} matched={r.matched} days={r.days} />
         </div>
       ))}
     </div>
@@ -180,7 +185,7 @@ export function KindModule({ id, kind, subKind, market, slug, label, detail, mar
               {g.label}{g.scope ? ` · ${shortLens(g.scope, detail.cats.find(c => c.key === g.scope)?.label || g.scope)} only` : ''}{g.basis === 'matched' ? ' · same cards at each grade' : ''}
             </span>
           ) : null}
-          <SplitLedger rows={g.rows.map(r => ({ key: `${g.key}:${r.key}`, label: r.label, n: r.n, med: r.med12m, n12: r.n12, matched: g.basis === 'matched' }))} />
+          <SplitLedger rows={g.rows.map(r => ({ key: `${g.key}:${r.key}`, label: r.label, n: r.n, med: r.med12m, n12: r.n12, matched: g.basis === 'matched', days: g.days }))} />
           {g.basis === 'matched' ? <p className="nsp-note">{ladderNote(g)}.</p> : null}
         </div>
       ))}

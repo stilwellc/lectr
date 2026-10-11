@@ -41,6 +41,7 @@ import { refLineOf } from '../app/lib/watch-ref';
 import { sportOf, overEstimatePct } from '../app/utils';
 import { sportLabelOfDrill } from '../app/lib/submarkets';
 import type { MarketAnalytics } from '../app/types';
+import { CARD_WINDOW_Y, CARD_SINGLE_Y, CARD_HL_Y, cardRecordStamp } from '../app/lib/card-record';
 
 // Build-time distribution aggregates over the FULL corpus for a market's lots,
 // so the analytics charts (Top sales, Price distribution, Sport/Category
@@ -90,9 +91,8 @@ const MARKETS: Record<string, string[]> = {};
 for (const a of ARTISTS) (MARKETS[a.market] ||= []).push(a.slug);
 /** card tier recency (Sep 27): pools keep sales ≤ CARD_WINDOW_Y old; a lone
  *  exact sale counts only when ≤ CARD_SINGLE_Y; weights halve every CARD_HL_Y */
-const CARD_WINDOW_Y = 1;
-const CARD_SINGLE_Y = 0.5;
-const CARD_HL_Y = 0.25;
+// (W17) CARD_WINDOW_Y / CARD_SINGLE_Y / CARD_HL_Y live in app/lib/card-record
+// — one source with the page's "in the last year" labels
 /** tier 2 (grade-adjusted) prices from rungs at most this many grades from the
  *  card's own (Oct 5 2026 — see the tier's note in priceCard) */
 const CARD_GA_MAX_STEP = 0.5;
@@ -1355,25 +1355,41 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         // a different item; the pool is returned untouched with extraction off
         const exact: AuctionLot[] = sameObjectFilter(l, (ck ? byCardKey.get(ck) : undefined) || [], { queue: !opts.evalOnly });
         const ladder: AuctionLot[] = (lk ? byLadderKey.get(lk) : undefined) || [];
+        // (W17) each row carries its id, so the page marks the rows the value
+        // was read from (value.poolIds) instead of inferring them
         const lastSales = exact.slice().sort((a, b) => (a.saleDate! < b.saleDate! ? 1 : -1)).slice(0, 5)
-          .map(s => ({ d: s.saleDate, p: Math.round(s.realizedUsd!) }));
-        const gradeRungs = new Map<string, number[]>();
+          .map(s => ({ id: String(s.id), d: s.saleDate, p: Math.round(s.realizedUsd!) }));
+        const gradeRungs = new Map<string, { d: string | null | undefined; p: number }[]>();
         for (const s of ladder) {
           const g = (s as PLot)._card;
           if (!g || g.gradeNum == null) continue;
           const key = `${g.gradeCo} ${g.gradeNum}`;
-          (gradeRungs.get(key) || gradeRungs.set(key, []).get(key)!).push(s.realizedUsd!);
+          (gradeRungs.get(key) || gradeRungs.set(key, []).get(key)!).push({ d: s.saleDate, p: s.realizedUsd! });
         }
+        // (W17) every rung and the card's own record carry the pricer's
+        // window (card-record: the last CARD_WINDOW_Y, as of this build) —
+        // its median + n — and the years on file, so an all-time median
+        // never prints undated beside a value read from last year's sales
         const gradeLadder = Array.from(gradeRungs.entries())
-          .map(([g, v]) => ({ g, med: Math.round(median(v)), n: v.length }))
+          .map(([g, v]) => {
+            const st = cardRecordStamp(v, NOW_MS);
+            return {
+              g, med: Math.round(median(v.map(x => x.p))), n: v.length,
+              rn: st.r.n, rmed: st.r.med,
+              ...(st.s ? { y0: st.s.y0, y1: st.s.y1, m0: st.s.m0, m1: st.s.m1 } : {}),
+            };
+          })
           .filter(r => r.n >= 2)
           .sort((a, b) => parseFloat(a.g.split(' ')[1]) - parseFloat(b.g.split(' ')[1]));
         if (lastSales.length || gradeLadder.length) {
+          const st = cardRecordStamp(exact.map(s => ({ d: s.saleDate, p: s.realizedUsd! })), NOW_MS);
           lw.cardComps = {
             med: exact.length ? Math.round(median(exact.map(s => s.realizedUsd!))) : null,
             n: exact.length,
             lastSales,
             gradeLadder: gradeLadder.length > 1 ? gradeLadder : [],
+            r: st.r,
+            ...(st.s ? { s: st.s } : {}),
           };
         }
         // cross-house: this exact card (key incl. grade) live elsewhere NOW
