@@ -8,6 +8,8 @@ import { bucketOf } from '../../app/lib/page-data';
 import { normalizeArtCategory } from '../lib/corpus-normalize';
 import type { AuctionLot } from '../../app/types';
 import { ARTISTS, MAKER_MARKETS, type Market } from '../../app/constants';
+import { pinClock } from '../../app/lib/__tests__/helpers/pin-clock';
+pinClock('2026-10-09T16:00:00-04:00'); // fixtures are dated (see helpers/pin-clock)
 
 const TODAY = '2026-10-09';
 let n = 0;

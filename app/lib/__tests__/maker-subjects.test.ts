@@ -59,7 +59,13 @@ test('maker-pool: sortByPriority is byPriority\'s order; makerLiveLots is the ro
   ];
   const want = lots.slice().sort(byPriority(now)).map(l => l.title);
   assert.deepEqual(sortByPriority(lots, now).map(l => l.title), want);
-  assert.equal(makerLiveLots(lots, 'andy-warhol', TRIAGE_DEFAULTS, { today: '2026-10-09' }).length, 4);
+  // pin the clock: a live-window check against the real clock fails this
+  // test once Oct 10 is past (the Oct 11 nightly's unit-test gate did)
+  const realNow = Date.now;
+  Date.now = () => now;
+  try {
+    assert.equal(makerLiveLots(lots, 'andy-warhol', TRIAGE_DEFAULTS, { today: '2026-10-09' }).length, 4);
+  } finally { Date.now = realNow; }
   assert.equal(makerLiveLots(lots, 'kaws', TRIAGE_DEFAULTS, { today: '2026-10-09' }).length, 0);
 });
 

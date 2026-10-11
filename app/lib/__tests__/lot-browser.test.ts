@@ -15,6 +15,8 @@ import { passesTriage, triageFromParams, triageToParams, TRIAGE_DEFAULTS, houseB
 import { savedQueryOf, matchesSavedQuery, unmatchableReason } from '../saved-query';
 import { shortlist } from '../priority';
 import type { AuctionLot } from '../../types';
+import { pinClock } from './helpers/pin-clock';
+pinClock('2026-10-09T16:00:00-04:00'); // fixtures are dated (see helpers/pin-clock)
 
 const art = (o: Record<string, unknown> = {}) => ({
   id: String(Math.random()), artist: 'andy-warhol', title: 'Flowers', status: 'upcoming', auctionHouse: 'Phillips',
