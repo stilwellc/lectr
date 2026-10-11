@@ -341,7 +341,12 @@ export function noteEnrichFail(house: string, kind: 'json' | 'page', lot: Auctio
   if (enrichFailLogged++ < 10) console.warn(`  [Enrich] ${house} ${kind === 'json' ? 'embedded JSON parse' : 'page'} failure on ${lot.id}: ${(e as Error)?.message?.slice(0, 120) || e}`);
 }
 
-export const MEDIUM_PATTERNS = /(?:oil|acrylic|gouache|watercolor|watercolour|ink|charcoal|pencil|pastel|spray|enamel|screenprint|silkscreen|lithograph|etching|woodcut|woodblock|linocut|engraving|aquatint|monotype|monoprint|offset|poster|gicl[eé]e|print|photograph|gelatin silver|c-print|chromogenic|pigment print|inkjet|cibachrome|bronze|ceramic|porcelain|earthenware|stoneware|terracotta|glazed|mixed media|collage|canvas|linen|paper|board|panel|synthetic polymer|marker|crayon|felt[- ]?tip|tempera|encaustic|aluminum|steel|wood|glass|leather|fabric|textile|neon|plaster|resin|fiberglass|marble)/i;
+/** (W24, Oct 11 2026) a medium keyword is a WORD: it starts at a word
+ *  boundary and ends at one (plurals and the French forms the houses print —
+ *  lithographie, aquatinte — allowed). Unanchored, "toilette" read as
+ *  "oil" + "ette" (Picasso's "Femmes à leur toilette" carried the medium
+ *  "oilette"), "Linke" as "ink", "temperature" as "tempera" — 593 corpus rows. */
+export const MEDIUM_PATTERNS = /\b(?:oil ?stick|oil|acrylic|gouache|watercolor|watercolour|ink|charcoal|pencil|pastel|spray|enamel|screenprint|silkscreen|lithograph|etching|woodcut|woodblock|linocut|engraving|aquatintes?|aquatint|monotype|monoprint|offset|poster|gicl[eé]e|print|photograph|gelatin silver|c-print|chromogenic|pigment print|inkjet|cibachrome|bronze|ceramic|porcelaine?|earthenware|stoneware|terracotta|glazed|mixed media|collage|canvas|linen|paper|board|panel|synthetic polymer|marker|crayon|felt[- ]?tip|tempera|encaustic|aluminum|steel|wooden|wood|glass|leather|fabric|textile|neon|plaster|resin|fiberglass|marble)(?:s|es|ie|ies|ique|iques|ic|ed)?\b/i;
 
 // Wall-clock budget: worst case (a stalled house timing out every 10s fetch)
 // would run ~85 min while the CI workflow is killed at 45 — taking the day's

@@ -601,6 +601,43 @@ The tier tails close most of wave 9's band gap. The promoted high-tier lots now 
 
 `validate-engine` passes all gates. Harness additions: `oneoff/qa/band-tier-fit.ts` (the table, `--split` for the training window's own out-of-sample check), `oneoff/qa/band-tier-sim.ts` (re-fits only the band per quarter and rescores an `engine-ab.ts` run, which reproduces the run's own coverage), and `engine-ab.ts --a wave10`. Tests: `scripts/__tests__/pricing-wave10.test.ts`.
 
+## 22 · OCT 11 2026 W24 — the buyer review: other objects in the pool, the max bid at the bid (`2026.10.11-w24`)
+
+**Why.** A buyer review of prod lots: Warhol's 90 × 70 in "Diamond Dust Shoes" canvas (christies-6606837) priced with the estate's 40 × 60 in works ON PAPER ($185k, $290.5k) among $2M canvases; Picasso's 1965 "Femmes à leur toilette, IIᵉ état" (bonhams-31799-13, est. €6.9–9.2k) priced off his 1956 linocuts and the unique 1964 "Deux femmes" ($134.5k) — comps median $32k against an $8.5k value; Lichtenstein's Cow Triptych (bonhams-31799-60) with a $1,250 Rago poster in the pool (value $11k against a $28k comps median); "worth up to" printing the live bid itself (137 of 969 valued live lots with a bid).
+
+**Causes.**
+- Christie's archive rows carry no medium (the medium field is the title) and are stamped `original-2d`, so the estate's paper works read as canvases; nothing compared support or size.
+- The art value is the house-anchored blend (blendW 0.10–0.15 on these lots): the pool barely moves it, so an impure pool shows on the page (the comps list, the comps median) without hurting the value. The Cow Triptych's $11k vs $28k is that blend, not the pool: three same-title Bonhams sales at $25.6–31.8k sit beside a €8–14k estimate, and the engine's measured weight stays on the estimate (exactWeight / sameWork were measured and not adopted in waves 3–4; the Cow lot has no dimensions, so sameWork cannot see it).
+- `floorAtBid` clamped the max bid into [bid, expected hammer]: a bid past the walk-away printed the bid as the walk-away.
+- The crawlers' medium reader (`houses/common.MEDIUM_PATTERNS`) matched keywords inside words: "toilette" → "oilette", Christie's run-together text → "oilettelinocut", Oskar Linke → "inke", "temperature" (593 corpus rows).
+
+**Adopted** (`ENGINE_FLAGS_W24`):
+- `uniqueSupport` — two unique works (formKey `original-2d` or an edition-class unique medium), one on paper and the other on canvas / panel, never price each other (comp-purity `supportOf`: the first "on <support>" in the medium or the description head).
+- `uniqueSize` — unique 2-D works more than 2.5× apart in area are different objects.
+- `maxBidOwn` — the live-bid floor lifts the expected hammer and the band low, never the max bid: a room past the walk-away shows the engine's own max bid under the bid (139 live lots today; 3 still equal the bid by coincidence).
+- `otherWorkMark` — `value.otherWorkIds`: the pool rows the estimate-scale (comp's own estimate > 6× from the target's, time-carried) or work-date (> 2 years apart, art) readers call another work. The value is unchanged; a comps list can set them apart (Picasso: the two 1956 linocuts; Cow: the Rago poster).
+- The medium reader needs whole words; normalize deletes the stored captures only the old reader produced (`healGluedMediums`).
+
+| | wave 10 | W24 |
+|---|---|---|
+| holdout (engine-ab --cal full, test year from Oct 1 2025, Oct 11 corpus): values / medErr / ±30% / bias / band / ≤ max bid | 6,249 / 30.1% / 49.9% / 1.044 / 82.2% / 29.2% | 6,243 / 30.1% / 49.9% / 1.044 / 82.2% / 29.2% |
+| holdout changed values (8, art) medErr / mean abs log | 22.7% / 0.264 | 21.0% / 0.228 |
+| holdout withdrawn (7, art) | medErr 34.8% | — |
+| holdout flags / precision / edge | 692 / 54.9% / 24.4pt | 691 / 54.8% / 24.4pt |
+| live Sep 14 book (936 graded): medErr / band / ≤ max bid | 19.1% / 84.2% / 30.0% | 19.1% / 84.2% / 27.2% |
+| live Sep 24 book (454 graded): medErr / band / ≤ max bid | 18.4% / 79.5% / 43.0% | 18.4% / 79.5% / 35.2% |
+| live lots whose max bid sat AT the bid: hammer ≤ max bid (Sep 14 151 / Sep 24 89) | 17.9% / 41.6% | 0.7% / 2.2% |
+
+The max bid's nominal share is 30%: Sep 24 moves toward it (43.0 → 35.2%), Sep 14 a little past it (30.0 → 27.2%). `validate-engine` passes every gate.
+
+**Measured and NOT adopted:**
+- `estScale` as a pool filter (comp's own estimate > 6× from the target's): holdout medErr 30.1% = 30.1% (+39 values, flags 692 → 703, precision 54.9 → 55.2%), but art's same-lot median 27.5 → 27.7% and live changed lots worse on both books (Sep 14: 26 lots 27.8 → 31.8%; Sep 24: 21 lots 27.0 → 32.0%). At 10×: holdout art 27.5 → 27.7%, edge 22.0 → 20.7pt. A hand-read of 45 dropped live pairs: ~40 other objects (plates vs portfolios, posters, other works), ~4 the same work repriced since (Campbell's Soup I singles, "Liz").
+- `workYear` as a pool filter (art lots dated > 2 years apart): holdout 110 changed 22.6 → 24.4%, 61 withdrawn at 25.2%; live Sep 14 17 changed 22.7 → 32.7%, Sep 24 12 changed 23.1 → 33.7%. At 5 years: holdout 81 changed 21.3 → 23.8%.
+- `mixedPoolAbstain` (abstain when ≥ half the top pool is other works): withdraws 147 holdout values at 24.3% medErr (art average 27.3%) and 22 / 19 live art values at ~24% — values better than average, so a coverage loss with no accuracy gain.
+- The lesson of wave 6's compScale holds: on art the off-object comps still inform an estimate-anchored value. What is wrong is the page reading them as THE comps — hence `otherWorkIds`.
+
+Harness additions: `oneoff/qa/w24-pool-debug.ts` (a live lot's pool with each comp's row), `oneoff/qa/w24-pair-dump.ts` (the comps each W24 reader drops on the live book, for hand judgment). Tests: `scripts/__tests__/pricing-w24.test.ts`.
+
 ## Oct 11 2026 — one projected close (supersedes F5's `bidProj` spine)
 
 The served growth-curve projection (`bidProj`: bid × the close-day curve, all-in) is retired. On the 495 live lots that printed it, the lot page's "Projected close" ran a median 3.96× the decision line's figure (0.83–8.67×; REA 413 lots, Goldin 82) — the curve overshot the non-Goldin rooms. Every surface now prints `priority.projectedCloseOf` (the ranker's anchor: bid × the room's measured close multiple, `close-k.ts`, refit nightly), hammer basis, with the all-in = hammer × `lotAllInFactor` printed only labelled "all-in" (`lot-face.projectedCloseFace`).

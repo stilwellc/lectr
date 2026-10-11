@@ -13,7 +13,8 @@ import { USE_HOUSE_REFERENCE } from '../lib/corpus-normalize';
 const with_ = (o: Partial<EngineFlags>): EngineFlags => ({ ...ENGINE_FLAGS_CURRENT, ...o, version: `${ENGINE_FLAGS_CURRENT.version}~t` });
 
 test('wave 10 is the served engine: the tier tails on, the Phillips reference still off', () => {
-  assert.equal(ENGINE_FLAGS_CURRENT.version, '2026.10.06-wave10');
+  // (W24) the served engine is now 2026.10.11-w24, which carries wave 10 whole
+  assert.ok(['2026.10.06-wave10', '2026.10.11-w24'].includes(ENGINE_FLAGS_CURRENT.version));
   assert.equal(ENGINE_FLAGS_CURRENT.vbTier, true);
   assert.ok(!ENGINE_FLAGS_WAVE7.vbTier);
   for (const k of ['vbMarket', 'bidPull', 'cardNewRelease', 'oddsFloor'] as const) assert.equal(ENGINE_FLAGS_CURRENT[k], true, k);

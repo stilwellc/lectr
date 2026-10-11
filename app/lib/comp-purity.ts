@@ -681,3 +681,73 @@ export function objectBoundaryFault(t: PurityLot, c: PurityLot, rules: Boundary5
   if (on('stampedUnique') && stampedUniqueConflict(t, c)) return 'edition';
   return null;
 }
+
+/* ── W24 (Oct 11 2026): WHAT A UNIQUE WORK IS, AND WHAT SCALE IT TRADES AT ─
+   A buyer review of the live book found pools that mix different objects
+   under one title: Warhol's 90 × 70 in "Diamond Dust Shoes" canvas priced
+   with the estate's 40 × 60 in works ON PAPER ($185k, $291k) beside $2M
+   canvases; a 1965 Picasso aquatint priced with his 1956 linocuts of the
+   same name and a unique 1964 brush-and-ink sheet ("Deux femmes", $135k
+   against a $7–9k estimate); a Lichtenstein triptych with a $1.2k poster
+   sale. Each reader below is a fact both rows carry; each abstains when
+   either side says nothing. EngineFlags estScale / uniqueSupport /
+   uniqueSize / workYear switch them on (app/lib/value.ts W24). */
+type W24Lot = WorkLot & { yearNum?: number | null; estLowUsd?: number | null; estHighUsd?: number | null };
+
+/** The SUPPORT a unique work is executed on — 'paper' (paper, card,
+ *  vellum), 'canvas' (canvas, linen, burlap) or 'panel' (panel, board,
+ *  masonite) — from the first "on <support>" in the medium (when it is not
+ *  the title echoed) or the head of the description. "Gouache on paper laid
+ *  down on board" is paper (the first named). null = no evidence. */
+const SUPPORT_RE = /\bon\s+(?:(?:[a-z'’-]+)\s+){0,3}?(paper|papier|card|vellum|canvas|toile|linen|burlap|panel|board|masonite)\b/i;
+export function supportOf(l: PurityLot): 'paper' | 'canvas' | 'panel' | null {
+  const med = l.medium && l.medium.trim() !== (l.title || '').trim() ? l.medium : '';
+  const text = fold(`${med} ${(l.description || '').slice(0, 600)}`);
+  const m = text.match(SUPPORT_RE);
+  if (!m) return null;
+  const w = m[1].toLowerCase();
+  if (w === 'paper' || w === 'papier' || w === 'card' || w === 'vellum') return 'paper';
+  if (w === 'canvas' || w === 'toile' || w === 'linen' || w === 'burlap') return 'canvas';
+  return 'panel';
+}
+/** A UNIQUE work by the stamps: a 2-D original (formKey) or a medium the
+ *  edition reader calls unique — never an edition lot. */
+export function isUniqueWork(l: PurityLot): boolean {
+  if (editionClassOf(l as never) === 'multiple') return false;
+  return l.formKey === 'original-2d' || editionClassOf(l as never) === 'unique';
+}
+/** (EngineFlags.uniqueSupport) Two unique works, one on paper and the other
+ *  on canvas / panel: a different object and a different market (a work on
+ *  paper sells at a fraction of the canvas of the same image). Art only. */
+export function uniqueSupportConflict(t: PurityLot, c: PurityLot): boolean {
+  if (!ART_SLUGS.has(t.artist)) return false;
+  if (!isUniqueWork(t) || !isUniqueWork(c)) return false;
+  const a = supportOf(t), b = supportOf(c);
+  return !!a && !!b && a !== b && (a === 'paper' || b === 'paper');
+}
+/** (EngineFlags.uniqueSize) Two unique 2-D works whose surface areas
+ *  (height × width, cm) differ by more than `ratio`×: the same image at
+ *  another scale is another object (Warhol's 40 × 60 in sheets vs the 90 ×
+ *  70 in canvas, 2.6×). Art only; both sides need both dimensions. */
+export function uniqueSizeConflict(t: W24Lot, c: W24Lot, ratio: number): boolean {
+  if (!ART_SLUGS.has(t.artist)) return false;
+  if (!isUniqueWork(t) || !isUniqueWork(c)) return false;
+  const a = hwOf(t), b = hwOf(c);
+  if (!a || !b) return false;
+  const x = a[0] * a[1], y = b[0] * b[1];
+  return Math.max(x, y) / Math.min(x, y) > ratio;
+}
+/** (EngineFlags.workYear) Two art lots dated more than `d` years apart (the
+ *  stamped creation year, both sides): another work that shares the title
+ *  (Picasso's 1956 "Femmes à leur toilette" linocut for the 1965 aquatint). */
+export function workYearConflict(t: W24Lot, c: W24Lot, d: number): boolean {
+  if (!ART_SLUGS.has(t.artist)) return false;
+  const a = t.yearNum || 0, b = c.yearNum || 0;
+  if (!(a >= 1400 && a <= 2100 && b >= 1400 && b <= 2100)) return false;
+  return Math.abs(a - b) > d;
+}
+/** The estimate midpoint in USD (a one-sided estimate is its bound), or 0. */
+export function estMidUsdOf(l: W24Lot): number {
+  const lo = l.estLowUsd || 0, hi = l.estHighUsd || 0;
+  return lo > 0 && hi > 0 ? (lo + hi) / 2 : lo || hi;
+}
