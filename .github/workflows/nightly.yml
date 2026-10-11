@@ -467,6 +467,18 @@ jobs:
           # push leaves it out of the tar — skipping it halves the persist
           # phase (build-market.ts); the gz NDJSON bytes are unchanged
           RAY_CORPUS_PARQUET: '0'
+          # THE SETTLED APPRAISAL (W31, Oct 11 2026): the engine also values
+          # the served SOLD rows whose sale is within RAY_SETTLED_MONTHS of
+          # tonight (today's value of the hammered object, same live path;
+          # scripts/lib/settled-appraisal) — a phase inside this single load
+          # (the pools are already built; a second process would re-read the
+          # corpus). ADVISORY: it warns and the night ships without settled
+          # values on any failure, and it stops at RAY_SETTLED_BUDGET_S
+          # (newest sales first). Measured Oct 11 2026 on the 1.24M-row
+          # corpus: 24 months = ~69k rows, see the W31 report for the per-row
+          # rate; 0 = every served sold row (~547k, hours — never nightly).
+          RAY_SETTLED_MONTHS: '24'
+          RAY_SETTLED_BUDGET_S: '480'
       - name: Check the entity files (advisory)
         continue-on-error: true
         run: npx tsx scripts/emit-entities.ts --check

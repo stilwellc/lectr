@@ -42,6 +42,7 @@ import { sportOf, overEstimatePct } from '../app/utils';
 import { sportLabelOfDrill } from '../app/lib/submarkets';
 import type { MarketAnalytics } from '../app/types';
 import { CARD_WINDOW_Y, CARD_SINGLE_Y, CARD_HL_Y, cardRecordStamp } from '../app/lib/card-record';
+import { settledScopeOf, settledCut, settledTargets, settledValueOf, gradeSettled, cohortRatios, type SettledScope } from './lib/settled-appraisal';
 
 // Build-time distribution aggregates over the FULL corpus for a market's lots,
 // so the analytics charts (Top sales, Price distribution, Sport/Category
@@ -122,6 +123,11 @@ export interface MarketBuildOpts {
   onlyIds?: Set<string>;
   /** ablation: skip the comp time-adjustment */
   noTimeAdjust?: boolean;
+  /** (W31) THE SETTLED APPRAISAL pass over the served sold rows
+   *  (scripts/lib/settled-appraisal): undefined = the nightly's env scope
+   *  (RAY_SETTLED_MONTHS / RAY_SETTLED_BUDGET_S; disabled under evalOnly),
+   *  null = off, a scope = run it (the measurement harness) */
+  settled?: SettledScope | null;
 }
 
 function readGz(f: string): AuctionLot[] {
@@ -166,6 +172,9 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   // point-in-time evaluation seam (every window/decay below reads NOW_MS)
   const NOW_MS = opts.nowMs ?? Date.now();
   const TODAY = new Date(NOW_MS).toISOString().slice(0, 10);
+  // (W31) the settled-appraisal scope: the harness passes one; the nightly
+  // reads the env; the point-in-time eval seam never runs it
+  const SETTLED: SettledScope | null = opts.settled !== undefined ? opts.settled : (opts.evalOnly ? null : settledScopeOf(process.env));
   let all: AuctionLot[];
   if (opts.lots) all = opts.lots;
   else {
@@ -223,6 +232,10 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
   // clear any prior stamps so a re-run is idempotent (never inherits a looser
   // pass's groups)
   for (const l of all) { const t = l as AuctionLot & { repeatSaleGroupId?: unknown; value?: unknown; abstain?: unknown }; delete t.repeatSaleGroupId; delete t.value; delete t.abstain; }
+  // (W31) last night's settled stamps too — cleared to undefined (never
+  // `delete`d: a deleted key drops the row to V8 dictionary mode, and ~70k
+  // sold rows carry one). JSON.stringify and slimForClient skip undefined.
+  for (const l of all) { const t = l as AuctionLot & { valueAsOf?: unknown }; if (t.valueAsOf !== undefined) t.valueAsOf = undefined; }
 
   // COVERAGE FLOOR baseline (P1-8): the prior build's valued-upcoming counts,
   // read BEFORE market.json is overwritten below.
@@ -420,7 +433,11 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     return pos ? pos.map(i => pool[i]) : pool;
   };
 
-  for (const lot of upcoming) {
+  /** THE COMP POOL of a lot — the maker roster, or for a sports lot the
+   *  same-player / game-used-axes / roster-tier pool (marks crossPooled).
+   *  One function for the live book and the settled appraisal (W31): a
+   *  hammered row reads exactly the pool it would read on the block. */
+  const poolFor = (lot: AuctionLot): AuctionLot[] => {
     let pool = soldByArtist.get(lot.artist) || [];
     if (SPORTS_SET.has(lot.artist)) {
       const pid = playerSlugOf(lot);
@@ -475,6 +492,24 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         }
       }
     }
+    return pool;
+  };
+  // THE NO-ESTIMATE PUBLISH GATE (Oct 3): an absolute (no-estimate) value
+  // publishes only where its market × confidence record over the trailing
+  // year clears the card bar (calibration.noEstGate — replayed out of
+  // sample by the backtest); else it abstains with the cell's reason. The
+  // record keeps scoring every value either way (the gate sits HERE, at
+  // publish, never inside the engine).
+  const gateNoEst = (lot: AuctionLot, val: ValueResult | null, flags: { noEstGate: boolean }): { pass: boolean; reason?: string } => {
+    if (!val || !flags.noEstGate || val.compRatio != null) return { pass: true };
+    const g = noEstGateOf(lot.artist, val.confidence);
+    return g.pass ? { pass: true } : { pass: false, reason: g.reason || 'noest:uncalibrated' };
+  };
+  /** the hedonic read of one lot through the live path: its pool, its comps
+   *  known before today, the engine, the publish gate — the value (with the
+   *  sell-through / cross-player metadata) or the abstention reason */
+  const hedonicValueOf = (lot: AuctionLot): { v: ValueResult | null; abstain: string; comps: ReturnType<typeof resolveComps>; gated: boolean } => {
+    const pool = poolFor(lot);
     // priorTo=TODAY: only sales KNOWN before today (month/year-precision
     // dates count from the end of their period — value.knownKey).
     // THE CANDIDATE INDEX (Oct 5 scale pass): resolveComps is handed only the
@@ -485,31 +520,12 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     const ex = estimateValueEx(lot as AuctionLot & { _v?: Record<string, number> }, comps, tbl);
     let v = ex.value;
     let abstain: AbstainReason | string | null = ex.abstain;
-    // THE NO-ESTIMATE PUBLISH GATE (Oct 3): an absolute (no-estimate) value
-    // publishes only where its market × confidence record over the trailing
-    // year clears the card bar (calibration.noEstGate — replayed out of
-    // sample by the backtest); else it abstains with the cell's reason. The
-    // record keeps scoring every value either way (the gate sits HERE, at
-    // publish, never inside the engine).
-    const gateNoEst = (val: ValueResult | null, flags: { noEstGate: boolean }): { pass: boolean; reason?: string } => {
-      if (!val || !flags.noEstGate || val.compRatio != null) return { pass: true };
-      const g = noEstGateOf(lot.artist, val.confidence);
-      return g.pass ? { pass: true } : { pass: false, reason: g.reason || 'noest:uncalibrated' };
-    };
+    let gated = false;
     {
-      const g = gateNoEst(v, getEngineFlags());
-      if (!g.pass) { v = null; abstain = g.reason!; noEstGated++; }
+      const g = gateNoEst(lot, v, getEngineFlags());
+      if (!g.pass) { v = null; abstain = g.reason!; gated = true; }
     }
-    if (SHADOW) {
-      const served = getEngineFlags();
-      setEngineFlags(ENGINE_FLAGS_CANDIDATE);
-      const sv = estimateValueEx(lot as AuctionLot & { _v?: Record<string, number> }, comps, tbl).value;
-      setEngineFlags(served);
-      if (sv && gateNoEst(sv, ENGINE_FLAGS_CANDIDATE).pass) shadowValues.set(String(lot.id), sv);
-    }
-    const lotW = lot as AuctionLot & { value?: ValueResult | null; abstain?: AbstainReason | string };
     if (v) {
-      delete lotW.abstain;
       // BOUGHT-IN SHADOW (Aug 13 value audit): comp pools are sold-only, so
       // their medians carry survivorship. Attach the artist's contemporaneous
       // sell-through as flag METADATA (no suppression yet — measure first;
@@ -521,23 +537,108 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         vv.crossPlayer = true;                        // UI: name the basis honestly
         if (vv.confidence === 'high') vv.confidence = 'medium';
       }
+    }
+    return { v, abstain: abstain || (pool.length ? 'pool<3' : 'no-candidates'), comps, gated };
+  };
+
+  for (const lot of upcoming) {
+    const { v, abstain, comps, gated } = hedonicValueOf(lot);
+    if (gated) noEstGated++;
+    if (SHADOW) {
+      const served = getEngineFlags();
+      setEngineFlags(ENGINE_FLAGS_CANDIDATE);
+      const sv = estimateValueEx(lot as AuctionLot & { _v?: Record<string, number> }, comps, tbl).value;
+      setEngineFlags(served);
+      if (sv && gateNoEst(lot, sv, ENGINE_FLAGS_CANDIDATE).pass) shadowValues.set(String(lot.id), sv);
+    }
+    const lotW = lot as AuctionLot & { value?: ValueResult | null; abstain?: AbstainReason | string };
+    if (v) {
+      delete lotW.abstain;
       lotW.value = v; valued++;
     }
     else {
       // ABSTAIN (P1-6): value null + the reason, served on the lot so a client
       // can tell "the engine looked and declined" from "never ran"
       lotW.value = null;
-      lotW.abstain = abstain || (pool.length ? 'pool<3' : 'no-candidates');
+      lotW.abstain = abstain;
     }
   }
-  // the candidate indices + memoized player/sport rosters are valuation-only
-  compIx.clear(); playerPools.clear(); sportPools.clear(); stablePools.clear();
   console.log(`[market] valued ${valued}/${upcoming.length} upcoming lots (${noEstGated} no-estimate values withheld by the publish gate) · ${((Date.now() - tVal) / 1000).toFixed(0)}s`);
   {
     const reasons: Record<string, number> = {};
     for (const l of upcoming) { const a = (l as AuctionLot & { abstain?: string }).abstain; if (a) reasons[a] = (reasons[a] || 0) + 1; }
     console.log('[market] abstentions:', JSON.stringify(reasons));
   }
+
+  // ── 1b · THE SETTLED APPRAISAL (W31, Oct 11 2026) — today's value of every
+  // served SOLD row in scope, through the SAME path as the live book above:
+  // the same pool (poolFor), the same comps known before today (the row is
+  // never in its own pool — resolveComps skips its id; comps dated after its
+  // sale are admitted), the same engine, gate and confidence rules. No call
+  // rides it (settledValueOf: signal / vsBid null — there is no bid to make)
+  // and the row names its clock: `valueAsOf` = TODAY. Newest sale first under
+  // a wall-clock budget, so a slow night leaves the OLDEST rows unstamped.
+  // ADVISORY: a failure here warns and the night ships without settled
+  // values — it never holds back the book. scripts/lib/settled-appraisal.
+  const settledStats: { scope: SettledScope; cut: string; targets: number; done: number; valued: number; abstained: number; gated: number; preGated: number; seconds: number; budgetHit: boolean; heapMbBefore: number; heapMbAfter: number } | null = SETTLED ? (() => {
+    const t1 = Date.now();
+    const heapMb = () => Math.round(process.memoryUsage().heapUsed / 1048576);
+    const heapMbBefore = heapMb();
+    const cut = settledCut(TODAY, SETTLED.months);
+    // engineAll: the engine-eligible rows (cards / Pokémon / the algolia
+    // backfill never enter the hedonic engine — the card tiers read the
+    // served card sample in §3). Every engine-eligible sold row is served
+    // (main or archive tier), so the scope is "sold, priced, dated, in window".
+    const targets = settledTargets(engineAll as (AuctionLot & { titleTokens?: string[] | null })[], cut);
+    let done = 0, sValued = 0, sAbstained = 0, sGated = 0, sPreGated = 0, budgetHit = false;
+    // THE GATE FIRST on a no-estimate row: the publish gate is a function of
+    // maker × confidence only (noEstGateOf), so a maker whose cell fails at
+    // EVERY confidence can never publish — the engine's answer is known
+    // before it runs (measured Oct 11 2026: 72,415 of 299,648 rows valued
+    // and then withheld, 0 no-estimate values published at any sale age).
+    // Same stamp the live path would leave (value null + the cell's reason);
+    // a row that would have abstained for a thinner reason carries the gate's.
+    const noEstCellClosed = new Map<string, string | null>();
+    const preGateReason = (lot: AuctionLot): string | null => {
+      if (!getEngineFlags().noEstGate || (lot.estLowUsd || 0) > 0 || (lot.estHighUsd || 0) > 0) return null;
+      let r = noEstCellClosed.get(lot.artist);
+      if (r === undefined) {
+        const cells = (['high', 'medium', 'low'] as const).map(c => noEstGateOf(lot.artist, c));
+        r = cells.every(g => !g.pass) ? (cells[1].reason || cells[0].reason || 'noest:uncalibrated') : null;
+        noEstCellClosed.set(lot.artist, r);
+      }
+      return r;
+    };
+    try {
+      for (const lot of targets) {
+        if ((done & 127) === 0 && Date.now() - t1 > SETTLED.budgetMs) { budgetHit = true; break; }
+        done++;
+        const pre = preGateReason(lot);
+        if (pre) {
+          const lotW = lot as AuctionLot & { value?: ValueResult | null; abstain?: string };
+          lotW.value = null; lotW.abstain = pre; sAbstained++; sGated++; sPreGated++;
+          continue;
+        }
+        const { v, abstain, gated } = hedonicValueOf(lot);
+        const lotW = lot as AuctionLot & { value?: ValueResult | null; abstain?: string; valueAsOf?: string };
+        if (v) {
+          lotW.value = settledValueOf(v); lotW.valueAsOf = TODAY; sValued++;
+          if (lotW.abstain !== undefined) lotW.abstain = undefined;
+        } else {
+          lotW.value = null; lotW.abstain = abstain; sAbstained++;
+          if (gated) sGated++;
+        }
+      }
+    } catch (e) {
+      console.log(`::warning title=settled appraisals failed::${(e as Error).message} — ${sValued} rows stamped before the failure; the night ships without the rest`);
+    }
+    const seconds = Math.round((Date.now() - t1) / 1000);
+    console.log(`[market] settled appraisals (W31): ${sValued} valued · ${sAbstained} abstained (${sGated} by the no-estimate gate, ${sPreGated} of them before the engine ran) · ${done}/${targets.length} served sold rows since ${cut}${SETTLED.months == null ? ' (every row)' : ` (${SETTLED.months} months)`} · ${seconds}s${budgetHit ? ` · BUDGET ${Math.round(SETTLED.budgetMs / 1000)}s HIT` : ''} · heap ${heapMbBefore}→${heapMb()}MB`);
+    if (budgetHit) console.log(`::warning title=settled appraisals budget::${Math.round(SETTLED.budgetMs / 1000)}s budget hit after ${done} of ${targets.length} rows (newest first) — the oldest ${targets.length - done} served sold rows carry no appraisal tonight`);
+    return { scope: SETTLED, cut, targets: targets.length, done, valued: sValued, abstained: sAbstained, gated: sGated, preGated: sPreGated, seconds, budgetHit, heapMbBefore, heapMbAfter: heapMb() };
+  })() : null;
+  // the candidate indices + memoized player/sport rosters are valuation-only
+  compIx.clear(); playerPools.clear(); sportPools.clear(); stablePools.clear();
 
   // ── COMP EVIDENCE (Aug 14): the certificate must show its pool. Engine
   // pools draw on the corpus-only tier that never ships to the client, so the
@@ -1336,6 +1437,47 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
     // Stamped on the LIVE lot objects (they're in `all`, so the stamp flows to
     // corpus + served shards + upcoming.json). playerSlug stamps every live
     // sports lot so the client links to /player without re-parsing.
+    /** THE CARD RECORD (W17) of one card from its exact-key pool + its grade
+     *  ladder — the cardComps stamp: the newest 5 sales with their ids (so
+     *  the page marks the rows the value read, value.poolIds), every rung
+     *  and the card's own record with the pricer's window (the last
+     *  CARD_WINDOW_Y as of this build: median + n) and the years on file, so
+     *  an all-time median never prints undated beside a value read from last
+     *  year's sales. null when the card has no sales and no rungs. One
+     *  function for the live stamp and the settled one (W31). */
+    type CardRecordStamp = NonNullable<AuctionLot['cardComps']>;
+    const cardRecordOf = (exact: AuctionLot[], ladder: AuctionLot[]): CardRecordStamp | null => {
+      const lastSales = exact.slice().sort((a, b) => (a.saleDate! < b.saleDate! ? 1 : -1)).slice(0, 5)
+        .map(s => ({ id: String(s.id), d: s.saleDate, p: Math.round(s.realizedUsd!) }));
+      const gradeRungs = new Map<string, { d: string | null | undefined; p: number }[]>();
+      for (const s of ladder) {
+        const g = (s as PLot)._card;
+        if (!g || g.gradeNum == null) continue;
+        const key = `${g.gradeCo} ${g.gradeNum}`;
+        (gradeRungs.get(key) || gradeRungs.set(key, []).get(key)!).push({ d: s.saleDate, p: s.realizedUsd! });
+      }
+      const gradeLadder = Array.from(gradeRungs.entries())
+        .map(([g, v]) => {
+          const st = cardRecordStamp(v, NOW_MS);
+          return {
+            g, med: Math.round(median(v.map(x => x.p))), n: v.length,
+            rn: st.r.n, rmed: st.r.med,
+            ...(st.s ? { y0: st.s.y0, y1: st.s.y1, m0: st.s.m0, m1: st.s.m1 } : {}),
+          };
+        })
+        .filter(r => r.n >= 2)
+        .sort((a, b) => parseFloat(a.g.split(' ')[1]) - parseFloat(b.g.split(' ')[1]));
+      if (!lastSales.length && !gradeLadder.length) return null;
+      const st = cardRecordStamp(exact.map(s => ({ d: s.saleDate, p: s.realizedUsd! })), NOW_MS);
+      return {
+        med: exact.length ? Math.round(median(exact.map(s => s.realizedUsd!))) : null,
+        n: exact.length,
+        lastSales,
+        gradeLadder: gradeLadder.length > 1 ? gradeLadder : [],
+        r: st.r,
+        ...(st.s ? { s: st.s } : {}),
+      };
+    };
     let stamped = 0, laddered = 0, soldStamped = 0;
     // CROSS-HOUSE LIVE COLLISIONS — the same cardKey live at 2+ houses right
     // now (the venue-arbitrage read no single-house tool can produce). Built
@@ -1397,43 +1539,9 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         // a different item; the pool is returned untouched with extraction off
         const exact: AuctionLot[] = sameObjectFilter(l, (ck ? byCardKey.get(ck) : undefined) || [], { queue: !opts.evalOnly });
         const ladder: AuctionLot[] = (lk ? byLadderKey.get(lk) : undefined) || [];
-        // (W17) each row carries its id, so the page marks the rows the value
-        // was read from (value.poolIds) instead of inferring them
-        const lastSales = exact.slice().sort((a, b) => (a.saleDate! < b.saleDate! ? 1 : -1)).slice(0, 5)
-          .map(s => ({ id: String(s.id), d: s.saleDate, p: Math.round(s.realizedUsd!) }));
-        const gradeRungs = new Map<string, { d: string | null | undefined; p: number }[]>();
-        for (const s of ladder) {
-          const g = (s as PLot)._card;
-          if (!g || g.gradeNum == null) continue;
-          const key = `${g.gradeCo} ${g.gradeNum}`;
-          (gradeRungs.get(key) || gradeRungs.set(key, []).get(key)!).push({ d: s.saleDate, p: s.realizedUsd! });
-        }
-        // (W17) every rung and the card's own record carry the pricer's
-        // window (card-record: the last CARD_WINDOW_Y, as of this build) —
-        // its median + n — and the years on file, so an all-time median
-        // never prints undated beside a value read from last year's sales
-        const gradeLadder = Array.from(gradeRungs.entries())
-          .map(([g, v]) => {
-            const st = cardRecordStamp(v, NOW_MS);
-            return {
-              g, med: Math.round(median(v.map(x => x.p))), n: v.length,
-              rn: st.r.n, rmed: st.r.med,
-              ...(st.s ? { y0: st.s.y0, y1: st.s.y1, m0: st.s.m0, m1: st.s.m1 } : {}),
-            };
-          })
-          .filter(r => r.n >= 2)
-          .sort((a, b) => parseFloat(a.g.split(' ')[1]) - parseFloat(b.g.split(' ')[1]));
-        if (lastSales.length || gradeLadder.length) {
-          const st = cardRecordStamp(exact.map(s => ({ d: s.saleDate, p: s.realizedUsd! })), NOW_MS);
-          lw.cardComps = {
-            med: exact.length ? Math.round(median(exact.map(s => s.realizedUsd!))) : null,
-            n: exact.length,
-            lastSales,
-            gradeLadder: gradeLadder.length > 1 ? gradeLadder : [],
-            r: st.r,
-            ...(st.s ? { s: st.s } : {}),
-          };
-        }
+        const rec = cardRecordOf(exact, ladder);
+        if (rec) lw.cardComps = rec;
+        const gradeLadder = rec?.gradeLadder || [];
         // cross-house: this exact card (key incl. grade) live elsewhere NOW
         {
           // ANOTHER house only (Oct 9 2026): the stamp used to match the
@@ -1521,6 +1629,63 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
         lw.playerSlug = p.playerSlug; lw.playerName = p.player;
       }
     }
+    // ── THE SETTLED CARD APPRAISAL (W31) — the served SOLD card / Pokémon
+    // sample (scripts/lib/served-sample: the rows that reach the wire) in the
+    // settled scope, through the same tier pricer + publish gate as a live
+    // bid-only card tonight: pools as of NOW_MS with the row itself kept out
+    // (priceCard / priceTcg selfId), the W17 card record beside it (cardComps:
+    // the card's other sales — never its own hammer — with the past-year
+    // median + n), no bid read (bid 0 → vsBid null). Advisory, like §1b.
+    if (SETTLED) {
+      const t2 = Date.now();
+      let cValued = 0, cAbstained = 0, cRecords = 0, cSeen = 0;
+      try {
+        const { servedSoldSample } = require('./lib/served-sample') as typeof import('./lib/served-sample');
+        const sample = servedSoldSample(lotsForSlug('sports-cards').concat(lotsForSlug('graded-cards'), lotsForSlug('pokemon')));
+        const cut = settledCut(TODAY, SETTLED.months);
+        for (const l of all) {
+          if (l.status !== 'sold' || !(l.realizedUsd! > 0) || !l.saleDate || l.saleDate.slice(0, 10) < cut || !sample.has(String(l.id))) continue;
+          const self = String(l.id);
+          const lw = l as AuctionLot & { value?: ValueResult | null; abstain?: string; valueAsOf?: string; cardComps?: unknown };
+          const stamp = (pub: ValueResult | null, abstain: string) => {
+            if (pub) { lw.value = settledValueOf(pub); lw.valueAsOf = TODAY; cValued++; }
+            else { lw.value = null; lw.abstain = abstain; cAbstained++; }
+          };
+          if (l.artist === 'pokemon') {
+            cSeen++;
+            if (hasConditionFlag(l.title) || llmConditionFlag(l)) { stamp(null, 'no-identity'); continue; }
+            const k = pkKey(l);
+            if (!k) { stamp(null, 'no-identity'); continue; }
+            const pr = priceTcg(k, sameObjectFilter(l, tcgByKey.get(k) || [], { queue: false }), NOW_MS, self);
+            if (!pr || !(pr.value > 0)) { stamp(null, 'tcg:pool<2'); continue; }
+            // the gate withholds through publishCardValue (it stamps the reason itself)
+            const pub = publishCardValue(l, cardCalib, 'tcg', pr.tier, pr.confidence, pr.value, pr.low, pr.high, pr.poolIds, pr.poolN, 0,
+              pr.confidence === 'low' ? 'tcg:grade-proxy-context-only' : null);
+            if (pub) stamp(pub, ''); else cAbstained++;
+            continue;
+          }
+          if (!CARD_SLUGS.has(l.artist) || l.subCat === 'tcg-other') continue;
+          cSeen++;
+          // a condition-flagged card wears no clean-comp record and no value (the live rule)
+          if (hasConditionFlag(l.title) || llmConditionFlag(l)) continue;
+          const c = cardIdOf(l);
+          const ck = cardKey(c); const lk = cardLadderKey(c);
+          const exact: AuctionLot[] = sameObjectFilter(l, ((ck ? byCardKey.get(ck) : undefined) || []).filter(s => String(s.id) !== self), { queue: false });
+          const ladder: AuctionLot[] = ((lk ? byLadderKey.get(lk) : undefined) || []).filter(s => String(s.id) !== self);
+          const rec = cardRecordOf(exact, ladder);
+          if (rec) { lw.cardComps = rec; cRecords++; }
+          const pr = priceCard(c, exact, ladder, String(l.auctionHouse), NOW_MS, self);
+          if (pr.value == null || !(pr.value > 0)) { stamp(null, pr.stale ? 'card:stale' : (ck || lk) ? 'card:pool<2' : c.playerSlug ? 'card:player-tier' : 'no-identity'); continue; }
+          if (getEngineFlags().cardNewRelease && isNewReleaseCard(c.year, NOW_MS)) { stamp(null, 'card:new-release'); continue; }
+          const pub = publishCardValue(l, cardCalib, 'sports', pr.tier, pr.confidence, pr.value, pr.low, pr.high, pr.poolIds, pr.poolN, 0,
+            'card:player-median-context-only');
+          if (pub) stamp(pub, ''); else cAbstained++;
+        }
+      } catch (e) {
+        console.log(`::warning title=settled card appraisals failed::${(e as Error).message} — ${cValued} card rows stamped before the failure`);
+      }
+      console.log(`[market] settled card appraisals (W31): ${cValued} valued · ${cAbstained} abstained · ${cRecords} card records (W17) over ${cSeen} served sold card / Pokémon rows in scope · ${((Date.now() - t2) / 1000).toFixed(0)}s`);
+    }
     console.log(`[market] player-id keep rule (W16): ${JSON.stringify(keepStats)} · keep roster ${keepPlayers.size}`);
     console.log(`[market] live-card comps: ${stamped} cards stamped (${laddered} w/ grade ladder) · ${soldStamped} sold sports-object lots player-stamped · players+cards pass ${((Date.now() - tPl) / 1000).toFixed(0)}s`);
     const cardValued = tierCounts.exact + tierCounts['grade-adj'] + tierCounts.player;
@@ -1557,6 +1722,30 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
       if (!vsBidLive(lw, NOW_MS)) { lw.value = { ...lw.value, vsBid: null }; cleared++; }
     }
     console.log(`[market] bid read: ${cleared} vs-bid reads withheld (close > ${VSBID_WINDOW_DAYS}d away)`);
+  }
+  // ── THE SETTLED APPRAISAL'S RECORD (W31): every sold row stamped tonight
+  // (hedonic §1b + card §3), graded where the hammer is recent — rows sold in
+  // the last 60 days, today's value vs what they realized (all-in to all-in),
+  // reported like the live gate (median abs error, ±30%, bias) — plus the
+  // value / realized ratio by sale age (the estimate-anchor diagnostic).
+  // data/qa/settled-appraisal.json; never a gate, never a publish block.
+  if (SETTLED) {
+    try {
+      const stamped: AuctionLot[] = [];
+      for (const l of all) if (l.status === 'sold' && (l as AuctionLot & { valueAsOf?: string }).valueAsOf === TODAY) stamped.push(l);
+      const grade = gradeSettled(stamped as never, TODAY, 60);
+      const cohorts = cohortRatios(stamped as never, TODAY);
+      const bytes = (() => { let b = 0, n = 0; for (const l of stamped) { if ((n++ & 15) === 0) b += JSON.stringify((l as AuctionLot & { value?: unknown }).value).length + 25; } return Math.round(b * 16 / 1048576 * 10) / 10; })();
+      const g = grade.all;
+      console.log(`[market] settled appraisals (W31) record: ${stamped.length} rows stamped valueAsOf ${TODAY} (~${bytes}MB on the wire) · 60d check n=${g.n}: medErr ${g.medAbsErrPct ?? '-'}% · ±30% ${g.within30Pct ?? '-'}% · bias ${g.bias ?? '-'}× · by path e/n/c: ${(['e', 'n', 'c'] as const).map(k => `${k} n${grade.byPath[k].n} ${grade.byPath[k].medAbsErrPct ?? '-'}%/${grade.byPath[k].within30Pct ?? '-'}%/${grade.byPath[k].bias ?? '-'}×`).join(' · ')}`);
+      console.log(`[market] settled appraisals (W31) realized/value by sale age: ${Object.entries(cohorts).map(([k, c]) => `${k} n${c.all.n} med ${c.all.medRatio ?? '-'} [${c.all.q1 ?? '-'}–${c.all.q3 ?? '-'}]`).join(' · ')}`);
+      const qa = path.join(process.cwd(), 'data', 'qa');
+      fs.mkdirSync(qa, { recursive: true });
+      fs.writeFileSync(path.join(qa, 'settled-appraisal.json'), JSON.stringify({
+        generatedAt: new Date().toISOString(), valueAsOf: TODAY, engineVersion: ENGINE_VERSION,
+        hedonic: settledStats, stampedRows: stamped.length, wireMbEstimate: bytes, grade, cohorts,
+      }, null, 2));
+    } catch (e) { console.log(`::warning title=settled appraisal record failed::${(e as Error).message}`); }
   }
   // the point-in-time evaluation seam stops here: every upcoming lot now
   // carries the value/abstain/cardComps it would have been served

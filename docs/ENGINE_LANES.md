@@ -638,6 +638,31 @@ The max bid's nominal share is 30%: Sep 24 moves toward it (43.0 → 35.2%), Sep
 
 Harness additions: `oneoff/qa/w24-pool-debug.ts` (a live lot's pool with each comp's row), `oneoff/qa/w24-pair-dump.ts` (the comps each W24 reader drops on the live book, for hand judgment). Tests: `scripts/__tests__/pricing-w24.test.ts`.
 
+## 23 · OCT 11 2026 W31 — THE SETTLED APPRAISAL: today's value on the served sold rows (no engine change; `2026.10.11-w24` stays)
+
+**Why.** The engine stamps `value` on LIVE lots only — 0 of the served sold rows carried one — so /profile's Portfolio and Collection rooms printed "— · not on the block" for every piece a reader owns. Owners want a current figure per piece, from THE engine (no client re-appraisal — standing law).
+
+**What ships** (`scripts/lib/settled-appraisal.ts`, build-market §1b + §3, nightly env `RAY_SETTLED_MONTHS` / `RAY_SETTLED_BUDGET_S`):
+- Every served SOLD row whose sale is within the scope is valued through the live path — the same `poolFor` pool, `resolveComps` with `priorTo` = the build day (the row itself is never a comp: its id is skipped; comps dated AFTER its sale are admitted), the same `estimateValueEx`, no-estimate publish gate, confidence rules. **This is TODAY's value of a past object, not what the engine would have said before the hammer** (that is the backtest's replay). The row names its clock: `lot.valueAsOf` = the build day (ISO). `value.signal` and `value.vsBid` are null — no call rides a settled value (there is no bid to make; a years-old estimate is not a flag's yardstick); `compRatio` / `flagRatio` / `houseFactor` stay as statistics (the ×5 sanity readers need compRatio). Sold card / Pokémon rows in the served sample go through the card tier pricer with `selfId`, the publish gate, and carry the W17 record (`cardComps` from the card's OTHER sales, past-year median + n).
+- Newest sale first under a wall-clock budget; a budget hit leaves the OLDEST rows unstamped (`::warning`). A no-estimate row whose maker × confidence cells all fail the publish gate is stamped the gate's reason without running the engine (identical outcome — measured 0 no-estimate values published at any sale age). The whole pass is advisory (try/catch → `::warning`, the night ships without settled values). Idempotent: last night's stamps are cleared at the start of the build.
+- Record: `data/qa/settled-appraisal.json` — the 60-day tracking check (rows sold in the last 60 days, today's value vs realized, all-in to all-in: median abs error, ±30%, bias) and realized/value by sale age.
+
+**Measured (Oct 11 2026, local 1.12M-row corpus, 553,297 engine-eligible served sold rows; local ≈ 3.2× the runner — upcoming valuation 14s local vs 46s on the runner):**
+
+| scope | rows (hedonic) | local cost | runner (×3.2) | stamped | 60d check |
+|---|---|---|---|---|---|
+| every row, no pre-gate | 553,297 | 1,500s reached 299,648 rows (5.0 ms/row) | ~49 min for the 300k reached, ~90 min for all | 92,385 (16.7%) | n1392 · medErr 23.7% · ±30% 59.1% · bias 1.032× |
+| 24 months (pre-gate) | W31_24M_ROWS | W31_24M_LOCAL | W31_24M_RUNNER | W31_24M_STAMPED | W31_24M_GRADE |
+
+- By path on the 60-day check: estimate lots n1322 23.9% / 58.3% / 1.034×; card tier n70 17.3% / 74.3% / 0.989×; no-estimate hedonic n0 — the publish gate withheld every no-estimate value (72,415 of the 299,648 rows), so Goldin / RR memorabilia sold rows carry `abstain: 'noest:…'`, no figure. The live gate's bar for comparison (W24 holdout): medErr 30.1% · ±30% 49.9% · bias 1.044×.
+- **The estimate anchor shows.** Realized / value by sale age: 0–2m 1.032 [0.84–1.38] · 2–12m 1.042 · 12–24m 1.011 · 24–36m 1.028 · 36m+ 1.042 [0.86–1.36] (n 67,646). The same ratio and the same spread at every age means today's value of an estimate lot sold in 2008 is still its 2008 estimate × premium (blendW 0.10–0.25), lightly moved by comps the index carried to today — the estimate itself is not carried. On a settled row that is honest only near the sale; beyond ~2 years the figure says "what it was" more than "what it is". Carrying the estimate by the market index (`value.timeFactor`) would be an engine change (app/lib/value.ts) and is NOT done here — a candidate for the next engine wave, measured on the cohort table above.
+- Wire: ~730 bytes per stamped row (poolIds + the buyer fields): 92k rows ≈ 67.5MB over the shards; the 24-month scope is W31_24M_WIRE.
+- The engine gate is untouched: validate-engine run twice on the same corpus — with the settled stamps and with them stripped — writes an identical report (`oneoff/qa/w31-settled-measure.ts --validate`; the value tape and the replay read `status === 'upcoming'` / their own pools, never a sold row's `value`).
+
+Harness: `scripts/oneoff/qa/w31-settled-measure.ts` (evalOnly run of the engine phase with the settled pass on; `--months`, `--budget-s`, `--validate`). Tests: `scripts/__tests__/settled-appraisal.test.ts` (real Rolex ref. 1016 rows: the row is never its own comp, a later sale is admitted, the point-in-time replay would not admit it, the stamp carries no call; the tape ignores a stamped sold row; slimForClient ships `value` + `valueAsOf`).
+
+**Reading it (profile):** a sold row with `valueAsOf` set and `value.compValueUsd > 0` is a settled appraisal: `value.compValueUsd` all-in prediction, `value.expectedHammerUsd` / `bandLowUsd` / `bandHighUsd` / `maxBidUsd` hammer basis, `value.premiumFactor`, `value.n` comps, `value.poolIds`, `value.confidence`, `value.basis` ('card-comp' for cards), `value.engineVersion`; `lotVerdict(lot)` already reads it (expectedAllIn, compN). A sold row with `abstain` and no `value` was read and declined; neither key = out of scope / budget.
+
 ## Oct 11 2026 — one projected close (supersedes F5's `bidProj` spine)
 
 The served growth-curve projection (`bidProj`: bid × the close-day curve, all-in) is retired. On the 495 live lots that printed it, the lot page's "Projected close" ran a median 3.96× the decision line's figure (0.83–8.67×; REA 413 lots, Goldin 82) — the curve overshot the non-Goldin rooms. Every surface now prints `priority.projectedCloseOf` (the ranker's anchor: bid × the room's measured close multiple, `close-k.ts`, refit nightly), hammer basis, with the all-in = hammer × `lotAllInFactor` printed only labelled "all-in" (`lot-face.projectedCloseFace`).
