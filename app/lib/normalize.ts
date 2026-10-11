@@ -999,7 +999,10 @@ export async function imageHash(imageUrl: string | null): Promise<string | null>
     // fetch the bytes
     const res = await fetch(imageUrl);
     if (!res.ok) { IMAGE_HASH_CACHE.set(imageUrl, null); return null; }
-    const buf = Buffer.from(await res.arrayBuffer());
+    // globalThis.Buffer, not the bare global: a free `Buffer` makes the
+    // client bundler inject its ~8 KB Buffer polyfill into every route that
+    // reaches this module (W18 perf, Oct 11 2026) — this path runs in Node only
+    const buf = globalThis.Buffer.from(await res.arrayBuffer());
 
     // decode to a 9×8 grayscale raw buffer via sharp (optional dep)
     const sharp = await loadSharp();

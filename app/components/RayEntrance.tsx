@@ -100,7 +100,7 @@ export function RayLoading() {
       {/* skeleton styles live in globals.css — raw-text style blocks with
           quotes/apostrophes break hydration (React escapes them server-side) */}
       <div className="lectr-loader">
-        <img src="/brand/lectr-nav.png" alt="" className="lectr-write" style={{ height: 40, width: 'auto' }} />
+        <img src="/brand/lectr-ink-nav.png" alt="" className="lectr-write" style={{ height: 40, width: 'auto' }} />
         <div className="lectr-lead" />
       </div>
       <div className="ray-sk" style={{ width: 280, height: 56, marginBottom: 14 }} />

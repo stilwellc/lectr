@@ -82,10 +82,12 @@ const pfBand = (x: number) => (x < 0.5 ? '<0.5' : x < 0.75 ? '0.5-0.75' : x < 1 
 export function gapCellKey(id: string, daysOut: number, projAllIn: number, floor: number): string {
   return `${houseKeyOf(id)}|${daysBand(daysOut)}|${pfBand(projAllIn / floor)}`;
 }
-/** the ledger marker on a 'vsbid' call logged on THE projected close (close-k) */
-export const PROJ_CALL_MARK = 'k';
+/** the ledger marker on a 'vsbid' call logged on THE projected close (close-k).
+ *  'k2' (Oct 11): the projection is capped above 3× the bid (bid·√(3k)) — calls
+ *  logged on the uncapped 'k' projection validate nothing, a clean break. */
+export const PROJ_CALL_MARK = 'k2';
 /** Validate every cell from graded 'vsbid' calls on the current projection
- *  (s 'k'; call day → sale day is the days out; p = projected close all-in,
+ *  (s PROJ_CALL_MARK; call day → sale day is the days out; p = projected close all-in,
  *  f = the floor, r = realized). */
 export function validateGapCells(calls: { id: string; d: string; k: string; s?: string; p: number; f?: number; r?: number; sd?: string }[]): Record<string, GapCell> {
   const acc = new Map<string, number[]>();

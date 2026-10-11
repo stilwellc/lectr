@@ -320,7 +320,7 @@ export default function IndexHero({
         <p className={styles.nsMastThesis}>
           {/* the script mark IS the word — the light-mode ink swap in globals
               retargets this src automatically */}
-          <img src="/brand/lectr-nav.png" alt="lectr" className={styles.nsMastMark} />
+          <img src="/brand/lectr-ink-nav.png" alt="lectr" className={styles.nsMastMark} />
           {' '}reads the live auction book each night and checks every ask against
           where its comparables actually sold — {fmtInt(totalLots)} lots on file.
           {onPersonalize && (

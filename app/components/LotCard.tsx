@@ -8,7 +8,7 @@ import { labelLineOf } from '../lib/lot-labels';
 import { displayMakerOf } from '../lib/maker-subjects';
 import { usePlayerDossiers } from '../lib/use-player-dossiers';
 import { closeDayOf, houseColors, formatDate, craftTitle, formatPrice, httpsImg, sizedImg, localToday, isClosedPending } from '../utils';
-import ComparableModal from './ComparableModal';
+import ComparableModal from './ComparableModalLazy';
 import { useBackClose } from '../lib/use-lot-modal';
 import Flick from './Flick';
 import { computeDeepSignal, FORM_LABEL, signalMagnitude } from '../lib/comps';

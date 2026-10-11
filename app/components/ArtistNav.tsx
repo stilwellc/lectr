@@ -567,7 +567,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
       <div className="ray-artist-nav-inner rail">
         <a href={homePath} onClick={e => linkNav(e, homePath)} className="ray-wordmark" aria-label="lectr — home">
           {/* the script mark stands alone — the mark IS the name; its upward tilt is intentional */}
-          <img className={`ray-mark-r${lit ? ' lectr-on' : ''}`} src="/brand/lectr-nav.png" alt="lectr" />
+          <img className={`ray-mark-r${lit ? ' lectr-on' : ''}`} src="/brand/lectr-ink-nav.png" alt="lectr" />
         </a>
 
         {/* Desktop quick links — one click to each room; the dropdown stays

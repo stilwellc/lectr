@@ -3752,13 +3752,16 @@ html[data-lectr-light] .terminal-shell .ray-sheet {
   box-shadow: var(--shadow-modal) !important;
 }
 
-/* the ink-on-transparent script marks take over from the cream rasters
-   (full-resolution ink recolors — the 68px lectr-ink.png blurred at scale) */
-html[data-lectr-light] img[src='/brand/lectr-nav.png'] {
-  content: url('/brand/lectr-ink-nav.png');
+/* the ink-on-transparent script marks (full-resolution ink recolors — the
+   68px lectr-ink.png blurred at scale) are the markup's src, because the
+   porcelain is the default: the dark catalogue swaps the cream rasters back
+   in. (The src used to be cream with the ink swapped in here, so every
+   porcelain page downloaded both marks — 60 KB on a phone's first load.) */
+html:not([data-lectr-light]) img[src='/brand/lectr-ink-nav.png'] {
+  content: url('/brand/lectr-nav.png');
 }
-html[data-lectr-light] img[src='/brand/lectr.png'] {
-  content: url('/brand/lectr-ink-lg.png');
+html:not([data-lectr-light]) img[src='/brand/lectr-ink-lg.png'] {
+  content: url('/brand/lectr.png');
 }
 
 /* term tips ride white cards with a real shadow now */
@@ -4599,7 +4602,7 @@ button.ns-stat { cursor: pointer; }
 .ck-today-cols .ck-reads + .ck-reads { margin-top: 10px; }
 @media (min-width: 900px) {
   .ck-today-cols[data-split='two'] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .ck-today-cols[data-split='two'] .ck-read-title { max-width: 46%; }
+  .ck-today-cols[data-split='two'] .ck-read-title { max-width: 38%; } /* (W19) facts wrap now — the reason gets the width */
 }
 .ck-today-empty { font-size: 12.5px; color: var(--color-text-muted); margin: 14px 0 0; padding: 10px 2px; border-bottom: 1px solid var(--hairline); }
 .ck-today-more {

@@ -8,7 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  readSignals, recordSignal, recordDwell, markLot, unmarkLot, clearSignals, signalsToTaste, quietKeysOf,
+  readSignals, recordSignal, recordDwell, markLot, unmarkLot, clearSignals, signalsToTaste, quietKeysOf, startPage,
   SIGNALS_KEY, MAX_EVENTS, MAX_MARKS, SIGNAL_WEIGHT, type KV,
 } from '../recs-signals';
 import { buildTaste, recommend, SEED_WEIGHT, type RecLot } from '../recs';
@@ -119,6 +119,79 @@ test('marks: one per lot, the newer replaces; undo restores the one it replaced'
   assert.deepEqual(st.marks.map(m => m.k), ['more']);
   unmarkLot(l.id, null, kv, NOW + 3);
   assert.equal(readSignals(kv, NOW).marks.length, 0);
+});
+
+test('open a pick, "Not for me", Undo: the page reads the same signals and the room comes back identical', () => {
+  const kv = mem();
+  const seed = card('1952 Topps #311 Mickey Mantle - PSA VG 3', 'baseball', 60000);
+  const room = [
+    card('1956 Topps #135 Mickey Mantle - PSA EX 5', 'baseball', 9000),
+    card('1957 Topps #95 Mickey Mantle - PSA EX 5', 'baseball', 8000),
+    card('1954 Topps #128 Hank Aaron - PSA VG 3', 'baseball', 7000),
+    card('1955 Topps #47 Hank Aaron - PSA EX 5', 'baseball', 6000),
+    card('1951 Bowman #253 Mickey Mantle - PSA PR 1', 'baseball', 9500),
+    card('1986 Fleer #57 Michael Jordan - PSA 8', 'basketball', 5000),
+    card('1997 Topps Chrome #123 Kobe Bryant - PSA 9', 'basketball', 4000),
+  ];
+  const byId = new Map(room.map(l => [l.id, l]));
+  // what this device already knew when the page opened: a long read, a
+  // "More like this", a "Not for me"
+  recordSignal('lot', room[3].id, { lot: room[3] }, kv, NOW - 2 * DAY);
+  recordDwell('lot', room[3].id, 30_000, kv, NOW - 2 * DAY);
+  markLot('more', room[5], kv, NOW - DAY);
+  markLot('less', room[6], kv, NOW - DAY);
+  startPage(kv);
+  const ids = () => {
+    const st = readSignals(kv, NOW, { view: true });
+    const { extra, negative } = signalsToTaste(st, NOW, id => byId.get(id));
+    const t = buildTaste({ saved: [{ id: seed.id, lot: seed, savedAt: at(-1) }], follows: [], extra, negative, nowMs: NOW });
+    return { st, ids: recommend(room, t, { nowMs: NOW }).map(r => r.lot.id) };
+  };
+  const before = ids();
+  // the reader opens a lower pick (comps modal) and reads it 25s — quiet
+  recordSignal('comps', room[4].id, { lot: room[4] }, kv, NOW + 1000);
+  recordDwell('comps', room[4].id, 25_000, kv, NOW + 26_000);
+  // …then passes on another pick, and takes it back
+  const prev = markLot('less', room[1], kv, NOW + 30_000);
+  assert.ok(!ids().ids.includes(room[1].id), 'the passed pick leaves the room');
+  unmarkLot(room[1].id, prev, kv, NOW + 32_000);
+  const after = ids();
+  assert.deepEqual(after.ids, before.ids, 'same picks, same order');
+  { // without the page's view the open would re-rank the room (the bug)
+    const { extra, negative } = signalsToTaste(readSignals(kv, NOW), NOW, id => byId.get(id));
+    const t = buildTaste({ saved: [{ id: seed.id, lot: seed, savedAt: at(-1) }], follows: [], extra, negative, nowMs: NOW });
+    assert.notDeepEqual(recommend(room, t, { nowMs: NOW }).map(r => r.lot.id), before.ids);
+  }
+  assert.deepEqual(after.st, before.st, 'same opens, dwell and marks');
+  // the same with a mark replaced (More like this → Not for me → Undo)
+  const p2 = markLot('less', room[5], kv, NOW + 40_000);
+  assert.equal(p2?.k, 'more');
+  unmarkLot(room[5].id, p2, kv, NOW + 41_000);
+  assert.deepEqual(ids().st, before.st, 'the replaced mark is back in its seat');
+  // the open is stored, and the next page reads it
+  const raw = readSignals(kv, NOW + 50_000);
+  const open = raw.ev.find(e => e.k === 'comps' && e.id === room[4].id);
+  assert.equal(open?.dwell, 25_000);
+  startPage(kv);
+  assert.ok(readSignals(kv, NOW + 50_000, { view: true }).ev.some(e => e.k === 'comps' && e.id === room[4].id));
+});
+
+test('a repeat visit on this page reads as it stood before (n and dwell), the next page as it is now', () => {
+  const kv = mem();
+  const l = card('1952 Topps #311 Mickey Mantle - PSA VG 3', 'baseball', 60000);
+  recordSignal('lot', l.id, { lot: l }, kv, NOW - DAY);
+  startPage(kv);
+  recordSignal('lot', l.id, { lot: l }, kv, NOW);
+  recordDwell('lot', l.id, 40_000, kv, NOW);
+  const v = readSignals(kv, NOW, { view: true }).ev[0];
+  assert.equal(v.n, 1);
+  assert.equal(v.dwell, undefined);
+  assert.equal(v.t, NOW - DAY);
+  const r = readSignals(kv, NOW).ev[0];
+  assert.equal(r.n, 2);
+  assert.equal(r.dwell, 40_000);
+  clearSignals(kv);
+  assert.equal(readSignals(kv, NOW, { view: true }).ev.length, 0);
 });
 
 test('quietKeysOf: a card lot quiets its player and its card in any grade', () => {

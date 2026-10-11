@@ -9,10 +9,14 @@
  *   - Cards (sports-cards, tcg): one group per HOUSE + card ladder key
  *     (player · year · set · # · variant · serial — grade aside), the same
  *     identity the shortlist seats on.
+ *     A card with no ladder key (most Pokémon) groups on its grade-cut title
+ *     only when that title names a card number (#3, #H9) — then a raw copy
+ *     and its slabs fold too (W26).
  *   - Everything else: one group per HOUSE + maker + normalized title, but
- *     never for unique works (fine art, design) — eleven "Untitled" Wools at
- *     one house are eleven paintings — nor for titles too short to identify
- *     anything ("Lot", "Pair of chairs").
+ *     never for unique works — eleven "Untitled" Wools at one house are
+ *     eleven paintings — except EDITIONS: fine art's Prints & Multiples and
+ *     design's production pieces do fold (W26). Never for titles too short to
+ *     identify anything ("Lot", "Pair of chairs").
  *
  * The group's representative is its highest-priority lot (app/lib/priority);
  * representatives keep their own place in the input order, so whatever sort
@@ -28,7 +32,7 @@
  */
 import { parseCard, cardLadderKey, type CardId } from './cards';
 import { taxonOf, type CatKey } from './taxonomy';
-import { priorityOf } from './priority';
+import { priorityOf, gradelessCardKey } from './priority';
 
 type FoldLot = {
   id: string;
@@ -80,8 +84,6 @@ export interface Fold<T> {
 const CARD_CATS: ReadonlySet<CatKey> = new Set<CatKey>(['sports-cards', 'tcg']);
 /** unique works: a shared title is not a shared object */
 const NO_TITLE_FOLD: ReadonlySet<CatKey> = new Set<CatKey>(['fine-art', 'design']);
-/** " - PSA NM-MT 8 (OC)", " BGS 9.5", " - CGC PRISTINE 10" … to the end */
-const GRADE_TAIL = /\s*[-–—]?\s*\b(?:PSA|BGS|SGC|CGC|BVG|HGA|TAG|ISA|GMA)\b.*$/i;
 const normTitle =(t: string | null | undefined) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
 /** The fold key for one lot, or null when it stands alone. */
@@ -92,14 +94,19 @@ export function foldKeyOf(l: FoldLot): { key: string; kind: 'card' | 'title'; ca
     const id = parseCard(l.title);
     const k = cardLadderKey(id);
     if (k) return { key: `c|${house}|${k}`, kind: 'card', card: id };
-    // no ladder key (most Pokémon titles name no "player"), but a slab grade
-    // parsed: the title with its grade tail cut is the card
-    if (id.gradeCo && !id.multi && !id.notCard) {
-      const bare = normTitle(l.title.replace(GRADE_TAIL, ''));
-      if (bare.length >= 16 && bare.split(' ').length >= 3) return { key: `g|${house}|${bare}`, kind: 'card', card: id };
-    }
+    // no ladder key (most Pokémon titles name no "player"): the title with its
+    // grade tail cut is the card — when it names a card NUMBER (#3, #H9,
+    // #104). The number is what makes a raw copy and its slabs one card
+    // (W26: a raw "#3 Charizard" stood apart from its PSA 10 and BGS 9.5);
+    // without it a gradeless title is too loose to call the same card.
+    const bare = gradelessCardKey(l.title, id);
+    if (bare) return { key: `g|${house}|${bare}`, kind: 'card', card: id };
   }
-  if (NO_TITLE_FOLD.has(cat)) return null;
+  // unique works never fold on a shared title — but an EDITION does: prints
+  // and multiples (fine art's Prints & Multiples), and design, whose lots
+  // are production pieces (W26: two $2K Rago KAWS "Untitled (from the
+  // Tension portfolio)" sat at Art #10–11, four "LC 2" chairs on Design)
+  if (NO_TITLE_FOLD.has(cat) && !(cat === 'fine-art' ? taxonOf(l).sub === 'prints' : cat === 'design')) return null;
   const t = normTitle(l.title);
   // a title must name something: ≥3 words and ≥16 characters
   if (t.length < 16 || t.split(' ').length < 3) return null;
@@ -186,8 +193,10 @@ export function gradeLabel(id: CardId): string {
   return `${id.gradeCo}${g !== '' ? ` ${g}` : ''}${tier}${id.gradeQual ? ` (${id.gradeQual})` : ''}`;
 }
 
-/** The reason-line text for a folded group:
- *  cards  → "Also PSA 8, PSA 6 · 6 more grades"
+/** The reason-line text for a folded group — how many more copies, then
+ *  which grades they are (W26: "Also BGS 9" read as if the shown lot were
+ *  also a BGS 9):
+ *  cards  → "+1 more BGS 9" · "+4 more PSA 9, BGS 9 and 2 other grades"
  *  titles → "+4 more of this lot" */
 export function foldNote(rep: FoldLot, sibs: readonly FoldLot[], kind: 'card' | 'title'): string | null {
   if (!sibs.length) return null;
@@ -195,15 +204,14 @@ export function foldNote(rep: FoldLot, sibs: readonly FoldLot[], kind: 'card' | 
   const ids = sibs.map(s => parseCard(s.title || ''));
   // best grade first; raw last
   const order = ids
-    .map((id, i) => ({ label: gradeLabel(id), n: id.gradeNum ?? (id.gradeCo ? 0.5 : -1), i }))
+    .map((id, i) => ({ label: id.gradeCo ? gradeLabel(id) : 'raw', n: id.gradeNum ?? (id.gradeCo ? 0.5 : -1), i }))
     .sort((a, b) => (b.n - a.n) || (a.i - b.i));
   const labels: string[] = [];
   for (const o of order) if (!labels.includes(o.label)) labels.push(o.label);
   const shown = labels.slice(0, 2);
-  const restLots = order.filter(o => !shown.includes(o.label)).length;
   const restGrades = labels.length - shown.length;
-  const tail = restLots ? ` · ${restLots} more ${restGrades === restLots ? (restLots === 1 ? 'grade' : 'grades') : (restLots === 1 ? 'lot' : 'lots')}` : '';
-  return `Also ${shown.join(', ')}${tail}`;
+  const tail = restGrades ? ` and ${restGrades} other ${restGrades === 1 ? 'grade' : 'grades'}` : '';
+  return `+${sibs.length} more ${shown.join(', ')}${tail}`;
 }
 
 /** A search string every lot of the group contains (their titles' longest

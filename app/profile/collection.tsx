@@ -19,6 +19,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { AuctionLot } from '../types';
 import { useAccount } from '../lib/account';
 import { idAliases } from '../lib/recs';
+import { useAfterPaint } from './stall';
 import { collectionPicks, type HeldInput, type MatchedLadder, type PickKind } from '../lib/collection-picks';
 import { loadEntityDetail } from '../hooks/useEntities';
 import { useLotModal } from '../lib/use-lot-modal';
@@ -64,12 +65,14 @@ export default function ForYourCollection({ book, pool, compLots, ready, lastCra
   onCount?: (n: number) => void;
 }) {
   const { held, ready: heldReady } = useHeld(book);
+  // below the fold: read a frame after the picks above it have painted
+  const dealt = useAfterPaint(ready);
   const nowDay = new Date().toISOString().slice(0, 10);
   const [ladders, setLadders] = useState<Map<string, MatchedLadder | null>>(() => new Map());
   const result = useMemo(
-    () => (ready && heldReady && held.length ? collectionPicks(held, pool, { ladders }) : null),
+    () => (dealt && heldReady && held.length ? collectionPicks(held, pool, { ladders }) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ready, heldReady, held, pool, ladders, nowDay],
+    [dealt, heldReady, held, pool, ladders, nowDay],
   );
   // the matched grade ladders an upgrade names — loaded once each
   const want = (result?.ladderIds ?? []).filter(id => !ladders.has(id)).join(',');
@@ -125,8 +128,8 @@ export default function ForYourCollection({ book, pool, compLots, ready, lastCra
             grade, or a watch with the same reference number; a raw card is never &ldquo;upgraded&rdquo; by a slab, and a
             qualified grade (OC, MK) or an Authentic slab never counts. The same-card median is that grade&rsquo;s own
             record, all-in (buyer&rsquo;s premium included): its sales in the last year when it sold then — the
-            window lectr&rsquo;s card value reads — else every sale on file (n beside it; the lot page dates
-            both); a grade premium is printed only from the player&rsquo;s matched grade ladder — the same
+            window lectr&rsquo;s card value reads, named &ldquo;N sales in the last year&rdquo; — else every sale on
+            file, named &ldquo;all-time&rdquo; with its years and n (under 3 sales, no figure); a grade premium is printed only from the player&rsquo;s matched grade ladder — the same
             cards sold at both grades. <b>Sets</b>: when you hold two or more singles of one set, live cards from that
             set and year whose numbers you don&rsquo;t hold. &ldquo;N of M&rdquo; is printed only for sets whose size is
             settled (1952 Topps, Base Set…); otherwise it says &ldquo;same set&rdquo;. <b>Series</b>: other prints from a
