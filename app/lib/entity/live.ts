@@ -104,30 +104,57 @@ export function groupByCat(pool: readonly AuctionLot[]): Map<string, LiveEntry> 
   return out;
 }
 
+/** a By-name bucket. Its spelling + subject are read LAZILY (r8): the
+ *  subject reader (lotSubjectOf: card parsing, name canon) cost ~210ms of
+ *  main thread over the 10K-lot book at /makers boot (~840ms at 4x CPU), yet
+ *  only the fail-soft summary (an id the entities file lacks) ever asks for
+ *  it: every lot carries the build's `ek` stamp and the file carries the
+ *  label. Same lots, same reads: the lazy answer is exactly the eager one. */
+class NameBucket implements NameEntry {
+  lots: AuctionLot[];
+  flags: number;
+  score: number;
+  market: Market;
+  private read: { name: string; subject: LotSubject | null } | null = null;
+  constructor(lots: AuctionLot[], market: Market, private readonly rest: boolean) {
+    const e = entryOf(lots);
+    this.lots = e.lots; this.flags = e.flags; this.score = e.score; this.market = market;
+  }
+  private resolve(): { name: string; subject: LotSubject | null } {
+    if (this.read) return this.read;
+    if (this.rest) return (this.read = { name: '', subject: null });
+    // the first lot's subject; the spelling its lots use most
+    const names = new Map<string, number>();
+    let subject: LotSubject | null = null;
+    this.lots.forEach((l, i) => {
+      const s = lotSubjectOf(l);
+      if (i === 0) subject = s;
+      if (s) names.set(s.name, (names.get(s.name) || 0) + 1);
+    });
+    let name = (subject as LotSubject | null)?.name ?? '', n = 0;
+    names.forEach((c, nm) => { if (c > n) { n = c; name = nm; } });
+    return (this.read = { name, subject });
+  }
+  get name(): string { return this.resolve().name; }
+  get subject(): LotSubject | null { return this.resolve().subject; }
+}
+
 /** By-name buckets: the collection markets' lots under their entity (pl: /
  *  sj: / st:), the unnamed under the market's remainder row (`~:<market>`) */
 export function groupByName(pool: readonly AuctionLot[]): Map<string, NameEntry> {
-  const by = new Map<string, { lots: AuctionLot[]; names: Map<string, number>; subject: LotSubject | null; market: Market }>();
+  const by = new Map<string, { lots: AuctionLot[]; market: Market }>();
   for (const l of pool) {
     const market = marketOf(l.artist);
     if (!SUBJECT_MARKETS.has(market)) continue;
     const id = entityIdOf(l);
     if (!id) continue;
     const k = nameBucketOf(id, l);
-    // the spelling + subject come from the reader — a stamped book only needs
-    // them for the fail-soft summary (entities files carry the label)
-    const s = k.startsWith('~:') ? null : lotSubjectOf(l);
     let g = by.get(k);
-    if (!g) by.set(k, g = { lots: [], names: new Map(), subject: s, market });
+    if (!g) by.set(k, g = { lots: [], market });
     g.lots.push(l);
-    if (s) g.names.set(s.name, (g.names.get(s.name) || 0) + 1);
   }
   const out = new Map<string, NameEntry>();
-  by.forEach((g, k) => {
-    let name = g.subject?.name ?? '', n = 0;
-    g.names.forEach((c, nm) => { if (c > n) { n = c; name = nm; } });
-    out.set(k, { ...entryOf(g.lots), name, subject: g.subject, market: g.market });
-  });
+  by.forEach((g, k) => out.set(k, new NameBucket(g.lots, g.market, k.startsWith('~:'))));
   return out;
 }
 
@@ -143,7 +170,8 @@ export function stabilize<E extends LiveEntry>(prev: Map<string, E> | null, next
   if (!prev) return next;
   next.forEach((e, k) => {
     const p = prev.get(k);
-    if (p && sameLots(p.lots, e.lots) && (!('name' in e) || (p as unknown as NameEntry).name === (e as unknown as NameEntry).name)) next.set(k, p);
+    // (a By-name bucket's spelling is read from its lots: same lots, same name)
+    if (p && sameLots(p.lots, e.lots)) next.set(k, p);
   });
   return next;
 }

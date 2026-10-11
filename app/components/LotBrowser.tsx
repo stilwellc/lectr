@@ -269,6 +269,9 @@ export interface LotBrowserProps {
    *  24 on desktop, 12 under 900px (home). An entity page passes 12 so its
    *  live book scans in a screen and the sections below stay in reach */
   pageSize?: number;
+  /** (r8) rows per page on a phone (640px and under), when it should scan
+   *  shorter than `pageSize` — the entity page's 8 */
+  phonePageSize?: number;
 }
 
 export default function LotBrowser({
@@ -295,6 +298,7 @@ export default function LotBrowser({
   persistKey,
   bare = false,
   pageSize: pageSizeProp,
+  phonePageSize,
 }: LotBrowserProps) {
   const crawlDay = (lastCrawl || new Date().toISOString()).slice(0, 10);
   const savedSet = useMemo(() => new Set(savedIds ?? []), [savedIds]);
@@ -315,6 +319,7 @@ export default function LotBrowser({
   const filterSig = useMemo(() => JSON.stringify(feedFilters), [feedFilters]);
   const widePage = pageSizeProp ?? 24;
   const narrowPage = Math.min(12, widePage);
+  const phonePage = Math.min(phonePageSize ?? narrowPage, narrowPage);
   const [pageSize, setPageSize] = useState(widePage);
   const [vis, setVis] = useState<{ sig: string; n: number }>({ sig: '', n: widePage });
   const visibleUpcoming = vis.sig === filterSig ? vis.n : pageSize;
@@ -333,15 +338,17 @@ export default function LotBrowser({
   };
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 899px)');
+    const mqPhone = window.matchMedia('(max-width: 640px)');
     const apply = () => {
-      const size = mq.matches ? narrowPage : widePage;
+      const size = mqPhone.matches ? phonePage : mq.matches ? narrowPage : widePage;
       setPageSize(size);
-      setVis(v => (v.n === narrowPage || v.n === widePage ? { ...v, n: size } : v));
+      setVis(v => (v.n === phonePage || v.n === narrowPage || v.n === widePage ? { ...v, n: size } : v));
     };
     apply();
     mq.addEventListener('change', apply);
-    return () => mq.removeEventListener('change', apply);
-  }, [narrowPage, widePage]);
+    mqPhone.addEventListener('change', apply);
+    return () => { mq.removeEventListener('change', apply); mqPhone.removeEventListener('change', apply); };
+  }, [phonePage, narrowPage, widePage]);
 
   // The layout choice persists — read after mount (SSR renders the default).
   // A stored preference always wins; with none, desktop (≥900px) earns the

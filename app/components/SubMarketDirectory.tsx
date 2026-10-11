@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { ARTISTS, MARKETS } from '../constants';
 import { SUBCAT_LABELS } from '../lib/subcat-labels';
 import type { MarketData, SubMarketRead } from '../hooks/useRayData';
+import { signedPct, dirOf } from '../lib/signed';
 import '../northstar-pages.css';
 
 type DrillRow = SubMarketRead & { parent: string };
@@ -40,17 +41,8 @@ const rowLabel = (r: DrillRow): string => {
   return (part && SUBCAT_LABELS[part]) || r.label;
 };
 
-/** SIGNED-SIGNAL LAW: the glyph and the ink agree. A rounded 0 is flat —
-    no sign, no color; only a real up wears '+' and green, a real down '−'
-    and red. Shared by every sub-market surface that prints these reads. */
-export const signedPct = (v: number): string => {
-  const r = Math.round(v);
-  return `${r > 0 ? '+' : r < 0 ? '−' : ''}${Math.abs(r)}%`;
-};
-export const dirOf = (v: number): 'up' | 'down' | undefined => {
-  const r = Math.round(v);
-  return r > 0 ? 'up' : r < 0 ? 'down' : undefined;
-};
+/** SIGNED-SIGNAL LAW (app/lib/signed): a rounded 0 is flat ink */
+export { signedPct, dirOf };
 
 const fmtUsd = (n: number) =>
   n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` : n >= 10_000 ? `$${Math.round(n / 1000)}K` : `$${n.toLocaleString()}`;

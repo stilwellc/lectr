@@ -25,6 +25,7 @@ import type { MarketData, SubMarketRead } from '../../hooks/useRayData';
 import HeroChart, { HeroLine } from '../../preview/terminal/HeroChart';
 import { LAYER_PALETTE } from '../../lib/heroLayers';
 import { HorizonMark } from '../marks';
+import { signedPct, dirOf } from '../../lib/signed';
 
 type DrillRow = SubMarketRead & { parent: string };
 
@@ -132,8 +133,9 @@ function demandChart(md: MarketData, scope: string, take: number, minLen: number
     key: r.slug,
     label: r.label,
     color: i === 0 ? ANCHOR_INK : LAYER_PALETTE[(i - 1) % LAYER_PALETTE.length],
-    num: `${r.demandNow! >= 0 ? '+' : ''}${r.demandNow!.toFixed(0)}%`,
-    dir: r.demandNow! >= 0 ? 'up' : 'down',
+    // the signed-signal law: a rounded 0 is flat ink, never a green +0%
+    num: signedPct(r.demandNow!),
+    dir: dirOf(r.demandNow!) ?? null,
     pct: true,
     sub: `vs estimate · ${fmtLots(r.lots)}`,
   }));

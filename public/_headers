@@ -8,6 +8,18 @@
 #               here). Next's per-page inline RSC flight scripts (3,600+ unique
 #               bodies) are moved into /_next/static/chunks/flight/<hash>.js by
 #               csp-postbuild, so no 'unsafe-inline' and no per-page hashes.
+#               + https://static.cloudflareinsights.com/beacon.min.js/ (r8): the
+#               zone has Cloudflare Web Analytics on, so the edge injects its
+#               beacon (<script src=…/beacon.min.js/v…> with an SRI integrity
+#               hash) into every page — and this policy blocked it: a console
+#               error on every page and zero analytics. Allowed by path prefix
+#               (that one script, version-pinned by its integrity attribute),
+#               per Cloudflare's CSP guidance; the beacon is cookieless and
+#               posts to same-origin /cdn-cgi/rum, which connect-src 'self'
+#               already covers. (The alternative — Cache-Control: no-transform
+#               on HTML to stop the injection — would also block edge
+#               compression and silently keep a dashboard someone turned on
+#               dead; switching it off belongs in the Cloudflare dashboard.)
 #   style-src   'unsafe-inline' is required: the export carries ~13.5K style=""
 #               attributes (React SSR) plus <style> blocks per route. Style
 #               injection cannot execute script under this script-src.
@@ -17,13 +29,14 @@
 #               more; an allow-list would silently blank a house's photos on
 #               the night it lands. Images cannot run script.
 #   connect-src same-origin data shards + the Supabase project (auth + saved
-#               lots + /rest/v1/lots). No analytics hosts are called.
+#               lots + /rest/v1/lots). No third-party analytics hosts are
+#               called (the Web Analytics beacon posts same-origin).
 # frame-ancestors 'none' + X-Frame-Options block clickjacking of the login
 # modal. HSTS pins https; adding `preload` (and submitting to hstspreload.org)
 # is Collin's call — it is hard to undo.
 /*
   X-Frame-Options: DENY
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-HE/v6bj/M7TOjC32nQkQiq+zDWeWUOfe3gzeMhLIQqA='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://tiwrdomqydtnmgljsqsi.supabase.co; media-src 'self'; frame-src 'none'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-HE/v6bj/M7TOjC32nQkQiq+zDWeWUOfe3gzeMhLIQqA=' https://static.cloudflareinsights.com/beacon.min.js/; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://tiwrdomqydtnmgljsqsi.supabase.co; media-src 'self'; frame-src 'none'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin

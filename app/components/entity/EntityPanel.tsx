@@ -10,7 +10,7 @@ import React, { useMemo } from 'react';
 import Link from 'next/link';
 import { ARTIST_LABEL } from '../../constants';
 import type { AuctionLot } from '../../types';
-import { formatDate, formatPrice, craftTitle, httpsImg, sizedImg, trueSaleDay, refLabel } from '../../utils';
+import { formatDate, formatPrice, craftTitle, httpsImg, sizedImg, tidyTitle, trueSaleDay, refLabel } from '../../utils';
 import { formatEstimate } from '../LotCard';
 import CloseClock from '../CloseClock';
 import Flick from '../Flick';
@@ -251,7 +251,7 @@ export default function EntityPanel({
           <div>
             <span className="kicker">The record</span>
             {rec ? (
-              <p><b>{formatPrice(rec.p)}</b>{rec.d ? <> · {formatDate(rec.d)}</> : null}{rec.h ? <> · {rec.h}</> : null}{rec.t ? <><br /><span className="mkx-rec-t">{rec.t}</span></> : null}</p>
+              <p><b>{formatPrice(rec.p)}</b>{rec.d ? <> · {formatDate(rec.d)}</> : null}{rec.h ? <> · {rec.h}</> : null}{rec.t ? <><br /><span className="mkx-rec-t">{tidyTitle(rec.t)}</span></> : null}</p>
             ) : <p>—</p>}
           </div>
           <div>

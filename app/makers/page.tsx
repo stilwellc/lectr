@@ -12,7 +12,7 @@ import { useAuth } from '../lib/account';
 import ArtistNav from '../components/ArtistNav';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import { formatDate, getUpcomingCounts, localToday } from '../utils';
-import { formatDemand } from '../lib/demand';
+import { signedPct, dirOf } from '../lib/signed';
 import { FigureCell, FigGate } from '../components/cells';
 import { Accent } from '../components/Masthead';
 import { Colophon } from '../components/Terminal';
@@ -729,6 +729,24 @@ export default function MakersPage() {
     box.scrollLeft = Math.max(0, el.offsetLeft - (box.clientWidth - el.offsetWidth) / 2);
   }, [activeKey, booting]);
 
+  // (r8, QA3 Q18) the Following lens with nothing followed (a signed-out
+  // reader's ?fw=1): say what the lens is and how to fill it — never "Clear
+  // the filters" over an empty ledger
+  const followPrompt = fFollowing && !followsOn && followedSet.size === 0 ? (
+    <div className="mk-empty">
+      <FigureCell
+        figure={<FigGate />}
+        label="Nothing followed yet"
+        body={<>
+          The Following lens shows only the names you follow, with what&rsquo;s new for them since your last visit.
+          {' '}Follow a Pokémon, film, set, team or category with the + on its row &mdash; no account needed
+          {authEnabled && !user ? <>; <button type="button" className="mk-reset" onClick={openLogin}>sign in</button> to follow makers and players too</> : null}.
+          {' '}<button type="button" className="mk-reset" onClick={() => set({ fw: false })}>See every name</button>
+        </>}
+      />
+    </div>
+  ) : null;
+
   const v = topVerified?.verified ?? null;
   const vSlug = topVerified ? makerSlugOf(topVerified.id) : null;
   const vHref = vSlug ? makerHref(vSlug) : null;
@@ -907,7 +925,7 @@ export default function MakersPage() {
                   <span className="mk-bar-rule" aria-hidden />
                   <button type="button" className="mk-chip" onClick={() => setBody('names')}>Back to {namesNoun}</button>
                 </div>
-                <LotBrowser
+                {followPrompt ?? <LotBrowser
                   bare
                   lots={lotsPool}
                   compLots={allLots}
@@ -923,7 +941,7 @@ export default function MakersPage() {
                   baselines={baselines}
                   anchorId="mk-lots"
                   persistKey={`/makers/lots/${activeKey}`}
-                />
+                />}
               </div>
             ) : (
               <div ref={listRef} className="mk-list-room" style={{ '--mk-grid': gridTemplateOf(cols) } as React.CSSProperties}>
@@ -943,7 +961,7 @@ export default function MakersPage() {
                     <span className="mk-lotsrow-go">Search {gradePlus.label} <span aria-hidden>→</span></span>
                   </button>
                 )}
-                {groups.length === 0 ? (
+                {followPrompt ? followPrompt : groups.length === 0 ? (
                   <div className="mk-empty">
                     <FigureCell
                       figure={<FigGate />}
@@ -964,7 +982,7 @@ export default function MakersPage() {
                       <span className="mk-group-read">
                         {g.flags > 0 && <b className="mk-group-flags">{g.flags} flagged</b>}
                         {g.live > 0 && <>{g.flags > 0 ? ' · ' : ''}{g.live.toLocaleString()} on the block</>}
-                        {g.demandNow !== null && <>{g.flags > 0 || g.live > 0 ? ' · ' : ''}demand <b data-dir={g.demandNow >= 0 ? 'up' : 'down'} title={g.demandQ ? `Median hammer over estimate, the 12 months to the end of ${g.demandQ}` : undefined}>{formatDemand(g.demandNow).replace('-', '−')}</b></>}
+                        {g.demandNow !== null && <>{g.flags > 0 || g.live > 0 ? ' · ' : ''}demand <b data-dir={dirOf(g.demandNow)} title={g.demandQ ? `Median hammer over estimate, the 12 months to the end of ${g.demandQ}` : undefined}>{signedPct(g.demandNow)}</b></>}
                       </span>
                       <div className="mk-cols">
                         <span /><span className="mk-col-name">{nameHead(g.key)}</span>

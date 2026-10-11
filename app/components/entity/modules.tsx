@@ -18,11 +18,13 @@ import type { EntityDetail, EntityResultRow, EntityKind } from '../../lib/entity
 import type { MarketData, SubMarketRead } from '../../hooks/useRayData';
 import { useRefs, refsForMaker } from '../../hooks/useRefs';
 import { encodeRefPath } from '../../ref/ref-path';
-import { closeCut, formatDate, formatPrice, httpsImg, sizedImg, refLabel } from '../../utils';
+import { closeCut, formatDate, formatPrice, httpsImg, sizedImg, refLabel, tidyTitle } from '../../utils';
 import PlateImg from '../PlateImg';
-import { signedPct } from '../SubMarketDirectory';
+import { signedPct, dirOf } from '../SubMarketDirectory';
 import type { Market } from '../../constants';
 import { shortLens, drillSlugOf } from '../../lib/entity/lens';
+import { useMediaQuery } from '../../preview/terminal/hooks';
+import { useLotLinks } from '../../lib/lot-resolve';
 export { shortLens, drillSlugOf };
 
 const HeroChart = dynamic(() => import('../../preview/terminal/HeroChart'), { ssr: false, loading: () => <div style={{ height: 170 }} aria-hidden /> });
@@ -60,11 +62,17 @@ function MedCell({ med, n }: { med: number | null; n: number }) {
  *  ledger only CAP + 1 long shows whole: a toggle for one row costs more
  *  than the row. */
 const CAP = 5;
-function capRows<T>(rows: T[], open: boolean): T[] {
-  return open || rows.length <= CAP + 1 ? rows : rows.slice(0, CAP);
+/** (r8, QA3 E1) a phone scrolls every row: its ledgers open on 3, the
+ *  results on 3, the context on 2 — each with the same one-tap Show all */
+const PHONE_CAP = 3;
+const PHONE_Q = '(max-width: 640px)';
+/** the ledger cap at this width (SSR + first paint: the desktop cap) */
+function useCap(): number { return useMediaQuery(PHONE_Q) ? PHONE_CAP : CAP; }
+function capRows<T>(rows: T[], open: boolean, cap = CAP): T[] {
+  return open || rows.length <= cap + 1 ? rows : rows.slice(0, cap);
 }
-function ShowAll({ total, open, onToggle, noun }: { total: number; open: boolean; onToggle: () => void; noun: string }) {
-  if (total <= CAP + 1) return null;
+function ShowAll({ total, open, onToggle, noun, cap = CAP }: { total: number; open: boolean; onToggle: () => void; noun: string; cap?: number }) {
+  if (total <= cap + 1) return null;
   return (
     <button type="button" className="nsp-more" aria-expanded={open} onClick={onToggle}
       style={{ display: 'block', background: 'none', border: 0, padding: 0, cursor: 'pointer' }}>
@@ -85,10 +93,11 @@ export interface SplitRow { key: string; label: string; n: number; med: number |
  *  live book above to them) */
 function SplitLedger({ rows, onLive, noun = '' }: { rows: SplitRow[]; onLive?: (key: string) => void; noun?: string }) {
   const [open, setOpen] = useState(false);
+  const cap = useCap();
   return (
     <>
     <div className="nsp-ledger">
-      {capRows(rows, open).map(r => (
+      {capRows(rows, open, cap).map(r => (
         <div key={r.key} className="ns-ledger-row">
           <span className="nsp-lk">
             {r.href ? <Link href={r.href} className="t" style={{ textDecoration: 'none' }}>{r.label}</Link> : <span className="t">{r.label}</span>}
@@ -104,7 +113,7 @@ function SplitLedger({ rows, onLive, noun = '' }: { rows: SplitRow[]; onLive?: (
         </div>
       ))}
     </div>
-    <ShowAll total={rows.length} open={open} onToggle={() => setOpen(o => !o)} noun={noun} />
+    <ShowAll total={rows.length} open={open} onToggle={() => setOpen(o => !o)} noun={noun} cap={cap} />
     </>
   );
 }
@@ -180,12 +189,13 @@ function WatchModule({ slug, label, marketData }: { slug: string; label: string;
   const rows = useMemo(() => refsForMaker(refs, slug).filter(r => /\d/.test(r.ref)).slice(0, 8), [refs, slug]);
   const [famOpen, setFamOpen] = useState(false);
   const [refOpen, setRefOpen] = useState(false);
+  const cap = useCap();
   return (
     <section className="nsp-section ns-plate" aria-label="Model families and references">
       <SectionHead kicker="By family" title={`${label}'s model families`} ctx="typical = median of the past 12 months · read = the family's strongest measured read" />
       {families.length ? (
         <div className="nsp-ledger">
-          {capRows(families, famOpen).map(r => (
+          {capRows(families, famOpen, cap).map(r => (
             <Link key={r.slug} href={`/sub/${r.slug.replace(':', '/')}`} className="ns-ledger-row" style={{ textDecoration: 'none', color: 'inherit' }}>
               <span className="nsp-lk">
                 <span className="t">{r.label.replace(new RegExp(`\\s*·?\\s*${label}$`), '')}</span>
@@ -199,7 +209,7 @@ function WatchModule({ slug, label, marketData }: { slug: string; label: string;
           ))}
         </div>
       ) : <p className="nsp-note">No model family is tracked for {label} yet.</p>}
-      <ShowAll total={families.length} open={famOpen} onToggle={() => setFamOpen(o => !o)} noun="families" />
+      <ShowAll total={families.length} open={famOpen} onToggle={() => setFamOpen(o => !o)} noun="families" cap={cap} />
       <div style={{ marginTop: 22 }}>
         <span className="ns-kicker">References</span>
         {failed ? (
@@ -208,7 +218,7 @@ function WatchModule({ slug, label, marketData }: { slug: string; label: string;
           <p className="nsp-note">Loading the reference book&hellip;</p>
         ) : rows.length ? (
           <div className="nsp-ledger">
-            {capRows(rows, refOpen).map(r => (
+            {capRows(rows, refOpen, cap).map(r => (
               <Link key={r.key} href={`/ref/${slug}/${encodeRefPath(r.ref)}`} className="ns-ledger-row" style={{ textDecoration: 'none', color: 'inherit' }}>
                 <span className="nsp-lk">
                   <span className="t">{refLabel(r.ref)}</span>
@@ -222,7 +232,7 @@ function WatchModule({ slug, label, marketData }: { slug: string; label: string;
             ))}
           </div>
         ) : <p className="nsp-note">No reference with a number on it has enough sales yet.</p>}
-        {rows.length ? <ShowAll total={rows.length} open={refOpen} onToggle={() => setRefOpen(o => !o)} noun="references" /> : null}
+        {rows.length ? <ShowAll total={rows.length} open={refOpen} onToggle={() => setRefOpen(o => !o)} noun="references" cap={cap} /> : null}
       </div>
     </section>
   );
@@ -235,7 +245,7 @@ function ReadTag({ r }: { r: SubMarketRead }) {
     const v = r.index.changePct;
     return (
       <span title={`verified index, ${r.index.horizon}, 95% interval [${r.index.ciLoPct.toFixed(0)}%, ${r.index.ciHiPct.toFixed(0)}%]`}>
-        <span className={`nsp-lv mono ${v >= 0 ? 'up' : 'down'}`}>{signedPct(v)}</span>
+        <span className={`nsp-lv mono ${dirOf(v) ?? ''}`}>{signedPct(v)}</span>
         <span className="nsp-lsub">{r.index.horizon} verified</span>
       </span>
     );
@@ -244,7 +254,7 @@ function ReadTag({ r }: { r: SubMarketRead }) {
     const v = r.demandNow;
     return (
       <span>
-        <span className={`nsp-lv mono ${v >= 0 ? 'up' : 'down'}`}>{signedPct(v)}</span>
+        <span className={`nsp-lv mono ${dirOf(v) ?? ''}`}>{signedPct(v)}</span>
         <span className="nsp-lsub">vs estimate</span>
       </span>
     );
@@ -317,8 +327,11 @@ export function YearlyLine({ detail, name, defaultLens }: { detail: EntityDetail
 
 /* ── §5 RESULTS ────────────────────────────────────────────────────── */
 
-function ResultRow({ row }: { row: EntityResultRow }) {
-  const title = (row.t || '').length >= 119 ? closeCut(row.t, 119) : row.t;
+/** `href`: the lot id to open (its alias when the table keys it so), null =
+ *  no lot page answers for it (r8 lot-resolve) — the row prints unlinked */
+function ResultRow({ row, href }: { row: EntityResultRow; href: string | null }) {
+  const t = tidyTitle(row.t);
+  const title = t.length >= 119 ? closeCut(t, 119) : t;
   const img = httpsImg(row.img);
   const body = (
     <>
@@ -335,8 +348,8 @@ function ResultRow({ row }: { row: EntityResultRow }) {
       <span className="lectr-lot-comp-p">{formatPrice(row.p)}</span>
     </>
   );
-  return row.id
-    ? <Link href={`/lot?id=${encodeURIComponent(row.id)}`} className="lectr-lot-comp">{body}</Link>
+  return row.id && href
+    ? <Link href={`/lot?id=${encodeURIComponent(href)}`} className="lectr-lot-comp">{body}</Link>
     : <span className="lectr-lot-comp" style={{ cursor: 'default' }}>{body}</span>;
 }
 
@@ -350,7 +363,9 @@ export function Results({ detail, sold, onEvery }: { detail: EntityDetail; sold:
   const lenses = (detail.lensSplit || []).filter(l => l.top.length > 0 && l.n >= LENS_PILL_N).slice(0, 3);
   const [view, setView] = useState<string>('recent');
   const [open, setOpen] = useState(false);
+  const first = useMediaQuery(PHONE_Q) ? PHONE_CAP : RESULT_FIRST;
   const rows = (view === 'recent' ? detail.recent : view === 'top' ? detail.top : (lenses.find(l => l.key === view)?.top || [])).slice(0, RESULT_ROWS);
+  const linkOf = useLotLinks(rows);
   if (!detail.recent.length && !detail.top.length) return null;
   const sorted = view === 'recent'
     ? rows.slice().sort((a, b) => (a.d < b.d ? 1 : a.d > b.d ? -1 : b.p - a.p))
@@ -372,9 +387,9 @@ export function Results({ detail, sold, onEvery }: { detail: EntityDetail; sold:
         ))}
       </div>
       <div className="nsp-rows">
-        {(open ? sorted : sorted.slice(0, RESULT_FIRST)).map((r, i) => <ResultRow key={`${r.id}-${i}`} row={r} />)}
+        {(open ? sorted : sorted.slice(0, first)).map((r, i) => <ResultRow key={`${r.id}-${i}`} row={r} href={r.id ? linkOf(r.id) : null} />)}
       </div>
-      {!open && sorted.length > RESULT_FIRST ? (
+      {!open && sorted.length > first ? (
         <button type="button" className="nsp-more" aria-expanded={false} onClick={() => setOpen(true)}
           style={{ display: 'block', background: 'none', border: 0, padding: 0, cursor: 'pointer' }}>
           Show all {sorted.length} {view === 'recent' ? 'latest sales' : 'top results'}
@@ -413,12 +428,15 @@ export function Context({ name, detail, marketData, sportKey, discipline, market
     if (market === 'tcg') add('tcg:pokemon-cards');
     return out.slice(0, 4);
   }, [marketData, detail, sportKey, discipline, market]);
+  // phone: the first 2, the rest one tap away (a 3-row context shows whole)
+  const cap = useMediaQuery(PHONE_Q) ? 2 : CAP;
+  const [open, setOpen] = useState(false);
   if (!rows.length) return null;
   return (
     <section className="nsp-section ns-plate" aria-label="The markets it trades in">
       <SectionHead kicker="Context" title={`The markets ${name} trades in`} ctx={`sub-market reads across every lot — not ${name}'s own figures`} />
       <div className="nsp-ledger">
-        {rows.map(r => (
+        {capRows(rows, open, cap).map(r => (
           <Link key={r.slug} href={`/sub/${r.slug.replace(':', '/')}`} className="ns-ledger-row" style={{ textDecoration: 'none', color: 'inherit' }}>
             <span className="nsp-lk">
               <span className="t">{r.label}</span>
@@ -433,6 +451,7 @@ export function Context({ name, detail, marketData, sportKey, discipline, market
           </Link>
         ))}
       </div>
+      <ShowAll total={rows.length} open={open} onToggle={() => setOpen(o => !o)} noun="markets" cap={cap} />
     </section>
   );
 }

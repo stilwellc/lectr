@@ -479,6 +479,11 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
     const m = new Map<string, EntityBundle>();
     if (!namesAll) return m;
     namesAll.forEach((g, id) => {
+      // (r8) namesAll spans every market: on a market tab only that market's
+      // names can be rows. Another market's id is never in this file, so it
+      // fell to the fail-soft reader (~1K subject reads on /makers/m/sports
+      // at boot) for a row the ledger then filtered out.
+      if (market !== 'all' && g.market !== market) return;
       const fromFile = fileMap?.get(id);
       const hit = nameKeep.get(id);
       if (hit && hit.f === fromFile && hit.g === g && (fromFile || (hit.pl === players && hit.ds === dossiers))) { m.set(id, hit.out); return; }
@@ -489,7 +494,7 @@ export function useEntities(market: Market, opts: UseEntitiesOpts = {}): Entitie
       m.set(id, out);
     });
     return m;
-  }, [namesAll, players, dossiers, fileMap, nameKeep]);
+  }, [namesAll, players, dossiers, fileMap, nameKeep, market]);
   const playersReady = !needPlayers || players !== undefined;
 
   const tailReady = !tailNeeded || tailFile !== undefined;
