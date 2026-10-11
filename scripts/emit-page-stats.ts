@@ -77,7 +77,7 @@ export async function emitPageStats(opts: PageStatsOpts = {}): Promise<void> {
     if (!e) return l;
     const x = { ...l } as unknown as Record<string, unknown>;
     if (e.signal !== undefined) x.signal = e.signal;
-    for (const k of ['soldComp', 'bidVelocity', 'saleDateTime', 'bidProj', 'currentBid', 'bidCount', 'overlayAt']) {
+    for (const k of ['soldComp', 'bidVelocity', 'saleDateTime', 'gapOk', 'currentBid', 'bidCount', 'overlayAt']) {
       if (e[k] != null) x[k] = e[k];
     }
     return x as unknown as AuctionLot;

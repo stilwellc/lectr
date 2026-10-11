@@ -59,7 +59,7 @@ import { gapRead, sleeperRead, valueFloor, GAP_CELL_GATE, type GapRead, type Sle
 import TriageBar from '../components/TriageBar';
 import { useUrlState, useLastVisit, passesTriage, isTriageActive, houseBaselines, TRIAGE_DEFAULTS, triageFromParams, triageToParams, WINDOWS, fmtCeiling, relaxTriage, type TriageFilters, type RelaxKey } from '../lib/feed-filters';
 import { CAT_LABEL, SUBS, MARKET_CATS } from '../lib/taxonomy';
-import { byPriority, spread } from '../lib/priority';
+import { byPriority, spread, projectedCloseOf } from '../lib/priority';
 import { makerLineOf, labelLineOf } from '../lib/lot-labels';
 
 /** the row's label line (app/lib/lot-labels — the home feed's words), riding
@@ -216,7 +216,7 @@ const GLOSSARY: Record<string, string> = {
   'odds': 'The share of historical calls at this comp-ratio that beat the high estimate — read from the calibration curve, refit nightly.',
   'floor': 'The engine’s conservative lower bound: the appraisal low at medium-or-better confidence, else 0.85× the card-comps median at three-plus sales.',
   'forming': '3.5–8 days from the close — the projection is still tightening, so the bar is 15 points harder than at the wire.',
-  'wire': 'Closing inside 3.5 days — near enough that the close-curve projection has its full accuracy.',
+  'wire': 'Closing inside 3.5 days — near enough that the projected close has the least room left to move.',
   'graded': 'A call grades when its lot hammers: the realized price is measured against the number the engine put on the tape before the outcome was known.',
   'verified fair': 'The engine’s own appraisal sits within 0.75–1.3× the estimate midpoint — fairness is measured, never inferred from a missing signal.',
   'forward tape': 'The append-only ledger of calls stamped before their outcomes. Each lane publishes its record only after 20 graded calls.',
@@ -283,7 +283,8 @@ function WitnessTrack({ at }: { at: number }) {
 }
 
 /* ── ROOM 2c · THE GAP — "the bidding is behind the value" on no-estimate
-   lots: the growth-projected close vs the value floor. Two shelves — AT THE
+   lots: THE projected close (priority.projectedCloseOf; all-in, the floor's
+   basis) vs the value floor. Two shelves — AT THE
    WIRE (≤3.5d, depth ≥25%) and FORMING (3.5–8d, ≥40%). A PROJECTION product:
    neutral ink, every entry logs to the forward tape, publishes at 20 graded.
    Same ledger grammar as the Flags board — sibling boards, one language. ── */
@@ -296,7 +297,7 @@ function GapAnnex({ rows, total, measured, validated, receipts, activeKey, play,
    *  — the lane's measurable inventory (before the cell gate) */
   measured: number;
   /** of those, the projections whose cell is validated on the graded tape
-   *  (bidProj.ok) — the only ones that may seat a row */
+   *  (gapOk) — the only ones that may seat a row */
   validated: number;
   receipts: { record: { gap?: { n: number; graded: number; medRatio?: number | null; floorHit?: number | null } } } | null;
   activeKey: string;
@@ -363,7 +364,7 @@ function GapAnnex({ rows, total, measured, validated, receipts, activeKey, play,
           {/* mobile stack */}
           <span className="vd-lane-mob">
             <span className="vd-cell-strong" style={{ display: 'block' }}>−{Math.round(g.depth * 100)}% under floor</span>
-            <span style={{ display: 'block' }}>{formatPrice(g.allIn)} proj → floor {formatPrice(g.floor)}</span>
+            <span style={{ display: 'block' }}>{formatPrice(g.allIn)} all-in proj → floor {formatPrice(g.floor)}</span>
             <span style={{ display: 'block' }}>closes {formatDate(lot.saleDate)}</span>
           </span>
         </div>
@@ -371,7 +372,7 @@ function GapAnnex({ rows, total, measured, validated, receipts, activeKey, play,
         <div className="vd-lane-detail">
           <div className="vd-lane-detail-in">
             <p className="vd-detail-lead">
-              The room projects <b>{formatPrice(g.allIn)}</b> all-in at the close — <b>{Math.round(g.depth * 100)}%</b> under
+              The room projects a close of <b>~{fmtFace(g.hammer)}</b> hammer, <b>~{fmtFace(g.allIn)}</b> all-in — <b>{Math.round(g.depth * 100)}%</b> under
               the <b>{formatPrice(g.floor)}</b> floor.
             </p>
             <div className="vd-detail-grid">
@@ -383,7 +384,7 @@ function GapAnnex({ rows, total, measured, validated, receipts, activeKey, play,
               </div>
               <div>
                 <span className="kicker">The projection</span>
-                <p>close-day growth curve fitted from Goldin bid histories · current bid {(lot.currentBid || 0) > 0 ? formatPrice(lot.currentBid!) : 'none'}</p>
+                <p>the live bid × its room&rsquo;s measured close multiple — the projected close the lot page prints · current bid {(lot.currentBid || 0) > 0 ? formatPrice(lot.currentBid!) : 'none'}</p>
               </div>
               <div>
                 <span className="kicker">The tape</span>
@@ -391,7 +392,7 @@ function GapAnnex({ rows, total, measured, validated, receipts, activeKey, play,
               </div>
             </div>
             {/* the close on the curve's 8-day fitted window */}
-            <div className="vd-curve" aria-label={`Closes in ${g.daysOut.toFixed(1)} days — the curve is fitted to 8`}>
+            <div className="vd-curve" aria-label={`Closes in ${g.daysOut.toFixed(1)} days — the lane reads to 8`}>
               <span className="vd-curve-rail" aria-hidden>
                 <span className="vd-curve-wire" style={{ width: `${(3.5 / 8) * 100}%` }} />
                 <span className="vd-curve-dot" style={{ left: `${Math.min(100, (g.daysOut / 8) * 100)}%` }} />
@@ -399,7 +400,7 @@ function GapAnnex({ rows, total, measured, validated, receipts, activeKey, play,
               <span className="vd-curve-labels" aria-hidden>
                 <span>now</span>
                 <span style={{ position: 'absolute', left: `${(3.5 / 8) * 100}%`, transform: 'translateX(-50%)' }}>wire ≤3.5d</span>
-                <span>8d · curve edge</span>
+                <span>8d · lane edge</span>
               </span>
               <span className="vd-curve-read">closes in {g.daysOut < 1 ? `${Math.round(g.daysOut * 24)}h` : `${g.daysOut.toFixed(1)}d`} · {g.shelf === 'wire' ? 'at the wire' : 'forming'}{lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}</span>
             </div>
@@ -429,8 +430,8 @@ function GapAnnex({ rows, total, measured, validated, receipts, activeKey, play,
         play={play}
         tag={<>projected close vs floor · no-estimate books · record accruing</>}
         help={
-          <>These lots post no estimate, so the engine projects the close from Goldin bid-history
-          curves instead. A lot prints when the projection sits at least 25% under
+          <>These lots post no estimate, so the engine projects the close instead — the live
+          bid times its room&rsquo;s measured close multiple. A lot prints when the projection sits at least 25% under
           its <Term k="floor">floor</Term> — at the <Term k="wire">wire</Term> inside
           3.5 days, or <Term k="forming">forming</Term> at a harder bar. Every entry logs to
           the <Term k="forward tape">forward tape</Term> and is <Term k="graded">graded</Term> at
@@ -445,7 +446,7 @@ function GapAnnex({ rows, total, measured, validated, receipts, activeKey, play,
               : validated > 0
                 ? <>0 at the wire tonight · {validated.toLocaleString()} no-estimate {validated === 1 ? 'lot carries' : 'lots carry'} a tape-validated projection; none clears the bar of 25% under its floor inside 3.5 days.</>
                 /* the cell gate cut everything: abstain OUT LOUD, with why */
-                : <>The Gap abstains tonight · {measured.toLocaleString()} no-estimate {measured === 1 ? 'lot carries' : 'lots carry'} a projected close and a floor inside the curve&rsquo;s 8-day window, but none sits in a house × days-out cell whose graded closes have held the projection ({GAP_CELL_GATE.minN}+ graded, landing {GAP_CELL_GATE.lo}–{GAP_CELL_GATE.hi}×) — so no row seats.</>}
+                : <>The Gap abstains tonight · {measured.toLocaleString()} no-estimate {measured === 1 ? 'lot carries' : 'lots carry'} a projected close and a floor inside 8 days, but the lane now reads a new projection (Oct 11 — the projected close each lot page prints), and no house × days-out cell has yet held it across {GAP_CELL_GATE.minN} graded calls landing {GAP_CELL_GATE.lo}–{GAP_CELL_GATE.hi}× — so no row seats until one does.</>}
           </p>
         </div>
       ) : (
@@ -454,7 +455,7 @@ function GapAnnex({ rows, total, measured, validated, receipts, activeKey, play,
           <span />
           <span className="kicker">Lot</span>
           <span className="kicker" style={{ textAlign: 'right' }}>Under floor</span>
-          <span className="kicker" style={{ textAlign: 'right' }}>Proj → floor</span>
+          <span className="kicker" style={{ textAlign: 'right' }}>All-in proj → floor</span>
           <span className="kicker" style={{ textAlign: 'right' }}>Bid now</span>
           <span className="kicker" style={{ textAlign: 'right' }}>Closes</span>
         </div>
@@ -478,11 +479,11 @@ function GapAnnex({ rows, total, measured, validated, receipts, activeKey, play,
         {gapRec && gapRec.graded >= 20 && gapRec.medRatio != null
           /* published (≥20 graded): the record itself — and it is why rows
              now seat only in validated cells */
-          ? <>forward tape: {gapRec.n.toLocaleString()} logged · {gapRec.graded.toLocaleString()} <Term k="graded">graded</Term> · closes landed at a median {gapRec.medRatio.toFixed(2)}× the projection{gapRec.floorHit != null ? <>, {gapRec.floorHit}% at or over the floor</> : null} · rows now seat only in validated cells</>
+          ? <>forward tape: {gapRec.n.toLocaleString()} logged · {gapRec.graded.toLocaleString()} <Term k="graded">graded</Term> · closes landed at a median {gapRec.medRatio.toFixed(2)}× the projection logged{gapRec.floorHit != null ? <>, {gapRec.floorHit}% at or over the floor</> : null} · calls before Oct 11 logged the retired growth curve</>
           : gapRec
           ? <>forward tape: {gapRec.n.toLocaleString()} logged · {gapRec.graded} <Term k="graded">graded</Term> · publishes at 20 graded</>
           : <>forward tape: — · publishes at 20 <Term k="graded">graded</Term></>}
-        {' '}· curve fitted from goldin bid histories · estimate-house books abstain{activeKey === 'tcg' || activeKey === 'all' ? <> · tcg: no comp basis yet</> : null}
+        {' '}· estimate-house books abstain{activeKey === 'tcg' || activeKey === 'all' ? <> · tcg: no comp basis yet</> : null}
       </div>
     </section>
   );
@@ -866,8 +867,9 @@ export default function ValuePage() {
 
   // ── THE GAP + THE SLEEPERS: the two uncertified lanes, computed from the
   // SAME readers the nightly ledger logs from (app/lib/lanes) — one lot,
-  // one statistic. The close-board overlay refreshes currentBid/bidProj
-  // every ~4h, so these client reads inherit that freshness for free.
+  // one statistic. The close-board overlay refreshes currentBid every ~4h
+  // and the projected close is read off it here (priority.projectedCloseOf),
+  // so these client reads inherit that freshness for free.
   const gapRows = useMemo(() => {
     const now = Date.now();
     return liveLots
@@ -896,19 +898,23 @@ export default function ValuePage() {
   }, [liveLots]);
 
   // the Gap's measurable inventory in scope: no-estimate live lots closing
-  // inside the curve's 8-day fitted window with a projected close and a floor
-  // by THE floor rule (lanes.valueFloor) — the empty lane's honest
+  // inside the 8-day window with THE projected close (priority.projectedCloseOf)
+  // and a floor by THE floor rule (lanes.valueFloor) — the empty lane's honest
   // denominator, never a statistic of its own. (Oct 11) counted BEFORE the
-  // cell gate (bidProj.ok), so a lane the gate cut entirely abstains out
-  // loud instead of vanishing while the dial still counts it
-  const gapPool = useMemo(() => liveLots.filter(l => {
-    if (!(l.bidProj && l.bidProj.allIn > 0)) return false;
-    const ms = closeAt(l);
-    if (ms == null || ms <= Date.now() || (ms - Date.now()) / 86400000 > 8) return false;
-    const est = estUsdBand(l);
-    if (est.low != null || est.high != null) return false;
-    return valueFloor(l) != null;
-  }), [liveLots]);
+  // cell gate (gapOk), so a lane the gate cuts entirely abstains out loud
+  // instead of vanishing while the dial still counts it
+  const gapPool = useMemo(() => {
+    const now = Date.now();
+    return liveLots.filter(l => {
+      const ms = closeAt(l);
+      if (ms == null || ms <= now || (ms - now) / 86400000 > 8) return false;
+      const pc = projectedCloseOf(l as Parameters<typeof projectedCloseOf>[0], now);
+      if (!pc || !(pc.allIn > 0)) return false;
+      const est = estUsdBand(l);
+      if (est.low != null || est.high != null) return false;
+      return valueFloor(l) != null;
+    });
+  }, [liveLots]);
 
   // NEXT HAMMER — book-wide (survives a zero-flag scope): the soonest close
   // still strictly ahead (the results-pending grace window must never print
@@ -1030,7 +1036,7 @@ export default function ValuePage() {
   // none — the lane steps aside instead of quoting the sports book's count)
   const gapMeasuredLots = useMemo(() => gapPool.filter(inTriage), [gapPool, inTriage]);
   const gapMeasured = gapMeasuredLots.length;
-  const gapValidated = useMemo(() => gapMeasuredLots.filter(l => l.bidProj?.ok === true).length, [gapMeasuredLots]);
+  const gapValidated = useMemo(() => gapMeasuredLots.filter(l => l.gapOk === true).length, [gapMeasuredLots]);
   useEffect(() => { setShown(ROWS_PAGE); }, [triage]);
 
   // Today's call: the strongest deal Ray can STAND BEHIND — highest
@@ -1184,16 +1190,6 @@ export default function ValuePage() {
 
   const hasFlags = deals.length > 0;
   const coverage = ray.market?.markets?.[activeKey]?.n;
-
-  // ── the reads room's one live figure: the Gap curve's fitted population,
-  // summed from the served closeCurve buckets (LabFigures' own precedent —
-  // "fitted from N bid histories"). Read from data, never a typed constant.
-  const curveSnaps = useMemo(() => {
-    const cc = (ray.market?.markets?.all?.analytics as {
-      closeCurve?: { n?: number[] };
-    } | undefined)?.closeCurve;
-    return Array.isArray(cc?.n) && cc!.n!.length ? cc!.n!.reduce((a, b) => a + b, 0) : null;
-  }, [ray.market]);
 
   // ── FLIP — a sort flip re-RANKS the same rows, so they should visibly
   // travel, not teleport. Animate only when the id set is unchanged (pure
@@ -2405,8 +2401,7 @@ export default function ValuePage() {
               no longer stands between a reader and the board) — the cell grammar: split
               head (quiet kicker, light headline) over three patent-figure
               cells, one per lane. Copy states each lane's real gates
-              (pickCall/comps ladder, lanes.ts) in the lanes' own words; the
-              bid-history count reads live from the served closeCurve. No
+              (pickCall/comps ladder, lanes.ts) in the lanes' own words. No
               thresholds invented, no new signal labels. ════ */}
           <section id="reads" className="rail ray-enter vd-room ns-plate vd-reads" style={{ '--enter-delay': '20ms', paddingTop: 'calc(var(--space-4) + var(--space-2))' } as React.CSSProperties}>
             <div className="ns-split">
@@ -2433,8 +2428,8 @@ export default function ValuePage() {
                 figure={<FigReplay />}
                 label="The Gap"
                 body={<>No-estimate lots where the projected close sits at least 25% under the
-                  value floor — the close-day growth curve fitted
-                  from {curveSnaps != null ? `${compactCount(curveSnaps)} ` : ''}Goldin bid histories.</>}
+                  value floor — the live bid times its room&rsquo;s close multiple, measured
+                  nightly on bids that went on to sell.</>}
               />
               <FigureCell
                 figure={<FigPools />}

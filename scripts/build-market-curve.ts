@@ -13,12 +13,28 @@
  * of its own population (≥ GRID_MIN_N observations), falling back to the
  * days-out bucket median where a cell is thin. `buckets`/`edges`/`n` keep
  * their exact prior meaning (back-compat for every reader); `grid`/`bidEdges`
- * are additive. Readers project through app/lib/lanes.closeGrowth.
+ * are additive.
+ * (Oct 11 2026) Nothing projects a lot through this curve any more: it overshot
+ * the non-Goldin rooms by 70–150% and the lot page printed it beside the
+ * ranker's figure. THE projected close is priority.projectedCloseOf (bid × the
+ * room's close multiple, app/lib/close-k.ts). The curve stays served in
+ * market.json as the Lab's close-day figure (LabFigures).
  */
 import type { AuctionLot } from '../app/types';
 import { lotAllInFactor } from '../app/lib/premiums';
 import { medianSorted } from '../app/lib/stats';
-import type { CloseCurve } from '../app/lib/lanes';
+
+/** market.json analytics.closeCurve. `buckets`/`edges`/`n` = the days-out
+ *  medians; `grid[bidBand][dayBucket]` = the same median within a hammer-USD
+ *  bid band (`bidEdges`), null where thin. */
+export interface CloseCurve {
+  buckets: (number | null)[];
+  edges: number[];
+  n?: number[];
+  bidEdges?: number[];
+  grid?: (number | null)[][];
+  gridN?: number[][];
+}
 
 export const CURVE_EDGES = [1, 2, 4, 8];
 /** hammer-USD bid bands (<25 · 25-50 · 50-100 · 100-250 · 250-500 · 500-2k ·
