@@ -26,10 +26,13 @@ import { displayMakerOf } from '../lib/maker-subjects';
 import { craftTitle, localToday } from '../utils';
 import { formatEstimate } from '../components/LotCard';
 import { AwayMark } from '../components/marks';
+import DecisionLine from '../components/DecisionLine';
 
 export interface TodayRead { key: string; tag: string; lot: AuctionLot; fact: React.ReactNode; tone?: 'up' | 'hot' }
 
-type Row = { key: string; group: 'closing' | 'new' | 'reads'; tag: React.ReactNode; tone?: 'up' | 'hot'; lot: AuctionLot; fact: React.ReactNode };
+type Row = { key: string; group: 'closing' | 'new' | 'reads'; tag: React.ReactNode; tone?: 'up' | 'hot'; lot: AuctionLot; fact: React.ReactNode;
+  /** (N2) the pick's decision line — projected close · worth up to · gap */
+  decision?: React.ReactNode };
 
 const PER_COL = 3;
 
@@ -68,10 +71,14 @@ function useNarrow(): boolean {
 
 function ReadRow({ r }: { r: Row }) {
   return (
-    <Link href={`/lot?id=${encodeURIComponent(r.lot.id)}`} className="ck-read" role="listitem" data-nav-row>
+    <Link href={`/lot?id=${encodeURIComponent(r.lot.id)}`} className="ck-read" role="listitem" data-nav-row
+      data-decision={r.decision ? '' : undefined}>
       <span className="ck-tag" data-tone={r.tone}>{r.tag}</span>
       <span className="ck-read-title">{craftTitle(r.lot.title, r.lot.auctionHouse)}</span>
       <span className="ck-read-fact">{r.fact}</span>
+      {/* the decision rides its own line under the row — the fact (the
+          reason) keeps its width and is never cut for it */}
+      {r.decision && <span style={{ flex: '1 1 100%', minWidth: 0 }}>{r.decision}</span>}
     </Link>
   );
 }
@@ -104,17 +111,21 @@ export default function TodayBand({ loop, closingWatches, reads, away }: {
       const est = formatEstimate(l);
       closing.push({
         key: `cw-${l.id}`, group: 'closing', tone: 'hot', lot: l, tag: closeTag(l),
+        // the fact prints the estimate and the tag the close: the line adds the rest
+        decision: <DecisionLine lot={l} estimate={false} when={false} style={{ marginTop: 0 }} />,
         fact: lead(l, <>your watch{est ? <> · {est}</> : null}{l.saleDateTime ? <CloseClock iso={l.saleDateTime} windowHours={24} prefix=" · " /> : null}</>),
       });
     }
     for (const r of loop?.closing ?? []) {
       if (!take(r.lot.id)) continue;
-      closing.push({ key: `cp-${r.lot.id}`, group: 'closing', tone: 'hot', lot: r.lot, tag: closeTag(r.lot), fact: pickFact(r) });
+      closing.push({ key: `cp-${r.lot.id}`, group: 'closing', tone: 'hot', lot: r.lot, tag: closeTag(r.lot), fact: pickFact(r),
+        decision: <DecisionLine lot={r.lot} when={false} style={{ marginTop: 0 }} /> });
     }
     const fresh: Row[] = [];
     for (const r of loop?.fresh ?? []) {
       if (!take(r.lot.id)) continue;
-      fresh.push({ key: `n-${r.lot.id}`, group: 'new', lot: r.lot, tag: 'New', fact: pickFact(r) });
+      fresh.push({ key: `n-${r.lot.id}`, group: 'new', lot: r.lot, tag: 'New', fact: pickFact(r),
+        decision: <DecisionLine lot={r.lot} style={{ marginTop: 0 }} /> });
     }
     const rest: Row[] = [];
     for (const x of reads) {

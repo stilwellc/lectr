@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useInsertionEffect, memo } from 'react';
+import { useState, useMemo, useInsertionEffect, memo, type ReactNode } from 'react';
 import Link from 'next/link';
 import CloseClock from './CloseClock';
 import { AuctionLot } from '../types';
@@ -109,6 +109,7 @@ function LotCard({
   lastCrawl,
   note,
   onNote,
+  decision,
   subjectMaker = false,
 }: {
   lot: AuctionLot;
@@ -123,6 +124,9 @@ function LotCard({
   /** makes the note line itself pressable (the feed's folded grades: it
    *  searches the feed for the whole group) — same type, no new chrome */
   onNote?: () => void;
+  /** (N2) a pick's decision line (components/DecisionLine) — rides under
+   *  the note, in the stacked row's price-line type */
+  decision?: ReactNode;
   /** (Oct 11) a pick card: a collection lot's pseudo-maker ("Autographs",
    *  "Entertainment & Icons") gives way to its subject, or the maker slot is
    *  left out — never a category printed as a maker (maker-subjects.displayMakerOf) */
@@ -348,6 +352,7 @@ function LotCard({
             </button>
           ) : note}</>}
         </div>
+        {decision}
       </div>
       <div style={{ flexShrink: 0, textAlign: 'right', zIndex: 'auto' }}>
         {buySignal && (
@@ -570,6 +575,7 @@ function LotCard({
             ) : note}
           </div>
         )}
+        {decision && <div style={{ marginTop: note ? -6 : -4, marginBottom: 10 }}>{decision}</div>}
         <div style={{ marginTop: 'auto' }}>
           {/* The intelligence leads — the number IS the card's rank. */}
           {buySignal && (

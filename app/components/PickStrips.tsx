@@ -22,6 +22,7 @@ import { isNewLot, type HouseBaselines } from '../lib/feed-filters';
 import { closeMsOf } from '../lib/priority';
 import { closeIsTimed } from '../lib/house-tz';
 import { closeWhenText } from '../lib/close-time';
+import DecisionLine from './DecisionLine';
 import { makerLineOf } from '../lib/lot-labels';
 import { craftTitle, localToday } from '../utils';
 import type { AuctionLot } from '../types';
@@ -79,17 +80,19 @@ function StripHead({ label }: { label: string }) {
   );
 }
 
-function StripRow({ r, tag, tone }: { r: Rec<RecLot>; tag: string; tone?: 'hot' | 'up' }) {
+function StripRow({ r, tag, tone, when = true }: { r: Rec<RecLot>; tag: string; tone?: 'hot' | 'up'; when?: boolean }) {
   const l = r.lot as AuctionLot;
   const maker = makerLineOf(l).name;
   const why = r.short || r.reason;
   // the reason usually names the maker already ("Like your Andy Warhol prints")
   const fact = why.toLowerCase().includes(maker.toLowerCase()) ? why : `${maker} · ${why}`;
   return (
-    <Link href={`/lot?id=${encodeURIComponent(l.id)}`} className="ck-read" role="listitem" data-nav-row>
+    <Link href={`/lot?id=${encodeURIComponent(l.id)}`} className="ck-read" role="listitem" data-nav-row data-decision>
       <span className="ck-tag" data-tone={tone}>{tag}</span>
       <span className="ck-read-title">{craftTitle(l.title, l.auctionHouse)}</span>
       <span className="ck-read-fact">{fact}</span>
+      {/* (N2) the decision on its own line — the fact keeps its width */}
+      <DecisionLine lot={l} when={when} style={{ flex: '1 1 100%', minWidth: 0, marginTop: 0 }} />
     </Link>
   );
 }
@@ -123,7 +126,7 @@ export function ClosingTonightPicks({ loop, max = 3 }: { loop: ReturnLoop; max?:
     <div className="ck-reads" role="list" aria-label="Closing tonight from your picks">
       <StripHead label="Closing tonight from your picks" />
       {loop.closing.length
-        ? loop.closing.slice(0, max).map(r => <StripRow key={r.lot.id} r={r} tag={closeTag(r.lot)} tone="hot" />)
+        ? loop.closing.slice(0, max).map(r => <StripRow key={r.lot.id} r={r} tag={closeTag(r.lot)} tone="hot" when={false} />)
         : <p style={emptyStyle}>None of your picks close tonight{nextCloseText(loop)}.</p>}
     </div>
   );

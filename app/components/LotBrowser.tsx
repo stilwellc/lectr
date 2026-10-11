@@ -28,6 +28,7 @@ import ComparableModal from './ComparableModal';
 import FeedToolbar, { FeedFilters, FEED_DEFAULTS } from './FeedToolbar';
 import { houseBaselines, type HouseBaselines } from '../lib/feed-filters';
 import { shortlist, reasonOf } from '../lib/priority';
+import DecisionLine from './DecisionLine';
 import { makerLineOf, labelTagOf, subColumnOf } from '../lib/lot-labels';
 import { displayMakerOf } from '../lib/maker-subjects';
 import { foldVariants, foldNote, foldQuery, crossSibs, crossNote } from '../lib/fold';
@@ -146,7 +147,7 @@ function BidVelChip({ lot }: { lot: AuctionLot }) {
 
 /** the pick row (FeedRow stack) — thumb · maker/subject · title (1 line) ·
  *  reason (wraps) · price · hammer day */
-function StackRow({ lot, onOpen, tone, note, est }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down'; note?: string | null; est: string }) {
+function StackRow({ lot, onOpen, tone, note, est, decision }: { lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down'; note?: string | null; est: string; decision?: React.ReactNode }) {
   const maker = displayMakerOf(lot);
   const label = labelTagOf(lot);
   const title = craftTitle(lot.title, lot.auctionHouse);
@@ -171,13 +172,17 @@ function StackRow({ lot, onOpen, tone, note, est }: { lot: AuctionLot; onOpen: (
           {lot.saleDate ? <span className="ray-feedrow-day">· {formatDate(lot.saleDate)}</span> : null}
           <BidVelChip lot={lot} />
         </span>
+        {decision}
       </span>
     </button>
   );
 }
 
-export function FeedRow({ lot, onOpen, tone, note, onNote, feedback, stack = false }: {
+export function FeedRow({ lot, onOpen, tone, note, onNote, feedback, decision, stack = false }: {
   lot: AuctionLot; onOpen: () => void; tone?: 'up' | 'down'; note?: string | null; onNote?: () => void;
+  /** (N2) a pick's decision line (components/DecisionLine) — under the note,
+   *  never in place of it */
+  decision?: React.ReactNode;
   /** a pick's "More like this / Not for me" (components/PickFeedback) — rides
    *  inside the row's hairline, under its text */
   feedback?: React.ReactNode;
@@ -188,7 +193,7 @@ export function FeedRow({ lot, onOpen, tone, note, onNote, feedback, stack = fal
   stack?: boolean;
 }) {
   const est = feedRowPrice(lot);
-  if (stack) return <StackRow lot={lot} onOpen={onOpen} tone={tone} note={note} est={est} />;
+  if (stack) return <StackRow lot={lot} onOpen={onOpen} tone={tone} note={note} est={est} decision={decision} />;
   // the label's lead word (its lead badge, else the sub) — the full line
   // ellipsized the maker away at 390px
   const label = labelTagOf(lot);
@@ -234,6 +239,7 @@ export function FeedRow({ lot, onOpen, tone, note, onNote, feedback, stack = fal
             {note}
           </span>
         ) : <span className="ray-feedrow-title" style={{ color: 'var(--color-text-secondary)', fontSize: '0.86em' }}>{note}</span>)}
+        {decision}
       </span>
       <span className="ray-feedrow-right">
         <b>{est}</b>
@@ -765,6 +771,7 @@ export default function LotBrowser({
                           ? <button type="button" onClick={e => { e.stopPropagation(); open(); }} style={{ ...st, background: 'none', border: 0, padding: 0, fontFamily: 'inherit', textAlign: 'left', cursor: 'pointer' }}>{n}</button>
                           : <span style={st}>{n}</span>;
                       })()}
+                      {youTab && <DecisionLine lot={lot} estimate={false} when={false} style={{ fontSize: 10.5, marginTop: 2 }} />}
                       {youTab && <PickFeedback lot={lot} mark={fb.marks.get(lot.id)} onMark={fb.mark} at={i} tight />}
                     </td>
                     <td>{lot.auctionHouse}</td>
@@ -873,6 +880,8 @@ export default function LotBrowser({
                   tone={feedTone(lot, belowIds, belowSignal.hasSig)}
                   note={noteOf(lot, true)}
                   onNote={foldOpeners.get(lot.id)}
+                  // the row's right column prints the hammer day
+                  decision={youTab ? <DecisionLine lot={lot} estimate={false} when={false} /> : undefined}
                   feedback={youTab ? <PickFeedback lot={lot} mark={fb.marks.get(lot.id)} onMark={fb.mark} at={i} inset /> : undefined}
                 />
               </div>
@@ -892,6 +901,7 @@ export default function LotBrowser({
                   lastCrawl={lastCrawl || undefined}
                   note={noteOf(lot)}
                   onNote={foldOpeners.get(lot.id)}
+                  decision={youTab ? <DecisionLine lot={lot} estimate={false} /> : undefined}
                 />
                 {youTab && <PickFeedback lot={lot} mark={fb.marks.get(lot.id)} onMark={fb.mark} at={i} />}
               </div>
