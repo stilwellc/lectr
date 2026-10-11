@@ -27,7 +27,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import ArtistNav from '../ArtistNav';
-import { LOTPAGE_CSS } from '../LotPage';
+import { LOTPAGE_CSS } from '../lotpage-css';
 import { Colophon } from '../Terminal';
 import FollowButton from '../FollowButton';
 import LotBrowser from '../LotBrowser';

@@ -17,7 +17,8 @@ import type { Backtest } from '../hooks/useRayData';
 import { useSavedLots } from '../hooks/useSavedLots';
 import ArtistNav from '../components/ArtistNav';
 import { lotSignal, formatEstimate, estimateOnly, confidenceMeter, LiveStamp } from '../components/LotCard';
-import ComparableModal, { PriceBand } from '../components/ComparableModal';
+import ComparableModal from '../components/ComparableModalLazy';
+import PriceBand from '../components/PriceBand';
 // The paper room's two recharts consumers stay OUT of the initial bundle
 // (dynamic, ssr:false, fixed-height fallbacks so the swap can never shift).
 const RecordByYear = dynamic(() => import('../components/RecordByYear'), {

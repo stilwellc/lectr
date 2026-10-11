@@ -17,7 +17,7 @@
 import React, { useMemo } from 'react';
 import Link from 'next/link';
 import ArtistNav from '../components/ArtistNav';
-import { LOTPAGE_CSS } from '../components/LotPage';
+import { LOTPAGE_CSS } from '../components/lotpage-css';
 import { Colophon } from '../components/Terminal';
 import HeroChart, { type HeroLine } from '../preview/terminal/HeroChart';
 import { LAYER_PALETTE } from '../lib/heroLayers';
