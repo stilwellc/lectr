@@ -11,6 +11,13 @@
  */
 
 export const SW_OFF_KEY = 'lectr-sw-off';
+
+/** the worker's cache of one deploy's book — public/sw.js `DATA + ver`
+ *  (PREFIX 'lectr-sw1-'; a test pins the two together). The page reads a new
+ *  deploy's book straight from it (app/hooks/useRayData prepareNewBook): the
+ *  worker answers this tab's own book requests from the tab's OWN generation,
+ *  so the network can never hand it the new one. */
+export const swGenCache = (ver: string) => `lectr-sw1-data-${ver}`;
 const RELOAD_KEY = 'lectr-sw-reloaded';
 
 export type SwStatus = {

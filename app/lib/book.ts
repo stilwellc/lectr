@@ -36,6 +36,27 @@ export function bookTotalsCache(): BookTotals | null {
   return cache;
 }
 
+const subscribers = new Set<(t: BookTotals) => void>();
+
+function totalsOf(j: { totalLots?: number; totalSold?: number; sources?: unknown; lastCrawl?: string }): BookTotals {
+  return {
+    totalLots: j.totalLots || 0,
+    totalSold: j.totalSold || 0,
+    sources: Array.isArray(j.sources) ? j.sources.length : 0,
+    lastCrawl: j.lastCrawl || '',
+  };
+}
+
+/** A new deploy's book went on screen in place (W25, useRayData
+ *  prepareNewBook): its meta.json replaces the totals for every mounted
+ *  reader in the same tick, so the colophon never dates the old book. */
+export function replaceBookTotals(meta: { totalLots?: number; totalSold?: number; sources?: unknown; lastCrawl?: string }): void {
+  cache = totalsOf(meta);
+  inflight = Promise.resolve(cache);
+  const t = cache;
+  subscribers.forEach(fn => fn(t));
+}
+
 export function fetchBookTotals(): Promise<BookTotals | null> {
   if (cache) return Promise.resolve(cache);
   if (!inflight) {
@@ -43,12 +64,7 @@ export function fetchBookTotals(): Promise<BookTotals | null> {
       .then(r => (r.ok ? r.json() : null))
       .then(j => {
         if (!j) return null;
-        cache = {
-          totalLots: j.totalLots || 0,
-          totalSold: j.totalSold || 0,
-          sources: Array.isArray(j.sources) ? j.sources.length : 0,
-          lastCrawl: j.lastCrawl || '',
-        };
+        cache = totalsOf(j);
         return cache;
       })
       .catch(() => null /* callers fall back to whatever shipped in the HTML */);
@@ -60,14 +76,17 @@ export function fetchBookTotals(): Promise<BookTotals | null> {
 export function useBookTotals(skip = false): BookTotals | null {
   const [totals, setTotals] = useState<BookTotals | null>(cache);
   useEffect(() => {
-    if (cache || skip) return;
     let dead = false;
-    fetchBookTotals().then(t => {
-      if (t && !dead) setTotals(t);
-    });
+    const on = (t: BookTotals) => { if (!dead) setTotals(t); };
+    subscribers.add(on);
+    // totals replaced between render and subscribe still reach us
+    if (cache) { const c = cache; if (c !== totals) Promise.resolve().then(() => on(c)); }
+    else if (!skip) fetchBookTotals().then(t => { if (t) on(t); });
     return () => {
       dead = true;
+      subscribers.delete(on);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [skip]);
   return totals;
 }
