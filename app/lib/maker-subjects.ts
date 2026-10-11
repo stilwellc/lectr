@@ -29,7 +29,7 @@
  * else" row so every live lot is still counted exactly once.
  */
 import { marketOf, ARTIST_LABEL, type Market } from '../constants';
-import { makerLineOf } from './lot-labels';
+import { makerLineOf, catalogMakerLineOf } from './lot-labels';
 import { subjectOf, nameTokensOk, cardGroupOf, leadOf } from './subject';
 
 const CARD_MAKERS = new Set(['sports-cards', 'graded-cards']);
@@ -61,7 +61,7 @@ const FILM_FRANCHISE = new Set(['fr-starwars', 'fr-potter', 'fr-marvel']);
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
   .replace(/[’']/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-type SubjectLot = Parameters<typeof makerLineOf>[0] & Parameters<typeof lotFacets>[0];
+type SubjectLot = Parameters<typeof catalogMakerLineOf>[0] & Parameters<typeof lotFacets>[0];
 
 function franchiseOf(l: SubjectLot): string | null {
   let out: string | null = null;
@@ -88,11 +88,10 @@ export function lotSubjectOf(l: SubjectLot): LotSubject | null {
  *  rather than printing a category as if it were a maker. Art / design /
  *  watch makers always keep their line. */
 export function displayMakerOf(l: SubjectLot): { name: string; href: string } | null {
+  // (Oct 11) makerLineOf itself now reads the subject for a pseudo-maker
+  // (app/lib/lot-labels); this is its nullable form for slots that drop out
   const line = makerLineOf(l);
-  if (!SUBJECT_MARKETS.has(marketOf(l.artist))) return line;
-  if (line.name !== (ARTIST_LABEL[l.artist] || l.artist)) return line;
-  const sub = lotSubjectOf(l);
-  return sub ? { name: sub.name, href: line.href } : null;
+  return line.name ? line : null;
 }
 
 /** a player row off a reader's name, canonical (null: no person). (r7 data
@@ -108,7 +107,7 @@ function playerRow(name: string | null | undefined, title: string, kind: Subject
 
 function read(l: SubjectLot): LotSubject | null {
   if (!SUBJECT_MARKETS.has(marketOf(l.artist))) return null;
-  const line = makerLineOf(l);
+  const line = catalogMakerLineOf(l);
   const fallback = ARTIST_LABEL[l.artist] || l.artist;
   const title = String(l.title || '');
   // (Oct 10) only a CARD's parsed player reads off the maker line: a person's

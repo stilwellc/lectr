@@ -56,6 +56,10 @@ shots/
 # share-card build outputs (scripts/build-og.tsx) + its photo cache — regenerated every build
 /public/og/live/
 /public/og/lot/
+# market + static-alias share cards (scripts/build-og.tsx) — regenerated every build
+/public/og/m/
+/public/og/p/
+/public/og/e/
 /.og-cache/
 
 # close-k archive pulled from / pushed to R2 (scripts/lib/close-k-fit.ts) — never committed

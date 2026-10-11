@@ -365,7 +365,7 @@ export default function PastResults({ lots, showArtist = false, categoryFilter: 
                 />
               )}
               <div style={{ minWidth: 0 }}>
-                {showArtist && lot.artist && (
+                {showArtist && lot.artist && makerLabel && (
                   <div style={{ marginBottom: 2 }}>
                     {/* the maker's own book — an internal link above the
                         stretched house anchor (which keeps the title/CTA) */}

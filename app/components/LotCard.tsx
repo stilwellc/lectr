@@ -4,10 +4,10 @@ import { useState, useMemo, useInsertionEffect, memo, type ReactNode } from 'rea
 import Link from 'next/link';
 import CloseClock from './CloseClock';
 import { AuctionLot } from '../types';
-import { makerLineOf, labelLineOf } from '../lib/lot-labels';
+import { labelLineOf } from '../lib/lot-labels';
 import { displayMakerOf } from '../lib/maker-subjects';
 import { usePlayerDossiers } from '../lib/use-player-dossiers';
-import { houseColors, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg, sizedImg, localToday, isClosedPending } from '../utils';
+import { closeDayOf, houseColors, formatDate, makeAuctionIcs, craftTitle, formatPrice, httpsImg, sizedImg, localToday, isClosedPending } from '../utils';
 import ComparableModal from './ComparableModal';
 import { useBackClose } from '../lib/use-lot-modal';
 import Flick from './Flick';
@@ -110,7 +110,6 @@ function LotCard({
   note,
   onNote,
   decision,
-  subjectMaker = false,
 }: {
   lot: AuctionLot;
   showArtist?: boolean;
@@ -129,7 +128,8 @@ function LotCard({
   decision?: ReactNode;
   /** (Oct 11) a pick card: a collection lot's pseudo-maker ("Autographs",
    *  "Entertainment & Icons") gives way to its subject, or the maker slot is
-   *  left out — never a category printed as a maker (maker-subjects.displayMakerOf) */
+   *  left out — never a category printed as a maker (maker-subjects.displayMakerOf).
+   *  (Oct 11) every card does this now; the prop is accepted and ignored */
   subjectMaker?: boolean;
 }) {
   useLotCardStyles();
@@ -196,9 +196,11 @@ function LotCard({
   // label and the maker line already renders, the title says nothing twice.
   // pseudo-makers ("Sports Cards", "Pokémon") give way to the card's player / Pokémon (app/lib/lot-labels)
   usePlayerDossiers();
-  const maker = !lot.artist ? null : subjectMaker ? displayMakerOf(lot) : makerLineOf(lot);
+  // (Oct 11) every card now: makerLineOf itself gives a pseudo-maker's slot to
+  // the subject (app/lib/lot-labels); the `subjectMaker` prop is now the default
+  const maker = !lot.artist ? null : displayMakerOf(lot);
   // no name to print (a pseudo-maker with no subject) → the title takes the head
-  const showArtist = showArtistProp && (!subjectMaker || !!maker);
+  const showArtist = showArtistProp && !!maker;
   const makerLabel = maker ? maker.name : '';
   const titleText = craftTitle(lot.title, lot.auctionHouse);
   const titleDupesMaker = showArtist && !!lot.artist && titleText === makerLabel;
@@ -337,10 +339,10 @@ function LotCard({
           {lot.auctionHouse}
           {catLabel ? ` · ${catLabel}` : ''}
           {isPastPending
-            ? ` · hammered ${formatDate(lot.saleDate)} · results pending`
+            ? ` · hammered ${formatDate(closeDayOf(lot))} · results pending`
             : isNoSale
             ? ` · bought in`
-            : <> · {isUpcoming ? 'hammers ' : ''}{formatDate(lot.saleDate)}{isUpcoming && lot.saleDateTime && <CloseClock iso={lot.saleDateTime} windowHours={24} prefix=" · " />}{isUpcoming && lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}</>}
+            : <> · {isUpcoming ? 'hammers ' : ''}{formatDate(closeDayOf(lot))}{isUpcoming && lot.saleDateTime && <CloseClock iso={lot.saleDateTime} windowHours={24} prefix=" · " />}{isUpcoming && lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}</>}
           {/* the compact face carries the note on its meta line */}
           {note && <> · {onNote ? (
             <button
@@ -557,10 +559,10 @@ function LotCard({
           {lot.auctionHouse}
           {catLabel ? ` · ${catLabel}` : ''}
           {isPastPending
-            ? ` · hammered ${formatDate(lot.saleDate)} · results pending`
+            ? ` · hammered ${formatDate(closeDayOf(lot))} · results pending`
             : isNoSale
             ? ` · bought in`
-            : <> · {isUpcoming ? 'hammers ' : ''}{formatDate(lot.saleDate)}{isUpcoming && lot.saleDateTime && <CloseClock iso={lot.saleDateTime} windowHours={24} prefix=" · " />}{isUpcoming && lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}</>}
+            : <> · {isUpcoming ? 'hammers ' : ''}{formatDate(closeDayOf(lot))}{isUpcoming && lot.saleDateTime && <CloseClock iso={lot.saleDateTime} windowHours={24} prefix=" · " />}{isUpcoming && lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}</>}
         </div>
         {note && (
           <div style={{ fontSize: 12.5, color: 'var(--color-text-secondary)', letterSpacing: '-0.01em', marginTop: -4, marginBottom: 10, ...(onNote ? { position: 'relative' as const, zIndex: 2 } : null) }}>

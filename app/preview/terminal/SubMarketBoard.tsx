@@ -8,7 +8,7 @@ import { type Market } from '../../constants';
 import { makerLineOf } from '../../lib/lot-labels';
 import { median as statsMedian } from '../../lib/stats';
 import type { AuctionLot } from '../../types';
-import { formatPrice, httpsImg } from '../../utils';
+import { closeDayOf, formatPrice, httpsImg } from '../../utils';
 import { lotFace, fmtFace } from '../../lib/lot-face';
 import { countSubMarkets } from '../../lib/submarkets';
 import { fmtInt, fmtMoneyCompact, useInView, useReducedMotion } from './hooks';
@@ -430,7 +430,7 @@ function EngineHero({ h, onOpen }: { h: EngineHeroData; onOpen?: (lot: AuctionLo
       <span className={styles.ehRead}>
         <span className={styles.ehTopRow}>
           <span className={styles.ehMaker}>{makerName}</span>
-          <span className={styles.ehWhen}>{lot.auctionHouse} · hammers {daysWord(lot.saleDate)}</span>
+          <span className={styles.ehWhen}>{lot.auctionHouse} · hammers {daysWord(closeDayOf(lot))}</span>
         </span>
         <span className={styles.ehTitle}>{lot.title}</span>
         <span className={styles.ehVerdict}>

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { personOf, filmOf, missionOf, subjectOf, castOf, actOf, cardGroupOf } from '../subject';
 import { teamOf, teamCardOf, productLineOf, pokemonSetOf, programOf, instrumentBrandOf } from '../subject-groups';
-import { makerLineOf, registerPlayerDossiers } from '../lot-labels';
+import { makerLineOf, catalogMakerLineOf, registerPlayerDossiers } from '../lot-labels';
 import { craftTitle, expandLeadYear, splitTitle } from '../../utils';
 import { makerHref } from '../entity/retired';
 
@@ -114,8 +114,12 @@ test('maker line: memorabilia subjects take the slot; athletes link to an EXISTI
   // a name with no dossier, or one the pipeline didn't stamp, keeps the maker link
   assert.equal(makerLineOf({ artist: 'game-used', title: 'Crucial Catch - Eagles Jack Stoll Game Worn Jersey (10/13/2024) Size 44', playerName: 'Jack Stoll', playerSlug: 'jack-stoll' }).href, makerHref('game-used'));
   assert.equal(makerLineOf({ artist: 'autographs', title: t }).href, makerHref('autographs'));
-  // nothing readable → the pseudo-maker label, unchanged
-  assert.equal(makerLineOf({ artist: 'autographs', title: 'Moneyball Multi-Signed Oakland Athletics Jersey (48 Signatures)' }).name, 'Autographs');
+  // nothing readable → (Oct 11) no maker line at all: a category is never printed as a maker;
+  // the catalogue read keeps the pseudo-maker label for the subject reader
+  const moneyball = { artist: 'autographs', title: 'Moneyball Multi-Signed Oakland Athletics Jersey (48 Signatures)' };
+  assert.equal(makerLineOf(moneyball).name, '');
+  assert.equal(makerLineOf(moneyball).href, makerHref('autographs'));
+  assert.equal(catalogMakerLineOf(moneyball).name, 'Autographs');
   registerPlayerDossiers([]);
 });
 

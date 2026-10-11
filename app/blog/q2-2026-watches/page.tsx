@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import JsonLd from '../../components/JsonLd';
+import { postMeta, postLd } from '../posts';
 import { Fragment } from 'react';
 import QuarterInsight, { P, H, B } from '../../components/blog/QuarterInsight';
 import { PullQuote } from '../../components/blog/Editorial';
@@ -72,7 +74,7 @@ for (const slug of Object.keys(market.makerIndex ?? {})) {
 const moverSummary = movers.map(m => `${m.label} ${pct(m.changePct)} (${m.horizon})`).join(', ');
 const splitPhrase = up.length && down.length ? ` (${countWord(up.length)} up, ${countWord(down.length)} down)` : '';
 
-export const metadata: Metadata = {
+const POST = {
   title: 'Q2 2026 watch market in review — the deepest, most liquid tape we track',
   description:
     `1,811 watches, $240M, near-total sell-through — the deepest, most measurable market we cover${
@@ -83,6 +85,7 @@ export const metadata: Metadata = {
         : ' As of the ' + asOf + ' corpus, no watch maker clears the 95%-confidence bar.'
     } What a confidence interval means, why almost everything abstains, and the Q2 2026 sales underneath.`,
 };
+export const metadata: Metadata = postMeta('q2-2026-watches', POST);
 
 const dek =
   `1,811 watches sold for $240M — by far the most liquid, most measurable market we cover.${
@@ -116,6 +119,8 @@ function moverClause(m: VerifiedMover) {
 
 export default function Q2Watches() {
   return (
+    <>
+      <JsonLd data={postLd('q2-2026-watches', POST)} />
     <QuarterInsight
       market="watch"
       date="July 16, 2026"
@@ -251,5 +256,6 @@ export default function Q2Watches() {
         so it&rsquo;s the one where we do.</> : null}
       </P>
     </QuarterInsight>
+    </>
   );
 }
