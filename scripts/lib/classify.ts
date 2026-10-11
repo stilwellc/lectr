@@ -224,6 +224,25 @@ export function sportsObjectKind(title: string | null | undefined, catchAll: 'sp
 // Non-sport TCG (Yu-Gi-Oh / One Piece / Union Arena …) and comics have no home.
 export const NON_SPORT_TCG_RE = /\b(yu-?gi-?oh!?|one piece|union arena|dragon ball|digimon|magic:? the gathering|\bmtg\b|weiss schwarz|lorcana|flesh and blood|jujutsu kaisen|naruto|my hero academia|demon slayer|star wars unlimited|black lotus|mox (?:sapphire|ruby|pearl|jet|emerald))\b/i;
 
+/** (Oct 11 2026) a graded CARD the object ladder misreads off a "Canvas",
+ *  "Framed", "Wrapper Redemption" or "Jersey Number" word: a card brand AND a
+ *  card-slab grade, and no game-used phrase ("2010 Topps Chrome Wrapper
+ *  Redemption Refractor #223 Lou Gehrig – PSA MINT 9", "2022 Upper Deck UD
+ *  Canvas C115 Morgan Barron – PSA GEM MT 10"). */
+export function isSlabbedBrandCard(title: string | null | undefined): boolean {
+  const t = String(title || '');
+  return CARD_BRAND_RE.test(t) && SLAB_GRADE_RE.test(t) && !GAME_USED_RE.test(t);
+}
+
+/** THE Goldin sport verdict — the reclass ladder (goldin-sport-noncard) and
+ *  corpus-normalize's relic-card reroute both read it, so neither can undo
+ *  the other (they fought over 615 rows on every pass until Oct 11 2026). */
+export function goldinSportVerdict(title: string | null | undefined): string {
+  const k = goldinSportKind(title);
+  if (k === 'sports-cards' || k === DROP || k === 'game-used' || k === 'unopened-wax' || k === 'autographs') return k;
+  return isSlabbedBrandCard(title) ? 'sports-cards' : k;
+}
+
 const POP_PIECE_RE = /\b(animation (?:cel|cell)s?|production cel|looney tunes|warner bros|hanna[- ]barbera|disney|mondo|pearl jam|grateful dead|phish|gig poster)\b/i;
 export function goldinSportKind(title: string | null | undefined): string {
   const t = String(title || '');
@@ -1298,7 +1317,7 @@ export const RECLASS_RULES: ReclassRule[] = [
     cls: 'goldin-sport-noncard',
     apply: l => {
       if (l.auctionHouse !== 'Goldin' || l.artist !== 'sports-cards') return null;
-      const k = goldinSportKind(l.title);
+      const k = goldinSportVerdict(l.title);
       return k === 'sports-cards' ? null : k;
     },
   },
