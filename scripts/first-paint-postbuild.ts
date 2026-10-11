@@ -19,7 +19,8 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { FP_ZONES, FP_GATE_JS, FP_CSS, FP_VIEWPORTS, FP_SLOT_OPEN, FP_SLOT_MID, FP_SLOT_CLOSE } from '../app/lib/first-paint';
+import { FP_ZONES, FP_VIEWPORTS, FP_SLOT_OPEN, FP_SLOT_MID, FP_SLOT_CLOSE } from '../app/lib/first-paint';
+import { FP_GATE_JS, FP_CSS } from '../app/lib/first-paint-gate';
 
 const VARIANTS = Object.keys(FP_VIEWPORTS);
 

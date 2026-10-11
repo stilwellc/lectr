@@ -9,9 +9,8 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import {
-  FP_SLOT_JS, FP_GATE_JS, FP_ZONES, fpMatches, fpSlot, pinClock, unpinClock,
-} from '../first-paint';
+import { FP_ZONES, fpMatches, fpSlot, pinClock, unpinClock } from '../first-paint';
+import { FP_SLOT_JS, FP_GATE_JS } from '../first-paint-gate';
 import { reasonOf, closeMsOf } from '../priority';
 import { closeIsTimed } from '../house-tz';
 import { foldPage, slotify, normalize, deferImages } from '../../../scripts/first-paint-postbuild';
