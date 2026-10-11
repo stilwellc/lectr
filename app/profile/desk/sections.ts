@@ -34,6 +34,12 @@ import CollectionRoom, { meta as collectionMeta, when as collectionWhen } from '
 import HistoryRoom, { meta as historyMeta, when as historyWhen } from './rooms/history';
 import AccountStrip, { meta as accountMeta } from './rooms/account';
 import Becomes, { meta as becomesMeta, when as becomesWhen } from './rooms/becomes';
+// Phase 2 — the five sections, each a default export (SectionProps) + meta(desk)
+import WeekSection, { meta as weekMeta } from '../week';
+import BudgetDesk, { meta as budgetMeta } from '../budget';
+import Portfolio, { meta as portfolioMeta } from '../portfolio';
+import NamesSection, { meta as namesMeta } from '../names';
+import EdgeSection, { meta as edgeMeta } from '../edge';
 
 export type SectionGroup = 'now' | 'picks' | 'desk';
 export type MarkComponent = React.ComponentType<{ size?: number; className?: string }>;
@@ -51,34 +57,49 @@ export interface DeskSection {
 
 const noPill = (): SectionMeta | null => null;
 /** a reserved Phase-2 slot: nothing mounts, no pill, the key is spoken for */
-const slot = (id: string, label: string, key: string, group: SectionGroup, mark: MarkComponent): DeskSection =>
+/** a reserved slot for a section still to come: nothing mounts, no pill, the key is spoken for */
+export const slot = (id: string, label: string, key: string, group: SectionGroup, mark: MarkComponent): DeskSection =>
   ({ id, label, key, group, mark, Component: null, meta: noPill });
 
 export const SECTIONS: readonly DeskSection[] = [
   { id: 'today', label: 'Today', key: 't', group: 'now', mark: AwayMark, Component: Today, meta: todayMeta },
-  slot('week', 'Your week', 'd', 'now', HorizonMark),
+  // the hammer timeline: watches, picks and the sales of your names, day by day
+  { id: 'week', label: 'Your week', key: 'd', group: 'now', mark: HorizonMark, Component: WeekSection, meta: weekMeta },
   { id: 'watching', label: 'Watching', key: 'w', group: 'now', mark: WatchMark, Component: WatchingRoom, meta: watchingMeta,
     when: (_d, i) => i.deskView && i.upcoming.length > 0 },
   // the picks group: Lots you may like → For your collection → How your picks did (one pill)
   { id: 'for-you', label: 'For you', key: 'f', group: 'picks', mark: RankMark, Component: PicksGroup, meta: picksMeta },
-  slot('budget', 'Budget', 'b', 'picks', GapMark),
-  slot('portfolio', 'Portfolio', 'p', 'picks', IndexLabMark),
-  // signed out: the slim sign-in line sits after the picks, before the rest
+  // signed out: the slim sign-in line sits right after the picks — after value, never before it
   { id: 'signin', label: 'Sign in', key: '', group: 'picks', Component: SignIn, meta: noPill, when: signinWhen },
+  { id: 'budget', label: 'Budget', key: 'b', group: 'picks', mark: GapMark, Component: BudgetDesk, meta: budgetMeta },
+  { id: 'portfolio', label: 'Portfolio', key: 'p', group: 'picks', mark: IndexLabMark, Component: Portfolio, meta: portfolioMeta },
   { id: 'market', label: 'Market', key: 'm', group: 'picks', mark: MoversMark, Component: Market, meta: marketMeta },
-  slot('names', 'Names', 'n', 'picks', SalesMark),
+  { id: 'names', label: 'Names', key: 'n', group: 'picks', mark: SalesMark, Component: NamesSection, meta: namesMeta },
   { id: 'signals', label: 'Signals', key: 's', group: 'picks', mark: SignalMark, Component: Signals, meta: signalsMeta },
   { id: 'record', label: 'Record', key: 'r', group: 'desk', mark: RecordMark, Component: RecordRoom, meta: recordMeta, when: recordWhen },
-  slot('edge', 'Edge', 'e', 'desk', CalibrationMark),
+  { id: 'edge', label: 'Edge', key: 'e', group: 'desk', mark: CalibrationMark, Component: EdgeSection, meta: edgeMeta },
   { id: 'collection', label: 'Collection', key: 'c', group: 'desk', mark: CollectionMark, Component: CollectionRoom, meta: collectionMeta, when: collectionWhen },
   { id: 'history', label: 'History', key: 'h', group: 'desk', mark: TapeMark, Component: HistoryRoom, meta: historyMeta, when: historyWhen },
   { id: 'becomes', label: 'What else this page becomes', key: '', group: 'desk', Component: Becomes, meta: becomesMeta, when: becomesWhen },
   { id: 'account', label: 'Account', key: 'a', group: 'desk', Component: AccountStrip, meta: accountMeta },
 ];
 
-/** the sections that mount on this desk, in order */
+/** the sections that mount on this desk, in order. ONE rule bends the
+ *  order: with nothing live on the desk (no watch on a hammer clock) the
+ *  picks lead — as they always have — and Your week, which then holds only
+ *  picks and the sales of the reader's names, follows the picks group
+ *  (right after the sign-in line when signed out) instead of sitting
+ *  between Today and the first pick. */
 export function mountedSections(desk: DeskData, i: DeskInternals): DeskSection[] {
-  return SECTIONS.filter(s => !!s.Component && (!s.when || s.when(desk, i)));
+  const out = SECTIONS.filter(s => !!s.Component && (!s.when || s.when(desk, i)));
+  if (i.watchFirst) return out;
+  const w = out.findIndex(s => s.id === 'week');
+  if (w < 0) return out;
+  const [week] = out.splice(w, 1);
+  const anchor = out.findIndex(s => s.id === 'signin');
+  const after = anchor >= 0 ? anchor : out.findIndex(s => s.id === 'for-you');
+  out.splice(after + 1, 0, week);
+  return out;
 }
 
 /** the rail, in section order: one pill per mounted section whose meta says so */
@@ -89,7 +110,7 @@ export function railItemsOf(desk: DeskData, i: DeskInternals): RailItem[] {
     if (!m) continue;
     out.push({
       id: m.id, label: m.label, group: s.group,
-      count: m.count ?? undefined, tone: m.tone, dot: m.dot,
+      count: m.count ?? undefined, tone: m.tone, dot: m.dot, quiet: m.quiet,
       hint: s.key ? `g then ${s.key}` : undefined,
     });
   }

@@ -29,6 +29,7 @@ import { closeDays, hammerWord } from './derive';
 import { useDesk, useDeskInternals } from './provider';
 import { jump } from '../rail';
 import { dayLabel, estMidOf, hammerStrip, streakOf, stripCaption } from './cockpit-logic';
+import { closingNowOf } from '../week/week';
 
 const lamp = (v: number) => (v > 0 ? 'var(--color-up)' : v < 0 ? 'var(--color-down-text)' : 'var(--color-fg)');
 
@@ -64,7 +65,12 @@ export default function Cockpit() {
   const max = Math.max(1, ...strip.map(d => d.n));
   const total = strip.reduce((s, d) => s + d.n, 0);
   const streak = record ? streakOf(record.series) : null;
-  const next = summary.next;
+  // (Phase 2) the soonest close by the house's published instant — the same
+  // read Your week's Closing-now strip makes (closingNowOf), so the cell and
+  // the strip never name different lots; the summary's day-ordered next is
+  // the fallback for a lot with no close instant
+  const cn = useMemo(() => closingNowOf(desk.saved, desk.now), [desk.saved, desk.now]);
+  const next = cn.rows[0]?.lot ?? cn.next?.lot ?? summary.next;
   const nextDays = next ? closeDays(next) : NaN;
   const nextWho = next ? displayMakerOf(next)?.name ?? null : null;
   // the strip lands on Your week once it registers; on the room until then

@@ -22,6 +22,9 @@ import { useDeskInternals } from '../provider';
 import type { SectionProps, SectionMeta, DeskData } from '../types';
 import type { DeskInternals } from '../provider';
 import { Term, SavedDelta } from './shared';
+import { ClosingNow } from '../../week';
+import { closingNowOf, offsetWord, dayOffsetOf, dayWords, localClock } from '../../week/week';
+import { useDesk } from '../provider';
 
 type SavedView = 'ledger' | 'cards';
 /** rows a phone shows of a long room before "Show all" */
@@ -116,6 +119,11 @@ export function meta(_desk: DeskData, i: DeskInternals): SectionMeta | null {
 
 export default function WatchingRoom(_p: SectionProps) {
   const i = useDeskInternals();
+  const { desk, act, narrow } = useDesk();
+  // (Phase 2) the ≤24h closers ride as a live strip above the ledger; with
+  // none inside 24h the strip's one-liner folds into the head's sub-line
+  const closingNow = useMemo(() => closingNowOf(desk.saved, desk.now), [desk.saved, desk.now]);
+  const cnNext = closingNow.next;
   const { upcoming, summary, room, ledgerCols, signalById, metaFor, allLots, isSaved, savedIdOf, toggle, onCardToggle, isDesktop } = i;
 
   const [savedView, setSavedView] = useState<SavedView>('ledger');
@@ -225,6 +233,9 @@ export default function WatchingRoom(_p: SectionProps) {
           {summary.closesToday > 0 && <> · {summary.closesToday} {summary.closesToday === 1 ? 'closes' : 'close'} today</>}
           {summary.flagged > 0 && <> · {summary.flagged} below market</>}
           {summary.totalEst > 0 && <><span className="ck-wide"> · {formatPrice(summary.totalEst)} at estimate midpoint</span></>}
+          {closingNow.live > 0 && closingNow.rows.length === 0 && (
+            <> · none close in the next 24h{cnNext ? <> · next: <Link href={`/lot?id=${encodeURIComponent(cnNext.lot.id)}`} className="ck-away-link">{craftTitle(cnNext.lot.title, cnNext.lot.auctionHouse)}</Link>, {offsetWord(dayOffsetOf(cnNext.day, desk.now)) ?? `${dayWords(cnNext.day).wd}, ${dayWords(cnNext.day).md}`}{cnNext.timed ? ` at ${localClock(cnNext.closeMs)}` : ''}</> : null}</>
+          )}
         </>}
         actions={
           <div className="ray-savedview-toggle" role="group" aria-label="Watching view">
@@ -232,6 +243,9 @@ export default function WatchingRoom(_p: SectionProps) {
             <button className="ray-savedview-btn" data-active={savedView === 'cards'} aria-pressed={savedView === 'cards'} onClick={() => pickView('cards')}>Cards</button>
           </div>
         } />
+      {/* (Phase 2) CLOSING NOW — the ≤24h closers as a live ticker row,
+          countdown + bids + decision line, above the ledger */}
+      {closingNow.rows.length > 0 && <ClosingNow desk={desk} act={act} narrow={narrow} />}
       {/* desktop ledger */}
       {/* a column with nothing in it on any row folds away (legacy saves
           carry no direction, so Δ saved can be all dashes) */}

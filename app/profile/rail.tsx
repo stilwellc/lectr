@@ -31,6 +31,9 @@ export interface RailItem {
   group?: string;
   /** the pill's title — the `g`-chord that lands here ("g then w") */
   hint?: string;
+  /** the section has nothing to say on this desk: the pill folds (muted,
+   *  no count) but stays reachable — the room is mounted and says so */
+  quiet?: boolean;
 }
 
 /** scroll a section into view and stamp its hash (replaceState — Back
@@ -116,9 +119,10 @@ export function PillRail({ items, help }: { items: RailItem[];
           <React.Fragment key={it.id}>
           {i > 0 && it.group && items[i - 1].group && it.group !== items[i - 1].group && <i className="ck-rail-sep" aria-hidden />}
           <a href={`#${it.id}`} data-id={it.id} className="ck-rail-pill" aria-current={active === it.id ? 'true' : undefined}
-            title={it.hint} onClick={e => { e.preventDefault(); jump(it.id); }}>
+            data-quiet={it.quiet || undefined} title={it.quiet ? `${it.hint ? `${it.hint} · ` : ''}nothing here yet` : it.hint}
+            onClick={e => { e.preventDefault(); jump(it.id); }}>
             {it.label}
-            {it.count != null && <b style={{ color: toneInk(it.tone) }}>{it.count}</b>}
+            {it.count != null && !it.quiet && <b style={{ color: toneInk(it.tone) }}>{it.count}</b>}
             {it.dot && <i className="ck-rail-dot" aria-label="new matches" />}
           </a>
           </React.Fragment>
@@ -139,6 +143,11 @@ export function useHashLanding(ready: boolean) {
     const id = decodeURIComponent(window.location.hash.slice(1));
     if (!id) { done.current = true; return; }
     let tries = 0;
+    let settle = 0;
+    let moved = false;
+    // the reader taking the wheel ends the re-landing at once
+    const onIntent = () => { moved = true; };
+    const intents: (keyof WindowEventMap)[] = ['wheel', 'touchstart', 'keydown', 'pointerdown'];
     const t = window.setInterval(() => {
       const el = document.getElementById(id);
       if (el) {
@@ -146,8 +155,20 @@ export function useHashLanding(ready: boolean) {
         window.clearInterval(t);
         // after layout settles (images, the Today band) — instant, no animation
         requestAnimationFrame(() => el.scrollIntoView({ block: 'start', behavior: 'auto' }));
+        // (desk3) the rooms above a deep link keep growing after it lands —
+        // Your week's columns, Names' sold-history reads — and the anchor
+        // drifts down the screen. Re-land while the page settles (8s), unless
+        // the reader has started scrolling.
+        for (const ev of intents) window.addEventListener(ev, onIntent, { passive: true });
+        const margin = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+        settle = window.setInterval(() => {
+          if (moved) { window.clearInterval(settle); return; }
+          const top = el.getBoundingClientRect().top - margin;
+          if (Math.abs(top) > 24) el.scrollIntoView({ block: 'start', behavior: 'auto' });
+        }, 250);
+        window.setTimeout(() => window.clearInterval(settle), 8000);
       } else if (++tries > 40) { done.current = true; window.clearInterval(t); }
     }, 150);
-    return () => window.clearInterval(t);
+    return () => { window.clearInterval(t); window.clearInterval(settle); for (const ev of intents) window.removeEventListener(ev, onIntent); };
   }, [ready]);
 }

@@ -840,7 +840,29 @@ export function useDeskState(): DeskState {
     return s;
   }, [savedIds, savedLots]);
   const ownedAll = useMemo(() => { const s = new Set(ownedLotIds); ownedIdSet.forEach(id => s.add(id)); return s; }, [ownedLotIds, ownedIdSet]);
-  const collectionLots = useMemo(() => collection.rows.map(r => r.lot), [collection.rows]);
+  // the contract's collection: every owned save as a row — the resolved row,
+  // else the settled-cache row kept on this device (a corpus row, with its
+  // entity key, so Portfolio and Names can read the maker / player behind a
+  // Goldin ghost), else the archive ghost the collection built
+  const collectionLots = useMemo(() => {
+    const out: AuctionLot[] = [];
+    const seen = new Set<string>();
+    for (const r of collection.rows) {
+      const kept = (r.lot.auctionHouse as string) === 'archive' ? keptRows.get(r.savedId) : null;
+      const l = kept ?? r.lot;
+      if (seen.has(l.id)) continue;
+      seen.add(l.id); out.push(l);
+    }
+    if (!fullLoaded) {
+      // before the archive: owned saves not yet resolved, from the kept rows
+      for (const id of ownedIds) {
+        if (seen.has(id)) continue;
+        const k = keptRows.get(id);
+        if (k && !seen.has(k.id)) { seen.add(k.id); seen.add(id); out.push(k); }
+      }
+    }
+    return out;
+  }, [collection.rows, keptRows, fullLoaded, ownedIds]);
   const metaForContract = useCallback((id: string) => metaFor(id) ?? savedMeta[id] ?? null, [metaFor, savedMeta]);
   const price = useMemo<PricePref>(() => statedPrice ?? { minUsd: null, maxUsd: null }, [statedPrice]);
   const lastVisitMs = useMemo(() => (prevVisit ? Date.parse(`${prevVisit}T00:00:00`) : null), [prevVisit]);

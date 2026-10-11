@@ -52,8 +52,10 @@ export const DAY_MS = 86_400_000;
 /** the Closing-now strip's window */
 export const CLOSING_NOW_MS = 24 * 3_600_000;
 /** rows a day opens on before "+N more": every watch, then this many picks and this many name rows */
-export const PICK_ROWS_OPEN = 5;
-export const NAME_ROWS_OPEN = 3;
+/** (integration) a day opens on every watch, 3 picks and 2 name rows —
+ *  "+N more" opens the rest; the desk stays scannable at seven columns */
+export const PICK_ROWS_OPEN = 3;
+export const NAME_ROWS_OPEN = 2;
 
 export type WeekKind = 'watch' | 'pick' | 'name';
 
