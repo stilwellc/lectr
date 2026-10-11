@@ -37,6 +37,7 @@ import { isFlagged, FLAG_SIGNAL } from '../lib/flags';
 import { useLotModal } from '../lib/use-lot-modal';
 import { cameBack } from '../lib/use-back-scroll';
 import Flick from './Flick';
+import { usePricePref, inPriceRange } from '../lib/interests';
 
 const NOOP = () => {};
 
@@ -236,6 +237,9 @@ export interface LotBrowserProps {
   /** the reader's taste (app/lib/use-recs) — enables the "For you" tab: the
    *  same recommender as the profile's "Lots you may like" room */
   taste?: Taste | null;
+  /** (Oct 11) what the For-you tab shows while the reader has no taste yet
+   *  (home's quick start) — present → the tab shows even with no signals */
+  youCold?: React.ReactNode;
   /** scoped to one maker's book: the maker lens hides, a saved search
    *  carries the maker; `named` = a real maker (art/design/watches), whose
    *  shortlist can't diversify across makers. `subj` = one subject's book
@@ -279,6 +283,7 @@ export default function LotBrowser({
   belowSignal: belowSignalProp,
   follows = [],
   taste = null,
+  youCold = null,
   scope = null,
   savedIds,
   isSaved: isSavedProp,
@@ -420,8 +425,13 @@ export default function LotBrowser({
   // player, category, house) — signed in or not (app/lib/follows)
   // (a feed scoped to one subject row by ?subj= is one "who" as well)
   const whoCap = scope?.named || scope?.subj || feedFilters.subj ? Infinity : undefined;
-  const youAvail = !!taste && taste.seeds.length > 0;
+  const youTaste = !!taste && taste.seeds.length > 0;
+  const youAvail = youTaste || !!youCold;
   const youTab = youAvail && feedFilters.tab === 'you';
+  // the For-you tab before any signal: the quick start stands in for the rows
+  const youColdOn = youTab && !youTaste;
+  // (Oct 11) the reader's stated price range (app/lib/interests) narrows For you
+  const pricePref = usePricePref();
   const wantTop = !youTab && feedFilters.sort === 'priority' && (feedFilters.tab ?? 'top') !== 'all';
   const top = useMemo(
     () => (wantTop || scoped ? shortlist(feedAll, Date.now(), 20, { who: whoCap }) : null),
@@ -442,8 +452,8 @@ export default function LotBrowser({
   // "For you" — the ONE recommender (app/lib/recs), over whatever the
   // toolbar filtered; each pick keeps its reason for the note line
   const youRecs = useMemo(
-    () => (youTab && taste ? recommend(feedAll, taste, { n: 20 }) : null),
-    [youTab, taste, feedAll]
+    () => (youTab && youTaste && taste ? recommend(pricePref ? feedAll.filter(l => inPriceRange(l, pricePref)) : feedAll, taste, { n: 20 }) : null),
+    [youTab, youTaste, taste, feedAll, pricePref]
   );
   const youNote = useMemo(() => new Map((youRecs ?? []).map(r => [r.lot.id, { full: recNote(r), short: recNote(r, { short: true }) }])), [youRecs]);
   const feed = useMemo(
@@ -550,9 +560,9 @@ export default function LotBrowser({
             className="ray-toolbar-pill"
             data-active={youTab}
             onClick={() => handleFilters({ ...feedFilters, sort: 'priority', tab: 'you' })}
-            title={follows.length ? `Picked from your desk and what you follow: ${follows.map(f => f.label).join(', ')}` : 'Picked from the lots on your desk'}
+            title={!youTaste ? 'Tell lectr what you collect — picks from the live book' : follows.length ? `Picked from your desk and what you follow: ${follows.map(f => f.label).join(', ')}` : 'Picked from the lots on your desk'}
           >
-            For you {youTab && <i>{feed.length}</i>}
+            For you {youTab && youTaste && <i>{feed.length}</i>}
           </button>
         )}
         <button
@@ -587,7 +597,9 @@ export default function LotBrowser({
       />
       </>}
 
-      {effectiveView === 'table' && feed.length > 0 ? (
+      {youColdOn ? (
+        <div className="ray-feed-rekey">{youCold}</div>
+      ) : effectiveView === 'table' && feed.length > 0 ? (
         <div key={feedKey} className="ray-feed-rekey ray-feedtable-scroll" style={{ overflowX: 'auto' }}>
           <table className="ray-feedtable">
             <thead>

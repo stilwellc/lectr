@@ -7,10 +7,8 @@
  * people, not query strings — this is that hook. Reuses the saved-search
  * plumbing entirely; unfollow deletes the row.
  */
-import React, { useMemo, useState } from 'react';
-import { useSavedSearches } from '../lib/alerts';
-import { useAuth } from '../lib/account';
-import { useFollows, type Follow } from '../lib/follows';
+import React, { useState } from 'react';
+import { useFollows, makerFollow, type Follow } from '../lib/follows';
 
 /** the one look: a quiet call pill, + → ✓ */
 function FollowPill({ on, busy, name, onClick }: { on: boolean; busy: boolean; name: string; onClick: () => void }) {
@@ -47,32 +45,9 @@ function FollowsPill({ follow, name }: { follow: Follow; name: string }) {
   return <FollowPill on={on} busy={busy} name={name} onClick={async () => { setBusy(true); try { await toggle(follow); } finally { setBusy(false); } }} />;
 }
 
+/** (Oct 11) a maker / player follows on the device signed out too — the
+ *  same { player, playerName } row once the reader signs in (app/lib/follows
+ *  carries it over); no more sign-in wall in front of the first follow */
 export default function FollowButton({ slug, name, follow }: { slug?: string; name: string; follow?: Follow }) {
-  if (follow) return <FollowsPill follow={follow} name={name} />;
-  return <PersonFollow slug={slug || ''} name={name} />;
-}
-
-function PersonFollow({ slug, name }: { slug: string; name: string }) {
-  const { authEnabled, user, openLogin } = useAuth();
-  const { searches, save, remove } = useSavedSearches();
-  const [busy, setBusy] = useState(false);
-
-  const existing = useMemo(
-    () => searches.find(s => (s.query as { player?: string }).player === slug),
-    [searches, slug],
-  );
-
-  // auth unconfigured → the whole feature is off; render nothing rather than a dead button
-  if (!authEnabled) return null;
-
-  const onClick = async () => {
-    if (!user) { openLogin('follow'); return; }
-    setBusy(true);
-    try {
-      if (existing) await remove(existing.id);
-      else await save(`Following ${name}`, { player: slug, playerName: name });
-    } finally { setBusy(false); }
-  };
-
-  return <FollowPill on={!!existing} busy={busy} name={name} onClick={onClick} />;
+  return <FollowsPill follow={follow ?? makerFollow(slug || '', name)} name={name} />;
 }
