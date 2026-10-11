@@ -415,6 +415,24 @@ export default function FeedToolbar({
     return () => mq.removeEventListener('change', sync);
   }, []);
 
+  // pinned under the nav → a hairline closes the bar (data-stuck). The
+  // observer's top inset sits 1px below the bar's sticky top, so the bar
+  // reads <1 visible exactly while it is pinned — a paint-only toggle, no
+  // layout change, so it can never flip-flop the scroll.
+  const barRef = useRef<HTMLDivElement | null>(null);
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const top = parseFloat(getComputedStyle(el).top) || 0;
+    const io = new IntersectionObserver(
+      ([e]) => setStuck(e.intersectionRatio < 1 && e.boundingClientRect.top <= top + 1),
+      { rootMargin: `${-(top + 1)}px 0px 0px 0px`, threshold: [1] },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   const [sheetOpen, setSheetOpen] = useState(false);
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const sheetReturnRef = useRef<HTMLElement | null>(null);
@@ -760,7 +778,8 @@ export default function FeedToolbar({
   ) : null;
 
   return (
-    <div className="ray-toolbar" role="search" aria-label="Find lots">
+    <>
+    <div ref={barRef} className="ray-toolbar" data-stuck={stuck || undefined} role="search" aria-label="Find lots">
       {/* hydration-safe scoped styles — NEVER a raw-text style child */}
       <style dangerouslySetInnerHTML={{ __html: `
 ${FEEDSHEET_CSS}
@@ -791,6 +810,7 @@ ${FEEDSHEET_CSS}
             onChange={e => set({ query: e.target.value })}
             placeholder="Search maker, work, reference…"
             aria-label="Search lots"
+            aria-keyshortcuts="/"
           />
           {filters.query && (
             <button className="ray-toolbar-clearq" onClick={() => set({ query: '' })} aria-label="Clear search">
@@ -973,7 +993,12 @@ ${FEEDSHEET_CSS}
         {catMenu}
         {sheet}
       </div>
+    </div>
 
+    {/* THE TAIL — the rows a reader sets once and then reads under: they
+        scroll away with the page instead of pinning a 4-row slab over the
+        table (sports' refine chips made the stuck bar ~265px at 1440) */}
+    <div className="ray-toolbar-tail">
       {/* REFINE ROW — only once a category exists (top pills or the chooser):
           sports / makers / mediums scroll behind the fade as before. */}
       {!isMobile && (sports.length > 0 || makers.length > 0 || categories.length > 0) && (
@@ -1036,5 +1061,6 @@ ${FEEDSHEET_CSS}
         )}
       </span>
     </div>
+    </>
   );
 }
