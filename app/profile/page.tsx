@@ -25,6 +25,8 @@ import Flick from '../components/Flick';
 import CloseClock from '../components/CloseClock';
 import { AwayMark, ReadsMark, WatchMark, RecordMark, CollectionMark, TapeMark, ArchiveMark, HorizonMark, RankMark } from '../components/marks';
 import { FeedRow, belowSignalOf, feedTone } from '../components/LotBrowser';
+import { useReturnLoop, NewSincePicks, ClosingTonightPicks } from '../components/PickStrips';
+import { useLastVisit, houseBaselines } from '../lib/feed-filters';
 import ComparableModal from '../components/ComparableModal';
 import { useLotModal } from '../lib/use-lot-modal';
 import { recommend, recNote, recDepth, type Taste } from '../lib/recs';
@@ -399,6 +401,11 @@ function RecsRoom({ book, compLots, taste, ready, lastCrawl, isSaved, onToggleSa
   // (r9) a narrow taste (one followed maker) deals deeper — Show more walks it
   const recs = useMemo(() => (ready && taste.seeds.length ? recommend(pool, taste, { n: Math.max(RECS_MAX, recDepth(taste)) }) : []), [ready, pool, taste]);
   const below = useMemo(() => belowSignalOf(recs.map(r => r.lot), compLots), [recs, compLots]);
+  // THE RETURN LOOP — what is new in your picks since you were last here,
+  // and what of them closes tonight (app/components/PickStrips)
+  const prevVisitDay = useLastVisit();
+  const baselines = useMemo(() => houseBaselines(book), [book]);
+  const loop = useReturnLoop(pool, taste, { ready, prevVisitDay, baselines });
   const [narrow, setNarrow] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 639px)');
@@ -438,7 +445,10 @@ function RecsRoom({ book, compLots, taste, ready, lastCrawl, isSaved, onToggleSa
             that order of weight, recent saves louder than old ones. A lot qualifies only through a real tie: the same
             maker, player, Pokémon or subject; the same card in another grade; the same franchise or model line; or,
             inside one category, the same era, grader or language at a price like yours. Then the strongest ties that
-            matter most and close soonest lead, spread so no one name or sale fills the list. Lots on your desk never
+            matter most and close soonest lead, spread so no one name or sale fills the list. Lots at the prices you
+            save and own lead lots far from them, and a lot the engine reads below market is lifted and says so. When
+            a name you follow has only a few lots live, the list goes on to its nearest kin — another Pokémon, another
+            player of the same sport and era — and each such pick says that is why it is here. Lots on your desk never
             come back here. The line under each lot says why it is here; the picks re-read with every crawl and every
             save.
           </HelpChip>
@@ -459,12 +469,15 @@ function RecsRoom({ book, compLots, taste, ready, lastCrawl, isSaved, onToggleSa
           </p>
         ) : narrow ? (
           <div>
+            {loop && <div style={{ marginBottom: 18 }}><ClosingTonightPicks loop={loop} max={2} /><NewSincePicks loop={loop} max={2} /></div>}
             {recs.slice(0, visible).map(r => (
               <FeedRow key={r.lot.id} lot={r.lot} onOpen={() => setOpenLot(r.lot)}
                 tone={feedTone(r.lot, below.ids, below.hasSig)} note={recNote(r, { short: true })} />
             ))}
           </div>
         ) : (
+          <>
+          {loop && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 420px), 1fr))', gap: '0 28px', marginBottom: 26 }}><ClosingTonightPicks loop={loop} /><NewSincePicks loop={loop} /></div>}
           <div className="ray-saved-grid">
             {recs.slice(0, visible).map((r, i) => (
               <div key={r.lot.id} className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms` } as React.CSSProperties}>
@@ -473,6 +486,7 @@ function RecsRoom({ book, compLots, taste, ready, lastCrawl, isSaved, onToggleSa
               </div>
             ))}
           </div>
+          </>
         )}
 
         {visible < recs.length && (

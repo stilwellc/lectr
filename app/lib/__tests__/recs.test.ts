@@ -7,7 +7,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTaste, recommend, scoreLots, featOf, lotSim, bandText, recNote, shortTitle, idAliases, type RecLot } from '../recs';
+import { buildTaste, recommend, scoreLots, featOf, lotSim, bandText, recNote, shortTitle, idAliases, learnBands, bandFit, pickStrips, tonightEndMs, familyOf, ENGINE_NOTE, BAND_MIN, type RecLot, type Seed } from '../recs';
 import { entityFollow, houseFollow, catFollow } from '../follows';
 
 const NOW = Date.parse('2026-10-09T20:00:00Z');
@@ -101,8 +101,12 @@ test('follows and searches seed picks with their own reasons; houses reach only 
   const pika = { ...zard, id: 'z2', title: '1999 Pokemon Base Set Holo #58 Pikachu - PSA 9', auctionHouse: 'Heritage' } as RecLot;
   const t = buildTaste({ saved: [], follows: [entityFollow('sj:tcg|k:charizard', 'Charizard')], nowMs: NOW });
   const rs = recommend([zard, pika], t, { nowMs: NOW });
-  assert.deepEqual(ids(rs), ['z1']);
+  assert.equal(rs[0].lot.id, 'z1');
   assert.equal(rs[0].reason, 'You follow Charizard');
+  // the other Pokémon is no follow match — only the fallback ladder's
+  // family rung reaches it, after the real tie, and it says so
+  assert.equal(rs[1]?.tier, 2);
+  assert.equal(rs[1].reason, 'Another Pokémon · you follow Charizard');
   const th = buildTaste({ saved: [], follows: [houseFollow('Heritage')], nowMs: NOW });
   assert.deepEqual(ids(recommend([zard, pika], th, { nowMs: NOW })), ['z2']);
   const tc = buildTaste({ saved: [], follows: [catFollow('tcg', 'vintage')], nowMs: NOW });
@@ -182,4 +186,99 @@ test('lotSim gates, bandText, notes, short titles', () => {
   assert.equal(recNote({ reason: 'Because you saved X', why: ['same player', 'PSA'] }), 'Because you saved X · same player');
   assert.equal(recNote({ reason: 'You follow Charizard', why: ['followed subject'] }), 'You follow Charizard');
   assert.ok(shortTitle('2017 Panini Prizm Silver Prizm #4 Patrick Mahomes II Rookie Card - PSA GEM MT 10').length <= 47);
+});
+
+/* ── Oct 11: price bands, the engine's flag, freshness, the ladder, the return loop ── */
+
+test('price band: median ± robust spread in log space, n-gated, owned counts twice', () => {
+  const seed = (logA: number, kind: Seed['kind'] = 'saved'): Seed => ({ kind, w: 1, label: 'x', f: { ...featOf(card(`1955 Topps #${++seq} Test Player - PSA 5`, 'baseball', 100), NOW), logA } });
+  assert.equal(learnBands([seed(2.3), seed(2.4)]).size, 0, `fewer than ${BAND_MIN} priced lots → no band`);
+  const b = learnBands([seed(2.3), seed(2.4), seed(2.5), seed(5)]).get('sports-cards')!;
+  assert.ok(b && b.n === 4);
+  assert.ok(b.hi < 3.5, 'one $100K outlier on a $300 desk does not stretch the band');
+  assert.ok(b.lo <= 2.3 && b.hi >= 2.5, 'the desk itself sits inside');
+  const own = learnBands([seed(2, 'owned'), seed(3)]).get('sports-cards');
+  assert.equal(own?.n, 3, 'an owned lot weighs twice');
+  const fit = (logA: number | null) => bandFit({ cat: 'sports-cards', logA }, new Map([['sports-cards', b]]));
+  assert.equal(fit(2.4).fit, 1);
+  assert.ok(fit(2.4).inside);
+  assert.ok(fit(5).fit >= 0.45 && fit(5).fit < 0.5, 'far outside: soft floor, never a filter');
+  assert.equal(bandFit({ cat: 'fine-art', logA: 4 }, new Map()).fit, 1, 'no band → no effect');
+});
+
+test('price band: a budget desk ranks the in-band card first and cites the band only when true', () => {
+  const saves = [120, 180, 260, 300].map((p, i) => card(`1956 Topps #${200 + i} Budget Player${i} - PSA 5`, 'baseball', p));
+  const cheap = card('1957 Topps #44 Budget Player0 - PSA 5', 'baseball', 200);
+  const dear = card('1952 Topps #12 Budget Player1 - PSA 8', 'baseball', 60000);
+  const t = buildTaste({ saved: saves.map(l => ({ id: l.id, lot: l })), follows: [], nowMs: NOW });
+  assert.ok(t.bands.get('sports-cards'));
+  const rs = recommend([dear, cheap], t, { nowMs: NOW });
+  assert.equal(rs[0].lot.id, cheap.id);
+  assert.ok(rs[0].inBand);
+  const d = rs.find(r => r.lot.id === dear.id);
+  if (d) {
+    assert.ok(!d.inBand);
+    assert.ok(!/in your \$/.test(d.reason) && !d.why.some(w => /in your \$/.test(w)), 'an off-band pick never claims the band');
+  }
+  assert.ok(/\$/.test(recNote(rs[0])), 'the in-band pick prints a band');
+});
+
+test('engine: a flagged lot that truly ties is lifted and says so; a flagged stranger stays out', () => {
+  const seed = print('andy-warhol', 'Flowers (F. & S. II.64)', 20000, 30000);
+  const plain = print('andy-warhol', 'Cow (F. & S. II.11)', 20000, 30000, { signal: null });
+  const flagged = print('andy-warhol', 'Mick Jagger (F. & S. II.138)', 20000, 30000, { signal: { label: 'Below Market' } });
+  const stranger = card('1990 Fleer #1 Nobody - PSA 9', 'baseball', 25000, { signal: { label: 'Below Market' } });
+  const t = buildTaste({ saved: [{ id: seed.id, lot: seed }], follows: [], nowMs: NOW });
+  const rs = recommend([plain, flagged, stranger], t, { nowMs: NOW });
+  assert.deepEqual(ids(rs), [flagged.id, plain.id]);
+  assert.ok(rs[0].flagged && rs[0].reason.endsWith(ENGINE_NOTE));
+  assert.ok(!rs[1].flagged && !rs[1].reason.includes(ENGINE_NOTE), 'never on an unflagged lot');
+});
+
+test('freshness: closed and results-pending-past-close lots never come back, day over day', () => {
+  const seed = card('1952 Topps #311 Mickey Mantle - PSA 3', 'baseball', 50000);
+  const today = card('1956 Topps #135 Mickey Mantle - PSA 5', 'baseball', 9000, { saleDateTime: at(0.5), saleDate: at(0.5).slice(0, 10) });
+  const later = card('1957 Topps #95 Mickey Mantle - PSA 5', 'baseball', 9000, { saleDateTime: at(4), saleDate: at(4).slice(0, 10) });
+  const pend = card('1958 Topps #150 Mickey Mantle - PSA 5', 'baseball', 9000, { saleDateTime: at(-0.2), saleDate: at(-0.2).slice(0, 10), resultsPending: true } as Partial<RecLot>);
+  const t = buildTaste({ saved: [{ id: seed.id, lot: seed }], follows: [], nowMs: NOW });
+  const d0 = ids(recommend([today, later, pend], t, { nowMs: NOW }));
+  assert.ok(d0.includes(today.id) && d0.includes(later.id) && !d0.includes(pend.id));
+  const d1 = ids(recommend([today, later, pend], t, { nowMs: NOW + 864e5 }));
+  assert.deepEqual(d1, [later.id], 'the lot that closed overnight rotates out');
+});
+
+test('fallback ladder: a thin follow fills by family after the real tie, saying its rung; never across sports', () => {
+  const ewing = card('1986 Fleer #32 Patrick Ewing Rookie - PSA 8', 'basketball', 300);
+  const olajuwon = card('1986 Fleer #82 Hakeem Olajuwon Rookie - PSA 8', 'basketball', 250);
+  const baseball = card('1986 Fleer #1 Wade Boggs - PSA 8', 'baseball', 250);
+  const t = buildTaste({ saved: [], follows: [{ kind: 'maker', key: 'patrick-ewing', label: 'Patrick Ewing' }], nowMs: NOW });
+  const rs = recommend([olajuwon, ewing, baseball], t, { nowMs: NOW });
+  assert.equal(rs[0].lot.id, ewing.id);
+  assert.equal(rs[0].tier, 1);
+  const h = rs.find(r => r.lot.id === olajuwon.id)!;
+  assert.equal(h.tier, 2);
+  assert.match(h.reason, /^Another .*basketball player · you follow Patrick Ewing$/);
+  assert.ok(!ids(rs).includes(baseball.id), 'the ladder never crosses sports');
+  assert.equal(familyOf(featOf(ewing, NOW)), familyOf(featOf(olajuwon, NOW)));
+  // a taste with plenty of real ties never opens the ladder
+  const many: RecLot[] = [];
+  for (let i = 0; i < 60; i++) many.push(card(`19${60 + (i % 30)} Topps #${i} Patrick Ewing - PSA 8`, 'basketball', 300));
+  assert.ok(scoreLots([...many, olajuwon], t, { nowMs: NOW }).every(r => !r.best.ladder));
+});
+
+test('return loop: closing tonight soonest first, new-since-last-visit without repeats, honest empties', () => {
+  const seed = card('1952 Topps #311 Mickey Mantle - PSA 3', 'baseball', 50000);
+  const soon = card('1956 Topps #135 Mickey Mantle - PSA 5', 'baseball', 9000, { saleDateTime: at(0.1), saleDate: at(0.1).slice(0, 10) });
+  const fresh = card('1957 Topps #95 Mickey Mantle - PSA 5', 'baseball', 9000, { saleDateTime: at(4), saleDate: at(4).slice(0, 10) });
+  const old = card('1958 Topps #150 Mickey Mantle - PSA 5', 'baseball', 9000, { saleDateTime: at(5), saleDate: at(5).slice(0, 10) });
+  const t = buildTaste({ saved: [{ id: seed.id, lot: seed }], follows: [], nowMs: NOW });
+  const rs = recommend([soon, fresh, old], t, { nowMs: NOW });
+  const isNew = (l: RecLot) => l.id === fresh.id || l.id === soon.id;
+  const s = pickStrips(rs, { isNew, nowMs: NOW, closesBy: NOW + 6 * 3_600_000 });
+  assert.deepEqual(ids(s.closing), [soon.id]);
+  assert.deepEqual(ids(s.fresh), [fresh.id], 'a pick closing tonight is not repeated under new');
+  const none = pickStrips(rs, { isNew: () => false, nowMs: NOW, closesBy: NOW + 60_000 });
+  assert.equal(none.fresh.length + none.closing.length, 0);
+  const end = tonightEndMs(NOW);
+  assert.ok(end > NOW && end - NOW <= 24 * 3_600_000 && new Date(end).getHours() === 4);
 });

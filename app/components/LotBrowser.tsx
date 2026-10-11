@@ -32,6 +32,7 @@ import { makerLineOf, labelTagOf, subColumnOf } from '../lib/lot-labels';
 import { foldVariants, foldNote, foldQuery, crossSibs, crossNote } from '../lib/fold';
 import type { Follow } from '../lib/follows';
 import { recommend, recNote, type Taste } from '../lib/recs';
+import { useReturnLoop, NewSincePicks, ClosingTonightPicks } from './PickStrips';
 import { feedPass } from '../lib/lot-browser';
 import { isFlagged, FLAG_SIGNAL } from '../lib/flags';
 import { useLotModal } from '../lib/use-lot-modal';
@@ -445,6 +446,8 @@ export default function LotBrowser({
     () => (youTab && taste ? recommend(feedAll, taste, { n: 20 }) : null),
     [youTab, taste, feedAll]
   );
+  // the return loop above the picks: new since the last visit, closing tonight
+  const loop = useReturnLoop(feedAll, youTab ? taste : null, { prevVisitDay, baselines });
   const youNote = useMemo(() => new Map((youRecs ?? []).map(r => [r.lot.id, { full: recNote(r), short: recNote(r, { short: true }) }])), [youRecs]);
   const feed = useMemo(
     () => (youTab
@@ -587,6 +590,12 @@ export default function LotBrowser({
       />
       </>}
 
+      {youTab && loop && feed.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 420px), 1fr))', gap: '0 28px', marginBottom: 26 }}>
+          <ClosingTonightPicks loop={loop} max={narrowView ? 2 : 3} />
+          <NewSincePicks loop={loop} max={narrowView ? 2 : 3} />
+        </div>
+      )}
       {effectiveView === 'table' && feed.length > 0 ? (
         <div key={feedKey} className="ray-feed-rekey ray-feedtable-scroll" style={{ overflowX: 'auto' }}>
           <table className="ray-feedtable">
