@@ -514,6 +514,16 @@ export function trueSaleDay(l: { saleDate?: string | null; saleDateTime?: string
   return dt ? dt.slice(0, 10) : (l.saleDate || '').slice(0, 10);
 }
 
+/** THE printed close day — what every "hammers <day>" / "closes <day>" /
+ *  "hammered <day>" print reads (Oct 11 2026). The reader's TRUE day
+ *  (trueSaleDay), falling back to the crawl's saleDate only when the lot
+ *  carries no usable stamp. Raw saleDate is the crawl/house day: a Goldin
+ *  close at 1:56 AM ET Oct 10 printed "Oct 9" on the lot page while the feed,
+ *  the "In" column and the closing windows all said Oct 10. */
+export function closeDayOf(l: { saleDate?: string | null; saleDateTime?: string | null; auctionHouse?: string | null }): string {
+  return trueSaleDay(l) || (l.saleDate || '');
+}
+
 /** THE upcoming-visibility predicate — ONE definition of "live" for every
  *  surface (feed, /value, /[artist], nav counts), mirroring build-upcoming's
  *  semantics.

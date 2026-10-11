@@ -1,14 +1,19 @@
 import type { Metadata } from 'next';
+import JsonLd from '../../components/JsonLd';
+import { postMeta, postLd } from '../posts';
 import QuarterInsight, { P, H, B } from '../../components/blog/QuarterInsight';
 import { PullQuote } from '../../components/blog/Editorial';
 
-export const metadata: Metadata = {
+const POST = {
   title: 'Q2 2026 design market in review — small money, real heat',
   description: 'The smallest market we track put up the strongest demand of the quarter: the median design lot hammered nearly 50% over its midpoint and 69% beat the high estimate. The Q2 2026 numbers.',
 };
+export const metadata: Metadata = postMeta('q2-2026-design', POST);
 
 export default function Q2Design() {
   return (
+    <>
+      <JsonLd data={postLd('q2-2026-design', POST)} />
     <QuarterInsight
       market="design"
       date="July 16, 2026"
@@ -109,5 +114,6 @@ export default function Q2Design() {
         of them.
       </P>
     </QuarterInsight>
+    </>
   );
 }

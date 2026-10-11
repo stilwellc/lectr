@@ -8,6 +8,8 @@ import { AccountProvider } from './lib/account';
 import { ROSTER_PHRASE } from './constants';
 import { DelegatedTrackers } from './components/retention/trackers';
 import RayDataPreloads from './components/RayDataPreloads';
+import JsonLd from './components/JsonLd';
+import { siteLd } from './lib/seo';
 
 // One voice. Inter carries everything — display numerals, labels, body —
 // with tabular figures for anything that counts money.
@@ -117,6 +119,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </AccountProvider>
           </MarketProvider>
         </ThemeProvider>
+        {/* schema.org Organization + WebSite — the site's name and logo for
+            search results; a data block, never executed (CSP-safe) */}
+        <JsonLd data={siteLd(`Auction intelligence for the collectibles market — ${ROSTER_PHRASE} tracked across major houses, crawled nightly.`)} />
         {/* anonymous product-event counts (outbound + pick opens) — renders nothing */}
         <DelegatedTrackers />
       </body>

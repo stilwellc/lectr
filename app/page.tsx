@@ -1,4 +1,19 @@
+import type { Metadata } from 'next';
 import TerminalHome from './preview/terminal/TerminalHome';
+import { seoMeta } from './lib/seo';
+import { SITE_TITLE } from './lib/route-titles';
+import { ROSTER_PHRASE } from './constants';
+
+// home's own head: the site title, a self canonical ('/', so the www host and
+// any ?query variant consolidate here) and og:url — the root layout keeps NO
+// global canonical (audit-urls), so each route names its own
+export const metadata: Metadata = seoMeta({
+  title: SITE_TITLE,
+  absolute: true,
+  description: `Auction intelligence for the collectibles market — ${ROSTER_PHRASE} tracked across major houses, crawled nightly.`,
+  path: '/',
+  imageAlt: 'lectr — auction intelligence for the collectibles market',
+});
 
 // The Terminal is the site's main lander. Its full implementation lives in
 // app/preview/terminal/TerminalHome.tsx; the legacy /preview/terminal path

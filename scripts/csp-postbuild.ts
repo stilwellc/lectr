@@ -119,6 +119,20 @@ function main() {
     if (!connect.split(/\s+/).includes(origin)) problems.push(`connect-src is missing the Supabase origin ${origin} — add it to public/_headers`);
   }
 
+  // Cloudflare Pages refuses a deploy over 20,000 files. The static sets that
+  // grow with the data (flagged lots ≤500, refs, sub-markets, the /p + /e
+  // aliases ≤600 — app/lib/seo-entities) each cost ~6–7 files a page: fail
+  // the BUILD here, with the count, rather than the deploy step later.
+  let total = 0;
+  (function count(d: string) {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      if (e.isDirectory()) count(path.join(d, e.name)); else total++;
+    }
+  })(OUT);
+  console.log(`csp-postbuild: ${total.toLocaleString('en-US')} files in out/ (Cloudflare Pages cap 20,000)`);
+  if (total > 19_500) problems.push(`out/ holds ${total} files — over the 19,500 safety line under Cloudflare Pages' 20,000-file cap; shrink a static set (app/lib/seo-entities caps, flagged.ts)`);
+  else if (total > 18_000) console.warn(`::warning::out/ holds ${total} files — nearing Cloudflare Pages' 20,000-file cap`);
+
   console.log(`csp-postbuild: ${rewritten}/${files.length} pages externalized, ${flightFiles} flight files written`);
   if (problems.length) {
     for (const p of problems) console.error(`::error::${p}`);

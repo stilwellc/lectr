@@ -1,9 +1,15 @@
 import type { Metadata } from 'next';
 import { flaggedLots } from '../flagged';
 import LotPage from '../../components/LotPage';
-import { splitTitle, formatDate, httpsImg, formatPrice } from '../../utils';
+import { splitTitle, formatDate, httpsImg, sizedImg, formatPrice } from '../../utils';
 import { signalMagnitude } from '../../lib/comps';
 import { makerLineOf } from '../../lib/lot-labels';
+import JsonLd from '../../components/JsonLd';
+import { seoMeta, webPageLd, breadcrumbLd, type Ld } from '../../lib/seo';
+import { PAGE_MAKERS } from '../../lib/entity/retired';
+import { ARTIST_LABEL, ARTIST_MARKET } from '../../constants';
+import type { AuctionLot } from '../../types';
+import { houseCloseDayOf } from '../../lib/house-tz';
 
 /**
  * The STATIC flagged set — /lot/<id> prerendered for every lot the crawl
@@ -21,6 +27,20 @@ export function generateStaticParams() {
   return flaggedLots().map(l => ({ id: l.id }));
 }
 
+/** the lot photo at share size. Unfurlers choke on the extremes: Christie's
+ *  `?mode=max` originals run 2–3 MB (WhatsApp / X drop the preview), Wright's
+ *  stored 220px thumbnail is under X's large-card minimum. sizedImg's
+ *  verified rungs (Wright /1200/, Bonhams &width=) plus Christie's `w=1200`
+ *  (curl-verified Oct 11 2026: 2.27 MB → 255 KB). */
+function shareImg(u: string | null | undefined): string | undefined {
+  const h = httpsImg(u);
+  if (!h) return undefined;
+  if (/^https:\/\/www\.christies\.com\/img\//i.test(h) && !/[?&]w=\d/i.test(h)) {
+    return `${h}${h.includes('?') ? '&' : '?'}w=1200`;
+  }
+  return sizedImg(h, 1200);
+}
+
 export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const params = await props.params;
   const lot = flaggedLots().find(l => l.id === params.id);
@@ -35,32 +55,57 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
       ? `${formatPrice((lot.estimateLow || lot.estimateHigh)!)} est.`
       : null;
   const description = [
-    `${maker} — flagged Below Market: comps run ${sig ? signalMagnitude(sig.label, sig.pct) : 'over'} the ask${sig?.basis ? ` across ${sig.basis} comparable sales` : ''}.`,
+    `${maker || title} — flagged Below Market: comps run ${sig ? signalMagnitude(sig.label, sig.pct) : 'over'} the ask${sig?.basis ? ` across ${sig.basis} comparable sales` : ''}.`,
     est,
-    `Hammers ${formatDate(lot.saleDate)} at ${lot.auctionHouse}.`,
+    `Hammers ${formatDate(houseCloseDayOf(lot) || lot.saleDate)} at ${lot.auctionHouse}${lot.lotNumber != null ? `, lot ${lot.lotNumber}` : ''}.`,
   ].filter(Boolean).join(' ');
+  // two flagged lots of one title (editions, a letter series in one sale)
+  // would share a <title>: the lot number tells them apart
+  const twin = lot.lotNumber != null && flaggedLots().some(o => o.id !== lot.id
+    && makerLineOf(o).name === maker && splitTitle(o.title, o.auctionHouse).short === title);
+  const head = `${maker ? `${title} — ${maker}` : title}${twin ? ` · lot ${lot.lotNumber}` : ''}`;
 
   // the lot's own photograph carries the share; https-forced (mixed-content),
-  // falling back to the site card when the house published none
-  const image = httpsImg(lot.imageUrl) || 'https://lectr.bid/opengraph-image';
+  // sized for an unfurler (shareImg), falling back to the site card when the
+  // house published none
+  const image = shareImg(lot.imageUrl) || '/opengraph-image';
 
-  return {
-    title: `${title} — ${maker}`,
+  return seoMeta({
+    title: head,
     description,
-    alternates: { canonical: `/lot/${lot.id}` },
-    openGraph: {
-      title: `${title} — ${maker} — lectr`,
-      description,
-      images: [image],
-      type: 'article',
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title: `${title} — ${maker}`,
-      description,
-      images: [image],
-    },
-  };
+    path: `/lot/${lot.id}`,
+    image,
+    imageAlt: `${maker ? `${title} — ${maker}` : title}, at ${lot.auctionHouse}`,
+    type: 'article',
+  });
+}
+
+/** a flagged lot's structured data: the page and the work it is about, plus
+ *  its breadcrumb. Deliberately NOT a Product/Offer: lectr sells nothing and
+ *  the house estimate is not an offer price (app/lib/seo.ts). */
+function lotLd(lot: AuctionLot): Ld[] {
+  const maker = makerLineOf(lot).name;
+  const title = splitTitle(lot.title, lot.auctionHouse).short;
+  const path = `/lot/${encodeURIComponent(lot.id)}`;
+  const img = shareImg(lot.imageUrl);
+  const art = ARTIST_MARKET[lot.artist] === 'art';
+  const crumbs: [string, string][] = [['lectr', '/']];
+  if (PAGE_MAKERS.includes(lot.artist)) crumbs.push([ARTIST_LABEL[lot.artist] || maker, `/makers/${lot.artist}`]);
+  crumbs.push([title, path]);
+  return [
+    webPageLd({
+      path, type: 'ItemPage', name: maker ? `${title} — ${maker}` : title,
+      description: `${title}${maker ? ` by ${maker}` : ''}, offered at ${lot.auctionHouse} on ${formatDate(houseCloseDayOf(lot) || lot.saleDate)} — read against its comparable sales by lectr.`,
+      image: img || undefined,
+      about: {
+        '@type': art ? 'VisualArtwork' : 'Thing',
+        name: title,
+        ...(img ? { image: img } : {}),
+        ...(art && maker ? { creator: { '@type': 'Person', name: maker } } : {}),
+      },
+    }),
+    breadcrumbLd(crumbs),
+  ];
 }
 
 export default async function StaticLotPage(props: { params: Promise<{ id: string }> }) {
@@ -68,5 +113,10 @@ export default async function StaticLotPage(props: { params: Promise<{ id: strin
   const lot = flaggedLots().find(l => l.id === params.id) || null;
   // key: navigating between static lot pages must remount (fresh dbLot/
   // imgFailed state) — same doctrine as the /lot?id= query route.
-  return <LotPage key={params.id} lotId={params.id} initialLot={lot} />;
+  return (
+    <>
+      {lot && <JsonLd data={lotLd(lot)} />}
+      <LotPage key={params.id} lotId={params.id} initialLot={lot} />
+    </>
+  );
 }

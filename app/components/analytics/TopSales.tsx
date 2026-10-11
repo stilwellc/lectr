@@ -208,7 +208,7 @@ export default function TopSales({ allLots, market, series }: Props) {
                     {i + 1}
                   </td>
                   <td className="ray-top-td">
-                    <div style={{
+                    {makerLineOf(lot).name && <div style={{
                       fontSize: 12,
                       letterSpacing: '-0.01em',
                       textTransform: 'none',
@@ -217,7 +217,7 @@ export default function TopSales({ allLots, market, series }: Props) {
                       marginBottom: 3,
                     }}>
                       {makerLineOf(lot).name}
-                    </div>
+                    </div>}
                     {/* canonical in-app lot permalink — /lot?id= resolves any
                         corpus lot client-side; the house link lives on the
                         lot page's own CTA row */}

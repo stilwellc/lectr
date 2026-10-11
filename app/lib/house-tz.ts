@@ -184,6 +184,14 @@ export function closeMs(l: TzLot): number | null {
 }
 const closeMemo = new WeakMap<object, { k: string; v: number | null }>();
 
+/** The close day where the sale is HELD — for prints with no reader behind
+ *  them (build-time page metadata). A reader-facing print uses closeDayOf
+ *  (app/utils), the reader's own calendar. */
+export function houseCloseDayOf(l: TzLot): string {
+  if (closeIsTimed(l)) return localDayIn(Date.parse(l.saleDateTime as string), houseTzOf(l));
+  return dayOnly(l);
+}
+
 /** How long after a timed close an un-resulted lot still reads live.
  *   'online'  (crawler-stamped: Phillips online, Bonhams ONLINE) — the stamp
  *             is when lots BEGIN closing one by one: 3h covers the stagger.

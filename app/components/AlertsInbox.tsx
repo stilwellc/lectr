@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useAlerts, useSavedSearches } from '../lib/alerts';
 import { supabase } from '../lib/supabase';
-import { craftTitle, formatDate, formatPrice, fmtSignedPct, httpsImg, sizedImg } from '../utils';
+import { closeDayOf, craftTitle, formatDate, formatPrice, fmtSignedPct, httpsImg, sizedImg } from '../utils';
 import { makerLineOf } from '../lib/lot-labels';
 
 interface SlimLot {
@@ -213,9 +213,9 @@ export default function AlertsInbox({ embedded = false }: {
                     )}
                     <span className="lectr-inbox-title">{lot ? craftTitle(lot.title || a.lot_id) : a.lot_id}</span>
                     <span className="lectr-inbox-meta" style={{ marginLeft: 'auto', flex: 'none' }}>
-                      {lot?.artist ? `${makerLineOf({ ...lot, artist: lot.artist }).name} · ` : ''}
+                      {lot?.artist && makerLineOf({ ...lot, artist: lot.artist }).name ? `${makerLineOf({ ...lot, artist: lot.artist }).name} · ` : ''}
                       {est ? `est. ${formatPrice(est)}` : 'no estimate'}
-                      {lot?.saleDate ? ` · ${formatDate(lot.saleDate)}` : ''}
+                      {lot?.saleDate ? ` · ${formatDate(closeDayOf(lot))}` : ''}
                       {/* measured comp signal only — the lamp is Below Market
                           (the deal); Above Market is not a down-signal for a
                           buyer, so it prints in ink with its sign (signed-

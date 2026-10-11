@@ -1,4 +1,5 @@
 import { MARKETS } from '../../../constants';
+import { seoMeta } from '../../../lib/seo';
 
 /**
  * /makers/m/<market> — the roster with the market pinned in the URL
@@ -21,11 +22,13 @@ export function generateStaticParams() {
 export async function generateMetadata(props: { params: Promise<{ market: string }> }) {
   const params = await props.params;
   const label = MARKETS.find(m => m.key === params.market)?.label || params.market;
-  return {
+  return seoMeta({
     title: `${label} makers`,
     description: `Every maker lectr tracks in the ${params.market === 'tcg' ? 'TCG' : label.toLowerCase()} market — sparklines, record sales, and where the market is heading.`,
-    alternates: { canonical: `/makers/m/${params.market}` },
-  };
+    path: `/makers/m/${params.market}`,
+    image: `/og/m/${params.market}.png`,
+    imageAlt: `${label} — the market on lectr: settled results and lots on the block`,
+  });
 }
 
 import Base from '../../page';

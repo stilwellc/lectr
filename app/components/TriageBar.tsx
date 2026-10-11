@@ -7,7 +7,7 @@
  * (the page's live pool for the current market) so a chip never offers an
  * empty cut.
  */
-import { useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { taxonOf, subChipsOf, CAT_LABEL, type CatKey, type SubChip } from '../lib/taxonomy';
 import FollowChip from './FollowChip';
 import { catFollow, houseFollow } from '../lib/follows';
@@ -111,8 +111,29 @@ export default function TriageBar({
     </button>
   );
 
+  // PHONES: each row is one swipeable strip, so a picked control can sit
+  // past the right edge ("Under $5K" lived off-screen at 390px — the reader
+  // couldn't see the filter cutting the board). After any change, every
+  // scrolling row brings its first active control into view — the row
+  // scrolls, never the page.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const activeKey = JSON.stringify(filters);
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    root.querySelectorAll<HTMLElement>('.ray-triagebar-row').forEach(row => {
+      if (row.scrollWidth <= row.clientWidth + 1) return;
+      const on = row.querySelector<HTMLElement>('[data-active="true"]');
+      if (!on) return;
+      const r = row.getBoundingClientRect(), c = on.getBoundingClientRect();
+      if (c.left >= r.left && c.right <= r.right) return;
+      // land the control with a chip's breath of context on its left
+      row.scrollLeft = Math.max(0, row.scrollLeft + (c.left - r.left) - 24);
+    });
+  }, [activeKey]);
+
   return (
-    <div className="ray-triagebar" role="group" aria-label={label}>
+    <div ref={rootRef} className="ray-triagebar" role="group" aria-label={label}>
       <style dangerouslySetInnerHTML={{ __html: `
         .ray-triagebar { display: flex; flex-direction: column; gap: 8px; margin: 0 0 14px; }
         .ray-triagebar-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
