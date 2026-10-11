@@ -10,6 +10,7 @@ import { closeDayOf, houseColors, categoryColors, formatDate, formatPrice, craft
 import { contextComps, isSportsScienceObject, FORM_LABEL, signalMagnitude, type Form } from '../lib/comps';
 import { enginePoolOf } from '../lib/engine-pool';
 import { lotFace, fmtFace, medianRowId, valueSentence, FACE_LABEL } from '../lib/lot-face';
+import { rungView, valueRowFlags, yearsText } from '../lib/card-record';
 import { latestExactSale } from '../lib/exact-sale';
 import { lotHammerFromAllIn } from '../lib/premiums';
 import type { SoldComp } from '../types';
@@ -202,35 +203,47 @@ function CardCompsBlock({ lot }: { lot: AuctionLot }) {
   const sales = (cc.lastSales || []).filter(s => s.p > 0);
   const ladder = cc.gradeLadder || [];
   if (!sales.length && !ladder.length) return null;
+  // (W17) the rows the value read, marked; the rungs dated; all-in vs hammer said
+  const used = valueRowFlags(lot, sales);
+  const card = lotFace(lot).card;
   return (
     <div style={{ margin: '4px 0 2px' }}>
       {sales.length > 0 && (
         <div style={{ marginBottom: ladder.length ? 10 : 0 }}>
           <div style={{ fontSize: 12, letterSpacing: '-0.01em', color: 'var(--color-text-muted)', fontWeight: 500, marginBottom: 6 }}>
-            This exact card — recent sales
+            This exact card — latest sales, all-in{card?.head ? <span style={{ color: 'var(--color-text-faint)', fontWeight: 400 }}> · {card.head}</span> : null}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {sales.map((s, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--color-text-secondary)' }}>
-                <span style={{ color: 'var(--color-text-faint)' }}>{s.d ? formatDate(s.d, { month: 'short', year: 'numeric' }) : '—'}</span>
+                <span style={{ color: 'var(--color-text-faint)' }}>{s.d ? formatDate(s.d, { month: 'short', year: 'numeric' }) : '—'}{used[i] ? ' · in the last year · in the value' : ''}</span>
                 <span style={{ color: 'var(--color-fg)', fontWeight: 500 }}>{formatPrice(s.p)}</span>
               </div>
             ))}
           </div>
+          {card?.window === 'year' && card.allTime && card.n < cc.n && (
+            <div style={{ fontSize: 12, color: 'var(--color-text-faint)', marginTop: 4 }}>All-time: {card.allTime}</div>
+          )}
+          {card?.note && (
+            <div style={{ fontSize: 12, color: 'var(--color-text-faint)', marginTop: 4 }}>{card.note}</div>
+          )}
         </div>
       )}
       {ladder.length > 0 && (
         <div>
           <div style={{ fontSize: 12, letterSpacing: '-0.01em', color: 'var(--color-text-muted)', fontWeight: 500, marginBottom: 6 }}>
-            Grade ladder — same card, by grade
+            Grade ladder — same card, by grade{ladder.some(r => typeof r.rn === 'number') ? ' · last-year median where it sold, else all-time' : ' · all-time medians'}
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {ladder.map((r, i) => (
-              <span key={i} style={{ fontSize: 12.5, color: 'var(--color-text-secondary)', border: '1px solid var(--hairline)', borderRadius: 6, padding: '3px 8px' }}>
-                {r.g} <b style={{ color: 'var(--color-fg)', fontWeight: 500 }}>{formatPrice(r.med)}</b>
-                <span style={{ color: 'var(--color-text-faint)' }}> · {r.n}</span>
-              </span>
-            ))}
+            {ladder.map((r, i) => {
+              const rv = rungView(r, fmtFace);
+              return (
+                <span key={i} title={rv.meta} style={{ fontSize: 12.5, color: 'var(--color-text-secondary)', border: '1px solid var(--hairline)', borderRadius: 6, padding: '3px 8px' }}>
+                  {r.g} <b style={{ color: 'var(--color-fg)', fontWeight: 500 }}>{formatPrice(rv.price)}</b>
+                  <span style={{ color: 'var(--color-text-faint)' }}> · {rv.basis === 'year' ? `${r.rn} in 12 mo` : `${r.n}${typeof r.rn === 'number' && r.y0 != null ? ` in ${yearsText(r.y0, r.y1 ?? r.y0)}` : ' all-time'}`}</span>
+                </span>
+              );
+            })}
           </div>
         </div>
       )}
