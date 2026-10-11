@@ -39,7 +39,7 @@ import { CellGrid, Cell, ColorCell } from '../components/cells';
 import { RoomHead } from './head';
 import { useGridCols, PickSkeleton } from './grid';
 import { PillRail, useHashLanding, type RailItem } from './rail';
-import TodayBand from './today';
+import TodayBand, { topPicksOf } from './today';
 import YourSignals from './signals';
 import YourMarket from './YourMarket';
 import PickMenu from './pickmenu';
@@ -53,6 +53,7 @@ import { displayMakerOf } from '../lib/maker-subjects';
 import PushOptIn from '../components/retention/PushOptIn';
 import { TrackOnMount } from '../components/retention/trackers';
 import DecisionLine from '../components/DecisionLine';
+import { useStalled } from './stall';
 
 /* ============================================================
    MY PROFILE — THE COCKPIT (Aug 24 2026 rebuild). The page is
@@ -417,13 +418,23 @@ function useDeal(book: AuctionLot[], taste: Taste, ready: boolean): Deal {
   return { pool, recs, loop };
 }
 
-function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onToggleSave, signedOut = false, compact = false }: {
+function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onToggleSave, signedOut = false, compact = false, top }: {
   book: AuctionLot[]; deal: Deal; compLots: AuctionLot[]; taste: Taste; ready: boolean; lastCrawl?: string;
   isSaved: (id: string) => boolean; onToggleSave: (id: string, lot?: AuctionLot) => void; signedOut?: boolean;
   /** a desk with live watches: the picks open as one row, Show more deals the rest */
   compact?: boolean;
+  /** the picks the Today band already prints (its Top 3 strip) — the room
+   *  starts after them, so no pick shows twice on the page */
+  top?: readonly Rec<AuctionLot>[];
 }) {
-  const { pool, recs } = deal;
+  const { pool } = deal;
+  const recs = useMemo(() => {
+    if (!top?.length) return deal.recs;
+    const ids = new Set(top.map(r => r.lot.id));
+    return deal.recs.filter(r => !ids.has(r.lot.id));
+  }, [deal.recs, top]);
+  // (deadline) a book that never lands: the seat stops pretending to load
+  const slow = useStalled(!ready, 15_000);
   // (Oct 11) the reader's stated price range (quick start, app/lib/interests)
   // rides inside the taste as a strong band (recs' statedFit) — named here only
   const pricePref = usePricePref();
@@ -484,7 +495,8 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
   }, [recs, visible, fb.marks]);
   useEffect(() => { lastShown.current = shownList; }, [shownList]);
   // the picks on screen, noted on this device with what lectr said then (N4)
-  useLogPicks(useMemo(() => (ready && !editing ? shownList.map(r => ({ lot: r.lot, rec: r })) : null), [ready, editing, shownList]), 'p');
+  // (the Today band's Top 3 are on screen too — noted with the room's)
+  useLogPicks(useMemo(() => (ready && !editing ? [...(top ?? []), ...shownList].map(r => ({ lot: r.lot, rec: r })) : null), [ready, editing, shownList, top]), 'p');
   const seats = withUndoSeat(shownList, fb.undo);
 
   return (
@@ -512,15 +524,20 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
             : null}
           sub={ready && !cold ? (
             <>
-              {recs.length > 0 ? <>{recs.length} picked</> : <>nothing ties yet</>}<span className="ck-wide"> from {pool.length.toLocaleString()} live lots</span>
+              {deal.recs.length > 0 ? <>{deal.recs.length} picked</> : <>nothing ties yet</>}<span className="ck-wide"> from {pool.length.toLocaleString()} live lots</span>
+              {top?.length ? <> · top {top.length} <a href="#today" className="ck-away-link">in Today</a></> : null}
               {pricePref ? <> · {priceText(pricePref)}</> : null} · <span className="ck-wide">tuning </span>from {from}
             </>
           ) : null} />
 
         {!ready ? (
           <div aria-busy="true">
-            <p className="ck-sig-note" style={{ margin: '0 0 14px' }}>Reading the block against your desk…</p>
-            <PickSkeleton cols={cols} n={page} />
+            {slow
+              ? <p className="ck-sig-note" role="status" style={{ margin: '0 0 14px' }}>The live book is slow to arrive — your picks land here the moment it does.</p>
+              : <>
+                  <p className="ck-sig-note" style={{ margin: '0 0 14px' }}>Reading the block against your desk…</p>
+                  <PickSkeleton cols={cols} n={page} />
+                </>}
           </div>
         ) : cold ? (
           <QuickStart book={book} mode="cold" surface="profile" />
@@ -529,7 +546,11 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
             <QuickStart book={book} mode="edit" surface="profile" onClose={() => setEditing(false)} />
           </div>
         ) : null}
-        {!ready || cold ? null : recs.length === 0 ? (
+        {!ready || cold ? null : recs.length === 0 && top?.length ? (
+          <p className="ck-sig-note" style={{ margin: 0 }}>
+            {top.length === 1 ? 'Your one pick is' : `All ${top.length} of your picks are`} in <a href="#today" className="ck-away-link">Today</a> above — new lots land with every crawl.
+          </p>
+        ) : recs.length === 0 ? (
           <div>
             <p style={{ fontSize: 13.5, color: 'var(--color-text-muted)', margin: 0, maxWidth: 640, lineHeight: 1.55 }}>
               Nothing on the block ties to your desk right now — no live lot shares a name, card, franchise or close
@@ -542,7 +563,7 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
             {seats.map((r, i) => ('undoSeat' in r
               ? <UndoSeat key={`undo-${r.undoSeat.id}`} undo={r.undoSeat} onUndo={fb.undoIt} row />
               : (
-                <div key={r.lot.id} className="ck-pickrow" data-pick data-nav-row>
+                <div key={r.lot.id} className="ck-pickrow" data-pick={r.lot.id} data-nav-row>
                   {/* the reason is the row's one line that never truncates
                       (the honesty payload) — it wraps; the price rides under */}
                   <FeedRow stack lot={r.lot} onOpen={() => setOpenLot(r.lot)}
@@ -560,7 +581,7 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
               ? <div key={`undo-${r.undoSeat.id}`} className="ck-undoseat"><UndoSeat undo={r.undoSeat} onUndo={fb.undoIt} /></div>
               : (
               // the card fills its row; the pick's feedback rides under it
-              <div key={r.lot.id} data-pick data-nav-row className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms`, display: 'grid', gridTemplateRows: 'minmax(0, 1fr) auto' } as React.CSSProperties}>
+              <div key={r.lot.id} data-pick={r.lot.id} data-nav-row className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms`, display: 'grid', gridTemplateRows: 'minmax(0, 1fr) auto' } as React.CSSProperties}>
                 <LotCard lot={r.lot} showArtist subjectMaker allLots={compLots} saved={isSaved(r.lot.id)} onToggleSave={onToggleSave}
                   lastCrawl={lastCrawl} note={recNote(r)} decision={<DecisionLine lot={r.lot} estimate={false} />} />
                 <PickFeedback lot={r.lot} mark={fb.marks.get(r.lot.id)} onMark={fb.mark} at={i} />
@@ -762,6 +783,15 @@ export default function SavedPage() {
   // the reader's taste — saves resolve against whatever book has landed,
   // else their own snapshot (app/lib/use-recs)
   const { taste: recTaste, ready: tasteReady } = useTaste(allLots);
+  // NO INFINITE SPINNERS (./stall): the archive that resolves the desk has a
+  // deadline — past it every surface waiting on it fails soft and says so
+  // (20s: the archive is ~35MB — a slow phone legitimately takes a while,
+  // and dealing picks before it lands means a reshuffle when it does)
+  const fullWait = deskNeedsCorpus && !loading && !fullLoaded && !fullError;
+  const fullSlow = useStalled(fullWait, 20_000);
+  // a deep link lands after the archive (rows above it change height when it
+  // arrives); one that never arrives still lands, later
+  const landSlow = useStalled(fullWait, 30_000);
 
   const [savedView, setSavedView] = useState<SavedView>('ledger');
   useEffect(() => {
@@ -1374,7 +1404,9 @@ export default function SavedPage() {
 
   // the room waits for every save to resolve (or the corpus to answer), so a
   // settled watch reads as its row, not its snapshot — no reshuffle on arrival
-  const recsReady = !loading && tasteReady && (!deskNeedsCorpus || fullLoaded || fullError || savedLots.length >= savedIds.length);
+  // (deadline) an archive that never answers stops holding the picks: they
+  // deal from the live book already in hand
+  const recsReady = !loading && tasteReady && (!deskNeedsCorpus || fullLoaded || fullError || fullSlow || savedLots.length >= savedIds.length);
   // ONE deal per page: the Today band, the rail's count and the room agree
   const deal = useDeal(allLots, recTaste, recsReady);
   // the picks, then how the ones shown before did (N4, app/profile/outcomes),
@@ -1385,7 +1417,7 @@ export default function SavedPage() {
   const recsRoom = (signedOut = false, compact = false) => (
     <div className="ck-group" data-compact={compact || undefined}>
       <RecsRoom book={allLots} deal={deal} compLots={allLots} taste={recTaste} ready={recsReady} lastCrawl={lastCrawl || undefined}
-        isSaved={isSaved} onToggleSave={toggle} signedOut={signedOut} compact={compact} />
+        isSaved={isSaved} onToggleSave={toggle} signedOut={signedOut} compact={compact} top={compact ? todayTop : undefined} />
       <ForYourCollection book={allLots} pool={deal.pool} compLots={allLots} ready={recsReady} lastCrawl={lastCrawl || undefined}
         isSaved={isSaved} onToggleSave={toggle} />
       <PickOutcomes book={allLots} />
@@ -1475,6 +1507,15 @@ export default function SavedPage() {
   // has live watches (their own lots, on a hammer clock, before lectr's
   // suggestions); with nothing live, the picks lead
   const watchFirst = deskView && upcoming.length > 0;
+  // (follow-up) a desk whose watches lead the page pushes its picks below
+  // Watching — the Today band carries the top three so they stay in the
+  // first screen, and the picks room below starts after them
+  const todayTop = useMemo(() => {
+    if (!watchFirst || !recsReady) return [];
+    const claimed = new Set<string>(closingWatches.map(l => l.id));
+    for (const r of deal.loop?.closing ?? []) claimed.add(r.lot.id);
+    return topPicksOf(deal.recs, claimed);
+  }, [watchFirst, recsReady, closingWatches, deal.recs, deal.loop]);
   const railItems: RailItem[] = useMemo(() => {
     const r: RailItem[] = [];
     const forYou: RailItem = { id: 'for-you', label: 'For you', mark: <RankMark size={15} />, count: deal.recs.length || undefined, group: 'picks' };
@@ -1499,7 +1540,21 @@ export default function SavedPage() {
       ? [{ id: 'today', label: 'Today', mark: <AwayMark size={15} />, group: 'now' }, ...railItems]
       : railItems;
 
-  useHashLanding(recsReady && !loading && authReady && savedReady && (!deskNeedsCorpus || fullLoaded || !!fullError));
+  useHashLanding(recsReady && !loading && authReady && savedReady && (!deskNeedsCorpus || fullLoaded || !!fullError || landSlow));
+  // the whole-page loader's own deadline: past it the loader says the book is
+  // slow and offers a reload — never a skeleton forever
+  const pageLoading = !signedOutView && (loading || !authReady || !savedReady || (savedLots.length === 0 && !fullLoaded && !fullError && savedIds.length > 0));
+  const pageSlow = useStalled(pageLoading, 15_000);
+  const slowNote = pageSlow ? (
+    <section className="rail" role="status" style={{ paddingBlock: 64, textAlign: 'center', minHeight: '60vh' }}>
+      <p style={{ color: 'var(--color-text-muted)', margin: '0 0 14px' }}>
+        {loading || !authReady || !savedReady
+          ? <>The book is slow to arrive — your desk opens the moment it lands.</>
+          : <>The archive that resolves your saved lots is slow to arrive — your desk opens the moment it lands.</>}
+      </p>
+      <button className="ray-call-btn ray-call-btn-quiet" onClick={() => window.location.reload()}>Reload</button>
+    </section>
+  ) : null;
 
   /* ── ACCOUNT — who is signed in, where the desk lives, sign out ── */
   const accountStrip = (
@@ -1619,7 +1674,7 @@ export default function SavedPage() {
           {accountStrip}
         </RayEntrance>
       ) : loading || !authReady || !savedReady ? (
-        <RayLoading />
+        (slowNote ?? <RayLoading />)
       ) : savedLots.length === 0 && !fullLoaded && fullError ? (
         <RayEntrance animate={false}>
           <section className="rail" style={{ paddingBlock: 48, textAlign: 'center' }}>
@@ -1633,7 +1688,7 @@ export default function SavedPage() {
         savedIds.length === 0 ? (
           <RayEntrance animate={!fromCache}>{emptyState}</RayEntrance>
         ) : (
-          <RayLoading />
+          (slowNote ?? <RayLoading />)
         )
       ) : savedLots.length === 0 && orphanIds.length === 0 ? (
         <RayEntrance animate={!fromCache}>{emptyState}</RayEntrance>
@@ -1725,13 +1780,20 @@ export default function SavedPage() {
                 <button className="ck-warn-btn" onClick={() => retryFullLoad()}>Try again</button>
               </div>
             )}
+            {/* (deadline) the archive is still out, not failed — say so, once */}
+            {fullSlow && !partialLoadFailed && (
+              <div className="ck-warn ray-enter" role="status">
+                The archive that resolves your concluded lots is slow to arrive — settled results and appraisals fill in
+                when it lands{savedIds.length - savedLots.length > 0 ? <>; {savedIds.length - savedLots.length} of your {savedIds.length} saved {savedIds.length === 1 ? 'watch is' : 'watches are'} not shown yet</> : null}.
+              </div>
+            )}
           </section>
 
           <PillRail items={railWith({ away: !!awayLine, closing: closingWatches.length, reads: reads.length })} />
 
           {/* ══ 1 · TODAY — new since, closing tonight, today's reads; the
               away facts ride its header line ══ */}
-          <TodayBand loop={deal.loop} closingWatches={closingWatches} reads={reads} away={awayLine} phoneRows={watchFirst ? 2 : 3} />
+          <TodayBand loop={deal.loop} closingWatches={closingWatches} reads={reads} away={awayLine} top={todayTop} phoneRows={watchFirst ? 2 : 3} />
 
           {/* ══ 2 · LOTS YOU MAY LIKE — first only when nothing is live on the
               desk; a reader with live watches sees their own lots first ══ */}
@@ -1747,6 +1809,9 @@ export default function SavedPage() {
                   Every bookmarked lot still on the block, sorted action-first: lands soon, then flagged below
                   market, then bid momentum, then quiet. Click a row (or press Enter on it) to open its dossier
                   in place — <b>j</b>/<b>k</b> walks the rows. The tag on each row says why it needs you now.
+                  Under a title, <b>worth up to</b> is the engine&rsquo;s max bid and the gap to the projected close
+                  beside it. A row with no such line is one the engine abstained on (too little like it has sold) or
+                  could not price — no value is implied, high or low.
                 </> }}
                 sub={<>
                   {upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}
@@ -1809,7 +1874,7 @@ export default function SavedPage() {
                             {craftTitle(lot.title, lot.auctionHouse)}
                           </Link>
                           {/* (N2) the decision: the Est and Hammers columns print the rest */}
-                          <DecisionLine lot={lot} estimate={false} when={false} style={{ marginTop: 3 }} />
+                          <DecisionLine lot={lot} estimate={false} when={false} abstain="quiet" style={{ marginTop: 3 }} />
                         </span>
                         <span className="num">{formatEstimate(lot) || '—'}</span>
                         <span className="num" style={sig ? { color: sigInk(sig.label), fontWeight: 700 } : { color: 'var(--color-text-faint)' }}
@@ -1852,7 +1917,7 @@ export default function SavedPage() {
                           {reason && <span className="ck-tag" data-tone={reason.tag === 'Below market' ? 'up' : reason.tag === 'Lands soon' ? 'hot' : undefined}>{reason.tag}</span>}
                           {[displayMakerOf(lot)?.name, formatEstimate(lot)].filter(Boolean).join(' · ')}
                         </span>
-                        <DecisionLine lot={lot} estimate={false} when={false} style={{ marginTop: 2 }} />
+                        <DecisionLine lot={lot} estimate={false} when={false} abstain="quiet" style={{ marginTop: 2 }} />
                       </span>
                       <span className="ck-mrow-right">
                         {sig && <b style={{ color: sigInk(sig.label) }} aria-label={`${sig.label}, ${Math.abs(Math.round(sig.pct))} percent`}>{sigText(sig)}</b>}
@@ -1878,7 +1943,7 @@ export default function SavedPage() {
                 <div className="ray-saved-grid">
                   {room.map(({ l: lot }, i) => (
                     <div key={lot.id} className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms` } as React.CSSProperties}>
-                      <LotCard lot={lot} showArtist allLots={allLots} saved={isSaved(savedIdOf(lot.id)) || isSaved(lot.id)} onToggleSave={onCardToggle} decision={<DecisionLine lot={lot} estimate={false} />} />
+                      <LotCard lot={lot} showArtist allLots={allLots} saved={isSaved(savedIdOf(lot.id)) || isSaved(lot.id)} onToggleSave={onCardToggle} decision={<DecisionLine lot={lot} estimate={false} abstain="quiet" />} />
                       <SavedDelta lot={lot} meta={metaFor(lot.id)} sig={signalById.get(lot.id) ?? null} />
                     </div>
                   ))}
@@ -2127,7 +2192,7 @@ export default function SavedPage() {
                             )}
                           </div>
                           <div className="ck-piece-src">
-                            {basis ?? (fullLoaded ? 'no comps yet' : fullError ? 'couldn’t load comps' : 'appraising…')}
+                            {basis ?? (fullLoaded ? 'no comps yet' : fullError ? 'couldn’t load comps' : fullSlow ? 'comps slow to load' : 'appraising…')}
                           </div>
                         </div>
                       </div>

@@ -29,7 +29,7 @@ function Part({ text, title, tone }: { text: string; title?: string; tone?: 'up'
   );
 }
 
-export default function DecisionLine({ lot, when = true, estimate = true, nowMs, className, style }: {
+export default function DecisionLine({ lot, when = true, estimate = true, abstain = 'say', nowMs, className, style }: {
   lot: AuctionLot;
   /** false: leave a two-sided house estimate out (a host that already prints
    *  it — the card, the feed row, the Watching ledger); a projection and a
@@ -37,6 +37,10 @@ export default function DecisionLine({ lot, when = true, estimate = true, nowMs,
   estimate?: boolean;
   /** false: leave the close out (a surface that prints its own Hammers column) */
   when?: boolean;
+  /** an engine that abstained: 'say' prints "no engine read"; 'quiet'
+   *  prints nothing for it (a list that explains abstention once, in its
+   *  how-to-read — a row never implies a value either way) */
+  abstain?: 'say' | 'quiet';
   /** the clock (tests, frozen captures); default: now */
   nowMs?: number;
   className?: string;
@@ -49,11 +53,12 @@ export default function DecisionLine({ lot, when = true, estimate = true, nowMs,
   const texts = decisionParts(d, { when, close: showClose });
   // a line with no figure on it (only the close time the host already
   // prints) is not a decision — nothing renders
-  if (!texts.length || (!(d.close && showClose) && !d.worth && !d.abstained)) return null;
+  const sayAbstain = d.abstained && abstain === 'say';
+  if (!texts.length || (!(d.close && showClose) && !d.worth && !sayAbstain)) return null;
   const parts: React.ReactNode[] = [];
   if (d.close && showClose) parts.push(<Part key="c" text={d.close.text} title={d.close.title} />);
   if (d.worth) parts.push(<Part key="w" text={d.worth.text} title={d.worth.title} />);
-  else if (d.abstained) parts.push(<Part key="w" text="no engine read" title="The engine abstained on this lot — no max bid" />);
+  else if (sayAbstain) parts.push(<Part key="w" text="no engine read" title="The engine abstained on this lot — no max bid" />);
   if (d.gap) parts.push(<Part key="g" text={d.gap.text} tone={d.gap.dir === 'room' ? 'up' : 'down'} />);
   if (d.when && when) parts.push(<Part key="t" text={d.when.text} />);
   return (
