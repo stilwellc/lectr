@@ -488,14 +488,17 @@ function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onTo
             Every lot on the block is read against what you <b>own</b>, <b>save</b>, <b>follow</b> and <b>search</b> — in
             that order of weight, recent saves louder than old ones. A lot qualifies only through a real tie: the same
             maker, player, Pokémon or subject; the same card in another grade; the same franchise or model line; or,
-            inside one category, the same era, grader or language at a price like yours. Then the strongest ties that
-            matter most and close soonest lead, spread so no one name, sale or single signal fills the list. Lots at the
-            prices you save and own — or the range you set in Tune — lead lots far from them, and a lot the engine reads
-            below market is lifted and says so. When a name you follow has only a few lots live, the list goes on to its
-            nearest kin — another Pokémon, another player of the same sport and era — and each such pick says that is why
-            it is here. Lots on your desk never come back here. The line under each lot says why it is here; the picks
-            re-read with every crawl and every save. Below all of that, what you open and search on this device leans the
-            list a little, and More like this / Not for me steer it at once — kept in this browser, never uploaded.
+            inside one category, the same era, grader or language at a price like yours. A category you follow counts
+            only for the kind of thing it names. Then the strongest ties that matter most and close soonest lead. The
+            names you keep may fill much of the list; looser matches are spread out, so one sale, one category or one
+            single signal never takes over. Lots at the prices you save and own — or the range you set in Tune — lead
+            lots far from them, and a lot well outside your range comes last and says so. A lot the engine reads below
+            market says so. When a name you follow has only a few lots live, the list goes on to its nearest kin —
+            another Pokémon, another player of the same sport and era — and each such pick says that is why it is here.
+            Lots on your desk never come back here. The line under each lot says why it is here; the picks re-read with
+            every crawl and every save. What you open and search on this device leans the list (a few seats are kept
+            for it), and More like this / Not for me steer it at once — Not for me also quiets what led to that pick.
+            Kept in this browser, never uploaded.
             Everything that tunes the list is under <a href="#signals" className="ck-away-link">Your signals</a>.
           </HelpChip>
           {ready && !cold && !editing && (

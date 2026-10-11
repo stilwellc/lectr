@@ -1,6 +1,7 @@
 /**
- * recs.ts — "Lots you may like" (Oct 10 2026). ONE recommender for the
- * profile's For-you room and the home feed's For-you tab, so the two agree.
+ * recs.ts — "Lots you may like" (Oct 10 2026; re-tuned Oct 11 against a
+ * held-out eval, scripts/recs-eval.ts). ONE recommender for the profile's
+ * For-you room and the home feed's For-you tab, so the two agree.
  *
  * THE TASTE PROFILE is a list of SEEDS — the things the reader told us,
  * each with a weight by how strongly it speaks:
@@ -9,6 +10,9 @@
  *   saved   a lot on their desk (live, or settled = watched)  0.75
  *   follow  a maker / player / subject / category / house    0.55
  *   search  a saved search (its own matcher decides a hit)    0.35
+ *   signal  what this device learned (recs-signals): a lot view .25,
+ *           an entity page .2, a searched term .15, "More like this" .7
+ *   market  a quick-start market with no name in it            0.30
  *
  * × recency (a save or search halves every 120 days, floored at 0.4; a
  * follow is a standing statement and does not decay).
@@ -23,43 +27,55 @@
  *   franchise, complication, signed… app/lib/facets) · price on a log
  *   kernel (priority.prioStatic's anchor, ±0.35 decade) · same house
  *
- * — and a follow or search seed matches by its own rule (the follows
- * affinity ladder; saved-query's matcher). Contributions W·sim are
- * combined with diminishing returns (best + .35·second + .15·third), so a
- * lot like several things you saved outranks a lot like one, without one
- * seed's twin crowding the rest. Then
+ * — and a follow or search seed matches by its own rule (a followed name by
+ * its slug / entity id; a category, house or market by the lot's clean
+ * category, only when the lot IS that kind of object — app/lib/object-kind;
+ * a searched term by entity + facet, never by loose title words; a saved
+ * search by saved-query's matcher). Contributions W·sim are combined with
+ * diminishing returns (best + .35·second + .15·third). Then
  *
- *   score = taste × (0.45 + 0.55 · priority/100) × closing window
+ *   score = taste × (0.8 + 0.2 · priority/100) × closing window
+ *           × the reader's band (learned per category, or the stated range)
+ *           × "Not for me" quieting
  *
- * where priority is THE "matters most" score (app/lib/priority) and the
- * window keeps a lot closing this week ahead of one a month out. A lot
- * enters only when one seed truly reaches it (a lot seed needs sim ≥ 0.3 —
- * same category AND same sub or entity — never a category-only nudge).
+ * where priority is THE "matters most" score (app/lib/priority — it already
+ * carries the engine's below-market edge, so a flagged lot gets no second
+ * lift; its reason still says so). A broad follow (a category, a house, a
+ * market) is read through the names the reader keeps in that category (same
+ * sport / era / cut lead; a Wembanyama reader's "Singles" follow is modern
+ * basketball, not F1), and a followed name with no band to read leans to the
+ * name's own price level (a Warhol follower is not handed only grails).
  *
- * (Oct 11) × the reader's PRICE BAND per category (learnBands: median ±
- * robust spread of what they own and save, n ≥ 3; soft — never a filter)
- * × ENGINE_LIFT when the engine flags the lot below market (flags.isFlagged;
- * the reason says so). Closed and closed-pending lots never enter. When the
- * real ties run short, the FALLBACK LADDER (scoreLots) opens below them:
- * same identity family → same sub + cut → same category at the anchor's
- * prices, each rung dealt after every real tie and saying which rung it is.
- * The return loop (pickStrips) cuts "new since your last visit" and
- * "closing tonight" from the picks.
- *
- * DIVERSITY: ≤3 per named entity, ≤3 per sale (house + close day), ≤6 per
- * house, ≤4 explained by the same seed, one per object / card identity;
- * the caps loosen once only if seats stay empty — never filler below the
- * entry bar. Lots already on the desk (any id alias, or the same card live
- * at another house) never come back as a recommendation.
+ * THE DEAL (recommend) is greedy with soft repeat penalties: a NAMED tie
+ * (the same maker / player / subject / card as a seed, or a followed name)
+ * is barely discounted by its own repeats — the reader asked for that name —
+ * while a GENERIC tie (a cut, a broad follow, a fallback rung) is spread
+ * hard. Hard caps, lifted one seat at a time only when every seed with lots
+ * left sits at them (never filler below the entry bar):
+ *   one seed      ≤ 40% of the deal (a broad seed ≤ 20%; a followed name the
+ *                 taste is mostly about up to 90% of its share; the device's
+ *                 quiet signals count as one seed; a save's own ties are
+ *                 bounded by the entity cap instead)
+ *   one sale      ≤ 1/6 of the GENERIC seats (house + close day) — unless
+ *                 nothing elsewhere comes within 70%; a named tie is never
+ *                 capped by its sale
+ *   one entity    ≤ 40–90% by its share of the taste
+ *   one object    one seat per card identity in any grade / title per house
+ * Phases: every real tie in range first, then the FALLBACK LADDER (same
+ * identity family → same sub + cut → same category at the anchor's prices;
+ * inside a stated range only), then real ties far outside a stated range
+ * (each saying "below your $50K floor"). What the device learned keeps a
+ * small guaranteed share (3 of every 24 seats) once the reader has said
+ * anything out loud. Lots already on the desk never come back.
  *
  * Every pick carries its REASON — the seed that put it there, in words
  * ("Because you saved 1952 Topps Mantle PSA 3", "You follow Charizard",
  * "Like your Andy Warhol prints · $20K–40K") — and `why`, the matched
- * facts. A reader with no seeds gets NO picks (cold start is said, not
- * faked). Pure: no React, no storage — the eval script and the tests run
- * it over the real book.
+ * facts; a price band is printed only on a lot inside it. A reader with no
+ * seeds gets NO picks (cold start is said, not faked). Pure: no React, no
+ * storage — the eval script and the tests run it over the real book.
  */
-import { taxonOf, subMatches, subLabel, SPORTS, type CatKey } from './taxonomy';
+import { taxonOf, subMatches, subLabel, SPORTS, MARKET_CATS, type CatKey } from './taxonomy';
 import { lotFacets, FACET_LABEL } from './facets';
 import { entityKeyOf } from './entity/key';
 import { parseCard, cardLadderKey, cardSetKey, cardYearKey, type CardId } from './cards';
@@ -68,8 +84,9 @@ import { tonightEndMs } from './close-time';
 import { matchesSavedQuery, unmatchableReason } from './saved-query';
 import { makerLineOf } from './lot-labels';
 import { craftTitle, isClosedPending } from '../utils';
-import { ARTIST_LABEL } from '../constants';
+import { ARTIST_LABEL, MARKETS } from '../constants';
 import { isFlagged } from './flags';
+import { kindFits } from './object-kind';
 import type { Follow } from './follows';
 import type { SavedQuery } from './alerts';
 
@@ -99,6 +116,9 @@ export type RecLot = {
   flown?: boolean | null;
   ek?: string | null;
   crossLive?: { id: string; house: string; bid: number }[] | null;
+  /** the upstream object class / item class (object-kind reads them) */
+  objectClass?: string | null;
+  itemClass?: string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value?: any; signal?: any; bidProj?: any;
 };
@@ -141,7 +161,14 @@ export interface ExtraInput {
  *  identity (`keys`: an entity id, or `card:<identity>`; repeated once per
  *  mark) is down-weighted — the card hard (×0.3), the entity softly (×0.6
  *  per mark: one print you pass on does not erase its maker) */
-export interface NegativeInput { ids?: Iterable<string>; keys?: Iterable<string> }
+export interface NegativeInput {
+  ids?: Iterable<string>;
+  keys?: Iterable<string>;
+  /** (Oct 11) the passed lots themselves (resolved row or snapshot): the seed
+   *  that explained each one is quieted (×0.75 per pass, floored), and a lot
+   *  with no named entity quiets its cut (category · sub · sport · era) */
+  lots?: Iterable<RecLot>;
+}
 
 export interface TasteInput {
   saved: SavedInput[];
@@ -155,6 +182,10 @@ export interface TasteInput {
    *  hammer-basis USD) — read as a strong band across every category, never a
    *  hard filter: a lot outside it sinks, it does not vanish */
   price?: StatedPriceInput | null;
+  /** the markets the reader picked in the quick start (app/lib/interests):
+   *  a market with no followed or saved name in it still deals its own
+   *  picks — the weakest seed, read as its categories */
+  markets?: readonly string[];
   nowMs?: number;
 }
 
@@ -198,6 +229,11 @@ export interface Seed {
   query?: SavedQuery;
   /** a 'signal' seed's verb ("looked at", "asked for more like", "searched") */
   verb?: string;
+  /** a BROAD seed — a category / house follow, a quick-start market: it
+   *  fills fewer seats than a name */
+  broad?: boolean;
+  /** a quick-start market seed: the market's words ("TCG") */
+  market?: string;
 }
 
 export interface Taste {
@@ -215,6 +251,9 @@ export interface Taste {
   bands: Map<CatKey, PriceBand>;
   /** the range the reader stated (quick start), if any */
   stated?: StatedBand | null;
+  /** entity ids the reader follows (maker / player / subject) — "Not for me"
+   *  quiets them only so far */
+  followedEks?: Set<string>;
 }
 
 /** a learned price band, in log10 dollars */
@@ -239,7 +278,9 @@ const PRICE_LINK_CATS: ReadonlySet<CatKey> = new Set<CatKey>(['fine-art', 'desig
  *  ties them ("signed" + "film & TV" made Houdini a Star Wars pick). */
 const FACET_TIE_CATS: ReadonlySet<CatKey> = new Set<CatKey>(['sports-cards', 'tcg', 'space-science', 'watches']);
 const eraOf = (fx: ReadonlySet<string>): string | null => { for (const k of Array.from(fx)) if (k.startsWith('era-')) return k; return null; };
-const featMemo = new WeakMap<object, Feat>();
+/** per lot object, per UTC day: the price anchor moves as bids arrive and
+ *  closes near, so a tab left open for days never reads yesterday's features */
+const featMemo = new WeakMap<object, { day: number; f: Feat }>();
 
 const normTitle = (t: string | null | undefined) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
@@ -277,8 +318,9 @@ export function cardGradeOf(title: string): string {
 }
 
 export function featOf(l: RecLot, nowMs: number, estFallback?: number | null): Feat {
+  const day = Math.floor(nowMs / 864e5);
   const hit = featMemo.get(l as object);
-  if (hit) return hit;
+  if (hit && hit.day === day) return hit.f;
   const t = taxonOf(l);
   const ek = ekOf(l);
   let card: string | null = null;
@@ -291,7 +333,7 @@ export function featOf(l: RecLot, nowMs: number, estFallback?: number | null): F
     card, drill: DRILL_CATS.has(t.cat) && l.drill ? l.drill : null, sport: t.sport ?? null, fx,
     logA: a ? Math.log10(a) : null, house: l.auctionHouse || null,
   };
-  featMemo.set(l as object, f);
+  featMemo.set(l as object, { day, f });
   return f;
 }
 
@@ -391,7 +433,52 @@ export function buildTaste(input: TasteInput): Taste {
       seeds.push({ kind: 'signal', w: x.weight, verb: x.reason, label: x.text.trim(), query });
     }
   }
-  return { seeds, exclude, excludeKeys, down, counts: { owned, saved, follows: input.follows.length, searches, signals }, bands: learnBands(seeds), stated: statedBandOf(input.price) };
+  // (Oct 11) a quick-start market with no name in it still deals its own
+  // picks: the weakest seed, one per category of the market (scoreLots opens
+  // it only for a category no followed or saved name already covers)
+  for (const m of Array.from(new Set(input.markets ?? []))) {
+    const cats = MARKET_CATS[m];
+    if (!cats) continue;
+    const label = MARKETS.find(x => x.key === m)?.label ?? m;
+    for (const cat of cats) seeds.push({ kind: 'follow', w: MARKET_WEIGHT, label, follow: { kind: 'cat', key: cat, label }, broad: true, market: label });
+  }
+  for (const s of seeds) if (s.follow && (s.follow.kind === 'cat' || s.follow.kind === 'house')) s.broad = true;
+  const followedEks = new Set<string>();
+  for (const fo of input.follows) {
+    if (fo.kind === 'maker') followedEks.add(`mk:${fo.key}`).add(`pl:${fo.key}`);
+    else if (fo.kind === 'entity') followedEks.add(fo.key);
+  }
+  // (Oct 11) "Not for me" reaches the SEED that explained the pick, not only
+  // its entity: each pass quiets the strongest seed tying the passed lot
+  // ×0.75 (a save floors at .3, a follow — a standing statement — at .5), and
+  // a lot with no named entity (a collection bucket, 12% of the block) quiets
+  // its cut — the category · sub · sport · era it stood for
+  const passed = new Map<Seed, number>();
+  const today = new Date(nowMs).toISOString().slice(0, 10);
+  for (const nl of Array.from(neg?.lots ?? [])) {
+    if (!nl || !nl.title) continue;
+    const nf = featOf(nl, nowMs);
+    if (!nf.named) { const k = cutKeyOf(nf); down.set(k, (down.get(k) ?? 0) + 1); }
+    let best: Seed | null = null, bc = 0;
+    for (const s of seeds) {
+      let c = 0;
+      if (s.f) { if (s.lotId === nl.id) continue; const p = lotSim(nf, s.f); c = p.sim >= LOT_SIM_MIN ? s.w * p.sim : 0; }
+      else if (s.follow) c = s.w * followSim(nl, nf, s.follow);
+      else if (s.query) c = (s.kind === 'signal' ? termMatcherOf(s.label)?.(nl, nf) : matchesSavedQuery(s.query, nl, today)) ? s.w * 0.6 : 0;
+      if (c > bc) { bc = c; best = s; }
+    }
+    if (best) passed.set(best, (passed.get(best) ?? 0) + 1);
+  }
+  passed.forEach((k, s) => { s.w *= Math.max(s.f ? 0.3 : 0.5, Math.pow(0.75, k)); });
+  return { seeds, exclude, excludeKeys, down, counts: { owned, saved, follows: input.follows.length, searches, signals }, bands: learnBands(seeds), stated: statedBandOf(input.price), followedEks };
+}
+
+/** a quick-start market's seed weight — below a follow, above a page view */
+const MARKET_WEIGHT = 0.3;
+
+/** the cut a lot with no named entity stands for ("Not for me" quiets it) */
+function cutKeyOf(f: Pick<Feat, 'cat' | 'sub' | 'sport' | 'fx'>): string {
+  return `cut:${f.cat}|${f.sub}|${f.sport ?? ''}|${eraOf(f.fx) ?? ''}`;
 }
 
 /* ── price-band learning ────────────────────────────────────────────────── */
@@ -485,6 +572,8 @@ export function bandFit(f: Pick<Feat, 'cat' | 'logA'>, bands: ReadonlyMap<CatKey
 
 const PRICE_SIGMA = 0.35; // decades
 export const LOT_SIM_MIN = 0.3;
+/** the same named entity in another category (a card desk's player on a signed ball) */
+const CROSS_CAT_SIM = 0.42;
 
 export interface SimParts {
   sim: number; sub: boolean; entity: boolean; card: boolean; franchise: boolean; drill: boolean;
@@ -501,13 +590,19 @@ export interface SimParts {
  * facet (era, grader, language, complication…) at a comparable price; in
  * art, design and watches the same sub at your price is a tie of its own.
  */
-export function lotSim(c: Feat, s: Feat): SimParts {
+export function lotSim(c: Feat, s: Feat, entityTie = REC_TUNE.entityTie): SimParts {
   const out: SimParts = { sim: 0, sub: false, entity: false, card: false, franchise: false, drill: false, weak: false, shared: [], fx: 0, price: null, house: false };
-  if (c.cat !== s.cat) return out;
+  if (c.cat !== s.cat) {
+    // (Oct 11) the same NAMED entity across categories — a Derek Jeter signed
+    // ball for a desk of Jeter cards, a Sinatra letter for his photographs —
+    // is a tie of its own (weaker than inside one category); nothing else crosses
+    if (c.named && s.named && c.ek === s.ek) { out.entity = true; out.sim = CROSS_CAT_SIM; }
+    return out;
+  }
   if (c.sport && s.sport && c.sport !== s.sport) return out;
   let v = 0.1;
   if (c.sub === s.sub) { v += 0.12; out.sub = true; }
-  if (c.named && c.ek === s.ek) { v += 0.34; out.entity = true; }
+  if (c.named && c.ek === s.ek) { v += entityTie; out.entity = true; }
   if (c.card && c.card === s.card) { v += 0.12; out.card = true; }
   let inter = 0;
   for (const k of Array.from(c.fx)) {
@@ -540,6 +635,79 @@ export function lotSim(c: Feat, s: Feat): SimParts {
   out.weak = !strong && out.sub && PRICE_LINK_CATS.has(c.cat) && out.price != null && out.price >= 0.6;
   out.sim = strong ? Math.min(1, v) : out.weak ? Math.min(1, v) * 0.75 : 0;
   return out;
+}
+
+/* ── a searched term, read as an entity + facets ───────────────────────── */
+
+/** words a search carries that say nothing on their own */
+const TERM_DROP = new Set(['the', 'a', 'an', 'of', 'and', 'or', 'for', 'with', 'in', 'on', 'by', 'to', 'card', 'cards', 'lot', 'lots', 'item', 'items', 'screen', 'used', 'worn', 'game', 'original', 'rare', 'new', 'vintage', 'modern', 'graded']);
+/** words that must match but never anchor a term (an object noun, a set word):
+ *  "signed album" alone names nobody — it matched Walt Disney's Autograph Album */
+const TERM_COMMON = new Set(['album', 'set', 'base', 'print', 'prints', 'screenprint', 'lithograph', 'poster', 'photo', 'photograph', 'helmet', 'jersey', 'ball', 'bat', 'letter', 'book', 'record', 'vinyl', 'chair', 'table', 'lamp', 'watch', 'painting', 'drawing', 'sculpture', 'prop', 'costume', 'edition', 'first', '1st', 'holo', 'promo', 'gold', 'silver', 'refractor', 'chrome', 'prizm', 'topps', 'panini', 'bowman', 'fleer', 'calendar', 'perpetual', 'surface', 'pop', 'shop', 'collection', 'complete', 'sealed', 'box', 'pack', 'trophy', 'award', 'shirt', 'ticket', 'program']);
+const TERM_GRADERS: Record<string, string> = { psa: 'psa', sgc: 'sgc', bgs: 'bgs', beckett: 'bgs', cgc: 'cgc' };
+const TERM_FACET: Record<string, { fx?: string; re?: RegExp }> = {
+  japanese: { fx: 'lang-ja', re: /\b(?:japanese|japan|pocket monsters)\b/i }, japan: { fx: 'lang-ja', re: /\bjapan/i }, jp: { fx: 'lang-ja' },
+  chinese: { fx: 'lang-zh', re: /\bchinese\b/i }, flown: { fx: 'flown', re: /\bflown\b/i },
+  rookie: { fx: 'rookie', re: /\b(?:rookie|rc)\b/i }, rc: { fx: 'rookie', re: /\b(?:rookie|rc)\b/i },
+  signed: { fx: 'auto', re: /\b(?:sign|autograph|auto\b)/i }, autograph: { fx: 'auto', re: /\b(?:sign|autograph|auto\b)/i }, autographed: { fx: 'auto', re: /\b(?:sign|autograph|auto\b)/i },
+  auto: { fx: 'auto', re: /\b(?:sign|autograph|auto\b)/i }, signature: { fx: 'auto', re: /\b(?:sign|autograph|auto\b)/i },
+};
+const words = (s: string) => s.toLowerCase().replace(/[^a-z0-9.]+/g, ' ').trim().split(' ').filter(Boolean);
+const termMemo = new Map<string, ((l: RecLot, f: Feat) => boolean) | null>();
+
+/**
+ * A searched term as a matcher (Oct 11, R1 #7): a term is read as an ENTITY
+ * plus FACETS, never as loose title words. Grader / grade / language /
+ * flown / rookie / signed words must hold as facts (the card's grade, its
+ * language facet…), a year must be in the title, every other word must be
+ * on the lot — and at least one word must ANCHOR it: a name on the lot's
+ * maker / player / subject line, the term's words as a phrase in the title,
+ * or one distinctive word (≥ 6 letters, not an object noun). A term that can
+ * never anchor ("signed album") seeds nothing. null = no matcher.
+ */
+export function termMatcherOf(term: string): ((l: RecLot, f: Feat) => boolean) | null {
+  const key = term.trim().toLowerCase();
+  if (termMemo.has(key)) return termMemo.get(key)!;
+  const ws = words(key).filter(w => !TERM_DROP.has(w));
+  const graders: string[] = [], grades: number[] = [], years: string[] = [], facets: { fx?: string; re?: RegExp }[] = [], text: string[] = [];
+  for (let i = 0; i < ws.length; i++) {
+    const w = ws[i];
+    if (TERM_GRADERS[w]) { graders.push(TERM_GRADERS[w]); const g = ws[i + 1]; if (g && /^\d{1,2}(?:\.5)?$/.test(g)) { grades.push(parseFloat(g)); i++; } continue; }
+    if (/^(?:18|19|20)\d{2}$/.test(w)) { years.push(w); continue; }
+    if (TERM_FACET[w]) { facets.push(TERM_FACET[w]); continue; }
+    if (/^\d+$/.test(w)) continue;
+    text.push(w);
+  }
+  const anchorable = text.some(w => !TERM_COMMON.has(w)) || text.length >= 2 || graders.length + grades.length + years.length + facets.length >= 2;
+  let fn: ((l: RecLot, f: Feat) => boolean) | null = null;
+  if (anchorable && (text.length || graders.length + grades.length + years.length + facets.length >= 2)) {
+    const phrase = text.length >= 2 ? ` ${text.join(' ')} ` : null;
+    fn = (l, f) => {
+      const title = ` ${words(String(l.title || '')).join(' ')} `;
+      for (const y of years) if (!title.includes(` ${y} `)) return false;
+      for (const fc of facets) if (!(fc.fx && f.fx.has(fc.fx)) && !(fc.re && fc.re.test(String(l.title || '')))) return false;
+      if (graders.length || grades.length) {
+        const id = parseCard(String(l.title || ''));
+        for (const g of graders) if (!f.fx.has(g) && String(id.gradeCo || '').toLowerCase() !== g) return false;
+        for (const g of grades) if (id.gradeNum !== g) return false;
+      }
+      // facets alone ("japanese psa") anchor only a term with no other words
+      if (!text.length) return true;
+      const name = ` ${words(`${makerLineOf(l as Parameters<typeof makerLineOf>[0]).name} ${l.playerName ?? ''} ${(l.playerSlug ?? '').replace(/-/g, ' ')} ${ARTIST_LABEL[l.artist] ?? l.artist.replace(/-/g, ' ')} ${(f.ek ?? '').replace(/[^a-z0-9]+/g, ' ')} ${(l.drill ?? '').replace(/-/g, ' ')}`).join(' ')} `;
+      const on = (hay: string, w: string) => hay.includes(` ${w}`) && (w.length >= 3 || hay.includes(` ${w} `));
+      let anchored = false;
+      for (const w of text) {
+        const inName = on(name, w);
+        if (!inName && !on(title, w)) return false;
+        if (inName && !TERM_COMMON.has(w)) anchored = true;
+        else if (!TERM_COMMON.has(w) && w.length >= 6) anchored = true;
+      }
+      if (!anchored && phrase && (title.includes(phrase) || name.includes(phrase))) anchored = true;
+      return anchored;
+    };
+  }
+  termMemo.set(key, fn);
+  return fn;
 }
 
 /** a follow's reach on one lot (the follows.affinityOf ladder, × 0.8) */
@@ -577,6 +745,9 @@ export interface Rec<L extends RecLot = RecLot> {
   inBand?: boolean;
   /** 1 = a real tie; 2–4 = a fallback rung (scoreLots' ladder) */
   tier?: 1 | LadderTier;
+  /** a real tie far outside the range the reader stated (dealt after every
+   *  lot inside it; the reason says "below your $50K floor") */
+  outOfRange?: 'below' | 'above';
 }
 
 /** the suffix a below-market pick carries — the engine's read, said as one */
@@ -589,6 +760,46 @@ export function bandOfCat(bands: ReadonlyMap<CatKey, PriceBand> | undefined, cat
 
 /** the most of the deal's seats one seed may fill while others have lots */
 export const SEED_SHARE = 0.4;
+
+/**
+ * The deal's tuning (Oct 11), chosen on scripts/recs-eval.ts's held-out
+ * collectors (see the eval's header): every number here moved the held-out
+ * hit rate, the baseline gap or a scenario, and the eval reports each.
+ */
+export interface RecTune {
+  /** lotSim's same-entity weight (was .34: a name tie lost to a cut tie) */
+  entityTie: number;
+  /** the quality curve: qBase + (1 − qBase) · priority — priority is 40% price
+   *  size, so a steep curve handed every follow its grails */
+  qBase: number;
+  /** per-repeat discounts on a NAMED tie (the same maker / player / subject /
+   *  card as a seed, or a followed name): the reader asked for that name */
+  namedEnt: number; namedSale: number; namedSeed: number;
+  /** a named tie's lift in the deal over a generic one at the same score */
+  namedLift: number;
+  /** per-repeat discounts on a GENERIC tie (a cut, a broad follow, a rung) */
+  genEnt: number; genSale: number; genSeed: number;
+  house: number;
+  /** hard caps, as shares of the deal: GENERIC seats from one sale (a named
+   *  tie is never capped by its sale — the reader's names sell where they
+   *  sell); one broad seed; one entity = entBase + entShare × its share */
+  saleShare: number; broadShare: number; entBase: number; entShare: number;
+  /** a sale past its cap still deals when the best lot elsewhere is worth
+   *  less than this share of it (a vintage-baseball desk whose names all sell
+   *  at one REA sale is not handed Pokémon to keep REA under a third) */
+  saleYield: number;
+  /** seats in every 24 kept for what the device learned, once the reader has
+   *  said anything out loud (a deep desk otherwise never shows a view) */
+  sigSeats: number;
+}
+export const REC_TUNE: Readonly<RecTune> = {
+  entityTie: 0.5, qBase: 0.8,
+  namedEnt: 0.98, namedSale: 0.98, namedSeed: 0.98, namedLift: 1,
+  genEnt: 0.7, genSale: 0.93, genSeed: 0.95,
+  house: 0.97,
+  saleShare: 1 / 6, broadShare: 0.2, saleYield: 0.7, entBase: 0.4, entShare: 0.5,
+  sigSeats: 3,
+};
 
 /** the deal size the per-entity cap reads (the profile's list) */
 export const REC_DEAL = 24;
@@ -612,6 +823,8 @@ export interface RecOpts {
   maxDays?: number;
   /** a pool already narrowed to the block (skip the on-block gate) */
   onBlock?: (l: RecLot) => boolean;
+  /** the eval's knob (scripts/recs-eval.ts sweeps variants); the app never passes it */
+  tune?: Partial<RecTune>;
 }
 
 function windowFactor(closeMs: number | null, nowMs: number): number {
@@ -697,11 +910,17 @@ export interface ScoredRow<L extends RecLot = RecLot> {
   inBand?: boolean;
   /** it sits inside the range the reader stated (quick start) */
   inStated?: boolean;
+  /** far outside the stated range (dealt last, said so) */
+  out?: 'below' | 'above';
+  /** the strongest tie an on-device signal lends it, when the best tie is
+   *  something else (the signal quota deals it under that reason) */
+  sig?: { seed: Seed; c: number; parts?: SimParts };
 }
 
-/** the engine's below-market flag lifts a qualifying pick this much — a
- *  tiebreak among real ties, never a way in */
-export const ENGINE_LIFT = 1.15;
+/* (Oct 11) the engine's below-market flag no longer multiplies the score: the
+ * priority it is scored on already carries the engine's edge (+ up to 25),
+ * and the second lift put flagged lots in 58% of an art desk's top 12 against
+ * 16% of the lots that fit. The reason still says so (ENGINE_NOTE). */
 
 /* ── the fallback ladder ────────────────────────────────────────────────── */
 
@@ -794,6 +1013,36 @@ function ladderTier(c: Feat, a: LadderAnchor): LadderTier | 0 {
 /** how many strong rows a taste needs before the ladder stays shut */
 const LADDER_NEED = REC_DEAL * 2;
 
+/** how far past a stated edge a real tie is "far outside" it (×2) */
+const STATED_FAR = 0.3;
+/** which side of the stated range a priced lot sits FAR outside (null: inside or near) */
+function statedSide(logA: number | null, b: StatedBand | null | undefined): 'below' | 'above' | null {
+  if (!b || logA == null) return null;
+  if (b.lo != null && logA < b.lo - STATED_FAR) return 'below';
+  if (b.hi != null && logA > b.hi + STATED_FAR) return 'above';
+  return null;
+}
+
+/** how well a candidate fits one anchor's cut, 0–1: the same sport, the
+ *  same era, a shared distinctive facet (a broad follow reads through it) */
+function anchorFit(c: Feat, a: LadderAnchor): number {
+  if (c.sport && a.sport && c.sport !== a.sport) return 0;
+  // a screen piece for a film reader, a stage piece for a music reader: an
+  // Elvis ring is no answer to a Star Wars follow's "Props & Wardrobe"
+  if ((a.cut.includes('film-tv') && c.fx.has('music') && !c.fx.has('film-tv')) || (a.cut.includes('music') && c.fx.has('film-tv') && !c.fx.has('music'))) return 0.05;
+  if (a.fr && c.fx.has(a.fr)) return 1;
+  let v = a.sport ? (c.sport === a.sport ? 0.4 : 0.15) : 0.4;
+  const era = a.cut.find(k => k.startsWith('era-'));
+  const ec = eraOf(c.fx);
+  v += era ? (ec === era ? 0.35 : ec ? 0 : 0.15) : 0.2;
+  if (a.cut.some(k => !k.startsWith('era-') && c.fx.has(k))) v += 0.25;
+  if (a.sub && c.sub === a.sub) v += 0.1;
+  return Math.min(1, v);
+}
+
+type Contrib = { seed: Seed; c: number; parts?: SimParts };
+const tuneOf = (opts: RecOpts): RecTune => (opts.tune ? { ...REC_TUNE, ...opts.tune } : REC_TUNE);
+
 /**
  * Every lot on the block one seed truly reaches, scored and sorted best
  * first — no caps (recommend() deals the diversity). When the real ties
@@ -801,36 +1050,33 @@ const LADDER_NEED = REC_DEAL * 2;
  * FALLBACK LADDER opens below them, rung by rung — same identity family →
  * same sub + a shared cut → same category at the anchor's prices — each
  * rung's rows strictly after the rung above, each saying which rung it is.
+ * Real ties far outside a stated range come last of all.
  */
 export function scoreLots<L extends RecLot>(pool: readonly L[], taste: Taste, opts: RecOpts = {}): ScoredRow<L>[] {
   const nowMs = opts.nowMs ?? Date.now();
   if (!taste.seeds.length) return [];
+  const T = tuneOf(opts);
   const lotSeeds = taste.seeds.filter(s => s.f);
   const followSeeds = taste.seeds.filter(s => s.follow);
+  const nameSeeds = followSeeds.filter(s => s.follow!.kind === 'maker' || s.follow!.kind === 'entity');
   const searchSeeds = taste.seeds.filter(s => s.query);
-  const seedCats = new Set(lotSeeds.map(s => s.f!.cat));
+  // a searched TERM (an on-device signal) is read as entity + facets; a saved
+  // search keeps its own matcher
+  const terms = new Map<Seed, ((l: RecLot, f: Feat) => boolean) | null>();
+  for (const s of searchSeeds) if (s.kind === 'signal') terms.set(s, termMatcherOf(s.label));
+  const looseSearch = searchSeeds.some(s => !terms.has(s));
+  const termWords = Array.from(terms.entries()).filter(([, m]) => m).map(([s]) => words(s.label).filter(w => w.length >= 3 && !TERM_DROP.has(w) && !TERM_FACET[w] && !TERM_GRADERS[w] && !/^\d+$/.test(w)));
   const today = new Date(nowMs).toISOString().slice(0, 10);
 
   type Row = ScoredRow<L>;
-  const rows: Row[] = [];
-  // the gated pool the ladder may reach into, and each follow's live lots
-  const open: { l: L; f: Feat | null; cat: CatKey; close: number | null }[] = [];
+  type Open = { l: L; f: Feat | null; cat: CatKey; close: number | null };
   /** a relist / twin of something on the desk */
   const deskTwin = (l: L, f: Feat) => (!!f.card && taste.excludeKeys.has(`card:${f.card}|${normTitle(l.title)}`)) || taste.excludeKeys.has(`t:${l.auctionHouse ?? ''}|${normTitle(l.title)}`);
+
+  // PASS 0 — the gated pool, and each followed name's live lots (the anchors
+  // the broad follows, the price prior and the ladder read)
+  const open: Open[] = [];
   const members = new Map<Seed, Feat[]>();
-  /** quality × window × the reader's band × the engine's flag */
-  const finish = (l: L, f: Feat, tasteV: number, close: number | null) => {
-    const pr = priorityOf(l, nowMs);
-    const q = pr ? pr.score / 100 : 0.1;
-    const band = bandFit(f, taste.bands);
-    const flagged = isFlagged(l as Parameters<typeof isFlagged>[0]);
-    // "Not for me" on a lot quiets its entity and its card in any grade
-    const quiet = !taste.down?.size ? 1
-      : (f.card && taste.down.has(`card:${f.card}`) ? 0.3 : 1) * Math.pow(0.6, (f.ek && taste.down.get(f.ek)) || 0);
-    const said = statedFit(f.logA, taste.stated);
-    const score = tasteV * (0.45 + 0.55 * q) * windowFactor(close, nowMs) * band.fit * said.fit * (flagged ? ENGINE_LIFT : 1) * quiet;
-    return { score, flagged, inBand: band.inside, inStated: said.inside };
-  };
   for (const l of pool) {
     if (l.status && l.status !== 'upcoming') continue;
     if (opts.onBlock ? !opts.onBlock(l) : isClosedPending(l as Parameters<typeof isClosedPending>[0], nowMs)) continue;
@@ -838,53 +1084,127 @@ export function scoreLots<L extends RecLot>(pool: readonly L[], taste: Taste, op
     const close = closeMsOf(l);
     if (close != null && close <= nowMs) continue;
     if (opts.maxDays != null && (close == null || close - nowMs > opts.maxDays * 864e5)) continue;
-    // cheap pre-gate: a lot no seed can reach skips the feature pass (the
-    // ladder may still read it, lazily)
-    const cat = taxonOf(l).cat;
-    let reach = seedCats.has(cat) || searchSeeds.length > 0;
-    if (!reach) for (const s of followSeeds) {
+    const o: Open = { l, f: null, cat: taxonOf(l).cat, close };
+    for (const s of nameSeeds) {
       const fo = s.follow!;
-      if (fo.kind === 'house' ? l.auctionHouse === fo.key : fo.kind === 'cat' ? fo.key.split(':')[0] === cat : true) { reach = true; break; }
+      let hit = fo.kind === 'maker' && (l.artist === fo.key || l.playerSlug === fo.key);
+      if (!hit) { const ek = ekOf(l); hit = fo.kind === 'maker' ? ek === `pl:${fo.key}` || ek === `mk:${fo.key}` : ek === fo.key; }
+      if (!hit) continue;
+      o.f ??= featOf(l, nowMs);
+      if (deskTwin(l, o.f)) continue;
+      let m = members.get(s); if (!m) members.set(s, (m = [])); m.push(o.f);
     }
-    if (!reach) { open.push({ l, f: null, cat, close }); continue; }
-    const f = featOf(l, nowMs);
-    if (deskTwin(l, f)) continue;
-    open.push({ l, f, cat, close });
+    open.push(o);
+  }
+  const anchors = ladderAnchors(taste, members);
+  const anchorsByCat = new Map<CatKey, LadderAnchor[]>();
+  const anchorLogA = new Map<Seed, number | null>();
+  for (const a of anchors) {
+    // the device's own looks lend the ladder, never the broad follows' reading
+    if (a.seed.kind !== 'signal') { let xs = anchorsByCat.get(a.cat); if (!xs) anchorsByCat.set(a.cat, (xs = [])); xs.push(a); }
+    anchorLogA.set(a.seed, a.logA);
+  }
+  // a quick-start market opens only when nothing the reader named or saved
+  // sits in that market (a Mantle follower who picked Sports is a Mantle
+  // reader, not a game-used-jersey reader)
+  const covered = new Set<string>(Array.from(anchorsByCat.keys()));
+  for (const s of followSeeds) if (s.follow!.kind === 'cat' && !s.market) covered.add(s.follow!.key.split(':')[0]);
+  const marketOpen = (s: Seed) => { const cats = MARKET_CATS[MARKETS.find(m => m.label === s.market)?.key ?? ''] ?? [s.follow!.key]; return !cats.some(c => covered.has(c)); };
+  const followOn = followSeeds.filter(s => !s.market || marketOpen(s));
+  const seedCats = new Set<string>(lotSeeds.map(s => s.f!.cat));
+  for (const s of followOn) if (s.follow!.kind === 'cat') seedCats.add(s.follow!.key.split(':')[0]);
+  const houses = new Set(followOn.filter(s => s.follow!.kind === 'house').map(s => s.follow!.key));
 
-    const contribs: { seed: Seed; c: number; parts?: SimParts }[] = [];
+  /** quality × window × the reader's band (learned, else stated) × "Not for me" */
+  const finish = (l: L, f: Feat, tasteV: number, close: number | null) => {
+    const pr = priorityOf(l, nowMs);
+    const q = pr ? pr.score / 100 : 0.1;
+    const band = bandFit(f, taste.bands);
+    const flagged = isFlagged(l as Parameters<typeof isFlagged>[0]);
+    let quiet = 1;
+    if (taste.down?.size) {
+      // "Not for me" quiets the card in any grade hard, the entity by pass
+      // (a followed name never below half), a nameless lot's cut softly
+      if (f.card && taste.down.has(`card:${f.card}`)) quiet *= 0.3;
+      const k = f.ek ? taste.down.get(f.ek) ?? 0 : 0;
+      if (k) quiet *= Math.max(taste.followedEks?.has(f.ek!) ? 0.5 : 0.15, Math.pow(0.6, k));
+      if (!f.named) { const c = taste.down.get(cutKeyOf(f)) ?? 0; if (c) quiet *= Math.max(0.4, Math.pow(0.75, c)); }
+    }
+    const said = statedFit(f.logA, taste.stated);
+    const score = tasteV * (T.qBase + (1 - T.qBase) * q) * windowFactor(close, nowMs) * band.fit * said.fit * quiet;
+    return { score, flagged, inBand: band.inside, inStated: said.inside, out: statedSide(f.logA, taste.stated) ?? undefined };
+  };
+
+  // PASS 1 — every lot a seed truly reaches
+  const rows: Row[] = [];
+  for (const o of open) {
+    const { l, cat, close } = o;
+    let reach = o.f != null || seedCats.has(cat) || houses.has(l.auctionHouse ?? '') || looseSearch;
+    if (!reach && termWords.length) {
+      const hay = `${String(l.title || '').toLowerCase()} ${l.playerSlug ?? ''} ${l.artist} ${l.ek ?? ''} ${l.drill ?? ''}`;
+      reach = termWords.some(ws => !ws.length || ws.some(w => hay.includes(w)));
+    }
+    if (!reach) continue;
+    const f = o.f ?? featOf(l, nowMs);
+    o.f = f;
+    if (deskTwin(l, f)) continue;
+    // a category-level tie needs the lot to BE that kind of object
+    const kind = kindFits({ ...l, ek: f.ek });
+    const contribs: Contrib[] = [];
     for (const s of lotSeeds) {
       // a lot you only looked at never explains itself
       if (s.kind === 'signal' && s.lotId === l.id) continue;
-      const p = lotSim(f, s.f!);
+      const p = lotSim(f, s.f!, T.entityTie);
       if (p.sim < LOT_SIM_MIN) continue;
+      if (!kind && !p.entity && !p.card) continue;
       contribs.push({ seed: s, c: s.w * p.sim, parts: p });
     }
-    for (const s of followSeeds) {
-      const v = followSim(l, f, s.follow!);
-      if (v > 0) {
-        contribs.push({ seed: s, c: s.w * v });
-        if (s.follow!.kind === 'maker' || s.follow!.kind === 'entity') { let m = members.get(s); if (!m) members.set(s, (m = [])); m.push(f); }
+    for (const s of followOn) {
+      const fo = s.follow!;
+      let v = followSim(l, f, fo);
+      if (!v) continue;
+      if (fo.kind === 'cat' || fo.kind === 'house') {
+        // a category follow (or a market) reaches only the kind of object it
+        // names; a house follow reaches whatever the house sells
+        if (fo.kind === 'cat' && !kind) continue;
+        // a broad follow reads through the names the reader keeps there
+        const as = anchorsByCat.get(f.cat);
+        if (as?.length) { let b = 0; for (const a of as) b = Math.max(b, anchorFit(f, a)); v *= 0.45 + 0.55 * b; }
+      } else if (!taste.stated && !taste.bands.has(f.cat)) {
+        // a followed name with no band to read leans to its own price level
+        const m = anchorLogA.get(s);
+        if (m != null) v *= f.logA == null ? 0.85 : 0.6 + 0.4 * Math.exp(-((f.logA - m) ** 2) / (2 * 0.45 * 0.45));
       }
+      contribs.push({ seed: s, c: s.w * v });
     }
+    // a searched term SHARPENS what the reader already wants: a lot it
+    // matches that another seed reaches is lifted (a "flown apollo" search
+    // puts the flown pieces first among the Apollo picks)
+    let sharpen = 0;
     for (const s of searchSeeds) {
-      if (matchesSavedQuery(s.query!, l, today)) contribs.push({ seed: s, c: s.w * 0.6 });
+      const tm = terms.get(s);
+      if (tm === undefined ? matchesSavedQuery(s.query!, l, today) : tm ? tm(l, f) : false) {
+        contribs.push({ seed: s, c: s.w * 0.6 });
+        if (tm) sharpen = Math.max(sharpen, Math.min(0.35, 2 * s.w));
+      }
     }
     if (!contribs.length) continue;
     contribs.sort((a, b) => b.c - a.c);
-    const tasteV = contribs[0].c + 0.35 * (contribs[1]?.c ?? 0) + 0.15 * (contribs[2]?.c ?? 0);
+    const tasteV = (contribs[0].c + 0.35 * (contribs[1]?.c ?? 0) + 0.15 * (contribs[2]?.c ?? 0)) * (contribs.length > 1 ? 1 + sharpen : 1);
     const fin = finish(l, f, tasteV, close);
     if (fin.score <= 0) continue;
-    rows.push({ l, score: fin.score, taste: tasteV, best: contribs[0], f, flagged: fin.flagged, inBand: fin.inBand, inStated: fin.inStated });
+    const sig = contribs[0].seed.kind === 'signal' ? undefined : contribs.find(x => x.seed.kind === 'signal');
+    rows.push({ l, score: fin.score, taste: tasteV, best: contribs[0], f, flagged: fin.flagged, inBand: fin.inBand, inStated: fin.inStated, out: fin.out, sig });
   }
   const order = (a: Row, b: Row) => (b.score - a.score) || (a.l.id < b.l.id ? -1 : 1);
   rows.sort(order);
-  if (rows.length >= Math.max(LADDER_NEED, (opts.n ?? 0) * 2)) return rows;
+  const inRange = rows.filter(r => !r.out);
+  const outside = rows.filter(r => r.out);
+  if (inRange.length >= Math.max(LADDER_NEED, (opts.n ?? 0) * 2) || !anchors.length) return [...inRange, ...outside];
 
   // THE LADDER — only when the real ties run short; rung by rung, each
   // rung's rows after every row above it (a family stranger never outranks
-  // the name you follow)
-  const anchors = ladderAnchors(taste, members);
-  if (!anchors.length) return rows;
+  // the name you follow); inside a stated range only
   const have = new Set(rows.map(r => r.l));
   const rungs: Record<LadderTier, Row[]> = { 2: [], 3: [], 4: [] };
   const anchorCats = new Set(anchors.map(a => a.cat));
@@ -893,6 +1213,8 @@ export function scoreLots<L extends RecLot>(pool: readonly L[], taste: Taste, op
     if (have.has(l) || !anchorCats.has(o.cat)) continue;
     const f = o.f ?? featOf(l, nowMs);
     if (!o.f && deskTwin(l, f)) continue;
+    if (!kindFits({ ...l, ek: f.ek })) continue;
+    if (taste.stated && f.logA != null && !statedFit(f.logA, taste.stated).inside) continue;
     let bestTier: LadderTier | 0 = 0, bestC = 0, bestA: LadderAnchor | null = null;
     for (const a of anchors) {
       // a looked-at lot never stands in as its own kin
@@ -911,7 +1233,8 @@ export function scoreLots<L extends RecLot>(pool: readonly L[], taste: Taste, op
     rungs[bestTier].push({ l, score: fin.score, taste: bestC, best: { seed: bestA.seed, c: bestC, ladder: { tier: bestTier, anchor: bestA } }, f, flagged: fin.flagged, inBand: fin.inBand, inStated: fin.inStated });
   }
   // each rung sits strictly below the one above: rescale into the gap
-  let ceil = rows.length ? rows[rows.length - 1].score : Infinity;
+  let ceil = inRange.length ? inRange[inRange.length - 1].score : Infinity;
+  const ladder: Row[] = [];
   for (const t of [2, 3, 4] as LadderTier[]) {
     const r = rungs[t].sort(order);
     if (!r.length) continue;
@@ -919,9 +1242,28 @@ export function scoreLots<L extends RecLot>(pool: readonly L[], taste: Taste, op
     const k = Number.isFinite(ceil) && top >= ceil ? (ceil * 0.98) / top : 1;
     for (const x of r) x.score *= k;
     ceil = r[r.length - 1].score;
-    rows.push(...r);
+    ladder.push(...r);
   }
-  return rows;
+  // in range, then the rungs, then the real ties far outside the stated range
+  return [...inRange, ...ladder, ...outside];
+}
+
+/** a tie to a NAME — the same maker / player / subject / card as a seed, or
+ *  a followed name — barely discounts its own repeats; everything else
+ *  (a cut, a broad follow, a rung, a search) is spread hard */
+function namedTie(r: Pick<ScoredRow, 'best'>): boolean {
+  const b = r.best;
+  if (b.ladder) return false;
+  if (b.parts) return b.parts.entity || b.parts.card;
+  return !!b.seed.follow && !b.seed.broad && (b.seed.follow.kind === 'maker' || b.seed.follow.kind === 'entity');
+}
+
+/** the seat (0-based) by which the device's i-th guaranteed pick is owed:
+ *  3, 11, 19 in the first 24 for 3 seats, then one in every 8 — fixed, so a
+ *  shorter deal (home's 20) is always the longer one's prefix */
+function sigSlot(i: number, perDeal: number): number {
+  const gap = Math.max(1, Math.floor(REC_DEAL / Math.max(1, perDeal)));
+  return i < perDeal ? 3 + i * gap : REC_DEAL + (i - perDeal) * 8 + 3;
 }
 
 /**
@@ -930,17 +1272,12 @@ export function scoreLots<L extends RecLot>(pool: readonly L[], taste: Taste, op
  */
 export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, opts: RecOpts = {}): Rec<L>[] {
   const n = opts.n ?? 12;
+  const T = tuneOf(opts);
   const rows = scoreLots(pool, taste, opts);
   if (!rows.length) return [];
   const lotSeeds = taste.seeds.filter(s => s.f);
   type Row = ScoredRow<L>;
 
-  // DIVERSITY — a greedy deal with soft penalties: every pick already
-  // dealt from the same entity / sale / seed / house discounts the next
-  // (a strong same-maker lot still beats a weak stranger; a run of one
-  // sale or one seed's twins does not wall the list). Hard: one seat per
-  // object or card identity (any grade), a same card live at another
-  // house is the same seat, and ≤ ~40% of the seats to one entity.
   const out: Row[] = [];
   // a taste that IS one entity (a Star Wars desk, a Patek desk) is not
   // diversified away from it: the entity's share of the lot seeds' weight
@@ -950,9 +1287,7 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
   for (const s of lotSeeds) { seedTot += s.w; if (s.f!.named && s.f!.ek) seedW.set(s.f!.ek, (seedW.get(s.f!.ek) ?? 0) + s.w); }
   // (r9, QA4 C1) a followed maker / player / subject IS a named entity of the
   // taste: it carries its weight to its entity key(s), so a reader who follows
-  // only Warhol is a Warhol taste (share 1) — the follow used to add to the
-  // total and never to the entity, so every follow-only taste read share 0
-  // and capped at ~40% of the seats (10 of 101 live Warhol lots)
+  // only Warhol is a Warhol taste (share 1)
   for (const s of taste.seeds) {
     const fo = s.follow;
     if (!fo || (fo.kind !== 'entity' && fo.kind !== 'maker')) continue;
@@ -961,69 +1296,142 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
     for (const ek of eks) seedW.set(ek, (seedW.get(ek) ?? 0) + s.w);
   }
   const shareOf = (ek: string | null) => (ek && seedTot > 0 ? Math.min(1, (seedW.get(ek) ?? 0) / seedTot) : 0);
-  // the per-entity cap reads a fixed deal size, not n: home (20) and the
-  // profile (24) deal the same list, so home is the profile's prefix (C7)
+  // the caps read a fixed deal size, not n: home (20) and the profile (24)
+  // deal the same list, so home is the profile's prefix (C7)
   const capN = Math.max(n, REC_DEAL);
+  // the deal reads the top of the ranking — plus the best rows an on-device
+  // signal ties (they sit low on a deep desk, and they are owed seats)
   const cand = rows.slice(0, Math.max(400, capN * 20));
-  const perEnt = new Map<string, number>(), perSale = new Map<string, number>(), perHouse = new Map<string, number>(), perSeed = new Map<Seed, number>();
+  { const inCand = new Set(cand); let k = 0; for (const r of rows) { if (k >= capN) break; if ((r.sig || r.best.seed.kind === 'signal') && !inCand.has(r)) { cand.push(r); k++; } } }
+  const perEnt = new Map<string, number>(), perSale = new Map<string, number>(), perSaleGen = new Map<string, number>(), perHouse = new Map<string, number>(), perSeed = new Map<Seed | string, number>();
+  // what the device picked up quietly (views, pages, typed terms) speaks as
+  // ONE voice in the deal: five page views are not five seeds each owed their
+  // own share of the seats ("More like this" is a statement of its own)
+  const seedKey = (s: Seed): Seed | string => (s.kind === 'signal' && s.verb !== 'asked for more like' ? 'signal' : s);
   const seen = new Set<string>();
   const keysOf = (r: Row) => ({
-    ent: r.f.ek ?? `id:${r.l.id}`, sale: saleKeyOf(r.l), house: r.l.auctionHouse ?? '',
+    // a collection bucket (cs:) is not one entity: its lots are spread by
+    // the cut's own penalties, not discounted as repeats of one name
+    ent: r.f.named && r.f.ek ? r.f.ek : `id:${r.l.id}`, sale: saleKeyOf(r.l), house: r.l.auctionHouse ?? '',
     thing: r.f.card ? `card:${r.f.card}` : `t:${r.l.auctionHouse}|${normTitle(r.l.title)}`,
   });
   const keys = new Map(cand.map(r => [r, keysOf(r)]));
   const used = new Set<Row>();
   const bump = <K,>(m: Map<K, number>, key: K) => m.set(key, (m.get(key) ?? 0) + 1);
-  // two phases: every real tie is dealt before any fallback rung opens (a
-  // diversity penalty never lets a ladder row jump a real one)
-  let ladderOpen = !cand.some(r => !r.best.ladder);
-  // ONE SEED'S SHARE (Oct 11): no single seed — one "More like this" at .7,
-  // one save — takes more than ~40% of the seats while another seed still
-  // has something to deal, so a mixed taste stays mixed. A one-seed taste
-  // (or one whose other seeds run dry) fills past the cap rather than
-  // printing a short list.
-  const seedCapOn = new Set(cand.map(r => r.best.seed)).size > 1;
-  let seedCap = Math.ceil(capN * SEED_SHARE);
+  // PHASES: every real tie in range (0) before any fallback rung (1), every
+  // rung before a real tie far outside a stated range (2) — a penalty never
+  // lets a later phase jump an earlier one
+  const phaseOf = (r: Row) => (r.out ? 2 : r.best.ladder ? 1 : 0);
+  let phase = Math.min(...cand.map(phaseOf));
+  // ONE SEED'S SHARE: no single seed — one "More like this" at .7, one save,
+  // one category follow (a fifth) — takes more than ~40% of the seats while
+  // another seed still has something to deal; ONE SALE never more than a
+  // sixth of the GENERIC seats (R1: 22 of 24 from one RR sale, 7 from one
+  // Bonhams sale). A one-seed / one-sale taste fills past the caps rather
+  // than printing a short list (the caps lift one seat at a time).
+  const seedCapOn = new Set(cand.map(r => seedKey(r.best.seed))).size > 1;
+  const saleCapOn = new Set(cand.map(r => keys.get(r)!.sale)).size > 1;
+  let lift = 0;
+  // a followed name the taste is mostly about (a Star Wars reader who also
+  // ticked "Props & Wardrobe") keeps up to 90% of its share; a broad seed a fifth
+  const seedCap = (s: Seed) => Math.ceil(capN * (s.broad ? T.broadShare
+    : s.follow && s.kind === 'follow' && seedTot > 0 ? Math.max(SEED_SHARE, 0.9 * s.w / seedTot) : SEED_SHARE)) + lift;
+  const saleCap = () => Math.ceil(capN * T.saleShare) + lift;
+  // what the device learned keeps a few seats once the reader has said
+  // anything out loud (a deep desk otherwise never shows a view)
+  const loud = taste.seeds.some(s => s.kind !== 'signal');
+  const sigOn = loud && T.sigSeats > 0 && cand.some(r => r.sig || r.best.seed.kind === 'signal');
+  let sigDealt = 0;
+  const sigOwed = (seat: number) => { let k = 0; while (sigSlot(k, T.sigSeats) <= seat) k++; return k; };
+  const penalty = (r: Row, k: ReturnType<typeof keysOf>, saleToo = true) => {
+    const e = perEnt.get(k.ent) ?? 0;
+    const share = r.f.named ? shareOf(r.f.ek) : 0;
+    const named = namedTie(r);
+    // a desk-wide cut tie names whichever save is strongest: its "seed" is
+    // incidental, so it pays no per-seed discount (the sale and house do)
+    return (named ? T.namedLift : 1) * Math.pow(named ? T.namedEnt + (0.99 - T.namedEnt) * share : r.f.named ? 0.8 + 0.15 * share : T.genEnt, e)
+      * (saleToo ? Math.pow(named ? T.namedSale : T.genSale, perSale.get(k.sale) ?? 0) : 1)
+      * (r.best.parts && !named && r.best.seed.kind !== 'signal' ? 1 : Math.pow(named ? T.namedSeed : T.genSeed, perSeed.get(seedKey(r.best.seed)) ?? 0))
+      * Math.pow(T.house, perHouse.get(k.house) ?? 0);
+  };
+  const entCapOf = (r: Row) => Math.max(4, Math.ceil(capN * (T.entBase + T.entShare * (r.f.named ? shareOf(r.f.ek) : 0))));
+  const take = (r: Row, k: ReturnType<typeof keysOf>) => {
+    out.push(r);
+    bump(perEnt, k.ent); bump(perSale, k.sale); bump(perHouse, k.house); bump(perSeed, seedKey(r.best.seed));
+    if (!namedTie(r)) bump(perSaleGen, k.sale);
+    seen.add(k.thing); seen.add(`id:${r.l.id}`);
+    for (const x of r.l.crossLive || []) if (x?.id) seen.add(`id:${x.id}`);
+    if (r.best.seed.kind === 'signal') sigDealt++;
+  };
   while (out.length < n) {
-    let best: Row | null = null, bestV = 0;
+    // the device's guaranteed seat, when one is owed here
+    if (sigOn && sigDealt < sigOwed(out.length)) {
+      let best: Row | null = null, bestV = 0;
+      for (const r of cand) {
+        if (used.has(r) || phaseOf(r) > phase) continue;
+        const k = keys.get(r)!;
+        if (seen.has(k.thing) || seen.has(`id:${r.l.id}`)) continue;
+        const sigC = r.best.seed.kind === 'signal' ? r.best.c : r.sig?.c;
+        if (!sigC) continue;
+        if (r.f.named && (perEnt.get(k.ent) ?? 0) >= entCapOf(r)) continue;
+        const v = r.score * (sigC / Math.max(1e-9, r.taste)) * penalty(r, k);
+        if (v > bestV) { bestV = v; best = r; }
+      }
+      if (best) {
+        used.add(best);
+        // dealt under the signal's own reason ("Because you looked at …")
+        take(best.best.seed.kind === 'signal' ? best : { ...best, best: best.sig!, score: best.score * (best.sig!.c / Math.max(1e-9, best.taste)) }, keys.get(best)!);
+        continue;
+      }
+      sigDealt = Infinity; // nothing left a signal explains — stop owing seats
+    }
+    let best: Row | null = null, bestV = 0, capped = false;
+    let overSale: Row | null = null, overV = 0, bestBare = 0;
     for (const r of cand) {
       if (used.has(r)) continue;
-      if (r.best.ladder && !ladderOpen) continue;
+      if (phaseOf(r) > phase) continue;
       const k = keys.get(r)!;
       if (seen.has(k.thing) || seen.has(`id:${r.l.id}`)) { used.add(r); continue; }
-      const e = perEnt.get(k.ent) ?? 0;
-      const share = r.f.named ? shareOf(r.f.ek) : 0;
-      if (r.f.named && e >= Math.max(4, Math.ceil(capN * (0.4 + 0.5 * share)))) continue;
-      if (seedCapOn && (perSeed.get(r.best.seed) ?? 0) >= seedCap) continue;
-      const v = r.score
-        * Math.pow(r.f.named ? 0.8 + 0.15 * share : 0.7, e)
-        * Math.pow(0.85, perSale.get(k.sale) ?? 0)
-        * Math.pow(0.8, perSeed.get(r.best.seed) ?? 0)
-        * Math.pow(0.94, perHouse.get(k.house) ?? 0);
+      if (r.f.named && (perEnt.get(k.ent) ?? 0) >= entCapOf(r)) continue;
+      // the seed cap is about one SEED's voice: a save's tie (to its name — the
+      // entity cap bounds that — or a desk-wide cut, "More vintage PSA baseball
+      // cards like yours", which names whichever save is strongest) is the
+      // whole desk's, not one seed's
+      const deskTie = !!r.best.parts && r.best.seed.kind !== 'signal';
+      if (seedCapOn && !deskTie && (perSeed.get(seedKey(r.best.seed)) ?? 0) >= seedCap(r.best.seed)) { capped = true; continue; }
+      if (saleCapOn && !namedTie(r) && (perSaleGen.get(k.sale) ?? 0) >= saleCap()) {
+        // at its cap the sale's own repeat discount is spent: weigh it without
+        capped = true;
+        const v = r.score * penalty(r, k, false);
+        if (v > overV) { overV = v; overSale = r; }
+        continue;
+      }
+      const v = r.score * penalty(r, k);
       if (v > bestV) { bestV = v; best = r; }
+      bestBare = Math.max(bestBare, r.score * penalty(r, k, false));
     }
+    // the sale cap yields when nothing elsewhere comes close (weighed alike:
+    // neither side's sale discount counts)
+    if (overSale && overV * T.saleYield > bestBare) best = overSale;
     if (!best) {
-      if (!ladderOpen) { ladderOpen = true; continue; }
-      // every seed with lots left sits at the cap: lift it one seat (the
-      // strongest seed takes the next, the others keep pace) — a one-seed
-      // taste walks it up to the full deal
-      if (seedCapOn && seedCap < n) { seedCap++; continue; }
+      // stuck: open the fallback ladder before lifting a cap; lift the caps
+      // (one seat at a time — the strongest seed takes the next, the others
+      // keep pace) before reaching outside a stated range
+      if (phase < 1 && cand.some(r => !used.has(r) && phaseOf(r) === 1)) { phase = 1; continue; }
+      if (capped && lift < n) { lift++; continue; }
+      if (phase < 2 && cand.some(r => !used.has(r) && phaseOf(r) === 2)) { phase = 2; continue; }
       break;
     }
-    const k = keys.get(best)!;
     used.add(best);
-    out.push(best);
-    bump(perEnt, k.ent); bump(perSale, k.sale); bump(perHouse, k.house); bump(perSeed, best.best.seed);
-    seen.add(k.thing); seen.add(`id:${best.l.id}`);
-    for (const x of best.l.crossLive || []) if (x?.id) seen.add(`id:${x.id}`);
+    take(best, keys.get(best)!);
   }
 
   // (r9, QA4 C2) the same card in another grade lost its seat to the better
   // fit — the kept pick says the other is live too ("also live as PSA 10")
   const twinOf = new Map<string, Row>();
-  const picked = new Set(out);
+  const picked = new Set(out.map(r => r.l));
   for (const r of rows) {
-    if (picked.has(r) || !r.f.card) continue;
+    if (picked.has(r.l) || !r.f.card) continue;
     const t = `card:${r.f.card}`;
     if (!twinOf.has(t)) twinOf.set(t, r);
   }
@@ -1035,21 +1443,32 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
     // the suffixes, each only when TRUE: the engine's below-market flag
     // (isFlagged — a published read, never a number made up here), else the
     // reader's learned band when the lot sits in it and the reason does not
-    // already print a band; then the card's other grade live
-    // the learned band speaks first; else the range the reader stated
+    // already print a band, else the stated range it sits in — or, far
+    // outside the stated range, which side; then the card's other grade live
     const band = r.inBand ? bandOfCat(taste.bands, r.f.cat) : null;
     const said = !band && r.inStated && taste.stated ? taste.stated.say : null;
+    const off = r.out && taste.stated ? outsideWords(r.out, taste.stated) : null;
     const extra = [
-      r.flagged ? ENGINE_NOTE : !/\$/.test(base) && band ? `in your ${band} range` : !/\$/.test(base) && said ? said : null,
+      r.flagged ? ENGINE_NOTE : null,
+      off ?? (!r.flagged && !/\$/.test(base) ? (band ? `in your ${band} range` : said) : null),
       twinNote,
     ].filter(Boolean).join(' · ');
     const reason = extra ? `${base} · ${extra}` : base;
     const short = baseShort ? (extra ? `${baseShort} · ${extra}` : baseShort) : reason;
-    return {
+    const rec: Rec<L> = {
       lot: r.l, score: Math.round(r.score * 1000) / 1000, taste: Math.round(r.taste * 1000) / 1000, reason, short, why, seed: r.best.seed,
       flagged: !!r.flagged, inBand: !!r.inBand, tier: r.best.ladder?.tier ?? 1,
     };
+    if (r.out) rec.outOfRange = r.out;
+    return rec;
   });
+}
+
+/** "below your $50K floor" / "above your $20K cap" */
+function outsideWords(side: 'below' | 'above', b: StatedBand): string | null {
+  if (side === 'below' && b.lo != null) return `below your ${usdWord(Math.round(Math.pow(10, b.lo)))} floor`;
+  if (side === 'above' && b.hi != null) return `above your ${usdWord(Math.round(Math.pow(10, b.hi)))} cap`;
+  return null;
 }
 
 /* ── reasons ────────────────────────────────────────────────────────────── */
@@ -1069,6 +1488,7 @@ function explain(l: RecLot, f: Feat, best: { seed: Seed; parts?: SimParts; ladde
   if (s.kind === 'signal' && !s.f) return { reason: `Because you ${s.verb} ${s.query ? `“${s.label}”` : s.label}`, why: [] };
   lotSeeds = lotSeeds.filter(x => x.kind !== 'signal');
   if (best.ladder) return ladderReason(l, f, best.ladder, s);
+  if (s.market) return { reason: `You picked ${s.market}`, why: ['picked market'] };
   if (s.follow) {
     const word = s.follow.kind === 'house' ? 'house' : s.follow.kind === 'cat' ? 'category' : s.follow.kind === 'entity' ? 'subject' : 'name';
     return { reason: `You follow ${s.follow.label}`, why: [`followed ${word}`] };
@@ -1085,7 +1505,7 @@ function explain(l: RecLot, f: Feat, best: { seed: Seed; parts?: SimParts; ladde
   // kernel otherwise — one save's neighborhood)
   const bandWords = inBand ? bandOfCat(bands, f.cat) : null;
   if (bandWords) why.push(`in your ${bandWords} range`);
-  else if (p.price != null && p.price >= 0.6) why.push('in your price range');
+  else if (p.price != null && p.price >= 0.6 && inDeskSpan(f, lotSeeds)) why.push('in your price range');
   if (!why.length && p.sub) why.push(`also ${subLabel(f.cat, f.sub)}`);
   if (s.kind === 'signal') {
     const lead = why[0] ? why[0].charAt(0).toUpperCase() + why[0].slice(1) : null;
@@ -1103,7 +1523,7 @@ function explain(l: RecLot, f: Feat, best: { seed: Seed; parts?: SimParts; ladde
       if (prices.length >= 2 && f.logA != null) {
         const lo = Math.min(...prices), hi = Math.max(...prices);
         const a = Math.pow(10, f.logA);
-        if (a >= lo / 1.6 && a <= hi * 1.6 && hi / lo <= 20) band = ` · ${bandText(lo, hi)}`;
+        if (hi / lo <= 20) band = bandSuffix(a, lo, hi);
       }
       return { reason: `Like your ${name} ${nounOf(f.cat, f.sub)}${band}`, why };
     }
@@ -1191,11 +1611,26 @@ function cutReason(f: Feat, p: SimParts, lotSeeds: Seed[]): string | null {
   let band = '';
   if (prices.length >= 2 && f.logA != null) {
     const lo = Math.min(...prices), hi = Math.max(...prices), a = Math.pow(10, f.logA);
-    if (a >= lo / 1.6 && a <= hi * 1.6 && hi / lo <= 40) band = ` · ${bandText(lo, hi)}`;
+    if (hi / lo <= 40) band = bandSuffix(a, lo, hi);
   }
   if (p.weak) return `More ${noun} in your range${band}`;
   if (!words.length) return null;
   return `More ${words.join(' ')} ${noun} like yours${band}`;
+}
+/** a desk band printed after a reason: the band itself only when the lot
+ *  sits in it (R3: a $566 Kobe read "· $190–380"), "near your …" when it is
+ *  within ×1.6 of it, nothing further out */
+function bandSuffix(a: number, lo: number, hi: number): string {
+  if (a >= lo * 0.97 && a <= hi * 1.03) return ` · ${bandText(lo, hi)}`;
+  if (a >= lo / 1.6 && a <= hi * 1.6) return ` · near your ${bandText(lo, hi)}`;
+  return '';
+}
+/** the lot sits inside the span of what the desk saved in its category */
+function inDeskSpan(f: Feat, lotSeeds: readonly Seed[]): boolean {
+  if (f.logA == null) return false;
+  const ps = lotSeeds.filter(x => x.f!.cat === f.cat && x.f!.logA != null).map(x => x.f!.logA!);
+  if (!ps.length) return false;
+  return f.logA >= Math.min(...ps) - 0.05 && f.logA <= Math.max(...ps) + 0.05;
 }
 const rankCut = (k: string) => (k.startsWith('era-') ? 0 : k.startsWith('lang-') ? 1 : /^(?:psa|sgc|bgs|cgc|tag)$/.test(k) ? 2 : 3);
 
@@ -1203,7 +1638,7 @@ const rankCut = (k: string) => (k.startsWith('era-') ? 0 : k.startsWith('lang-')
  *  reason does not already say */
 export function recNote(r: Pick<Rec, 'reason' | 'why'> & { short?: string }, opts: { short?: boolean } = {}): string {
   if (opts.short && r.short) return r.short;
-  const extra = r.why.find(w => !/^(?:followed|saved search)/.test(w) && !r.reason.toLowerCase().includes(w.toLowerCase()));
+  const extra = r.why.find(w => !/^(?:followed|saved search|picked market)/.test(w) && !r.reason.toLowerCase().includes(w.toLowerCase()));
   return extra && !/^(?:Like your|More )/.test(r.reason) ? `${r.reason} · ${extra}` : r.reason;
 }
 

@@ -11,6 +11,11 @@
  *   saved searches       the plain (non-follow) saved_searches rows
  *   stated price range   the quick start's (app/lib/interests) — a strong
  *                        band in scoring, never a filter that hides lots
+ *   picked markets       the quick start's markets: one with no followed or
+ *                        saved name in it still deals its own picks
+ *   this device          views, pages, typed terms, More like this; "Not for
+ *                        me" passes the lots themselves, so the seed that
+ *                        explained each is quieted (app/lib/recs-signals)
  *
  * The profile's "Lots you may like" room and the home feed's For-you tab
  * both read this one hook, so the two lists agree.
@@ -19,8 +24,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AuctionLot } from '../types';
 import { useAccount } from './account';
 import { useFollows } from './follows';
-import { buildTaste, idAliases, type Taste, type SavedInput } from './recs';
-import { usePricePref } from './interests';
+import { buildTaste, idAliases, type Taste, type SavedInput, type RecLot } from './recs';
+import { usePricePref, useInterests } from './interests';
 import { readSignals, signalsToTaste, SIGNALS_EVENT, SIGNALS_KEY, type SignalStore } from './recs-signals';
 
 /** the on-device signal store (app/lib/recs-signals). Read once on mount
@@ -59,6 +64,8 @@ export function useTaste(book: readonly AuctionLot[]): TasteState {
   const signals = useSignals();
   // the quick start's stated price range — a strong band inside recs, not a pre-filter
   const price = usePricePref();
+  // the quick start's markets, as a stable key (a new array each read)
+  const marketsKey = useInterests().markets.join(',');
   const anySignal = !!signals && signals.ev.length + signals.marks.length > 0;
   const byId = useMemo(() => {
     const m = new Map<string, AuctionLot>();
@@ -79,13 +86,22 @@ export function useTaste(book: readonly AuctionLot[]): TasteState {
     });
     // on-device signals (app/lib/recs-signals) — below every save
     const { extra, negative } = signals ? signalsToTaste(signals, Date.now(), id => byId.get(id)) : { extra: [], negative: {} };
+    // "Not for me" hands the passed lots themselves (the loaded row, else the
+    // mark's snapshot) so the seed that explained each pick is quieted too
+    const lots: RecLot[] = [];
+    for (const m of signals?.marks ?? []) {
+      if (m.k !== 'less') continue;
+      const l = byId.get(m.id) ?? m.lot;
+      if (l && l.title) lots.push(l);
+    }
     return buildTaste({
       saved, follows,
       searches: searches.map(s => ({ id: s.id, name: s.name, query: s.query, createdAt: s.created_at })),
-      extra, negative, price,
+      extra, negative: { ...negative, lots }, price,
+      markets: marketsKey ? marketsKey.split(',') : [],
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedIds, savedMeta, byId, follows, searches, day, signals, price]);
+  }, [savedIds, savedMeta, byId, follows, searches, day, signals, price, marketsKey]);
   return {
     taste,
     ready: savedReady && followsReady && signals !== null,

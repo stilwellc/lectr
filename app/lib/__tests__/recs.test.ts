@@ -223,16 +223,20 @@ test('price band: a budget desk ranks the in-band card first and cites the band 
   assert.ok(/\$/.test(recNote(rs[0])), 'the in-band pick prints a band');
 });
 
-test('engine: a flagged lot that truly ties is lifted and says so; a flagged stranger stays out', () => {
+test('engine: a flagged lot that truly ties says so (no second lift on top of priority); a flagged stranger stays out', () => {
   const seed = print('andy-warhol', 'Flowers (F. & S. II.64)', 20000, 30000);
   const plain = print('andy-warhol', 'Cow (F. & S. II.11)', 20000, 30000, { signal: null });
   const flagged = print('andy-warhol', 'Mick Jagger (F. & S. II.138)', 20000, 30000, { signal: { label: 'Below Market' } });
   const stranger = card('1990 Fleer #1 Nobody - PSA 9', 'baseball', 25000, { signal: { label: 'Below Market' } });
   const t = buildTaste({ saved: [{ id: seed.id, lot: seed }], follows: [], nowMs: NOW });
   const rs = recommend([plain, flagged, stranger], t, { nowMs: NOW });
-  assert.deepEqual(ids(rs), [flagged.id, plain.id]);
-  assert.ok(rs[0].flagged && rs[0].reason.endsWith(ENGINE_NOTE));
-  assert.ok(!rs[1].flagged && !rs[1].reason.includes(ENGINE_NOTE), 'never on an unflagged lot');
+  assert.deepEqual(ids(rs).sort(), [flagged.id, plain.id].sort());
+  const f = rs.find(r => r.lot.id === flagged.id)!, p = rs.find(r => r.lot.id === plain.id)!;
+  assert.ok(f.flagged && f.reason.endsWith(ENGINE_NOTE));
+  assert.ok(!p.flagged && !p.reason.includes(ENGINE_NOTE), 'never on an unflagged lot');
+  // the flag is not a multiplier of its own: the two score the same here
+  // (the engine's edge already rides in priority when it has a read)
+  assert.equal(f.score, p.score);
 });
 
 test('freshness: closed and results-pending-past-close lots never come back, day over day', () => {

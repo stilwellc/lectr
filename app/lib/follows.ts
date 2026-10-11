@@ -19,6 +19,7 @@ import { useAuth } from './account';
 import { useSavedSearches, type SavedQuery } from './alerts';
 import { taxonOf, subMatches, CAT_LABEL, subLabel, type CatKey } from './taxonomy';
 import { storageGet, storageSet } from './safe-storage';
+import { kindFits } from './object-kind';
 
 export type FollowKind = 'maker' | 'cat' | 'house' | 'entity';
 export interface Follow {
@@ -167,7 +168,9 @@ export function useFollows() {
     })();
   }, [user, ready, local, cloud, save]);
 
-  const follows: Follow[] = user ? cloud.map(c => c.f) : local;
+  // memoized (R3): a fresh array each render re-built the taste and re-ran
+  // both of the profile's deals on every render, signed in
+  const follows: Follow[] = useMemo(() => (user ? cloud.map(c => c.f) : local), [user, cloud, local]);
 
   const isFollowing = useCallback((f: Follow) => follows.some(x => same(x, f)), [follows]);
 
@@ -207,19 +210,25 @@ export function useFollows() {
 /**
  * How strongly one lot matches the reader's follows (0–1): a followed maker or
  * player (or subject / set) 1, a followed sub-category 0.8, a whole category 0.6, a house 0.4.
+ * (Oct 11) A category follow reaches only a lot that IS that kind of
+ * object (app/lib/object-kind): a Gibson guitar filed under Sports Cards ·
+ * Singles, an Omega dinner menu under Wristwatches are not what the reader
+ * followed. A named follow (maker / player / subject) needs no such check.
  */
 export function affinityOf(
-  l: { artist?: string | null; playerSlug?: string | null; auctionHouse?: string | null; subCat?: string | null; drill?: string | null; ek?: string | null },
+  l: { artist?: string | null; title?: string | null; playerSlug?: string | null; auctionHouse?: string | null; subCat?: string | null; drill?: string | null; ek?: string | null; formKey?: string | null; objectClass?: string | null; itemClass?: string | null },
   follows: Follow[],
 ): number {
   if (!follows.length) return 0;
   const t = taxonOf(l);
+  let kind: boolean | null = null;
+  const fits = () => (kind ??= !l.title || kindFits({ ...l, artist: l.artist ?? '', title: l.title }));
   let a = 0;
   for (const f of follows) {
     if (f.kind === 'maker' && (l.artist === f.key || l.playerSlug === f.key)) a = Math.max(a, 1);
     else if (f.kind === 'cat') {
       const [cat, sub] = f.key.split(':');
-      if (t.cat === cat && (!sub || subMatches(cat, sub, t.sub))) a = Math.max(a, sub ? 0.8 : 0.6);
+      if (t.cat === cat && (!sub || subMatches(cat, sub, t.sub)) && fits()) a = Math.max(a, sub ? 0.8 : 0.6);
     } else if (f.kind === 'house' && l.auctionHouse === f.key) a = Math.max(a, 0.4);
     else if (f.kind === 'entity' && l.ek === f.key) a = Math.max(a, 1);
   }
