@@ -21,10 +21,10 @@ import {
 } from '../lib/pick-log';
 import { SIGNALS_EVENT } from '../lib/recs-signals';
 import { fmtFace, FACE_LABEL } from '../lib/lot-face';
-import { makerLineOf } from '../lib/lot-labels';
+import { displayMakerOf } from '../lib/maker-subjects';
 import { HorizonMark } from '../components/marks';
 import { craftTitle, fmtSignedPct } from '../utils';
-import { HelpChip } from './help';
+import { RoomHead } from './head';
 
 /** the log, read on mount (null until then — no hydration mismatch), again
  *  on a clear here or a write in another tab */
@@ -77,7 +77,9 @@ function soldCell(o: PickOutcome): React.ReactNode {
 function OutcomeRow({ o, mobile }: { o: PickOutcome; mobile: boolean }) {
   const p = o.pick;
   const title = craftTitle(p.lot.title, p.lot.auctionHouse);
-  const maker = makerLineOf({ artist: p.lot.artist, title: p.lot.title }).name;
+  // the maker or the lot's subject (a Goldin card names its player, never
+  // the "Sports Cards" bucket) — nothing when neither is known
+  const maker = displayMakerOf(p.lot as unknown as AuctionLot)?.name ?? null;
   const href = `/lot?id=${encodeURIComponent(p.id)}`;
   const est = p.est ? `${fmtFace(p.est[0])}–${fmtFace(p.est[1])}` : null;
   if (mobile) {
@@ -85,7 +87,7 @@ function OutcomeRow({ o, mobile }: { o: PickOutcome; mobile: boolean }) {
       <div className="ray-settled-mrow">
         <Link href={href} style={{ color: 'inherit', textDecoration: 'none' }}><div className="ck-mtitle">{title}</div></Link>
         <div className="ck-mline">
-          <span className="ck-msub">{maker} · {shownLine(o)}</span>
+          <span className="ck-msub">{maker ? <>{maker} · </> : null}{shownLine(o)}</span>
           <span className="ck-mnum"><b>{soldCell(o)}</b></span>
         </div>
         <div className="ck-mline" style={{ marginTop: 2 }}>
@@ -113,7 +115,7 @@ function OutcomeRow({ o, mobile }: { o: PickOutcome; mobile: boolean }) {
   }
   return (
     <div className="ray-settled-cols ray-savedrow" style={{ display: 'grid' }}>
-      <span className="maker"><Link href={href} style={{ color: 'inherit', textDecoration: 'none' }}>{maker}</Link></span>
+      <span className="maker"><Link href={href} style={{ color: 'inherit', textDecoration: 'none' }}>{maker ?? '—'}</Link></span>
       <span className="work">
         <Link href={href} style={{ color: 'inherit', textDecoration: 'none' }}>{title}</Link>
         <span style={{ display: 'block', whiteSpace: 'normal', fontSize: 11.5, marginTop: 3, color: 'var(--color-text-muted)' }}>{shownLine(o)}</span>
@@ -141,13 +143,13 @@ function OutcomeRow({ o, mobile }: { o: PickOutcome; mobile: boolean }) {
 /** newest close first: the result's day, else the close's */
 const dayKey = (o: PickOutcome) => o.date || (o.closeMs != null ? new Date(o.closeMs).toISOString().slice(0, 10) : '');
 
-const PAGE = 6;
+const PAGE = 3;
 function OutcomeGroup({ label, rows, note }: { label: string; rows: PickOutcome[]; note?: string }) {
   const [shown, setShown] = useState(PAGE);
   if (!rows.length) return null;
   const vis = rows.slice(0, shown);
   return (
-    <div style={{ marginTop: 22 }}>
+    <div style={{ marginTop: 18 }}>
       <div className="ck-reads-head"><span className="kicker">{label} · {rows.length}</span><i className="ck-reads-rule" /></div>
       {note && <p className="ck-sig-note" style={{ margin: '4px 0 8px' }}>{note}</p>}
       <div className="ray-settled-desk" style={{ marginTop: 8 }}>
@@ -166,8 +168,8 @@ function OutcomeGroup({ label, rows, note }: { label: string; rows: PickOutcome[
         {vis.map(o => <OutcomeRow key={o.pick.id} o={o} mobile />)}
       </div>
       {shown < rows.length && (
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
-          <button className="ray-show-more" onClick={() => setShown(s => s + PAGE * 2)}>
+        <div className="ck-more-row" style={{ marginTop: 14 }}>
+          <button className="ray-show-more" onClick={() => setShown(s => s + 6)}>
             Show more ({rows.length - shown} more)
           </button>
         </div>
@@ -235,13 +237,11 @@ export default function PickOutcomes({ book }: { book: readonly AuctionLot[] }) 
   const waiting = wantLedger && !ledger.loaded && !ledger.error;
 
   return (
-    <section id="pick-outcomes" className="ray-saved-section rail ray-enter" aria-label="How your picks did">
+    <section id="pick-outcomes" className="ck-subroom rail ray-enter" aria-label="How your picks did">
       {gate}
-      <div className="ns-plate" style={{ paddingTop: 18 }}>
-        <div className="ck-room-head" style={{ marginBottom: 4 }}>
-          <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><HorizonMark size={17} /></span>How your picks did</h2>
-          <HelpChip name="How your picks did">
-            Every pick lectr shows you here or in home&rsquo;s For you is noted <b>on this device</b> with what lectr said
+      <div>
+        <RoomHead level={3} mark={<HorizonMark size={15} />} title="How your picks did"
+          help={{ name: 'How your picks did', body: <>            Every pick lectr shows you here or in home&rsquo;s For you is noted <b>on this device</b> with what lectr said
             about it at the time — its <b>lectr value</b> (the engine&rsquo;s expected price, all-in, and its likely range),
             the house estimate and the live bid, as last shown before the close. When the lot closes, its result is read
             from lectr&rsquo;s sold record. <b>vs lectr</b> is the sold price against that lectr value, both all-in;
@@ -251,14 +251,11 @@ export default function PickOutcomes({ book }: { book: readonly AuctionLot[] }) 
             lectr value; a price still settling, a lot bought in and a lot with no result yet never enter it. Outcomes do
             not steer your picks — a pick you won already counts as owned. Kept in this browser, never uploaded;
             &ldquo;Clear&rdquo; under Your signals empties it.
-          </HelpChip>
-          <span className="ck-room-sub ck-room-subline">
-            {picks.length} {picks.length === 1 ? 'pick' : 'picks'} noted on this device{open ? <> · {open} still open</> : null}
-          </span>
-        </div>
-        <p className="ck-sig-note" style={{ marginTop: 6, color: 'var(--color-fg)' }}>
+          </> }}
+          sub={<>{picks.length} {picks.length === 1 ? 'pick' : 'picks'} noted on this device{open ? <> · {open} still open</> : null}</>} />
+        <p className="ck-outcome-line">
           {line
-            ? <><b>Your picks, past {OUTCOME_WINDOW_DAYS} days:</b> {line}</>
+            ? <><b>Past {OUTCOME_WINDOW_DAYS} days:</b> {line}</>
             : waiting ? 'Reading results for the picks that closed…'
               : <>No pick has a final result in the past {OUTCOME_WINDOW_DAYS} days yet.</>}
         </p>

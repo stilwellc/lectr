@@ -26,7 +26,8 @@ import LotCard from '../components/LotCard';
 import ComparableModal from '../components/ComparableModal';
 import { FeedRow, belowSignalOf, feedTone } from '../components/LotBrowser';
 import { CollectionMark } from '../components/marks';
-import { HelpChip } from './help';
+import { RoomHead } from './head';
+import { useGridCols } from './grid';
 
 const KIND_LABEL: Record<PickKind, string> = { upgrade: 'Upgrades', set: 'Sets', series: 'Series', maker: 'More by' };
 const KINDS: PickKind[] = ['upgrade', 'set', 'series', 'maker'];
@@ -97,15 +98,11 @@ export default function ForYourCollection({ book, pool, compLots, ready, lastCra
   const shownKind = kind && counts[kind] > 0 ? kind : null;
   const list = useMemo(() => (shownKind ? picks.filter(p => p.kind === shownKind) : picks), [picks, shownKind]);
 
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 639px)');
-    const on = () => setNarrow(mq.matches);
-    on();
-    mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
-  }, []);
-  const page = 6;
+  const cols = useGridCols();
+  const narrow = cols === 1;
+  // a room inside the picks group: one row of cards (two on a phone),
+  // Show more deals the rest
+  const page = cols === 3 ? 3 : cols === 2 ? 4 : 3;
   const [shown, setShown] = useState<number | null>(null);
   const visible = shown ?? page;
   const [openLot, setOpenLot] = useLotModal<AuctionLot>();
@@ -118,12 +115,10 @@ export default function ForYourCollection({ book, pool, compLots, ready, lastCra
   const kindsLive = KINDS.filter(k => counts[k] > 0);
 
   return (
-    <section id="for-collection" className="ray-saved-section rail ray-enter ck-foryou" aria-label="For your collection">
-      <div className="ns-plate" style={{ paddingTop: 18 }}>
-        <div className="ck-room-head" style={{ marginBottom: 16 }}>
-          <h2 className="ray-h2" style={{ margin: 0 }}><span className="ray-sect-mark" aria-hidden><CollectionMark size={17} /></span>For your collection</h2>
-          <HelpChip name="For your collection">
-            Live lots read against what you <b>own</b> (lots you marked &ldquo;I won it&rdquo;) and, as weaker evidence,
+    <section id="for-collection" className="ck-subroom rail ray-enter" aria-label="For your collection">
+      <div>
+        <RoomHead level={3} mark={<CollectionMark size={15} />} title="For your collection" style={{ marginBottom: picks.length ? 14 : 0 }}
+          help={{ name: 'For your collection', body: <>            Live lots read against what you <b>own</b> (lots you marked &ldquo;I won it&rdquo;) and, as weaker evidence,
             what you <b>save</b>. <b>Upgrade</b>: the same card — same year, set, number and parallel — live in a higher
             grade, or a watch with the same reference number; a raw card is never &ldquo;upgraded&rdquo; by a slab, and a
             qualified grade (OC, MK) or an Authentic slab never counts. The same-card median is that grade&rsquo;s own
@@ -134,15 +129,16 @@ export default function ForYourCollection({ book, pool, compLots, ready, lastCra
             portfolio you hold one of — Warhol by his Feldman &amp; Schellmann number, others by the &ldquo;from …&rdquo;
             the house printed. <b>More by</b>: other live lots by the makers and players you hold. Each line says which
             of your lots it was read from.
-          </HelpChip>
-          <span className="ck-room-sub ck-room-subline">
-            {picks.length > 0 ? <>{picks.length} picked</> : <>nothing ties yet</>}<span className="ck-wide"> from {pool.length.toLocaleString()} live lots</span>
-            {from ? <> · read from {from}</> : null}
-          </span>
-        </div>
+          </> }}
+          sub={picks.length > 0
+            ? <>{picks.length} picked<span className="ck-wide"> from {pool.length.toLocaleString()} live lots</span>{from ? <> · read from {from}</> : null}</>
+            : readable
+              // the thin state is one line: what was read, and that nothing ties
+              ? <>Nothing on the block ties to what you hold right now{from ? <> · read from {from}</> : null} — new lots land with every crawl.</>
+              : <>None of your lots carries an identity this room can read yet — a card needs its year, set and number; a print its series; a watch its reference.</>} />
 
         {kindsLive.length > 1 && (
-          <div role="group" aria-label="Kind of tie" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+          <div role="group" aria-label="Kind of tie" className="ck-kinds">
             <button type="button" className="ray-toolbar-pill" data-active={!shownKind} aria-pressed={!shownKind} onClick={() => { setKind(null); setShown(null); }}>All {picks.length}</button>
             {kindsLive.map(k => (
               <button key={k} type="button" className="ray-toolbar-pill" data-active={shownKind === k} aria-pressed={shownKind === k}
@@ -151,13 +147,7 @@ export default function ForYourCollection({ book, pool, compLots, ready, lastCra
           </div>
         )}
 
-        {picks.length === 0 ? (
-          <p className="ck-sig-note" style={{ marginTop: 0 }}>
-            {readable
-              ? <>Nothing on the block ties to what you hold right now — no higher grade of a card you own, no missing number of a set you hold singles of, no print from your portfolios, nothing more by your makers. New lots land with every crawl.</>
-              : <>None of your lots carries an identity this room can read yet — a card needs its year, set and number; a print its series; a watch its reference.</>}
-          </p>
-        ) : narrow ? (
+        {picks.length === 0 ? null : narrow ? (
           <div>
             {list.slice(0, visible).map(p => (
               <div key={p.lot.id} data-pick data-nav-row>
@@ -177,8 +167,8 @@ export default function ForYourCollection({ book, pool, compLots, ready, lastCra
         )}
 
         {visible < list.length && (
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 28 }}>
-            <button className="ray-show-more" onClick={() => setShown(Math.min(list.length, visible + page))}>
+          <div className="ck-more-row">
+            <button className="ray-show-more" onClick={() => setShown(Math.min(list.length, visible + 6))}>
               Show more ({list.length - visible} more {list.length - visible === 1 ? 'pick' : 'picks'})
             </button>
           </div>
