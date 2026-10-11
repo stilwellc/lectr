@@ -12,6 +12,10 @@
  *   GET /api/lot/:id                          one lot (the served row)
  *   GET /api/lots?ids=a,b,…                   ≤12 lots by id (missing ids omitted)
  *   GET /api/comps?lot=:id                    the lot's precomputed comp reads
+ *       (the three lot routes resolve a collapsed id — a Christie's
+ *       `christies-auc-<n>` twin — to its canonical row through the served
+ *       id-aliases.json, the map the /lot route reads: aliases.ts. /api/lot
+ *       then also says `canonicalId`; /api/lots keys the row by the ASKED id.)
  *                                             ({ np: true } outside the coverage window)
  *   GET /api/maker/:slug?view=summary         the maker's book in columns
  *   GET /api/maker/:slug?sort=&cat=&sport=&page=   the maker's sold table (20/page)
@@ -25,6 +29,7 @@ import {
   ID_RE, MAX_IDS, REF_PAGE, SLUG_RE, TABLE_PAGE, pageRange, refKey, tableKey,
   type Loc, type PagedLoc, type TablePageBody,
 } from './format';
+import { canonicalOf } from './aliases';
 import { Store, NotFound, StoreUnavailable, type EdgeCache, type Env, type R2ObjectBodyLike } from './store';
 
 const MAX_PAGE = 5000;
@@ -132,8 +137,20 @@ async function summary(store: Store, scope: string): Promise<Response> {
   throw new NotFound();
 }
 
+// ── lot ids ────────────────────────────────────────────────────────────────
+/** what a request lends the alias resolution: the asset binding + its origin */
+interface AliasIO { env: Env; origin: string }
+/** the index entry for an id — or, when the id missed and is a collapsed
+ *  alias, its canonical lot's entry (one lot, one id) */
+async function resolveEntry(store: Store, io: AliasIO, id: string): Promise<{ id: string; e: Awaited<ReturnType<Store['entry']>> }> {
+  const e = await store.entry(id);
+  if (e) return { id, e };
+  const canon = await canonicalOf(id, io.env.ASSETS, io.origin, store.version);
+  return canon ? { id: canon, e: await store.entry(canon) } : { id, e: null };
+}
+
 // ── routes ─────────────────────────────────────────────────────────────────
-async function route(store: Store, path: string[], sp: URLSearchParams): Promise<Response> {
+async function route(store: Store, path: string[], sp: URLSearchParams, io: AliasIO): Promise<Response> {
   const [head, a, b] = path;
   switch (head) {
     case 'version': {
@@ -143,24 +160,31 @@ async function route(store: Store, path: string[], sp: URLSearchParams): Promise
     }
     case 'lot': {
       if (path.length !== 2) break;
-      const e = await store.entry(lotId(a));
+      const asked = lotId(a);
+      const { id, e } = await resolveEntry(store, io, asked);
       if (!e) throw new NotFound();
       // the stored row is plain JSON — spliced in, never parsed
-      return new Response(`{"lot":${await store.rowText(e)}}`, { headers: BASE_HEADERS });
+      const canon = id !== asked ? `,"canonicalId":${JSON.stringify(id)}` : '';
+      return new Response(`{"lot":${await store.rowText(e)}${canon}}`, { headers: BASE_HEADERS });
     }
     case 'lots': {
       if (path.length !== 1) break;
       const raw = (sp.get('ids') || '').split(',').filter(Boolean);
       if (!raw.length || raw.length > MAX_IDS) throw new BadRequest(`ids: 1..${MAX_IDS} lot ids`);
-      const got = await store.rowTextsById(Array.from(new Set(raw.map(lotId))));
+      const ids = Array.from(new Set(raw.map(lotId)));
+      const got = await store.rowTextsById(ids);
+      // a missed alias id answers with its canonical row, keyed by the id asked
+      await Promise.all(ids.filter(id => !got.has(id)).map(async asked => {
+        const { id, e } = await resolveEntry(store, io, asked);
+        if (e && id !== asked) got.set(asked, await store.rowText(e));
+      }));
       const parts: string[] = [];
       got.forEach((t, id) => { parts.push(`${JSON.stringify(id)}:${t}`); });
       return new Response(`{"lots":{${parts.join(',')}}}`, { headers: BASE_HEADERS });
     }
     case 'comps': {
       if (path.length !== 1) break;
-      const id = lotId(sp.get('lot'));
-      const e = await store.entry(id);
+      const { id, e } = await resolveEntry(store, io, lotId(sp.get('lot')));
       if (!e) throw new NotFound();
       // outside the precompute window: say so (the surface prints it)
       if (e.length < 4) return json({ id, np: true, pack: {}, ctx: [], exact: null });
@@ -254,7 +278,7 @@ export async function handleApi(request: Request, env: Env, ctx: Ctx = {}, cache
   }
   let res: Response;
   try {
-    res = await route(store, path, url.searchParams);
+    res = await route(store, path, url.searchParams, { env, origin: url.origin });
   } catch (e) {
     if (e instanceof BadRequest) return errorResponse(400, e.message);
     if (e instanceof NotFound) return json({ error: 'not found' }, 404, { 'Cache-Control': 'public, max-age=300', ETag: etag });
