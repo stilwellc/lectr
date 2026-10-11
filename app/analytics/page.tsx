@@ -30,6 +30,7 @@ import PortfolioHeader from '../components/analytics/PortfolioHeader';
 import ArtistRankingsTable from '../components/analytics/ArtistRankingsTable';
 import TopSales from '../components/analytics/TopSales';
 import { Colophon } from '../components/Terminal';
+import { recordLead, recordScope, RECORD_MIN_N } from '../lib/record-lead';
 import meta from '../../public/data/ray/meta.json';
 
 const Distributions = dynamic(() => import('../components/analytics/Distributions'), { ssr: false });
@@ -77,6 +78,8 @@ export default function AnalyticsPage() {
   const bookHouses = sources.length || meta.sources.length;
   const { market } = useMarket();
   const activeKey = MARKETS.find(m => m.key === market)?.live ? market : 'all';
+  // THE RECORD's one figure + label (lib/record-lead), /value's dial exactly
+  const recordLeadNow = recordLead(backtest as Parameters<typeof recordLead>[0], recordScope(activeKey));
   const mktSet = useMemo(() => marketArtists(activeKey), [activeKey]);
   const marketStats = useMemo(() => {
     const out: typeof statsByArtist = {};
@@ -144,10 +147,21 @@ export default function AnalyticsPage() {
             <p>
               Across <b style={{ color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>{backtest.flagged.n.toLocaleString()}</b> flagged
               lots replayed against history, our below-market calls went{' '}
-              <b className="pct-data" style={{ color: backtest.flagged.medianPerfPct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontFamily: 'var(--font-mono), monospace' }}>
-                {fmtSignedPct(backtest.flagged.medianPerfPct)}
-              </b>{' '}
-              vs estimate all-in ({fmtSignedPct(backtest.flagged.hammerMedianPct ?? 0)} at hammer, the honest basis) with{' '}
+              {backtest.flagged.hammerMedianPct != null ? (
+                <>
+                  <b className="pct-data" style={{ color: backtest.flagged.hammerMedianPct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontFamily: 'var(--font-mono), monospace' }}>
+                    {fmtSignedPct(backtest.flagged.hammerMedianPct)}
+                  </b>{' '}
+                  hammer vs estimate (all-in {fmtSignedPct(backtest.flagged.medianPerfPct)}) with{' '}
+                </>
+              ) : (
+                <>
+                  <b className="pct-data" style={{ color: backtest.flagged.medianPerfPct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontFamily: 'var(--font-mono), monospace' }}>
+                    {fmtSignedPct(backtest.flagged.medianPerfPct)}
+                  </b>{' '}
+                  vs estimate all-in with{' '}
+                </>
+              )}
               <b style={{ color: 'var(--color-fg)', fontVariantNumeric: 'tabular-nums' }}>{backtest.flagged.failToSellPct}%</b> failing to sell —
               unflagged lots went {fmtSignedPct(backtest.unflagged.medianPerfPct)} on {backtest.unflagged.n.toLocaleString()}.
             </p>
@@ -236,10 +250,23 @@ export default function AnalyticsPage() {
               Nightly, this desk replays every settled sale against the engine&rsquo;s point-in-time calls and refits
               its indexes with like-for-like controls. Across <b>{backtest.flagged.n.toLocaleString()}</b> replayed
               flags, below-market calls realized{' '}
-              <b className="pct-data" style={{ color: backtest.flagged.medianPerfPct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
-                {fmtSignedPct(backtest.flagged.medianPerfPct)}
-              </b>{' '}
-              vs estimate all-in against {fmtSignedPct(backtest.unflagged.medianPerfPct)} unflagged — an edge that
+              {/* (r8) the record's lead basis (lib/record-lead): hammer first
+                  where the replay publishes it, all-in alongside */}
+              {backtest.flagged.hammerMedianPct != null && backtest.unflagged.hammerMedianPct != null ? (
+                <>
+                  <b className="pct-data" style={{ color: backtest.flagged.hammerMedianPct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
+                    {fmtSignedPct(backtest.flagged.hammerMedianPct)}
+                  </b>{' '}
+                  hammer vs estimate against {fmtSignedPct(backtest.unflagged.hammerMedianPct)} unflagged (all-in {fmtSignedPct(backtest.flagged.medianPerfPct)} against {fmtSignedPct(backtest.unflagged.medianPerfPct)}) — an edge that
+                </>
+              ) : (
+                <>
+                  <b className="pct-data" style={{ color: backtest.flagged.medianPerfPct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
+                    {fmtSignedPct(backtest.flagged.medianPerfPct)}
+                  </b>{' '}
+                  vs estimate all-in against {fmtSignedPct(backtest.unflagged.medianPerfPct)} unflagged — an edge that
+                </>
+              )}
               holds in every hammer year since 2000 (FIG. below). Indexes publish only where their 95% interval
               resolves the sign; everything else abstains, and the abstentions are printed.
             </p>
@@ -263,14 +290,16 @@ export default function AnalyticsPage() {
               an ink '—', never a made-up %. */}
           <div>
             <div className="k">The record</div>
-            {backtest ? (
-              <div className="v" style={{ color: backtest.flagged.medianPerfPct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontFamily: 'var(--font-mono), monospace' }}>
-                {fmtSignedPct(backtest.flagged.medianPerfPct)}
+            {/* (r8) lib/record-lead — /value's dial figure and label, the
+                same scope; never the unlabelled all-in median */}
+            {recordLeadNow ? (
+              <div className="v" style={{ color: recordLeadNow.pct >= 0 ? 'var(--color-up)' : 'var(--color-down-text)', fontFamily: 'var(--font-mono), monospace' }}>
+                {fmtSignedPct(recordLeadNow.pct)}
               </div>
             ) : (
               <div className="v">&mdash;</div>
             )}
-            <div className="s">{backtest ? `${backtest.flagged.n.toLocaleString()} flagged calls, replayed · median vs estimate` : 'flagged calls, replayed · median vs estimate'}</div>
+            <div className="s">{recordLeadNow ? recordLeadNow.sub : backtest ? `n ${backtest.flagged.n.toLocaleString()} · publishes at ${RECORD_MIN_N}` : 'flagged calls, replayed'}</div>
           </div>
           <div>
             <div className="k">{activeKey === 'all' ? 'Names ranked' : `${rosterNoun(activeKey).replace(/^./, c => c.toUpperCase())} ranked`}</div>

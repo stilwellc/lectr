@@ -289,13 +289,10 @@ export default function EntityPage({ id }: { id: string }) {
               <div className="s nsp-clamp2" title={[recTitle, rec.h, rec.d ? rec.d.slice(0, 4) : null].filter(Boolean).join(' · ') || undefined}>{[recTitle ? (recTitle.length > 40 ? closeCut(recTitle.slice(0, 40), 40) : recTitle) : null, rec.h, rec.d ? rec.d.slice(0, 4) : null].filter(Boolean).join(' · ')}</div>
             </div>
           ) : null}
-          {verified ? (
-            <div>
-              <div className="k">Verified index, {verified.horizon}</div>
-              <div className={`v ${verified.changePct >= 0 ? 'up' : 'down'}`}><span className="mono">{signedPct(verified.changePct)}</span></div>
-              <div className="s">95% interval [{signedPct(verified.ciLoPct)}, {signedPct(verified.ciHiPct)}] · {verified.n.toLocaleString()} lots</div>
-            </div>
-          ) : summary?.yoy ? (
+          {/* (r8, QA3 N7) the YoY and the verified index are two reads on two
+              bases — each prints under its own label, the index never stands
+              in the YoY's slot (Rolex: row "+9% YoY" vs page "5Y +25%") */}
+          {summary?.yoy ? (
             <div>
               <div className="k">Year on year</div>
               <div className="v"><span className="mono">{signedPct(summary.yoy.pct)}</span></div>
@@ -304,6 +301,13 @@ export default function EntityPage({ id }: { id: string }) {
               ) : (
                 <div className="s" title="The median of the last four complete quarters against the four before, printed only when both years sold a similar number of lots — a level the mix of what sold moves too, not an appreciation rate. The 90% interval covers sampling noise only, never a change in what sold">{summary.medScope ? `${summary.medScope.toLowerCase()} median` : 'median'} · 4 qtrs vs 4 · n={summary.yoy.n.toLocaleString()}{yoyIntervalText(summary.yoy) ? ` · ${yoyIntervalText(summary.yoy)}` : ''}</div>
               )}
+            </div>
+          ) : null}
+          {verified ? (
+            <div>
+              <div className="k">Verified index, {verified.horizon}</div>
+              <div className={`v ${verified.changePct >= 0 ? 'up' : 'down'}`}><span className="mono">{signedPct(verified.changePct)}</span></div>
+              <div className="s">95% interval [{signedPct(verified.ciLoPct)}, {signedPct(verified.ciHiPct)}] · {verified.n.toLocaleString()} lots</div>
             </div>
           ) : null}
         </div>

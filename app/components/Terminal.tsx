@@ -6,9 +6,10 @@ import Link from 'next/link';
 import { AuctionLot } from '../types';
 import { Market } from '../constants';
 import { makerLineOf } from '../lib/lot-labels';
-import { craftTitle, formatDate, formatPrice, httpsImg, localToday, fmtSignedPct, isLiveUpcoming, trueSaleDay } from '../utils';
-import { lotSignal, confidenceMeter, formatEstimate } from './LotCard';
+import { craftTitle, formatDate, httpsImg, localToday, fmtSignedPct, isLiveUpcoming, trueSaleDay } from '../utils';
+import { lotSignal, confidenceMeter, formatEstimate, estimateOnly } from './LotCard';
 import { dealScore, lotFitsMarket, signalMagnitude } from '../lib/comps';
+import { lotFace, FACE_LABEL } from '../lib/lot-face';
 import { safeHref } from '../lib/safe-href';
 import Flick from './Flick';
 import CloseClock from './CloseClock';
@@ -106,6 +107,10 @@ const CALLPLATE_CSS = `
 .lectr-cp-compact .lectr-cp-v.up{color:var(--color-up)}
 .lectr-cp-compact .lectr-cp-sub{font-size:11.5px;font-weight:500;color:var(--color-text-muted);margin-right:2px;white-space:nowrap}
 .lectr-cp-compact .lectr-cp-dots{font-size:10px;letter-spacing:1px;color:var(--color-beige);margin-right:7px}
+/* the leader key never breaks; on a phone a long sub wraps under itself
+   instead of crushing the key ("The / gap") */
+.lectr-cp-compact .lectr-cp-k{white-space:nowrap}
+@media (max-width:599px){.lectr-cp-compact .lectr-cp-sub{white-space:normal;text-align:right;min-width:0;line-height:1.35}}
 /* the compact plate's photograph — an elevated mat beside the certificate.
    Mobile: mat above the leaders; ≥900px: a right column. No image → the
    grid collapses to the single text column (never a dominant empty frame). */
@@ -217,15 +222,26 @@ export function CallPlate({
   const closesTonight = !!lot.saleDateTime && new Date(lot.saleDateTime).getHours() >= 17;
   const closingWord = closeD != null && closeD <= 0 ? (closesTonight ? 'closes tonight' : 'closes today') : null;
   const caption = `${lot.lotNumber ? `Lot ${lot.lotNumber} · ` : ''}${lot.auctionHouse} · ${closingWord ? closingWord : `hammers ${formatDate(saleDay)}`}`;
-  // the comps median in dollars: the deep signal carries the pool median;
-  // crawl-time signals don't, but pct IS med/estMid − 1, so it derives exactly
-  const estMid = lot.estimateLow && lot.estimateHigh
-    ? (lot.estimateLow + lot.estimateHigh) / 2
-    : (lot.estimateLow || lot.estimateHigh || null);
-  const sigMed = (signal as NonNullable<typeof signal> & { med?: number }).med;
-  const compsMed = sigMed ?? (estMid != null && signal!.label === 'Below Market'
-    ? Math.round(estMid * (1 + signal!.pct / 100))
-    : null);
+  // ONE LOT, ONE NUMBER (r8): every figure on the plate is lib/lot-face's —
+  // the same objects the comps modal, the lot page and the ledger print.
+  // (The plate used to rebuild a comps median from estMid × (1 + pct) when
+  // the signal carried none — a number the engine never made.)
+  const face = lotFace(lot);
+  const gapText = face.call ? face.call.text : signalMagnitude(signal!.label, signal!.pct);
+  const gapSub = face.call?.derivation ?? 'comps over ask';
+  const leaders = (
+    <>
+      {/* a FLAG is read against the estimate — the Ask row prints that, not
+          the live bid (formatEstimate's bid form on a one-sided estimate
+          printed "$200 bid" over a 4.0× read against the $300 estimate) */}
+      <LeaderRow k="Ask" v={lot.estimateLow || lot.estimateHigh ? `${estimateOnly(lot)} est.` : formatEstimate(lot)} />
+      <LeaderRow k={FACE_LABEL.comps} v={face.comps ? face.comps.text : '—'} sub={face.comps ? face.comps.sub : undefined} />
+      <LeaderRow k="The gap" v={gapText} up sub={gapSub} />
+      {face.value && (
+        <LeaderRow k={FACE_LABEL.value} v={face.value.text} sub={`${FACE_LABEL.valueSub} · ${FACE_LABEL.range} ${face.value.range}`} />
+      )}
+    </>
+  );
 
   const saveBtn = onToggleSave && (
     <button
@@ -254,7 +270,7 @@ export function CallPlate({
       <div className="glass lit lectr-cp lectr-cp-compact">
         <style dangerouslySetInnerHTML={{ __html: CALLPLATE_CSS }} />
         <div className="ray-panel-k lectr-cp-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <span>Today&rsquo;s call · highest confidence, deepest gap</span>
+          <span>Today&rsquo;s call · best odds, deepest gap</span>
           {saveBtn}
         </div>
         <div className={`lectr-cpc-grid${imgOk ? '' : ' lectr-cpc-noimg'}`}>
@@ -263,9 +279,7 @@ export function CallPlate({
             <div className="ray-call-title">{craftTitle(lot.title, lot.auctionHouse)}</div>
             {band && <div className="lectr-cp-band">{band}</div>}
             <div className="lectr-cp-leaders">
-              <LeaderRow k="Ask" v={formatEstimate(lot)} />
-              <LeaderRow k="Comps median" v={compsMed != null ? formatPrice(compsMed) : '—'} sub={`${signal!.basis ?? '—'} sales`} />
-              <LeaderRow k="The gap" v={signalMagnitude(signal!.label, signal!.pct)} up sub="comps over ask" />
+              {leaders}
               <LeaderRow k="Confidence">
                 <span className="lectr-cp-dots" aria-hidden>{meter.dots}</span>{meter.word}
               </LeaderRow>
@@ -339,7 +353,7 @@ export function CallPlate({
       <style dangerouslySetInnerHTML={{ __html: CALLPLATE_CSS }} />
       <div className="lectr-cp-body">
         <div className="ray-panel-k lectr-cp-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <span>Today&rsquo;s call · highest confidence, deepest gap</span>
+          <span>Today&rsquo;s call · best odds, deepest gap</span>
           {saveBtn}
         </div>
 
@@ -377,9 +391,7 @@ export function CallPlate({
 
           {/* wide plate: the call as dotted-leader rows */}
           <div className="lectr-cp-leaders">
-            <LeaderRow k="Ask" v={formatEstimate(lot)} />
-            <LeaderRow k="Comps median" v={compsMed != null ? formatPrice(compsMed) : '—'} sub={`${signal!.basis ?? '—'} sales`} />
-            <LeaderRow k="The gap" v={signalMagnitude(signal!.label, signal!.pct)} up sub="comps over ask" />
+            {leaders}
             <LeaderRow k="Confidence">
               <span className="lectr-cp-dots" aria-hidden>{meter.dots}</span>{meter.word}
             </LeaderRow>
@@ -393,9 +405,9 @@ export function CallPlate({
           {/* stacked plate (mobile + rail): the current lines, untouched */}
           <div className="lectr-cp-est" style={{ fontSize: 12.5, color: 'var(--color-text-muted)', marginTop: 4 }}>{formatEstimate(lot)}</div>
           <div className="ray-sigrow" data-tone="up" style={{ marginTop: 9 }}>
-            <span className="ray-sigrow-pct" style={{ fontSize: 26 }}>{signalMagnitude(signal!.label, signal!.pct)}</span>
+            <span className="ray-sigrow-pct" style={{ fontSize: 26 }}>{gapText}</span>
             <span className="ray-sigrow-ctx">
-              comps over ask · {signal!.basis} sales
+              {face.call?.derivation ?? 'comps over ask'} · {face.comps ? face.comps.sub : `${signal!.basis} sales`}
               <span className="ray-sigrow-dots" title={`${meter.word} confidence`}>{meter.dots}</span>
             </span>
           </div>
@@ -572,7 +584,10 @@ export function Colophon({ lotCount, houseCount, record, lastCrawl }: {
           {read && <span>last read <b>{read}</b></span>}
           {record && record.n > 500 ? (
             <span>
-              flagged <Link href="/receipts"><b className="up">{fmtSignedPct(record.medianPerfPct)}</b> median vs estimate, all-in{record.hammerMedianPct != null ? <> ({fmtSignedPct(record.hammerMedianPct)} hammer)</> : null}, over <b>{record.n.toLocaleString()}</b> replays</Link>
+              {/* (r8) the record's lead basis (lib/record-lead): hammer first */}
+              flagged <Link href="/receipts">{record.hammerMedianPct != null
+                ? <><b className="up">{fmtSignedPct(record.hammerMedianPct)}</b> median hammer vs estimate (all-in {fmtSignedPct(record.medianPerfPct)})</>
+                : <><b className="up">{fmtSignedPct(record.medianPerfPct)}</b> median vs estimate, all-in</>}, over <b>{record.n.toLocaleString()}</b> replays</Link>
             </span>
           ) : (
             <span><Link href="/receipts">see the record</Link></span>
