@@ -221,7 +221,10 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
     shown = { closing: cut(closing), fresh: cut(fresh), rest: cut(rest) };
   } else {
     const c = closing.slice(0, PER_COL);
-    shown = { closing: c, fresh: fresh.slice(0, PER_COL - c.length), rest: rest.slice(0, PER_COL) };
+    // (W19) with the picks strip in the right column the left one stacks
+    // closing + new + reads; its facts now wrap (never cut), so the reads
+    // open on two and the rest fold — Watching keeps its head in the first screen
+    shown = { closing: c, fresh: fresh.slice(0, PER_COL - c.length), rest: rest.slice(0, picks.length ? PER_COL - 1 : PER_COL) };
   }
   const hidden = total - (shown.closing.length + shown.fresh.length + shown.rest.length);
   const picksLabel = `Top ${picks.length} for you`;
@@ -260,6 +263,14 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
   else { left.push(closingList, freshList, quietPicks); right.push(readsList); }
   const leftCol = left.some(Boolean);
   const rightCol = right.some(Boolean);
+  // (W19) two columns: "+N more" closes the column it unfolds (the left one
+  // is the shorter), not a line under both — the band ends with its tallest column
+  const twoCol = !narrow && leftCol && rightCol;
+  const more = (hidden > 0 || all) && total > (narrow ? phoneRows : PER_COL) ? (
+    <button type="button" className="ck-today-more" aria-expanded={all} onClick={() => setAll(v => !v)}>
+      {all ? 'Show less' : `+${hidden} more today`}
+    </button>
+  ) : null;
 
   return (
     <section id="today" className="ck-today rail ray-enter" aria-label="Today">
@@ -279,15 +290,11 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
       </div>
       {(leftCol || rightCol) && (
         <div className="ck-today-cols" data-split={leftCol && rightCol ? 'two' : 'one'}>
-          {leftCol && <div>{left.map((x, i) => <React.Fragment key={i}>{x}</React.Fragment>)}</div>}
+          {leftCol && <div>{left.map((x, i) => <React.Fragment key={i}>{x}</React.Fragment>)}{twoCol && more}</div>}
           {rightCol && <div>{right.map((x, i) => <React.Fragment key={i}>{x}</React.Fragment>)}</div>}
         </div>
       )}
-      {(hidden > 0 || all) && total > (narrow ? phoneRows : PER_COL) && (
-        <button type="button" className="ck-today-more" aria-expanded={all} onClick={() => setAll(v => !v)}>
-          {all ? 'Show less' : `+${hidden} more today`}
-        </button>
-      )}
+      {!twoCol && more}
     </section>
   );
 }
