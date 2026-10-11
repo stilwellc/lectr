@@ -53,7 +53,8 @@ import { displayMakerOf } from '../lib/maker-subjects';
 import PushOptIn from '../components/retention/PushOptIn';
 import { TrackOnMount } from '../components/retention/trackers';
 import DecisionLine from '../components/DecisionLine';
-import { useStalled } from './stall';
+import { useStalled, useAfterPaint } from './stall';
+import { readSettledRows, writeSettledRows, type SettledRows } from './settled-cache';
 
 /* ============================================================
    MY PROFILE — THE COCKPIT (Aug 24 2026 rebuild). The page is
@@ -769,9 +770,27 @@ export default function SavedPage() {
   const { allLots, lastCrawl, loading, fullLoaded, fullError, fromCache, market: marketData } =
     useFullLotsOnDemand(deskNeedsCorpus);
   const { unseen: unseenAlerts } = useAlerts();
-  // the reader's taste — saves resolve against whatever book has landed,
-  // else their own snapshot (app/lib/use-recs)
-  const { taste: recTaste, ready: tasteReady } = useTaste(allLots);
+  // TIME-TO-USEFUL (W19): the corpus rows of this desk's settled saves, kept
+  // on this device once the archive resolved them (./settled-cache) — the
+  // picks deal the moment the live book lands instead of waiting ~20s+ for
+  // the archive, from the same rows it will hand over (no reshuffle)
+  const [keptRows, setKeptRows] = useState<SettledRows>(() => new Map());
+  useEffect(() => { setKeptRows(readSettledRows()); }, []);
+  const liveIds = useMemo(() => (fullLoaded ? null : new Set(allLots.map(l => l.id))), [allLots, fullLoaded]);
+  const tasteBook = useMemo(() => {
+    if (!liveIds || !keptRows.size) return allLots;
+    const extra: AuctionLot[] = [];
+    keptRows.forEach(r => { if (r && !liveIds.has(r.id)) extra.push(r); });
+    return extra.length ? allLots.concat(extra) : allLots;
+  }, [allLots, liveIds, keptRows]);
+  // every save is in the live book or kept here: the picks need no archive
+  const savesInHand = useMemo(() => {
+    if (!liveIds) return false;
+    return savedIds.every(id => keptRows.has(id) || idAliases(id).some(a => liveIds.has(a)));
+  }, [savedIds, keptRows, liveIds]);
+  // the reader's taste — saves resolve against whatever book has landed
+  // (plus the kept settled rows), else their own snapshot (app/lib/use-recs)
+  const { taste: recTaste, ready: tasteReady } = useTaste(tasteBook);
   // NO INFINITE SPINNERS (./stall): the archive that resolves the desk has a
   // deadline — past it every surface waiting on it fails soft and says so
   // (20s: the archive is ~35MB — a slow phone legitimately takes a while,
@@ -1395,7 +1414,17 @@ export default function SavedPage() {
   // settled watch reads as its row, not its snapshot — no reshuffle on arrival
   // (deadline) an archive that never answers stops holding the picks: they
   // deal from the live book already in hand
-  const recsReady = !loading && tasteReady && (!deskNeedsCorpus || fullLoaded || fullError || fullSlow || savedLots.length >= savedIds.length);
+  const recsInputsReady = !loading && tasteReady && (!deskNeedsCorpus || fullLoaded || fullError || fullSlow || savedLots.length >= savedIds.length || savesInHand);
+  // the desk paints first; the picks deal one frame later (./stall)
+  const recsReady = useAfterPaint(recsInputsReady);
+  // the archive resolved every save: keep the settled rows for next visit
+  useEffect(() => {
+    if (!fullLoaded || !savedReady) return;
+    const byId = new Map<string, AuctionLot>();
+    for (const l of savedLots) byId.set(l.id, l);
+    const resolve = (id: string) => { for (const a of idAliases(id)) { const l = byId.get(a); if (l) return l; } return undefined; };
+    writeSettledRows(savedIds, resolve);
+  }, [fullLoaded, savedReady, savedIds, savedLots]);
   // ONE deal per page: the Today band, the rail's count and the room agree
   const deal = useDeal(allLots, recTaste, recsReady);
   // the picks, then how the ones shown before did (N4, app/profile/outcomes),
@@ -1407,7 +1436,7 @@ export default function SavedPage() {
     <div className="ck-group" data-compact={compact || undefined}>
       <RecsRoom book={allLots} deal={deal} compLots={allLots} taste={recTaste} ready={recsReady} lastCrawl={lastCrawl || undefined}
         isSaved={isSaved} onToggleSave={toggle} signedOut={signedOut} compact={compact} top={compact ? todayTop : undefined} />
-      <ForYourCollection book={allLots} pool={deal.pool} compLots={allLots} ready={recsReady} lastCrawl={lastCrawl || undefined}
+      <ForYourCollection book={tasteBook} pool={deal.pool} compLots={allLots} ready={recsReady} lastCrawl={lastCrawl || undefined}
         isSaved={isSaved} onToggleSave={toggle} />
       <PickOutcomes book={allLots} />
     </div>
@@ -1518,7 +1547,7 @@ export default function SavedPage() {
       const med = record && record.med != null ? Math.round(record.med) : null;
       r.push({ id: 'record', label: 'Record', mark: <RecordMark size={15} />, count: med != null ? fmtSignedPct(med) : undefined, tone: med != null && med > 0 ? 'up' : med != null && med < 0 ? 'down' : undefined, group: 'desk' });
     }
-    if (deskView && collection.rows.length > 0) r.push({ id: 'collection', label: 'Collection', mark: <CollectionMark size={15} />, count: formatPrice(collection.totalAppraised), group: 'desk' });
+    if (deskView && collection.rows.length > 0) r.push({ id: 'collection', label: 'Collection', mark: <CollectionMark size={15} />, count: collection.appraisedN > 0 ? formatPrice(collection.totalAppraised) : collection.rows.length, group: 'desk' });
     if (deskView && (historyCount > 0 || orphanIds.length > 0)) r.push({ id: 'history', label: 'History', mark: <TapeMark size={15} />, count: historyCount || undefined, group: 'desk' });
     return r;
   }, [deal.recs.length, deskView, watchFirst, upcoming.length, myFollows.length, hasMarket, unseenAlerts, hasRecordRoom, record, collection, historyCount, orphanIds.length]);
@@ -1782,7 +1811,7 @@ export default function SavedPage() {
 
           {/* ══ 1 · TODAY — new since, closing tonight, today's reads; the
               away facts ride its header line ══ */}
-          <TodayBand loop={deal.loop} closingWatches={closingWatches} reads={reads} away={awayLine} top={todayTop} phoneRows={watchFirst ? 2 : 3} />
+          <TodayBand loop={deal.loop} closingWatches={closingWatches} reads={reads} away={awayLine} top={todayTop} topLoading={watchFirst && !recsReady} phoneRows={watchFirst ? 2 : 3} />
 
           {/* ══ 2 · LOTS YOU MAY LIKE — first only when nothing is live on the
               desk; a reader with live watches sees their own lots first ══ */}
@@ -2079,13 +2108,17 @@ export default function SavedPage() {
                   </div>
                   {collection.totalPaid > 0 && (
                     <div>
-                      <div className="k">Bought</div>
+                      {/* (W19) a price the reader never entered is the lot's
+                          realized price — say so, never imply they told us */}
+                      <div className="k">Bought{collection.rows.every(r => !r.paidIsOverride) ? ' · at the realized price' : ''}</div>
                       <div className="v">{formatPrice(collection.totalPaid)}</div>
                     </div>
                   )}
                   <div>
-                    <div className="k">lectr appraisal</div>
-                    <div className="v">{formatPrice(collection.totalAppraised)}</div>
+                    {/* (W19) with no piece read from comps the "appraisal" was
+                        only the bought prices summed back — no number then */}
+                    <div className="k">lectr appraisal{collection.appraisedN > 0 && collection.appraisedN < collection.rows.length ? ` · ${collection.appraisedN} of ${collection.rows.length} from comps` : ''}</div>
+                    <div className="v">{collection.appraisedN > 0 ? formatPrice(collection.totalAppraised) : <span title="none of your pieces has a comp pool yet">—</span>}</div>
                   </div>
                   {collection.deltaPct != null && collection.deltaPct !== 0 && collection.appraisedPaidN > 0 && (
                     <div>

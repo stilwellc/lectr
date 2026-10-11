@@ -39,6 +39,7 @@ import { entityKeyOf } from './entity/key';
 import { readWatchReference } from './watch-ref';
 import { editionIdentityKey } from './identity';
 import { lotFace } from './lot-face';
+import { cardRecordOf, spanText } from './card-record';
 import { priorityOf } from './priority';
 import { makerLineOf } from './lot-labels';
 import { craftTitle } from '../utils';
@@ -376,6 +377,13 @@ interface Held {
   who: string | null;
 }
 
+/** the row's entity key: the book's build stamp (`ek`, the same entityKeyOf)
+ *  when the row carries one, else read here */
+function stampedEk(l: AuctionLot): string | null {
+  const ek = (l as { ek?: string | null }).ek;
+  return ek !== undefined ? ek : entityKeyOf(l);
+}
+
 function readHeld(h: HeldInput, bySlug: ReadonlyMap<string, string>): Held | null {
   const lot = h.lot ?? null;
   const title = String(lot?.title || h.title || '');
@@ -388,7 +396,7 @@ function readHeld(h: HeldInput, bySlug: ReadonlyMap<string, string>): Held | nul
   const series = isPrintish(shape, t.cat) ? seriesOf({ artist, title }) : null;
   let edition: string | null = null;
   if (t.cat === 'fine-art') { try { edition = editionIdentityKey({ ...shape, artist, title }); } catch { edition = null; } }
-  const ek = entityKeyOf(shape);
+  const ek = stampedEk(shape);
   const named = !!ek && !ek.startsWith('cs:');
   let who: string | null = null;
   if (named) { try { who = makerLineOf(shape).name || null; } catch { who = null; } }
@@ -418,12 +426,23 @@ const CAP: Record<PickKind, number> = { upgrade: 3, set: 4, series: 4, maker: 3 
 
 const fmtN = (n: number) => n.toLocaleString('en-US');
 
-/** "same-card PSA 6 median $1.2K (4)" — the candidate's own card record
- *  (lotFace.card: same card & grade), else nothing */
+/** the candidate's own card record (lotFace.card: same card & grade), named
+ *  by its window the way the lot page names it (card-record, W17) — never
+ *  a bare median:
+ *    "same-card PSA 6 $1.2K median (4 sales in the last year)"
+ *    "same-card PSA 6 $1.2K (1 sale in the last year)"
+ *    "same-card PSA 6 $10K all-time median (since 2021 · 11 sales, most 2021–23)"
+ *  An all-time record under 3 sales prints no figure (the lot page's head
+ *  prints none either), so the line says nothing. */
 function sameCardLine(c: Cand): string | null {
-  const f = lotFace(c.lot);
-  if (f.card && f.card.med != null && f.card.n > 0 && f.card.text) return `same-card ${c.card!.gradeLabel} median ${f.card.text} (${fmtN(f.card.n)})`;
-  return null;
+  const f = lotFace(c.lot).card;
+  if (!f || f.med == null || !(f.n > 0) || !f.text) return null;
+  const g = c.card!.gradeLabel;
+  const sales = (k: number) => `${fmtN(k)} ${k === 1 ? 'sale' : 'sales'}`;
+  if (f.window === 'year') return `same-card ${g} ${f.text}${f.n === 1 ? '' : ' median'} (${sales(f.n)} in the last year)`;
+  if (f.n < 3) return null;
+  const rec = cardRecordOf(c.lot);
+  return `same-card ${g} ${f.text} all-time median (${spanText(f.n, rec?.all.span)}${rec?.recent && rec.recent.n === 0 ? ', none in the last year' : ''})`;
 }
 
 /** "PSA 9 ≈ 3.2× PSA 8 on Mickey Mantle's matched ladder (28 cards)" —
@@ -485,7 +504,9 @@ function readPool(pool: readonly AuctionLot[], nowMs: number): { bySlug: Map<str
     if (l.status !== 'upcoming' || !l.title) continue;
     const t = taxonOf(l);
     const card = readCard(l.title, t.cat, l, bySlug);
-    const ekRaw = entityKeyOf(l);
+    // the book stamps each row's entity key (ek) at build — the same
+    // entityKeyOf, read once there instead of ~10k times per desk here
+    const ekRaw = stampedEk(l);
     const p = priorityOf(l, nowMs);
     cands.push({
       lot: l, cat: t.cat, card,

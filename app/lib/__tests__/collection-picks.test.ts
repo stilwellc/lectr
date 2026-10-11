@@ -51,7 +51,25 @@ test('upgrade: the same card in a higher grade — never another set, year, para
   ];
   const r = collectionPicks([own(mine)], pool, { nowMs: NOW });
   assert.deepEqual(titlesOf(r.picks, 'upgrade'), [up.title]);
-  assert.match(r.picks[0].reason, /^Upgrade: you own PSA 4 · this is PSA 6 · same-card PSA 6 median \$1\.2K \(4\)$/);
+  assert.match(r.picks[0].reason, /^Upgrade: you own PSA 4 · this is PSA 6 · same-card PSA 6 \$1\.2K all-time median \(4 sales on file\)$/);
+});
+
+test('upgrade reason names its card-sale window like the lot page: last year with n, else all-time with years — never a bare median', () => {
+  const mine = card('1951 Bowman #253 Mickey Mantle - SGC 2');
+  const cc = (o: object) => ({ med: 10000, n: 11, lastSales: [], gradeLadder: [], ...o });
+  const year = card('1951 Bowman #253 Mickey Mantle - SGC VG 3', 'baseball', { cardComps: cc({ r: { med: 19000, n: 2 }, s: { y0: 2021, y1: 2026, m0: 2021, m1: 2023 } }) } as Partial<AuctionLot>);
+  let r = collectionPicks([own(mine)], [year], { nowMs: NOW });
+  assert.match(r.picks[0].reason, /· same-card SGC 3 \$19K median \(2 sales in the last year\)$/);
+  const one = card('1951 Bowman #253 Mickey Mantle - SGC VG 3', 'baseball', { cardComps: cc({ r: { med: 19000, n: 1 } }) } as Partial<AuctionLot>);
+  r = collectionPicks([own(mine)], [one], { nowMs: NOW });
+  assert.match(r.picks[0].reason, /· same-card SGC 3 \$19K \(1 sale in the last year\)$/);
+  const all = card('1951 Bowman #253 Mickey Mantle - SGC VG 3', 'baseball', { cardComps: cc({ r: { med: null, n: 0 }, s: { y0: 2021, y1: 2024, m0: 2021, m1: 2023 } }) } as Partial<AuctionLot>);
+  r = collectionPicks([own(mine)], [all], { nowMs: NOW });
+  assert.match(r.picks[0].reason, /· same-card SGC 3 \$10K all-time median \(since 2021 · 11 sales, most 2021–23, none in the last year\)$/);
+  const thin = card('1951 Bowman #253 Mickey Mantle - SGC VG 3', 'baseball', { cardComps: cc({ n: 2, r: { med: null, n: 0 } }) } as Partial<AuctionLot>);
+  r = collectionPicks([own(mine)], [thin], { nowMs: NOW });
+  assert.equal(r.picks[0].reason, 'Upgrade: you own SGC 2 · this is SGC 3', 'an all-time record under 3 sales prints no figure');
+  for (const l of [year, one, all]) assert.doesNotMatch(collectionPicks([own(mine)], [l], { nowMs: NOW }).picks[0].reason, /median \$|\(\d+\)$/);
 });
 
 test('upgrade: a parallel is not the base card; a raw card is not "upgraded" by a slab', () => {

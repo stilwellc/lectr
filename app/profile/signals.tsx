@@ -12,15 +12,14 @@
  *                    lots, subject pages, searches, More like this / Not
  *                    for me — as a dotted ledger with Clear. Never sent.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import { useFollows, type Follow, type FollowKind } from '../lib/follows';
 import { useSavedSearches, useAlerts } from '../lib/alerts';
 import { useInterests, priceText } from '../lib/interests';
 import { MARKETS } from '../constants';
-import { useSignals } from '../lib/use-recs';
-import { clearSignals, unmarkLot } from '../lib/recs-signals';
+import { clearSignals, unmarkLot, readSignals, SIGNALS_EVENT, SIGNALS_KEY, type SignalStore } from '../lib/recs-signals';
 import AlertsInbox from '../components/AlertsInbox';
 import QuickStart from '../components/QuickStart';
 import { SignalMark } from '../components/marks';
@@ -109,10 +108,26 @@ const ago = (t: number) => {
 
 const MARKS_SHOWN = 5;
 
+/** (W19) the ledger reads what is STORED, every write included: the picks
+ *  read this page's view (a visit here is read on the next page), but the
+ *  ledger says what lectr has learned — a lot opened here counts at once */
+function useStoredSignals(): SignalStore | null {
+  const [store, setStore] = useState<SignalStore | null>(null);
+  useEffect(() => {
+    const re = () => setStore(readSignals(undefined, Date.now(), { view: false }));
+    re();
+    const onStorage = (e: StorageEvent) => { if (e.key === null || e.key === SIGNALS_KEY) re(); };
+    window.addEventListener(SIGNALS_EVENT, re);
+    window.addEventListener('storage', onStorage);
+    return () => { window.removeEventListener(SIGNALS_EVENT, re); window.removeEventListener('storage', onStorage); };
+  }, []);
+  return store;
+}
+
 /** the on-device ledger: counts, every mark (each removable), the most
  *  recent things learned, Clear */
 export function OnDevice() {
-  const store = useSignals();
+  const store = useStoredSignals();
   const [cleared, setCleared] = useState(false);
   const [allMarks, setAllMarks] = useState(false);
   const s = useMemo(() => {

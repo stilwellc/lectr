@@ -113,9 +113,68 @@ export function cleanSnap(x: unknown): LotSnap | undefined {
 
 const str = (x: unknown, max: number): string | undefined => (typeof x === 'string' && x ? x.slice(0, max) : undefined);
 
+/* ── the page's view: a quiet visit is read on the NEXT page ──
+ * A plain visit (a lot / comps / entity page, a search) is written at once
+ * but the lists on the page it happened on keep the taste they opened with.
+ * Each quiet write keeps the event as it stood before this page touched it
+ * (null = new on this page); the live store's read hands that version back
+ * until the reader moves to another page. So "Not for me" → Undo after
+ * opening a pick re-ranks from exactly the signals the room was built on —
+ * the same opens, dwell and negatives — and the room comes back identical. */
+interface Held { page: string; at: number; ev: Map<string, SignalEvent | null> }
+const held = new WeakMap<object, Held>();
+/** a page held this long with no new quiet visit is read in full again */
+const HELD_MS = 30 * 60_000;
+const evKey = (k: string, id: string) => `${k}\u0000${id}`;
+function pageOf(): string {
+  try { return typeof location !== 'undefined' ? location.pathname : ''; } catch { return ''; }
+}
+function heldFor(kv: KV, nowMs: number): Held | null {
+  const h = held.get(kv);
+  if (!h) return null;
+  if (h.page !== pageOf() || nowMs - h.at > HELD_MS) { held.delete(kv); return null; }
+  return h;
+}
+/** keep `prev` (the event before this page's first quiet touch) */
+function hold(kv: KV, k: SignalKind, id: string, prev: SignalEvent | null, nowMs: number): void {
+  let h = heldFor(kv, nowMs);
+  if (!h) { h = { page: pageOf(), at: nowMs, ev: new Map() }; held.set(kv, h); }
+  h.at = nowMs;
+  const key = evKey(k, id);
+  if (!h.ev.has(key)) h.ev.set(key, prev ? { ...prev, ...(prev.lot ? { lot: { ...prev.lot } } : {}) } : null);
+}
+/** the store as this page's lists read it: every event a quiet visit
+ *  touched here, as it stood before (or absent when it is new) */
+export function pageView(store: SignalStore, kv: KV, nowMs = Date.now()): SignalStore {
+  const h = heldFor(kv, nowMs);
+  if (!h || !h.ev.size) return store;
+  const ev: SignalEvent[] = [];
+  const seen = new Set<string>();
+  for (const e of store.ev) {
+    const key = evKey(e.k, e.id);
+    seen.add(key);
+    if (!h.ev.has(key)) { ev.push(e); continue; }
+    const before = h.ev.get(key);
+    if (before) ev.push(before);
+  }
+  // an event this page touched that has since been trimmed: as it stood
+  for (const [key, before] of Array.from(h.ev)) if (before && !seen.has(key)) ev.push(before);
+  ev.sort((a, b) => a.t - b.t);
+  return { ...store, ev };
+}
+/** a new page (tests; the browser notices a path change by itself) */
+export function startPage(kv: KV | null = defaultKV()): void { if (kv) held.delete(kv); }
+
 /** read + validate; anything malformed is dropped (field by field, entry by
- *  entry — never the page), a foreign version starts over */
-export function readSignals(kv: KV | null = defaultKV(), nowMs = Date.now()): SignalStore {
+ *  entry — never the page), a foreign version starts over. The live store
+ *  (no `kv` given) reads as this page's view (pageView); `{ view: false }` or
+ *  a passed handle (unless `{ view: true }`) reads what is stored. */
+export function readSignals(kv: KV | null = defaultKV(), nowMs = Date.now(), opts: { view?: boolean } = {}): SignalStore {
+  const st = loadSignals(kv, nowMs);
+  return kv && (opts.view ?? kv === defaultKV()) ? pageView(st, kv, nowMs) : st;
+}
+
+function loadSignals(kv: KV | null, nowMs: number): SignalStore {
   if (!kv) return empty();
   let raw: string | null = null;
   try { raw = kv.getItem(SIGNALS_KEY); } catch { return empty(); }
@@ -201,9 +260,10 @@ export function recordSignal(
 ): void {
   const key = k === 'search' ? id.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 60) : id;
   if (!key || (k === 'search' && key.length < 3)) return;
-  const st = readSignals(kv, nowMs);
+  const st = loadSignals(kv, nowMs);
   const i = st.ev.findIndex(e => e.k === k && e.id === key);
   const prev = i >= 0 ? st.ev.splice(i, 1)[0] : null;
+  if (kv) hold(kv, k, key, prev, nowMs);
   const e: SignalEvent = prev
     ? { ...prev, t: nowMs, n: nowMs - prev.t > REPEAT_GAP_MS ? Math.min(prev.n + 1, 99) : prev.n }
     : { k, id: key, t0: nowMs, t: nowMs, n: 1 };
@@ -219,9 +279,10 @@ export function recordSignal(
 /** a page's dwell, reported when the reader leaves it (no new visit) */
 export function recordDwell(k: SignalKind, id: string, ms: number, kv: KV | null = defaultKV(), nowMs = Date.now()): void {
   if (!(ms > 0)) return;
-  const st = readSignals(kv, nowMs);
+  const st = loadSignals(kv, nowMs);
   const e = st.ev.find(x => x.k === k && x.id === id);
   if (!e || (e.dwell ?? 0) >= ms) return;
+  if (kv) hold(kv, k, id, e, nowMs);
   e.dwell = Math.round(ms);
   write(st, kv);
 }
@@ -244,12 +305,13 @@ export function quietKeysOf(l: RecLot): string[] {
 /** "More like this" / "Not for me" on one lot (the other mark is replaced).
  *  Returns the previous mark (or null) so the caller can undo. */
 export function markLot(k: MarkKind, lot: RecLot, kv: KV | null = defaultKV(), nowMs = Date.now()): SignalMark | null {
-  const st = readSignals(kv, nowMs);
+  const st = loadSignals(kv, nowMs);
   const i = st.marks.findIndex(m => m.id === lot.id);
-  const prev = i >= 0 ? st.marks.splice(i, 1)[0] : null;
+  const prev = i >= 0 ? st.marks[i] : null;
   const m: SignalMark = { k, id: lot.id, t: nowMs, lot: snapOf(lot) };
   if (k === 'less') m.keys = quietKeysOf(lot);
-  st.marks.push(m);
+  // replaced in its seat, so an undo puts the old mark back where it stood
+  if (i >= 0) st.marks[i] = m; else st.marks.push(m);
   write(st, kv, true);
   if (kv === defaultKV()) { notePickAction(lot.id, k === 'more' ? 'm' : 'x'); notePickAction(lot.id, k === 'more' ? 'x' : 'm', false); }
   return prev;
@@ -257,9 +319,13 @@ export function markLot(k: MarkKind, lot: RecLot, kv: KV | null = defaultKV(), n
 
 /** undo: drop the lot's mark, restoring the one it replaced (if any) */
 export function unmarkLot(id: string, restore: SignalMark | null = null, kv: KV | null = defaultKV(), nowMs = Date.now()): void {
-  const st = readSignals(kv, nowMs);
-  st.marks = st.marks.filter(m => m.id !== id);
-  if (restore) st.marks.push(restore);
+  const st = loadSignals(kv, nowMs);
+  const i = st.marks.findIndex(m => m.id === id);
+  if (restore && i >= 0) st.marks[i] = restore;
+  else {
+    st.marks = st.marks.filter(m => m.id !== id);
+    if (restore) st.marks.push(restore);
+  }
   write(st, kv, true);
   if (kv === defaultKV()) {
     notePickAction(id, 'm', restore?.k === 'more');
@@ -274,6 +340,7 @@ export function markOf(id: string, store: SignalStore): MarkKind | null {
 /** "Clear what lectr learned on this device" */
 export function clearSignals(kv: KV | null = defaultKV()): void {
   try { kv?.removeItem(SIGNALS_KEY); } catch { /* nothing to clear */ }
+  if (kv) held.delete(kv);
   // the picks lectr showed (and how they did) are part of what it kept here
   if (kv === defaultKV()) clearPicks();
   notify(true);
