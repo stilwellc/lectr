@@ -13,16 +13,36 @@
  * The profile's "Lots you may like" room and the home feed's For-you tab
  * both read this one hook, so the two lists agree.
  */
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AuctionLot } from '../types';
 import { useAccount } from './account';
 import { useFollows } from './follows';
 import { buildTaste, idAliases, type Taste, type SavedInput } from './recs';
+import { readSignals, signalsToTaste, SIGNALS_EVENT, SIGNALS_KEY, type SignalStore } from './recs-signals';
+
+/** the on-device signal store (app/lib/recs-signals). Read once on mount
+ *  (null until then — the server and the first client render know nothing,
+ *  so no hydration mismatch), then again whenever the reader ACTS on the
+ *  picks here (a mark, an undo, a clear) or another tab writes. A plain
+ *  visit is learned quietly and read on the next page. */
+export function useSignals(): SignalStore | null {
+  const [store, setStore] = useState<SignalStore | null>(null);
+  const reread = useCallback(() => setStore(readSignals()), []);
+  useEffect(() => {
+    reread();
+    const onChange = (e: Event) => { if ((e as CustomEvent<{ live?: boolean }>).detail?.live) reread(); };
+    const onStorage = (e: StorageEvent) => { if (e.key === null || e.key === SIGNALS_KEY) reread(); };
+    window.addEventListener(SIGNALS_EVENT, onChange);
+    window.addEventListener('storage', onStorage);
+    return () => { window.removeEventListener(SIGNALS_EVENT, onChange); window.removeEventListener('storage', onStorage); };
+  }, [reread]);
+  return store;
+}
 
 export interface TasteState {
   taste: Taste;
-  /** every input has loaded (saves, follows, searches) — before this, an
-   *  empty taste is "not yet", never "cold start" */
+  /** every input has loaded (saves, follows, searches, this device's
+   *  signals) — before this, an empty taste is "not yet", never "cold start" */
   ready: boolean;
   /** any signal at all */
   hasSignals: boolean;
@@ -33,11 +53,13 @@ export interface TasteState {
 export function useTaste(book: readonly AuctionLot[]): TasteState {
   const { savedIds, savedMeta, savedReady } = useAccount();
   const { follows, searches, ready: followsReady } = useFollows();
+  const signals = useSignals();
+  const anySignal = !!signals && signals.ev.length + signals.marks.length > 0;
   const byId = useMemo(() => {
     const m = new Map<string, AuctionLot>();
-    if (savedIds.length) for (const l of book) m.set(l.id, l);
+    if (savedIds.length || anySignal) for (const l of book) m.set(l.id, l);
     return m;
-  }, [book, savedIds.length]);
+  }, [book, savedIds.length, anySignal]);
   // stable per day: recency weights move daily, not per render
   const day = new Date().toISOString().slice(0, 10);
   const taste = useMemo(() => {
@@ -50,15 +72,18 @@ export function useTaste(book: readonly AuctionLot[]): TasteState {
         title: meta?.title ?? null, artist: meta?.artist ?? null, estMid: meta?.estMid ?? null,
       };
     });
+    // on-device signals (app/lib/recs-signals) — below every save
+    const { extra, negative } = signals ? signalsToTaste(signals, Date.now(), id => byId.get(id)) : { extra: [], negative: {} };
     return buildTaste({
       saved, follows,
       searches: searches.map(s => ({ id: s.id, name: s.name, query: s.query, createdAt: s.created_at })),
+      extra, negative,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedIds, savedMeta, byId, follows, searches, day]);
+  }, [savedIds, savedMeta, byId, follows, searches, day, signals]);
   return {
     taste,
-    ready: savedReady && followsReady,
+    ready: savedReady && followsReady && signals !== null,
     hasSignals: taste.seeds.length > 0,
   };
 }

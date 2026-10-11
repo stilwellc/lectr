@@ -29,6 +29,7 @@ import ComparableModal from '../components/ComparableModal';
 import { useLotModal } from '../lib/use-lot-modal';
 import { recommend, recNote, recDepth, type Taste } from '../lib/recs';
 import { useTaste } from '../lib/use-recs';
+import { PickFeedback, UndoSeat, LearnedOnDevice, usePickFeedback, withUndoSeat } from '../components/PickFeedback';
 import { CellGrid, Cell, ColorCell, FigPools, FigTape } from '../components/cells';
 import { getUpcomingCounts, formatPrice, formatDate, craftTitle, fmtSignedPct, localToday, median, overEstimatePct, isOnBlock } from '../utils';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../constants';
@@ -412,6 +413,8 @@ function RecsRoom({ book, compLots, taste, ready, lastCrawl, isSaved, onToggleSa
   const [shown, setShown] = useState<number | null>(null);
   const visible = shown ?? page;
   const [openLot, setOpenLot] = useLotModal<AuctionLot>();
+  // "More like this / Not for me" — this device only (app/lib/recs-signals)
+  const fb = usePickFeedback();
 
   if (!ready) return null;
   const c = taste.counts;
@@ -420,8 +423,11 @@ function RecsRoom({ book, compLots, taste, ready, lastCrawl, isSaved, onToggleSa
     c.owned ? `${c.owned} owned` : null,
     c.follows ? `${c.follows} ${c.follows === 1 ? 'follow' : 'follows'}` : null,
     c.searches ? `${c.searches} saved ${c.searches === 1 ? 'search' : 'searches'}` : null,
+    c.signals ? `${c.signals} recent ${c.signals === 1 ? 'look' : 'looks'} on this device` : null,
   ].filter(Boolean).join(', ');
   const cold = taste.seeds.length === 0;
+  const learned = (c.signals ?? 0) > 0 || fb.marks.size > 0;
+  const seats = withUndoSeat(recs.slice(0, visible), fb.undo);
 
   return (
     <section id="for-you" className="ray-saved-section rail ray-enter" aria-label="Lots you may like">
@@ -440,7 +446,8 @@ function RecsRoom({ book, compLots, taste, ready, lastCrawl, isSaved, onToggleSa
             inside one category, the same era, grader or language at a price like yours. Then the strongest ties that
             matter most and close soonest lead, spread so no one name or sale fills the list. Lots on your desk never
             come back here. The line under each lot says why it is here; the picks re-read with every crawl and every
-            save.
+            save. Below all of that, what you open and search on this device leans the list a little, and More like
+            this / Not for me steer it at once — kept in this browser only, never sent.
           </HelpChip>
         </div>
 
@@ -450,6 +457,7 @@ function RecsRoom({ book, compLots, taste, ready, lastCrawl, isSaved, onToggleSa
             {signedOut
               ? <>Follow a category, a house, or a Pokémon, film or other subject — no account needed — and lots like them land here; sign in to follow makers and players, and the lots you save shape it too.</>
               : <>Save a lot, mark one you won, or follow a maker, player, category or house, and lots like them land here.</>}
+            {' '}Or just look around: the lots and pages you open lean it too, kept on this device only.
             {' '}<Link href="/makers" className="ck-away-link">Find something to follow</Link>
           </p>
         ) : recs.length === 0 ? (
@@ -459,19 +467,25 @@ function RecsRoom({ book, compLots, taste, ready, lastCrawl, isSaved, onToggleSa
           </p>
         ) : narrow ? (
           <div>
-            {recs.slice(0, visible).map(r => (
-              <FeedRow key={r.lot.id} lot={r.lot} onOpen={() => setOpenLot(r.lot)}
-                tone={feedTone(r.lot, below.ids, below.hasSig)} note={recNote(r, { short: true })} />
+            {seats.map((r, i) => ('undoSeat' in r
+              ? <UndoSeat key={`undo-${r.undoSeat.id}`} undo={r.undoSeat} onUndo={fb.undoIt} row />
+              : <FeedRow key={r.lot.id} lot={r.lot} onOpen={() => setOpenLot(r.lot)}
+                  tone={feedTone(r.lot, below.ids, below.hasSig)} note={recNote(r, { short: true })}
+                  feedback={<PickFeedback lot={r.lot} mark={fb.marks.get(r.lot.id)} onMark={fb.mark} at={i} inset />} />
             ))}
           </div>
         ) : (
           <div className="ray-saved-grid">
-            {recs.slice(0, visible).map((r, i) => (
-              <div key={r.lot.id} className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms` } as React.CSSProperties}>
+            {seats.map((r, i) => ('undoSeat' in r
+              ? <UndoSeat key={`undo-${r.undoSeat.id}`} undo={r.undoSeat} onUndo={fb.undoIt} />
+              : (
+              // the card fills its row; the pick's feedback rides under it
+              <div key={r.lot.id} className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms`, display: 'grid', gridTemplateRows: 'minmax(0, 1fr) auto' } as React.CSSProperties}>
                 <LotCard lot={r.lot} showArtist allLots={compLots} saved={isSaved(r.lot.id)} onToggleSave={onToggleSave}
                   lastCrawl={lastCrawl} note={recNote(r)} />
+                <PickFeedback lot={r.lot} mark={fb.marks.get(r.lot.id)} onMark={fb.mark} at={i} />
               </div>
-            ))}
+            )))}
           </div>
         )}
 
@@ -482,6 +496,9 @@ function RecsRoom({ book, compLots, taste, ready, lastCrawl, isSaved, onToggleSa
             </button>
           </div>
         )}
+
+        {/* what this device learned — said plainly, and erasable */}
+        <LearnedOnDevice learned={learned} />
       </div>
       {openLot && <ComparableModal lot={openLot} allLots={compLots} onClose={() => setOpenLot(null)} />}
     </section>

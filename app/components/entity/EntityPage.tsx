@@ -37,6 +37,7 @@ import { useRayData } from '../../hooks/useRayData';
 import { useSavedLots } from '../../hooks/useSavedLots';
 import { useEntity } from '../../hooks/useEntities';
 import { useMarket } from '../../lib/market';
+import { useLearnVisit } from '../../lib/recs-signals';
 import { useUrlState, useLastVisit, houseBaselines } from '../../lib/feed-filters';
 import { useBackScroll } from '../../lib/use-back-scroll';
 import { livePool } from '../../lib/maker-pool';
@@ -150,6 +151,10 @@ export default function EntityPage({ id }: { id: string }) {
     n.forEach((k, nm) => { if (k > c) { c = k; best = nm; } });
     return displayName(best);
   }, [ref, summary, live]);
+
+  // on-device memory (app/lib/recs-signals): a visited page leans "Lots you
+  // may like" toward this name, below any follow — never sent anywhere
+  useLearnVisit('entity', ref && name ? id : null, () => ({ label: name }));
 
   useEffect(() => {
     if (!name) return;
