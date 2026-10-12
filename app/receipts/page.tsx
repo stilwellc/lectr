@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { signalMagnitude } from '../lib/comps';
 import { useFullLotsOnDemand, retryFullLoad } from '../hooks/useRayData';
 import { markFallbackProjections } from '../lib/page-data';
 import ArtistNav from '../components/ArtistNav';
@@ -328,7 +329,7 @@ export default function ReceiptsPage() {
                       <Link key={l.id} href={`/lot?id=${encodeURIComponent(l.id)}`} className="rcp-cols rcp-row">
                         <span className="rcp-date">{formatDate(closeDayOf(l))}</span>
                         <span className="rcp-work">{makerLineOf(l).name && <><b>{makerLineOf(l).name}</b> </>}{craftTitle(l.title, l.auctionHouse)}</span>
-                        <span className="rcp-num" style={{ color: 'var(--color-up)' }}>+{Math.abs(Math.round(sig.pct))}%<span className="rcp-kind">vs comps</span></span>
+                        <span className="rcp-num" style={{ color: 'var(--color-up)' }}>{signalMagnitude('Below Market', Math.abs(Math.round(sig.pct)))}<span className="rcp-kind">vs comps</span></span>
                         <span className="rcp-num" style={{ fontWeight: 600 }}>{formatPrice(l.priceUsd!)}</span>
                         <span className="rcp-num" style={vsEst != null ? { color: vsEst > 0 ? 'var(--color-up)' : vsEst < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 600 } : { color: 'var(--color-text-faint)' }}>
                           {vsEst != null ? fmtSignedPct(Math.round(vsEst)) : '—'}
