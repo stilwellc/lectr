@@ -30,7 +30,7 @@ function lot(p: Partial<AuctionLot>): AuctionLot {
   } as AuctionLot;
 }
 const row = (p: Partial<WeekRow> & { lot: AuctionLot }): WeekRow =>
-  ({ kind: 'watch', name: null, owned: false, closeMs: Date.parse(p.lot.saleDateTime || `${p.lot.saleDate}T23:59:59Z`), timed: true, day: p.lot.saleDate, estMid: null, conflictWith: [], ...p });
+  ({ kind: 'watch', name: null, owned: false, ownedN: 0, closeMs: Date.parse(p.lot.saleDateTime || `${p.lot.saleDate}T23:59:59Z`), timed: true, day: p.lot.saleDate, estMid: null, conflictWith: [], ...p });
 
 const unfold = (s: string) => s.replace(/\r\n[ \t]/g, '');
 const lines = (s: string) => unfold(s).split('\r\n');

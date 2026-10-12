@@ -26,6 +26,14 @@
  *           follow, which would pour a whole market onto the week)
  * A lot prints once, under its strongest claim (watch > pick > name).
  *
+ * THE VIEW (Oct 11 review, R1#15: picks outnumbered watches 2:1 in "my"
+ * week) — the plan always holds everything; what the columns SHOW is a
+ * view of it: watches + names by default, picks behind "Show picks (N)"
+ * (remembered on the device). A desk with no watch on the week shows its
+ * picks by default — hiding them would hide the only rows there are.
+ * viewOf() cuts the view; the rail's count, the head's sub-line and the
+ * toggle's number read the full plan.
+ *
  * CONFLICTS  two WATCHED lots with real close times inside 30 minutes of
  *            each other, from different sales (priority.saleKeyOf — forty
  *            lots of one Goldin night all close at 10 PM by design; that is
@@ -36,6 +44,11 @@
  *            a Warhol evening as your money) that carry BOTH bounds; a
  *            one-sided estimate (RR's "from $2,000") is counted as unpriced,
  *            so the head says "$212K · 3 of 4 priced".
+ *            TODO(X1): the shell is exporting ONE "priced" helper (both
+ *            bounds = priced; one-sided = "from $X", never summed) from
+ *            app/profile/desk — import it here in place of estMidOf as soon
+ *            as it is on main; the rule below is that rule, kept local only
+ *            until then.
  */
 import type { AuctionLot } from '../../types';
 import type { Follow } from '../../lib/follows';
@@ -66,6 +79,8 @@ export interface WeekRow {
   name: string | null;
   /** the name is one the reader owns a piece by (not only follows) */
   owned: boolean;
+  /** how many pieces in the collection file under that name (0 for a follow) */
+  ownedN: number;
   /** the close instant (house-tz closeMs) */
   closeMs: number;
   /** the lot carries a real close time (false: a date-only sale) */
@@ -149,6 +164,8 @@ export function weekDayOf(lot: AuctionLot, closeMs: number, timed: boolean): str
   return timed ? localDayOf(closeMs) : houseCloseDayOf(lot);
 }
 
+/** (low + high) / 2 when BOTH bounds are published, else null — the one
+ *  "priced" rule (see the file head's TODO: X1's shared export replaces this) */
 export function estMidOf(lot: AuctionLot): number | null {
   const lo = lot.estLowUsd ?? lot.estimateLow ?? null;
   const hi = lot.estHighUsd ?? lot.estimateHigh ?? null;
@@ -156,13 +173,13 @@ export function estMidOf(lot: AuctionLot): number | null {
 }
 
 /** one row, or null when the lot is not a live close ahead of `now` */
-export function rowOf(lot: AuctionLot, kind: WeekKind, now: number, today: string, name: string | null = null, owned = false): WeekRow | null {
+export function rowOf(lot: AuctionLot, kind: WeekKind, now: number, today: string, name: string | null = null, ownedN = 0): WeekRow | null {
   if (lot.status !== 'upcoming') return null;
   const closeMs = closeMsOf(lot);
   if (closeMs == null || closeMs <= now) return null;
   if (!isOnBlock(lot, today, now)) return null;
   const timed = closeIsTimed(lot);
-  return { lot, kind, name, owned, closeMs, timed, day: weekDayOf(lot, closeMs, timed), estMid: estMidOf(lot), conflictWith: [] };
+  return { lot, kind, name, owned: ownedN > 0, ownedN, closeMs, timed, day: weekDayOf(lot, closeMs, timed), estMid: estMidOf(lot), conflictWith: [] };
 }
 
 /** the reader's watched lots as rows, soonest first (every live watch — no window) */
@@ -207,12 +224,13 @@ export function markConflicts(rows: WeekRow[]): number {
 
 /** the reader's names (your-market's roster minus category follows), with
  *  a matcher per name; `owned` = a piece in the collection files under it */
-export function weekNamesOf(follows: readonly Follow[], collection: readonly AuctionLot[]): { label: string; owned: boolean; match: (l: AuctionLot, ek: string | null) => boolean }[] {
+export function weekNamesOf(follows: readonly Follow[], collection: readonly AuctionLot[]): { label: string; owned: boolean; ownedN: number; match: (l: AuctionLot, ek: string | null) => boolean }[] {
   return marketNamesOf(follows, collection as Parameters<typeof marketNamesOf>[1])
     .filter(n => n.follow.kind !== 'cat' && n.follow.kind !== 'house')
     .map(n => ({
       label: n.label,
       owned: n.owned > 0,
+      ownedN: n.owned,
       match: n.id
         ? (_l: AuctionLot, ek: string | null) => ek === n.id
         : (l: AuctionLot) => affinityOf(l, [n.follow]) > 0,
@@ -257,7 +275,7 @@ export function planWeek(input: WeekInput): WeekPlan {
       for (const n of names) {
         if (ek === undefined) ek = entityIdOf(l);
         if (!n.match(l, ek)) continue;
-        take(rowOf(l, 'name', now, today, n.label, n.owned));
+        take(rowOf(l, 'name', now, today, n.label, n.ownedN));
         break;
       }
     }
@@ -316,6 +334,50 @@ export function planWeek(input: WeekInput): WeekPlan {
     first: yoursRows.slice().sort((a, b) => a.closeMs - b.closeMs)[0] ?? null,
     dayKeys: keys,
   };
+}
+
+/* ── the view: what the columns show ── */
+
+export interface WeekView {
+  /** picks are shown (false: watches + names only) */
+  picks: boolean;
+}
+
+/** the device's remembered choice, or — with no watch on the week — the
+ *  picks (the only rows of yours there are) */
+export function pickDefault(plan: Pick<WeekPlan, 'watches'>, remembered: boolean | null): boolean {
+  if (remembered != null) return remembered;
+  return plan.watches === 0;
+}
+
+/** the plan as the columns show it: with `picks` off, the pick rows are cut
+ *  and every day's count / total is re-read over what is left (a day head
+ *  never counts a row it does not show); the plan's own totals (watches,
+ *  picks, estTotal, beyond …) are the week's facts and stay on the plan */
+export function viewOf(plan: WeekPlan, view: WeekView): WeekPlan {
+  if (view.picks) return plan;
+  const keep = (r: WeekRow) => r.kind !== 'pick';
+  const rows = plan.rows.filter(keep);
+  const days = plan.days.map(d => {
+    const kept = d.rows.filter(keep);
+    let estTotal = 0, priced = 0, yours = 0;
+    for (const r of kept) if (r.kind !== 'name') { yours++; if (r.estMid != null) { estTotal += r.estMid; priced++; } }
+    return { ...d, rows: kept, yours, estTotal, priced };
+  });
+  const yoursRows = rows.filter(r => r.kind !== 'name');
+  return {
+    ...plan, days, rows,
+    yours: yoursRows.length, picks: 0,
+    estTotal: days.reduce((s, d) => s + d.estTotal, 0),
+    priced: days.reduce((s, d) => s + d.priced, 0),
+    first: yoursRows.slice().sort((a, b) => a.closeMs - b.closeMs)[0] ?? null,
+  };
+}
+
+/** the words beside a name row's name: "you own 1" / "you own 3" (null for a follow) */
+export function ownedWords(r: Pick<WeekRow, 'kind' | 'ownedN'>): string | null {
+  if (r.kind !== 'name' || r.ownedN <= 0) return null;
+  return `you own ${r.ownedN}`;
 }
 
 /* ── the Closing-now strip ── */
