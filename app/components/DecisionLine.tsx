@@ -11,6 +11,12 @@
  * nothing. It wears the stacked row's price line (.ray-feedrow-price: mono,
  * figures in ink) and wraps between parts, never inside one — the reason line
  * above it is never cut for it.
+ *
+ * The worth part has two grammars, both decisionOf's (DECISION_COMPS_RULE):
+ * "worth up to $13K" (the max bid, hammer) or — on a ≥2× Below call whose
+ * max bid sits under half the comps median — "comps median $23K · 12 closest
+ * of 118 sales", the flag's own basis, with the max bid and its definition
+ * in the part's title. The figure in bold is the first "$…" either way.
  */
 import React, { useMemo } from 'react';
 import type { AuctionLot } from '../types';

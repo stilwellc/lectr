@@ -165,12 +165,17 @@ function estMidOf(lot: AuctionLot): number | null {
   return lo && hi ? (lo + hi) / 2 : null;
 }
 
-function compsSub(n: number, k: number): string {
-  // the weighted median reads the pool's closest K (the engine's TOP_K); a
-  // larger pool says so, never "N sales" over a median of fewer
+/** the n beside a comps median, in the engine's own count: the weighted
+ *  median reads the pool's closest K (the engine's TOP_K) — a larger pool
+ *  says so ("12 closest of 118 sales"), never "N sales" over a median of fewer */
+export function compsCountText(n: number, k: number): string {
   return n > k && k > 0
-    ? `${FACE_LABEL.compsSub} · ${k} closest of ${n.toLocaleString()} sales`
-    : `${FACE_LABEL.compsSub} · ${n.toLocaleString()} ${n === 1 ? 'sale' : 'sales'}`;
+    ? `${k} closest of ${n.toLocaleString()} sales`
+    : `${n.toLocaleString()} ${n === 1 ? 'sale' : 'sales'}`;
+}
+
+function compsSub(n: number, k: number): string {
+  return `${FACE_LABEL.compsSub} · ${compsCountText(n, k)}`;
 }
 
 /** (W29) the median was read over the other works too — said beside it
@@ -234,6 +239,20 @@ export function splitOtherWorks<T extends { id: string }>(rows: readonly T[], ot
   return { same, other };
 }
 
+/** a lot's live signal as a surface holds it: the build stamp's shape, with
+ *  the flag's median where the stamp carries one */
+export type LiveSignalOf = (NonNullable<AuctionLot['signal']> & { med?: number }) | null;
+
+/** THE LIVE SIGNAL — ONE SOURCE (X5, Oct 11 2026): the build's stamp
+ *  (`lot.signal`, stamped on the whole book, null included — a stamped null
+ *  is an abstention), else the engine's flag read off the lot's own value
+ *  (comps.engineFlagOf). Never a client recompute over whatever pool the
+ *  page holds (flags.ts law). lotFace's call and LotCard.lotSignal (the
+ *  desk's signalById, the feeds, /value, the lot page) all read this. */
+export function liveSignalOf(lot: AuctionLot): LiveSignalOf {
+  return (lot.signal !== undefined ? lot.signal : engineFlagOf(lot)) as LiveSignalOf;
+}
+
 /** THE ONE FUNCTION — every printed value figure of a lot. */
 export function lotFace(lot: AuctionLot): LotFace {
   // a card value the engine marked context-only (abstain 'card:…') is
@@ -247,9 +266,8 @@ export function lotFace(lot: AuctionLot): LotFace {
   } : null;
 
   // the call: the build stamp (lot.signal ≡ engineFlagOf at build), else
-  // the engine's flag read off the value directly
-  const sig = (lot.signal !== undefined ? lot.signal : engineFlagOf(lot)) as
-    (NonNullable<AuctionLot['signal']> & { med?: number }) | null;
+  // the engine's flag read off the value directly — liveSignalOf, the one source
+  const sig = liveSignalOf(lot);
 
   const ep = enginePoolOf(lot.value);
   const flagMed = sig?.med;
@@ -374,6 +392,10 @@ export function medianRowId<T extends { id: string; priceUsd?: number | null }>(
      worth  lotFace(lot).maxBid — the engine's max bid (hammer), the lot
             page's "Max bid". No max bid → nothing; "no engine read" only
             when the engine abstained in so many words. Never invented.
+            Under DECISION_COMPS_RULE (a ≥2× Below call whose max bid sits
+            under half the comps median) the flag's basis prints instead —
+            "comps median $23K · 12 closest of 118 sales" — and the max bid
+            rides the tooltip with its definition.
      gap    only between two figures printed on the same line, same basis
             (hammer), and only when they sit ≥10% apart.
      when   the house-tz close clock (priority.closeMsOf's), in the reader's
@@ -396,7 +418,16 @@ export interface DecisionClose {
   /** what the figure is, in full (a tooltip) */
   title: string;
 }
-export interface DecisionWorth { usd: number; text: string; title: string }
+export interface DecisionWorth {
+  usd: number;
+  text: string;
+  title: string;
+  /** 'max' — the engine's max bid, hammer ("worth up to $7K"); 'comps' —
+   *  the flag's basis, the weighted comps median, all-in realized ("comps
+   *  median $23K · 12 closest of 118 sales"), printed under
+   *  DECISION_COMPS_RULE with the max bid in `title` */
+  kind: 'max' | 'comps';
+}
 export interface DecisionGap { usd: number; dir: 'room' | 'over'; text: string }
 export interface DecisionWhen { ms: number; timed: boolean; text: string }
 export interface Decision {
@@ -410,6 +441,39 @@ export interface Decision {
 
 /** a gap prints only when the two figures are at least this far apart */
 export const DECISION_GAP_MIN = 0.10;
+
+/* ── THE COMPS RULE (X5, Oct 11 2026 — R1#3, R3#6) ───────────────────────
+   Cow 1976 (Bonhams, est $4.6K–$6.9K) wore "3.2×" — comps sit 3.2× the ask —
+   beside "worth up to $7K": the max bid is read off the VALUE, and on art
+   the value leans on the house estimate (ENGINE_LANES §22), so the two
+   figures contradict each other on one row ("4.1× BELOW … comps median
+   $1.7K · 4 sales … worth up to $338" on the Coldplay drumhead). When the
+   call is Below Market at ≥ 2× (signalMagnitude's × grammar, pct ≥ 100)
+   AND the max bid sits under half the comps median, the line prints the
+   flag's own basis — the comps median, with its n — and the max bid moves
+   to the tooltip with its definition. Both figures are still lotFace's;
+   nothing is re-derived. The comps median is all-in realized and the
+   estimate / projection is hammer, so no gap prints across the two bases.
+   Every surface reads the line through decisionOf (lot page, cards, feeds,
+   the desk's rooms, the .ics) — the rule lives here only. */
+export const DECISION_COMPS_RULE = {
+  /** the call's magnitude, in signal pct points: 100 = 2× */
+  minPct: 100,
+  /** the max bid under this share of the comps median */
+  maxBidShare: 0.5,
+} as const;
+
+/** the max bid's definition, as value.ts MAXBID_Q prints it (30%): the hammer
+ *  only ~30% of comparable outcomes cleared at or under — a test pins the two */
+export const MAXBID_POINT_PCT = 30;
+
+/** whether the comps rule governs this lot's decision line */
+export function compsRuleFires(face: LotFace): boolean {
+  const c = face.call, m = face.maxBid, k = face.comps;
+  return !!c && !!m && !!k && c.label === 'Below Market'
+    && c.pct >= DECISION_COMPS_RULE.minPct
+    && m.hammer < k.med * DECISION_COMPS_RULE.maxBidShare;
+}
 
 const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -498,9 +562,19 @@ export function decisionOf(lot: AuctionLot, nowMs: number = Date.now(), face: Lo
     }
   }
   const mb = face.maxBid;
-  const worth: DecisionWorth | null = mb && mb.hammer > 0
-    ? { usd: mb.hammer, text: `worth up to ${fmtFace(mb.hammer)}`, title: `lectr’s max bid ${mb.text} — ${mb.sub}` }
-    : null;
+  let worth: DecisionWorth | null = null;
+  if (mb && mb.hammer > 0) {
+    if (compsRuleFires(face)) {
+      const k = face.comps!, c = face.call!;
+      worth = {
+        kind: 'comps', usd: k.med,
+        text: `${FACE_LABEL.comps.toLowerCase()} ${k.text} · ${compsCountText(k.n, k.ids.length)}`,
+        title: `${FACE_LABEL.comps} ${k.text} — ${k.sub}, all-in realized: the basis of the ${c.text} flag · walk-away bid ${mb.text}: the engine’s ${MAXBID_POINT_PCT}% point — only ~${MAXBID_POINT_PCT}% of comparable outcomes cleared at or under it (${mb.sub})`,
+      };
+    } else {
+      worth = { kind: 'max', usd: mb.hammer, text: `worth up to ${fmtFace(mb.hammer)}`, title: `lectr’s max bid ${mb.text} — ${mb.sub}` };
+    }
+  }
   const ab = (lot.value as { abstain?: string | null } | null | undefined)?.abstain;
   // (W23) "no engine read" only when there is NO read: an abstain that held
   // back the FLAG ('flag:purity') or the max bid (a low-confidence value)
@@ -509,7 +583,9 @@ export function decisionOf(lot: AuctionLot, nowMs: number = Date.now(), face: Lo
   const abstained = !worth && !face.value && typeof ab === 'string' && ab.length > 0;
 
   let gap: DecisionGap | null = null;
-  if (close && worth) {
+  // a comps-median worth is all-in realized; the close figure is hammer —
+  // no gap across bases (DECISION_COMPS_RULE)
+  if (close && worth && worth.kind === 'max') {
     if (close.kind === 'proj') {
       const d = worth.usd - close.usd;
       if (Math.abs(d) >= DECISION_GAP_MIN * close.usd) {

@@ -11,6 +11,7 @@ import type { AuctionLot } from '../../types';
 import type { SavedMeta } from '../../lib/account';
 import { daysUntil as daysUntilOrNull } from '../../components/Terminal';
 import { lotSignal } from '../../components/LotCard';
+import { signalMagnitude } from '../../lib/comps';
 import { sleeperRead } from '../../lib/lanes';
 import { closeDayOf, localToday } from '../../utils';
 
@@ -75,11 +76,13 @@ export function watchTagOf(l: AuctionLot, sig: { label: string } | null | undefi
 }
 
 export type LiveSignal = NonNullable<ReturnType<typeof lotSignal>>;
-/** live-signal ink + text — the app-wide signalMagnitude convention */
+/** live-signal ink + text — THE app-wide formatter, comps.signalMagnitude
+ *  ("+38%", "3.2×" past 2×, "5×+", "−50%"): the same string lot-face
+ *  call.text prints on the lot page, the cards and /value (X5: the desk
+ *  printed "+224%" where the lot page printed "3.2×") */
 export const sigInk = (label: LiveSignal['label']) =>
   label === 'Below Market' ? 'var(--color-up)' : 'var(--color-down-text)';
-export const sigText = (sig: LiveSignal) =>
-  `${sig.label === 'Above Market' ? '−' : '+'}${Math.abs(Math.round(sig.pct))}%`;
+export const sigText = (sig: LiveSignal) => signalMagnitude(sig.label, sig.pct);
 
 /** a save's meta (keyed by the id at save time) — the raw shape rooms read */
 export type MetaOf = (rowId: string) => SavedMeta | undefined;
