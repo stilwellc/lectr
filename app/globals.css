@@ -4619,6 +4619,9 @@ a.ck-ccell:hover { background: var(--color-hover-item); }
 .ck-ccell-tap, .ck-cockpit[data-cold] .ck-ccell-tap { font-family: var(--font-sans), sans-serif; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--color-fg); line-height: 1.2; }
 a.ck-ccell:hover .ck-ccell-tap { text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px; }
 .ck-ccell-scope { font-size: 11.5px; color: var(--color-text-muted); }
+.ck-ccell-clock:empty { display: none; }
+.ck-ccell-clock::before { content: '· '; }
+.ck-ccell-clock:has(> :empty) { display: none; }
 a.ck-ccell:focus-visible { outline: 2px solid var(--color-fg); outline-offset: -2px; }
 .ck-cockpit[data-cold] .ck-hstrip { margin-top: 4px; }
 .ck-cockpit[data-cold] .ck-hbar { grid-template-rows: 14px auto; }
@@ -4658,7 +4661,7 @@ a.ck-ccell:focus-visible { outline: 2px solid var(--color-fg); outline-offset: -
   .ck-cockpit { margin-top: 8px; }
   .ck-ccells { grid-template-columns: 1fr; }
   .ck-ccell {
-    display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: baseline; column-gap: 10px; row-gap: 0;
+    display: grid; grid-template-columns: 100px minmax(0, 1fr); align-items: baseline; column-gap: 10px; row-gap: 0;
     border-left: none; padding: 5px 2px; border-top: 1px solid var(--hairline); min-height: 30px;
   }
   .ck-ccell:first-child { border-top: none; }

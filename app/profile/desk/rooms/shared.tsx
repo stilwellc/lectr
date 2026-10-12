@@ -5,6 +5,15 @@ import React from 'react';
 import type { AuctionLot } from '../../../types';
 import { signalCallOf, type SavedMeta } from '../../../lib/account';
 import { sigInk, sigText, type LiveSignal } from '../derive';
+import { signalMagnitude } from '../../../lib/comps';
+
+/** the at-save CALL's magnitude through THE one formatter (comps.signalMagnitude
+ *  — "+38%", "3.2×" past 2×, "−50%"): signed by the direction recorded at save
+ *  time (the signed-signal law); a legacy save with no direction prints "±" */
+export function callText(call: { dir: 'below' | 'above' | 'unknown'; pct: number }): string {
+  const m = signalMagnitude(call.dir === 'above' ? 'Above Market' : 'Below Market', Math.round(call.pct));
+  return call.dir === 'unknown' ? m.replace(/^[+−-]/, '±') : m;
+}
 
 /* ── THE GLOSSARY — the cockpit's measured jargon, tappable. Terms live in
    captions and heads, never inside an ellipsized cell. ── */
@@ -32,13 +41,13 @@ export function CallCell({ meta }: { meta: SavedMeta | undefined }) {
     return (
       <span className="num" style={{ color: 'var(--color-text-muted)' }}
         title="Saved before signals recorded their direction — magnitude only.">
-        ±{Math.round(call.pct)}%
+        {callText(call)}
       </span>
     );
   }
   return (
     <span className="num" style={{ color: call.dir === 'below' ? 'var(--color-up)' : 'var(--color-down-text)', fontWeight: 600 }}>
-      {call.dir === 'below' ? '+' : '−'}{Math.round(call.pct)}%
+      {callText(call)}
     </span>
   );
 }
@@ -56,7 +65,7 @@ export function SavedDelta({ lot, meta, sig }: { lot: AuctionLot; meta?: SavedMe
     } else if (Math.round(sig.pct) !== Math.round(call.pct)) {
       bits.push(
         <span key="s">
-          signal {call.dir === 'below' ? '+' : '−'}{Math.round(call.pct)}% <span aria-hidden>↝</span>{' '}
+          signal {callText(call)} <span aria-hidden>↝</span>{' '}
           <b style={{ color: sigInk(sig.label) }}>{sigText(sig)}</b> since you saved
         </span>
       );

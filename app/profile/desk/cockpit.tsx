@@ -158,7 +158,7 @@ export default function Cockpit() {
   };
   const hits = edge ? edge.graded.filter(c => c.hit).length : 0;
   const scopeLine = tonight
-    ? ` · ${[tonight.picks ? `${tonight.picks} ${tonight.picks === 1 ? 'pick' : 'picks'}` : null, tonight.names ? `${tonight.names} of your names` : null].filter(Boolean).join(' and ')} close tonight`
+    ? ` · ${[tonight.picks ? `${tonight.picks} ${tonight.picks === 1 ? 'pick' : 'picks'}` : null, tonight.names ? `${tonight.names} of your names` : null].filter(Boolean).join(' and ')} ${tonight.picks + tonight.names === 1 ? 'closes' : 'close'} tonight`
     : '';
 
   return (
@@ -170,14 +170,14 @@ export default function Cockpit() {
             body="Bookmark any lot on lectr — the picks below have the button — and its estimate counts here to the hammer, with the engine’s read beside it." />
         ) : picksOnly ? (
           <Cell k="Watching" v="0" note="watched" href="#for-you"
-            body={<>{picksLive} {picksLive === 1 ? 'pick' : 'picks'} live <span aria-hidden>→</span> For you{plan.nameRows > 0 && <> · {plan.nameRows} {plan.nameRows === 1 ? 'sale' : 'sales'} of your names this fortnight</>}</>} />
+            body={<span>{picksLive} {picksLive === 1 ? 'pick' : 'picks'} live <span aria-hidden>→</span> For you{plan.nameRows > 0 && <> · {plan.nameRows} {plan.nameRows === 1 ? 'sale' : 'sales'} of your names this fortnight</>}</span>} />
         ) : (
           <Cell k="Watching"
             v={summary.totalEst > 0 ? fmtFace(summary.totalEst) : upcoming.length > 0 ? upcoming.length.toLocaleString() : '—'}
             note={summary.totalEst > 0 ? 'to the hammer' : upcoming.length > 0 ? (upcoming.length === 1 ? 'lot, no estimate' : 'lots, no two-sided estimate') : null}
             body={upcoming.length === 0
               ? 'Nothing live on the block — your settled watches are judged under Your record.'
-              : <>{upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}{summary.totalEst > 0 && <> · {summary.priced} of {upcoming.length} priced, at estimate midpoint</>}{summary.oneSided > 0 && <> · {summary.oneSided} from one bound, not summed</>}{summary.flagged > 0 && <> · <b>{summary.flagged} below market</b></>}</>}
+              : <span>{upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}{summary.totalEst > 0 && <> · {summary.priced} of {upcoming.length} priced, at estimate midpoint</>}{summary.oneSided > 0 && <> · {summary.oneSided} from one bound, not summed</>}{summary.flagged > 0 && <> · <b>{summary.flagged} below market</b></>}</span>}
             href={upcoming.length > 0 ? '#watching' : undefined} />
         )}
 
@@ -193,7 +193,7 @@ export default function Cockpit() {
                   : hammerWord(nextDays))
               : '—'}
             note={next
-              ? <>{nextKind && nextKind !== 'watch' ? KIND_WORD[nextKind] : 'your watch'}{!(nextDays === 0 && next.saleDateTime) && next.saleDateTime ? <> · <CloseClock iso={next.saleDateTime} windowHours={48} /></> : null}</>
+              ? <>{nextKind && nextKind !== 'watch' ? KIND_WORD[nextKind] : 'your watch'}{!(nextDays === 0 && next.saleDateTime) && next.saleDateTime ? <span className="ck-ccell-clock"><CloseClock iso={next.saleDateTime} windowHours={48} /></span> : null}</>
               : null}
             body={next
               ? <>
@@ -217,14 +217,14 @@ export default function Cockpit() {
             v={edge.all.medianMiss != null ? fmtSignedPct(Math.round(edge.all.medianMiss)) : edge.n.toLocaleString()}
             tone={edge.all.medianMiss != null ? lamp(Math.round(edge.all.medianMiss)) : undefined}
             note={edge.all.medianMiss != null ? 'median miss, realized vs called' : (edge.n === 1 ? 'call graded' : 'calls graded')}
-            body={<>{edge.n} {edge.n === 1 ? 'call' : 'calls'} graded against the hammer · {hits} of {edge.n} within ±{EDGE_HIT_PCT}%{edge.streak.current >= 2 && <> · <b>{edge.streak.current} hits in a row</b></>}</>}
+            body={<span>{edge.n} {edge.n === 1 ? 'call' : 'calls'} graded against the hammer · {hits} of {edge.n} within ±{EDGE_HIT_PCT}%{edge.streak.current >= 2 && <> · <b>{edge.streak.current} hits in a row</b></>}</span>}
             href="#edge" />
         ) : record && record.med != null ? (
           <Cell k="Settled watches"
             v={fmtSignedPct(Math.round(record.med))}
             tone={lamp(Math.round(record.med))}
             note="vs estimate, median"
-            body={<>{record.n} {record.n === 1 ? 'watch' : 'watches'} judged, all-in{streak && <> · <b>{streak.n} {streak.dir === 'beat' ? 'beat' : 'missed'} in a row</b></>} · no call of yours graded yet</>}
+            body={<span>{record.n} {record.n === 1 ? 'watch' : 'watches'} judged, all-in{streak && <> · <b>{streak.n} {streak.dir === 'beat' ? 'beat' : 'missed'} in a row</b></>} · no call of yours graded yet</span>}
             href="#record" />
         ) : (
           <Cell k="Your edge" v="—"

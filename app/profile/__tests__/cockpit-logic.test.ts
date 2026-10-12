@@ -35,7 +35,7 @@ test('hammerStrip: the week\'s three kinds — watches bold, picks and names lig
   ], '2026-10-09');
   assert.deepEqual([s[0].n, s[0].watches, s[0].picks, s[0].names, s[0].est], [3, 1, 1, 1, 150]);
   assert.deepEqual([s[1].n, s[1].watches, s[1].est], [1, 1, 10]);
-  assert.equal(stripCaption(s), '2 watches · 1 pick · 1 of your names close in 14 days · next today');
+  assert.equal(stripCaption(s), '2 watches · 1 pick · 1 sale of your names close in 14 days · next today');
   const picksOnly = hammerStrip([{ day: '2026-10-11', est: 0, kind: 'pick' }, { day: '2026-10-11', est: 0, kind: 'pick' }], '2026-10-09');
   assert.equal(stripCaption(picksOnly), '2 picks close in 14 days · next Sun, Oct 11');
 });

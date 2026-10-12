@@ -283,7 +283,7 @@ export function PillRail({ items, help, tail = [] }: { items: RailItem[];
     // PHONE: one row — where you are, and the Sections sheet
     return (
       <nav className="ck-rail-wrap" data-phone="" aria-label="Sections on this page">
-        <div className="ck-rail-now">
+        <div className="ck-rail-now rail">
           <span className="ck-rail-here" aria-live="polite">
             {cur ? <>{cur.label}{cur.count != null && !cur.quiet && <b style={{ color: toneInk(cur.tone) }}>{cur.count}</b>}</> : 'Your desk'}
           </span>

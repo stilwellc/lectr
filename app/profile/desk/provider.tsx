@@ -47,7 +47,7 @@ import { ARTIST_LABEL, ARTIST_MARKET } from '../../constants';
 import { drillLabelOf } from '../../lib/lot-labels';
 import { useStalled, useAfterPaint } from '../stall';
 import { readSettledRows, writeSettledRows, type SettledRows } from '../settled-cache';
-import { closeDays, isPastPending, saleTime, watchTagOf, TAG_SOON_DAYS, type LiveSignal } from './derive';
+import { closeDays, isPastPending, saleTime, sigText, watchTagOf, TAG_SOON_DAYS, type LiveSignal } from './derive';
 import { pricedTotal } from './priced';
 import { fmtFace } from '../../lib/lot-face';
 import type { DeskData, DeskActions } from './types';
@@ -585,7 +585,7 @@ export function useDeskState(): DeskState {
       const printedBid = estText.includes('bid');
       rows.push({
         key: `bm-${claim(l).id}`, tag: 'Below market', lot: l, tone: 'up',
-        fact: <><b style={{ color: 'var(--color-up)', fontVariantNumeric: 'tabular-nums' }}>+{Math.abs(Math.round(sig.pct))}%</b> vs comps{estText ? <> · {estText}</> : null}{!printedBid && (l.currentBid || 0) > 0 ? <> · {fmtFace(l.currentBid!)} bid</> : null}</>,
+        fact: <><b style={{ color: 'var(--color-up)', fontVariantNumeric: 'tabular-nums' }}>{sigText(sig)}</b> vs comps{estText ? <> · {estText}</> : null}{!printedBid && (l.currentBid || 0) > 0 ? <> · {fmtFace(l.currentBid!)} bid</> : null}</>,
       });
     }
     return rows.slice(0, 8);

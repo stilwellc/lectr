@@ -33,7 +33,7 @@ import { closeDays, hammerWord, sigInk, sigText, type LiveSignal } from '../deri
 import { useDeskInternals } from '../provider';
 import type { SectionProps, SectionMeta, DeskData } from '../types';
 import type { DeskInternals } from '../provider';
-import { Term, SavedDelta } from './shared';
+import { Term, SavedDelta, callText } from './shared';
 import { ClosingNow } from '../../week';
 import { closingNowOf, offsetWord, dayOffsetOf, dayWords, localClock } from '../../week/week';
 import { useDesk } from '../provider';
@@ -107,7 +107,7 @@ function RowDossier({ lot, meta, sig, onRemove, id }: {
               {formatDate(meta.savedAt)}
               {meta.estMid != null && <span className="sub"> · est. {fmtFace(meta.estMid)} then</span>}
               {call && call.dir !== 'unknown' && (
-                <span className="sub"> · called {call.dir === 'below' ? '+' : '−'}{Math.round(call.pct)}%</span>
+                <span className="sub"> · called {callText(call)}</span>
               )}
             </span>
           </div>
@@ -320,7 +320,7 @@ export default function WatchingRoom(_p: SectionProps) {
                 </span>
                 <span className="num">{fromText(lot) ?? formatEstimate(lot) ?? '—'}</span>
                 <span className="num" style={sig ? { color: sigInk(sig.label), fontWeight: 700 } : { color: 'var(--color-text-faint)' }}
-                  aria-label={sig ? `${sig.label}, ${Math.abs(Math.round(sig.pct))} percent` : 'no signal'}>
+                  aria-label={sig ? `${sig.label}, ${sigText(sig)}` : 'no signal'}>
                   {sig ? sigText(sig) : '—'}
                 </span>
                 <span className="num" style={{ color: flipped ? 'var(--color-text-muted)' : dInk }}>
@@ -368,7 +368,7 @@ export default function WatchingRoom(_p: SectionProps) {
                   <DecisionLine lot={lot} estimate={false} when={false} abstain="quiet" style={{ marginTop: 2 }} />
                 </span>
                 <span className="ck-mrow-right">
-                  {sig && <b style={{ color: sigInk(sig.label) }} aria-label={`${sig.label}, ${Math.abs(Math.round(sig.pct))} percent`}>{sigText(sig)}</b>}
+                  {sig && <b style={{ color: sigInk(sig.label) }} aria-label={`${sig.label}, ${sigText(sig)}`}>{sigText(sig)}</b>}
                   <span className="ck-mham" style={days <= 1 ? { color: 'var(--color-fg)', fontWeight: 600 } : undefined}>
                     {days === 0 && lot.saleDateTime
                       ? <CloseClock iso={lot.saleDateTime} windowHours={24} />

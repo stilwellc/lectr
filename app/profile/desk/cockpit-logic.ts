@@ -115,7 +115,7 @@ export function stripCaption(days: readonly StripDay[]): string {
   const busy = busiest.n >= 2 && busiest !== next ? ` · busiest ${busiest.today ? 'today' : dayLabel(busiest.day)} (${busiest.n})` : '';
   const what = watches === total
     ? `${total} ${total === 1 ? 'lot closes' : 'lots close'}`
-    : [watches ? `${watches} ${watches === 1 ? 'watch' : 'watches'}` : null, picks ? `${picks} ${picks === 1 ? 'pick' : 'picks'}` : null, names ? `${names} of your names` : null]
+    : [watches ? `${watches} ${watches === 1 ? 'watch' : 'watches'}` : null, picks ? `${picks} ${picks === 1 ? 'pick' : 'picks'}` : null, names ? `${names} ${names === 1 ? 'sale' : 'sales'} of your names` : null]
         .filter(Boolean).join(' · ') + (total === 1 ? ' closes' : ' close');
   return `${what} in 14 days · next ${when}${busy}`;
 }
