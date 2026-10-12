@@ -4,8 +4,11 @@
  *
  * For every name the reader follows, owns or has saved — grouped by market:
  *   the calendar   the sales its live lots sit in (house · sale · when it
- *                  closes · lot count · the summed estimate band · live bids
- *                  · below-market flags), soonest first
+ *                  closes · lot count · the estimate band summed over the
+ *                  PRICED lots, one-sided estimates apart as "from $X" ·
+ *                  live bids · below-market flags), soonest first. The
+ *                  estimate fields are USD and are never converted here
+ *                  (R4#1 — budget/priced.ts is the one read).
  *   the pulse      the nightly's 12-month median WITH its n and scope, sold
  *                  in the trailing year, the complete-quarter trend, the
  *                  year-over-year only where the build printed one
@@ -17,10 +20,15 @@
  * "when do my names next come up, and which have gone quiet" — it links up
  * to #market for the news rather than repeating it.
  *
- * Reads: the page's DeskData only, plus — once the section nears the
- * viewport — the entities file of each name's market and one detail bucket
- * per name (the shared useEntities caches), at most MAX_READ names, each
- * with a deadline (../stall). One clock: desk.now.
+ * Reads: the page's DeskData only, plus — from two screens out (R3: the
+ * sold side used to start reading as the section arrived) — the entities
+ * file of each name's market and one detail bucket per name (the shared
+ * useEntities caches), at most MAX_READ names, each with a deadline
+ * (../stall). One clock: desk.now.
+ *
+ * Phone (R2): one name open per market, the rest folded behind "Show N
+ * more" with their live counts visible; the head reads "Names" with the
+ * full title in its sub-line; every tap clears a 40px hit area.
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -50,9 +58,11 @@ function namesOf(desk: DeskData): DeskName[] {
   return deskNamesOf(desk.follows, desk.collection, desk.saved);
 }
 
-export function meta(desk: DeskData): SectionMeta {
+/** the rail pill — NONE on a desk without names (R3#4: a quiet "Names"
+ *  pill was a dead end; the section returns null too, like Market) */
+export function meta(desk: DeskData): SectionMeta | null {
   const n = namesOf(desk).length;
-  return { id: 'names', label: 'Names', count: n || null, quiet: n === 0 };
+  return n > 0 ? { id: 'names', label: 'Names', count: n, quiet: false } : null;
 }
 
 /* ── the sold side (summary + detail per name, with a deadline) ── */
@@ -103,13 +113,16 @@ function useSoldSide(ids: readonly string[], enabled: boolean, ver?: string): Ma
   return got?.key === key ? got.m : undefined;
 }
 
-/** true once the element is within a screen or so of the viewport */
+/** a screen or two before the section — the sold side is on file by the time the reader arrives */
+const NEAR_MARGIN = '1800px 0px';
+
+/** true once the element is within NEAR_MARGIN of the viewport */
 function useNear(): [boolean, (el: HTMLElement | null) => void] {
   const [el, setEl] = useState<HTMLElement | null>(null);
   const [near, setNear] = useState(() => typeof window !== 'undefined' && typeof IntersectionObserver === 'undefined');
   useEffect(() => {
     if (near || !el) return;
-    const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) setNear(true); }, { rootMargin: '900px 0px' });
+    const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) setNear(true); }, { rootMargin: NEAR_MARGIN });
     io.observe(el);
     return () => io.disconnect();
   }, [el, near]);
@@ -142,18 +155,24 @@ function whenText(s: Sale, now: number): { lead: string; sub: string | null; soo
   return { lead: w.days === 1 ? 'Tomorrow' : dayOfMs(w.ms), sub: s.timed ? timeOfMs(w.ms) : w.days === 1 ? dayOfMs(w.ms) : null, soon: false };
 }
 
-/** a summed band: "$12K–$18K", "≈$12K–$18K" when any lot was converted
- *  from its native currency at the build's dated rate */
-function bandText(lo: number, hi: number, approx: boolean): string {
-  return `${approx ? '≈' : ''}${lo === hi ? fmtUsd(lo) : `${fmtUsd(lo)}–${fmtUsd(hi)}`}`;
+/** a summed band over the priced lots: "$12K–$18K" — the estimate fields
+ *  are USD already; nothing is converted or marked approximate here */
+function bandText(lo: number, hi: number): string {
+  return lo === hi ? fmtUsd(lo) : `${fmtUsd(lo)}–${fmtUsd(hi)}`;
+}
+
+/** "from $700" — the one-sided estimates' published sides, never in the band (R4#10) */
+function fromText(from: number, n: number, lots: number): string {
+  return `from ${fmtUsd(from)}${n < lots ? ` on ${n}` : ''} (one side published)`;
 }
 
 function estText(s: Sale): string {
   const { est, bids, lots } = s;
   const parts: string[] = [];
-  if (est.k > 0) parts.push(`est ${bandText(est.lo, est.hi, est.approx > 0)}${est.k < lots.length ? ` on ${est.k} of ${lots.length}` : ''}`);
+  if (est.k > 0) parts.push(`est ${bandText(est.lo, est.hi)}${est.k < lots.length ? ` on ${est.k} of ${lots.length}` : ''}`);
+  if (est.oneSided > 0) parts.push(fromText(est.from, est.oneSided, lots.length));
   if (bids.n > 0) parts.push(`${fmtUsd(bids.sum)} bid on ${bids.n === lots.length ? (lots.length === 1 ? 'it' : 'all') : bids.n}`);
-  if (est.k === 0 && bids.n === 0) parts.push('no estimate published');
+  if (est.k === 0 && est.oneSided === 0 && bids.n === 0) parts.push('no estimate published');
   return parts.join(' · ');
 }
 
@@ -214,8 +233,8 @@ function SaleRow({ s, now, href, onOpen }: { s: Sale; now: number; href: string;
       </span>
       <span className="nm-sale-act">
         {one
-          ? <button type="button" className="nm-link" onClick={() => onOpen(one)}>Open</button>
-          : <Link href={href} className="nm-link">See lots</Link>}
+          ? <button type="button" className="nm-link" onClick={() => onOpen(one)} aria-label={`Open ${one.title}`}>Open</button>
+          : <Link href={href} className="nm-link" aria-label={`See ${s.lots.length} lots at ${s.house}`}>See lots</Link>}
       </span>
     </li>
   );
@@ -297,6 +316,49 @@ function NameRow({ r, sold, capped, now, narrow, onOpen, onFollow }: {
   );
 }
 
+/* ── a market's names ── */
+
+/** names open per market on a phone (R2 b): the rest fold with their counts visible */
+const PHONE_OPEN = 1;
+
+function MarketGroup({ label, reads, now, narrow, sold, readSet, onOpen, onFollow }: {
+  label: string; reads: NameRead[]; now: number; narrow: boolean; sold: Map<string, Sold> | undefined; readSet: Set<string>;
+  onOpen: (l: AuctionLot) => void; onFollow: (n: DeskName) => void;
+}) {
+  const [all, setAll] = useState(false);
+  const open = narrow && !all ? reads.slice(0, PHONE_OPEN) : reads;
+  const folded = reads.slice(open.length);
+  return (
+    <div className="nm-group">
+      <div className="ck-reads-head">
+        <span className="kicker">{label}</span>
+        <hr className="ck-reads-rule" />
+        <span className="ck-mham">{reads.filter(r => r.live > 0).length} of {reads.length} live</span>
+      </div>
+      <div role="list" aria-label={`${label} names`}>
+        {open.map(r => (
+          <NameRow key={r.name.key} r={r} now={now} narrow={narrow}
+            sold={r.name.id ? sold?.get(r.name.id) : undefined}
+            capped={!!r.name.id && !readSet.has(r.name.id)}
+            onOpen={onOpen} onFollow={onFollow} />
+        ))}
+        {folded.length > 0 && (
+          <div className="nm-folded" role="listitem">
+            <ul className="nm-folded-list" aria-label={`${label}, ${folded.length} more names`}>
+              {folded.map(r => (
+                <li key={r.name.key}><span className="nm-folded-name">{r.name.label}</span> <span className="nm-n">{r.live > 0 ? `${n2(r.live)} live` : 'nothing live'}</span></li>
+              ))}
+            </ul>
+            <button type="button" className="nm-more" onClick={() => setAll(true)} aria-expanded={false}>
+              Show {folded.length} more {folded.length === 1 ? 'name' : 'names'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── the section ── */
 
 export default function NamesSection({ desk, act, narrow }: SectionProps) {
@@ -332,16 +394,25 @@ export default function NamesSection({ desk, act, narrow }: SectionProps) {
   const readSet = new Set(readIds);
   const loading = sold === undefined && readIds.length > 0;
   const unread = names.filter(n => n.id).length - readIds.length;
-  const band = cal.k > 0 ? bandText(cal.lo, cal.hi, cal.approx > 0) : null;
+  const band = cal.k > 0 ? bandText(cal.lo, cal.hi) : null;
+  const totals = (
+    <>
+      {n2(t.names)} {t.names === 1 ? 'name' : 'names'} · {t.live} with {cal.lots === 1 ? 'a lot' : `${n2(cal.lots)} lots`} live across {t.sales} {t.sales === 1 ? 'sale' : 'sales'}
+      {band ? ` · est ${band}${cal.k < cal.lots ? ` on ${n2(cal.k)} of ${n2(cal.lots)} lots` : ''}` : ''}
+      {cal.oneSided > 0 ? ` · ${fromText(cal.from, cal.oneSided, cal.lots)}` : ''}
+      {cal.flagged > 0 ? ` · ${cal.flagged} below market` : ''}
+      {t.blind > 0 ? ` · ${t.blind} ${t.blind === 1 ? 'blind spot' : 'blind spots'}` : ''}
+    </>
+  );
 
   return (
     <section id="names" ref={sectionRef} className="ray-saved-section rail ray-enter nm-section" aria-label="Names calendar and blind spots">
       <div className="ns-plate" style={{ paddingTop: 18 }}>
-        <RoomHead mark={<HorizonMark size={17} />} title="Names calendar & blind spots"
+        <RoomHead mark={<HorizonMark size={17} />} title={narrow ? 'Names' : 'Names calendar & blind spots'}
           help={{ name: 'Names calendar & blind spots', body: <>
             Every name you follow, own or watch, by market. <b>The calendar</b> is the sales its live lots sit in — house,
-            sale, when it closes (your clock; inside a day, in hours), lots, the house estimates summed (a band
-            marked ≈ holds a native-currency estimate converted at the build&rsquo;s dated rate; bid auctions publish
+            sale, when it closes (your clock; inside a day, in hours), lots, the house estimates summed over the lots with
+            both bounds published (a one-sided estimate prints <b>from $X</b> and is never summed; bid auctions publish
             none, so their live bids print instead), and how many the engine prices <b>below market</b>. <b>The pulse</b> is the nightly build&rsquo;s:
             the 12-month median prints only with its n (never under {MIN_MED_N} sales) and the scope it covers, sold in
             the trailing year, the complete-quarter trend (a gap is a quarter too thin to read), and year over year only
@@ -349,29 +420,11 @@ export default function NamesSection({ desk, act, narrow }: SectionProps) {
             is a name with nothing live: its last sale on file, the houses it usually sells at (shares of every tracked
             sale), and Follow if you don&rsquo;t yet. What moved this week for these names is in <a href="#market">Your market</a>.
           </> }}
-          sub={<span role="status">
-            {n2(t.names)} {t.names === 1 ? 'name' : 'names'} · {t.live} with {cal.lots === 1 ? 'a lot' : `${n2(cal.lots)} lots`} live across {t.sales} {t.sales === 1 ? 'sale' : 'sales'}
-            {band ? ` · est ${band}${cal.k < cal.lots ? ` on ${n2(cal.k)} of ${n2(cal.lots)} lots` : ''}` : ''}
-            {cal.flagged > 0 ? ` · ${cal.flagged} below market` : ''}
-            {t.blind > 0 ? ` · ${t.blind} ${t.blind === 1 ? 'blind spot' : 'blind spots'}` : ''}
-            {loading ? ' · reading sold history…' : ''}
-          </span>} />
+          sub={narrow ? <>Names calendar &amp; blind spots · {totals}</> : totals} />
+        {loading && <p className="ck-sig-note nm-status" role="status">Reading sold history for {n2(readIds.length)} {readIds.length === 1 ? 'name' : 'names'}…</p>}
         {groups.map(g => (
-          <div className="nm-group" key={g.market}>
-            <div className="ck-reads-head">
-              <span className="kicker">{g.label}</span>
-              <hr className="ck-reads-rule" />
-              <span className="ck-mham">{g.reads.filter(r => r.live > 0).length} of {g.reads.length} live</span>
-            </div>
-            <div role="list" aria-label={`${g.label} names`}>
-              {g.reads.map(r => (
-                <NameRow key={r.name.key} r={r} now={now} narrow={narrow}
-                  sold={r.name.id ? sold?.get(r.name.id) : undefined}
-                  capped={!!r.name.id && !readSet.has(r.name.id)}
-                  onOpen={act.openLot} onFollow={n => act.follow(n.follow)} />
-              ))}
-            </div>
-          </div>
+          <MarketGroup key={g.market} label={g.label} reads={g.reads} now={now} narrow={narrow} sold={sold} readSet={readSet}
+            onOpen={act.openLot} onFollow={n => act.follow(n.follow)} />
         ))}
         {unread > 0 && <p className="ck-sig-note">The first {MAX_READ} names carry sold history here; {unread} more show their calendar only.</p>}
         {!desk.fullLoaded && desk.fullError && <p className="ck-sig-note">The archive didn&rsquo;t load — the calendar reads the live book; owned and watched names may be missing until it does.</p>}

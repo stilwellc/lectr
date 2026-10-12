@@ -3,46 +3,59 @@
  * THE BUDGET DESK (#budget) — THE DESK v3 §5 (Oct 11 2026).
  *
  * The question it answers: "what can I actually bid this week, and what
- * will it cost me if I win?" Three reads under the reader's stated band:
+ * will it cost me if I win?" Two reads under the reader's stated band:
  *
  *   Bid plan        the live watches by close night, each at ONE hammer
- *                   figure (the engine's max bid, else the ranker's labelled
- *                   anchor — budget.ts planRowOf), summed per night against
- *                   the ceiling; an over-budget night says by how much and
- *                   which rows to drop first (a suggestion, nothing moves).
+ *                   figure with its all-in beside it (the engine's max bid,
+ *                   else the ranker's labelled anchor — budget.ts planRowOf).
+ *                   A night SUMS the rows priced by the engine or the room;
+ *                   an estimate-midpoint row is listed as "no max bid yet —
+ *                   the estimate midpoint would be $X" and joins the sum only
+ *                   under the "Show estimate midpoints in the plan" toggle
+ *                   (R1#7); a one-sided estimate prints "from $X" and never
+ *                   sums (R4#3, R4#10). Over the ceiling, the night says by
+ *                   how much and which rows to drop first (a suggestion,
+ *                   nothing moves). The premium sum closes the plan — "If
+ *                   you win" lives in the rows now (R1#17), not a second list.
  *   What your budget buys this week
  *                   the engine's Below Market flags in the reader's markets,
  *                   inside the band, closing within 7 days — dealScore order.
- *   If you win      every plan row's all-in with its house premium
- *                   (premiums.lotAllInFactor), and the sum.
+ *                   Before a market is stated: one row per market (R3#7).
  *
  * Honest by construction: no band stated → the desk asks for one (the
  * quick start's own floor/ceiling steps, one tap, act.setPrice) and prints
  * the plan with no ceiling line — every figure still labelled by what it is.
  * One clock: desk.now. Money: fmtFace. Every figure is budget.ts's.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { SectionProps, SectionMeta, DeskData } from '../desk/types';
 import type { AuctionLot } from '../../types';
 import { VALUE_FLOORS, VALUE_CEILINGS, fmtCeiling } from '../../lib/feed-filters';
 import { priceText } from '../../lib/interests';
 import { fmtFace, decisionOf } from '../../lib/lot-face';
+import { shortTitle } from '../../lib/recs';
 import { craftTitle } from '../../utils';
 import { displayMakerOf } from '../../lib/maker-subjects';
 import { DepthMark } from '../../components/marks';
-import DecisionLine from '../../components/DecisionLine';
 import { RoomHead } from '../head';
 import {
-  bidPlan, budgetBuys, readerMarkets, winTotals, basisMix, nightLabel, isoDayOf,
-  BASIS_TAG, BASIS_TEXT, BUYS_WINDOW_DAYS, type BidPlan, type PlanRow, type PlanNight, type BuyRow,
+  bidPlan, budgetBuys, marketTease, readerMarkets, winTotals, basisMix, nightLabel, isoDayOf, rowTag,
+  BASIS_TEXT, BUYS_WINDOW_DAYS, TEASE_MIN_N, type BidPlan, type PlanRow, type PlanNight, type BuyRow,
 } from './budget';
+import { oneSidedText } from './priced';
 import './budget.css';
 
 export const SECTION_ID = 'budget';
 
 /** the quick start's own floor words (QuickStart.tsx fmtFloor) */
 const fmtFloor = (n: number) => (n >= 1000 ? `$${n / 1000}K+` : `$${n}+`);
+
+/** on-device: the estimate-midpoint toggle */
+const EST_KEY = 'lectr-budget-estmid';
+/** the phone's folds (Watching's PHONE_ROWS grammar): rows open per night, nights open */
+const PHONE_ROWS = 3;
+const PHONE_NIGHTS = 2;
 
 /** what the rail shows for this section */
 export function meta(desk: DeskData): SectionMeta {
@@ -53,6 +66,18 @@ export function meta(desk: DeskData): SectionMeta {
 }
 
 const whoOf = (l: AuctionLot): string | null => displayMakerOf(l)?.name ?? null;
+const lotHref = (l: AuctionLot) => `/lot?id=${encodeURIComponent(l.id)}`;
+/** "tonight" / "tomorrow" mid-sentence; a dated night keeps its capitals ("Wed Oct 14") */
+const soonestWord = (label: string) => (label === 'Tonight' || label === 'Tomorrow' ? label.toLowerCase() : label);
+const marketWord = (m: string) => (m === 'tcg' ? 'TCG' : m === 'culture' ? 'Pop Culture' : m[0].toUpperCase() + m.slice(1));
+
+/** a flag remembered on this device (SSR-safe: the stored value lands after mount) */
+function useStoredFlag(key: string, initial: boolean): [boolean, (v: boolean) => void] {
+  const [v, setV] = useState(initial);
+  useEffect(() => { try { const s = localStorage.getItem(key); if (s != null) setV(s === '1'); } catch { /* private mode */ } }, [key]);
+  const set = (next: boolean) => { setV(next); try { localStorage.setItem(key, next ? '1' : '0'); } catch { /* private mode */ } };
+  return [v, set];
+}
 
 function BandEditor({ desk, act, onDone }: SectionProps & { onDone?: () => void }) {
   const { minUsd, maxUsd } = desk.price ?? { minUsd: null, maxUsd: null };
@@ -64,6 +89,7 @@ function BandEditor({ desk, act, onDone }: SectionProps & { onDone?: () => void 
   };
   return (
     <div className="ck-budget-band" role="group" aria-label="Your budget band">
+      <p className="ck-budget-band-note">Same band as your quick start — one setting, hammer basis.</p>
       <div className="ck-budget-band-row">
         <span className="kicker">At least</span>
         <button type="button" className="ray-toolbar-pill" data-active={minUsd == null} aria-pressed={minUsd == null} onClick={() => set({ minUsd: null })}>Any</button>
@@ -86,83 +112,147 @@ function BandEditor({ desk, act, onDone }: SectionProps & { onDone?: () => void 
   );
 }
 
-function PlanRowView({ r, now }: { r: PlanRow; now: number }) {
+/** the row's figure in words — what the plan prints and what its title spells out */
+function figureOf(r: PlanRow, estInPlan: boolean): { fig: string; sub: string; fact: string | null; summed: boolean } {
+  if (r.oneSided && r.side) {
+    return { fig: oneSidedText(r.side, r.hammer, fmtFace), sub: `one side published · ${fmtFace(r.allIn)} all-in · not summed`, fact: null, summed: false };
+  }
+  if (r.basis === 'est' && !estInPlan) {
+    return { fig: fmtFace(r.hammer), sub: `est midpoint · ${fmtFace(r.allIn)} all-in · not summed`, fact: `no max bid yet — the estimate midpoint would be ${fmtFace(r.hammer)}`, summed: false };
+  }
+  return { fig: `${fmtFace(r.hammer)} → ${fmtFace(r.allIn)}`, sub: `all-in · ${r.premiumPct}% premium`, fact: r.basis === 'est' ? 'estimate midpoint, counted at your ask' : null, summed: true };
+}
+
+function PlanRowView({ r, now, estInPlan }: { r: PlanRow; now: number; estInPlan: boolean }) {
   const who = whoOf(r.lot);
   const when = decisionOf(r.lot, now, r.face).when;
-  const tag = BASIS_TAG[r.basis];
+  const tag = rowTag(r);
+  const f = figureOf(r, estInPlan);
   return (
-    <Link href={`/lot?id=${encodeURIComponent(r.lot.id)}`} className="ck-read" role="listitem" data-nav-row
-      title={`${tag}: ${BASIS_TEXT[r.basis]}${r.oneSided ? ' (one published side)' : ''} · ${fmtFace(r.allIn)} all-in at ${r.premiumPct}% premium`}>
+    <Link href={lotHref(r.lot)} className="ck-read" role="listitem" data-nav-row data-summed={f.summed || undefined}
+      title={`${tag}: ${BASIS_TEXT[r.basis]}${r.oneSided ? ' (one published side — never summed)' : ''} · ${fmtFace(r.allIn)} all-in at ${r.premiumPct}% premium`}>
       <span className="ck-tag" data-tone={r.belowPct != null ? 'up' : r.basis === 'max' ? 'hot' : undefined}>{tag}</span>
       <span className="ck-read-title">{craftTitle(r.lot.title, r.lot.auctionHouse)}</span>
       <span className="ck-read-fact">
         {who ? <>{who} · </> : null}{r.lot.auctionHouse}
         {r.belowPct != null && <> · {r.face.call!.text} below market</>}
+        {f.fact && <> · {f.fact}</>}
         {when && <> · {when.text}</>}
       </span>
-      <span className="ck-budget-fig">
-        {fmtFace(r.hammer)}
-        <span className="sub">{fmtFace(r.allIn)} all-in · {r.premiumPct}%</span>
+      <span className="ck-budget-fig" data-muted={f.summed ? undefined : ''}>
+        {f.fig}
+        <span className="sub">{f.sub}</span>
       </span>
     </Link>
   );
 }
 
-function NightView({ n, plan, now }: { n: PlanNight; plan: BidPlan; now: number }) {
-  const label = n.day ? nightLabel(n.day, now) : 'No close date';
+function OverLine({ n, plan, narrow }: { n: PlanNight; plan: BidPlan; narrow: boolean }) {
+  const [open, setOpen] = useState(!narrow);
+  if (n.over == null || plan.ceiling == null) return null;
   return (
-    <div className="ck-budget-night">
-      <div className="ck-reads-head">
-        <span className="kicker">{label}</span>
-        <i className="ck-reads-rule" />
-        <span className="ck-budget-night-figs" data-over={n.over != null ? '' : undefined}>
-          {n.rows.length} {n.rows.length === 1 ? 'lot' : 'lots'} · <b>{fmtFace(n.total)}</b> at hammer · {fmtFace(n.totalAllIn)} all-in
-        </span>
-      </div>
-      <div role="list" aria-label={`${label} bid plan`}>
-        {n.rows.map(r => <PlanRowView key={r.lot.id} r={r} now={now} />)}
-      </div>
-      {n.over != null && plan.ceiling != null && (
-        <p className="ck-budget-over">
-          <b>{fmtFace(n.over)} over</b> your {fmtFace(plan.ceiling)} ceiling at hammer.
-          {n.drops.length > 0 && (
-            <> To fit, drop first{' '}
-              {n.drops.map((d, i) => (
-                <React.Fragment key={d.lot.id}>
-                  {i > 0 && ', then '}
-                  <em>{craftTitle(d.lot.title, d.lot.auctionHouse)}</em> ({fmtFace(d.hammer)} {BASIS_TAG[d.basis].toLowerCase()}{d.edge > 0 ? ', flagged' : d.edge < 0 ? ', above market' : ', no edge'})
-                </React.Fragment>
-              ))}
-              {' '}→ {n.kept > 0
-                ? <>{fmtFace(n.afterDrops)}, {n.kept} {n.kept === 1 ? 'lot stays' : 'lots stay'}</>
-                : <>$0 — nothing on this night fits under {fmtFace(plan.ceiling)} on its own</>}. A suggestion — nothing leaves your desk.
-            </>
-          )}
+    <div className="ck-budget-over">
+      <p className="ck-budget-over-line">
+        <b>{fmtFace(n.over)} over</b> your {fmtFace(plan.ceiling)} ceiling at hammer · {n.nCounted} {n.nCounted === 1 ? 'lot' : 'lots'} summed
+        {n.drops.length > 0 && (
+          <> · <button type="button" className="ck-budget-link" aria-expanded={open} onClick={() => setOpen(v => !v)}>{open ? 'Hide' : 'How to fit'}</button></>
+        )}
+      </p>
+      {open && n.drops.length > 0 && (
+        <p className="ck-budget-over-how">
+          Drop first{' '}
+          {n.drops.map((d, i) => (
+            <React.Fragment key={d.lot.id}>
+              {i > 0 && ', then '}
+              <em>{shortTitle(d.lot.title, d.lot.auctionHouse)}</em> ({fmtFace(d.hammer)} {rowTag(d).toLowerCase()}{d.edge > 0 ? ', flagged' : d.edge < 0 ? ', above market' : ', no edge'})
+            </React.Fragment>
+          ))}
+          {' '}→ {n.kept > 0
+            ? <>{fmtFace(n.afterDrops)}, {n.kept} {n.kept === 1 ? 'lot stays' : 'lots stay'}</>
+            : <>$0 — nothing summed on this night fits under {fmtFace(plan.ceiling)} on its own</>}. A suggestion — nothing leaves your desk.
         </p>
       )}
     </div>
   );
 }
 
+function NightView({ n, plan, now, narrow, open }: { n: PlanNight; plan: BidPlan; now: number; narrow: boolean; open: boolean }) {
+  const label = n.day ? nightLabel(n.day, now) : 'No close date';
+  const [all, setAll] = useState(false);
+  const rows = narrow && !all ? n.rows.slice(0, PHONE_ROWS) : n.rows;
+  const folded = n.rows.length - rows.length;
+  const apart: string[] = [];
+  if (n.nEst > 0 && !plan.estInPlan) apart.push(`+${fmtFace(n.estTotal)} at est midpoint, not counted`);
+  if (n.nFrom > 0) apart.push(`from ${fmtFace(n.fromSum)} one-sided, not counted`);
+  return (
+    <div className="ck-budget-night" data-folded={open ? undefined : ''}>
+      <div className="ck-reads-head">
+        <span className="kicker">{label}</span>
+        <i className="ck-reads-rule" />
+        <span className="ck-budget-night-figs" data-over={n.over != null ? '' : undefined}>
+          {n.rows.length} {n.rows.length === 1 ? 'lot' : 'lots'}
+          {n.nCounted > 0 ? <> · <b>{fmtFace(n.total)}</b> at hammer → {fmtFace(n.totalAllIn)} all-in{n.nCounted < n.rows.length ? ` on ${n.nCounted}` : ''}</> : <> · nothing summed</>}
+          {apart.length > 0 && <> · {apart.join(' · ')}</>}
+        </span>
+      </div>
+      {open ? (
+        <>
+          <div role="list" aria-label={`${label} bid plan`}>
+            {rows.map(r => <PlanRowView key={r.lot.id} r={r} now={now} estInPlan={plan.estInPlan} />)}
+          </div>
+          {folded > 0 && (
+            <button type="button" className="ck-budget-more" onClick={() => setAll(true)}>Show all {n.rows.length} lots</button>
+          )}
+          <OverLine n={n} plan={plan} narrow={narrow} />
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/** the buy row's decision line WITHOUT the engine's "worth up to" (R1#3,
+ *  R3#6): beside a "2.1× below" tag the max bid read as a contradiction;
+ *  the lane tag's basis (comps median · n) is printed on the fact line
+ *  instead. lot-face's DECISION_COMPS_RULE (X5, b136d0c) does the same
+ *  swap in decisionOf, but only past 2× with the max bid under half the
+ *  median — every row HERE carries the lane tag, so the budget row keeps
+ *  the close + the clock only and never prints a worth beside the flag
+ *  (nor the comps median twice). Both parts are decisionOf's own. */
+function BuyDecision({ lot, now }: { lot: AuctionLot; now: number }) {
+  const d = useMemo(() => decisionOf(lot, now), [lot, now]);
+  const parts: { text: string; title?: string }[] = [];
+  if (d.close) parts.push({ text: d.close.text, title: d.close.title });
+  if (d.when) parts.push({ text: d.when.text });
+  if (!parts.length) return null;
+  return (
+    <span className="ray-feedrow-price ck-decision">
+      {parts.map((p, i) => (
+        <React.Fragment key={i}>{i > 0 && <span aria-hidden style={{ margin: '0 6px' }}>·</span>}<span title={p.title}>{p.text}</span></React.Fragment>
+      ))}
+    </span>
+  );
+}
+
 function BuyRowView({ r, now, saved, onWatch }: { r: BuyRow; now: number; saved: boolean; onWatch: () => void }) {
   const who = whoOf(r.lot);
   const comps = r.face.comps;
+  const short = shortTitle(r.lot.title, r.lot.auctionHouse);
   return (
     <div className="ck-budget-buy">
-      <Link href={`/lot?id=${encodeURIComponent(r.lot.id)}`} className="ck-read" role="listitem" data-nav-row data-decision
-        title={r.call.derivation ? `${r.call.text}: ${r.call.derivation}${r.call.net ? ` · ${r.call.net}` : ''}` : undefined}>
+      <Link href={lotHref(r.lot)} className="ck-read" role="listitem" data-nav-row data-decision
+        title={r.call.derivation ? `${r.call.text} below market: ${r.call.derivation}${r.call.net ? ` · ${r.call.net}` : ''}` : `${r.call.text} below market — the engine's flag`}>
         <span className="ck-tag" data-tone="up">{r.call.text} below</span>
         <span className="ck-read-title">{craftTitle(r.lot.title, r.lot.auctionHouse)}</span>
         <span className="ck-read-fact" style={{ whiteSpace: 'normal' }}>
           {who ? <>{who} · </> : null}{r.lot.auctionHouse}
-          {comps && <> · comps median {comps.text} · {comps.sub.replace(/^weighted · /, '')}</>}
+          {comps && <> · comps median {comps.text} · {comps.n.toLocaleString('en-US')} {comps.n === 1 ? 'sale' : 'sales'}</>}
         </span>
         <span style={{ flex: '1 1 100%', minWidth: 0 }}>
-          <DecisionLine lot={r.lot} nowMs={now} abstain="quiet" />
+          <BuyDecision lot={r.lot} now={now} />
         </span>
       </Link>
-      <button type="button" className="ray-toolbar-pill" data-active={saved} aria-pressed={saved} onClick={onWatch}
-        aria-label={saved ? `Stop watching ${craftTitle(r.lot.title, r.lot.auctionHouse)}` : `Watch ${craftTitle(r.lot.title, r.lot.auctionHouse)}`}>
+      <button type="button" className="ray-toolbar-pill ck-budget-watch" data-active={saved} aria-pressed={saved} onClick={onWatch}
+        aria-label={saved ? `Stop watching ${short}` : `Watch ${short}`}>
         {saved ? 'Watching' : 'Watch'}
       </button>
     </div>
@@ -170,19 +260,24 @@ function BuyRowView({ r, now, saved, onWatch }: { r: BuyRow; now: number; saved:
 }
 
 export default function BudgetDesk(props: SectionProps) {
-  const { desk, act } = props;
+  const { desk, act, narrow } = props;
   const now = desk.now;
   const stated = priceText(desk.price);
   const [editing, setEditing] = useState(false);
-  const plan = useMemo(() => bidPlan(desk.saved, now, desk.price), [desk.saved, now, desk.price]);
+  const [estInPlan, setEstInPlan] = useStoredFlag(EST_KEY, false);
+  const [allNights, setAllNights] = useState(false);
+  const plan = useMemo(() => bidPlan(desk.saved, now, desk.price, { estInPlan }), [desk.saved, now, desk.price, estInPlan]);
   const markets = useMemo(() => readerMarkets(desk.taste, desk.follows, desk.book), [desk.taste, desk.follows, desk.book]);
   const buys = useMemo(() => budgetBuys(desk.book, now, desk.price, markets, desk.savedIds), [desk.book, now, desk.price, markets, desk.savedIds]);
+  const tease = useMemo(() => (markets.size === 0 ? marketTease(desk.book, now, desk.price, desk.savedIds) : []), [markets, desk.book, now, desk.price, desk.savedIds]);
   const win = useMemo(() => winTotals(plan), [plan]);
   const live = plan.rows.length + plan.unpriced.length;
-  // the markets in words; past four the list is the desk's whole spread
+  // the markets in words: the list up to four, past that the count
   const marketWords = !buys.markets.length ? 'every market'
     : buys.markets.length > 4 ? `${buys.markets.length} markets you watch`
-    : buys.markets.map(m => m === 'tcg' ? 'TCG' : m[0].toUpperCase() + m.slice(1)).join(', ');
+    : buys.markets.map(marketWord).join(', ');
+  const openNights = narrow && !allNights ? PHONE_NIGHTS : plan.nights.length;
+  const teaseTotal = tease.reduce((s, t) => s + t.n, 0);
 
   return (
     <section id={SECTION_ID} className="ray-saved-section rail ray-enter" aria-label="Budget desk">
@@ -190,17 +285,19 @@ export default function BudgetDesk(props: SectionProps) {
         <RoomHead mark={<DepthMark size={17} />} title="Budget desk" style={{ marginBottom: 14 }}
           help={{ name: 'Budget desk', body: <>
             <b>Your band</b> is the price range you stated in the quick start — hammer basis, before the buyer&rsquo;s premium; lectr never
-            infers one. <b>Bid plan</b> lists every live lot you watch by the night it closes, each at one hammer figure: the engine&rsquo;s
-            <b> max bid</b> (its walk-away) where it has one; otherwise the house <b>estimate midpoint</b>, a bid room&rsquo;s <b>projected
-            close</b>, the <b>lectr value</b> or the bare <b>live bid</b> — the tag says which. A night&rsquo;s sum is read against your
-            ceiling; over it, the desk suggests what to drop first (least edge, then the lots the engine did not price, biggest first) and
-            moves nothing. <b>What your budget buys</b> is the engine&rsquo;s Below Market flags in your markets, inside your band, closing within
-            {' '}{BUYS_WINDOW_DAYS} days, in the one flagged order. <b>If you win</b> grosses each figure to all-in with that house&rsquo;s own
-            premium schedule on the sale date. A lot with no estimate, bid or engine read is listed unpriced, never summed.
+            infers one. <b>Bid plan</b> lists every live lot you watch by the night it closes, each at one hammer figure with its all-in
+            beside it (that house&rsquo;s own premium schedule on the sale date): the engine&rsquo;s <b>max bid</b> (its walk-away) where it has
+            one; otherwise a bid room&rsquo;s <b>projected close</b>, the <b>lectr value</b> or the bare <b>live bid</b> — the tag says which.
+            A night&rsquo;s sum carries those rows only. A lot at the house <b>estimate midpoint</b> is listed as &ldquo;no max bid yet&rdquo; and
+            joins the sum only when you switch <b>Show estimate midpoints in the plan</b> on; a one-sided estimate prints <b>from $X</b> and
+            never sums. Over your ceiling, the desk suggests what to drop first (least edge, then the lots the engine did not price, biggest
+            first) and moves nothing. <b>What your budget buys</b> is the engine&rsquo;s Below Market flags in your markets, inside your band,
+            closing within {BUYS_WINDOW_DAYS} days, in the one flagged order — by the engine, not a prediction; before you state a market it
+            counts them per market. A lot with no estimate, bid or engine read is listed unpriced, never summed.
           </> }}
           sub={<>
             {stated ? <>Band {stated} at hammer</> : <>No budget stated</>}
-            {live > 0 && <> · {live} live {live === 1 ? 'lot' : 'lots'} watched · <span className="ck-wide">plan </span>{fmtFace(plan.total)} at hammer across {plan.nights.length} {plan.nights.length === 1 ? 'night' : 'nights'}</>}
+            {live > 0 && <> · {live} live {live === 1 ? 'lot' : 'lots'} watched · <span className="ck-wide">plan </span>{fmtFace(plan.total)} at hammer on {plan.nCounted} across {plan.nights.length} {plan.nights.length === 1 ? 'night' : 'nights'}</>}
             {plan.overNights > 0 && <> · {plan.overNights} {plan.overNights === 1 ? 'night' : 'nights'} over</>}
           </>}
           actions={stated && !editing ? <button type="button" className="ray-toolbar-pill ck-tune" onClick={() => setEditing(true)}>Edit band</button> : undefined} />
@@ -217,16 +314,16 @@ export default function BudgetDesk(props: SectionProps) {
             <span className="ck-gauge-v">{stated ?? '—'}</span>
             <span className="ck-gauge-s">{stated ? 'your band · hammer basis' : 'no band stated'}</span>
           </div>
-          <div className="ck-gauge-cell" role="listitem" title={plan.rows.length ? basisMix(plan.rows) : 'nothing live on the desk'}>
-            <span className="ck-gauge-v">{plan.rows.length ? fmtFace(plan.total) : '—'}</span>
-            <span className="ck-gauge-s">{plan.rows.length ? <>bid plan at hammer · {plan.nMax} at max bid, {plan.nOther} labelled</> : 'bid plan · nothing live'}</span>
+          <div className="ck-gauge-cell" role="listitem" title={plan.nCounted ? basisMix(plan.rows.filter(r => r.counted || (plan.estInPlan && r.basis === 'est' && !r.oneSided))) : 'nothing summed on the desk'}>
+            <span className="ck-gauge-v">{plan.nCounted ? fmtFace(plan.total) : '—'}</span>
+            <span className="ck-gauge-s">{plan.nCounted ? <>bid plan at hammer · {plan.nCounted} of {plan.rows.length} summed</> : plan.rows.length ? <>bid plan · {plan.rows.length} listed, none summed</> : 'bid plan · nothing live'}</span>
           </div>
-          <div className="ck-gauge-cell" role="listitem" title="Every plan figure × its house premium, summed">
-            <span className="ck-gauge-v">{plan.rows.length ? fmtFace(win.allIn) : '—'}</span>
-            <span className="ck-gauge-s">{plan.rows.length ? <>if you win, all-in · {fmtFace(win.premiums)} premiums{win.premiumPct != null ? ` (${win.premiumPct}%)` : ''}</> : 'if you win · all-in'}</span>
+          <div className="ck-gauge-cell" role="listitem" title="Every summed figure × its house premium">
+            <span className="ck-gauge-v">{plan.nCounted ? fmtFace(win.allIn) : '—'}</span>
+            <span className="ck-gauge-s">{plan.nCounted ? <>if you win, all-in · {fmtFace(win.premiums)} premiums{win.premiumPct != null ? ` (${win.premiumPct}%)` : ''}</> : 'if you win · all-in'}</span>
           </div>
-          <div className="ck-gauge-cell" role="listitem" title={`Below Market flags in ${marketWords}${buys.banded ? ' inside your band' : ''}, closing within ${BUYS_WINDOW_DAYS} days`}>
-            <span className="ck-gauge-v">{buys.candidates}</span>
+          <div className="ck-gauge-cell" role="listitem" title={`Below Market flags in ${marketWords}${buys.banded ? ' inside your band' : ''}, closing within ${BUYS_WINDOW_DAYS} days${tease.length ? ` · comps n ≥ ${TEASE_MIN_N}` : ''}`}>
+            <span className="ck-gauge-v">{tease.length ? teaseTotal : buys.candidates}</span>
             <span className="ck-gauge-s">below market this week · {marketWords}{buys.banded ? ' · in band' : ''}</span>
           </div>
         </div>
@@ -236,15 +333,63 @@ export default function BudgetDesk(props: SectionProps) {
           <div>
             <RoomHead level={3} title="Bid plan" style={{ marginBottom: 10 }}
               sub={plan.rows.length
-                ? <>{plan.rows.length} {plan.rows.length === 1 ? 'lot' : 'lots'} by close night · {basisMix(plan.rows)}{plan.ceiling != null ? <> · ceiling {fmtFace(plan.ceiling)} a night</> : <> · no ceiling stated</>}</>
-                : <>Nothing you watch is on the block{desk.fullError ? ' — the archive did not arrive, so settled saves are unresolved' : ''}. Save a lot anywhere on lectr and it lands here under its close night.</>} />
-            {plan.nights.map(n => <NightView key={n.day || 'none'} n={n} plan={plan} now={now} />)}
+                ? <>
+                    {plan.rows.length} {plan.rows.length === 1 ? 'lot' : 'lots'} by close night · {basisMix(plan.rows)}
+                    {plan.ceiling != null ? <> · ceiling {fmtFace(plan.ceiling)} a night</> : <> · no ceiling stated</>}
+                    {plan.nEst > 0 && <> · {plan.estInPlan ? 'estimate midpoints counted at your ask' : 'estimate midpoints listed, not summed'}</>}
+                  </>
+                : <>Nothing you watch is on the block{desk.fullError ? ' — the archive did not arrive, so settled saves are unresolved' : ''}. Save a lot anywhere on lectr and it lands here under its close night.</>}
+              actions={plan.nEst > 0
+                ? <button type="button" className="ray-toolbar-pill ck-tune" data-active={estInPlan} aria-pressed={estInPlan} onClick={() => setEstInPlan(!estInPlan)}>
+                    Show estimate midpoints in the plan
+                  </button>
+                : undefined} />
+            {plan.nights.map((n, i) => (
+              <NightView key={n.day || 'none'} n={n} plan={plan} now={now} narrow={narrow} open={i < openNights} />
+            ))}
+            {plan.nights.length > openNights && (
+              <button type="button" className="ck-budget-more" onClick={() => setAllNights(true)} aria-expanded={false}>
+                Open all {plan.nights.length} nights{plan.overNights > 0 ? ` · ${plan.overNights} over` : ''}
+              </button>
+            )}
             {plan.unpriced.length > 0 && (
               <p className="ck-budget-empty">
                 Unpriced, not summed: {plan.unpriced.map((l, i) => (
-                  <React.Fragment key={l.id}>{i > 0 && ', '}<Link href={`/lot?id=${encodeURIComponent(l.id)}`}>{craftTitle(l.title, l.auctionHouse)}</Link></React.Fragment>
+                  <React.Fragment key={l.id}>{i > 0 && ', '}<Link href={lotHref(l)}>{shortTitle(l.title, l.auctionHouse)}</Link></React.Fragment>
                 ))} — no estimate, bid or engine read on the lot.
               </p>
+            )}
+            {plan.rows.length > 0 && (
+              <div className="ck-budget-win" role="list" aria-label="If you win every summed lot">
+                <div className="ns-ledger-row ck-budget-sum" role="listitem">
+                  <span className="ck-budget-win-main">
+                    If you win all {win.rows.length} summed {win.rows.length === 1 ? 'lot' : 'lots'} · at hammer → all-in
+                    <span className="ck-budget-win-house">
+                      {fmtFace(win.premiums)} in buyer&rsquo;s premiums{win.premiumPct != null ? ` (${win.premiumPct}% of hammer)` : ''} · each house&rsquo;s schedule on its sale date
+                      {plan.ceiling != null && win.rows.length > 1 ? ' · your ceiling is per night, not per week' : ''}
+                    </span>
+                  </span>
+                  <span className="ck-budget-fig">{fmtFace(win.hammer)} → {fmtFace(win.allIn)}</span>
+                </div>
+                {plan.nEst > 0 && !plan.estInPlan && (
+                  <div className="ns-ledger-row" role="listitem">
+                    <span className="ck-budget-win-main">
+                      + {plan.nEst} at estimate midpoint, if counted
+                      <span className="ck-budget-win-house">not a bid you chose — switch the toggle above to sum them</span>
+                    </span>
+                    <span className="ck-budget-fig" data-muted="">{fmtFace(plan.estTotal)} → {fmtFace(plan.estAllIn)}</span>
+                  </div>
+                )}
+                {plan.nFrom > 0 && (
+                  <div className="ns-ledger-row" role="listitem">
+                    <span className="ck-budget-win-main">
+                      {plan.nFrom} one-sided {plan.nFrom === 1 ? 'estimate' : 'estimates'}, never summed
+                      <span className="ck-budget-win-house">the house published one bound only</span>
+                    </span>
+                    <span className="ck-budget-fig" data-muted="">from {fmtFace(plan.fromSum)}</span>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -254,10 +399,22 @@ export default function BudgetDesk(props: SectionProps) {
           <div>
             <RoomHead level={3} title="What your budget buys this week" style={{ marginBottom: 10 }}
               sub={<>
-                Below Market by the engine · {marketWords}{buys.banded ? <> · inside {stated}</> : <> · every price (no band stated)</>} · closing by {nightLabel(isoDayOf(now + BUYS_WINDOW_DAYS * 864e5), now)}
-                {buys.candidates > buys.rows.length && <> · top {buys.rows.length} of {buys.candidates}</>}
+                Below Market by the engine — not a prediction · {marketWords}{buys.banded ? <> · inside {stated}</> : <> · every price (no band stated)</>} · closing by {nightLabel(isoDayOf(now + BUYS_WINDOW_DAYS * 864e5), now)}
+                {!tease.length && buys.candidates > buys.rows.length && <> · top {buys.rows.length} of {buys.candidates}</>}
               </>} />
-            {buys.rows.length ? (
+            {tease.length ? (
+              <div role="list" aria-label="Below-market lots this week, by market">
+                {tease.map(t => (
+                  <Link key={t.market} href={`/value/${t.market}`} className="ck-read ck-budget-tease" role="listitem" data-nav-row
+                    title={`${t.n} Below Market ${t.n === 1 ? 'flag' : 'flags'} in ${t.label} closing within ${BUYS_WINDOW_DAYS} days, each on a comps pool of ${TEASE_MIN_N}+ sales — the market's value desk`}>
+                    <span className="ck-read-title">{t.label}</span>
+                    <span className="ck-read-fact">{t.n} below market this week · soonest {soonestWord(nightLabel(isoDayOf(t.soonestMs), now))}</span>
+                    <span className="ck-budget-fig" aria-hidden>→</span>
+                  </Link>
+                ))}
+                <p className="ck-budget-empty">Tell the desk your markets — a follow, or the quick start&rsquo;s taps — and this reads them live, lot by lot.</p>
+              </div>
+            ) : buys.rows.length ? (
               <div role="list" aria-label="Below-market lots inside your budget this week">
                 {buys.rows.map(r => (
                   <BuyRowView key={r.lot.id} r={r} now={now} saved={desk.savedIds.has(r.lot.id)} onWatch={() => act.toggleSave(r.lot)} />
@@ -268,33 +425,6 @@ export default function BudgetDesk(props: SectionProps) {
                 No Below Market flag in {marketWords}{buys.banded ? ` inside ${stated}` : ''} closes within {BUYS_WINDOW_DAYS} days
                 {desk.book.length === 0 ? ' — the live book has not landed' : ''}. The flag is the engine&rsquo;s call; a quiet week is a quiet week.
               </p>
-            )}
-          </div>
-        </div>
-
-        {/* ── If you win ── */}
-        <div className="ck-subroom ck-budget-win">
-          <div>
-            <RoomHead level={3} title="If you win" style={{ marginBottom: 10 }}
-              sub={win.rows.length
-                ? <>Each plan figure grossed to all-in with its house&rsquo;s buyer&rsquo;s premium on the sale date · {fmtFace(win.premiums)} in premiums on {fmtFace(win.hammer)} at hammer{win.premiumPct != null ? ` (${win.premiumPct}%)` : ''}</>
-                : <>Nothing live to gross up — the plan is empty.</>} />
-            {win.rows.length > 0 && (
-              <div role="list" aria-label="All-in cost if you win every plan lot">
-                {win.rows.map(r => (
-                  <div className="ns-ledger-row" role="listitem" key={r.lot.id}>
-                    <span className="ck-budget-win-main">
-                      <Link href={`/lot?id=${encodeURIComponent(r.lot.id)}`} className="ck-budget-win-title">{craftTitle(r.lot.title, r.lot.auctionHouse)}</Link>
-                      <span className="ck-budget-win-house">{r.lot.auctionHouse} · {r.premiumPct}% premium · {BASIS_TAG[r.basis].toLowerCase()}</span>
-                    </span>
-                    <span className="ck-budget-fig">{fmtFace(r.hammer)} → {fmtFace(r.allIn)}</span>
-                  </div>
-                ))}
-                <div className="ns-ledger-row ck-budget-sum" role="listitem">
-                  <span className="ck-budget-win-main">All {win.rows.length} {win.rows.length === 1 ? 'lot' : 'lots'} · at hammer → all-in{plan.ceiling != null && win.rows.length > 1 ? <span className="ck-budget-win-house"> · your ceiling is per night, not per week</span> : null}</span>
-                  <span className="ck-budget-fig">{fmtFace(win.hammer)} → {fmtFace(win.allIn)}</span>
-                </div>
-              </div>
             )}
           </div>
         </div>

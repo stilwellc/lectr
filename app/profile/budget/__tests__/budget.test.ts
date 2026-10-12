@@ -11,9 +11,11 @@ import { pinClock } from '../../../lib/__tests__/helpers/pin-clock';
 import { lotMaxBid } from '../../../lib/verdict';
 import { lotAllInFactor } from '../../../lib/premiums';
 import {
-  bidPlan, planRowOf, dropOrder, smallestDropSet, budgetBuys, readerMarkets, followMarket, marketOfLot, winTotals, basisMix,
-  nightLabel, isoDayOf, allInText, BASIS_TAG,
+  bidPlan, planRowOf, dropOrder, smallestDropSet, budgetBuys, marketTease, readerMarkets, followMarket, marketOfLot, winTotals, basisMix,
+  nightLabel, isoDayOf, allInText, rowTag, BASIS_TAG, TEASE_MIN_N,
 } from '../budget';
+import { estBandOf, isPriced, oneSidedText } from '../priced';
+import { fmtFace } from '../../../lib/lot-face';
 
 const NOW_ISO = '2026-10-09T16:00:00-04:00';
 pinClock(NOW_ISO);
@@ -66,6 +68,7 @@ test('planRowOf: the engine max bid leads, its all-in is verdict.lotMaxBid’s o
   assert.equal(r.premiumPct, 27); // Phillips under $1M
   assert.equal(r.day, '2026-10-14');
   assert.equal(r.oneSided, false);
+  assert.equal(r.counted, true, 'a max bid is priced by the engine — summed');
 });
 
 test('planRowOf: no engine max bid → the estimate midpoint, labelled; a low-confidence value never yields one', () => {
@@ -79,57 +82,92 @@ test('planRowOf: no engine max bid → the estimate midpoint, labelled; a low-co
   assert.equal(c.belowPct, 56);
   assert.ok(c.edge > 0, 'a Below Market flag is edge');
   assert.equal(BASIS_TAG[c.basis], 'Est mid');
+  assert.equal(rowTag(c), 'Est mid');
+  assert.equal(b.counted, false, 'R1#7: an estimate midpoint is a bid the reader never chose — listed, not summed');
+  assert.equal(c.counted, false);
 });
 
-test('planRowOf: a one-sided estimate says so; nothing prices → null', () => {
+test('planRowOf: a one-sided estimate says so — "from $2K", tag "Est low", never summed; nothing prices → null', () => {
   const d = planRowOf(D, NOW)!;
   assert.equal(d.basis, 'est');
   assert.equal(d.hammer, 2000);
   assert.equal(d.oneSided, true);
+  assert.equal(d.side, 'low');
+  assert.equal(d.counted, false);
+  assert.equal(rowTag(d), 'Est low');
+  assert.equal(oneSidedText(d.side!, d.hammer, fmtFace), 'from $2K');
   assert.equal(planRowOf(E, NOW), null);
+  // the one priced rule (priced.ts — X1's shared helper replaces it when it lands)
+  assert.deepEqual(estBandOf(D), { lo: 2000, hi: 2000, priced: false, side: 'low' });
+  assert.equal(isPriced(D), false); assert.equal(isPriced(A), true); assert.equal(estBandOf(E), null);
+  // a live-book RR row (Oct 11 2026): estimateLow 4000 only, a $5,191 bid on it
+  const rr = mk('rrauction-751-351715107510001', { auctionHouse: 'RR Auction', artist: 'entertainment-memorabilia', title: 'Thomas Jefferson and James Madison Signed Four-Language Ship\'s Papers', estimateLow: 4000, saleDate: '2026-10-14', currentBid: 5191 });
+  assert.deepEqual(estBandOf(rr), { lo: 4000, hi: 4000, priced: false, side: 'low' });
 });
 
-test('bidPlan: live lots only, grouped by close night in order; sums per night and overall', () => {
+test('bidPlan (default): live lots only, by close night in order; a night SUMS the engine/room-priced rows — est-mid rows are listed apart, one-sided never summed', () => {
   const p = bidPlan(SAVED, NOW, null);
+  assert.equal(p.estInPlan, false);
   assert.deepEqual(p.nights.map(n => n.day), ['2026-10-13', '2026-10-14', '2026-10-20']);
   assert.deepEqual(p.unpriced.map(l => l.id), ['bonhams-E']);
   assert.ok(!p.rows.some(r => r.lot.id === 'christies-F'), 'a sold save is off the block');
   const oct14 = p.nights[1];
-  assert.deepEqual(oct14.rows.map(r => r.lot.id), ['phillips-A', 'christies-B', 'rrauction-D'].sort((x, y) => {
-    // timed closes first (A 2pm, B 6pm), the date-only RR last
-    const o: Record<string, number> = { 'phillips-A': 0, 'christies-B': 1, 'rrauction-D': 2 };
-    return o[x] - o[y];
-  }));
-  assert.equal(oct14.total, 36924 + 12500 + 2000);
-  assert.equal(oct14.totalAllIn, oct14.rows.reduce((s, r) => s + r.allIn, 0));
+  assert.deepEqual(oct14.rows.map(r => r.lot.id), ['phillips-A', 'christies-B', 'rrauction-D'], 'every row is LISTED: timed closes first (A 2pm, B 6pm), the date-only RR last');
+  assert.equal(oct14.total, 36924, 'only the max-bid row is summed');
+  assert.equal(oct14.totalAllIn, oct14.rows[0].allIn);
+  assert.equal(oct14.nCounted, 1);
+  assert.equal(oct14.nEst, 1); assert.equal(oct14.estTotal, 12500);
+  assert.equal(oct14.nFrom, 1); assert.equal(oct14.fromSum, 2000);
   assert.equal(oct14.nMax, 1);
   assert.equal(oct14.nOther, 2);
-  assert.equal(p.total, 36924 + 12500 + 2000 + 4000 + 11007);
+  const oct13 = p.nights[0];
+  assert.equal(oct13.total, 0, 'the Wright est-mid row is listed, not summed'); assert.equal(oct13.nCounted, 0); assert.equal(oct13.estTotal, 4000);
+  assert.equal(p.total, 36924 + 11007);
+  assert.equal(p.nCounted, 2); assert.equal(p.nEst, 2); assert.equal(p.estTotal, 12500 + 4000); assert.equal(p.nFrom, 1); assert.equal(p.fromSum, 2000);
   assert.equal(p.ceiling, null);
   assert.equal(p.overNights, 0, 'no ceiling → nothing is over');
   assert.equal(basisMix(p.rows), '2 at max bid · 3 at estimate midpoint');
 });
 
-test('bidPlan: a ceiling flags the over nights and suggests the SMALLEST drop set — as many lots stay as possible', () => {
-  const p = bidPlan(SAVED, NOW, { minUsd: 1000, maxUsd: 25000 });
+test('bidPlan ({ estInPlan }): the reader asks for the estimate midpoints → the two-sided ones join the sum; the one-sided row still does not', () => {
+  const p = bidPlan(SAVED, NOW, null, { estInPlan: true });
+  assert.equal(p.estInPlan, true);
+  const oct14 = p.nights[1];
+  assert.equal(oct14.total, 36924 + 12500);
+  assert.equal(oct14.nCounted, 2);
+  assert.equal(oct14.nFrom, 1); assert.equal(oct14.fromSum, 2000);
+  assert.equal(p.total, 36924 + 12500 + 4000 + 11007);
+  assert.equal(p.nights[0].total, 4000);
+});
+
+test('bidPlan: a ceiling flags a night over on its SUMMED rows only, and suggests the SMALLEST drop set — as many lots stay as possible', () => {
+  // default: Oct 14 sums A alone ($36.9K) → over $11.9K; the est-mid B and the one-sided D never make a night "over"
+  const p0 = bidPlan(SAVED, NOW, { minUsd: 1000, maxUsd: 25000 });
+  const o14 = p0.nights.find(n => n.day === '2026-10-14')!;
+  assert.equal(o14.over, 36924 - 25000);
+  assert.deepEqual(o14.drops.map(r => r.lot.id), ['phillips-A']);
+  assert.equal(o14.kept, 0);
+  const o13 = p0.nights.find(n => n.day === '2026-10-13')!;
+  assert.equal(o13.over, null, 'an est-mid-only night is never over (R1#7)');
+  const o20 = p0.nights.find(n => n.day === '2026-10-20')!;
+  assert.equal(o20.over, null, '$11K max bid under a $25K ceiling');
+  assert.equal(p0.overNights, 1);
+  // with the midpoints counted: A + B = $49.4K over $25K by $24.4K; dropping A alone fits ($12.5K left) — never B then A → $0
+  const p = bidPlan(SAVED, NOW, { minUsd: 1000, maxUsd: 25000 }, { estInPlan: true });
   assert.equal(p.ceiling, 25000);
   const oct14 = p.nights.find(n => n.day === '2026-10-14')!;
-  assert.equal(oct14.over, 36924 + 12500 + 2000 - 25000);
-  // dropping A alone ($36.9K) fits ($14.5K left) — never B then D then A → $0
+  assert.equal(oct14.over, 36924 + 12500 - 25000);
   assert.deepEqual(oct14.drops.map(r => r.lot.id), ['phillips-A']);
-  assert.equal(oct14.afterDrops, 12500 + 2000);
-  assert.equal(oct14.kept, 2);
-  const oct13 = p.nights.find(n => n.day === '2026-10-13')!;
-  assert.equal(oct13.over, null);
+  assert.equal(oct14.afterDrops, 12500);
+  assert.equal(oct14.kept, 1);
   assert.equal(p.overNights, 1);
-  // a ceiling one drop clears: B or D both fit; same cost (est, no edge) →
-  // the one that keeps the most money in play (drop D, $2K)
-  const p2 = bidPlan(SAVED, NOW, { minUsd: null, maxUsd: 50000 });
+  // a ceiling one drop clears: B (est, no edge) is the cheaper drop than A (max bid)
+  const p2 = bidPlan(SAVED, NOW, { minUsd: null, maxUsd: 45000 }, { estInPlan: true });
   const n2 = p2.nights.find(n => n.day === '2026-10-14')!;
-  assert.equal(n2.over, 1424);
-  assert.deepEqual(n2.drops.map(r => r.lot.id), ['rrauction-D']);
-  assert.equal(n2.afterDrops, 36924 + 12500);
-  assert.equal(n2.kept, 2);
+  assert.equal(n2.over, 36924 + 12500 - 45000);
+  assert.deepEqual(n2.drops.map(r => r.lot.id), ['christies-B']);
+  assert.equal(n2.afterDrops, 36924);
+  assert.equal(n2.kept, 1);
 });
 
 test('smallestDropSet: the tight seed’s night — $37K max-bid Rolex + $12K est-mid Rolex under a $25K ceiling drops ONLY the $37K lot', () => {
@@ -160,11 +198,14 @@ test('dropOrder: Above Market before unflagged before flagged; within a tie the 
   assert.deepEqual(dropOrder([...rows, above]).map(r => r.lot.id), ['x-above', 'christies-B', 'rrauction-D', 'phillips-A', 'wright-C~']);
 });
 
-test('winTotals: hammer and premiums kept apart; the all-in sum is the rows’ own', () => {
+test('winTotals: hammer and premiums kept apart; the all-in sum is the SUMMED rows’ own', () => {
   const p = bidPlan(SAVED, NOW, null);
   const w = winTotals(p);
   assert.equal(w.hammer, p.total);
-  assert.equal(w.allIn, p.rows.reduce((s, r) => s + r.allIn, 0));
+  assert.equal(w.rows.length, p.nCounted);
+  assert.equal(w.allIn, p.rows.filter(r => r.counted).reduce((s, r) => s + r.allIn, 0));
+  const pe = bidPlan(SAVED, NOW, null, { estInPlan: true });
+  assert.equal(winTotals(pe).allIn, pe.rows.filter(r => !r.oneSided).reduce((s, r) => s + r.allIn, 0));
   assert.equal(w.premiums, w.allIn - w.hammer);
   assert.equal(w.premiumPct, Math.round((w.premiums / w.hammer) * 100));
   assert.deepEqual(w.rows.map(r => r.allIn), [...w.rows.map(r => r.allIn)].sort((a, b) => b - a), 'largest all-in first');
@@ -191,10 +232,33 @@ test('marketOfLot / followMarket: a lot’s taxonomy category → its market; fo
   assert.equal(followMarket({ kind: 'cat', key: 'fine-art:prints', label: 'Prints' }, []), 'art');
 });
 
-test('readerMarkets: seeds and follows union; nothing stated → empty (every market)', () => {
+test('readerMarkets (R4#8): the STATED markets — follows + quick-start market seeds — never fold a saved lot’s category in; saves count only when nothing was stated', () => {
   const taste = { seeds: [{ kind: 'saved', w: 1, label: 'x', f: { cat: 'design' } }, { kind: 'follow', w: 1, label: 'TCG', market: 'TCG' }] } as unknown as Parameters<typeof readerMarkets>[0];
-  assert.deepEqual(Array.from(readerMarkets(taste, follows, [A])).sort(), ['art', 'design', 'tcg', 'watches']);
+  assert.deepEqual(Array.from(readerMarkets(taste, follows, [A])).sort(), ['art', 'tcg', 'watches'], 'the saved design bench is not a market the reader watches');
+  const savesOnly = { seeds: [{ kind: 'saved', w: 1, label: 'x', f: { cat: 'design' } }, { kind: 'owned', w: 1, label: 'y', f: { cat: 'fine-art' } }] } as unknown as Parameters<typeof readerMarkets>[0];
+  assert.deepEqual(Array.from(readerMarkets(savesOnly, [], [])).sort(), ['art', 'design'], 'nothing stated → the saves imply the markets');
+  assert.deepEqual(Array.from(readerMarkets({ seeds: [{ kind: 'follow', w: 1, label: 'TCG', market: 'TCG' }] } as never, [], [])), ['tcg']);
   assert.equal(readerMarkets(null, [], []).size, 0);
+});
+
+test('marketTease (R3#7): no market stated → one row per market counting this week’s flags on pools of n ≥ TEASE_MIN_N, busiest first', () => {
+  const pool = (k: number) => ({ poolIds: Array.from({ length: k }, (_, i) => `p${i}`), n: k });
+  const deep = (id: string, o: Partial) => mk(id, { estLowUsd: 2000, estHighUsd: 3000, estimateLow: 2000, estimateHigh: 3000, saleDate: '2026-10-12', saleDateTime: '2026-10-12T14:00:00-04:00', ...flag(40), ...o });
+  const book = [
+    deep('christies-t1', { value: { ...flag(40).value, ...pool(5) } }),
+    deep('christies-t2', { value: { ...flag(40).value, ...pool(8) }, saleDate: '2026-10-11', saleDateTime: '2026-10-11T14:00:00-04:00' }),
+    deep('christies-t3', { value: { ...flag(40).value, ...pool(3) } }), // under the floor — not teased
+    deep('wright-t4~', { auctionHouse: 'Wright', artist: 'george-nakashima', value: { ...flag(40).value, ...pool(6) } }),
+    deep('christies-t5', { value: { ...flag(40).value, ...pool(9) }, saleDate: '2026-10-19', saleDateTime: '2026-10-19T14:00:00-04:00' }), // outside the week
+  ];
+  const t = marketTease(book, NOW, null, new Set());
+  assert.deepEqual(t.map(x => [x.market, x.label, x.n]), [['art', 'Art', 2], ['design', 'Design', 1]]);
+  assert.equal(t[0].soonestMs, Date.parse('2026-10-11T14:00:00-04:00'));
+  assert.equal(TEASE_MIN_N, 5);
+  // the floor is the engine's pool size, read off lotFace().comps
+  assert.deepEqual(marketTease(book, NOW, null, new Set(), 3).map(x => x.n), [3, 1]);
+  // a stated band gates the tease too
+  assert.deepEqual(marketTease(book, NOW, { minUsd: 5000, maxUsd: null }, new Set()), []);
 });
 
 const flag = (pct: number, br = 60) => ({ signal: { label: 'Below Market', pct, confidence: 'high' }, value: value({ compValueUsd: 9000, low: 5000, confidence: 'high', signal: { label: 'Below Market', strength: 'strong', beatRatePct: br }, compMedianUsd: 7000, flagRatio: 1 + pct / 100 }) });

@@ -5,7 +5,6 @@ import type { AuctionLot } from '../../../types';
 import type { EntityDetail, EntitySummary } from '../../../lib/entity/model';
 import type { Follow } from '../../../lib/follows';
 import { FLAG_SIGNAL } from '../../../lib/flags';
-import { fxRateFor } from '../../../lib/normalize';
 import {
   isoDayOf, marketOfName, deskNamesOf, groupByMarket, liveLotsOf, salesOf, estOf, saleWhen, calendarTotals,
   pulseOf, sparkSpan, blindSpotOf, agoText, namesTotals, orderNames, type DeskName, type NameRead,
@@ -83,20 +82,55 @@ test('liveLotsOf: a category follow (no entity) uses the follow matcher', () => 
   assert.equal(got.length, 1);
 });
 
-test('estOf: USD bands pass; a native estimate without a USD field converts at the dated rate and says so; none is none', () => {
-  assert.deepEqual(estOf(lot({ id: 'a', artist: 'x', estimateLow: 100, estimateHigh: 300 })), { lo: 100, hi: 300, approx: false });
-  assert.deepEqual(estOf(lot({ id: 'a', artist: 'x', estimateLow: 100, estimateHigh: null })), { lo: 100, hi: 100, approx: false });
-  const eur = estOf(lot({ id: 'b', artist: 'x', currency: 'EUR', estimateLow: 100, estimateHigh: 300, saleDate: '2026-10-14' }));
-  assert.notEqual(eur, 'none');
-  const e = eur as { lo: number; hi: number; approx: boolean };
-  assert.equal(e.approx, true);
-  assert.equal(e.lo, 100 * fxRateFor('EUR', '2026-10-14').rate);
-  assert.equal(e.hi, 300 * fxRateFor('EUR', '2026-10-14').rate);
-  assert.deepEqual(estOf(lot({ id: 'c', artist: 'x', currency: 'EUR', estimateLow: 100, estimateHigh: 300, estLowUsd: 110, estHighUsd: 330 })), { lo: 110, hi: 330, approx: false });
+test('estOf: the estimate fields are USD and are NEVER converted again; a one-sided estimate is not priced; none is none', () => {
+  assert.deepEqual(estOf(lot({ id: 'a', artist: 'x', estimateLow: 100, estimateHigh: 300 })), { lo: 100, hi: 300, priced: true, side: null });
+  assert.deepEqual(estOf(lot({ id: 'a', artist: 'x', estimateLow: 100, estimateHigh: null })), { lo: 100, hi: 100, priced: false, side: 'low' });
+  assert.deepEqual(estOf(lot({ id: 'a2', artist: 'x', estimateLow: null, estimateHigh: 900 })), { lo: 900, hi: 900, priced: false, side: 'high' });
+  // a non-USD lot whose row carries estimateLow/High only: those ARE dollars (the aliases of est*Usd) — read as comps.estUsdBand does
+  assert.deepEqual(estOf(lot({ id: 'b', artist: 'x', currency: 'EUR', estimateLow: 100, estimateHigh: 300, saleDate: '2026-10-14' })), { lo: 100, hi: 300, priced: true, side: null });
+  // the canonical USD fields lead when present
+  assert.deepEqual(estOf(lot({ id: 'c', artist: 'x', currency: 'EUR', estimateLow: 100, estimateHigh: 300, estLowUsd: 110, estHighUsd: 330 })), { lo: 110, hi: 330, priced: true, side: null });
   assert.equal(estOf(lot({ id: 'd', artist: 'x', estimateLow: null, estimateHigh: null })), 'none');
 });
 
-test('salesOf: groups by house + sale + close day, sums bands (converted ones marked), counts bids and flags, soonest first', () => {
+/* THE LIVE BOOK (R4#1, R1#10 — the double-FX bug). Two rows copied from prod
+   upcoming.json as pulled on Oct 11 2026 (lastCrawl Oct 11): every one of its
+   158 non-USD live lots carries estimateLow/High only, already in dollars.
+   names.ts used to multiply them by fxRateFor again when est*Usd was null. */
+const CALDER_DKK = lot({
+  id: 'bonhams-brk_1008686-50FCC97140EF', artist: 'alexander-calder', ek: 'mk:alexander-calder',
+  title: 'Alexander Calder: "Asymétrie". Signed in print Calder 72. Lithograph in colours. Visible size 80 x 57 cm.',
+  category: 'print', subCat: 'prints', auctionHouse: 'Bruun Rasmussen', saleName: '', saleDate: '2026-10-13', saleDateTime: '2026-10-13T18:32:00+00:00',
+  lotNumber: 776, estimateLow: 233.1, estimateHigh: 310.8, currency: 'DKK',
+} as never);
+const MAO_EUR = lot({
+  id: 'bonhams-31799-62', artist: 'andy-warhol', ek: 'mk:andy-warhol', title: 'Mao, 1972', category: 'print', subCat: 'prints',
+  auctionHouse: 'Bonhams', saleName: '', saleDate: '2026-10-28', saleDateTime: '2026-10-28T14:00:00+00:00', lotNumber: 62,
+  estimateLow: 13800, estimateHigh: 20700, currency: 'EUR',
+} as never);
+
+test('X3#1 the live book: the Bruun Rasmussen DKK Calder reads $233–$311 (it printed "$36–$48"); the Bonhams EUR Mao $13.8K–$20.7K (it printed ≈$15.9K–$23.8K)', () => {
+  assert.deepEqual(estOf(CALDER_DKK), { lo: 233.1, hi: 310.8, priced: true, side: null });
+  assert.deepEqual(estOf(MAO_EUR), { lo: 13800, hi: 20700, priced: true, side: null });
+  const sales = salesOf([CALDER_DKK, MAO_EUR]);
+  assert.deepEqual(sales.map(s => s.house), ['Bruun Rasmussen', 'Bonhams']);
+  assert.deepEqual(sales[0].est, { lo: 233.1, hi: 310.8, k: 1, oneSided: 0, from: 0, none: 0 });
+  assert.deepEqual(sales[1].est, { lo: 13800, hi: 20700, k: 1, oneSided: 0, from: 0, none: 0 });
+  const t = calendarTotals(sales);
+  assert.equal(t.lo, 233.1 + 13800); assert.equal(t.hi, 310.8 + 20700);
+  assert.ok(!('approx' in t), 'nothing is approximate: nothing was converted');
+});
+
+test('X3#2 one-sided estimates (RR publishes the low only): the sale prints "from $700" on 2 and sums nothing', () => {
+  const rr = (id: string, low: number) => lot({ id, artist: 'historical', auctionHouse: 'RR Auction', saleName: 'Fine Autographs', saleDate: '2026-10-14', estimateLow: low, estimateHigh: null, currentBid: 300, bidCount: 4 });
+  const sales = salesOf([rr('rr-1', 350), rr('rr-2', 350), lot({ id: 'rr-3', artist: 'historical', auctionHouse: 'RR Auction', saleName: 'Fine Autographs', saleDate: '2026-10-14', estimateLow: 1000, estimateHigh: 2000 })]);
+  assert.equal(sales.length, 1);
+  assert.deepEqual(sales[0].est, { lo: 1000, hi: 2000, k: 1, oneSided: 2, from: 700, none: 0 });
+  const t = calendarTotals(sales);
+  assert.equal(t.k, 1); assert.equal(t.oneSided, 2); assert.equal(t.from, 700);
+});
+
+test('salesOf: groups by house + sale + close day, sums the priced bands, counts bids and flags, soonest first', () => {
   const lots = [
     lot({ id: '1', artist: 'andy-warhol', auctionHouse: "Christie's", saleName: 'NY 2', saleDate: '2026-10-22', estimateLow: 1000, estimateHigh: 2000 }),
     lot({ id: '2', artist: 'andy-warhol', auctionHouse: "Christie's", saleName: 'NY 2', saleDate: '2026-10-22', estimateLow: 3000, estimateHigh: 5000, signal: { label: FLAG_SIGNAL } } as never),
@@ -107,15 +141,15 @@ test('salesOf: groups by house + sale + close day, sums bands (converted ones ma
   assert.deepEqual(sales.map(s => s.house), ['Bonhams', 'Goldin', "Christie's"]);
   const c = sales[2];
   assert.equal(c.lots.length, 2);
-  assert.deepEqual(c.est, { lo: 4000, hi: 7000, k: 2, approx: 0, none: 0 });
+  assert.deepEqual(c.est, { lo: 4000, hi: 7000, k: 2, oneSided: 0, from: 0, none: 0 });
   assert.equal(c.flagged, 1);
-  const r = fxRateFor('EUR', '2026-10-14').rate;
-  assert.deepEqual(sales[0].est, { lo: 100 * r, hi: 200 * r, k: 1, approx: 1, none: 0 });
-  assert.deepEqual(sales[1].est, { lo: 0, hi: 0, k: 0, approx: 0, none: 1 });
+  // the Bonhams EUR lot's estimateLow/High are dollars already — summed as they are
+  assert.deepEqual(sales[0].est, { lo: 100, hi: 200, k: 1, oneSided: 0, from: 0, none: 0 });
+  assert.deepEqual(sales[1].est, { lo: 0, hi: 0, k: 0, oneSided: 0, from: 0, none: 1 });
   assert.deepEqual(sales[1].bids, { n: 1, sum: 40000 });
   assert.ok(sales.every(s => s.closeMs != null && s.closeMs > NOW));
   const t = calendarTotals(sales);
-  assert.deepEqual(t, { lots: 4, sales: 3, lo: 4000 + 100 * r, hi: 7000 + 200 * r, k: 3, approx: 1, flagged: 1 });
+  assert.deepEqual(t, { lots: 4, sales: 3, lo: 4100, hi: 7200, k: 3, oneSided: 0, from: 0, flagged: 1 });
 });
 
 test('saleWhen: hours inside a day, days beyond, closed, unknown', () => {
@@ -179,7 +213,7 @@ test('agoText', () => {
 test('namesTotals + orderNames: live names first by soonest sale, then blind spots by last seen', () => {
   const mk = (key: string, live: number, closeMs: number | null): NameRead => ({
     name: { key, id: key, label: key, follow: F.warhol, followed: true, owned: 0, saved: 0, market: 'art' },
-    sales: closeMs == null ? [] : [{ key: 's', house: 'H', saleName: '', day: '', closeMs, timed: true, lots: [], est: { lo: 0, hi: 0, k: 0, approx: 0, none: 0 }, bids: { n: 0, sum: 0 }, flagged: 0 }],
+    sales: closeMs == null ? [] : [{ key: 's', house: 'H', saleName: '', day: '', closeMs, timed: true, lots: [], est: { lo: 0, hi: 0, k: 0, oneSided: 0, from: 0, none: 0 }, bids: { n: 0, sum: 0 }, flagged: 0 }],
     live, flagged: 0,
   });
   const reads = [mk('late', 2, NOW + 5 * 24 * H), mk('quietOld', 0, null), mk('soon', 1, NOW + 2 * H), mk('quietNew', 0, null)];
