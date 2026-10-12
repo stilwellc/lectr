@@ -5173,3 +5173,16 @@ html[data-lectr-light] .ray-band .ck-head[data-level='2'] h2.ray-h2::after { con
 
 /* home: a jump to the feed (/?tab=you, the below lens) lands its head under the nav */
 #on-the-block { scroll-margin-top: 72px; }
+
+/* (Oct 11, inventory) the phone cockpit must leave the Today band's Top 3 in
+   the first screen: the Next-hammer lot is one line (the Watching row and the
+   week print it whole) and the strip caption is one line */
+@media (max-width: 639.98px) {
+  .ck-cockpit-next .ck-ccell-lot { -webkit-line-clamp: 1; }
+  .ck-cockpit .ck-hstrip-cap > span:not(.kicker) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; min-width: 0; }
+}
+@media (max-width: 639.98px) {
+  .ck-cockpit { margin-top: 2px; }
+  .ck-cockpit .ck-hstrip { margin-top: 2px; }
+  .ck-rail-wrap { margin-top: 4px; }
+}
