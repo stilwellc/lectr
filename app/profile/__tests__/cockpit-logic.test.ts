@@ -19,11 +19,25 @@ test('dowLetter: Oct 9 2026 is a Friday', () => {
   assert.equal(dowLetter('2026-10-12'), 'M');
 });
 
-test('estMidOf: two-sided midpoint; a one-sided estimate counts at its side; none is 0', () => {
+test('estMidOf: two-sided midpoint; a one-sided estimate is "from $X" and adds 0 (the one priced rule, desk/priced); none is 0', () => {
   assert.equal(estMidOf({ estimateLow: 1000, estimateHigh: 3000 }), 2000);
-  assert.equal(estMidOf({ estimateLow: 1000, estimateHigh: null }), 1000);
-  assert.equal(estMidOf({ estimateLow: null, estimateHigh: 500 }), 500);
+  assert.equal(estMidOf({ estimateLow: 1000, estimateHigh: null }), 0);
+  assert.equal(estMidOf({ estimateLow: null, estimateHigh: 500 }), 0);
   assert.equal(estMidOf({}), 0);
+});
+
+test('hammerStrip: the week\'s three kinds — watches bold, picks and names light; a name\'s sale never adds to the day\'s total', () => {
+  const s = hammerStrip([
+    { day: '2026-10-09', est: 100, kind: 'watch' },
+    { day: '2026-10-09', est: 50, kind: 'pick' },
+    { day: '2026-10-09', est: 9999, kind: 'name' },
+    { day: '2026-10-10', est: 10 },               // no kind = a watch
+  ], '2026-10-09');
+  assert.deepEqual([s[0].n, s[0].watches, s[0].picks, s[0].names, s[0].est], [3, 1, 1, 1, 150]);
+  assert.deepEqual([s[1].n, s[1].watches, s[1].est], [1, 1, 10]);
+  assert.equal(stripCaption(s), '2 watches · 1 pick · 1 of your names close in 14 days · next today');
+  const picksOnly = hammerStrip([{ day: '2026-10-11', est: 0, kind: 'pick' }, { day: '2026-10-11', est: 0, kind: 'pick' }], '2026-10-09');
+  assert.equal(stripCaption(picksOnly), '2 picks close in 14 days · next Sun, Oct 11');
 });
 
 test('hammerStrip: 14 days from today, counts and estimate totals per reader-day, today marked', () => {

@@ -35,7 +35,7 @@ import { craftTitle, localToday } from '../utils';
 import { formatEstimate } from '../components/LotCard';
 import { AwayMark } from '../components/marks';
 import DecisionLine from '../components/DecisionLine';
-import { HelpChip } from './help';
+import { RoomHead } from './head';
 
 export interface TodayRead { key: string; tag: string; lot: AuctionLot; fact: React.ReactNode; tone?: 'up' | 'hot' }
 
@@ -155,7 +155,7 @@ function TopSeat() {
   );
 }
 
-export default function TodayBand({ loop, closingWatches, reads, away, top = [], topLoading = false, phoneRows = PER_COL }: {
+export default function TodayBand({ loop, closingWatches, reads, away, top = [], topLoading = false, phoneRows = PER_COL, picksN = 0 }: {
   loop: ReturnLoop | null;
   /** live watches that hammer today, soonest first */
   closingWatches: AuctionLot[];
@@ -169,6 +169,9 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
   /** rows a phone opens on (a desk with live watches opens on 2, so its
    *  own Watching room starts in the first screen) */
   phoneRows?: number;
+  /** the picks dealt right now — a first visit (no "since") with none
+   *  closing tonight says what landed, not "nothing new" (R3#9) */
+  picksN?: number;
 }) {
   const narrow = useNarrow();
   const [all, setAll] = useState(false);
@@ -221,7 +224,11 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
   const newLabel = since ? `New since your last visit · ${dayWord(since)}` : 'New today in your picks';
   // the honest empty line for the picks side (never padded)
   const quietPicks = loop && !closing.length && !fresh.length
-    ? <p className="ck-today-empty">Nothing new in your picks {since ? `since ${dayWord(since)}` : 'today'}, and none close tonight{nextCloseText(loop)}.</p>
+    ? <p className="ck-today-empty">
+        {!since && picksN > 0
+          ? <>{picksN} {picksN === 1 ? 'pick' : 'picks'} landed <a href="#for-you" className="ck-away-link">below</a> · none close tonight{nextCloseText(loop).replace(' — the next closes', ' · the next closes')}.</>
+          : <>Nothing new in your picks {since ? `since ${dayWord(since)}` : 'today'}, and none close tonight{nextCloseText(loop)}.</>}
+      </p>
     : null;
 
   // the fold: desktop 3 per column, phone 3 in one list
@@ -285,11 +292,12 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
   ) : null;
 
   return (
-    <section id="today" className="ck-today rail ray-enter" aria-label="Today">
-      <div className="ck-today-head">
-        <span className="kicker"><span className="ray-sect-mark" aria-hidden><AwayMark size={14} /></span>Today</span>
-        {/* the strip opens on its own full line after the away facts */}
-        <HelpChip name="Today" stripStyle={{ flex: '1 1 100%', order: 9 }}>
+    <section id="today" className="ck-today ray-saved-section rail ray-enter" aria-label="Today">
+      <div className="ns-plate" style={{ paddingTop: 18 }}>
+      {/* (R5#8) the same head every room opens with — mark, title, (?), the
+          while-you-were-away facts as the figure line */}
+      <RoomHead className="ck-today-head" mark={<AwayMark size={17} />} title="Today"
+        help={{ name: 'Today', body: <>
           What is new for you today, in one list. <b>Closing tonight</b>: your watches that hammer today, then picks
           that close before tonight ends. {picks.length > 0 && <><b>Top {picks.length} for you</b>: the strongest of your
           picks — the full list follows under Lots you may like, starting after these. </>}<b>New since your last
@@ -297,9 +305,8 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
           says about your lots today. Under a row, <b>worth up to</b> is the engine&rsquo;s max bid and the gap to the
           projected close beside it; a row with no such line is one the engine abstained on (too little like it has
           sold) or could not price — no value is implied, high or low. A lot prints in one group only.
-        </HelpChip>
-        {away && <span className="ck-away-line">{away}</span>}
-      </div>
+        </> }}
+        sub={away ? <span className="ck-away-line">{away}</span> : null} />
       {(leftCol || rightCol) && (
         <div className="ck-today-cols" data-split={leftCol && rightCol ? 'two' : 'one'}>
           {leftCol && <div>{left.map((x, i) => <React.Fragment key={i}>{x}</React.Fragment>)}{twoCol && more}</div>}
@@ -307,6 +314,7 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
         </div>
       )}
       {!twoCol && more}
+      </div>
     </section>
   );
 }

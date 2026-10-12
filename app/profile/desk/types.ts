@@ -46,6 +46,10 @@ export interface DeskData {
   price: PricePref;
   /** the current picks in rank order (Top 3 first, then the room) */
   recs: readonly Rec<AuctionLot>[];
+  /** the return loop's picks that close before tonight ends (Today's
+   *  "Closing tonight") — NOT in `recs`; Your week and the Budget desk read
+   *  them so a pick Today prints is never missing from the week (R4#7) */
+  closingPicks: readonly Rec<AuctionLot>[];
   /** the reader's last visit (ms) or null on a first visit */
   lastVisitMs: number | null;
 }

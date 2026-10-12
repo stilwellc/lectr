@@ -12,7 +12,8 @@ import type { SavedMeta } from '../../../lib/account';
 import LotCard, { formatEstimate } from '../../../components/LotCard';
 import { TapeMark, ArchiveMark, HorizonMark } from '../../../components/marks';
 import DecisionLine from '../../../components/DecisionLine';
-import { formatPrice, formatDate, craftTitle, fmtSignedPct, overEstimatePct } from '../../../utils';
+import { formatDate, craftTitle, fmtSignedPct, overEstimatePct } from '../../../utils';
+import { fmtFace } from '../../../lib/lot-face';
 import { makerLineOf } from '../../../lib/lot-labels';
 import { RoomHead } from '../../head';
 import { useDeskInternals, type DeskInternals, type LedgerState, type SettledRowData } from '../provider';
@@ -48,7 +49,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
     const name = meta?.title || 'Archived lot';
     const price = o.provisional
       ? <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }} title="Sold — final price settling; the house posts results shortly after the close.">settling…</span>
-      : formatPrice(o.priceUsd);
+      : fmtFace(o.priceUsd);
     if (mobile) {
       return (
         <div className="ray-settled-mrow">
@@ -56,7 +57,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
           <div className="ck-mline">
             <span className="ck-msub">
               {(meta?.artist ? makerLineOf({ artist: meta.artist, title: meta.title }).name : '') || 'archive'}
-              {meta?.estMid != null && <> · est. {formatPrice(meta.estMid)} at save</>}
+              {meta?.estMid != null && <> · est. {fmtFace(meta.estMid)} at save</>}
             </span>
             <span className="ck-mnum">
               {price}
@@ -86,7 +87,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
         <span className="work">{name}<span style={{ color: 'var(--color-text-faint)' }}> · archive</span></span>
         <span className="num" style={{ color: meta?.estMid != null ? undefined : 'var(--color-text-faint)' }}
           title={meta?.estMid != null ? 'The estimate as it stood when you saved the lot' : 'No estimate published'}>
-          {meta?.estMid != null ? <>{formatPrice(meta.estMid)}<span className="sub">at save</span></> : '—'}
+          {meta?.estMid != null ? <>{fmtFace(meta.estMid)}<span className="sub">at save</span></> : '—'}
         </span>
         <CallCell meta={meta} />
         <span className="num" style={{ fontWeight: 600 }}>{price}</span>
@@ -122,7 +123,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
           <span className="ck-mnum">
             {pending ? <span style={{ color: 'var(--color-text-faint)' }}>pending</span> : (
               <>
-                <b>{formatPrice(lot.priceUsd!)}</b>
+                <b>{fmtFace(lot.priceUsd!)}</b>
                 {pct != null && (
                   <b style={{ marginLeft: 6, color: pct > 0 ? 'var(--color-up)' : pct < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)' }}>{fmtSignedPct(Math.round(pct))}</b>
                 )}
@@ -160,7 +161,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
       <span className="num">{formatEstimate(lot) || '—'}</span>
       <CallCell meta={meta} />
       <span className="num" style={{ fontWeight: 600 }}>
-        {pending ? <span style={{ color: 'var(--color-text-faint)', fontWeight: 500 }}>pending</span> : formatPrice(lot.priceUsd!)}
+        {pending ? <span style={{ color: 'var(--color-text-faint)', fontWeight: 500 }}>pending</span> : fmtFace(lot.priceUsd!)}
       </span>
       <span className="num" style={pct != null ? { color: pct > 0 ? 'var(--color-up)' : pct < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 700 } : { color: 'var(--color-text-faint)' }}>
         {pct != null ? fmtSignedPct(Math.round(pct)) : '—'}
@@ -266,7 +267,7 @@ export default function HistoryRoom(_p: SectionProps) {
       <section className="ray-saved-section rail ck-fold-section">
         <details className="ns-plate ck-fold" open={isDesktop !== false}>
           <summary className="ck-fold-sum">
-            <h3 className="ck-h3"><span className="ray-sect-mark" aria-hidden><ArchiveMark size={15} /></span>Concluded &amp; other</h3>
+            <RoomHead level={3} mark={<ArchiveMark size={15} />} title="Concluded & other" />
             <span className="ck-fold-n">{other.length}</span>
           </summary>
           <p className="ck-fold-dek">
@@ -304,7 +305,7 @@ export default function HistoryRoom(_p: SectionProps) {
       <section className="ray-saved-section rail ray-enter ck-fold-section">
         <details className="ns-plate ck-fold" open={isDesktop !== false}>
           <summary className="ck-fold-sum">
-            <h3 className="ck-h3"><span className="ray-sect-mark" aria-hidden><HorizonMark size={15} /></span>No longer on the block</h3>
+            <RoomHead level={3} mark={<HorizonMark size={15} />} title="No longer on the block" />
             <span className="ck-fold-n">{goneOrphans.length}</span>
           </summary>
           <p className="ck-fold-dek">
@@ -323,7 +324,7 @@ export default function HistoryRoom(_p: SectionProps) {
                         {m.artist && makerLineOf({ artist: m.artist, title: m.title }).name ? <>, {makerLineOf({ artist: m.artist, title: m.title }).name}</> : null}
                       </span>
                       <span style={{ color: 'var(--color-text-faint)' }}>
-                        {m.estMid != null && <> · est. {formatPrice(m.estMid)}</>}
+                        {m.estMid != null && <> · est. {fmtFace(m.estMid)}</>}
                         {' '}· saved {formatDate(m.savedAt)}
                       </span>
                     </>
@@ -333,7 +334,7 @@ export default function HistoryRoom(_p: SectionProps) {
                       {m && (
                         <span style={{ color: 'var(--color-text-faint)' }}>
                           {' '}· saved {formatDate(m.savedAt)}
-                          {m.estMid != null && <> · was est. {formatPrice(m.estMid)}</>}
+                          {m.estMid != null && <> · was est. {fmtFace(m.estMid)}</>}
                         </span>
                       )}
                     </>

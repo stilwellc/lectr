@@ -2177,6 +2177,7 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   width: auto;
   height: 26px;
   display: block;
+  flex: none; /* the nav row's overflow is the search box's to absorb, never the mark's (Oct 11: a 9px wordmark) */
   object-fit: contain;
   transition: filter 150ms var(--ease-signature);
 }
@@ -3262,12 +3263,13 @@ html .lectr-recplate-k {
 .ck-tag[data-tone='hot'] { color: var(--color-fg); border-color: var(--color-border-mid); }
 .ck-workmaker { display: block; font-size: 11px; font-weight: 600; color: var(--color-fg); }
 
-/* view toggle: quiet elevated fill, never a butter lamp */
-.ray-savedview-toggle { display: none; }
+/* view toggle: quiet elevated fill, never a butter lamp — reachable at every
+   width (R2 c: a phone collector picks Cards too) */
+.ray-savedview-toggle { display: inline-flex; gap: 5px; }
 .ray-saved-ledger { display: none; }
 .ck-mledger { display: block; }
+.ray-saved-section[data-view='cards'] .ck-mledger { display: none; }
 @media (min-width: 900px) {
-  .ray-savedview-toggle { display: inline-flex; gap: 5px; }
   .ck-mledger { display: none; }
   .ray-saved-section[data-view='ledger'] .ray-saved-ledger { display: block; }
   .ray-saved-section[data-view='cards'] .ray-saved-ledger { display: none; }
@@ -3286,10 +3288,15 @@ html .lectr-recplate-k {
 /* ── the mobile glance rows — the room in 30 seconds ── */
 .ck-mrow {
   display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
-  padding: 12px 2px; min-height: 44px;
-  border-top: 1px solid var(--hairline);
+  padding: 12px 2px; min-height: 44px; width: 100%;
+  border: none; border-top: 1px solid var(--hairline); border-radius: 0;
+  background: none; font: inherit; text-align: left; cursor: pointer;
   text-decoration: none; color: inherit;
 }
+.ck-mrow[data-open] { background: var(--color-hover-item); }
+.ck-mrow-chev { font-size: 16px; line-height: 1; color: var(--color-text-faint); transition: transform 150ms var(--ease-house, ease); }
+.ck-mrow[data-open] .ck-mrow-chev { transform: rotate(90deg); }
+.ck-mrow-wrap .ck-dossier { border-top: none; }
 .ck-mrow-main { min-width: 0; display: grid; gap: 3px; }
 .ck-mrow-right { flex: none; display: grid; gap: 3px; justify-items: end; text-align: right; }
 .ck-mrow-right b { font-family: var(--font-mono), monospace; font-size: 13px; font-variant-numeric: tabular-nums; }
@@ -3490,12 +3497,31 @@ html .lectr-recplate-k {
   .ray-settled-head { padding-top: 6px; }
 }
 
-/* keyboard walk — the j/k focus ring */
-.ray-savedrow:focus-visible, .ck-mrow:focus-visible, .ck-read:focus-visible {
-  outline: 1px solid var(--color-border-mid); outline-offset: -1px;
+/* keyboard walk — the j/k focus ring: 2px ink like every button (R5),
+   on the row itself or on the ledger row whose Details button holds focus */
+.ray-savedrow:focus-visible, .ck-mrow:focus-visible, .ck-read:focus-visible,
+.ck-expandrow:has(.ck-expand-btn:focus-visible) {
+  outline: 2px solid var(--color-fg); outline-offset: -2px;
   background: var(--color-hover-item);
 }
+.ck-expandrow:has(.ck-expand-btn:focus-visible) .ck-expand-btn:focus-visible { outline: none; }
 .ck-expandrow { cursor: pointer; }
+.ck-expandrow[data-open] { background: var(--color-hover-item); }
+/* the row's title link + its Details button (R5#2: a link and a button side
+   by side — never a role=button wrapper around a link) */
+.ck-work-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ck-work-title { color: inherit; text-decoration: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ck-work-title:hover { text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px; }
+.ck-expand-btn {
+  flex: none; display: inline-flex; align-items: center; gap: 2px;
+  min-height: 24px; padding: 0 8px; border-radius: 999px;
+  background: none; border: 1px solid var(--color-border); cursor: pointer;
+  font-family: var(--font-sans), sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0; color: var(--color-text-muted);
+  transition: color var(--duration-fast) var(--ease-signature), border-color var(--duration-fast) var(--ease-signature);
+}
+.ck-expand-btn:hover, .ck-expand-btn[aria-expanded='true'] { color: var(--color-fg); border-color: var(--color-border-mid); }
+.ck-expand-chev { display: inline-block; transition: transform 150ms var(--ease-house, ease); }
+.ck-expand-btn[aria-expanded='true'] .ck-expand-chev { transform: rotate(90deg); }
 
 /* the in-place dossier — a watch opens on its own row, nothing navigates */
 .ck-dossier {
@@ -4544,7 +4570,9 @@ button.ns-stat { cursor: pointer; }
 .ck-deskdetails > p { margin: 4px 0 6px; max-width: 760px; line-height: 1.6; color: var(--color-text-secondary); }
 
 /* every section lands under the nav + the pill rail (one rail, every width) */
-.ck-page :is(#desk, #today, #week, #for-you, #for-collection, #pick-outcomes, #watching, #budget, #portfolio, #market, #names, #signals, #inbox, #on-device, #record, #edge, #collection, #history, #settled, #account) { scroll-margin-top: 116px; }
+.ck-page :is(#desk, #today, #week, #for-you, #for-collection, #pick-outcomes, #watching, #budget, #portfolio, #market, #names, #signals, #inbox, #on-device, #record, #edge, #collection, #history, #settled, #account, #becomes, #signin) { scroll-margin-top: 116px; }
+/* a jump focuses the section (tabindex −1) — the room, not a ring around a whole room */
+.ck-page :is(section, div)[tabindex='-1']:focus { outline: none; }
 
 /* ── THE COCKPIT (THE DESK v3 §0) — three registration cells under the
    masthead's statement, then the 14-day hammer strip. Registration grammar:
@@ -4587,6 +4615,11 @@ a.ck-ccell:hover { background: var(--color-hover-item); }
 .ck-cockpit[data-cold] { margin-top: 12px; }
 .ck-cockpit[data-cold] .ck-ccell { padding-block: 9px; gap: 3px; }
 .ck-cockpit[data-cold] .ck-ccell-v { color: var(--color-text-faint); font-size: 18px; line-height: 1; }
+/* the cold cell IS its tap: the action's words in ink, sans — not a figure */
+.ck-ccell-tap, .ck-cockpit[data-cold] .ck-ccell-tap { font-family: var(--font-sans), sans-serif; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--color-fg); line-height: 1.2; }
+a.ck-ccell:hover .ck-ccell-tap { text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px; }
+.ck-ccell-scope { font-size: 11.5px; color: var(--color-text-muted); }
+a.ck-ccell:focus-visible { outline: 2px solid var(--color-fg); outline-offset: -2px; }
 .ck-cockpit[data-cold] .ck-hstrip { margin-top: 4px; }
 .ck-cockpit[data-cold] .ck-hbar { grid-template-rows: 14px auto; }
 /* the strip: 14 columns, a bar per day (height = share of the busiest
@@ -4598,14 +4631,18 @@ a.ck-ccell:hover { background: var(--color-hover-item); }
 }
 .ck-hstrip:hover:not(:disabled) { background: var(--color-hover-item); }
 .ck-hstrip:disabled { cursor: default; }
-.ck-hstrip:focus-visible { outline: 1.5px solid var(--color-fg); outline-offset: 2px; }
+.ck-hstrip:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
 .ck-hstrip-bars { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 4px; flex: 0 0 auto; width: min(100%, 322px); }
 .ck-hbar { display: grid; grid-template-rows: 26px auto; gap: 3px; justify-items: center; min-width: 0; }
 .ck-hbar i {
+  position: relative; overflow: hidden;
   align-self: end; width: 100%; max-width: 14px; height: 0; border-radius: 2px 2px 0 0;
   background: var(--color-text-faint); border-bottom: 1px solid var(--color-border-mid); box-sizing: border-box;
 }
-.ck-hbar[data-n] i { background: var(--color-fg); }
+/* the week's rows: a day of your watches is ink; picks and your names'
+   sales are light; a mixed day stacks the watches (ink) under the rest */
+.ck-hbar[data-w]:not([data-mix]) i { background: var(--color-fg); }
+.ck-hbar i u { position: absolute; left: 0; right: 0; bottom: 0; display: block; background: var(--color-fg); }
 .ck-hbar b { font-family: var(--font-mono), monospace; font-size: 10px; font-weight: 500; color: var(--color-text-faint); line-height: 1; }
 .ck-hbar[data-today] b { color: var(--color-fg); text-decoration: underline; text-decoration-color: var(--color-fg); text-underline-offset: 3px; }
 .ck-hbar[data-today] i { outline: 1px solid var(--color-fg); outline-offset: -1px; }
@@ -4633,14 +4670,16 @@ a.ck-ccell:hover { background: var(--color-hover-item); }
     display: grid; gap: 2px; padding: 6px 2px 7px; border-bottom: 1px solid var(--hairline);
     font-size: 12.5px; color: inherit; text-decoration: none;
   }
-  .ck-cockpit-next .ck-ccell-lot { font-size: 12.5px; }
+  /* (R2 f) the figure prints first; the title takes two lines, never a cut that drops the estimate */
+  .ck-cockpit-next .ck-ccell-lot { font-size: 12.5px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .ck-cockpit-next .ck-ccell-sub { font-size: 12px; }
   /* the in-cell decision line is the Next-hammer line's now */
   .ck-ccell > .ck-ccell-decision { display: none; }
   .ck-cockpit-next { font-size: 12.5px; }
   /* the strip: bars only (today outlined; the caption carries the dates) */
-  .ck-cockpit .ck-hbar { grid-template-rows: 11px; gap: 0; }
-  .ck-cockpit .ck-hbar b { display: none; }
+  /* (R5#15) the bars keep their weekday letters on a phone — a bar without a label is a mark, not a day */
+  .ck-cockpit .ck-hbar { grid-template-rows: 11px auto; gap: 2px; }
+  .ck-cockpit .ck-hbar b { display: block; font-size: 9px; }
   .ck-cockpit .ck-hstrip { flex-direction: column; align-items: stretch; margin-top: 6px; gap: 3px; padding: 0 2px 2px; }
   .ck-cockpit .ck-hstrip-bars { width: 100%; }
   .ck-cockpit .ck-hstrip-cap { align-self: stretch; font-size: 11.5px; gap: 0; }
@@ -4651,6 +4690,8 @@ a.ck-ccell:hover { background: var(--color-hover-item); }
   .ck-cockpit[data-cold] .ck-ccell { display: flex; flex-direction: column; gap: 2px; border-top: none; border-left: 1px solid var(--hairline); padding: 6px 8px; min-height: 0; }
   .ck-cockpit[data-cold] .ck-ccell:first-child { border-left: none; padding-left: 2px; }
   .ck-cockpit[data-cold] .ck-ccell-v { font-size: 15px; }
+  .ck-cockpit[data-cold] .ck-ccell-tap { font-size: 13px; }
+  .ck-cockpit[data-cold] .ck-ccell { min-height: 56px; justify-content: center; }
   .ck-cockpit[data-cold] .ck-hstrip { display: none; }
   .ck-cockpit-what { display: block; font-size: 12.5px; color: var(--color-text-secondary); }
   .ck-cockpit-what > summary {
@@ -4664,11 +4705,86 @@ a.ck-ccell:hover { background: var(--color-hover-item); }
   .ck-cockpit-what b { color: var(--color-fg); font-weight: 600; }
 }
 
-/* the rail's (?) — the keys legend, pinned at the rail's right edge */
+/* the rail's (?) — the keys legend, pinned at the rail's right edge; the
+   strip drops under the rail on its own plate (R2 b: it printed as bare text
+   over the Today band) */
 .ck-rail-wrap { display: flex; align-items: center; gap: 8px; }
 .ck-rail-wrap > .ck-rail { flex: 1 1 auto; min-width: 0; }
 .ck-rail-help { flex: none; display: flex; align-items: center; position: static; }
-.ck-rail-help .ck-help { position: absolute; left: 0; right: 0; top: 100%; margin: 0; z-index: 25; border-radius: 0 0 12px 12px; }
+.ck-rail-help .ck-help {
+  position: absolute; left: 0; right: 0; top: 100%; margin: 0; z-index: 25;
+  padding: 12px 16px 14px; border: 1px solid var(--hairline); border-top: none; border-left: 2px solid var(--color-border-mid);
+  border-radius: 0 0 12px 12px; background: var(--color-bg); box-shadow: 0 12px 28px rgba(8, 6, 3, 0.12);
+}
+/* the › / ‹ at the rail's edge: pills ran off-screen with no affordance (R1#6) */
+.ck-rail-more {
+  flex: none; width: 28px; height: 28px; border-radius: 999px; padding: 0 0 2px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--color-bg-elevated); border: none; cursor: pointer;
+  font-family: var(--font-mono), monospace; font-size: 16px; line-height: 1; color: var(--color-text-muted);
+}
+.ck-rail-more:hover { color: var(--color-fg); }
+.ck-rail-more:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+/* PHONE (R2 d): one row — where you are, and the Sections sheet */
+.ck-rail-wrap[data-phone] { display: block; }
+.ck-rail-now { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; min-height: 44px; }
+.ck-rail-here { display: inline-flex; align-items: baseline; gap: 7px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 600; color: var(--color-fg); }
+.ck-rail-here b { font-family: var(--font-mono), monospace; font-size: 12px; font-weight: 500; color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+.ck-rail-open { height: 36px !important; border: none; cursor: pointer; font-family: var(--font-sans), sans-serif; color: var(--color-fg) !important; }
+.ck-rail-open::after { content: '▾'; font-size: 10px; margin-left: -2px; }
+.ck-rail-sheet-list { display: grid; margin-top: 4px; }
+.ck-rail-sheet-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px; width: 100%; min-height: 48px;
+  padding: 0 2px; background: none; border: none; border-top: 1px solid var(--hairline); border-radius: 0;
+  font: inherit; font-size: 15px; color: var(--color-fg); text-align: left; cursor: pointer;
+}
+.ck-rail-sheet-row:first-child { border-top: none; }
+.ck-rail-sheet-row > span { flex: 1 1 auto; }
+.ck-rail-sheet-row[aria-current='true'] { font-weight: 600; }
+.ck-rail-sheet-row[aria-current='true'] > span::after { content: ' · here'; font-weight: 400; color: var(--color-text-muted); font-size: 12.5px; }
+.ck-rail-sheet-row[data-quiet] { color: var(--color-text-muted); }
+.ck-rail-sheet-row b { font-family: var(--font-mono), monospace; font-size: 13px; font-weight: 500; color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+.ck-rail-sheet-row small { font-size: 12px; color: var(--color-text-faint); }
+.ck-rail-sheet-sep { display: block; height: 10px; }
+.ck-rail-sheet-note { font-size: 12.5px; color: var(--color-text-muted); margin: 12px 0 0; }
+/* a deep link to a room this desk doesn't have yet: one line under the rail */
+.ck-landnote { padding: 12px 0 0; }
+.ck-landnote p { margin: 0; padding: 10px 14px; border-left: 2px solid var(--color-border-mid); font-size: 13px; line-height: 1.55; color: var(--color-text-secondary); max-width: 760px; }
+.ck-landnote b { color: var(--color-fg); font-weight: 600; }
+/* THE INDEX (rooms/becomes): one row per room not on this desk — what it holds, how it fills, the tap */
+.ck-index { margin-top: 12px; border-top: 1px solid var(--hairline); }
+.ck-index-row { display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; gap: 6px 18px; align-items: baseline; padding: 12px 2px; border-bottom: 1px solid var(--hairline); font-size: 13px; line-height: 1.5; color: var(--color-text-secondary); }
+.ck-index-k { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--color-fg); }
+.ck-index-mark { margin-right: 0 !important; }
+html[data-lectr-light] .ck-index-mark { width: 22px !important; height: 22px !important; border-radius: 6px !important; vertical-align: -5px !important; }
+html[data-lectr-light] .ck-index-mark svg { width: 12px !important; height: 12px !important; }
+.ck-index-how { color: var(--color-text-muted); }
+.ck-index-tap { display: inline-flex; align-items: center; min-height: 40px; white-space: nowrap; font-weight: 600; color: var(--color-fg); text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px; }
+.ck-index-tap:hover { text-decoration-color: var(--color-fg); }
+.ck-index-ctas { display: flex; gap: 12px; flex-wrap: wrap; padding: 22px 0 4px; }
+@media (max-width: 899.98px) {
+  .ck-index-row { grid-template-columns: minmax(0, 1fr); gap: 2px; padding-block: 12px 8px; }
+  .ck-index-tap { justify-self: start; }
+}
+/* a save marked owned that is still on the block (R1#9) */
+.ck-pending-owned { list-style: none; margin: 12px 0 0; padding: 10px 12px; border-left: 2px solid var(--color-border-mid); display: grid; gap: 6px; font-size: 12.5px; line-height: 1.55; color: var(--color-text-secondary); }
+/* 40px hit areas on narrow for the row-level text links and the ⋯ (R2 e) */
+@media (max-width: 899.98px) {
+  .ck-today .ck-away-line a, .ck-head-sub .ck-away-link, .ck-pending-owned a, .ck-index-tap { position: relative; }
+  .ck-today .ck-away-line a::before, .ck-head-sub .ck-away-link::before, .ck-pending-owned a::before { content: ""; position: absolute; inset: -12px -4px; }
+  .ck-today .ck-read-title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .ck-mtitle { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.35; }
+  .ray-coll-exposure-row > span:first-child { white-space: normal !important; }
+  .ck-rec-tl-band { gap: 3px; }
+  .ck-rec-tl-bar { max-width: 18px; }
+  .ck-rec-tl-bar::before { content: ""; position: absolute; inset: -4px -2px; }
+}
+.ck-rec-tl-bar { background: none; border: none; padding: 0; cursor: pointer; }
+.ck-rec-tl-bar:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+.ck-rec-tl-bar[aria-pressed='true'] i { opacity: 1; outline: 1px solid var(--color-fg); outline-offset: 1px; }
+.ck-rec-tl-cap b { font-weight: 600; }
+.ck-signin-section { padding-top: 26px; }
+.ck-signin { padding-top: 8px; }
 
 /* ── THE PILL RAIL (every width): sticky under the site nav — the nav is
    64px tall (10px padding + 44px row), so top 64; at 54 the nav covered
@@ -4713,16 +4829,12 @@ a.ck-ccell:hover { background: var(--color-hover-item); }
   .ck-page .ray-saved-ledger-head, .ck-page .ray-settled-head { top: 108px; }
 }
 
-/* ── room heads: title, figure line, actions, ? — one wrapping row ── */
-.ck-room-head { display: flex; align-items: baseline; gap: 6px 14px; flex-wrap: wrap; }
-.ck-room-sub { font-size: 13px; color: var(--color-text-muted); min-width: 0; }
+/* ── room heads: app/profile/head.tsx (RoomHead) everywhere ── */
 .ck-tune { align-self: center; padding: 5px 14px; font-size: 13px; }
 
-/* ── THE TODAY BAND ── */
-.ck-today { padding-top: 22px; padding-bottom: 6px; }
-.ck-today-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; }
-.ck-today-head .kicker { display: inline-flex; align-items: center; font-size: 14px; color: var(--color-fg); }
-.ck-today-head .ck-away-line { font-size: 13px; color: var(--color-text-secondary); }
+/* ── THE TODAY BAND — a room like the others (R5#8: RoomHead, the 40/48
+   rhythm of .ray-saved-section); the away facts are its figure line ── */
+.ck-today-head .ck-head-sub { max-width: none; color: var(--color-text-secondary); }
 .ck-today-head .ck-away-go { margin-left: 0; }
 .ck-today-cols { display: grid; grid-template-columns: 1fr; gap: 0 36px; }
 .ck-today-cols > div > .ck-reads:first-child, .ck-today-cols > .ck-reads { margin-top: 14px; }
@@ -4848,15 +4960,11 @@ a.ck-ccell:hover { background: var(--color-hover-item); }
   .ck-today .ck-read-title { flex: 1 1 0; min-width: 0; max-width: none; }
   /* the fact carries the reason — it wraps on a phone, never cut */
   .ck-today .ck-read-fact { flex: 1 1 100%; white-space: normal; }
-  .ck-today-head .ck-away-line { font-size: 12.5px; }
+  .ck-today-head .ck-head-sub { font-size: 12.5px; }
   .ck-foryou.ray-saved-section { padding-top: 18px; }
 }
-.ck-room-subline { flex: 1 1 100%; }
-.ck-foryou .ck-room-head .ray-h2 { margin-right: auto !important; }
-@media (min-width: 900px) { .ck-foryou .ck-room-head .ray-h2 { margin-right: 0 !important; } }
 @media (max-width: 640px) {
   .ck-wide { display: none; }
-  .ck-today { padding-bottom: 0; }
   .ck-today-more { margin-top: 2px; }
 }
 .ck-deskdetails-btn {
@@ -4868,7 +4976,6 @@ a.ck-ccell:hover { background: var(--color-hover-item); }
 .ck-deskdetails-btn:hover { color: var(--color-fg); }
 @media (max-width: 899.98px) { .ck-deskdetails-btn::before { content: ""; position: absolute; inset: -12px -6px; } }
 .ck-deskdetails { margin: 0 0 6px; }
-@media (max-width: 640px) { .ck-today { padding-top: 16px; } }
 @media (max-width: 640px) {
   .ck-page .ray-h2 { font-size: 26px; }
 }

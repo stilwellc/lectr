@@ -9,12 +9,14 @@ import Masthead, { Accent } from '../components/Masthead';
 import CloseClock from '../components/CloseClock';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import ComparableModal from '../components/ComparableModal';
-import { formatPrice, formatDate } from '../utils';
-import { PillRail, useHashLanding } from './rail';
+import { formatDate } from '../utils';
+import { fmtFace } from '../lib/lot-face';
+import { PillRail, useHashLanding, jump } from './rail';
 import { useStalled } from './stall';
 import { closeDays, hammerWord } from './desk/derive';
 import { DeskProvider, useDeskState, useDeskInternals, useDesk, type DeskState } from './desk/provider';
-import { SECTIONS, mountedSections, railItemsOf, keysLegend } from './desk/sections';
+import { SECTIONS, mountedSections, railItemsOf, keysLegend, missingSection, type DeskSection } from './desk/sections';
+import type { RailItem } from './rail';
 import { LedgerGate } from './desk/rooms/history';
 import Cockpit from './desk/cockpit';
 import { useDeskKeys } from './desk/keys';
@@ -63,10 +65,40 @@ function KeysHelp({ mountedIds }: { mountedIds: ReadonlySet<string> }) {
           <b>{k.key}</b> {k.label}{!k.live && <span style={{ color: 'var(--color-text-faint)' }}> (not on this desk yet)</span>}
         </React.Fragment>
       ))}
-      . Every pill above is a link, too — the hash in the address bar follows you.
+      . Every pill above is a link, too — the hash in the address bar follows you. <b>?</b> opens this legend.
     </>
   );
 }
+
+/** a deep link to a room this desk doesn't have yet (#record on a cold desk)
+ *  used to land silently — one line under the rail says what the room is,
+ *  how it fills, and the tap that starts it (R3#5) */
+function MissingLanding({ sections }: { sections: readonly DeskSection[] }) {
+  const [id, setId] = useState<string | null>(null);
+  React.useEffect(() => {
+    const read = () => { try { setId(decodeURIComponent(window.location.hash.slice(1)) || null); } catch { setId(null); } };
+    read();
+    window.addEventListener('hashchange', read);
+    return () => window.removeEventListener('hashchange', read);
+  }, []);
+  const s = id ? missingSection(id, sections) : null;
+  if (!s || !s.fill) return null;
+  const { fill } = s;
+  const hash = fill.tap.href.startsWith('#');
+  return (
+    <section className="rail ck-landnote" role="status">
+      <p>
+        <b>{s.label}</b> — not on this desk yet; {fill.how}. It holds {fill.text}.{' '}
+        {hash
+          ? <a href={fill.tap.href} className="ck-away-link" onClick={e => { e.preventDefault(); jump(fill.tap.href.slice(1)); }}>{fill.tap.label} →</a>
+          : <a href={fill.tap.href} className="ck-away-link">{fill.tap.label} →</a>}
+      </p>
+    </section>
+  );
+}
+
+/** the rooms without a pill the phone's Sections sheet still lists */
+const RAIL_TAIL: RailItem[] = [{ id: 'account', label: 'Account', group: 'desk' }];
 
 /** the masthead — the statement, the sub-line, the desk details, the
  *  archive warnings, then the cockpit */
@@ -102,7 +134,7 @@ function DeskMasthead() {
                   Watching{' '}
                   <Accent>
                     <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      <CountUp to={summary.totalEst} format={formatPrice} duration={1100} animate={!fromCache} />
+                      <CountUp to={summary.totalEst} format={fmtFace} duration={1100} animate={!fromCache} />
                     </span>
                   </Accent>{' '}
                   to the hammer.
@@ -151,7 +183,7 @@ function DeskMasthead() {
           {hasDeskDetails && deskDetails && (
             <div className="ck-deskdetails" id="desk-details">
               <p>
-                {summary.totalEst > 0 && <>{formatPrice(summary.totalEst)} at estimate midpoint · {summary.priced} of {upcoming.length} lots priced</>}
+                {summary.totalEst > 0 && <>{fmtFace(summary.totalEst)} at estimate midpoint · {summary.priced} of {upcoming.length} lots priced</>}
                 {(changes.moved > 0 || changes.newBids > 0) && (
                   <>
                     {summary.totalEst > 0 ? ' · ' : ''}since you saved
@@ -202,7 +234,8 @@ function DeskBody() {
   return (
     <>
       <DeskMasthead />
-      <PillRail items={items} help={<KeysHelp mountedIds={mountedIds} />} />
+      <PillRail items={items} help={<KeysHelp mountedIds={mountedIds} />} tail={RAIL_TAIL} />
+      <MissingLanding sections={sections} />
       {sections.map(s => {
         const C = s.Component!;
         return <C key={s.id} desk={desk} act={act} narrow={narrow} />;

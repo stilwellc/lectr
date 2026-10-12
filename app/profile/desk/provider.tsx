@@ -42,18 +42,21 @@ import { usePricePref, priceText, readInterests, writeInterests, type PricePref 
 import { useLotModal } from '../../lib/use-lot-modal';
 import type { Follow } from '../../lib/follows';
 import { topPicksOf, type TodayRead } from '../today';
-import { closeDayOf, getUpcomingCounts, formatPrice, fmtSignedPct, localToday, median, overEstimatePct, isOnBlock } from '../../utils';
+import { closeDayOf, getUpcomingCounts, fmtSignedPct, localToday, median, overEstimatePct, isOnBlock } from '../../utils';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../../constants';
 import { drillLabelOf } from '../../lib/lot-labels';
 import { useStalled, useAfterPaint } from '../stall';
 import { readSettledRows, writeSettledRows, type SettledRows } from '../settled-cache';
 import { closeDays, isPastPending, saleTime, watchTagOf, TAG_SOON_DAYS, type LiveSignal } from './derive';
+import { pricedTotal } from './priced';
+import { fmtFace } from '../../lib/lot-face';
 import type { DeskData, DeskActions } from './types';
 
 /* ══ LOTS YOU MAY LIKE — the desk's recommender (app/lib/recs). The deal is
    computed once at the page (useDeal) so the Today band, the rail's count
    and the picks room read the same picks. ══ */
 export const RECS_MAX = 24;
+const EMPTY_RECS: readonly Rec<AuctionLot>[] = [];
 export interface Deal { pool: AuctionLot[]; recs: Rec<AuctionLot>[]; loop: ReturnLoop | null }
 function useDeal(book: AuctionLot[], taste: Taste, ready: boolean): Deal {
   // the block (isOnBlock — every live count's pool), re-cut per book
@@ -82,14 +85,37 @@ export interface CollectionRow {
   drill: DrillRow | null; drillSlug: string | null;
 }
 export interface CollectionRead {
-  rows: CollectionRow[]; totalPaid: number; totalAppraised: number; deltaPct: number | null; appraisedN: number; appraisedPaidN: number;
+  rows: CollectionRow[];
+  /** Σ bought over every piece with a price (your basis, else the realized price) */
+  totalPaid: number;
+  /** Σ the ENGINE's appraisal over the pieces it appraised — only those
+   *  (R4#4: a piece without a comp pool never carries at cost into a
+   *  figure called an appraisal) */
+  totalAppraised: number;
+  /** Σ bought over the appraised pieces that also carry a bought price —
+   *  the denominator of `deltaPct` */
+  appraisedPaid: number;
+  /** appraised vs bought over the `appraisedPaidN` pieces that have both; null = no measurement */
+  deltaPct: number | null;
+  appraisedN: number; appraisedPaidN: number;
+  /** saves marked owned while still on the block — a live lot can't be
+   *  owned yet: it stays in Watching and joins the collection when it
+   *  hammers (the mark is kept, never deleted) */
+  pendingOwned: AuctionLot[];
 }
 export interface RecordRead {
   n: number; realized: number; med: number | null;
   split: { flagged: number | null; flaggedN: number; rest: number | null; restN: number } | null;
   series: { id: string; d: string; pct: number; title: string }[];
 }
-export interface WatchSummary { totalEst: number; priced: number; flagged: number; next: AuctionLot | null; closesToday: number }
+export interface WatchSummary {
+  /** Σ estimate midpoints over the PRICED live watches (./priced: both bounds) */
+  totalEst: number;
+  priced: number;
+  /** live watches with a one-sided estimate ("from $X") — counted, never summed */
+  oneSided: number;
+  flagged: number; next: AuctionLot | null; closesToday: number;
+}
 export type LedgerState = { ledger: Map<string, LedgerEntry>; loaded: boolean; error: boolean };
 
 /** the page's own reads — what the rooms written before the contract use */
@@ -336,8 +362,13 @@ export function useDeskState(): DeskState {
 
   /* ── COLLECTION — engine-appraised; a reference RANGE is context only ── */
   const collection = useMemo<CollectionRead>(() => {
+    // OWNED ∩ LIVE (R1#9, R4#11): a lot marked owned while still on the block
+    // is not a piece yet — it stays in Watching (and the Budget plan) and
+    // joins here, with its totals, when it hammers; the mark is kept
+    const pendingOwned = savedLots.filter(l => ownedLotIds.has(l.id) && l.status === 'upcoming' && !isPastPending(l));
+    const pendingIds = new Set(pendingOwned.map(l => l.id));
     const rows: CollectionRow[] = savedLots
-      .filter(l => ownedLotIds.has(l.id))
+      .filter(l => ownedLotIds.has(l.id) && !pendingIds.has(l.id))
       .map(l => {
         const m = metaFor(l.id);
         // YOUR number first: the recorded cost basis beats the hammer price
@@ -357,8 +388,8 @@ export function useDeskState(): DeskState {
             ?? makerReferenceBand(l, allLots);
           if (rb) {
             refRange = rb.scope
-              ? `${ARTIST_LABEL[l.artist] || l.artist} ${rb.scope} reference ${formatPrice(rb.q1)}–${formatPrice(rb.q3)} · ${rb.n} sales`
-              : `reference ${formatPrice(rb.q1)}–${formatPrice(rb.q3)} · ${rb.n} sales`;
+              ? `${ARTIST_LABEL[l.artist] || l.artist} ${rb.scope} reference ${fmtFace(rb.q1)}–${fmtFace(rb.q3)} · ${rb.n} sales`
+              : `reference ${fmtFace(rb.q1)}–${fmtFace(rb.q3)} · ${rb.n} sales`;
           }
         }
         const deltaPct = paid && appraised ? Math.round((appraised / paid - 1) * 100) : null;
@@ -386,15 +417,18 @@ export function useDeskState(): DeskState {
       });
     }
     const totalPaid = rows.reduce((s, r) => s + (r.paid || 0), 0);
-    const totalAppraised = rows.reduce((s, r) => s + (r.appraised ?? r.paid ?? 0), 0);
-    const appraisedOfPaid = rows.reduce((s, r) => s + (r.paid != null ? (r.appraised ?? r.paid) : 0), 0);
-    const deltaPct = totalPaid > 0 ? Math.round((appraisedOfPaid / totalPaid - 1) * 100) : null;
-    // pieces the engine actually appraised (a comp pool) — and of those, the
-    // ones with a bought price. With none, "appraised vs bought" compares cost
-    // with cost (every piece carries at its bought price): no measurement.
-    const appraisedN = rows.filter(r => r.appraised != null).length;
-    const appraisedPaidN = rows.filter(r => r.appraised != null && r.paid != null && r.paid > 0).length;
-    return { rows, totalPaid, totalAppraised, deltaPct, appraisedN, appraisedPaidN };
+    // (R4#4, R1#4) the appraisal total is the ENGINE's over the pieces it
+    // appraised — never cost carried forward under the word "appraisal";
+    // the ±% compares those same pieces with their bought price, n said
+    const appraisedRows = rows.filter(r => r.appraised != null);
+    const bothRows = appraisedRows.filter(r => r.paid != null && r.paid > 0);
+    const totalAppraised = appraisedRows.reduce((s, r) => s + (r.appraised ?? 0), 0);
+    const appraisedPaid = bothRows.reduce((s, r) => s + (r.paid ?? 0), 0);
+    const appraisedOfPaid = bothRows.reduce((s, r) => s + (r.appraised ?? 0), 0);
+    const deltaPct = appraisedPaid > 0 ? Math.round((appraisedOfPaid / appraisedPaid - 1) * 100) : null;
+    const appraisedN = appraisedRows.length;
+    const appraisedPaidN = bothRows.length;
+    return { rows, totalPaid, totalAppraised, appraisedPaid, deltaPct, appraisedN, appraisedPaidN, pendingOwned };
   }, [savedLots, ownedLotIds, allLots, fullLoaded, marketData, soldOrphans, ownedIdSet, savedMeta, metaFor, savedIdOf]);
 
   /* ── sub-market exposure — the MARKET's read, labeled as such ── */
@@ -429,21 +463,16 @@ export function useDeskState(): DeskState {
 
   /* ── WATCHING summary ── */
   const summary = useMemo<WatchSummary>(() => {
-    const withEst = upcoming.filter(l => (l.estimateLow || 0) > 0 || (l.estimateHigh || 0) > 0);
-    // a sum of estimate MIDPOINTS over the estimate-bearing subset — every
-    // surface that prints it labels it so ("at estimate midpoint · N of M
-    // lots priced"); a bid-only lot contributes nothing and must say so
-    const totalEst = withEst.reduce((s, l) => {
-      const lo = l.estimateLow || l.estimateHigh || 0;
-      const hi = l.estimateHigh || l.estimateLow || 0;
-      return s + (lo + hi) / 2;
-    }, 0);
-    const priced = withEst.length;
+    // ONE "priced" rule (./priced, R4#3): a sum of estimate MIDPOINTS over the
+    // lots with BOTH bounds — every surface that prints it labels it so ("at
+    // estimate midpoint · N of M priced"); a one-sided estimate is "from $X"
+    // on its row and never enters the total; a bid-only lot adds nothing
+    const { total: totalEst, priced, oneSided } = pricedTotal(upcoming);
     const flagged = upcoming.filter(l => signalById.get(l.id)?.label === 'Below Market').length;
     const todayIso = localToday();
     const next = upcoming.find(l => { const d = closeDayOf(l).slice(0, 10); return !!d && d >= todayIso; }) || null;
     const closesToday = upcoming.filter(l => closeDays(l) === 0).length;
-    return { totalEst, priced, flagged, next, closesToday };
+    return { totalEst, priced, oneSided, flagged, next, closesToday };
   }, [upcoming, signalById]);
 
   const changes = useMemo(() => {
@@ -504,7 +533,7 @@ export function useDeskState(): DeskState {
       const d = closeDays(l);
       rows.push({
         key: `q-${claim(l).id}`, tag: 'Quietest', lot: l,
-        fact: <>no bids yet · hammers {d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}{read.entry != null ? <> · opens at {formatPrice(read.entry)}</> : null} · appraised {formatPrice(read.cvu)}{read.anchor === 'fair-est' ? ', at estimate' : ''}</>,
+        fact: <>no bids yet · hammers {d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}{read.entry != null ? <> · opens at {fmtFace(read.entry)}</> : null} · appraised {fmtFace(read.cvu)}{read.anchor === 'fair-est' ? ', at estimate' : ''}</>,
       });
     }
     const soon = upcoming
@@ -532,7 +561,7 @@ export function useDeskState(): DeskState {
         if (l.cardComps && l.cardComps.n > 0 && l.cardComps.med != null) {
           rows.push({
             key: `dc-${claim(l).id}`, tag: 'Direct comps', lot: l,
-            fact: <>{l.cardComps.n} {l.cardComps.n === 1 ? 'sale' : 'sales'}, same card &amp; grade · {formatPrice(l.cardComps.med)} median</>,
+            fact: <>{l.cardComps.n} {l.cardComps.n === 1 ? 'sale' : 'sales'}, same card &amp; grade · {fmtFace(l.cardComps.med)} median</>,
           });
           found++;
         }
@@ -556,7 +585,7 @@ export function useDeskState(): DeskState {
       const printedBid = estText.includes('bid');
       rows.push({
         key: `bm-${claim(l).id}`, tag: 'Below market', lot: l, tone: 'up',
-        fact: <><b style={{ color: 'var(--color-up)', fontVariantNumeric: 'tabular-nums' }}>+{Math.abs(Math.round(sig.pct))}%</b> vs comps{estText ? <> · {estText}</> : null}{!printedBid && (l.currentBid || 0) > 0 ? <> · {formatPrice(l.currentBid!)} bid</> : null}</>,
+        fact: <><b style={{ color: 'var(--color-up)', fontVariantNumeric: 'tabular-nums' }}>+{Math.abs(Math.round(sig.pct))}%</b> vs comps{estText ? <> · {estText}</> : null}{!printedBid && (l.currentBid || 0) > 0 ? <> · {fmtFace(l.currentBid!)} bid</> : null}</>,
       });
     }
     return rows.slice(0, 8);
@@ -879,8 +908,9 @@ export function useDeskState(): DeskState {
     follows: myFollows,
     price,
     recs: deal.recs,
+    closingPicks: deal.loop?.closing ?? EMPTY_RECS,
     lastVisitMs,
-  }), [now, authEnabled, user, tasteBook, fullLoaded, fullError, lastCrawl, saved, savedIdSet, metaForContract, collectionLots, ownedAll, ledgerState, tasteReady, recTaste, myFollows, price, deal.recs, lastVisitMs]);
+  }), [now, authEnabled, user, tasteBook, fullLoaded, fullError, lastCrawl, saved, savedIdSet, metaForContract, collectionLots, ownedAll, ledgerState, tasteReady, recTaste, myFollows, price, deal.recs, deal.loop, lastVisitMs]);
 
   const act = useMemo<DeskActions>(() => ({
     toggleSave: (lot) => toggle(savedIdOf(lot.id), lot),

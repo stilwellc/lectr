@@ -6,17 +6,31 @@
  *   Watching      $ at estimate midpoint to the hammer · lots · below market
  *   Next hammer   the soonest closing watch: live CloseClock inside 24h,
  *                 else the day word; the lot; its decision line
- *   Your edge     the record's median vs estimate (signed, the lamp), calls
- *                 graded, the current streak
+ *   Your edge     YOUR CALLS graded against the hammer (edge/edge.ts
+ *                 gradeDesk — imported, never re-derived) once any call has
+ *                 graded; until then the cell is what it is: "Settled
+ *                 watches", the Record's median vs estimate (R4#2, R1#1)
  *
- * Every number is the provider's (summary / record — the same figures the
- * sub-line, Watching and Your record print; nothing is re-derived here).
- * A cold desk keeps the three cells with honest dashes and says what fills
- * each one — the page reads as a product before it has data, not a ghost.
+ * Every number is the provider's or the week's (summary / record /
+ * planWeek / gradeDesk — the same figures the sub-line, Watching, Your week
+ * and Your edge print; nothing is re-derived here).
  *
- * The strip: one tiny bar per day for the next 14, the reader's lots closing
- * that day (closeDayOf — the reader's day); today marked; tap → #week once
- * Your week registers, #watching until then. Phone: cells stack, strip stays.
+ * THREE DESKS (Oct 11 review, R3#1/#2):
+ *   live        watches on the block — the cells above
+ *   picks-only  nothing watched, but picks / follows (a quick start, a
+ *               follows-only desk): Watching says "0 watched · 24 picks live",
+ *               Next hammer falls back to the soonest pick (labelled) or the
+ *               soonest sale of one of your names, and the strip counts the
+ *               SAME rows Your week counts (planWeek — watches bold, picks and
+ *               names light), so Today, the cockpit and the week never
+ *               contradict each other on one screen
+ *   cold        nothing at all — the three cells are the three taps that
+ *               fill them (watch a lot, tonight's closers, the engine's
+ *               record); no "What fills these" fold
+ *
+ * The strip: one tiny bar per day for the next 14, the reader's rows closing
+ * that day (the week's day — the reader's day for a timed close); today
+ * marked; tap → #week. Phone: cells stack, strip stays, weekday letters stay.
  */
 import React, { useMemo } from 'react';
 import Link from 'next/link';
@@ -24,24 +38,30 @@ import CloseClock from '../../components/CloseClock';
 import DecisionLine from '../../components/DecisionLine';
 import { formatEstimate } from '../../components/LotCard';
 import { displayMakerOf } from '../../lib/maker-subjects';
-import { closeDayOf, craftTitle, formatPrice, fmtSignedPct, localToday } from '../../utils';
+import { fmtFace } from '../../lib/lot-face';
+import { craftTitle, fmtSignedPct, localToday } from '../../utils';
 import { closeDays, hammerWord } from './derive';
 import { useDesk, useDeskInternals } from './provider';
 import { jump } from '../rail';
-import { dayLabel, estMidOf, hammerStrip, streakOf, stripCaption } from './cockpit-logic';
-import { closingNowOf } from '../week/week';
+import { dayLabel, hammerStrip, streakOf, stripCaption } from './cockpit-logic';
+import { closingNowOf, planWeek, localDayOf, type WeekRow } from '../week/week';
+import { gradeDesk, EDGE_HIT_PCT } from '../edge/edge';
+import type { AuctionLot } from '../../types';
 
 const lamp = (v: number) => (v > 0 ? 'var(--color-up)' : v < 0 ? 'var(--color-down-text)' : 'var(--color-fg)');
 
-function Cell({ k, v, note, body, href, tone, children }: {
+function Cell({ k, v, note, body, href, tone, tap, children }: {
   k: string; v: React.ReactNode; note?: React.ReactNode; body: React.ReactNode; href?: string;
   /** the value's ink — a signed read only (lamp law) */
-  tone?: string; children?: React.ReactNode;
+  tone?: string;
+  /** a cold cell IS its tap: the value is the action's words, not a figure */
+  tap?: boolean;
+  children?: React.ReactNode;
 }) {
   const inner = (
     <>
       <span className="ck-ccell-k">{k}</span>
-      <span className="ck-ccell-v" style={tone ? { color: tone } : undefined}>{v}{note != null && <small>{note}</small>}</span>
+      <span className={tap ? 'ck-ccell-v ck-ccell-tap' : 'ck-ccell-v'} style={tone ? { color: tone } : undefined}>{v}{note != null && <small>{note}</small>}</span>
       <span className="ck-ccell-b">{body}</span>
       {children}
     </>
@@ -53,81 +73,166 @@ function Cell({ k, v, note, body, href, tone, children }: {
     : <div className="ck-ccell">{inner}</div>;
 }
 
+/** the lot line a Next-hammer cell prints: who · title, the estimate / house under it */
+function LotLine({ lot, phone = false }: { lot: AuctionLot; phone?: boolean }) {
+  const who = displayMakerOf(lot)?.name ?? null;
+  const est = formatEstimate(lot);
+  const sub = [est, lot.auctionHouse].filter(Boolean).join(' · ');
+  // a phone prints the FIGURE first and lets the title take two lines — a
+  // single ellipsized line cut the estimate, not the noise (R2 f)
+  return phone ? (
+    <>
+      {sub && <span className="ck-ccell-sub">{sub}</span>}
+      <span className="ck-ccell-lot">{who && <>{who} · </>}{craftTitle(lot.title, lot.auctionHouse)}</span>
+    </>
+  ) : (
+    <>
+      <span className="ck-ccell-lot">{who && <>{who} · </>}{craftTitle(lot.title, lot.auctionHouse)}</span>
+      {sub && <span className="ck-ccell-sub">{sub}</span>}
+    </>
+  );
+}
+
+const KIND_WORD: Record<WeekRow['kind'], string> = { watch: 'your watch', pick: 'a pick', name: 'your name' };
+
 export default function Cockpit() {
   const { desk } = useDesk();
   const { upcoming, summary, record, deskView } = useDeskInternals();
-  const cold = !deskView;
   const todayKey = localToday();
+  // THE WEEK's rows — the one source the strip, Your week and (via X2) the
+  // Today band count; the return loop's closing picks join the picks
+  const plan = useMemo(() => {
+    const seen = new Set(desk.recs.map(r => r.lot.id));
+    const recs = desk.closingPicks.length ? desk.recs.concat(desk.closingPicks.filter(r => !seen.has(r.lot.id))) : desk.recs;
+    return planWeek({ now: desk.now, saved: desk.saved, savedIds: desk.savedIds, recs, book: desk.book, follows: desk.follows, collection: desk.collection });
+  }, [desk]);
+  const picksLive = useMemo(() => {
+    const ids = new Set(desk.recs.map(r => r.lot.id));
+    for (const r of desk.closingPicks) ids.add(r.lot.id);
+    return ids.size;
+  }, [desk.recs, desk.closingPicks]);
+  // the three desks
+  const live = deskView;
+  const cold = !live && plan.rows.length === 0 && picksLive === 0;
+  const picksOnly = !live && !cold;
   const strip = useMemo(
-    () => hammerStrip(upcoming.map(l => ({ day: closeDayOf(l), est: estMidOf(l) })), todayKey),
-    [upcoming, todayKey],
+    () => hammerStrip(plan.rows.map(r => ({ day: r.day, est: r.estMid ?? 0, kind: r.kind })), todayKey),
+    [plan, todayKey],
   );
   const max = Math.max(1, ...strip.map(d => d.n));
   const total = strip.reduce((s, d) => s + d.n, 0);
   const streak = record ? streakOf(record.series) : null;
-  // (Phase 2) the soonest close by the house's published instant — the same
-  // read Your week's Closing-now strip makes (closingNowOf), so the cell and
-  // the strip never name different lots; the summary's day-ordered next is
-  // the fallback for a lot with no close instant
+  // YOUR CALLS graded — Edge's own read (edge.ts), never a copy
+  const edge = useMemo(() => (desk.saved.length ? gradeDesk({ now: desk.now, saved: desk.saved, metaFor: desk.metaFor, ledger: desk.ledger }) : null), [desk.saved, desk.now, desk.metaFor, desk.ledger]);
+  // (Phase 2) the soonest WATCHED close by the house's published instant —
+  // the same read Your week's Closing-now strip makes (closingNowOf), so the
+  // cell and the strip never name different lots; the summary's day-ordered
+  // next is the fallback for a lot with no close instant. With nothing
+  // watched: the soonest pick, else the soonest sale of one of your names
   const cn = useMemo(() => closingNowOf(desk.saved, desk.now), [desk.saved, desk.now]);
-  const next = cn.rows[0]?.lot ?? cn.next?.lot ?? summary.next;
+  const nextWatch = cn.rows[0]?.lot ?? cn.next?.lot ?? summary.next;
+  const nextRow: WeekRow | null = useMemo(() => {
+    if (nextWatch) return null;
+    const yours = plan.rows.filter(r => r.kind === 'pick').sort((a, b) => a.closeMs - b.closeMs)[0];
+    if (yours) return yours;
+    return plan.rows.filter(r => r.kind === 'name').sort((a, b) => a.closeMs - b.closeMs)[0] ?? null;
+  }, [nextWatch, plan]);
+  const next = nextWatch ?? nextRow?.lot ?? null;
+  const nextKind: WeekRow['kind'] | null = nextWatch ? 'watch' : nextRow?.kind ?? null;
   const nextDays = next ? closeDays(next) : NaN;
-  const nextWho = next ? displayMakerOf(next)?.name ?? null : null;
+  // SCOPE (R2 a): picks and your names' sales that close TODAY before your next
+  // watched hammer — the Today band prints them as "Closing tonight", so the
+  // cell says so too and the first screen can't contradict itself
+  const tonight = useMemo(() => {
+    if (!nextWatch) return null;
+    const nextMs = cn.rows[0]?.closeMs ?? cn.next?.closeMs ?? Infinity;
+    const today = localDayOf(desk.now);
+    const rows = plan.rows.filter(r => r.kind !== 'watch' && r.day === today && r.closeMs < nextMs);
+    const picks = rows.filter(r => r.kind === 'pick').length, names = rows.length - picks;
+    return picks || names ? { picks, names } : null;
+  }, [nextWatch, cn, plan, desk.now]);
   // the strip lands on Your week once it registers; on the room until then
   const stripTarget = () => {
     const id = document.getElementById('week') ? 'week' : document.getElementById('watching') ? 'watching' : null;
     if (id) jump(id);
   };
-  // `desk.now` is the one clock: the strip's day cut re-reads with it
-  void desk.now;
+  const hits = edge ? edge.graded.filter(c => c.hit).length : 0;
+  const scopeLine = tonight
+    ? ` · ${[tonight.picks ? `${tonight.picks} ${tonight.picks === 1 ? 'pick' : 'picks'}` : null, tonight.names ? `${tonight.names} of your names` : null].filter(Boolean).join(' and ')} close tonight`
+    : '';
 
   return (
-    <div className="ck-cockpit" data-cold={cold || undefined} aria-label="Your desk at a glance">
+    <div className="ck-cockpit" data-cold={cold || undefined} data-live={picksOnly ? 'picks' : undefined} aria-label="Your desk at a glance">
       <div className="ck-ccells">
         {/* 1 · WATCHING — the sub-line's figures, as a cell */}
-        <Cell k="Watching"
-          v={summary.totalEst > 0 ? formatPrice(summary.totalEst) : upcoming.length > 0 ? upcoming.length.toLocaleString() : '—'}
-          note={summary.totalEst > 0 ? 'to the hammer' : upcoming.length > 0 ? (upcoming.length === 1 ? 'lot, no estimate' : 'lots, no estimates') : null}
-          body={cold
-            ? 'Bookmark a lot anywhere on lectr: its estimate counts here to the hammer, with the engine’s read beside it.'
-            : upcoming.length === 0
+        {cold ? (
+          <Cell k="Watching" tap v={<>Watch a lot <span aria-hidden>›</span></>} href="#for-you"
+            body="Bookmark any lot on lectr — the picks below have the button — and its estimate counts here to the hammer, with the engine’s read beside it." />
+        ) : picksOnly ? (
+          <Cell k="Watching" v="0" note="watched" href="#for-you"
+            body={<>{picksLive} {picksLive === 1 ? 'pick' : 'picks'} live <span aria-hidden>→</span> For you{plan.nameRows > 0 && <> · {plan.nameRows} {plan.nameRows === 1 ? 'sale' : 'sales'} of your names this fortnight</>}</>} />
+        ) : (
+          <Cell k="Watching"
+            v={summary.totalEst > 0 ? fmtFace(summary.totalEst) : upcoming.length > 0 ? upcoming.length.toLocaleString() : '—'}
+            note={summary.totalEst > 0 ? 'to the hammer' : upcoming.length > 0 ? (upcoming.length === 1 ? 'lot, no estimate' : 'lots, no two-sided estimate') : null}
+            body={upcoming.length === 0
               ? 'Nothing live on the block — your settled watches are judged under Your record.'
-              : <>{upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}{summary.totalEst > 0 && <> · {summary.priced} of {upcoming.length} priced, at estimate midpoint</>}{summary.flagged > 0 && <> · <b>{summary.flagged} below market</b></>}</>}
-          href={upcoming.length > 0 ? '#watching' : undefined} />
+              : <>{upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}{summary.totalEst > 0 && <> · {summary.priced} of {upcoming.length} priced, at estimate midpoint</>}{summary.oneSided > 0 && <> · {summary.oneSided} from one bound, not summed</>}{summary.flagged > 0 && <> · <b>{summary.flagged} below market</b></>}</>}
+            href={upcoming.length > 0 ? '#watching' : undefined} />
+        )}
 
-        {/* 2 · NEXT HAMMER — the soonest closing watch, counting down */}
-        <Cell k="Next hammer"
-          v={next
-            ? (nextDays === 0 && next.saleDateTime
-                ? <CloseClock iso={next.saleDateTime} windowHours={24} />
-                : hammerWord(nextDays))
-            : '—'}
-          note={next && !(nextDays === 0 && next.saleDateTime) && next.saleDateTime
-            ? <CloseClock iso={next.saleDateTime} windowHours={48} />
-            : null}
-          body={next
-            ? <>
-                <span className="ck-ccell-lot">{nextWho && <>{nextWho} · </>}{craftTitle(next.title, next.auctionHouse)}</span>
-                {formatEstimate(next) && <span className="ck-ccell-sub">{formatEstimate(next)}{next.auctionHouse && <> · {next.auctionHouse}</>}</span>}
-              </>
-            : cold
-              ? 'Your soonest closing watch counts down here, with the engine’s max bid and the gap to its projected close.'
+        {/* 2 · NEXT HAMMER — the soonest closing watch (else pick / your name), counting down */}
+        {cold ? (
+          <Cell k="Next hammer" tap v={<>Tonight&rsquo;s closers <span aria-hidden>›</span></>} href="/value?sort=closing"
+            body="Your soonest closing watch counts down here, with the engine’s max bid and the gap to its projected close. Until you watch one: what closes on the block tonight." />
+        ) : (
+          <Cell k="Next hammer"
+            v={next
+              ? (nextDays === 0 && next.saleDateTime
+                  ? <CloseClock iso={next.saleDateTime} windowHours={24} />
+                  : hammerWord(nextDays))
+              : '—'}
+            note={next
+              ? <>{nextKind && nextKind !== 'watch' ? KIND_WORD[nextKind] : 'your watch'}{!(nextDays === 0 && next.saleDateTime) && next.saleDateTime ? <> · <CloseClock iso={next.saleDateTime} windowHours={48} /></> : null}</>
+              : null}
+            body={next
+              ? <>
+                  <LotLine lot={next} />
+                  {(scopeLine || nextKind !== 'watch') && (
+                    <span className="ck-ccell-scope">{nextKind === 'watch' ? 'your next watched hammer' : nextKind === 'pick' ? 'nothing watched — your soonest pick' : 'nothing watched — the soonest sale of one of your names'}{scopeLine}</span>
+                  )}
+                </>
               : 'No watch is on a hammer clock right now.'}
-          href={next ? `/lot?id=${encodeURIComponent(next.id)}` : undefined}>
-          {next && <DecisionLine lot={next} estimate={false} when={false} abstain="quiet" className="ck-ccell-decision" />}
-        </Cell>
+            href={next ? `/lot?id=${encodeURIComponent(next.id)}` : undefined}>
+            {next && <DecisionLine lot={next} estimate={false} when={false} abstain="quiet" className="ck-ccell-decision" />}
+          </Cell>
+        )}
 
-        {/* 3 · YOUR EDGE — the record, signed */}
-        <Cell k="Your edge"
-          v={record && record.med != null ? fmtSignedPct(Math.round(record.med)) : '—'}
-          tone={record && record.med != null ? lamp(Math.round(record.med)) : undefined}
-          note={record && record.med != null ? 'vs estimate, median' : null}
-          body={record
-            ? <>{record.n} {record.n === 1 ? 'call' : 'calls'} graded, all-in{streak && <> · <b>{streak.n} {streak.dir === 'beat' ? 'beat' : 'missed'} in a row</b></>}</>
-            : cold
-              ? 'Every watch that settles is judged against its estimate — your eye, measured, call by call.'
-              : 'Grades once a watch settles with a published price against an estimate.'}
-          href={record ? '#record' : undefined} />
+        {/* 3 · YOUR EDGE — your calls graded (edge.ts); else the settled record, named as such */}
+        {cold ? (
+          <Cell k="Your edge" tap v={<>The engine&rsquo;s record <span aria-hidden>›</span></>} href="/receipts"
+            body="Every watch that settles is judged against its estimate — your eye, measured, call by call. Until then: how the engine’s own calls have done." />
+        ) : edge && edge.n > 0 ? (
+          <Cell k="Your edge"
+            v={edge.all.medianMiss != null ? fmtSignedPct(Math.round(edge.all.medianMiss)) : edge.n.toLocaleString()}
+            tone={edge.all.medianMiss != null ? lamp(Math.round(edge.all.medianMiss)) : undefined}
+            note={edge.all.medianMiss != null ? 'median miss, realized vs called' : (edge.n === 1 ? 'call graded' : 'calls graded')}
+            body={<>{edge.n} {edge.n === 1 ? 'call' : 'calls'} graded against the hammer · {hits} of {edge.n} within ±{EDGE_HIT_PCT}%{edge.streak.current >= 2 && <> · <b>{edge.streak.current} hits in a row</b></>}</>}
+            href="#edge" />
+        ) : record && record.med != null ? (
+          <Cell k="Settled watches"
+            v={fmtSignedPct(Math.round(record.med))}
+            tone={lamp(Math.round(record.med))}
+            note="vs estimate, median"
+            body={<>{record.n} {record.n === 1 ? 'watch' : 'watches'} judged, all-in{streak && <> · <b>{streak.n} {streak.dir === 'beat' ? 'beat' : 'missed'} in a row</b></>} · no call of yours graded yet</>}
+            href="#record" />
+        ) : (
+          <Cell k="Your edge" v="—"
+            body={desk.saved.length > 0
+              ? 'Grades once a watch settles with a published price against an estimate.'
+              : 'Every watch that settles is judged against its estimate — your eye, measured, call by call.'}
+            href={desk.saved.length > 0 ? '#edge' : undefined} />
+        )}
       </div>
 
       {/* phone (≤639): the cells fold to one ledger row each — the Next-hammer
@@ -135,38 +240,29 @@ export default function Cockpit() {
           band and the picks keep the first screen (CSS hides this ≥640) */}
       {next && (
         <Link className="ck-cockpit-next" href={`/lot?id=${encodeURIComponent(next.id)}`}>
-          <span className="ck-ccell-lot">{nextWho && <>{nextWho} · </>}{craftTitle(next.title, next.auctionHouse)}{formatEstimate(next) && <span className="ck-ccell-sub"> · {formatEstimate(next)}</span>}</span>
+          <LotLine lot={next} phone />
+          {(scopeLine || nextKind !== 'watch') && <span className="ck-ccell-scope">{nextKind === 'watch' ? 'next watched hammer' : nextKind === 'pick' ? 'a pick — nothing watched' : 'one of your names — nothing watched'}{scopeLine}</span>}
           <DecisionLine lot={next} estimate={false} when={false} abstain="quiet" className="ck-ccell-decision" />
         </Link>
       )}
-      {/* a cold phone: the dashes stay in one row; what fills them folds here */}
-      {cold && (
-        <details className="ck-cockpit-what">
-          <summary>What fills these</summary>
-          <ul>
-            <li><b>Watching</b> — bookmark a lot anywhere on lectr: its estimate counts here to the hammer, with the engine’s read beside it.</li>
-            <li><b>Next hammer</b> — your soonest closing watch counts down here, with the engine’s max bid and the gap to its projected close.</li>
-            <li><b>Your edge</b> — every watch that settles is judged against its estimate: your eye, measured, call by call.</li>
-            <li><b>Next 14 days</b> — your watched lots land on the strip, day by day.</li>
-          </ul>
-        </details>
-      )}
 
-      {/* THE 14-DAY HAMMER STRIP */}
-      <button type="button" className="ck-hstrip" onClick={stripTarget} disabled={cold && total === 0}
+      {/* THE 14-DAY HAMMER STRIP — the week's rows: watches bold, picks and your names light */}
+      <button type="button" className="ck-hstrip" onClick={stripTarget} disabled={total === 0}
         aria-label={`${stripCaption(strip)} — ${total ? 'open your week' : 'nothing to open yet'}`}>
         <span className="ck-hstrip-bars" aria-hidden>
           {strip.map(d => (
-            <span key={d.day} className="ck-hbar" data-today={d.today || undefined} data-n={d.n || undefined}
-              title={`${d.today ? 'Today' : dayLabel(d.day)} · ${d.n ? `${d.n} closing${d.est > 0 ? ` · ${formatPrice(d.est)} at estimate midpoint` : ''}` : 'nothing closing'}`}>
-              <i style={{ height: d.n ? `${Math.max(14, Math.round((d.n / max) * 100))}%` : undefined }} />
+            <span key={d.day} className="ck-hbar" data-today={d.today || undefined} data-n={d.n || undefined} data-w={d.watches || undefined} data-mix={(d.watches > 0 && d.watches < d.n) || undefined}
+              title={`${d.today ? 'Today' : dayLabel(d.day)} · ${d.n ? `${d.n} closing${d.watches !== d.n ? ` (${d.watches} ${d.watches === 1 ? 'watch' : 'watches'}, ${d.n - d.watches} ${d.picks && !d.names ? 'picks' : d.names && !d.picks ? 'of your names' : 'picks / your names'})` : ''}${d.est > 0 ? ` · ${fmtFace(d.est)} at estimate midpoint` : ''}` : 'nothing closing'}`}>
+              <i style={{ height: d.n ? `${Math.max(14, Math.round((d.n / max) * 100))}%` : undefined }}>
+                {d.n > 0 && d.watches > 0 && d.watches < d.n && <u style={{ height: `${Math.round((d.watches / d.n) * 100)}%` }} />}
+              </i>
               <b>{d.dow}</b>
             </span>
           ))}
         </span>
         <span className="ck-hstrip-cap">
           <span className="kicker">Next 14 days</span>
-          <span>{cold && total === 0 ? 'your watched lots land here, day by day' : stripCaption(strip)}</span>
+          <span>{total === 0 ? (cold ? 'your watched lots land here, day by day' : 'nothing of yours closes in the next 14 days') : stripCaption(strip)}</span>
         </span>
       </button>
     </div>

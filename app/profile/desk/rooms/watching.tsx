@@ -4,6 +4,16 @@
  * page.tsx unchanged): the ledger + cards views, why-now tags, Δ saved,
  * signal now, in-place dossiers, sticky head, FLIP re-ranking, the phone's
  * glance rows with Show all.
+ *
+ * (Oct 11 review) ROW ANATOMY (R5#2): a ledger row is a plain row whose
+ * title is a link and whose "Details" control is a BUTTON (aria-expanded,
+ * aria-controls) — never a role=button wrapper around a link (nested
+ * interactive ×13, target size ×49). The whole row still opens on a mouse
+ * click; the keyboard path is the button, which j/k focuses
+ * ([data-nav-focus]). A PHONE row (R2 c) is that button: tap → the same
+ * dossier in-row (estimate, signal, comps, appraisal, Open the lot, Remove
+ * watch) — a phone collector can un-watch from the desk; the Ledger / Cards
+ * toggle stays reachable at every width.
  */
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -14,7 +24,9 @@ import { lotVerdict } from '../../../lib/verdict';
 import CloseClock from '../../../components/CloseClock';
 import { WatchMark } from '../../../components/marks';
 import DecisionLine from '../../../components/DecisionLine';
-import { formatPrice, formatDate, craftTitle } from '../../../utils';
+import { formatDate, craftTitle } from '../../../utils';
+import { fmtFace } from '../../../lib/lot-face';
+import { fromText } from '../priced';
 import { displayMakerOf } from '../../../lib/maker-subjects';
 import { RoomHead } from '../../head';
 import { closeDays, hammerWord, sigInk, sigText, type LiveSignal } from '../derive';
@@ -35,9 +47,11 @@ const SAVEDVIEW_KEY = 'lectr-savedview';
     the cards view buried (the saved-delta narrative, the engine read with
     its basis, the live bid state) without leaving the ledger. Mounted only
     while open, so collapsed rows keep zero of its links in the tab order. */
-function RowDossier({ lot, meta, sig, onRemove }: {
+function RowDossier({ lot, meta, sig, onRemove, id }: {
   lot: AuctionLot; meta: SavedMeta | undefined; sig: LiveSignal | null;
   onRemove: () => void;
+  /** the dossier's DOM id — its expand control's aria-controls */
+  id?: string;
 }) {
   // (Oct 6 2026, wave 4) the ENGINE's appraisal (lot.value, ×5-sane) — never
   // a client appraisal over the loaded slice
@@ -46,20 +60,21 @@ function RowDossier({ lot, meta, sig, onRemove }: {
   const days = closeDays(lot);
   const hasEst = (lot.estimateLow || 0) > 0 || (lot.estimateHigh || 0) > 0;
   return (
-    <div className="ck-dossier" role="region" aria-label={`Details for ${lot.title}`}>
+    <div className="ck-dossier" id={id} role="region" aria-label={`Details for ${lot.title}`}>
       <SavedDelta lot={lot} meta={meta} sig={sig} />
       <div className="ck-dossier-grid">
         {hasEst && (
           <div className="ck-dossier-cell">
             <span className="kicker">Estimate</span>
-            <span className="ck-dossier-v">{formatEstimate(lot)}</span>
+            {/* ONE "priced" rule (../priced): a one-sided estimate prints "from $X" and never enters a total */}
+            <span className="ck-dossier-v">{fromText(lot) ?? formatEstimate(lot)}{fromText(lot) && <span className="sub"> · one bound published — not in the desk’s total</span>}</span>
           </div>
         )}
         {(lot.currentBid || 0) > 0 && (
           <div className="ck-dossier-cell">
             <span className="kicker">On the block</span>
             <span className="ck-dossier-v">
-              {formatPrice(lot.currentBid!)} bid
+              {fmtFace(lot.currentBid!)} bid
               {typeof lot.bidCount === 'number' && lot.bidCount > 0 && <span className="sub"> · {lot.bidCount} {lot.bidCount === 1 ? 'bid' : 'bids'}</span>}
               {lot.overlayAt && <span className="sub"> · <LiveStamp iso={lot.overlayAt} /></span>}
             </span>
@@ -77,12 +92,12 @@ function RowDossier({ lot, meta, sig, onRemove }: {
         {lot.cardComps && lot.cardComps.n > 0 && lot.cardComps.med != null ? (
           <div className="ck-dossier-cell">
             <span className="kicker">Direct comps</span>
-            <span className="ck-dossier-v">{formatPrice(lot.cardComps.med)}<span className="sub"> · {lot.cardComps.n} same card &amp; grade</span></span>
+            <span className="ck-dossier-v">{fmtFace(lot.cardComps.med)}<span className="sub"> · {lot.cardComps.n} same card &amp; grade</span></span>
           </div>
         ) : appr ? (
           <div className="ck-dossier-cell">
             <span className="kicker">Appraisal</span>
-            <span className="ck-dossier-v">{formatPrice(appr.value)}<span className="sub"> · {appr.n} comps</span></span>
+            <span className="ck-dossier-v">{fmtFace(appr.value)}<span className="sub"> · {appr.n} comps</span></span>
           </div>
         ) : null}
         {meta && (
@@ -90,7 +105,7 @@ function RowDossier({ lot, meta, sig, onRemove }: {
             <span className="kicker">Your save</span>
             <span className="ck-dossier-v">
               {formatDate(meta.savedAt)}
-              {meta.estMid != null && <span className="sub"> · est. {formatPrice(meta.estMid)} then</span>}
+              {meta.estMid != null && <span className="sub"> · est. {fmtFace(meta.estMid)} then</span>}
               {call && call.dir !== 'unknown' && (
                 <span className="sub"> · called {call.dir === 'below' ? '+' : '−'}{Math.round(call.pct)}%</span>
               )}
@@ -124,7 +139,7 @@ export default function WatchingRoom(_p: SectionProps) {
   // none inside 24h the strip's one-liner folds into the head's sub-line
   const closingNow = useMemo(() => closingNowOf(desk.saved, desk.now), [desk.saved, desk.now]);
   const cnNext = closingNow.next;
-  const { upcoming, summary, room, ledgerCols, signalById, metaFor, allLots, isSaved, savedIdOf, toggle, onCardToggle, isDesktop } = i;
+  const { upcoming, summary, room, ledgerCols, signalById, metaFor, allLots, isSaved, savedIdOf, toggle, onCardToggle } = i;
 
   const [savedView, setSavedView] = useState<SavedView>('ledger');
   useEffect(() => {
@@ -232,7 +247,7 @@ export default function WatchingRoom(_p: SectionProps) {
           {upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}
           {summary.closesToday > 0 && <> · {summary.closesToday} {summary.closesToday === 1 ? 'closes' : 'close'} today</>}
           {summary.flagged > 0 && <> · {summary.flagged} below market</>}
-          {summary.totalEst > 0 && <><span className="ck-wide"> · {formatPrice(summary.totalEst)} at estimate midpoint</span></>}
+          {summary.totalEst > 0 && <><span className="ck-wide"> · {fmtFace(summary.totalEst)} at estimate midpoint</span></>}
           {closingNow.live > 0 && closingNow.rows.length === 0 && (
             <> · none close in the next 24h{cnNext ? <> · next: <Link href={`/lot?id=${encodeURIComponent(cnNext.lot.id)}`} className="ck-away-link">{craftTitle(cnNext.lot.title, cnNext.lot.auctionHouse)}</Link>, {offsetWord(dayOffsetOf(cnNext.day, desk.now)) ?? `${dayWords(cnNext.day).wd}, ${dayWords(cnNext.day).md}`}{cnNext.timed ? ` at ${localClock(cnNext.closeMs)}` : ''}</> : null}</>
           )}
@@ -276,28 +291,34 @@ export default function WatchingRoom(_p: SectionProps) {
           const dInk = dPP == null || dPP === 0 ? 'var(--color-text-faint)'
             : (call!.dir === 'below' ? dPP > 0 : dPP < 0) ? 'var(--color-up)' : 'var(--color-down-text)';
           const open = openRow === lot.id;
+          const title = craftTitle(lot.title, lot.auctionHouse);
+          const dossierId = `ck-dossier-${lot.id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
           return (
             <div key={lot.id} data-flip-id={lot.id}>
-              {/* the row is the dossier's handle — the work title still
-                  deep-links; everything else opens in place */}
+              {/* the row is the dossier's handle on a mouse (a click anywhere
+                  but a link / button opens it); the keyboard path is the
+                  Details button — the work title still deep-links */}
               <div
-                role="button" tabIndex={0} data-nav-row aria-expanded={open}
+                data-nav-row data-open={open || undefined}
                 className="ray-saved-cols ray-savedrow ck-expandrow"
-                onClick={() => toggleRow(lot.id)}
-                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleRow(lot.id); } }}
+                onClick={e => { if ((e.target as HTMLElement).closest('a, button')) return; toggleRow(lot.id); }}
               >
                 <span className="ck-why">
                   {reason && <span className="ck-tag" data-tone={reason.tag === 'Below market' ? 'up' : reason.tag === 'Lands soon' ? 'hot' : undefined}>{reason.tag}</span>}
                 </span>
                 <span className="work">
                   {displayMakerOf(lot) && <span className="ck-workmaker">{displayMakerOf(lot)!.name}</span>}
-                  <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>
-                    {craftTitle(lot.title, lot.auctionHouse)}
-                  </Link>
+                  <span className="ck-work-line">
+                    <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} className="ck-work-title">{title}</Link>
+                    <button type="button" className="ck-expand-btn" data-nav-focus aria-expanded={open} aria-controls={dossierId}
+                      aria-label={`${open ? 'Close' : 'Open'} details for ${title}`} onClick={() => toggleRow(lot.id)}>
+                      {open ? 'Close' : 'Details'}<span aria-hidden className="ck-expand-chev">›</span>
+                    </button>
+                  </span>
                   {/* (N2) the decision: the Est and Hammers columns print the rest */}
                   <DecisionLine lot={lot} estimate={false} when={false} abstain="quiet" style={{ marginTop: 3 }} />
                 </span>
-                <span className="num">{formatEstimate(lot) || '—'}</span>
+                <span className="num">{fromText(lot) ?? formatEstimate(lot) ?? '—'}</span>
                 <span className="num" style={sig ? { color: sigInk(sig.label), fontWeight: 700 } : { color: 'var(--color-text-faint)' }}
                   aria-label={sig ? `${sig.label}, ${Math.abs(Math.round(sig.pct))} percent` : 'no signal'}>
                   {sig ? sigText(sig) : '—'}
@@ -317,7 +338,7 @@ export default function WatchingRoom(_p: SectionProps) {
                 </span>
               </div>
               {open && (
-                <RowDossier lot={lot} meta={m} sig={sig}
+                <RowDossier lot={lot} meta={m} sig={sig} id={dossierId}
                   onRemove={() => { setOpenRow(null); toggle(savedIdOf(lot.id)); }} />
               )}
             </div>
@@ -325,30 +346,42 @@ export default function WatchingRoom(_p: SectionProps) {
         })}
       </div>
 
-      {/* mobile: the glance rows — same facts, thumb scale */}
+      {/* mobile: the glance rows — same facts, thumb scale; a tap opens the
+          SAME dossier in-row (Open the lot · Remove watch inside it) */}
       <div className="ck-mledger ray-enter">
         {(allWatch ? room : room.slice(0, PHONE_ROWS)).map(({ l: lot, reason }) => {
           const sig = signalById.get(lot.id) ?? null;
           const days = closeDays(lot);
+          const open = openRow === lot.id;
+          const title = craftTitle(lot.title, lot.auctionHouse);
+          const dossierId = `ck-mdossier-${lot.id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
           return (
-            <Link key={lot.id} href={`/lot?id=${encodeURIComponent(lot.id)}`} className="ck-mrow" data-nav-row>
-              <span className="ck-mrow-main">
-                <span className="ck-mtitle">{craftTitle(lot.title, lot.auctionHouse)}</span>
-                <span className="ck-msub">
-                  {reason && <span className="ck-tag" data-tone={reason.tag === 'Below market' ? 'up' : reason.tag === 'Lands soon' ? 'hot' : undefined}>{reason.tag}</span>}
-                  {[displayMakerOf(lot)?.name, formatEstimate(lot)].filter(Boolean).join(' · ')}
+            <div key={lot.id} className="ck-mrow-wrap">
+              <button type="button" className="ck-mrow" data-nav-row data-open={open || undefined} aria-expanded={open} aria-controls={dossierId}
+                onClick={() => toggleRow(lot.id)}>
+                <span className="ck-mrow-main">
+                  <span className="ck-mtitle">{title}</span>
+                  <span className="ck-msub">
+                    {reason && <span className="ck-tag" data-tone={reason.tag === 'Below market' ? 'up' : reason.tag === 'Lands soon' ? 'hot' : undefined}>{reason.tag}</span>}
+                    {[displayMakerOf(lot)?.name, fromText(lot) ?? formatEstimate(lot)].filter(Boolean).join(' · ')}
+                  </span>
+                  <DecisionLine lot={lot} estimate={false} when={false} abstain="quiet" style={{ marginTop: 2 }} />
                 </span>
-                <DecisionLine lot={lot} estimate={false} when={false} abstain="quiet" style={{ marginTop: 2 }} />
-              </span>
-              <span className="ck-mrow-right">
-                {sig && <b style={{ color: sigInk(sig.label) }} aria-label={`${sig.label}, ${Math.abs(Math.round(sig.pct))} percent`}>{sigText(sig)}</b>}
-                <span className="ck-mham" style={days <= 1 ? { color: 'var(--color-fg)', fontWeight: 600 } : undefined}>
-                  {days === 0 && lot.saleDateTime
-                    ? <CloseClock iso={lot.saleDateTime} windowHours={24} />
-                    : hammerWord(days)}
+                <span className="ck-mrow-right">
+                  {sig && <b style={{ color: sigInk(sig.label) }} aria-label={`${sig.label}, ${Math.abs(Math.round(sig.pct))} percent`}>{sigText(sig)}</b>}
+                  <span className="ck-mham" style={days <= 1 ? { color: 'var(--color-fg)', fontWeight: 600 } : undefined}>
+                    {days === 0 && lot.saleDateTime
+                      ? <CloseClock iso={lot.saleDateTime} windowHours={24} />
+                      : hammerWord(days)}
+                  </span>
+                  <span className="ck-mrow-chev" aria-hidden>›</span>
                 </span>
-              </span>
-            </Link>
+              </button>
+              {open && (
+                <RowDossier lot={lot} meta={metaFor(lot.id)} sig={sig} id={dossierId}
+                  onRemove={() => { setOpenRow(null); toggle(savedIdOf(lot.id)); }} />
+              )}
+            </div>
           );
         })}
         {/* a phone opens on the most urgent rows; the rest are one tap */}
@@ -359,8 +392,8 @@ export default function WatchingRoom(_p: SectionProps) {
         )}
       </div>
 
-      {/* cards — desktop opt-in only; mounted only when shown */}
-      {savedView === 'cards' && isDesktop === true && (
+      {/* cards — an opt-in at every width (R2 c: the toggle stays reachable on a phone); mounted only when shown */}
+      {savedView === 'cards' && (
         <div className="ray-saved-grid">
           {room.map(({ l: lot }, idx) => (
             <div key={lot.id} className="ray-enter-card" style={{ '--enter-delay': `${Math.min(idx, 8) * 60}ms` } as React.CSSProperties}>
