@@ -9,7 +9,9 @@ import Link from 'next/link';
 import HeroChart from '../../../preview/terminal/HeroChart';
 import Flick from '../../../components/Flick';
 import { CollectionMark } from '../../../components/marks';
-import { closeDayOf, formatPrice, formatDate, craftTitle, fmtSignedPct } from '../../../utils';
+import { closeDayOf, formatDate, craftTitle, fmtSignedPct } from '../../../utils';
+import { fmtFace } from '../../../lib/lot-face';
+import { closeDays, hammerWord } from '../derive';
 import { makerLineOf, labelLineOf, drillLabelOf } from '../../../lib/lot-labels';
 import { RoomHead } from '../../head';
 import { useDeskInternals, type DeskInternals } from '../provider';
@@ -51,11 +53,22 @@ function PieceEditor({ paid, note, onSave, onClose }: {
   );
 }
 
-export function when(_desk: DeskData, i: DeskInternals): boolean { return i.deskView && i.collection.rows.length > 0; }
+/** the room mounts with a piece held — or a save marked owned that is still
+ *  on the block (the note says why it isn't a piece yet) */
+export function when(_desk: DeskData, i: DeskInternals): boolean { return i.deskView && (i.collection.rows.length > 0 || i.collection.pendingOwned.length > 0); }
+/** THE ONE COLLECTION FIGURE (R4#4, R1#4; Portfolio's wording agrees — "marked"):
+ *  the rail and the Record cell print BOUGHT or MARKED, never cost carried
+ *  forward under the word "appraisal": every piece appraised → the engine's
+ *  mark; else the bought total when any piece has a price; else the count */
+export function collectionFigure(c: DeskInternals['collection']): { text: string; kind: 'marked' | 'bought' | 'pieces' } {
+  if (c.rows.length > 0 && c.appraisedN === c.rows.length) return { text: fmtFace(c.totalAppraised), kind: 'marked' };
+  if (c.totalPaid > 0) return { text: fmtFace(c.totalPaid), kind: 'bought' };
+  return { text: String(c.rows.length), kind: 'pieces' };
+}
 export function meta(_desk: DeskData, i: DeskInternals): SectionMeta | null {
   if (!when(_desk, i)) return null;
   const c = i.collection;
-  return { id: 'collection', label: 'Collection', count: c.appraisedN > 0 ? formatPrice(c.totalAppraised) : c.rows.length };
+  return { id: 'collection', label: 'Collection', count: c.rows.length ? collectionFigure(c).text : c.pendingOwned.length };
 }
 
 export default function CollectionRoom(_p: SectionProps) {
@@ -67,7 +80,20 @@ export default function CollectionRoom(_p: SectionProps) {
     <div id="collection" className="ray-band ray-enter" style={{ marginTop: 30, paddingBlock: '28px 30px' }}>
       <section className="rail" aria-label="Your collection">
         <RoomHead mark={<CollectionMark size={17} />} title="Your collection"
-          sub={<>{collection.rows.length} {collection.rows.length === 1 ? 'piece' : 'pieces'} held · {collection.appraisedN > 0 ? `${collection.appraisedN} appraised from comps` : 'none appraised from comps yet'}</>} />
+          sub={<>{collection.rows.length} {collection.rows.length === 1 ? 'piece' : 'pieces'} held · {collection.appraisedN > 0 ? `${collection.appraisedN} of ${collection.rows.length} marked by the engine from comps` : 'none marked by the engine yet'}{collection.pendingOwned.length > 0 && <> · {collection.pendingOwned.length} marked owned, still on the block</>}</>} />
+        {/* OWNED ∩ LIVE (R1#9): a lot marked owned before it hammers is not a
+            piece yet — it stays in Watching and joins here when it sells; the
+            mark is kept, nothing is deleted */}
+        {collection.pendingOwned.length > 0 && (
+          <ul className="ck-pending-owned" aria-label="Marked owned, still on the block">
+            {collection.pendingOwned.map(l => (
+              <li key={l.id}>
+                <Link href={`/lot?id=${encodeURIComponent(l.id)}`} className="ck-away-link">{craftTitle(l.title, l.auctionHouse)}</Link>
+                {' '}— marked owned, but it hasn&rsquo;t sold yet ({hammerWord(closeDays(l))}); it joins the collection when it hammers. Until then it stays under <a href="#watching" className="ck-away-link">Watching</a>.
+              </li>
+            ))}
+          </ul>
+        )}
         {/* the certificate's provenance ledger — gray label over black
             value, dotted closing rule; the signed delta keeps its ink */}
         <div className="ns-byline" style={{ margin: '14px 0 2px' }}>
@@ -80,20 +106,21 @@ export default function CollectionRoom(_p: SectionProps) {
               {/* (W19) a price the reader never entered is the lot's
                   realized price — say so, never imply they told us */}
               <div className="k">Bought{collection.rows.every(r => !r.paidIsOverride) ? ' · at the realized price' : ''}</div>
-              <div className="v">{formatPrice(collection.totalPaid)}</div>
+              <div className="v">{fmtFace(collection.totalPaid)}</div>
             </div>
           )}
           <div>
-            {/* (W19) with no piece read from comps the "appraisal" was
-                only the bought prices summed back — no number then */}
-            <div className="k">lectr appraisal{collection.appraisedN > 0 && collection.appraisedN < collection.rows.length ? ` · ${collection.appraisedN} of ${collection.rows.length} from comps` : ''}</div>
-            <div className="v">{collection.appraisedN > 0 ? formatPrice(collection.totalAppraised) : <span title="none of your pieces has a comp pool yet">—</span>}</div>
+            {/* (R4#4) the ENGINE's mark over the pieces it appraised — never the
+                bought prices summed back under the word "appraisal"; the count
+                says how many of the pieces it covers */}
+            <div className="k">Marked by the engine{collection.appraisedN > 0 ? ` · ${collection.appraisedN} of ${collection.rows.length} ${collection.rows.length === 1 ? 'piece' : 'pieces'}` : ''}</div>
+            <div className="v">{collection.appraisedN > 0 ? fmtFace(collection.totalAppraised) : <span title="none of your pieces has a comp pool yet">—</span>}</div>
           </div>
           {collection.deltaPct != null && collection.deltaPct !== 0 && collection.appraisedPaidN > 0 && (
             <div>
-              <div className="k">Appraised vs bought</div>
+              <div className="k">Marked vs bought · {collection.appraisedPaidN} {collection.appraisedPaidN === 1 ? 'piece' : 'pieces'} with both</div>
               <div className="v" style={{ fontWeight: 600, color: collection.deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
-                {fmtSignedPct(collection.deltaPct)}
+                {fmtSignedPct(collection.deltaPct)} <span style={{ fontWeight: 400, fontSize: 12, color: 'var(--paper-muted, var(--color-text-muted))' }}>{fmtFace(collection.appraisedPaid)} bought</span>
               </div>
             </div>
           )}
@@ -102,7 +129,7 @@ export default function CollectionRoom(_p: SectionProps) {
         {collectionChart && (
           <div style={{ margin: '18px 0 8px' }}>
             <div className="kicker" style={{ marginBottom: 4, color: 'var(--paper-muted, var(--color-text-muted))' }}>
-              Your collection over time · appraisal vs bought · daily snapshots
+              Your collection over time · the engine&rsquo;s mark vs bought · daily snapshots
             </div>
             <HeroChart anchor={collectionChart.anchor} layers={collectionChart.layers} height={150} compact play={false} />
           </div>
@@ -125,7 +152,7 @@ export default function CollectionRoom(_p: SectionProps) {
                     {drillLabelOf(row.slug, row.label)} <Flick size={9} style={{ marginLeft: 2 }} />
                   </span>
                   <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                    {n} {n === 1 ? 'piece' : 'pieces'} · {formatPrice(held)} held
+                    {n} {n === 1 ? 'piece' : 'pieces'} · {fmtFace(held)} held
                   </span>
                   <span style={{ width: 150, textAlign: 'right', fontSize: 12.5, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', fontFamily: read ? 'var(--font-mono), monospace' : undefined, color: read ? (read.dir === 'up' ? 'var(--color-up)' : read.dir === 'down' ? 'var(--color-down-text)' : 'var(--color-fg)') : 'var(--color-text-faint)' }}>
                     {read ? read.txt : `${row.lots.toLocaleString()} lots tracked`}
@@ -139,7 +166,7 @@ export default function CollectionRoom(_p: SectionProps) {
         <div className="kicker ck-piece-head" style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '14px 0 6px', color: 'var(--paper-muted, var(--color-text-muted))' }}>
           <div style={{ flex: 1 }}>Piece</div>
           <div style={{ width: 92, textAlign: 'right' }}>Bought</div>
-          <div style={{ width: 128, textAlign: 'right' }}><Term k="appraisal">lectr appraisal</Term></div>
+          <div style={{ width: 128, textAlign: 'right' }}><Term k="appraisal">Engine mark</Term></div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           {collection.rows.map(({ lot, paid, paidIsOverride, note, savedId, appraised, basis, deltaPct, drill, drillSlug }) => (
@@ -169,13 +196,13 @@ export default function CollectionRoom(_p: SectionProps) {
                 <div className="ck-piece-paid"
                   title={paidIsOverride ? 'Your recorded cost basis' : 'Realized price — set what you paid to override'}>
                   <span className="ck-piece-k kicker">Bought</span>
-                  {paid != null ? formatPrice(paid) : '—'}
+                  {paid != null ? fmtFace(paid) : '—'}
                   {paidIsOverride && <span className="ck-piece-basis">your basis</span>}
                 </div>
                 <div className="ck-piece-appr">
-                  <span className="ck-piece-k kicker">Appraisal</span>
+                  <span className="ck-piece-k kicker">Engine mark</span>
                   <div className="ck-piece-v">
-                    {appraised != null ? formatPrice(appraised) : '—'}
+                    {appraised != null ? fmtFace(appraised) : '—'}
                     {deltaPct != null && deltaPct !== 0 && (
                       <span style={{ marginLeft: 6, fontSize: 12, fontWeight: 600, color: deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
                         {deltaPct > 0 ? '+' : '−'}{Math.abs(deltaPct)}%
@@ -196,10 +223,10 @@ export default function CollectionRoom(_p: SectionProps) {
           ))}
         </div>
         <p style={{ fontSize: 11.5, color: 'var(--color-text-muted)', margin: '14px 0 0' }}>
-          The lectr appraisal is the median its comparable sales currently trade at — our read from the data,
-          not a formal appraisal. Pieces without a usable comp pool carry at their bought price in the total;
-          a reference range is context only and never enters a number. The headline &plusmn;% compares
-          only pieces with a recorded bought price.
+          The engine&rsquo;s mark is the median its comparable sales currently trade at — our read from the data,
+          not a formal appraisal. The marked total covers only the pieces with a usable comp pool (the count says
+          how many); a piece without one is never carried at cost under that figure, and a reference range is
+          context only. The &plusmn;% compares the marked pieces that also carry a bought price, n stated.
         </p>
       </section>
     </div>

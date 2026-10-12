@@ -269,7 +269,8 @@ function QsBody({ book, sheet = false, titleId, onDone, onCancel }: {
   const body = (
     <>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px 14px', flexWrap: 'wrap' }}>
-        <div id={titleId ?? headId} className="ray-feedsheet-head" style={{ paddingBottom: 6 }}>What do you collect?</div>
+        {/* (/profile R3#9) the head lands under the sticky nav + pill rail when a step change scrolls to it */}
+        <div id={titleId ?? headId} className="ray-feedsheet-head" style={{ paddingBottom: 6, scrollMarginTop: 120 }}>What do you collect?</div>
         <nav aria-label="Quick start steps" style={{ display: 'flex', gap: 2 }}>
           {QS_STEPS.map((st, i) => (
             <button key={st} type="button" className="ray-toolbar-reset" aria-current={s.step === st ? 'step' : undefined}
@@ -410,7 +411,7 @@ function QsBody({ book, sheet = false, titleId, onDone, onCancel }: {
     );
   }
   return (
-    <section aria-labelledby={headId}>
+    <section aria-labelledby={headId} style={{ scrollMarginTop: 120 }}>
       <style dangerouslySetInnerHTML={{ __html: FEEDSHEET_CSS }} />
       {body}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginTop: 18 }}>

@@ -211,7 +211,7 @@ export default function YourSignals({ book, signedOut }: { book: readonly Auctio
       <div className="ck-reads-head"><span className="kicker">Saved searches</span><i className="ck-reads-rule" /></div>
       <p className="ck-sig-note">
         {signedOut
-          ? 'Sign in and a search you save from any feed is matched nightly against every new lot — matches land here.'
+          ? 'Save a search from any feed — it is kept here on this device; sign in and it is matched nightly against every new lot, with the matches landing here.'
           : 'None yet — save a search from any feed and every new lot is matched against it nightly.'}
       </p>
     </>

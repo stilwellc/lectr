@@ -1,53 +1,64 @@
 'use client';
 /**
- * WHAT ELSE THIS PAGE BECOMES — the ghost desk (lifted from page.tsx
- * unchanged): what the rooms below the fold hold once there is data. Signed
- * out it carries the split head; a signed-in empty desk gets the two CTAs.
- * Rendered only while the desk is empty (never on a live desk).
+ * WHAT ELSE THIS PAGE BECOMES — the cold desk's SECTION INDEX (Oct 11
+ * review, R3#2/#3): one row per room this desk doesn't have yet, each row
+ * the tap that starts filling it (desk/sections FILLS — Watch buttons on
+ * this page, /value, tonight's closers, /receipts). Signed out and signed
+ * in alike get the taps (the signed-out branch used to print ghost rows and
+ * no button). Rendered only while rooms are missing — never on a full desk.
  */
 import React from 'react';
 import Link from 'next/link';
-import { useDeskInternals, type DeskInternals } from '../provider';
+import { RoomHead } from '../../head';
+import { jump } from '../../rail';
+import { unfilledSections } from '../sections';
+import { useDesk, useDeskInternals, type DeskInternals } from '../provider';
 import type { SectionProps, SectionMeta, DeskData } from '../types';
 
-export function when(_desk: DeskData, i: DeskInternals): boolean { return !i.deskView; }
+export function when(desk: DeskData, i: DeskInternals): boolean { return unfilledSections(desk, i).length > 0; }
 export function meta(): SectionMeta | null { return null; }
 
+function Tap({ href, label }: { href: string; label: string }) {
+  return href.startsWith('#')
+    ? <a href={href} className="ck-index-tap" onClick={e => { e.preventDefault(); jump(href.slice(1)); }}>{label} <span aria-hidden>→</span></a>
+    : <Link href={href} className="ck-index-tap">{label} <span aria-hidden>→</span></Link>;
+}
+
 export default function Becomes(_p: SectionProps) {
-  const { signedOutView } = useDeskInternals();
-  const ghost = (
-    <div className="ck-ghost" aria-hidden>
-      <div className="ck-ghost-row"><span className="kicker">Watching</span><span>your live lots · signals + bids tracked to the hammer</span></div>
-      <div className="ck-ghost-row"><span className="kicker">Your record</span><span>every settled watch judged vs its estimate — your eye, measured</span></div>
-      <div className="ck-ghost-row"><span className="kicker">Collection</span><span>the pieces you own, appraised against the live market nightly</span></div>
-    </div>
-  );
-  if (signedOutView) {
-    return (
-      <section className="rail ray-enter" style={{ paddingTop: 34, paddingBottom: 8 }}>
-        <div className="ns-plate" style={{ paddingTop: 18 }}>
-          <div className="ns-split" style={{ marginBottom: 6 }}>
-            <h2 className="ray-h2" style={{ margin: 0 }}>What else this page becomes</h2>
-            <p>Watch lots to the hammer, keep your track record, and hold your collection against the engine&rsquo;s live appraisal. Private to you, synced everywhere.</p>
-          </div>
-          {ghost}
-        </div>
-      </section>
-    );
-  }
+  const { desk } = useDesk();
+  const i = useDeskInternals();
+  const rooms = unfilledSections(desk, i);
+  if (!rooms.length) return null;
+  const cold = !i.deskView && desk.recs.length === 0 && desk.follows.length === 0;
   return (
-    <section className="rail ray-enter" style={{ paddingTop: 34 }}>
+    <section id="becomes" className="ray-saved-section rail ray-enter ck-becomes" aria-label="What else this page becomes">
       <div className="ns-plate" style={{ paddingTop: 18 }}>
-        <h2 className="ray-h2" style={{ margin: 0 }}>What else this page becomes</h2>
-        {ghost}
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', padding: '26px 0 24px' }}>
-          <Link href="/value" className="ray-call-btn ray-call-btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
-            Start with today&rsquo;s below-market lots
-          </Link>
-          <Link href="/" className="ray-call-btn ray-call-btn-quiet" style={{ textDecoration: 'none', display: 'inline-block' }}>
-            Browse the markets
-          </Link>
+        <RoomHead title="What else this page becomes" style={{ marginBottom: 6 }}
+          sub={cold
+            ? 'Every room below fills from one tap. Private to you, synced everywhere once you sign in.'
+            : `${rooms.length} ${rooms.length === 1 ? 'room' : 'rooms'} not on this desk yet — each fills from one tap.`} />
+        <div className="ck-index" role="list">
+          {rooms.map(s => {
+            const M = s.mark;
+            return (
+              <div key={s.id} className="ck-index-row" role="listitem" id={`becomes-${s.id}`}>
+                <span className="ck-index-k">{M && <span className="ray-sect-mark ck-index-mark" aria-hidden><M size={13} /></span>}{s.label}</span>
+                <span className="ck-index-what">{s.fill!.text} <span className="ck-index-how">· {s.fill!.how}</span></span>
+                <Tap href={s.fill!.tap.href} label={s.fill!.tap.label} />
+              </div>
+            );
+          })}
         </div>
+        {cold && (
+          <div className="ck-index-ctas">
+            <Link href="/value" className="ray-call-btn ray-call-btn-primary" style={{ textDecoration: 'none', display: 'inline-block' }}>
+              Start with today&rsquo;s below-market lots
+            </Link>
+            <Link href="/" className="ray-call-btn ray-call-btn-quiet" style={{ textDecoration: 'none', display: 'inline-block' }}>
+              Browse the markets
+            </Link>
+          </div>
+        )}
       </div>
     </section>
   );

@@ -14,10 +14,12 @@ import type { DeskInternals } from '../desk/provider';
 // load the registry (the imports above are types only)
 (Module as unknown as { _extensions: Record<string, (m: unknown, f: string) => void> })._extensions['.css'] = () => {};
 declare const require: NodeRequire;
-const { SECTIONS, mountedSections, railItemsOf, sectionByKey, keysLegend, slot } = require('../desk/sections') as typeof import('../desk/sections');
+const { SECTIONS, mountedSections, railItemsOf, sectionByKey, keysLegend, slot, unfilledSections, missingSection } = require('../desk/sections') as typeof import('../desk/sections');
 
 const desk = { now: 0, signedIn: false, book: [], fullLoaded: true, fullError: false, lastCrawl: null, saved: [], savedIds: new Set<string>(), metaFor: () => null,
-  collection: [], ownedIds: new Set<string>(), ledger: new Map(), ledgerLoaded: false, taste: null, follows: [{ kind: 'maker', key: 'kaws', label: 'KAWS' }], price: { minUsd: null, maxUsd: null }, recs: [1, 2, 3].map(k => ({ lot: { id: `rec-${k}`, title: `Pick ${k}`, artist: 'andy-warhol', status: 'upcoming', saleDate: null, saleDateTime: null, auctionHouse: 'Phillips' } })), lastVisitMs: null } as unknown as DeskData;
+  collection: [], ownedIds: new Set<string>(), ledger: new Map(), ledgerLoaded: false, taste: null, follows: [{ kind: 'maker', key: 'kaws', label: 'KAWS' }], price: { minUsd: null, maxUsd: null }, recs: [1, 2, 3].map(k => ({ lot: { id: `rec-${k}`, title: `Pick ${k}`, artist: 'andy-warhol', status: 'upcoming', saleDate: null, saleDateTime: null, auctionHouse: 'Phillips' } })), closingPicks: [], lastVisitMs: null } as unknown as DeskData;
+/** nothing at all: no save, no pick, no follow, no band — the cold desk */
+const coldDesk = { ...desk, follows: [], recs: [] } as unknown as DeskData;
 
 /** the internals a live desk hands the registry (only what metas read) */
 const live = (over: Partial<DeskInternals> = {}): DeskInternals => ({
@@ -26,6 +28,7 @@ const live = (over: Partial<DeskInternals> = {}): DeskInternals => ({
   historyCount: 8, orphanIds: [], settledCount: 7, other: [],
   ...over,
 } as unknown as DeskInternals);
+const emptyCollection = { rows: [], appraisedN: 0, totalAppraised: 0, appraisedPaid: 0, totalPaid: 0, deltaPct: null, appraisedPaidN: 0, pendingOwned: [] };
 
 test('registry: ids and keys are unique; every id is a valid hash anchor', () => {
   const ids = SECTIONS.map(s => s.id);
@@ -66,36 +69,60 @@ test('registry: the desk order — Today, Your week, Watching, For you (+ sign-i
 
 test('a live desk mounts its rooms in order and builds the rail from their metas, parted now · picks · desk', () => {
   const i = live();
-  assert.deepEqual(mountedSections(desk, i).map(s => s.id), ['today', 'week', 'watching', 'for-you', 'budget', 'portfolio', 'market', 'names', 'signals', 'record', 'edge', 'collection', 'history', 'account']);
-  const rail = railItemsOf(desk, i);
+  // a live desk whose contract carries saves and an owned piece: every room mounts
+  const full = { ...desk, saved: [{ id: 's1' }], collection: [{ id: 'c1' }], ownedIds: new Set(['c1']) } as unknown as DeskData;
+  assert.deepEqual(mountedSections(full, i).map(s => s.id), ['today', 'week', 'watching', 'for-you', 'budget', 'portfolio', 'market', 'names', 'signals', 'record', 'edge', 'collection', 'history', 'account']);
+  // (Oct 11 review) the data-needing rooms gate on data (the when() pattern): with nothing saved / owned,
+  // Portfolio and Edge do NOT mount — no dead pill — and the index (becomes) lists them with their taps
+  assert.deepEqual(mountedSections(desk, i).map(s => s.id), ['today', 'week', 'watching', 'for-you', 'budget', 'market', 'names', 'signals', 'record', 'collection', 'history', 'becomes', 'account']);
+  assert.deepEqual(unfilledSections(desk, i).map(s => s.id), ['portfolio', 'edge']);
+  const rail = railItemsOf(full, i);
   assert.deepEqual(rail.map(r => r.id), ['today', 'week', 'watching', 'for-you', 'budget', 'portfolio', 'market', 'names', 'signals', 'record', 'edge', 'collection', 'history']);
   assert.deepEqual(rail.map(r => r.group), ['now', 'now', 'now', 'picks', 'picks', 'picks', 'picks', 'picks', 'picks', 'desk', 'desk', 'desk', 'desk']);
-  // nothing saved / owned on this fixture: Your week, Portfolio and Edge fold (quiet pills, still links)
-  assert.deepEqual(rail.filter(r => r.quiet).map(r => r.id), ['week', 'portfolio', 'edge']);
+  // nothing closes on this fixture: Your week folds (quiet pill, still a link); Portfolio counts its piece; Edge has no graded call yet
+  assert.deepEqual(rail.filter(r => r.quiet).map(r => r.id), ['week']);
   const by = Object.fromEntries(rail.map(r => [r.id, r]));
   assert.equal(by.watching.count, 2);
   assert.equal(by['for-you'].count, 3);
   assert.equal(by.signals.count, 1);
   assert.equal(by.record.count, '+7%'); assert.equal(by.record.tone, 'up');
-  assert.equal(by.collection.count, 2); // none appraised from comps: the piece count
+  assert.equal(by.collection.count, '2'); // none marked by the engine, nothing bought: the piece count
   assert.equal(by.history.count, 8);
   assert.equal(by.watching.hint, 'g then w');
 });
 
-test('a signed-out desk: no Watching, no Record/Collection/History; the sign-in line and the ghost mount (Market mounts and gates itself); rail = For you + Signals', () => {
-  const i = live({ deskView: false, signedOutView: true, watchFirst: false, upcoming: [], todayShows: false, hasMarket: false, hasRecordRoom: false, record: null, collection: { rows: [], appraisedN: 0, totalAppraised: 0, totalPaid: 0, deltaPct: null, appraisedPaidN: 0 } as never, historyCount: 0, settledCount: 0 });
+test('a signed-out desk with a follow: no Watching, no Record/Collection/History, no Portfolio/Edge (nothing saved); the sign-in line and the index mount; rail = For you + Budget + Names + Signals', () => {
+  const i = live({ deskView: false, signedOutView: true, watchFirst: false, upcoming: [], todayShows: false, hasMarket: false, hasRecordRoom: false, record: null, collection: emptyCollection as never, historyCount: 0, settledCount: 0 });
   // nothing live: the picks lead, Your week follows the sign-in line
-  assert.deepEqual(mountedSections(desk, i).map(s => s.id), ['today', 'for-you', 'signin', 'week', 'budget', 'portfolio', 'market', 'names', 'signals', 'edge', 'becomes', 'account']);
+  assert.deepEqual(mountedSections(desk, i).map(s => s.id), ['today', 'for-you', 'signin', 'week', 'budget', 'market', 'names', 'signals', 'becomes', 'account']);
   const rail = railItemsOf(desk, i);
   assert.deepEqual(rail.filter(r => !r.quiet).map(r => r.id), ['for-you', 'budget', 'names', 'signals']);
-  assert.deepEqual(rail.filter(r => r.quiet).map(r => r.id), ['week', 'portfolio', 'edge']);
+  assert.deepEqual(rail.filter(r => r.quiet).map(r => r.id), ['week']);
+  // the rooms this desk doesn't have, in desk order, each with its fill + tap
+  assert.deepEqual(unfilledSections(desk, i).map(s => s.id), ['watching', 'portfolio', 'record', 'edge', 'collection', 'history']);
+  for (const s of unfilledSections(desk, i)) assert.ok(s.fill && s.fill.text && s.fill.how && s.fill.tap.href, `${s.id} has a fill`);
 });
 
-test('a follows-only desk (signed in, nothing saved): picks lead; Market when a follow is a name; ghost + CTAs', () => {
-  const i = live({ deskView: false, signedOutView: false, watchFirst: false, upcoming: [], hasRecordRoom: false, record: null, collection: { rows: [], appraisedN: 0, totalAppraised: 0, totalPaid: 0, deltaPct: null, appraisedPaidN: 0 } as never, historyCount: 0, settledCount: 0 });
+test('a follows-only desk (signed in, nothing saved): picks lead; Market when a follow is a name; the index lists the rest', () => {
+  const i = live({ deskView: false, signedOutView: false, watchFirst: false, upcoming: [], hasRecordRoom: false, record: null, collection: emptyCollection as never, historyCount: 0, settledCount: 0 });
   // nothing live: the picks lead, Your week follows them
-  assert.deepEqual(mountedSections(desk, i).map(s => s.id), ['today', 'for-you', 'week', 'budget', 'portfolio', 'market', 'names', 'signals', 'edge', 'becomes', 'account']);
+  assert.deepEqual(mountedSections(desk, i).map(s => s.id), ['today', 'for-you', 'week', 'budget', 'market', 'names', 'signals', 'becomes', 'account']);
   assert.deepEqual(railItemsOf(desk, i).filter(r => !r.quiet).map(r => r.id), ['today', 'for-you', 'budget', 'market', 'names', 'signals']);
+});
+
+test('the COLD desk (nothing at all): masthead + Today (gates itself) + For you (the quick start) + Signals + the index + Account — no empty rooms, no dead pills', () => {
+  const i = live({ deskView: false, signedOutView: false, watchFirst: false, upcoming: [], todayShows: false, hasMarket: false, hasRecordRoom: false, record: null, collection: emptyCollection as never, historyCount: 0, settledCount: 0 });
+  assert.deepEqual(mountedSections(coldDesk, i).map(s => s.id), ['today', 'for-you', 'market', 'signals', 'becomes', 'account']);
+  assert.deepEqual(railItemsOf(coldDesk, i).map(r => r.id), ['for-you', 'signals']);
+  assert.deepEqual(unfilledSections(coldDesk, i).map(s => s.id), ['week', 'watching', 'budget', 'portfolio', 'names', 'record', 'edge', 'collection', 'history']);
+  // a deep link to a missing room resolves to its fill; a mounted room or an unknown id to nothing
+  const mounted = mountedSections(coldDesk, i);
+  assert.equal(missingSection('record', mounted)?.fill?.how, 'it fills as your watches settle');
+  assert.equal(missingSection('for-you', mounted), null);
+  assert.equal(missingSection('nope', mounted), null);
+  // a stated band alone brings the Budget desk (it has a band to plan against)
+  const banded = { ...coldDesk, price: { minUsd: 1000, maxUsd: 50_000 } } as unknown as DeskData;
+  assert.ok(mountedSections(banded, i).some(s => s.id === 'budget'));
 });
 
 test('keysLegend: every keyed section, mounted ones marked live', () => {

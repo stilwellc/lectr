@@ -44,6 +44,17 @@ import EdgeSection, { meta as edgeMeta } from '../edge';
 export type SectionGroup = 'now' | 'picks' | 'desk';
 export type MarkComponent = React.ComponentType<{ size?: number; className?: string }>;
 
+/** what a room is once it has data, and the ONE tap that starts filling it —
+ *  the cold desk's section index (rooms/becomes) and the line under the rail
+ *  when a deep link names a room this desk doesn't have yet both read it */
+export interface SectionFill {
+  /** what the room holds ("every settled watch judged vs its estimate") */
+  text: string;
+  /** how it fills ("it fills as your watches settle") */
+  how: string;
+  tap: { label: string; href: string };
+}
+
 export interface DeskSection {
   id: string;
   label: string;
@@ -53,7 +64,40 @@ export interface DeskSection {
   Component: React.ComponentType<SectionProps> | null;
   meta: (desk: DeskData, i: DeskInternals) => SectionMeta | null;
   when?: (desk: DeskData, i: DeskInternals) => boolean;
+  fill?: SectionFill;
 }
+
+/* ── the mount gates for the rooms that need data (the when() pattern:
+   Watching, Record, Collection and History always had one; the Phase-2
+   rooms join them so a cold desk is masthead + quick start + the index +
+   account, not 4,700px of empty rooms — R3#2). A room that is NOT mounted
+   has no pill; its key still lists in the (?) as "not on this desk yet",
+   and a deep link to it prints its fill line under the rail. ── */
+/** the reader has told lectr something (a taste): saves, follows, picks */
+const hasTaste = (d: DeskData, i: DeskInternals): boolean =>
+  i.deskView || d.recs.length > 0 || d.closingPicks.length > 0 || d.follows.length > 0 || (d.taste?.seeds.length ?? 0) > 0;
+const weekWhen = (d: DeskData, i: DeskInternals): boolean => hasTaste(d, i);
+const budgetWhen = (d: DeskData, i: DeskInternals): boolean => hasTaste(d, i) || d.price.minUsd != null || d.price.maxUsd != null;
+const portfolioWhen = (d: DeskData): boolean => d.collection.length > 0 || d.ownedIds.size > 0;
+const namesWhen = (d: DeskData): boolean => d.follows.length > 0 || d.collection.length > 0 || d.saved.length > 0;
+const edgeWhen = (d: DeskData): boolean => d.saved.length > 0;
+
+/** the tap that fills each room — "Watch" buttons live on this page (the
+ *  picks' bookmark), /value has today's below-market lots and tonight's
+ *  closers, /receipts the engine's own settled record */
+const WATCH_TAP = { label: 'Watch a lot below', href: '#for-you' };
+const FILLS: Record<string, SectionFill> = {
+  week: { text: 'every close of yours — watches, picks, the sales of your names — day by day', how: 'it fills as you watch lots and follow names', tap: WATCH_TAP },
+  watching: { text: 'your live lots: signals and bids tracked to the hammer', how: 'bookmark any lot on lectr and it lands here', tap: WATCH_TAP },
+  budget: { text: 'your watches grouped by close night against your band, and what the band buys this week', how: 'it fills as you watch lots and set a band', tap: { label: 'Today’s below-market lots', href: '/value' } },
+  portfolio: { text: 'the pieces you own, re-marked over time against their makers’ sales', how: 'it fills when a settled watch is marked “I won it”', tap: WATCH_TAP },
+  market: { text: 'the names you follow or own and their 12-month pulse', how: 'it fills as you follow names', tap: { label: 'Follow a name', href: '/makers' } },
+  names: { text: 'the upcoming sales of every name you follow or own, and the names with nothing live', how: 'it fills as you follow names', tap: { label: 'Follow a name', href: '/makers' } },
+  record: { text: 'every settled watch judged against its estimate — your eye, measured', how: 'it fills as your watches settle', tap: { label: 'Tonight’s closers', href: '/value?sort=closing' } },
+  edge: { text: 'your calls graded against the hammer, by market, with the receipts', how: 'it fills as your watches settle', tap: { label: 'The engine’s own record', href: '/receipts' } },
+  collection: { text: 'the pieces you own, appraised against the live market nightly', how: 'it fills when a settled watch is marked “I won it”', tap: WATCH_TAP },
+  history: { text: 'the line-item receipt of every settled watch', how: 'it fills as your watches settle', tap: { label: 'The engine’s own record', href: '/receipts' } },
+};
 
 const noPill = (): SectionMeta | null => null;
 /** a reserved Phase-2 slot: nothing mounts, no pill, the key is spoken for */
@@ -64,22 +108,22 @@ export const slot = (id: string, label: string, key: string, group: SectionGroup
 export const SECTIONS: readonly DeskSection[] = [
   { id: 'today', label: 'Today', key: 't', group: 'now', mark: AwayMark, Component: Today, meta: todayMeta },
   // the hammer timeline: watches, picks and the sales of your names, day by day
-  { id: 'week', label: 'Your week', key: 'd', group: 'now', mark: HorizonMark, Component: WeekSection, meta: weekMeta },
+  { id: 'week', label: 'Your week', key: 'd', group: 'now', mark: HorizonMark, Component: WeekSection, meta: weekMeta, when: weekWhen, fill: FILLS.week },
   { id: 'watching', label: 'Watching', key: 'w', group: 'now', mark: WatchMark, Component: WatchingRoom, meta: watchingMeta,
-    when: (_d, i) => i.deskView && i.upcoming.length > 0 },
+    when: (_d, i) => i.deskView && i.upcoming.length > 0, fill: FILLS.watching },
   // the picks group: Lots you may like → For your collection → How your picks did (one pill)
   { id: 'for-you', label: 'For you', key: 'f', group: 'picks', mark: RankMark, Component: PicksGroup, meta: picksMeta },
   // signed out: the slim sign-in line sits right after the picks — after value, never before it
   { id: 'signin', label: 'Sign in', key: '', group: 'picks', Component: SignIn, meta: noPill, when: signinWhen },
-  { id: 'budget', label: 'Budget', key: 'b', group: 'picks', mark: GapMark, Component: BudgetDesk, meta: budgetMeta },
-  { id: 'portfolio', label: 'Portfolio', key: 'p', group: 'picks', mark: IndexLabMark, Component: Portfolio, meta: portfolioMeta },
-  { id: 'market', label: 'Market', key: 'm', group: 'picks', mark: MoversMark, Component: Market, meta: marketMeta },
-  { id: 'names', label: 'Names', key: 'n', group: 'picks', mark: SalesMark, Component: NamesSection, meta: namesMeta },
+  { id: 'budget', label: 'Budget', key: 'b', group: 'picks', mark: GapMark, Component: BudgetDesk, meta: budgetMeta, when: budgetWhen, fill: FILLS.budget },
+  { id: 'portfolio', label: 'Portfolio', key: 'p', group: 'picks', mark: IndexLabMark, Component: Portfolio, meta: portfolioMeta, when: portfolioWhen, fill: FILLS.portfolio },
+  { id: 'market', label: 'Market', key: 'm', group: 'picks', mark: MoversMark, Component: Market, meta: marketMeta, fill: FILLS.market },
+  { id: 'names', label: 'Names', key: 'n', group: 'picks', mark: SalesMark, Component: NamesSection, meta: namesMeta, when: namesWhen, fill: FILLS.names },
   { id: 'signals', label: 'Signals', key: 's', group: 'picks', mark: SignalMark, Component: Signals, meta: signalsMeta },
-  { id: 'record', label: 'Record', key: 'r', group: 'desk', mark: RecordMark, Component: RecordRoom, meta: recordMeta, when: recordWhen },
-  { id: 'edge', label: 'Edge', key: 'e', group: 'desk', mark: CalibrationMark, Component: EdgeSection, meta: edgeMeta },
-  { id: 'collection', label: 'Collection', key: 'c', group: 'desk', mark: CollectionMark, Component: CollectionRoom, meta: collectionMeta, when: collectionWhen },
-  { id: 'history', label: 'History', key: 'h', group: 'desk', mark: TapeMark, Component: HistoryRoom, meta: historyMeta, when: historyWhen },
+  { id: 'record', label: 'Record', key: 'r', group: 'desk', mark: RecordMark, Component: RecordRoom, meta: recordMeta, when: recordWhen, fill: FILLS.record },
+  { id: 'edge', label: 'Edge', key: 'e', group: 'desk', mark: CalibrationMark, Component: EdgeSection, meta: edgeMeta, when: edgeWhen, fill: FILLS.edge },
+  { id: 'collection', label: 'Collection', key: 'c', group: 'desk', mark: CollectionMark, Component: CollectionRoom, meta: collectionMeta, when: collectionWhen, fill: FILLS.collection },
+  { id: 'history', label: 'History', key: 'h', group: 'desk', mark: TapeMark, Component: HistoryRoom, meta: historyMeta, when: historyWhen, fill: FILLS.history },
   { id: 'becomes', label: 'What else this page becomes', key: '', group: 'desk', Component: Becomes, meta: becomesMeta, when: becomesWhen },
   { id: 'account', label: 'Account', key: 'a', group: 'desk', Component: AccountStrip, meta: accountMeta },
 ];
@@ -115,6 +159,22 @@ export function railItemsOf(desk: DeskData, i: DeskInternals): RailItem[] {
     });
   }
   return out;
+}
+
+/** the rooms this desk does NOT mount that a reader can still fill — the
+ *  cold desk's index (rooms/becomes), in desk order; a room with no fill
+ *  (Today, Signals, Account) never lists */
+export function unfilledSections(desk: DeskData, i: DeskInternals): DeskSection[] {
+  // each room's own gate (not mountedSections — the index's gate reads this)
+  return SECTIONS.filter(s => !!s.fill && !!s.Component && !!s.when && !s.when(desk, i));
+}
+
+/** a deep link's target that is not on this desk — its fill, for the one
+ *  line under the rail ("Record — not on this desk yet; it fills as your
+ *  watches settle") */
+export function missingSection(id: string, mounted: readonly DeskSection[]): DeskSection | null {
+  if (!id || mounted.some(s => s.id === id)) return null;
+  return SECTIONS.find(s => s.id === id && !!s.fill) ?? null;
 }
 
 /** the `g`-chord table: key → section id (reserved slots included, so a key

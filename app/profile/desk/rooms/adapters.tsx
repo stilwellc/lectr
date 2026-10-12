@@ -10,6 +10,7 @@ import TodayBand from '../../today';
 import YourMarket from '../../YourMarket';
 import YourSignals from '../../signals';
 import { useDeskInternals, type DeskInternals } from '../provider';
+import { RoomHead } from '../../head';
 import type { SectionProps, SectionMeta, DeskData } from '../types';
 
 /* ── TODAY ── */
@@ -20,10 +21,10 @@ export function Today(_p: SectionProps) {
   const i = useDeskInternals();
   const { deal, deskView, signedOutView, closingWatches, reads, awayLine, unseenAlerts, todayTop, watchFirst, recsReady } = i;
   if (deskView) {
-    return <TodayBand loop={deal.loop} closingWatches={closingWatches} reads={reads} away={awayLine} top={todayTop} topLoading={watchFirst && !recsReady} phoneRows={watchFirst ? 2 : 3} />;
+    return <TodayBand loop={deal.loop} closingWatches={closingWatches} reads={reads} away={awayLine} top={todayTop} topLoading={watchFirst && !recsReady} phoneRows={watchFirst ? 2 : 3} picksN={deal.recs.length} />;
   }
   // signed out: no away facts; a signed-in empty desk keeps its inbox count
-  return <TodayBand loop={deal.loop} closingWatches={[]} reads={[]} away={signedOutView ? null : (unseenAlerts > 0 ? awayLine : null)} />;
+  return <TodayBand loop={deal.loop} closingWatches={[]} reads={[]} away={signedOutView ? null : (unseenAlerts > 0 ? awayLine : null)} picksN={deal.recs.length} />;
 }
 
 /* ── YOUR MARKET ── */
@@ -49,7 +50,8 @@ export function signinWhen(_desk: DeskData, i: DeskInternals): boolean { return 
 export function SignIn(_p: SectionProps) {
   const { coldOut, auth } = useDeskInternals();
   return (
-    <section className="rail ray-enter">
+    <section id="signin" className="rail ray-enter ck-signin-section">
+      <RoomHead level={3} title="Sign in" style={{ marginBottom: 2 }} />
       <div className="ck-signin">
         {/* a cold visit's one primary action is the quick start — sign-in
             rides as a text link under it, never a second black button */}

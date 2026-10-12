@@ -267,6 +267,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
         .ray-wordmark {
           display: inline-flex;
           align-items: center;
+          flex: 0 0 auto;
           gap: 9px;
           font-family: var(--font-sans), sans-serif;
           font-weight: 750;
@@ -280,7 +281,9 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           margin: -6px 0;
           transition: opacity var(--duration-fast) var(--ease-signature);
         }
-        .ray-mark-r { display: block; height: 26px; width: auto; }
+        .ray-mark-r { display: block; height: 26px; width: auto; flex: none; }
+        .ray-nav-count { font-family: var(--font-mono), monospace; font-size: 11.5px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--color-text-secondary); margin-left: 2px; }
+        .ray-nav-link[data-active=true] .ray-nav-count { color: inherit; }
         .ray-mark-r.lectr-on { animation: lectrSwitchOn 480ms var(--ease-signature) 1 both; }
         .ray-wordmark:hover,
         .ray-wordmark:focus-visible { opacity: 0.85; }
@@ -294,11 +297,16 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
            quotes or angle brackets in this block - React escapes them server
            side and hydration of the raw-text style element then fails. */
         @media (min-width: 769px) {
+          /* the search is the row's one flexible part: it gives before the
+             wordmark or a nav link ever would (the img used to absorb a 30px
+             overflow and shrink to 9px) */
           .ray-artist-select-wrap {
-            flex: 0 0 auto;
-            width: clamp(240px, 24vw, 320px);
+            flex: 0 1 clamp(200px, 22vw, 280px);
+            width: clamp(200px, 22vw, 280px);
+            min-width: 150px;
             margin-left: auto;
           }
+          .ray-nav-links { flex: 0 0 auto; }
         }
         .ray-artist-select-btn {
           width: 100%;
@@ -582,7 +590,7 @@ export default function ArtistNav({ activeSlug, savedCount = 0, upcomingCounts =
           <a href="/blog" className="ray-nav-link" data-active={activeSlug === 'blog'} aria-current={activeSlug === 'blog' ? 'page' : undefined} onClick={e => linkNav(e, '/blog')}>{NAV_ICONS.blog}Blog</a>
           {/* My profile for everyone; signed out, Sign in rides beside it */}
           <a href="/profile" className="ray-nav-link" data-active={activeSlug === 'saved'} aria-current={activeSlug === 'saved' ? 'page' : undefined} onClick={e => linkNav(e, '/profile')} title={user?.email || undefined}>
-            {NAV_ICONS.profile}My profile{savedCount > 0 ? ` · ${savedCount}` : ''}
+            {NAV_ICONS.profile}My profile{savedCount > 0 && <b className="ray-nav-count" aria-label={`${savedCount} saved`}>{savedCount}</b>}
             {unseenAlerts > 0 && (
               // ink marker: "something new happened" is a verb — the lamp
               // law keeps green for the market's up-read only

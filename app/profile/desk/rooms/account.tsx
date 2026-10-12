@@ -5,6 +5,7 @@ import React from 'react';
 import PushOptIn from '../../../components/retention/PushOptIn';
 import { TrackOnMount } from '../../../components/retention/trackers';
 import { useDeskInternals } from '../provider';
+import { RoomHead } from '../../head';
 import type { SectionProps, SectionMeta } from '../types';
 
 /** the strip has no rail pill (it never had one) — `g a` still lands on it */
@@ -15,8 +16,8 @@ export default function AccountStrip(_p: SectionProps) {
   const { authEnabled, user, signInWithGoogle, signOut } = auth;
   return (
     <section id="account" className="rail ck-account" aria-label="Account">
+      <RoomHead level={3} title="Account" style={{ marginBottom: 4 }} />
       <div className="ck-account-in">
-        <span className="kicker">Account</span>
         {authEnabled && user ? (
           <span>
             {user.email || 'Signed in'} · your desk syncs to your account ·{' '}
