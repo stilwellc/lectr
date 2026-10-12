@@ -65,7 +65,7 @@
 .pe-card-wait { font-size: var(--text-caption); }
 .pe-card-side { display: grid; gap: 10px; justify-items: start; }
 .pe-card-dek { margin: 0; font-size: var(--text-caption); line-height: 1.55; color: var(--color-text-muted); max-width: 360px; }
-.pe-card-side .ray-show-more:disabled { opacity: 0.5; cursor: default; }
+.pe-card-dek b { color: var(--color-fg); font-weight: 600; }
 
 @media (max-width: 900px) {
   .pe-calls, .pe-card { grid-template-columns: 1fr; }

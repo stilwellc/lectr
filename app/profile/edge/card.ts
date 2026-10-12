@@ -10,11 +10,14 @@
  *   record     the Record section's median realized vs estimate over every
  *              settled save with an estimate (edge.ts record), with its n
  *   graded     calls graded against the hammer (edge.ts n)
- *   names      the three makers / subjects the reader saves most (ties: the
- *              most recent save first); a desk with no saved names falls
- *              back to the names it follows
+ *   names      (R1#19) the names the reader FOLLOWS first (makers and
+ *              subjects — a followed house is not a name), then the makers /
+ *              subjects saved most (ties: the most recent save first) until
+ *              three stand
  * The record line prints only at EDGE_MIN_N graded calls — a desk under it
- * carries the card without the line (cardLines).
+ * carries the card without the line (cardLines). A card with no number at
+ * all (nothing on the block, no record line) is drawn but not offered for
+ * download — cardHasNumber decides (R3#8).
  */
 import type { AuctionLot } from '../../types';
 import type { SavedMeta } from '../../lib/account';
@@ -27,6 +30,8 @@ import { EDGE_MIN_N, dayOf } from './edge';
 
 export const CARD_W = 1200;
 export const CARD_H = 630;
+/** the card names this many */
+export const CARD_NAMES = 3;
 
 /** the brand sheet (docs/NORTHSTAR_UI.md §1.4 / §2.1): eggshell ground,
  *  warm ink, warm-gray 500, hairline, the lamp's print green and brick —
@@ -60,6 +65,35 @@ export interface CardInputs {
   graded: number;
 }
 
+/** the names the card prints: followed names first (never a house), then
+ *  the most-saved makers / subjects, ties to the most recent save */
+export function cardNamesOf(saved: readonly AuctionLot[], metaFor: CardInputs['metaFor'], follows: readonly Follow[], max = CARD_NAMES): string[] {
+  const names: string[] = [];
+  for (const f of follows) {
+    if ((f.kind !== 'maker' && f.kind !== 'entity') || !f.label) continue; // a house or a category is not a name
+    if (!names.includes(f.label)) names.push(f.label);
+    if (names.length >= max) return names;
+  }
+  const tally = new Map<string, { n: number; last: string }>();
+  for (const l of saved) {
+    const name = displayMakerOf(l)?.name;
+    if (!name) continue;
+    const at = metaFor(l.id)?.savedAt ?? '';
+    const t = tally.get(name) ?? { n: 0, last: '' };
+    t.n++; if (at > t.last) t.last = at;
+    tally.set(name, t);
+  }
+  const ranked = Array.from(tally.entries())
+    .sort((a, b) => b[1].n - a[1].n || (b[1].last > a[1].last ? 1 : b[1].last < a[1].last ? -1 : 0) || a[0].localeCompare(b[0]))
+    .map(([name]) => name);
+  for (const name of ranked) {
+    if (names.includes(name)) continue;
+    names.push(name);
+    if (names.length >= max) break;
+  }
+  return names;
+}
+
 export function cardNumbersOf(input: CardInputs): CardNumbers {
   const today = dayOf(input.now);
   const live = input.saved.filter(l => isOnBlock(l, today, input.now));
@@ -69,20 +103,7 @@ export function cardNumbersOf(input: CardInputs): CardNumbers {
     const hi = l.estimateHigh || l.estimateLow || 0;
     if (lo > 0 || hi > 0) { watchingUsd += (lo + hi) / 2; priced++; }
   }
-  // the names: most-saved first, then most recently saved
-  const tally = new Map<string, { n: number; last: string }>();
-  for (const l of input.saved) {
-    const name = displayMakerOf(l)?.name;
-    if (!name) continue;
-    const at = input.metaFor(l.id)?.savedAt ?? '';
-    const t = tally.get(name) ?? { n: 0, last: '' };
-    t.n++; if (at > t.last) t.last = at;
-    tally.set(name, t);
-  }
-  let names = Array.from(tally.entries())
-    .sort((a, b) => b[1].n - a[1].n || (b[1].last > a[1].last ? 1 : b[1].last < a[1].last ? -1 : 0) || a[0].localeCompare(b[0]))
-    .slice(0, 3).map(([name]) => name);
-  if (!names.length) names = input.follows.filter(f => f.kind !== 'house').slice(0, 3).map(f => f.label);
+  const names = cardNamesOf(input.saved, input.metaFor, input.follows);
   const d = new Date(input.now);
   const dateLabel = `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
   return { watchingUsd, watchingLots: live.length, watchingPriced: priced, record: input.record, graded: input.graded, names, dateLabel };
@@ -123,6 +144,12 @@ export function cardLines(n: CardNumbers): CardLines {
     names: n.names,
     foot: `lectr.bid · ${n.dateLabel} · rendered on this device`,
   };
+}
+
+/** the card carries at least one number — a watching figure or a record
+ *  line; a card of dashes is drawn but not offered for download (R3#8) */
+export function cardHasNumber(l: CardLines): boolean {
+  return l.headline.figure !== '—' || l.record != null;
 }
 
 export interface DrawOpts {
