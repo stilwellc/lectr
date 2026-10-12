@@ -19,12 +19,21 @@
  *                       (estimate houses), the projected close (bid rooms),
  *                       the lectr value, or the bare live bid.
  *                   A lot with neither is listed as unpriced, never summed.
+ *   counted         (R1#7, review fix wave) a night's SUM carries only the
+ *                   rows priced by the engine or by the room — a max bid,
+ *                   a projected close, a lectr value, a live bid. A row at
+ *                   the house ESTIMATE MIDPOINT is a bid the reader never
+ *                   chose: it is listed ("no max bid yet — the estimate
+ *                   midpoint would be $X"), kept apart in `estTotal`, and
+ *                   joins the sum only when the reader asks (`estInPlan`).
+ *                   A ONE-SIDED estimate (priced.ts: one bound published)
+ *                   prints "from $X" and is never summed, toggle or not.
  *   all-in          plan figure × the lot's buyer's-premium factor —
  *                   premiums.lotAllInFactor (the lot's own stamped premium,
  *                   else the house schedule in force on its sale date). A
  *                   max-bid row's all-in IS verdict.lotMaxBid's (same call).
  *   night           closeDayOf (app/utils) — the reader's TRUE close day.
- *   over budget     a night's hammer sum against the stated ceiling
+ *   over budget     a night's COUNTED hammer sum against the stated ceiling
  *                   (maxUsd). The drop suggestion is lowest-edge first
  *                   (priority.prioStatic.edge: a Below Market flag lifts a
  *                   lot, Above Market sinks it), then the rows the engine
@@ -37,6 +46,10 @@
  *                   (interests.inPriceRange: the ranker's anchor), closing
  *                   within 7 days, ranked by comps.dealScore — THE one
  *                   flagged ranking. No new signal label anywhere.
+ *   tease           (R3#7) before the reader has stated a market, the buys
+ *                   list is ONE ROW PER MARKET — "Art · 11 below market this
+ *                   week" — counting the same candidates, floored at comps
+ *                   n ≥ TEASE_MIN_N so a market is never teased on thin pools.
  */
 import type { AuctionLot } from '../../types';
 import type { PricePref } from '../../lib/interests';
@@ -50,6 +63,7 @@ import { dealScore, engineFlagOf } from '../../lib/comps';
 import { taxonOf, MARKET_CATS, type CatKey } from '../../lib/taxonomy';
 import { MARKETS, marketOf, type Market } from '../../constants';
 import { closeDayOf, isOnBlock } from '../../utils';
+import { estBandOf } from './priced';
 
 /* ── the clock's days ──────────────────────────────────────────────────── */
 
@@ -83,11 +97,17 @@ export const BASIS_TAG: Record<PlanBasis, string> = {
 /** the figure, in full (the row's title / the help strip) */
 export const BASIS_TEXT: Record<PlanBasis, string> = {
   max: 'the engine’s max bid — its walk-away hammer',
-  est: 'the house estimate midpoint — hammer, before premium',
+  est: 'the house estimate midpoint — hammer, before premium; not a bid you chose, so it is listed and not summed unless you ask',
   proj: 'the live bid projected to its close by this room’s measured multiple — hammer',
   engine: 'the lectr value — the engine’s expected hammer (no estimate on the lot)',
   bid: 'the live bid on the lot — a floor, not a value',
 };
+
+/** the tag a row prints: a one-sided estimate names its one side */
+export function rowTag(r: Pick<PlanRow, 'basis' | 'side'>): string {
+  if (r.basis === 'est' && r.side) return r.side === 'low' ? 'Est low' : 'Est high';
+  return BASIS_TAG[r.basis];
+}
 
 export interface PlanRow {
   lot: AuctionLot;
@@ -97,8 +117,13 @@ export interface PlanRow {
   /** the plan figure, hammer basis */
   hammer: number;
   basis: PlanBasis;
-  /** an estimate with one published side: the midpoint IS that side */
+  /** an estimate with one published side: the figure IS that side */
   oneSided: boolean;
+  /** which side, when one-sided */
+  side: 'low' | 'high' | null;
+  /** priced by the engine or the room (max / proj / engine / bid) — the rows
+   *  a night's sum carries by default; an estimate-midpoint row is not */
+  counted: boolean;
   /** hammer × the lot's premium factor (premiums.lotAllInFactor) */
   allIn: number;
   /** the premium that all-in carries, whole % */
@@ -115,17 +140,27 @@ export interface PlanRow {
 export interface PlanNight {
   day: string;
   rows: PlanRow[];
-  /** the night's hammer sum */
+  /** the night's hammer sum — the counted rows (+ the two-sided estimate
+   *  rows when `estInPlan`) */
   total: number;
-  /** the night's all-in sum */
+  /** the night's all-in sum, same rows */
   totalAllIn: number;
   nMax: number;
   /** rows priced off something other than a max bid */
   nOther: number;
+  /** the rows in the sum */
+  nCounted: number;
+  /** two-sided estimate-midpoint rows (listed; summed only when estInPlan) */
+  nEst: number;
+  estTotal: number;
+  estAllIn: number;
+  /** one-sided estimate rows ("from $X"; never summed) */
+  nFrom: number;
+  fromSum: number;
   /** hammer over the stated ceiling, null when under it or no ceiling */
   over: number | null;
-  /** the suggested drops (smallestDropSet), in dropOrder, that bring the
-   *  night under the ceiling */
+  /** the suggested drops (smallestDropSet over the summed rows), in
+   *  dropOrder, that bring the night under the ceiling */
   drops: PlanRow[];
   /** the night's hammer sum after the suggested drops */
   afterDrops: number;
@@ -138,18 +173,26 @@ export interface BidPlan {
   rows: PlanRow[];
   /** live watched lots with no figure at all (no max bid, no anchor) */
   unpriced: AuctionLot[];
+  /** the summed rows' hammer / all-in (see PlanNight.total) */
   total: number;
   totalAllIn: number;
   nMax: number;
   nOther: number;
+  nCounted: number;
+  nEst: number;
+  estTotal: number;
+  estAllIn: number;
+  nFrom: number;
+  fromSum: number;
   ceiling: number | null;
   overNights: number;
+  /** the estimate-midpoint rows were summed (the reader's toggle) */
+  estInPlan: boolean;
 }
 
-function estSides(lot: AuctionLot): { lo: number; hi: number } {
-  const lo = (lot.estLowUsd ?? lot.estimateLow) || 0;
-  const hi = (lot.estHighUsd ?? lot.estimateHigh) || 0;
-  return { lo, hi };
+export interface PlanOptions {
+  /** sum the two-sided estimate-midpoint rows too (default false — R1#7) */
+  estInPlan?: boolean;
 }
 
 /** ONE live watched lot's plan row — null when nothing prices it */
@@ -169,16 +212,23 @@ export function planRowOf(lot: AuctionLot, now: number): PlanRow | null {
   const factor = lotAllInFactor(lot, hammer);
   // a max-bid row's all-in is verdict.lotMaxBid's own (the same factor)
   const allIn = basis === 'max' && face.maxBid ? face.maxBid.allIn : Math.round(hammer * factor);
-  const { lo, hi } = estSides(lot);
+  const est = estBandOf(lot);
+  const oneSided = basis === 'est' && !!est && !est.priced;
   const call: FaceCall | null = face.call;
   return {
     lot, day: closeDayOf(lot), closeMs: closeMsOf(lot), hammer, basis,
-    oneSided: basis === 'est' && !(lo > 0 && hi > 0),
+    oneSided, side: oneSided ? est!.side : null,
+    counted: basis !== 'est',
     allIn, premiumPct: Math.round((factor - 1) * 100),
     edge: anchor?.edge ?? 0,
     belowPct: call && call.label === 'Below Market' ? call.pct : null,
     face, anchor,
   };
+}
+
+/** the rows a night's sum carries under the plan's option */
+export function summedRows(rows: readonly PlanRow[], estInPlan: boolean): PlanRow[] {
+  return rows.filter(r => r.counted || (estInPlan && r.basis === 'est' && !r.oneSided));
 }
 
 /** the drop order on an over-budget night: lowest edge first (Above Market,
@@ -240,8 +290,11 @@ export function smallestDropSet(rows: readonly PlanRow[], ceiling: number): Plan
   return dropOrder(rows).filter(r => set.has(r));
 }
 
+const sum = (rows: readonly PlanRow[], k: 'hammer' | 'allIn') => rows.reduce((s, r) => s + r[k], 0);
+
 /** the bid plan: every live watched lot, by close night, against the ceiling */
-export function bidPlan(saved: readonly AuctionLot[], now: number, price: PricePref | null): BidPlan {
+export function bidPlan(saved: readonly AuctionLot[], now: number, price: PricePref | null, opts: PlanOptions = {}): BidPlan {
+  const estInPlan = !!opts.estInPlan;
   const today = isoDayOf(now);
   const ceiling = price?.maxUsd ?? null;
   const rows: PlanRow[] = [];
@@ -261,24 +314,37 @@ export function bidPlan(saved: readonly AuctionLot[], now: number, price: PriceP
     .sort(([a], [b]) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)))
     .map(([day, rs]: [string, PlanRow[]]) => {
       rs.sort((a, b) => (a.closeMs ?? Infinity) - (b.closeMs ?? Infinity) || b.hammer - a.hammer);
-      const total = rs.reduce((s, r) => s + r.hammer, 0);
-      const totalAllIn = rs.reduce((s, r) => s + r.allIn, 0);
+      const summed = summedRows(rs, estInPlan);
+      const estRows = rs.filter(r => r.basis === 'est' && !r.oneSided);
+      const fromRows = rs.filter(r => r.oneSided);
+      const total = sum(summed, 'hammer');
+      const totalAllIn = sum(summed, 'allIn');
       const nMax = rs.filter(r => r.basis === 'max').length;
       const over = ceiling != null && total > ceiling ? total - ceiling : null;
-      const drops = over != null ? smallestDropSet(rs, ceiling!) : [];
-      const after = total - drops.reduce((s, r) => s + r.hammer, 0);
-      return { day, rows: rs, total, totalAllIn, nMax, nOther: rs.length - nMax, over, drops, afterDrops: after, kept: rs.length - drops.length };
+      const drops = over != null ? smallestDropSet(summed, ceiling!) : [];
+      const after = total - sum(drops, 'hammer');
+      return {
+        day, rows: rs, total, totalAllIn, nMax, nOther: rs.length - nMax, nCounted: summed.length,
+        nEst: estRows.length, estTotal: sum(estRows, 'hammer'), estAllIn: sum(estRows, 'allIn'),
+        nFrom: fromRows.length, fromSum: sum(fromRows, 'hammer'),
+        over, drops, afterDrops: after, kept: summed.length - drops.length,
+      };
     });
-  const total = rows.reduce((s, r) => s + r.hammer, 0);
-  const totalAllIn = rows.reduce((s, r) => s + r.allIn, 0);
+  const summed = summedRows(rows, estInPlan);
+  const estRows = rows.filter(r => r.basis === 'est' && !r.oneSided);
+  const fromRows = rows.filter(r => r.oneSided);
   const nMax = rows.filter(r => r.basis === 'max').length;
   return {
-    nights, rows, unpriced, total, totalAllIn, nMax, nOther: rows.length - nMax, ceiling,
-    overNights: nights.filter(n => n.over != null).length,
+    nights, rows, unpriced,
+    total: sum(summed, 'hammer'), totalAllIn: sum(summed, 'allIn'),
+    nMax, nOther: rows.length - nMax, nCounted: summed.length,
+    nEst: estRows.length, estTotal: sum(estRows, 'hammer'), estAllIn: sum(estRows, 'allIn'),
+    nFrom: fromRows.length, fromSum: sum(fromRows, 'hammer'),
+    ceiling, overNights: nights.filter(n => n.over != null).length, estInPlan,
   };
 }
 
-/** "2 at max bid · 5 at estimate midpoint" — what a sum is made of */
+/** "2 at max bid · 5 at estimate midpoint" — what a set of rows is made of */
 export function basisMix(rows: readonly PlanRow[]): string {
   const n = new Map<PlanBasis, number>();
   for (const r of rows) n.set(r.basis, (n.get(r.basis) ?? 0) + 1);
@@ -321,27 +387,32 @@ export function followMarket(f: Follow, book: readonly AuctionLot[]): Market | n
   return null;
 }
 
-/** the markets the desk reads — taste seeds (saves, owned, follows, the
- *  quick start's markets) and the follows; empty = every market */
+/** the markets the desk reads. STATED first (R4#8): the follows and the
+ *  quick start's market seeds; the saved / owned lots' categories are
+ *  folded in only when nothing was stated — a collector who follows three
+ *  names in art and watches is not "7 markets you watch" because of what
+ *  they once saved. Empty = every market. */
 export function readerMarkets(taste: Taste | null, follows: readonly Follow[], book: readonly AuctionLot[]): Set<Market> {
-  const out = new Set<Market>();
-  const add = (m: Market | null | undefined) => { if (m && m !== 'all') out.add(m); };
+  const stated = new Set<Market>();
+  const implied = new Set<Market>();
+  const add = (set: Set<Market>, m: Market | null | undefined) => { if (m && m !== 'all') set.add(m); };
   for (const s of taste?.seeds ?? []) {
-    if (s.f?.cat) add(marketOfCat(s.f.cat));
     if (s.market) {
       const w = s.market.toLowerCase();
-      add(MARKETS.find(m => m.key === w || m.label.toLowerCase() === w || m.short.toLowerCase() === w)?.key);
-    }
-    if (s.follow) add(followMarket(s.follow, book));
+      add(stated, MARKETS.find(m => m.key === w || m.label.toLowerCase() === w || m.short.toLowerCase() === w)?.key);
+    } else if (s.follow) add(stated, followMarket(s.follow, book));
+    else if (s.f?.cat) add(implied, marketOfCat(s.f.cat));
   }
-  for (const f of follows) add(followMarket(f, book));
-  return out;
+  for (const f of follows) add(stated, followMarket(f, book));
+  return stated.size ? stated : implied;
 }
 
 /* ── what your budget buys this week ───────────────────────────────────── */
 
 export const BUYS_WINDOW_DAYS = 7;
 export const BUYS_N = 6;
+/** a market is teased only on lots whose comps pool has at least this many sales */
+export const TEASE_MIN_N = 5;
 
 export interface BuyRow {
   lot: AuctionLot;
@@ -365,8 +436,9 @@ export interface BudgetBuys {
   banded: boolean;
 }
 
-export function budgetBuys(book: readonly AuctionLot[], now: number, price: PricePref | null, markets: ReadonlySet<Market>,
-  exclude: ReadonlySet<string>, n = BUYS_N): BudgetBuys {
+/** every Below Market candidate: flagged, not on the desk, closing inside
+ *  the window, in the markets (none = all), inside the band, edge left */
+function buyCandidates(book: readonly AuctionLot[], now: number, price: PricePref | null, markets: ReadonlySet<Market>, exclude: ReadonlySet<string>): BuyRow[] {
   const today = isoDayOf(now);
   const end = now + BUYS_WINDOW_DAYS * 864e5;
   const banded = !!price && (price.minUsd != null || price.maxUsd != null);
@@ -391,7 +463,41 @@ export function budgetBuys(book: readonly AuctionLot[], now: number, price: Pric
     out.push({ lot: l, face, call: face.call, anchor, closeMs, day: closeDayOf(l), market, score: dealScore(l, face.call.pct) });
   }
   out.sort((a, b) => b.score - a.score || a.closeMs - b.closeMs);
+  return out;
+}
+
+export function budgetBuys(book: readonly AuctionLot[], now: number, price: PricePref | null, markets: ReadonlySet<Market>,
+  exclude: ReadonlySet<string>, n = BUYS_N): BudgetBuys {
+  const banded = !!price && (price.minUsd != null || price.maxUsd != null);
+  const out = buyCandidates(book, now, price, markets, exclude);
   return { rows: out.slice(0, n), candidates: out.length, markets: Array.from(markets).sort(), banded };
+}
+
+export interface MarketTease {
+  market: Market;
+  label: string;
+  /** Below Market candidates this week with comps n ≥ TEASE_MIN_N */
+  n: number;
+  /** the soonest of them closes */
+  soonestMs: number;
+}
+
+/** THE COLD TEASE (R3#7): no market stated → one row per market, the count
+ *  of this week's Below Market candidates whose comps pool clears the n
+ *  floor, in the site's market order with the busiest first; a market with
+ *  none is absent */
+export function marketTease(book: readonly AuctionLot[], now: number, price: PricePref | null, exclude: ReadonlySet<string>, minN = TEASE_MIN_N): MarketTease[] {
+  const by = new Map<Market, MarketTease>();
+  for (const c of buyCandidates(book, now, price, new Set(), exclude)) {
+    const n = c.face.comps?.n ?? 0;
+    if (n < minN) continue;
+    const m = MARKETS.find(x => x.key === c.market);
+    if (!m || m.key === 'all') continue;
+    const t = by.get(c.market);
+    if (t) { t.n++; if (c.closeMs < t.soonestMs) t.soonestMs = c.closeMs; }
+    else by.set(c.market, { market: c.market, label: m.label, n: 1, soonestMs: c.closeMs });
+  }
+  return Array.from(by.values()).sort((a, b) => b.n - a.n || a.label.localeCompare(b.label));
 }
 
 /* ── if you win ─────────────────────────────────────────────────────────── */
@@ -406,9 +512,10 @@ export interface WinTotals {
   premiumPct: number | null;
 }
 
-/** every plan row's all-in, summed — hammer figures and premiums kept apart */
+/** the summed plan rows' all-in — hammer figures and premiums kept apart
+ *  (the plan's own rule: counted rows, + estimate rows when estInPlan) */
 export function winTotals(plan: BidPlan): WinTotals {
-  const rows = [...plan.rows].sort((a, b) => b.allIn - a.allIn);
+  const rows = summedRows(plan.rows, plan.estInPlan).sort((a, b) => b.allIn - a.allIn);
   const hammer = rows.reduce((s, r) => s + r.hammer, 0);
   const allIn = rows.reduce((s, r) => s + r.allIn, 0);
   return { rows, hammer, allIn, premiums: allIn - hammer, premiumPct: hammer > 0 ? Math.round(((allIn - hammer) / hammer) * 100) : null };

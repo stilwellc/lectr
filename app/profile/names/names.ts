@@ -13,11 +13,13 @@
  * lot's entity key = the name — entity/live entityIdOf, the /makers join)
  * grouped into the SALES they sit in: house + sale + the day the sale closes
  * where it is held (house-tz). Each sale: lot count, the estimate band summed
- * over the lots (a native-currency estimate with no USD field on the row is
- * converted at the build's dated rate — normalize fxRateFor, the same table
- * the money layer stamps — and the band is marked approximate), bid-auction
- * lots' live bids, and how many the engine flags below market (isFlagged —
- * the ONE below-market predicate).
+ * over the PRICED lots (both bounds published — budget/priced.ts estBandOf,
+ * the one rule the Budget desk reads too; the estimate fields are USD
+ * already and are NEVER converted here — R4#1: a second fxRateFor pass
+ * printed the Bruun Rasmussen Calder at "$36–$48" for a true $233–$311), the
+ * one-sided estimates apart as "from $X" (never summed), bid-auction lots'
+ * live bids, and how many the engine flags below market (isFlagged — the
+ * ONE below-market predicate).
  *
  * THE PULSE. The nightly's summary (pages/entities-<market>.json): the
  * 12-month median WITH its n and scope (the build's n gate: med12m is null
@@ -43,9 +45,7 @@ import { marketNamesOf, entityIdOfFollow, type MarketName } from '../../lib/your
 import { isFlagged } from '../../lib/flags';
 import { closeMsOf } from '../../lib/priority';
 import { closeIsTimed, houseCloseDayOf } from '../../lib/house-tz';
-import { estUsdBand } from '../../lib/comps';
-import { fxRateFor } from '../../lib/normalize';
-import type { Currency } from '../../types';
+import { estBandOf } from '../budget/priced';
 import { isOnBlock } from '../../utils';
 import type { CatKey } from '../../lib/taxonomy';
 
@@ -133,13 +133,14 @@ export function liveLotsOf(name: Pick<MarketName, 'id' | 'follow'>, book: readon
 }
 
 export interface SaleEst {
-  /** the summed band over the lots that carry an estimate */
+  /** the summed band over the PRICED lots (both bounds published) */
   lo: number; hi: number;
   /** lots summed */
   k: number;
-  /** of those, lots converted from a native currency at the build's dated
-   *  rate (the band prints as approximate when > 0) */
-  approx: number;
+  /** one-sided estimates (one bound published): how many, and their
+   *  published sides summed — printed "from $X", never in lo/hi */
+  oneSided: number;
+  from: number;
   /** lots with no estimate at all (bid auctions, estimate on request) */
   none: number;
 }
@@ -161,20 +162,15 @@ export interface Sale {
   flagged: number;
 }
 
-/** a lot's estimate band in USD (`approx`: converted here from its native
- *  currency at the build's dated rate — the row carried no USD field), or
- *  'none' when the house published no estimate */
-export function estOf(l: AuctionLot): { lo: number; hi: number; approx: boolean } | 'none' {
-  const b = estUsdBand(l);
-  if (b.low == null && b.high == null) return 'none';
-  const lo = b.low ?? b.high ?? 0, hi = b.high ?? b.low ?? 0;
-  // the band is native when the money layer left no USD field and the
-  // currency is not the dollar: convert at the dated rate, say so
-  if (l.estLowUsd == null && l.estHighUsd == null && l.currency && l.currency !== 'USD') {
-    const { rate } = fxRateFor(l.currency as Currency, l.saleDate || null);
-    return { lo: lo * rate, hi: hi * rate, approx: true };
-  }
-  return { lo, hi, approx: false };
+/** a lot's estimate band in USD, read the way comps.estUsdBand / verdict.estUsd
+ *  read it (est*Usd first, the estimateLow/High aliases after — both USD,
+ *  nothing converted), or 'none' when the house published no estimate.
+ *  `priced` = both bounds published; a one-sided estimate carries its one
+ *  side in lo === hi and the side it is. */
+export function estOf(l: AuctionLot): { lo: number; hi: number; priced: boolean; side: 'low' | 'high' | null } | 'none' {
+  const b = estBandOf(l);
+  if (!b) return 'none';
+  return { lo: b.lo, hi: b.hi, priced: b.priced, side: b.side };
 }
 
 /** the sales a name's live lots sit in, soonest close first */
@@ -187,7 +183,7 @@ export function salesOf(lots: readonly AuctionLot[]): Sale[] {
     const key = `${house}|${saleName}|${day}`;
     let s = by.get(key);
     if (!s) {
-      s = { key, house, saleName, day, closeMs: null, timed: closeIsTimed(l), lots: [], est: { lo: 0, hi: 0, k: 0, approx: 0, none: 0 }, bids: { n: 0, sum: 0 }, flagged: 0 };
+      s = { key, house, saleName, day, closeMs: null, timed: closeIsTimed(l), lots: [], est: { lo: 0, hi: 0, k: 0, oneSided: 0, from: 0, none: 0 }, bids: { n: 0, sum: 0 }, flagged: 0 };
       by.set(key, s);
     }
     s.lots.push(l);
@@ -195,7 +191,8 @@ export function salesOf(lots: readonly AuctionLot[]): Sale[] {
     if (c != null && (s.closeMs == null || c < s.closeMs)) s.closeMs = c;
     const e = estOf(l);
     if (e === 'none') s.est.none++;
-    else { s.est.lo += e.lo; s.est.hi += e.hi; s.est.k++; if (e.approx) s.est.approx++; }
+    else if (e.priced) { s.est.lo += e.lo; s.est.hi += e.hi; s.est.k++; }
+    else { s.est.oneSided++; s.est.from += e.lo; }
     if (l.currentBid && l.currentBid > 0) { s.bids.n++; s.bids.sum += l.currentBid; }
     if (isFlagged(l)) s.flagged++;
   }
@@ -224,11 +221,12 @@ export function saleWhen(closeMs: number | null, now: number): SaleWhen {
   return { kind: 'day', days: Math.round((d1.getTime() - d0.getTime()) / DAY), ms: closeMs };
 }
 
-/** the whole calendar's figures: lots, sales, the summed USD band */
-export function calendarTotals(sales: readonly Sale[]): { lots: number; sales: number; lo: number; hi: number; k: number; approx: number; flagged: number } {
-  let lots = 0, lo = 0, hi = 0, k = 0, approx = 0, flagged = 0;
-  for (const s of sales) { lots += s.lots.length; lo += s.est.lo; hi += s.est.hi; k += s.est.k; approx += s.est.approx; flagged += s.flagged; }
-  return { lots, sales: sales.length, lo, hi, k, approx, flagged };
+/** the whole calendar's figures: lots, sales, the summed USD band over the
+ *  priced lots, the one-sided estimates apart */
+export function calendarTotals(sales: readonly Sale[]): { lots: number; sales: number; lo: number; hi: number; k: number; oneSided: number; from: number; flagged: number } {
+  let lots = 0, lo = 0, hi = 0, k = 0, oneSided = 0, from = 0, flagged = 0;
+  for (const s of sales) { lots += s.lots.length; lo += s.est.lo; hi += s.est.hi; k += s.est.k; oneSided += s.est.oneSided; from += s.est.from; flagged += s.flagged; }
+  return { lots, sales: sales.length, lo, hi, k, oneSided, from, flagged };
 }
 
 /* ── the pulse ── */

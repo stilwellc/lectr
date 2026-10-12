@@ -38,7 +38,7 @@
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 7px;
 }
 .nm-num { font-family: var(--font-mono), monospace; font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--color-fg); }
-.nm-n { font-family: var(--font-mono), monospace; font-size: 11px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; margin-left: 2px; }
+.nm-n { font-family: var(--font-mono), monospace; font-size: 11.5px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; margin-left: 2px; }
 .nm-scope { font-size: 11.5px; color: var(--color-text-muted); margin-left: 4px; }
 .nm-dot { color: var(--color-text-muted); }
 .nm-spark { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; }
@@ -92,4 +92,30 @@
   .nm-sale-main { grid-column: 1; }
   .nm-sale-act { grid-column: 2; align-self: end; }
   .nm-sale-house { white-space: normal; }
+}
+
+/* ── the review fix wave (Oct 11 2026) ── */
+/* the sold-side status line sits under the head, never in it (R3) */
+.nm-status { margin-top: 6px; }
+/* the phone fold: the names past the first, counts visible, one tap opens them (R2 b) */
+.nm-folded { padding: 8px 2px 0; }
+.nm-folded-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--text-caption, 12.5px); color: var(--color-text-muted); }
+.nm-folded-name { color: var(--color-text-secondary); font-weight: 500; }
+.nm-more {
+  display: block; width: 100%; margin: 6px 0 0; padding: 12px 0; min-height: 44px; text-align: left;
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--color-fg);
+  background: none; border: none; cursor: pointer;
+}
+.nm-more:hover { background: var(--color-hover-item); }
+/* every tap clears 40px (R2 c): the pill and the text links grow a hit area without growing their type */
+.nm-follow, .nm-link { position: relative; }
+.nm-follow::before, .nm-link::before { content: ''; position: absolute; inset: -8px -6px; }
+.nm-link { min-height: 24px; display: inline-block; }
+@media (max-width: 639.98px) {
+  .nm-follow { min-height: 32px; padding: 7px 12px; }
+  .nm-follow::before, .nm-link::before { inset: -6px -8px; }
+  .nm-link { padding: 8px 0; min-height: 40px; }
+  .nm-name { position: relative; }
+  .nm-name::before { content: ''; position: absolute; inset: -9px 0; }
+  .nm-sale-act { align-self: center; }
 }
