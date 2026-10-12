@@ -8,7 +8,7 @@
  * follows + now. The grading lives in ./edge.ts, the card in ./card.ts —
  * both plain .ts with unit tests. Styles: ./edge.css, existing tokens only.
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { SectionProps, SectionMeta, DeskData } from '../desk/types';
 import { CellGrid, Cell, ColorCell } from '../../components/cells';
@@ -21,7 +21,7 @@ import {
   gradeDesk, biasText, dayOf, EDGE_MIN_N, EDGE_HIT_PCT, EDGE_MONTHS,
   type EdgeReport, type GradedCall, type MarketRow,
 } from './edge';
-import { cardNumbersOf, cardLines, drawDeskCard, CARD_W, CARD_H, type CardLines } from './card';
+import { cardNumbersOf, cardLines, cardHasNumber, drawDeskCard, CARD_W, CARD_H, type CardLines } from './card';
 import './edge.css';
 
 const reportOf = (desk: DeskData): EdgeReport =>
@@ -145,7 +145,10 @@ function pageFontFamily(): string {
   } catch { return 'Inter, sans-serif'; }
 }
 
-function DeskCard({ lines, day }: { lines: CardLines; day: string }) {
+/** the card drawn on a canvas (state lifted so the room head's toolbar pill
+ *  can offer the download — R5#7 / R3#8): a preview data URL, the state,
+ *  and the download handler */
+function useDeskCard(lines: CardLines, day: string) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [state, setState] = useState<'drawing' | 'ready' | 'failed'>('drawing');
@@ -180,7 +183,7 @@ function DeskCard({ lines, day }: { lines: CardLines; day: string }) {
     return () => { dead = true; };
   }, [key]);
 
-  const download = () => {
+  const download = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     canvas.toBlob(blob => {
@@ -191,14 +194,20 @@ function DeskCard({ lines, day }: { lines: CardLines; day: string }) {
       document.body.appendChild(a); a.click(); a.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 2000);
     }, 'image/png');
-  };
+  }, [day]);
 
+  return { preview, state, download };
+}
+
+/** the print and its one caption — the record's absence is said ON the
+ *  card (recordNote) and nowhere else beside it (R1#19: not twice) */
+function DeskCard({ lines, preview, state, hasNumber }: { lines: CardLines; preview: string | null; state: 'drawing' | 'ready' | 'failed'; hasNumber: boolean }) {
   return (
     <div className="pe-card">
       <div className="pe-card-frame" aria-busy={state === 'drawing'}>
         {preview
           // eslint-disable-next-line @next/next/no-img-element
-          ? <img className="pe-card-img" src={preview} width={CARD_W} height={CARD_H} alt={`Desk card: ${lines.headline.word} ${lines.headline.figure}, ${lines.sub}${lines.record ? `, record ${lines.record.figure} ${lines.record.rest}` : ''}`} />
+          ? <img className="pe-card-img" src={preview} width={CARD_W} height={CARD_H} alt={`Desk card: ${lines.headline.word} ${lines.headline.figure}, ${lines.sub}${lines.record ? `, record ${lines.record.figure} ${lines.record.rest}` : lines.recordNote ? `, ${lines.recordNote}` : ''}${lines.names.length ? `; your names ${lines.names.join(', ')}` : ''}`} />
           : <div className="pe-card-wait pe-muted">{state === 'failed' ? 'The card could not be drawn in this browser.' : 'Drawing…'}</div>}
       </div>
       <div className="pe-card-side">
@@ -206,9 +215,8 @@ function DeskCard({ lines, day }: { lines: CardLines; day: string }) {
         <p className="pe-card-dek">
           {CARD_W}×{CARD_H} PNG of the desk&rsquo;s headline numbers — brand ink on eggshell, the page&rsquo;s Inter.
           Rendered on this device and saved by you; never uploaded, no server.
+          {!hasNumber && <> <b>Download PNG</b> arrives with the card&rsquo;s first number — a watch on the block or a graded record.</>}
         </p>
-        <button type="button" className="ray-show-more" onClick={download} disabled={state !== 'ready'}>Download PNG</button>
-        {!lines.record && lines.recordNote && <p className="ck-sig-note">The record line is absent: {lines.recordNote}.</p>}
       </div>
     </div>
   );
@@ -220,6 +228,8 @@ export default function EdgeSection({ desk }: SectionProps) {
     now: desk.now, saved: desk.saved, metaFor: desk.metaFor, follows: desk.follows, record: r.record, graded: r.n,
   })), [desk, r]);
   const day = useMemo(() => dayOf(desk.now), [desk.now]);
+  const card = useDeskCard(lines, day);
+  const hasNumber = cardHasNumber(lines);
   const gated = r.n < EDGE_MIN_N;
   const ex = r.excluded;
   const whyNot = [
@@ -244,7 +254,12 @@ export default function EdgeSection({ desk }: SectionProps) {
           </> }}
           sub={r.settled === 0
             ? <>no settled watch yet — calls grade as your watches hammer</>
-            : <>{r.n} {r.n === 1 ? 'call' : 'calls'} graded against the hammer · {r.settled} settled {r.settled === 1 ? 'watch' : 'watches'}{r.provisional ? <> · {r.provisional} provisional</> : null}</>} />
+            : <>{r.n} {r.n === 1 ? 'call' : 'calls'} graded against the hammer · {r.settled} settled {r.settled === 1 ? 'watch' : 'watches'}{r.provisional ? <> · {r.provisional} provisional</> : null}</>}
+          actions={hasNumber ? (
+            <button type="button" className="ray-toolbar-pill" onClick={card.download} disabled={card.state !== 'ready'}
+              title={card.state === 'ready' ? `${CARD_W}×${CARD_H} PNG of the desk card — rendered on this device, never uploaded` : card.state === 'failed' ? 'The card could not be drawn in this browser' : 'Drawing the card…'}
+              aria-label="Download the desk card as a PNG">Download PNG</button>
+          ) : undefined} />
 
         {gated ? (
           <p className="ck-outcome-line">
@@ -294,7 +309,7 @@ export default function EdgeSection({ desk }: SectionProps) {
         )}
 
         {!gated ? null : r.n > 0 && <Receipts r={r} />}
-        <DeskCard lines={lines} day={day} />
+        <DeskCard lines={lines} preview={card.preview} state={card.state} hasNumber={hasNumber} />
       </div>
     </section>
   );

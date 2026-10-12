@@ -70,7 +70,7 @@ test('pieceOf: a settled row without an engine value has NO appraisal and no sol
 test('pieceOf: the appraisal is the engine’s own stamp — expectedAllIn, expected hammer, n, confidence', () => {
   const v = { poolIds: [], n: 12, compValueUsd: 30000, low: 24000, high: 36000, compRatio: 1.2, signal: null, estimateUsd: 12500, vsBid: null, confidence: 'high' as const, exact: null, expectedHammerUsd: 24000 };
   const p = pieceOf(lot({ id: 'a', status: 'upcoming', priceUsd: null, value: v as AuctionLot['value'] }), { paidUsd: 20000 });
-  assert.deepEqual(p.appraisal, { allIn: 30000, hammer: 24000, compN: 12, confidence: 'high' });
+  assert.deepEqual(p.appraisal, { allIn: 30000, hammer: 24000, compN: 12, confidence: 'high', asOf: null });
   // Sotheby's = estimate tier: 10% off the expected hammer
   assert.deepEqual(p.soldNow, { net: 21600, commission: 2400, rate: 0.10, tier: 'estimate', house: "Sotheby's" });
 });
@@ -242,7 +242,7 @@ test('pieceRow + totalsOf: the newest mark, the reads, and the totals with their
   assert.equal(row.trend?.text, '−8%');
   assert.equal(row.timing?.kind, 'low');
   const t = totalsOf([a, pieceOf(lot({ id: 'b' }), null)]);
-  assert.deepEqual(t, { pieces: 2, bought: 55400, boughtN: 2, paidN: 1, appraised: 0, appraisedN: 0, soldNow: 0, soldNowN: 0 });
+  assert.deepEqual(t, { pieces: 2, bought: 55400, boughtN: 2, paidN: 1, appraised: 0, appraisedN: 0, appraisedPaid: 0, appraisedPaidBought: 0, appraisedPaidN: 0, soldNow: 0, soldNowN: 0, abstainedN: 0, asOf: null });
 });
 
 test('portfolioCsv: one header, one row per piece, every column, RFC quoting; filename from the desk clock', () => {
@@ -256,6 +256,7 @@ test('portfolioCsv: one header, one row per piece, every column, RFC quoting; fi
   assert.match(lines[1], /^a,"Cow, ""Pink"" \(F\. & S\. II\.11\)",Andy Warhol,Sotheby's,2024-06-12,30000,what you paid,27000,2026,/);
   // the basis carries a comma → quoted; the fixture has four complete years inside the window
   assert.match(lines[1], /,-8,"same items, both years · 300 matched",12-mo median at a 4-yr low · n 360,/);
-  assert.match(lines[2], /,25400,realized price,,,maker not read yet,,,,,,,,,,,,,,,https:\/\/example\.test\/lot\/1$/);
+  // a settled row the engine never reached: no appraisal columns, the engine note says when it fills
+  assert.match(lines[2], /,25400,realized price,,,maker not read yet,,,,,,fills when the nightly reads it — settled pieces sold within 24 months are valued; older ones are out of its scope,,,,,,,,,,,https:\/\/example\.test\/lot\/1$/);
   assert.equal(csvFilename(NOW), 'lectr-portfolio-2026-10-09.csv');
 });
