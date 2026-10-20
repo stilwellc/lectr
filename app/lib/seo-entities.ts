@@ -3,7 +3,7 @@ import path from 'node:path';
 import { decodeEntities, isEntitiesWire } from './entity/wire';
 import type { EntitySummary } from './entity/model';
 import { slugify } from './seo';
-import { displayName, KIND_NOUN } from './entity/display';
+import { displayName, KIND_NOUN, entityDocTitle } from './entity/display';
 import { formatPrice } from '../utils';
 import { entityQueryOf, encodeAliases } from './entity/aliases';
 
@@ -176,4 +176,32 @@ export function entityDescription(x: StaticEntity): string {
     ? 'Cards, game-worn and memorabilia read together: live lots, the yearly median and the top results, read nightly.'
     : 'Live lots, what it sells for, the yearly median and the record, read nightly.';
   return `${f.name} at auction — ${facts ? `${facts}. ` : ''}${what} lectr auction intelligence.`;
+}
+
+
+/* ── every dossier's share preview (Oct 20 2026) ────────────────────────────
+   The static aliases above get their own page and card. Every OTHER player /
+   entity is reached through the /player?id= or /entity?id= query shell — one
+   HTML for all of them — so a shared link unfurled as the site card. These rows
+   are what functions/player + functions/entity hand a link-preview bot: the
+   dossier's own title and measured facts (the same entityFacts the static
+   pages print), its own card when it has an alias, else its market's card. */
+export interface EntityShareRow { id: string; title: string; description: string; image: string }
+
+export function entityShareRows(liveMarkets: ReadonlySet<string>): EntityShareRow[] {
+  const alias = new Map(staticEntities().map(x => [x.id, x] as const));
+  const seen = new Set<string>();
+  const out: EntityShareRow[] = [];
+  for (const e of readEntities()) {
+    if (!e?.id || seen.has(e.id)) continue;
+    const player = e.kind === 'player' && e.id.startsWith('pl:');
+    if (!player && e.kind !== 'subject' && e.kind !== 'set' && e.kind !== 'sub') continue;
+    seen.add(e.id);
+    const a = alias.get(e.id);
+    const x: StaticEntity = a ?? { id: e.id, kind: player ? 'player' : 'entity', slug: e.id, path: entityQueryOf(e.id), query: entityQueryOf(e.id), e };
+    const f = entityFacts(x);
+    const image = a ? entityCardPath(a) : liveMarkets.has(String(e.market)) ? `/og/m/${e.market}.png` : '/opengraph-image';
+    out.push({ id: e.id, title: entityDocTitle(f.name, x.kind), description: entityDescription(x), image });
+  }
+  return out;
 }

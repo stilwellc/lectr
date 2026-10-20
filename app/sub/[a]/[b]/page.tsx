@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
-import fs from 'node:fs';
-import path from 'node:path';
 import SubPage from '../../SubPage';
 import { subCatLabel } from '../../../lib/subcat-labels';
+import { drillRows, findRow, subCardPath } from '../../../lib/drill-rows';
 import { MARKETS } from '../../../constants';
 import JsonLd from '../../../components/JsonLd';
 import { seoMeta, datasetLd, breadcrumbLd } from '../../../lib/seo';
@@ -19,43 +18,6 @@ import { seoMeta, datasetLd, breadcrumbLd } from '../../../lib/seo';
  * browser webpack config stubs fs to false, so never import this from a
  * client component. market.json exists at build time locally and in CI.
  */
-
-interface DrillRow {
-  slug: string;
-  label?: string;
-  vertical?: string;
-  readType?: string;
-}
-
-let cache: DrillRow[] | null = null;
-
-function drillRows(): DrillRow[] {
-  if (cache) return cache;
-  try {
-    const raw = fs.readFileSync(
-      path.join(process.cwd(), 'public', 'data', 'ray', 'market.json'),
-      'utf8',
-    );
-    const drills = (JSON.parse(raw)?.drills ?? {}) as Record<string, DrillRow[]>;
-    const seen = new Set<string>();
-    cache = Object.values(drills).flat().filter(r => {
-      // params come from here verbatim — guard the invariants the route
-      // depends on (exactly one ':', both halves non-empty and path-safe)
-      if (!r || typeof r.slug !== 'string') return false;
-      if (!/^[a-z0-9-]+:[a-z0-9-]+$/.test(r.slug)) return false;
-      if (seen.has(r.slug)) return false; // dupe slugs would collide as params
-      seen.add(r.slug);
-      return true;
-    });
-  } catch {
-    cache = []; // no market.json (fresh checkout) — build ships zero sub pages
-  }
-  return cache;
-}
-
-function findRow(a: string, b: string): DrillRow | null {
-  return drillRows().find(r => r.slug === `${a}:${b}`) ?? null;
-}
 
 export const dynamicParams = false;
 
@@ -89,7 +51,7 @@ export async function generateMetadata(props: { params: Promise<{ a: string; b: 
     absolute: true,
     description,
     path: canonical,
-    image: market ? `/og/m/${market}.png` : undefined,
+    image: row ? subCardPath(row.slug) : market ? `/og/m/${market}.png` : undefined,
     imageAlt: `${label} — a tracked sub-market on lectr`,
   });
 }

@@ -16,7 +16,14 @@ import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { ARTISTS, MARKETS, type Market } from '../app/constants';
 import { marketFacts, lotNoun } from '../app/lib/og-meta';
-import { staticEntities, entityFacts, type StaticEntity } from '../app/lib/seo-entities';
+import { staticEntities, entityFacts, entityShareRows, type StaticEntity } from '../app/lib/seo-entities';
+import { refRows, type RefRow } from '../app/lib/ref-rows';
+import { drillRows, type DrillRow } from '../app/lib/drill-rows';
+import { encodeRefPath } from '../app/ref/ref-path';
+import { refLabel } from '../app/utils';
+import { subCatLabel } from '../app/lib/subcat-labels';
+import { POSTS } from '../app/blog/posts';
+import { SHARE_SHARDS, shareShardOf, type ShareShard } from '../app/lib/share-shard';
 
 interface ArtistStats {
   totalAuctionRevenue?: number;
@@ -172,6 +179,93 @@ function entityCard(x: StaticEntity) {
   );
 }
 
+/* ── the text card (Oct 20 2026: one card per shared page) ──────────────────
+   The entity card's grammar without a series: corner tag, kicker, the page's
+   own name, its measured facts, an optional line (a level in plain ink, never
+   green/red) and a one-line note. Watch references, sub-markets, the notes and
+   /about used to share their maker's / market's / the site's card. */
+interface TextCard { corner: string; kicker: string; title: string; facts?: (string | null)[]; note?: string | null; series?: number[]; caption?: string }
+
+function textCard(c: TextCard) {
+  const facts = (c.facts || []).filter(Boolean) as string[];
+  const W = 1080, H = 130;
+  const v = (c.series || []).filter(x => Number.isFinite(x));
+  let line = '';
+  if (v.length >= 4) {
+    const max = Math.max(...v), min = Math.min(...v);
+    line = v.map((y, i) => `${((i / (v.length - 1)) * W).toFixed(1)},${(H - ((y - min) / Math.max(max - min, 1e-9)) * H + 8).toFixed(1)}`).join(' ');
+  }
+  // the pinned Noto subset has no '≤' ("Vintage ≤'02") — say it in words
+  const t = c.title.replace(/≤\s*/g, 'up to ');
+  const titleSize = t.length <= 18 ? 72 : t.length <= 30 ? 58 : t.length <= 48 ? 46 : 38;
+  return new ImageResponse(
+    (
+      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', position: 'relative', background: '#FDFCFC', padding: '54px 60px 36px', fontFamily: 'sans-serif' }}>
+        <div style={{ position: 'absolute', top: 24, left: 24, right: 24, bottom: 24, border: '1px solid rgba(28,25,23,0.16)' }} />
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          {/* satori renders a plain <img> — next/image can't exist inside a share card */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={'data:image/png;base64,' + mark} width={150} height={96} alt="" />
+          <div style={{ fontSize: 20, color: '#777169' }}>{`${c.corner} · lectr.bid`}</div>
+        </div>
+        <div style={{ display: 'flex', fontSize: 22, color: '#777169', marginTop: 18 }}>{c.kicker}</div>
+        <div style={{ display: 'flex', fontSize: titleSize, fontWeight: 400, color: '#1C1917', letterSpacing: titleSize >= 58 ? -2.5 : -1.5, marginTop: 4, lineHeight: 1.12 }}>{t}</div>
+        {facts.length > 0 && (
+          <div style={{ display: 'flex', gap: 36, marginTop: 12, fontSize: 24, color: '#59544F' }}>
+            {facts.map(f => <div key={f} style={{ display: 'flex' }}>{f}</div>)}
+          </div>
+        )}
+        {line ? (
+          <div style={{ display: 'flex', flexDirection: 'column', marginTop: 'auto' }}>
+            <svg width={W} height={H + 16}>
+              <polyline points={line} fill="none" stroke="#1C1917" strokeWidth={4} strokeLinejoin="round" strokeLinecap="round" />
+            </svg>
+            {c.caption && <div style={{ display: 'flex', fontSize: 17, color: '#777169', marginTop: 4 }}>{c.caption}</div>}
+          </div>
+        ) : c.note ? (
+          <div style={{ display: 'flex', fontSize: 26, color: '#59544F', marginTop: 'auto', marginBottom: 8, lineHeight: 1.35 }}>{c.note}</div>
+        ) : null}
+      </div>
+    ),
+    { ...size, fonts }
+  );
+}
+
+const nfmt = (n: number) => n.toLocaleString('en-US');
+
+function refCard(r: RefRow) {
+  const maker = ARTISTS.find(a => a.slug === r.maker)?.label || r.maker;
+  return textCard({
+    corner: 'watch reference', kicker: maker, title: refLabel(r.ref),
+    facts: [`${nfmt(r.n)} ${r.n === 1 ? 'sale' : 'sales'}`, `median ${fmt(r.medianUsd)}`, r.ttmMedianUsd != null ? `past year ${fmt(r.ttmMedianUsd)}` : null],
+    note: r.houses.length ? `sold at ${r.houses.slice(0, 4).join(', ')}${r.houses.length > 4 ? ` +${r.houses.length - 4}` : ''}` : null,
+  });
+}
+
+function subCard(r: DrillRow) {
+  const label = r.label || subCatLabel(r.slug.split(':')[1]);
+  const market = MARKETS.find(m => m.key === r.vertical)?.label || 'sub-market';
+  const series = r.readType === 'index' && Array.isArray(r.indexSeries) ? r.indexSeries.map(p => p.value) : [];
+  return textCard({
+    corner: 'sub-market', kicker: market, title: label,
+    facts: [r.lots ? `${nfmt(r.lots)} lots` : null, r.typicalUsd ? `typical ${fmt(r.typicalUsd)}` : null,
+      r.record?.usd ? `record ${fmt(r.record.usd)}` : null, r.sellThroughPct != null ? `${r.sellThroughPct}% sold` : null],
+    series, caption: r.indexMethod === 'repeat-sale' ? 'repeat-sale index · by quarter' : 'index · by quarter',
+  });
+}
+
+const MON = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const longDate = (d: string) => { const [y, m, dd] = d.split('-').map(Number); return `${MON[m - 1]} ${dd}, ${y}`; };
+
+/** the share-card jobs the sharded pass renders: entity aliases, references, sub-markets */
+type Job = { file: string; render: () => ImageResponse };
+function shardedJobs(outDir: string): Job[] {
+  const jobs: Job[] = staticEntities().map(x => ({ file: path.join(outDir, x.kind === 'player' ? 'p' : 'e', `${x.slug}.png`), render: () => entityCard(x) }));
+  for (const r of refRows()) jobs.push({ file: path.join(outDir, 'r', r.maker, `${encodeRefPath(r.ref)}.png`), render: () => refCard(r) });
+  for (const r of drillRows()) jobs.push({ file: path.join(outDir, 's', ...r.slug.split(':')) + '.png', render: () => subCard(r) });
+  return jobs;
+}
+
 async function writePng(file: string, res: ImageResponse) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, Buffer.from(await res.arrayBuffer()));
@@ -181,8 +275,8 @@ async function writePng(file: string, res: ImageResponse) {
  *  threaded, so the ~600 alias cards render across child processes */
 async function renderEntityShard(i: number, k: number) {
   const outDir = path.join(process.cwd(), 'public', 'og');
-  const ents = staticEntities().filter((_, j) => j % k === i);
-  for (const x of ents) await writePng(path.join(outDir, x.kind === 'player' ? 'p' : 'e', `${x.slug}.png`), entityCard(x));
+  const jobs = shardedJobs(outDir).filter((_, j) => j % k === i);
+  for (const job of jobs) await writePng(job.file, job.render());
 }
 
 function runShards(k: number): Promise<void> {
@@ -216,12 +310,38 @@ async function main() {
 
   // the static aliases' cards — fresh dirs each build, so a name that left
   // the set never ships a stale card
-  for (const d of ['p', 'e']) fs.rmSync(path.join(outDir, d), { recursive: true, force: true });
+  for (const d of ['p', 'e', 'r', 's', 'q', 'blog', 'page']) fs.rmSync(path.join(outDir, d), { recursive: true, force: true });
   const ents = staticEntities();
-  const k = Math.max(1, Math.min(6, os.availableParallelism() - 1, Math.ceil(ents.length / 50)));
+  const jobsN = shardedJobs(outDir).length;
+  const k = Math.max(1, Math.min(6, os.availableParallelism() - 1, Math.ceil(jobsN / 50)));
   if (k > 1) await runShards(k);
   else await renderEntityShard(0, 1);
-  console.log(`[og] ${ents.length} entity cards → public/og/{p,e}/ across ${k} process(es) (${((Date.now() - t0) / 1000).toFixed(1)}s total)`);
+  console.log(`[og] ${jobsN} sharded cards (${ents.length} entity · ${refRows().length} reference · ${drillRows().length} sub-market) → public/og/{p,e,r,s}/ across ${k} process(es) (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
+
+  // the notes and /about: their own cards, not the site card
+  for (const p of POSTS) {
+    await writePng(path.join(outDir, 'blog', `${p.slug}.png`), textCard({ corner: 'notes from the desk', kicker: longDate(p.date), title: p.title, note: p.dek }));
+  }
+  const meta = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'public', 'data', 'ray', 'meta.json'), 'utf8')) as { sources?: string[]; totalSold?: number };
+  await writePng(path.join(outDir, 'page', 'about.png'), textCard({
+    corner: 'about', kicker: 'What is lectr', title: 'The auction market, priced',
+    facts: [meta.sources?.length ? `${meta.sources.length} auction houses` : null, meta.totalSold ? `${nfmt(meta.totalSold)} settled lots` : null, 'three decades'],
+    note: 'Every published estimate read against every realised hammer — and what comes next, priced.',
+  }));
+  await writePng(path.join(outDir, 'page', 'blog.png'), textCard({
+    corner: 'notes', kicker: 'lectr', title: 'Notes from the desk',
+    note: 'How the pricing engine works, what the market data actually says, and what we got wrong on the way.',
+  }));
+  console.log(`[og] ${POSTS.length} note cards + about + notes index → public/og/{blog,page}/`);
+
+  // every player / entity dossier's preview head, sharded for functions/player + functions/entity
+  const live = new Set(markets.map(m => m.key as string));
+  const shards: ShareShard[] = Array.from({ length: SHARE_SHARDS }, () => ({}));
+  const rows = entityShareRows(live);
+  for (const r of rows) shards[shareShardOf(r.id)][r.id] = [r.title, r.description, r.image];
+  fs.mkdirSync(path.join(outDir, 'q'), { recursive: true });
+  shards.forEach((sh, n) => fs.writeFileSync(path.join(outDir, 'q', `${n}.json`), JSON.stringify(sh)));
+  console.log(`[og] ${rows.length} dossier previews → public/og/q/ (${SHARE_SHARDS} shards)`);
 }
 
 main().catch(err => { console.error('[og] failed:', err); process.exit(1); });

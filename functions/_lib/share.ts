@@ -36,7 +36,11 @@ export interface ShareLot {
   value?: { n?: number; signal?: { label?: string } } | null;
 }
 
-export interface ShareMeta { title: string; description: string; image?: string; imageAlt: string; url: string }
+export interface ShareMeta {
+  title: string; description: string; image?: string; imageAlt: string; url: string;
+  /** true: `image` is one of our own 1200×630 cards (keep the size tags); else a house photo */
+  card?: boolean;
+}
 
 const SYMBOL: Record<string, string> = { USD: '$', GBP: '£', EUR: '€', HKD: 'HK$', CHF: 'CHF ', JPY: '¥', CNY: 'CN¥', AUD: 'A$', CAD: 'C$', SGD: 'S$' };
 
@@ -115,7 +119,7 @@ export function rewriteHead(html: string, m: ShareMeta): string {
   meta('name', 'twitter:title', m.title);
   meta('name', 'twitter:description', m.description);
   if (m.image) {
-    head = head.replace(/<meta property="og:image:(?:width|height)" content="[^"]*"\s*\/?>/g, '');
+    if (!m.card) head = head.replace(/<meta property="og:image:(?:width|height)" content="[^"]*"\s*\/?>/g, '');
     meta('property', 'og:image', m.image);
     meta('property', 'og:image:alt', m.imageAlt);
     meta('name', 'twitter:image', m.image);

@@ -59,9 +59,12 @@ function postOf(slug: string) {
 
 /** a post's head: its own title + description, self canonical, article
  *  type with the publish date, the site card */
+/** the share card a post ships (scripts/build-og.tsx renders it) */
+export const postCardPath = (slug: string) => `/og/blog/${slug}.png`;
+
 export function postMeta(slug: string, m: { title: string; description: string }): Metadata {
   const p = postOf(slug);
-  return seoMeta({ title: m.title, description: m.description, path: `/blog/${slug}`, type: 'article', publishedTime: p.date });
+  return seoMeta({ title: m.title, description: m.description, path: `/blog/${slug}`, type: 'article', publishedTime: p.date, image: postCardPath(slug), imageAlt: p.title });
 }
 
 /** a post's structured data: BlogPosting + its breadcrumb */

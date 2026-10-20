@@ -60,6 +60,12 @@ shots/
 /public/og/m/
 /public/og/p/
 /public/og/e/
+# reference / sub-market / notes / page cards + the dossier preview shards (build-og, Oct 20 2026)
+/public/og/r/
+/public/og/s/
+/public/og/blog/
+/public/og/page/
+/public/og/q/
 /.og-cache/
 
 # close-k archive pulled from / pushed to R2 (scripts/lib/close-k-fit.ts) — never committed

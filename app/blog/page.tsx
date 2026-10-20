@@ -12,6 +12,7 @@ export const metadata: Metadata = seoMeta({
   title: 'Notes from the desk',
   description: 'Writing from lectr — how the pricing engine works, what the market data actually says, and what we got wrong on the way.',
   path: '/blog',
+  image: '/og/page/blog.png',
 });
 
 

@@ -43,6 +43,7 @@ export const metadata: Metadata = seoMeta({
   // and it drifted 772 lots stale within two nightlies.
   description: `lectr reads every published estimate against every realised hammer across ${meta.sources.length} auction houses and three decades — ${Number(meta.totalSold).toLocaleString('en-US')} settled lots — and prices what comes next. The corpus, the value engine, the replayed record, and what it refuses to say.`,
   path: '/about',
+  image: '/og/page/about.png',
 });
 
 const p: React.CSSProperties = { fontSize: 15.5, lineHeight: 1.7, color: 'var(--color-text-secondary)', margin: '0 0 16px' };

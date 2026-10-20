@@ -1,10 +1,9 @@
 import type { Metadata } from 'next';
-import fs from 'node:fs';
-import path from 'node:path';
 import RefPage from '../../../components/RefPage';
 import { ARTIST_LABEL } from '../../../constants';
 import { formatPrice, refLabel } from '../../../utils';
 import { encodeRefPath, decodeRefPath } from '../../ref-path';
+import { refRows, findRow, refCardPath } from '../../../lib/ref-rows';
 import JsonLd from '../../../components/JsonLd';
 import { seoMeta, datasetLd, breadcrumbLd } from '../../../lib/seo';
 
@@ -17,46 +16,6 @@ import { seoMeta, datasetLd, breadcrumbLd } from '../../../lib/seo';
  *
  * SERVER-ONLY at build (node:fs) — same doctrine as app/lot/flagged.ts.
  */
-
-interface RefRow {
-  key: string;
-  maker: string;
-  ref: string;
-  n: number;
-  medianUsd: number;
-  ttmMedianUsd: number | null;
-  houses: string[];
-}
-
-let cache: RefRow[] | null = null;
-
-function refRows(): RefRow[] {
-  if (cache) return cache;
-  try {
-    const raw = fs.readFileSync(
-      path.join(process.cwd(), 'public', 'data', 'ray', 'refs.json'),
-      'utf8',
-    );
-    const rows = (JSON.parse(raw)?.refs as RefRow[]) || [];
-    const seen = new Set<string>();
-    cache = rows.filter(r => {
-      if (!r || typeof r.maker !== 'string' || typeof r.ref !== 'string') return false;
-      if (!/^[a-z0-9-]+$/.test(r.maker) || !r.ref) return false;
-      const p = `${r.maker}/${encodeRefPath(r.ref)}`;
-      if (seen.has(p)) return false; // dupe params would collide as pages
-      seen.add(p);
-      return true;
-    });
-  } catch {
-    cache = []; // no refs.json (fresh checkout) — build ships zero ref pages
-  }
-  return cache;
-}
-
-function findRow(maker: string, key: string): RefRow | null {
-  const ref = decodeRefPath(key);
-  return refRows().find(r => r.maker === maker && r.ref === ref) ?? null;
-}
 
 export const dynamicParams = false;
 
@@ -85,7 +44,7 @@ export async function generateMetadata(props: { params: Promise<{ maker: string;
     description,
     path: `/ref/${params.maker}/${params.key}`,
     // the watch house's own card (scripts/build-og.tsx) — every ref belongs to one
-    image: ARTIST_LABEL[params.maker] ? `/og/${params.maker}.png` : undefined,
+    image: row ? refCardPath(row.maker, row.ref) : ARTIST_LABEL[params.maker] ? `/og/${params.maker}.png` : undefined,
     imageAlt: `${makerName} ${label} — a watch reference on lectr`,
   });
 }
