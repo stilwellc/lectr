@@ -132,11 +132,12 @@ test('grade-ladder rungs: the last year’s median when the grade sold in it, el
 test('the served book: every printed card count and window equals the engine stamp', { skip: !existsSync(UP) }, () => {
   const u = JSON.parse(readFileSync(UP, 'utf8')) as { generatedAt: string; lots: AuctionLot[] };
   const asOf = Date.parse(u.generatedAt);
-  let checked = 0;
+  let checked = 0, eligible = 0;
   for (const l of u.lots) {
     const v = l.value as (AuctionLot['value'] & { cardTier?: string; abstain?: string }) | null | undefined;
     if (!v || v.basis !== 'card-comp' || v.cardTier !== 'exact' || !l.cardComps) continue;
     if (typeof v.abstain === 'string' && v.abstain.startsWith('card:')) continue;
+    eligible++;
     const f = lotFace(l);
     if (!f.value) continue;
     // the basis prints the engine's n
@@ -152,5 +153,9 @@ test('the served book: every printed card count and window equals the engine sta
     if (l.cardComps.r) assert.strictEqual(l.cardComps.r.n, v.n, `${l.id}: stamp r.n = value.n`);
     checked++;
   }
-  assert.ok(checked > 100, `checked ${checked}`);
+  // not vacuous, and the face prints most of the engine's exact-tier cards —
+  // judged against what the book holds tonight, not a fixed market size: the
+  // exact-tier count swings with the houses' calendars (Oct 19 2026: REA's sale
+  // closed and it fell 486 → 18 overnight, and a `> 100` floor blocked every deploy)
+  assert.ok(checked > 0 && checked >= Math.ceil(eligible / 2), `checked ${checked} of ${eligible} exact-tier cards`);
 });
