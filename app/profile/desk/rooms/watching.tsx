@@ -379,7 +379,7 @@ export default function WatchingRoom(_p: SectionProps) {
                   <DecisionLine lot={lot} estimate={false} when={false} abstain="quiet" style={{ marginTop: 2 }} />
                 </span>
                 <span className="ck-mrow-right">
-                  {sig && <b style={{ color: sigInk(sig.label) }} aria-label={`${sig.label}, ${sigText(sig)}`}>{sigText(sig)}</b>}
+                  {sig && <span className="ck-mrow-sig"><b style={{ color: sigInk(sig.label) }} aria-label={`${sig.label}, ${sigText(sig)}`}>{sigText(sig)}</b> <span className="ck-mrow-sig-k">vs comps</span></span>}
                   <span className="ck-mham" style={days <= 1 ? { color: 'var(--color-fg)', fontWeight: 600 } : undefined}>
                     {days === 0 && lot.saleDateTime
                       ? <CloseClock iso={lot.saleDateTime} windowHours={24} />

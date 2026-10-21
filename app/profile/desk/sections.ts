@@ -59,8 +59,10 @@ export const TABS: readonly DeskTabDef[] = [
   { id: 'owned', label: 'Collection' },
   { id: 'record', label: 'Record' },
 ];
-/** a tab whose id isn't its namesake room's */
-const NAMESAKE: Partial<Record<DeskTab, string>> = { owned: 'collection' };
+/** the room whose number a tab wears, when it isn't the tab's own id. Collection
+ *  wears the piece count (Portfolio's): a bare dollar figure in a tab can't say
+ *  whether it is what you paid or what it's worth (Oct 20 round 6) */
+const NAMESAKE: Partial<Record<DeskTab, string>> = { owned: 'portfolio' };
 /** a tab whose rooms read best in another order than the desk's (Record leads
  *  with your calls — the record room's figures live on other tabs too) */
 export const TAB_ORDER: Partial<Record<DeskTab, readonly string[]>> = { record: ['edge', 'record'] };
@@ -262,7 +264,7 @@ export function tabItemsOf(desk: DeskData, i: DeskInternals): TabItem[] {
     // the pills read in the order the panel mounts the rooms
     const items = rail.filter(r => ids.has(r.id)).sort((a, b) => (order ? order.indexOf(a.id) - order.indexOf(b.id) : 0));
     // the tab's number is its namesake room's (Watching = the lots you watch,
-    // not every close of the week; Collection = the Collection room), else its
+    // not every close of the week; Collection = how many pieces), else its
     // first room with a count
     const ns = NAMESAKE[t.id] ?? t.id;
     const lead = items.find(r => r.id === ns && r.count != null && !r.quiet) ?? items.find(r => r.count != null && !r.quiet);

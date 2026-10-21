@@ -5436,3 +5436,6 @@ html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] > .ray-band { bo
 @media (max-width: 639.98px) { .ck-page .dt-head:not([data-compact]) .ray-masthead > p { font-size: 15px; } }
 /* phone week: the next day peeks as a fade, not letter slivers */
 @media (max-width: 639.98px) { .ck-page .ck-week-days[data-narrow] { -webkit-mask-image: linear-gradient(to right, #000 86%, transparent); mask-image: linear-gradient(to right, #000 86%, transparent); } }
+/* (round 6) the phone watch card's signal says what it is measured against */
+.ck-page .ck-mrow-sig { white-space: nowrap; }
+.ck-page .ck-mrow-sig-k { font-size: 11px; color: var(--color-text-muted); font-weight: 400; }

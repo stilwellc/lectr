@@ -136,10 +136,14 @@ function hrefOf(n: MarketName, s: EntitySummary | null): string {
 
 function MoveFact({ m }: { m: Move }) {
   const color = m.tone === 'up' ? 'var(--color-up)' : m.tone === 'down' ? 'var(--color-down-text)' : undefined;
+  // (Oct 20 round 6) plain words on the row; the 90% interval and the basis
+  // ride in the title, never dropped
+  const why = `90% interval ${pctText(m.lo)} to ${pctText(m.hi)} · ${BASIS[m.basis]} · n ${m.n.toLocaleString('en-US')}`;
   return (
-    <span>
-      YoY <b style={{ color, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{pctText(m.pct)}</b> {BASIS[m.basis]}
-      {' '}· 90%{'\u00a0'}{pctText(m.lo)} to {pctText(m.hi)}{m.tone === 'flat' ? ' (spans\u00a00)' : ''} · n{'\u00a0'}{m.n.toLocaleString('en-US')}
+    <span title={why}>
+      <b style={{ color, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{pctText(m.pct)}</b> vs last year
+      {m.tone === 'flat' ? <> · <span className="nm-scope" style={{ marginLeft: 0 }}>not a clear move</span></> : null}
+      {' '}· {m.n.toLocaleString('en-US')}{'\u00a0'}{m.basis === 'matched' ? 'repeat sales' : 'sales'}
     </span>
   );
 }
@@ -292,9 +296,10 @@ export default function YourMarket({ book, owned = [], mode: modeProp, since: si
       <div className="ns-plate" style={{ paddingTop: 18 }}>
         <RoomHead className="ray-enter" mark={<MoversMark size={17} />} title="Your market"
           help={{ name: 'Your market', body: <>            One row per name you follow or own, newsworthy first: a <b>new all-time record</b> (or a top-eight result on
-            file) dated in the window, then a <b>clear year-over-year move</b> — printed with its 90% interval and the
-            number of sales it rests on, and toned only when the interval leaves zero out; <b>matched</b> compares the
-            same items sold in both years, <b>median sale</b> the pooled medians. Then <b>below-market</b> live lots
+            file) dated in the window, then a <b>clear year-over-year move</b> — printed with the
+            number of sales it rests on (hover it for the 90% interval), toned only when the interval leaves zero out, and
+            marked <b>not a clear move</b> when it doesn&rsquo;t; <b>repeat sales</b> are the same items sold in both years,
+            else it is the pooled <b>median sale</b>. Then <b>below-market</b> live lots
             (the engine prices them under their comparables) and what is live and closing within seven days. The
             biggest sale is the window&rsquo;s largest on file; where the published rows cover only part of the window
             it says from which day. No figure here is computed in your browser — each is the nightly build&rsquo;s.

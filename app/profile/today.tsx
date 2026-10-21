@@ -44,6 +44,8 @@ type Row = { key: string; group: 'closing' | 'top' | 'new' | 'reads'; tag: React
   decision?: React.ReactNode };
 
 const PER_COL = 3;
+/** your own watches closing tonight never fold behind picks — up to this many show (Oct 20) */
+const CLOSING_OPEN = 6;
 /** the picks strip's size */
 export const TOP_N = 3;
 
@@ -235,11 +237,13 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
   let shown: { closing: Row[]; fresh: Row[]; rest: Row[] };
   if (all) shown = { closing, fresh, rest };
   else if (narrow) {
-    let left = phoneRows;
+    // your own closes lead whole; the phone budget folds what comes after them
+    const c = closing.slice(0, CLOSING_OPEN);
+    let left = Math.max(0, phoneRows - c.length);
     const cut = (xs: Row[]) => { const s = xs.slice(0, Math.max(0, left)); left -= s.length; return s; };
-    shown = { closing: cut(closing), fresh: cut(fresh), rest: cut(rest) };
+    shown = { closing: c, fresh: cut(fresh), rest: cut(rest) };
   } else {
-    const c = closing.slice(0, PER_COL);
+    const c = closing.slice(0, CLOSING_OPEN);
     // (W19) with the picks strip in the right column the left one stacks
     // closing + new + reads; its facts now wrap (never cut), so the reads
     // open on two and the rest fold — Watching keeps its head in the first screen

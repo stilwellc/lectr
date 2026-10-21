@@ -97,19 +97,10 @@ export default function CollectionRoom(_p: SectionProps) {
         )}
         {/* the certificate's provenance ledger — gray label over black
             value, dotted closing rule; the signed delta keeps its ink */}
+        {/* (Oct 20 round 6) Pieces and Bought print once, in Portfolio's head
+            above (same caveat: "at the realized price"); this ledger keeps
+            what only it says — the engine's mark and its coverage */}
         <div className="ns-byline" style={{ margin: '14px 0 2px' }}>
-          <div>
-            <div className="k">Pieces</div>
-            <div className="v">{collection.rows.length}</div>
-          </div>
-          {collection.totalPaid > 0 && (
-            <div>
-              {/* (W19) a price the reader never entered is the lot's
-                  realized price — say so, never imply they told us */}
-              <div className="k">Bought{collection.rows.every(r => !r.paidIsOverride) ? ' · at the realized price' : ''}</div>
-              <div className="v">{fmtFace(collection.totalPaid)}</div>
-            </div>
-          )}
           <div>
             {/* (R4#4) the ENGINE's mark over the pieces it appraised — never the
                 bought prices summed back under the word "appraisal"; the count
