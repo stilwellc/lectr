@@ -49,11 +49,16 @@ export type SectionGroup = 'now' | 'picks' | 'desk';
    six tabs; the page mounts ONE tab's rooms at a time. Nothing is removed:
    every room mounts under its tab, every #anchor / g-chord still lands (the
    jump switches tab first, then scrolls), and Account rides under every tab. */
-export type DeskTab = 'today' | 'watching' | 'for-you' | 'names' | 'owned' | 'record';
+/* (Oct 20, later) ONE JOB PER TAB — "watching should only show what I'm
+   watching": the week's calendar and the budget left Watching for tabs of
+   their own. */
+export type DeskTab = 'today' | 'watching' | 'week' | 'budget' | 'for-you' | 'names' | 'owned' | 'record';
 export interface DeskTabDef { id: DeskTab; label: string }
 export const TABS: readonly DeskTabDef[] = [
   { id: 'today', label: 'Today' },
   { id: 'watching', label: 'Watching' },
+  { id: 'week', label: 'Week' },
+  { id: 'budget', label: 'Budget' },
   { id: 'for-you', label: 'For you' },
   { id: 'names', label: 'Names' },
   { id: 'owned', label: 'Collection' },
@@ -62,11 +67,13 @@ export const TABS: readonly DeskTabDef[] = [
 /** the room whose number a tab wears, when it isn't the tab's own id. Collection
  *  wears the piece count (Portfolio's): a bare dollar figure in a tab can't say
  *  whether it is what you paid or what it's worth (Oct 20 round 6) */
-const NAMESAKE: Partial<Record<DeskTab, string>> = { owned: 'portfolio' };
+const NAMESAKE: Partial<Record<DeskTab, string>> = { owned: 'portfolio', week: 'week' };
 /** a tab whose rooms read best in another order than the desk's (Record leads
  *  with your calls — the record room's figures live on other tabs too) */
 export const TAB_ORDER: Partial<Record<DeskTab, readonly string[]>> = { record: ['edge', 'record'] };
 /** the rooms that ride under every tab (no tab of their own) */
+/** a tab whose room's pill figure is a setting, not a count (Budget's "$1K and up") */
+export const TAB_NO_COUNT: ReadonlySet<DeskTab> = new Set<DeskTab>(['budget']);
 export const EVERY_TAB = new Set(['account', 'becomes']);
 export type MarkComponent = React.ComponentType<{ size?: number; className?: string }>;
 
@@ -136,14 +143,14 @@ export const slot = (id: string, label: string, key: string, group: SectionGroup
 export const SECTIONS: readonly DeskSection[] = [
   { id: 'today', label: 'Today', key: 't', group: 'now', tab: 'today', mark: AwayMark, Component: Today, meta: todayMeta },
   // the hammer timeline: watches, picks and the sales of your names, day by day
-  { id: 'week', label: 'Your week', key: 'd', group: 'now', tab: 'watching', mark: HorizonMark, Component: WeekSection, meta: weekMeta, when: weekWhen, fill: FILLS.week },
+  { id: 'week', label: 'Your week', key: 'd', group: 'now', tab: 'week', mark: HorizonMark, Component: WeekSection, meta: weekMeta, when: weekWhen, fill: FILLS.week },
   { id: 'watching', label: 'Watching', key: 'w', group: 'now', tab: 'watching', mark: WatchMark, Component: WatchingRoom, meta: watchingMeta,
     when: (_d, i) => i.deskView && i.upcoming.length > 0, fill: FILLS.watching },
   // the picks group: Lots you may like → For your collection → How your picks did (one pill)
   { id: 'for-you', label: 'For you', key: 'f', group: 'picks', tab: 'for-you', mark: RankMark, Component: PicksGroup, meta: picksMeta },
   // signed out: the slim sign-in line sits right after the picks — after value, never before it
   { id: 'signin', label: 'Sign in', key: '', group: 'picks', tab: 'for-you', Component: SignIn, meta: noPill, when: signinWhen },
-  { id: 'budget', label: 'Budget', key: 'b', group: 'picks', tab: 'watching', mark: GapMark, Component: BudgetDesk, meta: budgetMeta, when: budgetWhen, fill: FILLS.budget },
+  { id: 'budget', label: 'Budget', key: 'b', group: 'picks', tab: 'budget', mark: GapMark, Component: BudgetDesk, meta: budgetMeta, when: budgetWhen, fill: FILLS.budget },
   { id: 'portfolio', label: 'Portfolio', key: 'p', group: 'picks', tab: 'owned', mark: IndexLabMark, Component: Portfolio, meta: portfolioMeta, when: portfolioWhen, fill: FILLS.portfolio },
   { id: 'market', label: 'Market', key: 'm', group: 'picks', tab: 'names', mark: MoversMark, Component: Market, meta: marketMeta, fill: FILLS.market },
   { id: 'names', label: 'Names', key: 'n', group: 'picks', tab: 'names', mark: SalesMark, Component: NamesSection, meta: namesMeta, when: namesWhen, fill: FILLS.names },
@@ -270,6 +277,6 @@ export function tabItemsOf(desk: DeskData, i: DeskInternals): TabItem[] {
     const lead = items.find(r => r.id === ns && r.count != null && !r.quiet) ?? items.find(r => r.count != null && !r.quiet);
     // empty = no room under it has anything to say (a room can mount and
     // render nothing: Today with no closes, Market with no names)
-    return { ...t, count: lead?.count, tone: lead?.tone, dot: items.some(r => r.dot), items, empty: items.length === 0 };
+    return { ...t, count: TAB_NO_COUNT.has(t.id) ? undefined : lead?.count, tone: lead?.tone, dot: items.some(r => r.dot), items, empty: items.length === 0 };
   });
 }

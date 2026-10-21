@@ -5538,3 +5538,11 @@ html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] > .ray-band { bo
 .ck-page .ray-savedrow > .work.ck-ph > .ck-thumb { grid-row: 1 / span 3; align-self: center; }
 .ck-page .ck-mrow > .ck-thumb { align-self: center; }
 .ck-page .pe-rrow:has(.ck-thumb) { align-items: center; }
+/* (one job per tab) eight tabs: a phone shows them 4×2, the count under the word */
+@media (max-width: 639.98px) {
+  .dt-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .dt-tab { flex-direction: column; justify-content: center; gap: 0; min-height: 52px; padding: 2px 2px; font-size: 13.5px; line-height: 1.2; }
+  .dt-tab b { font-size: 11.5px; line-height: 1.2; }
+  .dt-tab .dt-dot { position: absolute; top: 9px; right: 14%; }
+  .dt-tab[aria-selected='true']::after { left: 22%; right: 22%; }
+}

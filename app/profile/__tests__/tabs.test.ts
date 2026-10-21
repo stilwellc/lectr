@@ -39,7 +39,7 @@ test('tabOf: rooms, tab hashes, anchors inside rooms, week days; unknown → nul
   for (const s of SECTIONS) assert.equal(tabOf(s.id), EVERY_TAB.has(s.id) ? null : s.tab, s.id);
   for (const t of TABS) assert.equal(tabOf(tabHash(t.id)), t.id);
   for (const [a, room] of Object.entries(SUB_ANCHORS)) assert.equal(tabOf(a), SECTIONS.find(s => s.id === room)!.tab, a);
-  assert.equal(tabOf('week-2026-10-20'), 'watching');
+  assert.equal(tabOf('week-2026-10-20'), 'week');
   assert.equal(tabOf('settled'), 'owned');
   assert.equal(tabOf('nope'), null);
   assert.equal(tabOf('tab-nope'), null);
@@ -91,7 +91,10 @@ test('every #link and jump() target on the desk resolves to the tab that holds i
 test('per-tab order: the rooms each tab mounts, in desk order', () => {
   const secs = mountedSections(desk, live());
   const of = (t: string) => secs.filter(s => s.tab === t && !EVERY_TAB.has(s.id)).map(s => s.id);
-  assert.deepEqual(of('watching').filter(id => ['week', 'watching', 'budget'].includes(id)), ['week', 'watching', 'budget']);
+  // one job per tab: Watching holds only your watches
+  assert.deepEqual(of('watching'), ['watching']);
+  assert.deepEqual(of('week'), ['week']);
+  assert.deepEqual(of('budget').filter(id => id === 'budget'), of('budget'));
   // order, not presence: each room keeps its own when() gate
   const owned = of('owned');
   assert.deepEqual(owned, ['portfolio', 'collection', 'history'].filter(id => owned.includes(id)));
