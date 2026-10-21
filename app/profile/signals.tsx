@@ -39,10 +39,10 @@ function Stated({ onEdit }: { onEdit: () => void }) {
   const price = priceText(it.minUsd != null || it.maxUsd != null ? { minUsd: it.minUsd, maxUsd: it.maxUsd } : null);
   return (
     <div className="ck-sig-stated">
-      <span className="ck-sig-k">Markets</span>
-      <span className="ck-sig-v">{mk.length ? mk.join(' · ') : 'any'}</span>
-      <span className="ck-sig-k">Price</span>
-      <span className="ck-sig-v">{price ?? 'any'}</span>
+      <span className="ck-sig-pair"><span className="ck-sig-k">Markets</span>
+      <span className="ck-sig-v">{mk.length ? mk.join(' · ') : 'any'}</span></span>
+      <span className="ck-sig-pair"><span className="ck-sig-k">Price</span>
+      <span className="ck-sig-v">{price ?? 'any'}</span></span>
       <button type="button" className="ck-warn-btn ck-sig-edit" aria-haspopup="dialog" onClick={onEdit}
         aria-label="Edit the markets and price range you stated">Edit</button>
     </div>

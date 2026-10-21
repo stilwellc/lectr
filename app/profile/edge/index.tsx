@@ -29,12 +29,14 @@ const reportOf = (desk: DeskData): EdgeReport =>
 
 export function meta(desk: DeskData): SectionMeta {
   const r = reportOf(desk);
-  return { id: 'edge', label: 'Edge', count: r.n > 0 ? r.n : null, quiet: r.n === 0 && desk.saved.length === 0 };
+  return { id: 'edge', label: 'Your calls', count: r.n > 0 ? r.n : null, quiet: r.n === 0 && desk.saved.length === 0 };
 }
 
-const tone = (p: number | null): 'up' | 'down' | 'ink' => (p == null || Math.round(p) === 0 ? 'ink' : p > 0 ? 'up' : 'down');
-const toneColor = (p: number | null) => ({ color: p == null ? 'var(--color-text-faint)' : Math.round(p) > 0 ? 'var(--color-up)' : Math.round(p) < 0 ? 'var(--color-down-text)' : 'var(--color-fg)' });
 const pct = (p: number) => fmtSignedPct(Math.round(p));
+/** a MISS is the hammer's distance from your call — error, not gain: its sign
+ *  says above/below your call, its ink is always neutral (the lamp is for a
+ *  measured move of the market, never for being wrong by +101%) */
+const missInk = (p: number | null) => ({ color: p == null ? 'var(--color-text-faint)' : 'var(--color-fg)' });
 
 function MarketLine({ row, all }: { row: MarketRow; all?: boolean }) {
   const gated = row.n < EDGE_MIN_N;
@@ -42,7 +44,7 @@ function MarketLine({ row, all }: { row: MarketRow; all?: boolean }) {
     <div className="pe-trow" data-all={all ? '' : undefined} role="row">
       <span className="pe-mk" role="cell">{row.label}</span>
       <span className="pe-num" data-k="Calls" role="cell">{row.n}</span>
-      <span className="pe-num" data-k="Median miss" role="cell" style={gated ? undefined : toneColor(row.medianMiss)}
+      <span className="pe-num" data-k="Median miss" role="cell" style={gated ? undefined : missInk(row.medianMiss)}
         title={gated ? `prints at ${EDGE_MIN_N} calls` : 'median of realized ÷ called − 1'}>
         {gated ? <span className="pe-faint">at {EDGE_MIN_N}</span> : pct(row.medianMiss!)}
       </span>
@@ -62,7 +64,7 @@ function CallCard({ label, c }: { label: string; c: GradedCall }) {
         <div className="pe-call-sub pe-muted">{[c.maker, c.house, formatDate(c.date)].filter(Boolean).join(' · ')}{c.provisional ? ' · result provisional' : ''}</div>
         <div className="pe-call-line">
           called <b>{fmtFace(c.called)}</b> <span className="pe-muted">({pct(c.callPct)} vs est. {fmtFace(c.estMid)})</span> · hammer <b>{fmtFace(c.price)}</b> ·{' '}
-          <b style={toneColor(c.missPct)}>{pct(c.missPct)}</b> <span className="pe-muted">off your call</span>
+          <b style={missInk(c.missPct)}>{pct(c.missPct)}</b> <span className="pe-muted">off your call</span>
         </div>
       </div>
     </div>
@@ -89,7 +91,7 @@ function Months({ r }: { r: EdgeReport }) {
           <div key={m.key} className="pe-mcol">
             <span className="pe-mlabel">{m.label}</span>
             <span className="pe-mn">{m.n > 0 ? <>{m.n} · {m.hits} hit</> : <span className="pe-faint">—</span>}</span>
-            <span className="pe-mmed" style={m.medianMiss == null ? undefined : toneColor(m.medianMiss)}>
+            <span className="pe-mmed" style={m.medianMiss == null ? undefined : missInk(m.medianMiss)}>
               {m.medianMiss != null ? pct(m.medianMiss) : m.n > 0 ? <span className="pe-faint">n&lt;{EDGE_MIN_N}</span> : ''}
             </span>
           </div>
@@ -122,7 +124,7 @@ function Receipts({ r }: { r: EdgeReport }) {
             <span className="pe-rnums">
               <span className="pe-muted">called {fmtFace(c.called)}</span>
               <span>hammer {fmtFace(c.price)}</span>
-              <b style={toneColor(c.missPct)}>{pct(c.missPct)}</b>
+              <b style={missInk(c.missPct)}>{pct(c.missPct)}</b>
               <span className={c.hit ? 'pe-hit' : 'pe-faint'}>{c.hit ? 'hit' : 'miss'}</span>
             </span>
           </div>
@@ -241,8 +243,8 @@ export default function EdgeSection({ desk }: SectionProps) {
   return (
     <section id="edge" className="ray-saved-section rail ray-enter" aria-label="Your edge">
       <div className="ns-plate" style={{ paddingTop: 18 }}>
-        <RoomHead mark={<CalibrationMark size={17} />} title="Your edge" style={{ marginBottom: 16 }}
-          help={{ name: 'Your edge', body: <>            A <b>call</b> is the engine&rsquo;s signal as it stood when you saved the lot — comps sitting, say, 12% above
+        <RoomHead mark={<CalibrationMark size={17} />} title="Your calls" style={{ marginBottom: 16 }}
+          help={{ name: 'Your calls', body: <>            A <b>call</b> is the engine&rsquo;s signal as it stood when you saved the lot — comps sitting, say, 12% above
             the ask (saved below market) or below it. Once the lot hammers, the call is graded: <b>called</b> is the
             estimate midpoint moved by the call, <b>miss</b> is the realized price against that (the same realized
             price the Record judges, premium included where the house includes it), a <b>hit</b> is a miss within
@@ -271,7 +273,7 @@ export default function EdgeSection({ desk }: SectionProps) {
         ) : (
           <>
             <CellGrid min={200} className="ck-cells ck-figs">
-              <ColorCell dir={tone(r.all.medianMiss)} stat={pct(r.all.medianMiss ?? 0)} label="Median miss"
+              <ColorCell dir="ink" stat={pct(r.all.medianMiss ?? 0)} label="Median miss"
                 body={`${r.n} calls · realized vs called · ${biasText(r.all) ?? ''}`} href="#settled" />
               <Cell stat={`${Math.round((r.all.hitRate ?? 0) * 100)}%`} statNote={`${r.all.hits} of ${r.n} within ±${EDGE_HIT_PCT}%`} label="Hit rate"
                 body={`a hit: the hammer landed within ±${EDGE_HIT_PCT}% of the price your call put it at`} />

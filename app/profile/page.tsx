@@ -11,12 +11,13 @@ import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import ComparableModal from '../components/ComparableModal';
 import { formatDate } from '../utils';
 import { fmtFace } from '../lib/lot-face';
-import { PillRail, useHashLanding, jump } from './rail';
+import { useHashLanding, jump, JUMP_EVENT, OPEN_TAB_EVENT, MISSING_EVENT } from './rail';
+import { HelpChip } from './help';
+import { DeskTabs, useDeskTab } from './tabs';
 import { useStalled } from './stall';
 import { closeDays, hammerWord } from './desk/derive';
 import { DeskProvider, useDeskState, useDeskInternals, useDesk, type DeskState } from './desk/provider';
-import { SECTIONS, mountedSections, railItemsOf, keysLegend, missingSection, type DeskSection } from './desk/sections';
-import type { RailItem } from './rail';
+import { SECTIONS, SUB_ANCHORS, TAB_ORDER, mountedSections, keysLegend, missingSection, tabItemsOf, tabOf, EVERY_TAB, type DeskSection, type DeskTab } from './desk/sections';
 import { LedgerGate } from './desk/rooms/history';
 import Cockpit from './desk/cockpit';
 import { useDeskKeys } from './desk/keys';
@@ -57,15 +58,16 @@ function KeysHelp({ mountedIds }: { mountedIds: ReadonlySet<string> }) {
   const legend = keysLegend(SECTIONS.filter(s => mountedIds.has(s.id)));
   return (
     <>
-      <b>j</b>/<b>k</b> walk the rows on this page; <b>Enter</b> opens the row under the cursor (a watch&rsquo;s dossier, a lot).
-      Press <b>g</b> then a letter to jump to a section:{' '}
+      <b>←</b>/<b>→</b> (<b>Home</b>/<b>End</b>) move between tabs when the tab bar has focus.{' '}
+      <b>j</b>/<b>k</b> walk the rows in this tab; <b>Enter</b> opens the row under the cursor (a watch&rsquo;s dossier, a lot).
+      Press <b>g</b> then a letter to open that room&rsquo;s tab and land on it:{' '}
       {legend.map((k, idx) => (
         <React.Fragment key={k.key}>
           {idx > 0 && ' · '}
           <b>{k.key}</b> {k.label}{!k.live && <span style={{ color: 'var(--color-text-faint)' }}> (not on this desk yet)</span>}
         </React.Fragment>
       ))}
-      . Every pill above is a link, too — the hash in the address bar follows you. <b>?</b> opens this legend.
+      . Every tab and room pill writes the address bar, so a reload or a shared link opens the same place. <b>?</b> opens this legend.
     </>
   );
 }
@@ -73,15 +75,30 @@ function KeysHelp({ mountedIds }: { mountedIds: ReadonlySet<string> }) {
 /** a deep link to a room this desk doesn't have yet (#record on a cold desk)
  *  used to land silently — one line under the rail says what the room is,
  *  how it fills, and the tap that starts it (R3#5) */
-function MissingLanding({ sections }: { sections: readonly DeskSection[] }) {
+function MissingLanding({ sections, tab, tabEmpty }: { sections: readonly DeskSection[]; tab: DeskTab; tabEmpty: boolean }) {
   const [id, setId] = useState<string | null>(null);
   React.useEffect(() => {
     const read = () => { try { setId(decodeURIComponent(window.location.hash.slice(1)) || null); } catch { setId(null); } };
+    const onMissing = (e: Event) => setId((e as CustomEvent<{ id: string }>).detail?.id ?? null);
+    const clear = () => setId(null);
     read();
     window.addEventListener('hashchange', read);
-    return () => window.removeEventListener('hashchange', read);
+    window.addEventListener(MISSING_EVENT, onMissing);
+    window.addEventListener(JUMP_EVENT, clear);
+    window.addEventListener(OPEN_TAB_EVENT, clear);
+    return () => {
+      window.removeEventListener('hashchange', read); window.removeEventListener(MISSING_EVENT, onMissing);
+      window.removeEventListener(JUMP_EVENT, clear); window.removeEventListener(OPEN_TAB_EVENT, clear);
+    };
   }, []);
-  const s = id ? missingSection(id, sections) : null;
+  // a tab click writes its hash with replaceState (no hashchange): drop a note that belongs elsewhere
+  React.useEffect(() => { setId(cur => (cur && tabOf(cur) !== tab ? null : cur)); }, [tab]);
+  // only on the tab that would hold the room — never a stale line on another tab
+  if (id && tabOf(id) !== tab) return null;
+  if (tabEmpty) return null;   // the empty tab's own index already says how it fills
+  // an anchor inside a room (#settled, #inbox, #week-…) is explained by its room
+  const owner = id ? (SUB_ANCHORS[id] ?? (id.startsWith('week-') ? 'week' : id)) : null;
+  const s = owner ? missingSection(owner, sections) : null;
   if (!s || !s.fill) return null;
   const { fill } = s;
   const hash = fill.tap.href.startsWith('#');
@@ -97,8 +114,23 @@ function MissingLanding({ sections }: { sections: readonly DeskSection[] }) {
   );
 }
 
-/** the rooms without a pill the phone's Sections sheet still lists */
-const RAIL_TAIL: RailItem[] = [{ id: 'account', label: 'Account', group: 'desk' }];
+
+/** a dotted fact line that never starts a line with its separator: each fact
+ *  is one unbreakable run carrying its own trailing "·" (glued by a no-break
+ *  space); the only break opportunities sit AFTER a dot */
+function Facts({ children }: { children: [string, React.ReactNode][] }) {
+  const facts = children.filter(([, c]) => c != null && c !== false);
+  return (
+    <>
+      {facts.map(([key, f], n) => (
+        <React.Fragment key={key}>
+          <span className="ck-nb">{f}{n < facts.length - 1 && '\u00a0·'}</span>
+          {n < facts.length - 1 && ' '}
+        </React.Fragment>
+      ))}
+    </>
+  );
+}
 
 /** the masthead — the statement, the sub-line, the desk details, the
  *  archive warnings, then the cockpit */
@@ -113,7 +145,7 @@ function DeskMasthead() {
         <Masthead
           kicker="My desk"
           title={<>Your desk at <Accent>the auction</Accent>.</>}
-          sub={tunedLine ?? 'Tell lectr what you collect and live lots tied to it land below.'}
+          sub={tunedLine ?? 'Tell lectr what you collect and live lots tied to it land in For you.'}
         />
       ) : !deskView ? (
         <Masthead
@@ -150,33 +182,29 @@ function DeskMasthead() {
                 // nothing live: the desk is a record, not a watch — falling
                 // back to savedLots.length claimed "Watching 3 lots to the
                 // hammer" over a sub-line that said "0 live lots"
-                : <>Your desk: <Accent>{savedLotsN} settled {savedLotsN === 1 ? 'watch' : 'watches'}</Accent>, judged below.</>}
+                : <>Your desk: <Accent>{savedLotsN} settled {savedLotsN === 1 ? 'watch' : 'watches'}</Accent>, judged under Record.</>}
             sub={
-              <>
-                {summary.next && (
-                  <>Next hammer {hammerWord(closeDays(summary.next))}
-                    {summary.next.saleDateTime && <CloseClock iso={summary.next.saleDateTime} windowHours={24} prefix=" · " />}
-                    {' '}·{' '}
-                  </>
-                )}
-                {upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}
-                {summary.flagged > 0 && (
-                  <>
-                    {' '}·{' '}
-                    {/* a count of flags, not a market direction — ink (lamp law) */}
-                    <b style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                      {summary.flagged} below market
-                    </b>
-                  </>
-                )}
-                {hasDeskDetails && (
-                  <>
-                    {' '}·{' '}
-                    <button type="button" className="ck-deskdetails-btn" aria-expanded={deskDetails} aria-controls="desk-details"
-                      onClick={() => setDeskDetails(v => !v)}>Desk details</button>
-                  </>
-                )}
-              </>
+              // each fact carries its own trailing dot (no-break space), so a
+              // separator can never start a line on a phone
+              <Facts>{[
+                // the next hammer is the cockpit's own cell — said once. With a
+                // priced total in the headline, the sub-line carries its basis
+                // (the Watching cell it replaced said it).
+                ['next', summary.totalEst <= 0 && summary.next
+                  ? <>Next hammer {hammerWord(closeDays(summary.next))}{summary.next.saleDateTime && <CloseClock iso={summary.next.saleDateTime} windowHours={24} prefix=" · " />}</>
+                  : null],
+                ['live', <>{upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}</>],
+                ['priced', summary.totalEst > 0 ? <>{summary.priced} of {upcoming.length} priced at estimate midpoint</> : null],
+                ['onesided', summary.totalEst > 0 && summary.oneSided > 0 ? <>{summary.oneSided} from one bound, not summed</> : null],
+                // a count of flags, not a market direction — ink (lamp law)
+                ['flagged', summary.flagged > 0
+                  ? <a href="#watching" className="ck-away-link" style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{summary.flagged} below market</a>
+                  : null],
+                ['details', hasDeskDetails
+                  ? <button type="button" className="ck-deskdetails-btn" aria-expanded={deskDetails} aria-controls="desk-details"
+                      onClick={() => setDeskDetails(v => !v)}>What changed</button>
+                  : null],
+              ]}</Facts>
             }
           />
           {/* the rest of the old sub-line — coverage, moves, taste, tenure */}
@@ -224,27 +252,79 @@ function DeskMasthead() {
   );
 }
 
-/** the desk: masthead → rail → every registered section, in order */
+/** the desk: masthead → the tab bar → the active tab's rooms, each on its own
+ *  band (alternating grounds: the color break between rooms) → Account */
 function DeskBody() {
   const { desk, act, narrow } = useDesk();
   const i = useDeskInternals();
+  // a desk with nothing closing today opens on the picks (the quick start)
+  const [tab, setTab] = useDeskTab(i.todayShows ? 'today' : 'for-you', i.landReady);
   const sections = mountedSections(desk, i);
-  const items = railItemsOf(desk, i);
+  const tabs = tabItemsOf(desk, i);
   const mountedIds = new Set(sections.map(s => s.id));
+  const order = TAB_ORDER[tab];
+  const inTab = sections.filter(s => s.tab === tab && !EVERY_TAB.has(s.id))
+    .sort((a, b) => (order ? order.indexOf(a.id) - order.indexOf(b.id) : 0));
+  const always = sections.filter(s => EVERY_TAB.has(s.id));
+  // empty = no room under the tab has a pill (a room may mount and render
+  // nothing); its rooms still mount — the sign-in line, a late room
+  const empty = !!tabs.find(t => t.id === tab)?.empty;
   return (
     <>
-      <DeskMasthead />
-      <PillRail items={items} help={<KeysHelp mountedIds={mountedIds} />} tail={RAIL_TAIL} />
-      <MissingLanding sections={sections} />
-      {sections.map(s => {
-        const C = s.Component!;
-        return <C key={s.id} desk={desk} act={act} narrow={narrow} />;
-      })}
+      <div className="dt-head" data-tab={tab} data-compact={(tab !== 'today' && i.todayShows) || undefined}><DeskMasthead /></div>
+      <DeskTabs tabs={tabs} active={tab} onPick={setTab}
+        help={<HelpChip name="Keys and tabs"><KeysHelp mountedIds={mountedIds} /></HelpChip>} />
+      {/* not before the desk can land: the archive that resolves #settled & co. lands late */}
+      {i.landReady && <MissingLanding sections={sections} tab={tab} tabEmpty={empty} />}
+      <div id="dt-panel" className="dt-panel" role="tabpanel" aria-labelledby={`dt-tab-${tab}`} tabIndex={empty ? 0 : -1} data-tab={tab}>
+        {empty && <EmptyTab tab={tab} />}
+        {inTab.map((s, n) => {
+          const C = s.Component!;
+          return (
+            <div key={s.id} className="dt-band" data-tone={s.id === 'collection' ? 'ink' : n % 2 ? 'b' : 'a'} data-room={s.id}>
+              <C desk={desk} act={act} narrow={narrow} />
+            </div>
+          );
+        })}
+      </div>
+      <div className="dt-band dt-band-foot" data-tone="foot">
+        {always.map(s => {
+          const C = s.Component!;
+          return <C key={s.id} desk={desk} act={act} narrow={narrow} />;
+        })}
+      </div>
       {/* on-demand: only fetch the ledger when there are orphans to resolve */}
       {i.orphanIds.length > 0 && <LedgerGate onState={i.setLedgerState} />}
       {/* the page-level comps modal — DeskActions.openLot */}
       {i.modalLot && <ComparableModal lot={i.modalLot} allLots={i.allLots} onClose={i.closeModal} />}
     </>
+  );
+}
+
+/** a tab with no room on this desk yet: what each of its rooms holds and the one tap that fills it */
+function EmptyTab({ tab }: { tab: string }) {
+  const rooms = SECTIONS.filter(s => s.tab === tab && s.fill && !EVERY_TAB.has(s.id));
+  return (
+    <div className="dt-band" data-tone="a">
+      <section className="rail dt-empty">
+        <p className="dt-empty-lead">
+          {tab === 'today'
+            ? <>Nothing of yours closes today. <a className="ck-index-tap" href="#for-you">Today&rsquo;s picks for you →</a></>
+            : 'Nothing here on your desk yet.'}
+        </p>
+        {rooms.length > 0 && <ul className="ck-index">
+          {rooms.map(s => (
+            <li key={s.id} className="ck-index-row">
+              <span className="ck-index-k">{s.label}</span>
+              <span>{s.fill!.text} <span className="ck-index-how">— {s.fill!.how}.</span></span>
+              {s.fill!.tap.href.startsWith('#')
+                ? <a className="ck-index-tap" href={s.fill!.tap.href} onClick={e => { e.preventDefault(); jump(s.fill!.tap.href.slice(1)); }}>{s.fill!.tap.label} →</a>
+                : <a className="ck-index-tap" href={s.fill!.tap.href}>{s.fill!.tap.label} →</a>}
+            </li>
+          ))}
+        </ul>}
+      </section>
+    </div>
   );
 }
 

@@ -13,7 +13,7 @@ import { daysUntil as daysUntilOrNull } from '../../components/Terminal';
 import { lotSignal } from '../../components/LotCard';
 import { signalMagnitude } from '../../lib/comps';
 import { sleeperRead } from '../../lib/lanes';
-import { closeDayOf, localToday } from '../../utils';
+import { closeDayOf } from '../../utils';
 
 /** Terminal's shared daysUntil, kept on the desk's NaN convention (every
     comparison here is NaN-safe; a null would need `?? NaN` at 14 call sites) */
@@ -39,23 +39,7 @@ export const saleTime = (l: AuctionLot, missing = Number.MAX_SAFE_INTEGER): numb
   return isNaN(t) ? missing : t;
 };
 
-/** past-pending = concluded but unresolved. The resultsPending flag alone
-    is NOT enough: a sale that closes between nightlies can carry rows frozen
-    as bare status 'upcoming' with a past saleDate and NO flag (RR sale 748's
-    Apple lots sat in "Watching" for six days this way). The DATE is the
-    truth — anything upcoming whose sale day is behind us has left the block,
-    flag or no flag. One-day grace mirrors isLiveUpcoming. A lot with NO
-    saleDate can't be date-judged and stays visible in Watching as
-    "scheduled" — an honest unknown, not a claim it is live.
-    UTC-parsed on both sides (the daysUntil convention) so the two clocks
-    can never disagree about whether a day is behind us. */
-export function isPastPending(l: AuctionLot): boolean {
-  if (l.status !== 'upcoming' || !l.saleDate) return false;
-  const day = l.saleDate.slice(0, 10);
-  if (l.resultsPending) return day < localToday();
-  const graceMs = Date.parse(`${day}T00:00:00Z`) + 2 * 86_400_000; // sale day + 1 grace day
-  return !isNaN(graceMs) && graceMs < Date.parse(`${localToday()}T00:00:00Z`) + 1;
-}
+export { isPastPending } from './pending';
 
 /* ── THE ONE CLASSIFIER — why a live watch needs you now. Both surfaces
    that tag rows (Today's reads and the Watching ledger) read THESE
@@ -68,8 +52,10 @@ export const TAG_SOON_DAYS = 2;      // "Lands soon": hammers within 2 days
 export type WatchTag = { tag: 'Lands soon' | 'Below market' | 'Most bids' | 'Quiet'; rank: number };
 export function watchTagOf(l: AuctionLot, sig: { label: string } | null | undefined, now = Date.now()): WatchTag | null {
   const d = closeDays(l);
-  if (d >= 0 && d <= TAG_SOON_DAYS) return { tag: 'Lands soon', rank: 0 };
+  // the read outranks the clock: a lot closing today that reads below market
+  // says so (its row already prints when it hammers)
   if (sig?.label === 'Below Market') return { tag: 'Below market', rank: 1 };
+  if (d >= 0 && d <= TAG_SOON_DAYS) return { tag: 'Lands soon', rank: 0 };
   if (l.bidVelocity && l.bidVelocity.delta > 0) return { tag: 'Most bids', rank: 2 };
   if (sleeperRead(l, now)) return { tag: 'Quiet', rank: 3 };
   return null;

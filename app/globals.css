@@ -4570,7 +4570,7 @@ button.ns-stat { cursor: pointer; }
 .ck-deskdetails > p { margin: 4px 0 6px; max-width: 760px; line-height: 1.6; color: var(--color-text-secondary); }
 
 /* every section lands under the nav + the pill rail (one rail, every width) */
-.ck-page :is(#desk, #today, #week, #for-you, #for-collection, #pick-outcomes, #watching, #budget, #portfolio, #market, #names, #signals, #inbox, #on-device, #record, #edge, #collection, #history, #settled, #account, #becomes, #signin) { scroll-margin-top: 116px; }
+.ck-page :is(#desk, #today, #week, #for-you, #for-collection, #pick-outcomes, #watching, #budget, #portfolio, #market, #names, #signals, #inbox, #on-device, #record, #edge, #collection, #history, #settled, #account, #becomes, #signin) { scroll-margin-top: calc(var(--dt-stick, 116px) + 12px); }
 /* a jump focuses the section (tabindex −1) — the room, not a ring around a whole room */
 .ck-page :is(section, div)[tabindex='-1']:focus { outline: none; }
 
@@ -4708,48 +4708,30 @@ a.ck-ccell:focus-visible { outline: 2px solid var(--color-fg); outline-offset: -
   .ck-cockpit-what b { color: var(--color-fg); font-weight: 600; }
 }
 
-/* the rail's (?) — the keys legend, pinned at the rail's right edge; the
-   strip drops under the rail on its own plate (R2 b: it printed as bare text
-   over the Today band) */
-.ck-rail-wrap { display: flex; align-items: center; gap: 8px; }
-.ck-rail-wrap > .ck-rail { flex: 1 1 auto; min-width: 0; }
-.ck-rail-help { flex: none; display: flex; align-items: center; position: static; }
-.ck-rail-help .ck-help {
-  position: absolute; left: 0; right: 0; top: 100%; margin: 0; z-index: 25;
-  padding: 12px 16px 14px; border: 1px solid var(--hairline); border-top: none; border-left: 2px solid var(--color-border-mid);
-  border-radius: 0 0 12px 12px; background: var(--color-bg); box-shadow: 0 12px 28px rgba(8, 6, 3, 0.12);
-}
-/* the › / ‹ at the rail's edge: pills ran off-screen with no affordance (R1#6) */
-.ck-rail-more {
-  flex: none; width: 28px; height: 28px; border-radius: 999px; padding: 0 0 2px;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: var(--color-bg-elevated); border: none; cursor: pointer;
-  font-family: var(--font-mono), monospace; font-size: 16px; line-height: 1; color: var(--color-text-muted);
-}
-.ck-rail-more:hover { color: var(--color-fg); }
-.ck-rail-more:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+/* the rail's (?) — the keys legend, pinned at the rail's right edge; 
+
+
+
+
+
+
 /* PHONE (R2 d): one row — where you are, and the Sections sheet */
-.ck-rail-wrap[data-phone] { display: block; }
-.ck-rail-now { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; min-height: 44px; }
-.ck-rail-here { display: inline-flex; align-items: baseline; gap: 7px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 600; color: var(--color-fg); }
-.ck-rail-here b { font-family: var(--font-mono), monospace; font-size: 12px; font-weight: 500; color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
-.ck-rail-open { height: 36px !important; border: none; cursor: pointer; font-family: var(--font-sans), sans-serif; color: var(--color-fg) !important; }
-.ck-rail-open::after { content: '▾'; font-size: 10px; margin-left: -2px; }
-.ck-rail-sheet-list { display: grid; margin-top: 4px; }
-.ck-rail-sheet-row {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 12px; width: 100%; min-height: 48px;
-  padding: 0 2px; background: none; border: none; border-top: 1px solid var(--hairline); border-radius: 0;
-  font: inherit; font-size: 15px; color: var(--color-fg); text-align: left; cursor: pointer;
-}
-.ck-rail-sheet-row:first-child { border-top: none; }
-.ck-rail-sheet-row > span { flex: 1 1 auto; }
-.ck-rail-sheet-row[aria-current='true'] { font-weight: 600; }
-.ck-rail-sheet-row[aria-current='true'] > span::after { content: ' · here'; font-weight: 400; color: var(--color-text-muted); font-size: 12.5px; }
-.ck-rail-sheet-row[data-quiet] { color: var(--color-text-muted); }
-.ck-rail-sheet-row b { font-family: var(--font-mono), monospace; font-size: 13px; font-weight: 500; color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
-.ck-rail-sheet-row small { font-size: 12px; color: var(--color-text-faint); }
-.ck-rail-sheet-sep { display: block; height: 10px; }
-.ck-rail-sheet-note { font-size: 12.5px; color: var(--color-text-muted); margin: 12px 0 0; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /* a deep link to a room this desk doesn't have yet: one line under the rail */
 .ck-landnote { padding: 12px 0 0; }
 .ck-landnote p { margin: 0; padding: 10px 14px; border-left: 2px solid var(--color-border-mid); font-size: 13px; line-height: 1.55; color: var(--color-text-secondary); max-width: 760px; }
@@ -4790,46 +4772,26 @@ html[data-lectr-light] .ck-index-mark svg { width: 12px !important; height: 12px
 .ck-signin { padding-top: 8px; }
 
 /* ── THE PILL RAIL (every width): sticky under the site nav — the nav is
-   64px tall (10px padding + 44px row), so top 64; at 54 the nav covered
-   the pills' top 10px. The rail itself scrolls sideways (never a sticky
-   ancestor) ── */
-.ck-rail-wrap {
-  position: sticky; top: 64px; z-index: 24; margin-top: 12px;
-  background: var(--color-bg);
-  border-bottom: 1px solid var(--hairline);
-}
-.ck-rail {
-  display: flex; gap: 6px; align-items: center;
-  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
-  padding-block: 7px;
-}
-.ck-rail::-webkit-scrollbar { display: none; }
-.ck-rail-pill {
-  flex: none; display: inline-flex; align-items: center; gap: 7px;
-  height: 30px; padding: 0 13px; border-radius: 999px;
-  font-size: 13px; font-weight: 500; letter-spacing: -0.01em; white-space: nowrap;
-  color: var(--color-text-muted); background: var(--color-bg-elevated);
-  text-decoration: none;
-  transition: color 150ms var(--ease-house, ease), background 150ms var(--ease-house, ease);
-}
-.ck-rail-pill b { font-family: var(--font-mono), monospace; font-size: 12px; font-weight: 500; color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
-.ck-rail-pill:hover { color: var(--color-fg); }
+   64px tall (10px padding + 44px row), so top 64; 
+
+
+
+
+
 /* a quiet section's pill: folded to its word in faint ink, still a link */
-.ck-rail-pill[data-quiet] { color: var(--color-text-faint); background: transparent; box-shadow: inset 0 0 0 1px var(--hairline); }
-.ck-rail-pill[data-quiet]:hover { color: var(--color-text-muted); }
-.ck-rail-pill[aria-current='true'] { background: var(--color-fg); color: var(--color-bg); }
-.ck-rail-pill[aria-current='true'] b { color: inherit !important; }
-.ck-rail-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--color-fg); flex: none; }
-.ck-rail-pill[aria-current='true'] .ck-rail-dot { background: var(--color-bg); }
+
+
+
+
+
 @media (max-width: 639.98px) {
-  .ck-rail { padding-block: 4px; }
-  /* 40px pill + a 2px hit margin each side = a 44px target */
-  .ck-rail-pill { height: 40px; padding: 0 14px; position: relative; }
-  .ck-rail-pill::before { content: ""; position: absolute; inset: -2px 0; }
+  
+  
+  
 }
 /* the ledger's sticky heads ride under the pill rail (nav 64 + rail 44) */
 @media (min-width: 900px) {
-  .ck-page .ray-saved-ledger-head, .ck-page .ray-settled-head { top: 108px; }
+  .ck-page .ray-saved-ledger-head, .ck-page .ray-settled-head { top: var(--dt-stick, 108px); }
 }
 
 /* ── room heads: app/profile/head.tsx (RoomHead) everywhere ── */
@@ -5077,7 +5039,7 @@ html[data-lectr-light] .ck-index-mark svg { width: 12px !important; height: 12px
    ════════════════════════════════════════════════════════════════════ */
 
 /* every hash target lands under the nav + the pill rail */
-.ck-page :is(#for-collection, #pick-outcomes, #market) { scroll-margin-top: 116px; }
+.ck-page :is(#for-collection, #pick-outcomes, #market) { scroll-margin-top: calc(var(--dt-stick, 116px) + 12px); }
 
 /* ── THE ROOM HEAD (app/profile/head.tsx): title · ? · actions right, one
    muted figure line under it that wraps and is never cut ── */
@@ -5148,13 +5110,9 @@ html[data-lectr-light] .ray-band .ck-head[data-level='2'] h2.ray-h2::after { con
 
 /* ── THE RAIL scales: groups parted by a hairline, a soft fade on the side
    that scrolls, the active pill brought to the middle (rail.tsx) ── */
-.ck-rail-sep { flex: none; width: 1px; height: 16px; background: var(--color-border-mid); margin: 0 5px; opacity: 0.7; }
-.ck-rail[data-fade-r] { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); }
-.ck-rail[data-fade-l] { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 36px), transparent); }
-.ck-rail[data-fade-l][data-fade-r] {
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
-  mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
-}
+
+
+
 
 /* ── YOUR MARKET: two columns of names on a desktop (a full-width row left
    a 900px gap between the name and its figure) ── */
@@ -5179,10 +5137,302 @@ html[data-lectr-light] .ray-band .ck-head[data-level='2'] h2.ray-h2::after { con
    week print it whole) and the strip caption is one line */
 @media (max-width: 639.98px) {
   .ck-cockpit-next .ck-ccell-lot { -webkit-line-clamp: 1; }
-  .ck-cockpit .ck-hstrip-cap > span:not(.kicker) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; min-width: 0; }
+  .ck-cockpit .ck-hstrip-cap > span:not(.kicker) { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-width: 0; }
 }
 @media (max-width: 639.98px) {
   .ck-cockpit { margin-top: 2px; }
   .ck-cockpit .ck-hstrip { margin-top: 2px; }
-  .ck-rail-wrap { margin-top: 4px; }
+  
 }
+
+/* ══ THE DESK TABS + ROOM BANDS (Oct 20 2026) — app/profile/tabs.tsx ═══════
+   The desk was one 24,000px column of fourteen rooms on one ground. Now: a
+   sticky tab bar (six tabs, one tab's rooms mounted at a time) and every room
+   on its own full-width band — the colour break. Grounds are the house warm-
+   gray ramp only (doctrine §1.4 — eggshell / cream / stone), never an accent:
+   colour still lives only in the signals.
+     header plate  cream   — masthead + cockpit + the sticky tabs: every tab
+                             opens with a break between the desk and its rooms
+     rooms         eggshell / cream, alternating, a stone hairline seam
+     Collection    its own house plate (.ray-band), full bleed
+     Account       stone, under every tab
+   The bar's real height is measured into --dt-h (tabs.tsx), so landings and
+   the ledgers' sticky heads sit under it at every width. */
+.ck-page {
+  --dt-head: #F5F3F1; --dt-band-a: #FDFCFC; --dt-band-b: #F1EEEB; --dt-band-foot: #E6E1DB;
+  --dt-seam: #EBE8E4; --dt-seam-foot: #CFC8BF;
+  --dt-stick: calc(64px + var(--dt-h, 50px));
+}
+html:not([data-lectr-light]) .ck-page {
+  --dt-head: #131519; --dt-band-a: #08090a; --dt-band-b: #191c21; --dt-band-foot: #1d2026;
+  --dt-seam: rgba(255, 255, 255, 0.10); --dt-seam-foot: rgba(255, 255, 255, 0.13);
+}
+
+/* the header plate: the masthead + cockpit band (page.tsx .dt-head) and the bar */
+.dt-head { background: var(--dt-head); padding-bottom: 6px; }
+.dt-wrap {
+  position: sticky; top: 64px; z-index: 24;
+  background: var(--dt-head);
+  border-bottom: 1px solid var(--dt-seam);
+}
+.dt-bar { display: flex; align-items: center; gap: 10px; }
+.dt-tabs {
+  flex: 1 1 auto; min-width: 0; display: flex; gap: 2px; margin-left: -14px;
+  overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.dt-tabs::-webkit-scrollbar { display: none; }
+.dt-tab {
+  flex: none; position: relative; display: inline-flex; align-items: center; gap: 7px;
+  min-height: 50px; padding: 0 14px; border: none; background: none; cursor: pointer;
+  font: inherit; font-size: 15px; font-weight: 450; letter-spacing: -0.01em; white-space: nowrap;
+  color: var(--color-text-muted);
+  transition: color 150ms var(--ease-house, ease);
+}
+.dt-tab b { font-family: var(--font-sans), sans-serif; font-size: 13px; font-weight: 450; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.dt-tab:hover { color: var(--color-fg); }
+.dt-tab[aria-selected='true'] { color: var(--color-fg); font-weight: 600; }
+.dt-tab[aria-selected='true'] b { color: var(--color-fg); }
+.dt-tab[aria-selected='true']::after {
+  content: ''; position: absolute; left: 14px; right: 14px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--color-fg);
+}
+.dt-tab[data-empty]:not([aria-selected='true']) { color: var(--color-text-faint); }
+.dt-tab:focus-visible { outline: 2px solid var(--color-fg); outline-offset: -5px; border-radius: 10px; }
+.dt-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--color-fg); }
+.dt-help { flex: none; position: static; display: flex; align-items: center; }
+.dt-help .ck-help {
+  position: absolute; left: 0; right: 0; top: 100%; margin: 0; z-index: 25;
+  padding: 12px 16px 14px; border: 1px solid var(--hairline); border-top: none; border-left: 2px solid var(--color-border-mid);
+  border-radius: 0 0 12px 12px; background: var(--color-bg); box-shadow: 0 12px 28px rgba(8, 6, 3, 0.12);
+}
+/* the room row — jump links to the rooms under this tab; scrolls with the page */
+.dt-rooms { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-block: 16px 2px; }
+.dt-rooms::-webkit-scrollbar { display: none; }
+.dt-room {
+  flex: none; position: relative; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 999px;
+  font-size: 13.5px; font-weight: 500; white-space: nowrap; text-decoration: none;
+  color: var(--color-text-secondary); box-shadow: inset 0 0 0 1px var(--color-border-mid, var(--hairline));
+}
+.dt-room::before { content: ''; position: absolute; inset: -4px 0; }
+.dt-room b { font-family: var(--font-sans), sans-serif; font-size: 13px; font-weight: 450; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.dt-room:hover { color: var(--color-fg); }
+.dt-room[aria-current='location'] { color: var(--color-bg); background: var(--color-fg); box-shadow: none; }
+.dt-room[aria-current='location'] b { color: inherit; }
+.dt-room[data-quiet] { color: var(--color-text-faint); }
+.dt-room:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+
+/* the bands */
+.dt-panel { display: block; }
+.dt-panel:focus { outline: none; }
+.ck-page #dt-panel:focus-visible { outline: 2px solid var(--color-fg); outline-offset: -2px; }
+.dt-band { background: var(--dt-band-a); border-top: 1px solid var(--dt-seam); padding-block: 4px 40px; }
+.dt-band[data-tone='b'] { background: var(--dt-band-b); }
+.dt-panel > .dt-band:first-child { border-top: none; }
+/* Collection: its house plate (.ray-band), full bleed — no rounded slab, no slivers */
+.dt-band[data-tone='ink'] { padding: 0; border-top: none; background: transparent; }
+.dt-band[data-tone='ink'] > .ray-band { margin: 0 !important; border-radius: 0; border-block: none; padding-block: 34px 44px !important; }
+.dt-band-foot { background: var(--dt-band-foot); border-top: 1px solid var(--dt-seam-foot); padding-block: 4px 28px; }
+/* the band IS the break: no registration rule, no print double-rule over a room title inside one */
+.dt-band .ns-plate { border-top: none; }
+.dt-band .ns-plate::before, .dt-band .ns-plate::after { display: none; }
+html[data-lectr-light] .dt-band :is(.ray-saved-section > div:first-child h2.ray-h2, section.rail > h2.ray-h2, .ray-saved-section > h2.ray-h2, .ck-head[data-level='2'] h2.ray-h2) { border-top: none; padding-top: 0; }
+html[data-lectr-light] .dt-band :is(.ray-saved-section > div:first-child h2.ray-h2, section.rail > h2.ray-h2, .ray-saved-section > h2.ray-h2, .ck-head[data-level='2'] h2.ray-h2)::after { display: none; }
+/* a cream cell on a cream band disappears: lift it to the eggshell */
+html[data-lectr-light] .dt-band[data-tone='b'] :is(.ns-cell:not(.ns-cell-color), .ck-call-well) { background: var(--dt-band-a); }
+
+/* every landing and every sticky ledger head sits under the measured bar */
+.ck-page [id] { scroll-margin-top: calc(var(--dt-stick) + 12px); }
+.ck-page .ray-saved-ledger-head, .ck-page .ray-settled-head { top: var(--dt-stick) !important; }
+.dt-empty { padding-block: 34px 8px; }
+.dt-empty-lead { margin: 0 0 6px; font-size: 15px; color: var(--color-text-secondary); }
+.dt-empty-lead .ck-index-tap { margin-left: 6px; }
+.sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* phone: all six tabs on screen (3×2), the room row scrolls with the page */
+@media (max-width: 639.98px) {
+  .dt-bar { align-items: flex-start; gap: 0; }
+  .dt-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; overflow: visible; margin-left: 0; }
+  .dt-tab { justify-content: center; min-height: 44px; padding: 0 4px; font-size: 14.5px; }
+  .dt-tab[aria-selected='true']::after { left: 18%; right: 18%; }
+  .dt-help { display: none; }
+  .dt-rooms { padding-block: 12px 0; }
+  .dt-band { padding-block: 2px 30px; }
+  .dt-band[data-tone='ink'] > .ray-band { padding-block: 26px 34px !important; }
+}
+
+/* the cockpit with the Watching cell folded into the masthead: two cells */
+.ck-ccells[data-n='2'] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 639.98px) { .ck-ccells[data-n='2'] { grid-template-columns: 1fr; } }
+/* a separator never starts a line: a fact and its dot travel together */
+/* desk chips: sentence-case Inter pills, never the uppercase mono eyebrow (Oct 20 review) */
+.ck-page .ck-tag {
+  font-family: var(--font-sans), sans-serif; font-size: 12px; font-weight: 500; letter-spacing: 0;
+  text-transform: none; border-radius: 999px; padding: 2px 9px; line-height: 1.45;
+}
+/* a display word in a cockpit cell ("today") is type, not data: Inter light */
+.ck-page .ck-ccell-v { font-family: var(--font-sans), sans-serif; font-weight: 300; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
+/* dark: the Collection plate is the deepest GRAY on the ramp — never the beige
+   certificate (a tan field breaks the dark desk); its paper tokens re-point to
+   the dark ink set. Light keeps the ink vault (the approved house plate). */
+html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] > .ray-band {
+  /* literal values (the .terminal-shell dark set): .ray-band maps --color-* to
+     --paper-* on this element, so pointing --paper-* back at --color-* would be
+     a cycle and the browser would drop both */
+  --paper: #21242b; --paper-card: #272a31; --paper-mid: #24272e; --paper-deep: #2a2d34;
+  --paper-ink: #f7f8f8; --paper-secondary: #d0d6e0; --paper-muted: #8a8f98; --paper-faint: #878d97;
+  --paper-line: rgba(255, 255, 255, 0.10); --paper-edge: rgba(255, 255, 255, 0.12);
+  --paper-up: #57be87; --paper-up-text: #57be87; --paper-down: #cc6a5c; --paper-down-text: #d98a7f;
+  --tape-up: #57be87; --tape-down: #d98a7f; --tape-mut: #8a8f98;
+  --color-butter-subtle: rgba(255, 255, 255, 0.09); --chart-cursor: rgba(255, 255, 255, 0.3); --chart-tick: #8a8f98;
+  --pa-05: rgba(255,255,255,.05); --pa-08: rgba(255,255,255,.08); --pa-16: rgba(255,255,255,.16); --pa-18: rgba(255,255,255,.18);
+  --pa-22: rgba(255,255,255,.22); --pa-25: rgba(255,255,255,.25); --pa-3: rgba(255,255,255,.3); --pa-32: rgba(255,255,255,.32);
+  --pa-35: rgba(255,255,255,.35); --pa-36: rgba(255,255,255,.36); --pa-4: rgba(255,255,255,.4); --pa-5: rgba(255,255,255,.5);
+  --pa-55: rgba(255,255,255,.55); --pa-6: rgba(255,255,255,.6); --pa-8: rgba(255,255,255,.8);
+  background: var(--paper); color: var(--paper-ink);
+}
+/* faint text on the stone foot fell under AA (4.26:1): Account reads muted */
+.dt-band-foot { --color-text-faint: var(--color-text-muted); }
+/* desk secondary buttons get an edge: white-on-eggshell pills were invisible */
+.ck-page :is(.ck-tune, .ck-head-actions .ray-call-btn-quiet, .ck-head-actions > :is(button, a):not(.ck-week-act):not(.ray-savedview-btn):not(.ck-away-link)) { box-shadow: inset 0 0 0 1px var(--color-border-mid, var(--hairline)); background: transparent; }
+/* phone 3×2 grid at 320–360px: a long label + count never overflows its cell */
+.dt-tab-label { overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 359.98px) { .dt-tab b { display: none; } }
+
+/* ── round 2 (Oct 20 review) ── */
+/* the gold pencil retires on the desk: gold is the headline figure's alone, and
+   the green "Below market" pill already carries the signal */
+html[data-lectr-light] .ck-page :is(.ray-savedrow, .ck-read):has(.ck-tag[data-tone='up'])::before { display: none; }
+/* the room mark is the same tile in both modes (titles share one x) */
+html:not([data-lectr-light]) .ck-page .ray-sect-mark {
+  display: inline-grid; place-items: center; width: 27px; height: 27px; border-radius: 7px;
+  background: var(--color-fg); color: var(--color-bg); vertical-align: -6px; margin-right: 11px;
+}
+html:not([data-lectr-light]) .ck-page .ray-sect-mark svg { width: 15px; height: 15px; }
+html:not([data-lectr-light]) .ck-page .ck-h3 .ray-sect-mark { width: 23px; height: 23px; border-radius: 6px; vertical-align: -4px; margin-right: 10px; }
+html:not([data-lectr-light]) .ck-page .ck-h3 .ray-sect-mark svg { width: 13px; height: 13px; }
+/* one pill family on the desk: toolbar pills and the owned toggle get an edge, sentence case */
+.ck-page .ray-toolbar-pill { box-shadow: inset 0 0 0 1px var(--color-border-mid, var(--hairline)); background: none; font-size: 13px; letter-spacing: 0; text-transform: none; }
+.ck-page .ray-own-btn { font-size: 13px; letter-spacing: 0; text-transform: none; padding: 0 14px; min-height: 36px; }
+/* phone: past Today the header plate is just the headline — the cockpit lives on Today
+   (where it reads with its rooms), so other tabs open on their own content */
+@media (max-width: 639.98px) {
+  .dt-head[data-compact] :is(.ck-cockpit, .ray-masthead > p, #desk-details) { display: none; }
+  .dt-head[data-compact] .ray-masthead-h1 { font-size: 26px !important; line-height: 1.15 !important; }
+  .dt-head[data-compact] { padding-bottom: 2px; }
+  /* Budget nights: the figures wrap under the night, never a leader rule on some nights only */
+  .ck-page .ck-budget-night .ck-reads-head { flex-wrap: wrap; }
+  .ck-page .ck-budget-night .ck-reads-rule { display: none; }
+  .ck-page .ck-budget-night-figs { flex: 1 1 100%; text-align: left; }
+}
+
+/* a room that renders nothing (Today on a quiet day) leaves no empty band */
+.dt-band:empty { display: none; }
+/* the site footer meets the Account band — no seam, no gap */
+.ck-page > footer.ray-close { margin-top: 0 !important; border-top: none !important; }
+
+/* ── round 3 (Oct 20 review) ── */
+/* Your week's head actions and the Ledger/Cards toggle: real pills, not boxed underlines */
+.ck-page .ck-head-actions :is(.ck-week-act, .ray-savedview-btn) {
+  display: inline-flex; align-items: center; box-shadow: inset 0 0 0 1px var(--color-border-mid, var(--hairline)); border-radius: 999px;
+  min-height: 34px; padding: 0 14px; text-decoration: none; font-size: 13px; font-weight: 500; color: var(--color-text-secondary); background: transparent;
+}
+.ck-page .ck-head-actions :is(.ck-week-act, .ray-savedview-btn):is([aria-pressed='true'], [aria-current='true'], [data-active='true']) {
+  background: var(--color-fg); color: var(--color-bg); box-shadow: none;
+}
+/* figures in prose speak Inter with tabular numerals (one voice with the masthead);
+   no more lowercase mono sentences, no uppercase mono words */
+.ck-page :is(.ray-feedrow-price, .ck-week-time, .ck-week-clock, .ck-week-daysum, .ck-week-vel, .ck-week-chip b, .ck-week-chip i,
+  .ck-week-conflict-word, .nm-fig b, .nm-num, .nm-n, .nm-sale-when b, .ck-budget-fig, .ck-budget-night-figs b, .ray-lot-est) {
+  font-family: var(--font-sans), sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -0.005em; text-transform: none;
+}
+.ck-page .ns-cell-stat { font-family: var(--font-sans), sans-serif; font-weight: 300; letter-spacing: -0.03em; }
+/* the ledger's sticky head paints its band, not the page ground */
+.ck-page .dt-band[data-tone='b'] :is(.ray-saved-ledger-head, .ray-settled-head) { background: var(--dt-band-b); }
+.ck-page .dt-band[data-tone='a'] :is(.ray-saved-ledger-head, .ray-settled-head) { background: var(--dt-band-a); }
+/* the dark Collection plate keeps its room mark visible */
+html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] .ray-sect-mark { background: #f7f8f8 !important; color: #191b20 !important; }
+/* Your week: "+N more" reads left like everything else, on one line */
+.ck-page .ck-week-more { text-align: left; white-space: normal; }
+/* Account: no dead stone under its links */
+.dt-band-foot > * { margin-bottom: 0 !important; padding-bottom: 0 !important; }
+
+/* dark: the Collection plate stands off its neighbours with a hairline at each edge */
+html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] > .ray-band { border-block: 1px solid rgba(255, 255, 255, 0.10) !important; }
+
+/* ── round 4 (Oct 20 alignment audit) ── */
+/* a fact never breaks inside itself above 360px ("4 below market") */
+@media (min-width: 360px) { .ck-page .ck-nb { white-space: nowrap; } }
+/* rows that lead with a pill: the pill sits in a fixed slot, title and facts stack beside it at full width,
+   so every title starts on one edge, row to row */
+.ck-page .ck-read:has(> .ck-tag:first-child) {
+  display: grid; grid-template-columns: 112px minmax(0, 1fr); column-gap: 14px; row-gap: 2px; align-items: baseline;
+}
+.ck-page .ck-read:has(> .ck-tag:first-child) > .ck-tag { justify-self: start; grid-row: 1 / span 4; align-self: start; }
+.ck-page .ck-read:has(> .ck-tag:first-child) > :not(.ck-tag) { grid-column: 2; min-width: 0; }
+.ck-page .ck-read:has(> .ck-tag:first-child) > .ck-read-title { max-width: none; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* phone: the pill rides above the title, so the title gets the full width */
+@media (max-width: 639.98px) {
+  .ck-page .ck-read:has(> .ck-tag:first-child) { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
+  .ck-page .ck-read:has(> .ck-tag:first-child) > .ck-tag { grid-row: auto; }
+  .ck-page .ck-read:has(> .ck-tag:first-child) > :not(.ck-tag) { grid-column: 1; }
+}
+/* one left edge for everything in a room */
+.ck-page :is(.ck-reads-head, .ck-read, .nm-row, .ck-week-dayhead, .ck-week-namesrule, .ray-savedrow, .ray-saved-ledger-head, .ck-budget-more) { padding-inline: 2px; }
+/* ledgers: an Est cell wide enough for "No reserve · opening bid", the numeral spine holds */
+.ck-page .ray-saved-cols { grid-template-columns: 92px minmax(0, 1fr) 156px 96px 104px 104px; }
+.ck-page .ray-saved-ledger[data-nosig] .ray-saved-cols { grid-template-columns: 92px minmax(0, 1fr) 156px 104px 104px; }
+.ck-page .ray-saved-ledger[data-nodelta] .ray-saved-cols { grid-template-columns: 92px minmax(0, 1fr) 156px 96px 104px; }
+.ck-page .ray-saved-ledger[data-nosig][data-nodelta] .ray-saved-cols { grid-template-columns: 92px minmax(0, 1fr) 156px 120px; }
+.ck-page .ray-savedrow .num:nth-child(3) { white-space: normal; text-wrap: balance; }
+.ck-page .ray-settled-cols { grid-template-columns: minmax(100px, 140px) minmax(0, 1fr) 156px 88px 100px 88px 86px; }
+.ck-page .ray-settled-desk[data-nocall] .ray-settled-cols { grid-template-columns: minmax(100px, 140px) minmax(0, 1fr) 156px 100px 88px 86px; }
+.ck-page .ray-settled-cols > :last-child { justify-self: end; }
+/* the figures the round-3 list missed: Inter, tabular */
+.ck-page :is(.ray-savedrow .num, .ray-savedrow .num .sub, .ck-week-cn-clock, .ck-gauge-v) { font-family: var(--font-sans), sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -0.005em; }
+.ck-page .ck-gauge-v { font-weight: 300; }
+.ck-page .ns-ccell-stat { font-family: var(--font-sans), sans-serif; font-weight: 300; letter-spacing: -0.03em; }
+/* Names calendar edges: the when-column, "+N more sales" left, the live-count spine, the trend label on its line */
+.ck-page .nm-sale-when .nm-n { margin-left: 0; }
+.ck-page .nm-sale.nm-sale-more { grid-template-columns: 1fr; }
+.ck-page .nm-sale-more .nm-link { justify-self: start; text-align: left; }
+.ck-page .nm-fig .ck-mham { min-width: 5.6em; text-align: left; display: inline-block; }
+.ck-page .nm-spark { align-items: baseline; }
+.ck-page .nm-spark svg { align-self: center; }
+/* Your week: day heads share a height, so the first cards line up across the days */
+@media (min-width: 900px) { .ck-page .ck-week-days:not([data-narrow]) .ck-week-dayhead { min-height: 108px; align-content: start; } }
+.ck-page .ck-week-cn-title { min-height: calc(2 * 1.35em + 6px); }
+/* every call's figures on fixed columns (called · hammer · miss) */
+.ck-page .pe-rnums { display: grid; grid-template-columns: 7.5em 8.5em 4.5em 2.6em; justify-items: end; column-gap: 12px; white-space: nowrap; }
+.ck-page .pe-rnums > :last-child { justify-self: start; }
+@media (max-width: 639.98px) { .ck-page .pe-rnums { grid-template-columns: auto auto auto 1fr; justify-items: start; column-gap: 10px; } }
+/* dark: the soft wells and the month bars need an edge against the near-black ground */
+:root[data-theme="dark"] .ck-page .ns-well, :root.dark .ck-page .ns-well { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.09); background: #121418; }
+:root[data-theme="dark"] .ck-page .pe-mbar, :root.dark .ck-page .pe-mbar { background: rgba(255,255,255,0.34); }
+/* a stated signal keeps its label and value on one line */
+.ck-page .ck-sig-pair { white-space: nowrap; display: inline-flex; gap: 6px; align-items: baseline; }
+/* For you cards: the body has a real inset and titles hold two lines, so the meta lines share a height */
+.ck-page .ck-picks .ray-lot-card .ray-lot-img + div { padding-inline: 14px !important; }
+.ck-page .ck-picks .ray-lot-title { min-height: calc(2 * 1.4em); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* figure rows on the same tab share columns */
+.ck-page .ns-byline { display: grid; grid-template-columns: repeat(4, minmax(0, 220px)); column-gap: 24px; }
+@media (max-width: 639.98px) { .ck-page .ns-byline { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 14px; } }
+/* phone: the room-pill strip keeps a right gutter */
+.dt-rooms { padding-inline-end: 16px; scroll-padding-inline: 16px; }
+/* a missing-room note lands under the sticky chrome, not behind it */
+.ck-page .ck-landnote { scroll-margin-top: calc(var(--dt-stick, 120px) + 12px); }
+/* (round 5) past Today the header plate is just the headline at every width —
+   the cockpit reads with Today's rooms; other tabs open on their own content */
+@media (min-width: 640px) {
+  .dt-head[data-compact] :is(.ck-cockpit, .ray-masthead > p, #desk-details) { display: none; }
+  .dt-head[data-compact] .ray-masthead-h1 { font-size: 40px !important; line-height: 1.1 !important; }
+}
+/* the last figures still in mono: Inter, tabular */
+.ck-page :is(.ck-mrow-right b, .ck-hbar b, .ck-fold-n, .ck-budget-fig) { font-family: var(--font-sans), sans-serif; font-variant-numeric: tabular-nums; }
+/* Bid plan rows: the figure keeps its own right column beside the title and facts */
+@media (min-width: 640px) {
+  .ck-page .ck-read:has(> .ck-tag:first-child):has(> .ck-budget-fig) { grid-template-columns: 112px minmax(0, 1fr) auto; }
+  .ck-page .ck-read:has(> .ck-tag:first-child) > .ck-budget-fig { grid-column: 3; grid-row: 1 / span 2; align-self: start; margin-left: 0; }
+}
+/* phone: the headline facts at reading size, so they pack two to a line */
+@media (max-width: 639.98px) { .ck-page .dt-head:not([data-compact]) .ray-masthead > p { font-size: 15px; } }
+/* phone week: the next day peeks as a fade, not letter slivers */
+@media (max-width: 639.98px) { .ck-page .ck-week-days[data-narrow] { -webkit-mask-image: linear-gradient(to right, #000 86%, transparent); mask-image: linear-gradient(to right, #000 86%, transparent); } }

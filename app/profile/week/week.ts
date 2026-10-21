@@ -64,9 +64,9 @@ export const CONFLICT_MS = 30 * 60_000;
 export const DAY_MS = 86_400_000;
 /** the Closing-now strip's window */
 export const CLOSING_NOW_MS = 24 * 3_600_000;
-/** rows a day opens on before "+N more": every watch, then this many picks and this many name rows */
-/** (integration) a day opens on every watch, 3 picks and 2 name rows —
+/** rows a day opens on before "+N more": this many watches, then picks and name rows —
  *  "+N more" opens the rest; the desk stays scannable at seven columns */
+export const WATCH_ROWS_OPEN = 3;
 export const PICK_ROWS_OPEN = 3;
 export const NAME_ROWS_OPEN = 2;
 

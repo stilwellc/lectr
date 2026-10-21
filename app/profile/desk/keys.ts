@@ -60,14 +60,15 @@ export function useDeskKeys(): void {
       if (pending.current && Date.now() - pending.current < CHORD_MS) {
         pending.current = 0;
         const s = sectionByKey(e.key);
-        if (s && document.getElementById(s.id)) { jump(s.id); e.preventDefault(); }
+        // jump() opens the room's tab first when it lives under another one
+        if (s) { jump(s.id); e.preventDefault(); }
         return;
       }
       pending.current = 0;
       if (e.key === 'g') { pending.current = Date.now(); e.preventDefault(); return; }
       // `?` opens the rail's keys legend (the same chip the (?) button toggles)
       if (e.key === '?') {
-        const btn = document.querySelector<HTMLElement>('.ck-rail-help .ck-helpbtn');
+        const btn = document.querySelector<HTMLElement>('.dt-help .ck-helpbtn');
         if (btn) { btn.click(); btn.focus(); e.preventDefault(); }
         return;
       }

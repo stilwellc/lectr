@@ -51,7 +51,7 @@ import type { CatKey } from '../../lib/taxonomy';
 
 /** names whose sold side is read (each costs one entities file + one
  *  entity-<bb>.json bucket; the rest carry their calendar only) */
-export const MAX_READ = 16;
+export { MAX_READ } from '../../lib/your-market';
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
 

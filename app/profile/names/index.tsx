@@ -296,7 +296,8 @@ function NameRow({ r, sold, capped, now, narrow, onOpen, onFollow }: {
           : read ? <p className="nm-pulse">{sold!.sFail ? 'Sold history didn’t load' : 'No sold history on file'}</p>
             : <p className="nm-pulse">Reading sold history…</p>
       )}
-      {name.id && capped && <p className="nm-pulse">Calendar only here — the first {MAX_READ} names carry sold history</p>}
+      {/* (Oct 20) said once in the room's figure line; each capped name just says so */}
+      {name.id && capped && <p className="nm-pulse">Calendar only</p>}
       {!name.id && <p className="nm-pulse">{name.follow.kind === 'cat' ? 'Category' : 'Collection'} follow · live lots only — no single name to read a sold history for</p>}
       {live ? (
         <ul className="nm-sales" aria-label={`${name.label}, upcoming sales`}>
@@ -405,6 +406,11 @@ export default function NamesSection({ desk, act, narrow }: SectionProps) {
     </>
   );
 
+  // the sold-history cap, said once (the rows past it say "Calendar only")
+  const capNote = names.some(n => n.id && !readIds.includes(n.id))
+    ? <> · sold history covers your first {MAX_READ} names; the rest are calendar only</>
+    : null;
+
   return (
     <section id="names" ref={sectionRef} className="ray-saved-section rail ray-enter nm-section" aria-label="Names calendar and blind spots">
       <div className="ns-plate" style={{ paddingTop: 18 }}>
@@ -420,7 +426,7 @@ export default function NamesSection({ desk, act, narrow }: SectionProps) {
             is a name with nothing live: its last sale on file, the houses it usually sells at (shares of every tracked
             sale), and Follow if you don&rsquo;t yet. What moved this week for these names is in <a href="#market">Your market</a>.
           </> }}
-          sub={narrow ? <>Names calendar &amp; blind spots · {totals}</> : totals} />
+          sub={<>{narrow ? <>Names calendar &amp; blind spots · </> : null}{totals}{capNote}</>} />
         {loading && <p className="ck-sig-note nm-status" role="status">Reading sold history for {n2(readIds.length)} {readIds.length === 1 ? 'name' : 'names'}…</p>}
         {groups.map(g => (
           <MarketGroup key={g.market} label={g.label} reads={g.reads} now={now} narrow={narrow} sold={sold} readSet={readSet}

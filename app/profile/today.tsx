@@ -226,7 +226,7 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
   const quietPicks = loop && !closing.length && !fresh.length
     ? <p className="ck-today-empty">
         {!since && picksN > 0
-          ? <>{picksN} {picksN === 1 ? 'pick' : 'picks'} landed <a href="#for-you" className="ck-away-link">below</a> · none close tonight{nextCloseText(loop).replace(' — the next closes', ' · the next closes')}.</>
+          ? <>{picksN} {picksN === 1 ? 'pick' : 'picks'} landed in <a href="#for-you" className="ck-away-link">For you</a> · none close tonight{nextCloseText(loop).replace(' — the next closes', ' · the next closes')}.</>
           : <>Nothing new in your picks {since ? `since ${dayWord(since)}` : 'today'}, and none close tonight{nextCloseText(loop)}.</>}
       </p>
     : null;

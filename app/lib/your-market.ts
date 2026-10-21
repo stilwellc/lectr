@@ -34,7 +34,7 @@ import { isNewLot, type HouseBaselines } from './feed-filters';
 import { isOnBlock } from '../utils';
 
 /** names whose sold side is read (each costs an entity-<bb>.json bucket) */
-export const MAX_READ = 12;
+export const MAX_READ = 16;   // one constant for Your market AND the Names calendar (profile/names re-exports it)
 /** a "new record" looks back this far in week mode */
 export const RECORD_DAYS = 30;
 export const WEEK_DAYS = 7;

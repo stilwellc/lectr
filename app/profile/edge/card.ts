@@ -23,10 +23,11 @@ import type { AuctionLot } from '../../types';
 import type { SavedMeta } from '../../lib/account';
 import type { Follow } from '../../lib/follows';
 import { displayMakerOf } from '../../lib/maker-subjects';
-import { isOnBlock } from '../../utils';
+import { pricedTotal } from '../desk/priced';
+import { isPastPending } from '../desk/pending';
 import { fmtFace } from '../../lib/lot-face';
 import { fmtSignedPct } from '../../utils';
-import { EDGE_MIN_N, dayOf } from './edge';
+import { EDGE_MIN_N } from './edge';
 
 export const CARD_W = 1200;
 export const CARD_H = 630;
@@ -49,6 +50,8 @@ export interface CardNumbers {
   watchingUsd: number;
   watchingLots: number;
   watchingPriced: number;
+  /** live watches with a one-bound estimate: counted, never summed (the masthead's rule) */
+  watchingOneSided?: number;
   record: { n: number; med: number | null };
   graded: number;
   names: string[];
@@ -95,18 +98,17 @@ export function cardNamesOf(saved: readonly AuctionLot[], metaFor: CardInputs['m
 }
 
 export function cardNumbersOf(input: CardInputs): CardNumbers {
-  const today = dayOf(input.now);
-  const live = input.saved.filter(l => isOnBlock(l, today, input.now));
-  let watchingUsd = 0, priced = 0;
-  for (const l of live) {
-    const lo = l.estimateLow || l.estimateHigh || 0;
-    const hi = l.estimateHigh || l.estimateLow || 0;
-    if (lo > 0 || hi > 0) { watchingUsd += (lo + hi) / 2; priced++; }
-  }
+  // the masthead's own set (provider `upcoming`): every upcoming save not past
+  // its pending window — the card and the page count the same lots
+  const live = input.saved.filter(l => l.status === 'upcoming' && !isPastPending(l));
+  // the SAME basis the masthead prints (desk/priced pricedTotal): two-sided
+  // estimates at their midpoint; a one-bound estimate is counted, never summed —
+  // the shared card can never disagree with the page it was drawn from
+  const { total: watchingUsd, priced, oneSided } = pricedTotal(live);
   const names = cardNamesOf(input.saved, input.metaFor, input.follows);
   const d = new Date(input.now);
   const dateLabel = `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-  return { watchingUsd, watchingLots: live.length, watchingPriced: priced, record: input.record, graded: input.graded, names, dateLabel };
+  return { watchingUsd, watchingLots: live.length, watchingPriced: priced, watchingOneSided: oneSided, record: input.record, graded: input.graded, names, dateLabel };
 }
 
 export interface CardLines {
@@ -126,7 +128,7 @@ export function cardLines(n: CardNumbers): CardLines {
   const sub = n.watchingLots === 0
     ? 'nothing on the block'
     : n.watchingPriced > 0
-      ? `${lots} · ${n.watchingPriced} of ${n.watchingLots} priced, at estimate midpoint`
+      ? `${lots} · ${n.watchingPriced} of ${n.watchingLots} priced, at estimate midpoint${n.watchingOneSided ? ` · ${n.watchingOneSided} from one bound, not summed` : ''}`
       : `${lots} · none priced yet`;
   const recordOk = n.graded >= EDGE_MIN_N && n.record.med != null;
   const med = n.record.med == null ? 0 : Math.round(n.record.med);

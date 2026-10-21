@@ -167,7 +167,7 @@ export function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSave
         ) : null}
         {!ready || cold ? null : recs.length === 0 && top?.length ? (
           <p className="ck-sig-note" style={{ margin: 0 }}>
-            {top.length === 1 ? 'Your one pick is' : `All ${top.length} of your picks are`} in <a href="#today" className="ck-away-link">Today</a> above — new lots land with every crawl.
+            {top.length === 1 ? 'Your one pick is' : `All ${top.length} of your picks are`} in the <a href="#today" className="ck-away-link">Today</a> tab — new lots land with every crawl.
           </p>
         ) : recs.length === 0 ? (
           <div>

@@ -57,7 +57,7 @@ test('registry: the five Phase-2 sections are mounted on their reserved ids + ke
   assert.equal(sectionByKey('w')?.id, 'watching');
   assert.equal(sectionByKey('z'), undefined);
   // a reserved slot still mounts nothing and shows no pill
-  const r = slot('later', 'Later', 'l', 'desk', SECTIONS[0].mark!);
+  const r = slot('later', 'Later', 'l', 'desk', SECTIONS[0].mark!, 'today');
   assert.equal(r.Component, null); assert.equal(r.meta(desk, live()), null);
 });
 

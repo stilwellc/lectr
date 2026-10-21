@@ -43,6 +43,7 @@ import { craftTitle, fmtSignedPct, localToday } from '../../utils';
 import { closeDays, hammerWord } from './derive';
 import { useDesk, useDeskInternals } from './provider';
 import { jump } from '../rail';
+import { mountedSections } from './sections';
 import { dayLabel, hammerStrip, streakOf, stripCaption } from './cockpit-logic';
 import { closingNowOf, planWeek, localDayOf, type WeekRow } from '../week/week';
 import { gradeDesk, EDGE_HIT_PCT } from '../edge/edge';
@@ -97,7 +98,8 @@ const KIND_WORD: Record<WeekRow['kind'], string> = { watch: 'your watch', pick: 
 
 export default function Cockpit() {
   const { desk } = useDesk();
-  const { upcoming, summary, record, deskView } = useDeskInternals();
+  const i = useDeskInternals();
+  const { upcoming, summary, record, deskView } = i;
   const todayKey = localToday();
   // THE WEEK's rows — the one source the strip, Your week and (via X2) the
   // Today band count; the return loop's closing picks join the picks
@@ -152,8 +154,11 @@ export default function Cockpit() {
     return picks || names ? { picks, names } : null;
   }, [nextWatch, cn, plan, desk.now]);
   // the strip lands on Your week once it registers; on the room until then
+  // decided from the desk, not the DOM: under tabs, Your week / Watching
+  // aren't mounted unless their tab is open (jump() opens it)
   const stripTarget = () => {
-    const id = document.getElementById('week') ? 'week' : document.getElementById('watching') ? 'watching' : null;
+    const ids = new Set(mountedSections(desk, i).map(s => s.id));
+    const id = ids.has('week') ? 'week' : ids.has('watching') ? 'watching' : null;
     if (id) jump(id);
   };
   const hits = edge ? edge.graded.filter(c => c.hit).length : 0;
@@ -163,14 +168,18 @@ export default function Cockpit() {
 
   return (
     <div className="ck-cockpit" data-cold={cold || undefined} data-live={picksOnly ? 'picks' : undefined} aria-label="Your desk at a glance">
-      <div className="ck-ccells">
+      <div className="ck-ccells" data-n={!cold && !picksOnly && summary.totalEst > 0 && deskView ? 2 : 3}>
         {/* 1 · WATCHING — the sub-line's figures, as a cell */}
         {cold ? (
           <Cell k="Watching" tap v={<>Watch a lot <span aria-hidden>›</span></>} href="#for-you"
-            body="Bookmark any lot on lectr — the picks below have the button — and its estimate counts here to the hammer, with the engine’s read beside it." />
+            body="Bookmark any lot on lectr — the picks under For you have the button — and its estimate counts here to the hammer, with the engine’s read beside it." />
         ) : picksOnly ? (
           <Cell k="Watching" v="0" note="watched" href="#for-you"
             body={<span>{picksLive} {picksLive === 1 ? 'pick' : 'picks'} live <span aria-hidden>→</span> For you{plan.nameRows > 0 && <> · {plan.nameRows} {plan.nameRows === 1 ? 'sale' : 'sales'} of your names this fortnight</>}</span>} />
+        ) : summary.totalEst > 0 && deskView ? (
+          // the headline prints this total and the sub-line its basis — the cell
+          // would only say it a third time (Oct 20 review)
+          null
         ) : (
           <Cell k="Watching"
             v={summary.totalEst > 0 ? fmtFace(summary.totalEst) : upcoming.length > 0 ? upcoming.length.toLocaleString() : '—'}
@@ -210,13 +219,17 @@ export default function Cockpit() {
 
         {/* 3 · YOUR EDGE — your calls graded (edge.ts); else the settled record, named as such */}
         {cold ? (
-          <Cell k="Your edge" tap v={<>The engine&rsquo;s record <span aria-hidden>›</span></>} href="/receipts"
+          <Cell k="Your calls" tap v={<>The engine&rsquo;s record <span aria-hidden>›</span></>} href="/receipts"
             body="Every watch that settles is judged against its estimate — your eye, measured, call by call. Until then: how the engine’s own calls have done." />
         ) : edge && edge.n > 0 ? (
-          <Cell k="Your edge"
+          <Cell k="Your calls"
             v={edge.all.medianMiss != null ? fmtSignedPct(Math.round(edge.all.medianMiss)) : edge.n.toLocaleString()}
-            tone={edge.all.medianMiss != null ? lamp(Math.round(edge.all.medianMiss)) : undefined}
-            note={edge.all.medianMiss != null ? 'median miss, realized vs called' : (edge.n === 1 ? 'call graded' : 'calls graded')}
+            // a miss is distance from your call, not a gain — ink, never the lamp
+            tone={undefined}
+            note={edge.all.medianMiss != null
+              ? (Math.round(edge.all.medianMiss) === 0 ? 'typical miss — hammers landed on your calls'
+                : `typical miss — hammers ran ${edge.all.medianMiss > 0 ? 'above' : 'below'} your calls`)
+              : (edge.n === 1 ? 'call graded' : 'calls graded')}
             body={<span>{edge.n} {edge.n === 1 ? 'call' : 'calls'} graded against the hammer · {hits} of {edge.n} within ±{EDGE_HIT_PCT}%{edge.streak.current >= 2 && <> · <b>{edge.streak.current} hits in a row</b></>}</span>}
             href="#edge" />
         ) : record && record.med != null ? (
@@ -227,7 +240,7 @@ export default function Cockpit() {
             body={<span>{record.n} {record.n === 1 ? 'watch' : 'watches'} judged, all-in{streak && <> · <b>{streak.n} {streak.dir === 'beat' ? 'beat' : 'missed'} in a row</b></>} · no call of yours graded yet</span>}
             href="#record" />
         ) : (
-          <Cell k="Your edge" v="—"
+          <Cell k="Your calls" v="—"
             body={desk.saved.length > 0
               ? 'Grades once a watch settles with a published price against an estimate.'
               : 'Every watch that settles is judged against its estimate — your eye, measured, call by call.'}

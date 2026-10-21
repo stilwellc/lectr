@@ -46,7 +46,7 @@ import { storageGet, storageSet } from '../../lib/safe-storage';
 import { craftTitle, formatPrice } from '../../utils';
 import {
   planWeek, viewOf, pickDefault, ownedWords, dayWords, offsetWord, localClock, houseClock, countdownText, velocityText, bidsText,
-  CLOSING_NOW_MS, NAME_ROWS_OPEN, PICK_ROWS_OPEN, WEEK_DAYS, cityOf, type WeekPlan, type WeekRow, type WeekDay,
+  CLOSING_NOW_MS, NAME_ROWS_OPEN, WATCH_ROWS_OPEN, PICK_ROWS_OPEN, WEEK_DAYS, cityOf, type WeekPlan, type WeekRow, type WeekDay,
 } from './week';
 import { icsCalendar, eventOfRow, icsFileName } from './ics';
 import { ClosingNow } from './closing-now';
@@ -170,13 +170,17 @@ function DayCol({ d, now, titleById, onOpen, open, onMore }: { d: WeekDay; now: 
   const picks = d.rows.filter(r => r.kind === 'pick');
   const names = d.rows.filter(r => r.kind === 'name');
   const yours = d.rows.filter(r => r.kind !== 'name');
+  // (Oct 20) watches fold too: a heavy day no longer runs two screens past its
+  // neighbours — every row is still one tap away behind "+N more"
+  const shownWatches = open ? watches : watches.slice(0, WATCH_ROWS_OPEN);
+  const foldedWatches = watches.length - shownWatches.length;
   const shownPicks = open ? picks : picks.slice(0, PICK_ROWS_OPEN);
   const shownNames = open ? names : names.slice(0, NAME_ROWS_OPEN);
   const foldedPicks = picks.length - shownPicks.length;
   const foldedNames = names.length - shownNames.length;
-  const folded = foldedPicks + foldedNames;
-  const foldable = picks.length > PICK_ROWS_OPEN || names.length > NAME_ROWS_OPEN;
-  const foldWords = [foldedPicks ? `${foldedPicks} ${foldedPicks === 1 ? 'pick' : 'picks'}` : null, foldedNames ? `${foldedNames} of your names` : null].filter(Boolean).join(', ');
+  const folded = foldedWatches + foldedPicks + foldedNames;
+  const foldable = watches.length > WATCH_ROWS_OPEN || picks.length > PICK_ROWS_OPEN || names.length > NAME_ROWS_OPEN;
+  const foldWords = [foldedWatches ? `${foldedWatches} ${foldedWatches === 1 ? 'watch' : 'watches'}` : null, foldedPicks ? `${foldedPicks} ${foldedPicks === 1 ? 'pick' : 'picks'}` : null, foldedNames ? `${foldedNames} of your names` : null].filter(Boolean).join(', ');
   const dayName = `${w.wd} ${w.md}${word ? ` (${word})` : ''}`;
   const sub = d.rows.length
     ? `${d.yours} yours${d.priced ? ` · ${formatPrice(d.estTotal)} at estimate midpoint${d.priced < d.yours ? ` (${d.priced} of ${d.yours} priced)` : ''}` : ''}${d.names ? ` · ${d.names} of your names` : ''}${d.conflicts ? ` · ${d.conflicts} ${d.conflicts === 1 ? 'overlap' : 'overlaps'}` : ''}`
@@ -203,9 +207,9 @@ function DayCol({ d, now, titleById, onOpen, open, onMore }: { d: WeekDay; now: 
       </div>
       {d.rows.length > 0 ? (
         <>
-          {(watches.length > 0 || shownPicks.length > 0) && (
+          {(shownWatches.length > 0 || shownPicks.length > 0) && (
             <ul className="ck-week-rows" aria-label={`Yours on ${w.md}`}>
-              {watches.map(r => <Row key={r.lot.id} r={r} now={now} titleById={titleById} onOpen={onOpen} />)}
+              {shownWatches.map(r => <Row key={r.lot.id} r={r} now={now} titleById={titleById} onOpen={onOpen} />)}
               {shownPicks.map(r => <Row key={r.lot.id} r={r} now={now} titleById={titleById} onOpen={onOpen} />)}
             </ul>
           )}

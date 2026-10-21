@@ -1,31 +1,18 @@
 'use client';
 /**
- * THE SECTION RAIL (Oct 11 2026, /profile redesign) — the desk's in-page
- * index: a sticky pill rail under the site nav (top 64, the nav's height)
- * at EVERY width, scrolling sideways on itself — never on a sticky ancestor.
- * (Oct 11 review: the ≥1160px left-gutter index retired — it revived the
- * spine /value dropped on Aug 29, split the site into two navigation
- * grammars, hid its labels below 1400px and broke the focus order. One rail,
- * in reading order, "Today" first when the band renders.)
+ * THE DESK'S LANDING (Oct 11 2026; Oct 20 the pill rail retired for the tabs,
+ * app/profile/tabs.tsx). What stays here is how a reader lands on a room:
  *
- * Every item is a real hash link (#for-you, #watching …): it jumps, stamps
- * the hash (replaceState, so Back leaves the page rather than walking
- * sections), and the active item tracks the scroll. Items follow each
- * section's own null gate — the page passes only what renders.
- *
- * (Oct 11 review fixes) LANDING: a jump scrolls, then re-anchors on its
- * target for ~8s while the rooms above it settle (ResizeObserver — Names'
- * sold-history reads, Your week's columns change height after the jump),
- * unless the reader takes the wheel; it focuses the section (tabindex −1)
- * so j/k continues from there, and the pill it came from reads as current
- * at once (pinned) rather than wherever the scroll happened to be. The rail
- * shows a › affordance when pills run off the edge. A PHONE gets one row:
- * the current room's name and a "Sections" sheet listing every room (Account
- * too) — thirteen pills in a 362px scroller was a dead end.
+ *   jump(id)       scroll a room (or an anchor in one) under the sticky bar,
+ *                  stamp the hash (replaceState — Back leaves the page), focus
+ *                  it so j/k continue from there, and re-anchor for ~8s while
+ *                  the rooms above settle, unless the reader takes the wheel.
+ *                  A room under another tab: the tab opens first
+ *                  (OPEN_TAB_EVENT), the landing waits for the room to mount,
+ *                  and a room this desk doesn't have says so (MISSING_EVENT).
+ *   useHashLanding a deep link (/profile#budget) lands once the desk is ready.
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { HelpChip } from './help';
-import { FEEDSHEET_CSS } from '../components/FeedToolbar';
+import React, { useEffect, useState } from 'react';
 
 export interface RailItem {
   id: string;
@@ -69,6 +56,7 @@ export function settleOn(el: HTMLElement, ms = SETTLE_MS, startAfter = 0): () =>
   const check = () => {
     raf = 0;
     if (done || !armed) return;
+    if (!el.isConnected) { stop(); return; }   // the room unmounted (a tab switch): never chase a detached node
     const top = el.getBoundingClientRect().top - margin;
     if (Math.abs(top) > 2) window.scrollBy({ top, behavior: 'auto' });
   };
@@ -103,9 +91,48 @@ export function focusSection(el: HTMLElement): void {
 /** scroll a section into view and stamp its hash (replaceState — Back
  *  leaves the page rather than walking sections); then hold the landing
  *  while the page settles and focus the section */
-export function jump(id: string, opts: { focus?: boolean } = {}) {
+/** a jump to a room under another tab: the desk switches tab (tabs.tsx
+ *  listens), then the jump retries once the room has mounted */
+export const OPEN_TAB_EVENT = 'lectr:open-tab';
+/** a jump that found no room (its tab opened, the room isn't on this desk) */
+export const MISSING_EVENT = 'lectr:missing-room';
+
+/** the pending cross-tab landing, if any — a newer jump always cancels it */
+let stopOpen: (() => void) | null = null;
+
+export function jump(id: string, opts: { focus?: boolean; retried?: boolean } = {}) {
+  if (!opts.retried) { stopOpen?.(); stopOpen = null; }
   const el = document.getElementById(id);
-  if (!el) return;
+  if (!el) {
+    if (opts.retried) return;
+    window.dispatchEvent(new CustomEvent(OPEN_TAB_EVENT, { detail: { id } }));
+    // the tab commits, then the room mounts (some rooms render their section
+    // late, after data) — poll for it, then land; give up quietly after 3s
+    let n = 0;
+    const stop = () => { window.clearInterval(t); for (const ev of INTENTS) window.removeEventListener(ev, stop); if (stopOpen === stop) stopOpen = null; };
+    const t = window.setInterval(() => {
+      if (document.getElementById(id)) { stop(); jump(id, { ...opts, retried: true }); return; }
+      if (++n < 30) return;
+      // never landed (the room isn't on this desk): say so where the reader
+      // now is — the hash names the room, the panel takes focus, the missing
+      // line explains how it fills — never strand them on a blank tab
+      stop();
+      try { window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}#${id}`); } catch { /* ignore */ }
+      window.dispatchEvent(new CustomEvent(MISSING_EVENT, { detail: { id } }));
+      // land on the explanation itself (it mounts on this event), else the panel
+      // two frames: the event schedules MissingLanding's render, then it paints
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const note = document.querySelector<HTMLElement>('.ck-landnote') ?? document.getElementById('dt-panel');
+        if (!note) return;
+        note.scrollIntoView({ block: 'start', behavior: 'auto' });
+        focusSection(note);
+      }));
+    }, 100);
+    stopOpen = stop;
+    // the reader starts scrolling or typing: they've moved on, don't yank them later
+    for (const ev of INTENTS) window.addEventListener(ev, stop, { passive: true });
+    return;
+  }
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
   try { window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}#${id}`); } catch { /* ignore */ }
@@ -113,218 +140,8 @@ export function jump(id: string, opts: { focus?: boolean } = {}) {
   if (opts.focus !== false) focusSection(el);
   settleOn(el, SETTLE_MS, reduce ? 0 : 700);
 }
-
-function useActive(ids: string[]): string | null {
-  const [active, setActive] = useState<string | null>(null);
-  const key = ids.join('|');
-  useEffect(() => {
-    let raf = 0;
-    const read = () => {
-      raf = 0;
-      const bar = window.innerHeight * 0.34;
-      let cur: string | null = null;
-      for (const id of ids) {
-        const el = document.getElementById(id);
-        if (el && el.getBoundingClientRect().top <= bar) cur = id;
-      }
-      setActive(cur);
-    };
-    const on = () => { if (!raf) raf = requestAnimationFrame(read); };
-    read();
-    window.addEventListener('scroll', on, { passive: true });
-    window.addEventListener('resize', on, { passive: true });
-    // sections above grow as data lands (picks, the Today band) — re-read
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(on) : null;
-    ro?.observe(document.body);
-    return () => { window.removeEventListener('scroll', on); window.removeEventListener('resize', on); ro?.disconnect(); if (raf) cancelAnimationFrame(raf); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-  return active;
-}
-
-/** the pill a jump came from reads as current at once — the scroll read
- *  takes over when the reader moves (or after the landing settles) */
-function usePinned(): string | null {
-  const [pinned, setPinned] = useState<string | null>(null);
-  useEffect(() => {
-    let t = 0;
-    const clear = () => { setPinned(null); window.clearTimeout(t); };
-    const onJump = (e: Event) => {
-      const id = (e as CustomEvent<{ id: string }>).detail?.id;
-      if (!id) return;
-      setPinned(id);
-      window.clearTimeout(t);
-      t = window.setTimeout(clear, SETTLE_MS);
-    };
-    window.addEventListener(JUMP_EVENT, onJump);
-    for (const ev of INTENTS) window.addEventListener(ev, clear, { passive: true });
-    return () => { window.removeEventListener(JUMP_EVENT, onJump); for (const ev of INTENTS) window.removeEventListener(ev, clear); window.clearTimeout(t); };
-  }, []);
-  return pinned;
-}
-
-function useMedia(q: string): boolean {
-  const [m, setM] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia(q);
-    const on = () => setM(mq.matches);
-    on();
-    mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
-  }, [q]);
-  return m;
-}
-
-const toneInk = (t?: 'up' | 'down') => (t === 'up' ? 'var(--color-up)' : t === 'down' ? 'var(--color-down-text)' : undefined);
-
-/** the phone's Sections sheet: every room on this desk (Account too), the
- *  current one marked; tap → jump + close. Reuses the feed sheet grammar. */
-function SectionsSheet({ items, current, onPick, onClose }: { items: RailItem[]; current: string | null; onPick: (id: string) => void; onClose: () => void }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
-    const first = ref.current?.querySelector<HTMLElement>('[aria-current="true"]') ?? ref.current?.querySelector<HTMLElement>('button');
-    first?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } };
-    document.addEventListener('keydown', onKey);
-    const html = document.documentElement;
-    const over = html.style.overflow;
-    html.style.overflow = 'hidden';
-    return () => { document.removeEventListener('keydown', onKey); html.style.overflow = over; prev?.focus?.(); };
-  }, [onClose]);
-  return (
-    <div className="ray-feedsheet-scrim ck-rail-scrim" role="presentation" onClick={onClose}>
-      <style dangerouslySetInnerHTML={{ __html: FEEDSHEET_CSS }} />
-      <div ref={ref} className="ray-feedsheet ck-rail-sheet" role="dialog" aria-modal="true" aria-label="Sections on this page" onClick={e => e.stopPropagation()}>
-        <div className="ray-feedsheet-grip" aria-hidden="true" />
-        <div className="ray-feedsheet-body">
-          <div className="ray-feedsheet-head">Sections</div>
-          <div className="ck-rail-sheet-list" role="list">
-            {items.map((it, i) => (
-              <React.Fragment key={it.id}>
-                {i > 0 && it.group && items[i - 1].group && it.group !== items[i - 1].group && <i className="ck-rail-sheet-sep" aria-hidden />}
-                <button type="button" role="listitem" className="ck-rail-sheet-row" aria-current={current === it.id ? 'true' : undefined}
-                  data-quiet={it.quiet || undefined} onClick={() => onPick(it.id)}>
-                  <span>{it.label}</span>
-                  {it.count != null && !it.quiet && <b style={{ color: toneInk(it.tone) }}>{it.count}</b>}
-                  {it.quiet && <small>nothing here yet</small>}
-                  {it.dot && <i className="ck-rail-dot" aria-label="new matches" />}
-                </button>
-              </React.Fragment>
-            ))}
-          </div>
-          <p className="ck-rail-sheet-note">Tap a section to jump to it — the address bar follows you.</p>
-        </div>
-        <div className="ray-feedsheet-foot">
-          <button type="button" className="ray-feedsheet-done" onClick={onClose}>Close</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** the sticky pill rail. Place it as a direct child of the page-long
- *  wrapper so it stays pinned past every section. */
-export function PillRail({ items, help, tail = [] }: { items: RailItem[];
-  /** the how-to-read strip behind the rail's (?) — the keys legend */
-  help?: React.ReactNode;
-  /** rooms with no pill that the phone's Sections sheet still lists (Account) */
-  tail?: RailItem[] }) {
-  const scrolled = useActive(items.map(i => i.id).concat(tail.map(i => i.id)));
-  const pinned = usePinned();
-  const active = pinned ?? scrolled;
-  const phone = useMedia('(max-width: 639.98px)');
-  const touch = useMedia('(hover: none) and (pointer: coarse)');
-  const [sheet, setSheet] = useState(false);
-  const closeSheet = useCallback(() => setSheet(false), []);
-  // keep the active pill in view inside the rail's own sideways scroll
-  useEffect(() => {
-    if (!active) return;
-    const pill = document.querySelector<HTMLElement>(`.ck-rail a[data-id="${active}"]`);
-    const rail = pill?.parentElement;
-    if (!pill || !rail || rail.scrollWidth <= rail.clientWidth) return;
-    const l = pill.offsetLeft - rail.offsetLeft, r = l + pill.offsetWidth;
-    // near or past either edge (under the fade): bring it to the middle
-    if (l < rail.scrollLeft + 32 || r > rail.scrollLeft + rail.clientWidth - 32) {
-      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      rail.scrollTo({ left: Math.max(0, l - (rail.clientWidth - pill.offsetWidth) / 2), behavior: reduce ? 'auto' : 'smooth' });
-    }
-  }, [active]);
-  // the rail scrolls sideways on itself when its pills outrun the width: a
-  // soft fade on the side that has more says so (never a cut pill edge), and
-  // a › at the edge scrolls the rail a page
-  const railRef = useRef<HTMLDivElement | null>(null);
-  const [edge, setEdge] = useState<{ l: boolean; r: boolean }>({ l: false, r: false });
-  useEffect(() => {
-    const el = railRef.current;
-    if (!el) return;
-    const read = () => {
-      const l = el.scrollLeft > 4, r = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
-      setEdge(e => (e.l === l && e.r === r ? e : { l, r }));
-    };
-    read();
-    el.addEventListener('scroll', read, { passive: true });
-    window.addEventListener('resize', read, { passive: true });
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(read) : null;
-    ro?.observe(el);
-    return () => { el.removeEventListener('scroll', read); window.removeEventListener('resize', read); ro?.disconnect(); };
-  }, [items.length, phone]);
-  const page = (dir: 1 | -1) => {
-    const el = railRef.current;
-    if (!el) return;
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    el.scrollBy({ left: dir * Math.max(120, el.clientWidth * 0.7), behavior: reduce ? 'auto' : 'smooth' });
-  };
-  if (items.length < 2) return null;
-  const all = items.concat(tail);
-  const cur = all.find(i => i.id === active) ?? null;
-
-  if (phone) {
-    // PHONE: one row — where you are, and the Sections sheet
-    return (
-      <nav className="ck-rail-wrap" data-phone="" aria-label="Sections on this page">
-        <div className="ck-rail-now rail">
-          <span className="ck-rail-here" aria-live="polite">
-            {cur ? <>{cur.label}{cur.count != null && !cur.quiet && <b style={{ color: toneInk(cur.tone) }}>{cur.count}</b>}</> : 'Your desk'}
-          </span>
-          <button type="button" className="ck-rail-pill ck-rail-open" aria-haspopup="dialog" aria-expanded={sheet} onClick={() => setSheet(true)}>
-            Sections <b>{all.length}</b>
-          </button>
-        </div>
-        {sheet && <SectionsSheet items={all} current={active} onPick={id => { setSheet(false); window.setTimeout(() => jump(id), 30); }} onClose={closeSheet} />}
-      </nav>
-    );
-  }
-  return (
-    <nav className="ck-rail-wrap" aria-label="Sections on this page">
-      {edge.l && <button type="button" className="ck-rail-more" data-dir="l" aria-label="Earlier sections" onClick={() => page(-1)}>‹</button>}
-      <div ref={railRef} className="ck-rail rail" data-fade-l={edge.l || undefined} data-fade-r={edge.r || undefined}>
-        {items.map((it, i) => (
-          <React.Fragment key={it.id}>
-          {i > 0 && it.group && items[i - 1].group && it.group !== items[i - 1].group && <i className="ck-rail-sep" aria-hidden />}
-          <a href={`#${it.id}`} data-id={it.id} className="ck-rail-pill" aria-current={active === it.id ? 'true' : undefined}
-            data-quiet={it.quiet || undefined} title={it.quiet ? `${it.hint ? `${it.hint} · ` : ''}nothing here yet` : it.hint}
-            onClick={e => { e.preventDefault(); jump(it.id); }}>
-            {it.label}
-            {it.count != null && !it.quiet && <b style={{ color: toneInk(it.tone) }}>{it.count}</b>}
-            {it.dot && <i className="ck-rail-dot" aria-label="new matches" />}
-          </a>
-          </React.Fragment>
-        ))}
-      </div>
-      {edge.r && <button type="button" className="ck-rail-more" data-dir="r" aria-label="More sections" onClick={() => page(1)}>›</button>}
-      {/* the keys legend rides outside the scroller, so it never scrolls away;
-          on a touch device the chord copy means nothing — the chip says what a tap does */}
-      {help && (
-        <div className="ck-rail-help">
-          <HelpChip name="the keys" stripStyle={{ position: 'absolute', left: 0, right: 0, top: '100%', margin: 0 }}>
-            {touch ? <>Tap a pill to jump to its room — the address bar follows you. A room this desk doesn&rsquo;t have yet is listed at the end of the page with the tap that fills it.</> : help}
-          </HelpChip>
-        </div>
-      )}
-    </nav>
-  );
-}
+/* (Oct 20 2026) the 14-pill PillRail, its phone Sections sheet and their
+   useActive/usePinned/useMedia helpers retired with the desk tabs (tabs.tsx). */
 
 /** a deep link (/profile#settled) arrives before its section exists — the
  *  desk renders after the saves resolve — so land on it once it does.
@@ -336,7 +153,8 @@ export function useHashLanding(ready: boolean): string | null {
   useEffect(() => {
     if (!ready || done.current) return;
     const id = decodeURIComponent(window.location.hash.slice(1));
-    if (!id) { done.current = true; return; }
+    // a tab's own hash (#tab-watching) opens the tab — there is no room to land on
+    if (!id || id.startsWith('tab-')) { done.current = true; return; }
     let tries = 0;
     let stop: (() => void) | null = null;
     const t = window.setInterval(() => {

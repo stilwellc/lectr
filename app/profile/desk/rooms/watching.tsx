@@ -142,6 +142,7 @@ export default function WatchingRoom(_p: SectionProps) {
   const { upcoming, summary, room, ledgerCols, signalById, metaFor, allLots, isSaved, savedIdOf, toggle, onCardToggle } = i;
 
   const [savedView, setSavedView] = useState<SavedView>('ledger');
+  const [closersOpen, setClosersOpen] = useState(false);
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
@@ -260,7 +261,17 @@ export default function WatchingRoom(_p: SectionProps) {
         } />
       {/* (Phase 2) CLOSING NOW — the ≤24h closers as a live ticker row,
           countdown + bids + decision line, above the ledger */}
-      {closingNow.rows.length > 0 && <ClosingNow desk={desk} act={act} narrow={narrow} />}
+      {/* (Oct 20) in the Ledger view the closers' rows lead the ledger already —
+          the bid cards fold to one line (one tap opens them, bid buttons and all);
+          the Cards view keeps them open */}
+      {closingNow.rows.length > 0 && (savedView === 'cards' || closersOpen
+        ? <ClosingNow desk={desk} act={act} narrow={narrow} />
+        : (
+          <p className="ck-head-sub ck-closers-line">
+            {closingNow.rows.length} {closingNow.rows.length === 1 ? 'watch closes' : 'watches close'} in the next 24h ·{' '}
+            <button type="button" className="ck-deskdetails-btn" aria-expanded={false} onClick={() => setClosersOpen(true)}>Show the bid cards</button>
+          </p>
+        ))}
       {/* desktop ledger */}
       {/* a column with nothing in it on any row folds away (legacy saves
           carry no direction, so Δ saved can be all dashes) */}

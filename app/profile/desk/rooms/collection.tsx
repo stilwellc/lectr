@@ -76,6 +76,7 @@ export default function CollectionRoom(_p: SectionProps) {
   const { collection, collectionChart, exposure, fullLoaded, fullError, fullSlow, setSavedFields } = i;
   // which collection piece has its cost-basis/note editor open
   const [editPiece, setEditPiece] = useState<string | null>(null);
+  const [piecesOpen, setPiecesOpen] = useState(false);
   return (
     <div id="collection" className="ray-band ray-enter" style={{ marginTop: 30, paddingBlock: '28px 30px' }}>
       <section className="rail" aria-label="Your collection">
@@ -163,6 +164,17 @@ export default function CollectionRoom(_p: SectionProps) {
           </div>
         )}
 
+        {/* (Oct 20) Portfolio, above, lists every piece; here the list folds to one
+            line — one tap opens it with the edit tools (what you paid, your note) */}
+        {!piecesOpen && collection.rows.length === 0 ? null : !piecesOpen ? (
+          <p className="ck-head-sub" style={{ margin: '14px 0 0' }}>
+            {collection.rows.length} {collection.rows.length === 1 ? 'piece is' : 'pieces are'} listed under Portfolio ·{' '}
+            <button type="button" className="ck-deskdetails-btn" aria-expanded={false} onClick={() => setPiecesOpen(true)}>
+              Show them here to edit what you paid and your notes
+            </button>
+          </p>
+        ) : (
+          <>
         <div className="kicker ck-piece-head" style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '14px 0 6px', color: 'var(--paper-muted, var(--color-text-muted))' }}>
           <div style={{ flex: 1 }}>Piece</div>
           <div style={{ width: 92, textAlign: 'right' }}>Bought</div>
@@ -222,6 +234,8 @@ export default function CollectionRoom(_p: SectionProps) {
             </React.Fragment>
           ))}
         </div>
+          </>
+        )}
         <p style={{ fontSize: 11.5, color: 'var(--color-text-muted)', margin: '14px 0 0' }}>
           The engine&rsquo;s mark is the median its comparable sales currently trade at — our read from the data,
           not a formal appraisal. The marked total covers only the pieces with a usable comp pool (the count says

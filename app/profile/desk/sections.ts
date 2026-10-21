@@ -42,6 +42,30 @@ import NamesSection, { meta as namesMeta } from '../names';
 import EdgeSection, { meta as edgeMeta } from '../edge';
 
 export type SectionGroup = 'now' | 'picks' | 'desk';
+
+/* ── THE TABS (Oct 20 2026) ────────────────────────────────────────────────
+   The desk was ONE 24,000px column — 14 rooms stacked, a 27-screen scroll on
+   desktop and 26 on a phone ("horrible and unusable"). The rooms now live in
+   six tabs; the page mounts ONE tab's rooms at a time. Nothing is removed:
+   every room mounts under its tab, every #anchor / g-chord still lands (the
+   jump switches tab first, then scrolls), and Account rides under every tab. */
+export type DeskTab = 'today' | 'watching' | 'for-you' | 'names' | 'owned' | 'record';
+export interface DeskTabDef { id: DeskTab; label: string }
+export const TABS: readonly DeskTabDef[] = [
+  { id: 'today', label: 'Today' },
+  { id: 'watching', label: 'Watching' },
+  { id: 'for-you', label: 'For you' },
+  { id: 'names', label: 'Names' },
+  { id: 'owned', label: 'Collection' },
+  { id: 'record', label: 'Record' },
+];
+/** a tab whose id isn't its namesake room's */
+const NAMESAKE: Partial<Record<DeskTab, string>> = { owned: 'collection' };
+/** a tab whose rooms read best in another order than the desk's (Record leads
+ *  with your calls — the record room's figures live on other tabs too) */
+export const TAB_ORDER: Partial<Record<DeskTab, readonly string[]>> = { record: ['edge', 'record'] };
+/** the rooms that ride under every tab (no tab of their own) */
+export const EVERY_TAB = new Set(['account', 'becomes']);
 export type MarkComponent = React.ComponentType<{ size?: number; className?: string }>;
 
 /** what a room is once it has data, and the ONE tap that starts filling it —
@@ -60,6 +84,8 @@ export interface DeskSection {
   label: string;
   key: string;
   group: SectionGroup;
+  /** the tab this room lives under (EVERY_TAB rooms: the first tab, rendered under all) */
+  tab: DeskTab;
   mark?: MarkComponent;
   Component: React.ComponentType<SectionProps> | null;
   meta: (desk: DeskData, i: DeskInternals) => SectionMeta | null;
@@ -85,7 +111,7 @@ const edgeWhen = (d: DeskData): boolean => d.saved.length > 0;
 /** the tap that fills each room — "Watch" buttons live on this page (the
  *  picks' bookmark), /value has today's below-market lots and tonight's
  *  closers, /receipts the engine's own settled record */
-const WATCH_TAP = { label: 'Watch a lot below', href: '#for-you' };
+const WATCH_TAP = { label: 'Watch a lot from For you', href: '#for-you' };
 const FILLS: Record<string, SectionFill> = {
   week: { text: 'every close of yours — watches, picks, the sales of your names — day by day', how: 'it fills as you watch lots and follow names', tap: WATCH_TAP },
   watching: { text: 'your live lots: signals and bids tracked to the hammer', how: 'bookmark any lot on lectr and it lands here', tap: WATCH_TAP },
@@ -102,30 +128,30 @@ const FILLS: Record<string, SectionFill> = {
 const noPill = (): SectionMeta | null => null;
 /** a reserved Phase-2 slot: nothing mounts, no pill, the key is spoken for */
 /** a reserved slot for a section still to come: nothing mounts, no pill, the key is spoken for */
-export const slot = (id: string, label: string, key: string, group: SectionGroup, mark: MarkComponent): DeskSection =>
-  ({ id, label, key, group, mark, Component: null, meta: noPill });
+export const slot = (id: string, label: string, key: string, group: SectionGroup, mark: MarkComponent, tab: DeskTab): DeskSection =>
+  ({ id, label, key, group, tab, mark, Component: null, meta: noPill });
 
 export const SECTIONS: readonly DeskSection[] = [
-  { id: 'today', label: 'Today', key: 't', group: 'now', mark: AwayMark, Component: Today, meta: todayMeta },
+  { id: 'today', label: 'Today', key: 't', group: 'now', tab: 'today', mark: AwayMark, Component: Today, meta: todayMeta },
   // the hammer timeline: watches, picks and the sales of your names, day by day
-  { id: 'week', label: 'Your week', key: 'd', group: 'now', mark: HorizonMark, Component: WeekSection, meta: weekMeta, when: weekWhen, fill: FILLS.week },
-  { id: 'watching', label: 'Watching', key: 'w', group: 'now', mark: WatchMark, Component: WatchingRoom, meta: watchingMeta,
+  { id: 'week', label: 'Your week', key: 'd', group: 'now', tab: 'watching', mark: HorizonMark, Component: WeekSection, meta: weekMeta, when: weekWhen, fill: FILLS.week },
+  { id: 'watching', label: 'Watching', key: 'w', group: 'now', tab: 'watching', mark: WatchMark, Component: WatchingRoom, meta: watchingMeta,
     when: (_d, i) => i.deskView && i.upcoming.length > 0, fill: FILLS.watching },
   // the picks group: Lots you may like → For your collection → How your picks did (one pill)
-  { id: 'for-you', label: 'For you', key: 'f', group: 'picks', mark: RankMark, Component: PicksGroup, meta: picksMeta },
+  { id: 'for-you', label: 'For you', key: 'f', group: 'picks', tab: 'for-you', mark: RankMark, Component: PicksGroup, meta: picksMeta },
   // signed out: the slim sign-in line sits right after the picks — after value, never before it
-  { id: 'signin', label: 'Sign in', key: '', group: 'picks', Component: SignIn, meta: noPill, when: signinWhen },
-  { id: 'budget', label: 'Budget', key: 'b', group: 'picks', mark: GapMark, Component: BudgetDesk, meta: budgetMeta, when: budgetWhen, fill: FILLS.budget },
-  { id: 'portfolio', label: 'Portfolio', key: 'p', group: 'picks', mark: IndexLabMark, Component: Portfolio, meta: portfolioMeta, when: portfolioWhen, fill: FILLS.portfolio },
-  { id: 'market', label: 'Market', key: 'm', group: 'picks', mark: MoversMark, Component: Market, meta: marketMeta, fill: FILLS.market },
-  { id: 'names', label: 'Names', key: 'n', group: 'picks', mark: SalesMark, Component: NamesSection, meta: namesMeta, when: namesWhen, fill: FILLS.names },
-  { id: 'signals', label: 'Signals', key: 's', group: 'picks', mark: SignalMark, Component: Signals, meta: signalsMeta },
-  { id: 'record', label: 'Record', key: 'r', group: 'desk', mark: RecordMark, Component: RecordRoom, meta: recordMeta, when: recordWhen, fill: FILLS.record },
-  { id: 'edge', label: 'Edge', key: 'e', group: 'desk', mark: CalibrationMark, Component: EdgeSection, meta: edgeMeta, when: edgeWhen, fill: FILLS.edge },
-  { id: 'collection', label: 'Collection', key: 'c', group: 'desk', mark: CollectionMark, Component: CollectionRoom, meta: collectionMeta, when: collectionWhen, fill: FILLS.collection },
-  { id: 'history', label: 'History', key: 'h', group: 'desk', mark: TapeMark, Component: HistoryRoom, meta: historyMeta, when: historyWhen, fill: FILLS.history },
-  { id: 'becomes', label: 'What else this page becomes', key: '', group: 'desk', Component: Becomes, meta: becomesMeta, when: becomesWhen },
-  { id: 'account', label: 'Account', key: 'a', group: 'desk', Component: AccountStrip, meta: accountMeta },
+  { id: 'signin', label: 'Sign in', key: '', group: 'picks', tab: 'for-you', Component: SignIn, meta: noPill, when: signinWhen },
+  { id: 'budget', label: 'Budget', key: 'b', group: 'picks', tab: 'watching', mark: GapMark, Component: BudgetDesk, meta: budgetMeta, when: budgetWhen, fill: FILLS.budget },
+  { id: 'portfolio', label: 'Portfolio', key: 'p', group: 'picks', tab: 'owned', mark: IndexLabMark, Component: Portfolio, meta: portfolioMeta, when: portfolioWhen, fill: FILLS.portfolio },
+  { id: 'market', label: 'Market', key: 'm', group: 'picks', tab: 'names', mark: MoversMark, Component: Market, meta: marketMeta, fill: FILLS.market },
+  { id: 'names', label: 'Names', key: 'n', group: 'picks', tab: 'names', mark: SalesMark, Component: NamesSection, meta: namesMeta, when: namesWhen, fill: FILLS.names },
+  { id: 'signals', label: 'Signals', key: 's', group: 'picks', tab: 'for-you', mark: SignalMark, Component: Signals, meta: signalsMeta },
+  { id: 'record', label: 'Record', key: 'r', group: 'desk', tab: 'record', mark: RecordMark, Component: RecordRoom, meta: recordMeta, when: recordWhen, fill: FILLS.record },
+  { id: 'edge', label: 'Your calls', key: 'e', group: 'desk', tab: 'record', mark: CalibrationMark, Component: EdgeSection, meta: edgeMeta, when: edgeWhen, fill: FILLS.edge },
+  { id: 'collection', label: 'Collection', key: 'c', group: 'desk', tab: 'owned', mark: CollectionMark, Component: CollectionRoom, meta: collectionMeta, when: collectionWhen, fill: FILLS.collection },
+  { id: 'history', label: 'History', key: 'h', group: 'desk', tab: 'owned', mark: TapeMark, Component: HistoryRoom, meta: historyMeta, when: historyWhen, fill: FILLS.history },
+  { id: 'becomes', label: 'What else this page becomes', key: '', group: 'desk', tab: 'today', Component: Becomes, meta: becomesMeta, when: becomesWhen },
+  { id: 'account', label: 'Account', key: 'a', group: 'desk', tab: 'today', Component: AccountStrip, meta: accountMeta },
 ];
 
 /** the sections that mount on this desk, in order. ONE rule bends the
@@ -188,4 +214,60 @@ export function sectionByKey(key: string): DeskSection | undefined {
 export function keysLegend(mounted: readonly DeskSection[]): { key: string; label: string; live: boolean }[] {
   const live = new Set(mounted.map(s => s.id));
   return SECTIONS.filter(s => s.key).map(s => ({ key: s.key, label: s.label, live: live.has(s.id) }));
+}
+
+/** anchors INSIDE a room (links and deep links point at them) → the room that holds them */
+export const SUB_ANCHORS: Readonly<Record<string, string>> = {
+  settled: 'history', inbox: 'signals', 'on-device': 'signals', 'for-collection': 'for-you', 'pick-outcomes': 'for-you',
+};
+/** a tab's own hash ('#tab-watching') — never a room id, so a tab click can't
+ *  land on (or report missing) the room that happens to share its name */
+export const TAB_HASH = 'tab-';
+export const tabHash = (t: DeskTab) => `${TAB_HASH}${t}`;
+
+/** the tab an id lives under — a tab hash (tab-x), a room id, or an anchor
+ *  inside a room (settled, inbox, week-2026-10-20 …); null for an unknown id
+ *  or a room that rides under every tab */
+export function tabOf(id: string | null | undefined): DeskTab | null {
+  if (!id) return null;
+  if (id.startsWith(TAB_HASH)) {
+    const t = TABS.find(x => x.id === id.slice(TAB_HASH.length));
+    return t ? t.id : null;
+  }
+  const owner = SUB_ANCHORS[id] ?? (id.startsWith('week-') ? 'week' : id);
+  const sec = SECTIONS.find(x => x.id === owner);
+  if (sec) return EVERY_TAB.has(sec.id) ? null : sec.tab;
+  const t = TABS.find(x => x.id === id);
+  return t ? t.id : null;
+}
+
+export interface TabItem extends DeskTabDef {
+  /** the tab's lead number (its first room's pill count) */
+  count?: React.ReactNode;
+  tone?: 'up' | 'down';
+  dot?: boolean;
+  /** the rooms mounted under it, as rail items (the in-tab jump row) */
+  items: RailItem[];
+  /** nothing mounted under it on this desk */
+  empty: boolean;
+}
+
+/** the tab bar for this desk: every tab (an empty one stays — it explains how it fills) */
+export function tabItemsOf(desk: DeskData, i: DeskInternals): TabItem[] {
+  const rail = railItemsOf(desk, i);
+  const mounted = mountedSections(desk, i);
+  return TABS.map(t => {
+    const ids = new Set(mounted.filter(s => s.tab === t.id && !EVERY_TAB.has(s.id)).map(s => s.id));
+    const order = TAB_ORDER[t.id];
+    // the pills read in the order the panel mounts the rooms
+    const items = rail.filter(r => ids.has(r.id)).sort((a, b) => (order ? order.indexOf(a.id) - order.indexOf(b.id) : 0));
+    // the tab's number is its namesake room's (Watching = the lots you watch,
+    // not every close of the week; Collection = the Collection room), else its
+    // first room with a count
+    const ns = NAMESAKE[t.id] ?? t.id;
+    const lead = items.find(r => r.id === ns && r.count != null && !r.quiet) ?? items.find(r => r.count != null && !r.quiet);
+    // empty = no room under it has anything to say (a room can mount and
+    // render nothing: Today with no closes, Market with no names)
+    return { ...t, count: lead?.count, tone: lead?.tone, dot: items.some(r => r.dot), items, empty: items.length === 0 };
+  });
 }

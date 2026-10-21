@@ -25,20 +25,21 @@ function lot(p: Partial<AuctionLot> & { id: string }): AuctionLot {
 const meta = (savedAt: string): SavedMeta => ({ savedAt, estMid: null, signalPct: null, bidCount: null });
 const noFollows: Follow[] = [];
 
-test('watching = Σ estimate midpoint over the live watches that carry one; lots counts every live watch', () => {
+test('watching = the masthead basis: Σ two-sided midpoints; a one-bound estimate is counted, never summed; lots counts every live watch', () => {
   const n = cardNumbersOf({
     now: NOW, follows: noFollows, record: { n: 0, med: null }, graded: 0,
     saved: [
       lot({ id: 'a' }),                                                  // mid 10,000
-      lot({ id: 'b', estimateLow: 5000, estimateHigh: null }),           // one-sided: 5,000
+      lot({ id: 'b', estimateLow: 5000, estimateHigh: null }),           // one-sided: counted, not summed
       lot({ id: 'c', estimateLow: null, estimateHigh: null }),           // live, unpriced
       lot({ id: 'd', status: 'sold', priceUsd: 9000, saleDate: '2026-09-01' }),  // settled: not watching
     ],
     metaFor: () => null,
   });
   assert.equal(n.watchingLots, 3);
-  assert.equal(n.watchingPriced, 2);
-  assert.equal(n.watchingUsd, 15000);
+  assert.equal(n.watchingPriced, 1);
+  assert.equal(n.watchingOneSided, 1);
+  assert.equal(n.watchingUsd, 10000);
   assert.equal(n.dateLabel, 'Oct 11, 2026');
 });
 
@@ -124,4 +125,16 @@ test('an empty block prints an em dash, never $0', () => {
   assert.equal(l.sub, 'nothing on the block');
   assert.equal(CARD_W, 1200);
   assert.equal(CARD_H, 630);
+});
+
+test('the card counts the masthead\'s set: a lot whose sale day is today stays counted until its pending window ends (Oct 20)', () => {
+  const todayLot = lot({ id: 'today', saleDate: new Date(NOW).toISOString().slice(0, 10), estimateLow: 1000, estimateHigh: 3000 });
+  const n = cardNumbersOf({ now: NOW, follows: noFollows, record: { n: 0, med: null }, graded: 0, saved: [lot({ id: 'a' }), todayLot], metaFor: () => null });
+  assert.equal(n.watchingLots, 2);
+  assert.equal(n.watchingPriced, 2);
+});
+
+test('the card says a one-bound estimate is counted, not summed — the masthead\'s words', () => {
+  const l = cardLines({ watchingLots: 3, watchingUsd: 10000, watchingPriced: 1, watchingOneSided: 1, record: { n: 0, med: null }, graded: 0, names: ['KAWS'], dateLabel: 'Oct 20, 2026' });
+  assert.match(l.sub, /1 of 3 priced, at estimate midpoint · 1 from one bound, not summed/);
 });
