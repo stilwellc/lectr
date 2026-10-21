@@ -5536,7 +5536,7 @@ html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] > .ray-band { bo
 .ck-page .ray-savedrow > .work.ck-ph { align-items: center; row-gap: 2px; }
 .ck-page .ray-savedrow > .work.ck-ph > .ck-thumb { grid-row: 1 / span 3; align-self: center; }
 .ck-page .ck-mrow > .ck-thumb { align-self: center; }
-.ck-page .pe-rrow:has(.ck-thumb) { align-items: center; }
+@media (min-width: 640px) { .ck-page .pe-rrow:has(.ck-thumb) { align-items: center; } }
 /* (one job per tab) eight tabs: a phone shows them 4×2, the count under the word */
 @media (max-width: 639.98px) {
   .dt-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
