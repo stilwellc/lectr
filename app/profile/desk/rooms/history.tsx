@@ -5,6 +5,7 @@
  * page (LedgerGate) only when there are orphans to resolve; a fetch in
  * flight or failed is never printed as "withdrawn".
  */
+import { Thumb, SigPill } from '../thumb';
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { retrySoldLedger, useSoldLedger } from '../../../hooks/useRayData';
@@ -114,7 +115,8 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
   const pending = !lot.priceUsd;
   if (mobile) {
     return (
-      <div className="ray-settled-mrow">
+      <div className="ray-settled-mrow ck-ph" style={{ '--ph': '56px' } as React.CSSProperties}>
+        <Thumb src={lot.imageUrl} label={lot.title} size={56} />
         <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
           <div className="ck-mtitle">{craftTitle(lot.title, lot.auctionHouse)}</div>
         </Link>
@@ -125,7 +127,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
               <>
                 <b>{fmtFace(lot.priceUsd!)}</b>
                 {pct != null && (
-                  <b style={{ marginLeft: 6, color: pct > 0 ? 'var(--color-up)' : pct < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)' }}>{fmtSignedPct(Math.round(pct))}</b>
+                  <span style={{ marginLeft: 6 }}><SigPill dir={pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat'} title="the hammer vs the estimate">{fmtSignedPct(Math.round(pct))}</SigPill></span>
                 )}
               </>
             )}
@@ -153,8 +155,9 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
           {makerLineOf(lot).name || '—'}
         </Link>
       </span>
-      <span className="work">
-        <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+      <span className="work ck-ph" style={{ '--ph': '40px', alignItems: 'center' } as React.CSSProperties}>
+        <Thumb src={lot.imageUrl} label={lot.title} size={40} />
+        <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none', alignSelf: 'center', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {craftTitle(lot.title, lot.auctionHouse)}
         </Link>
       </span>
@@ -163,8 +166,8 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
       <span className="num" style={{ fontWeight: 600 }}>
         {pending ? <span style={{ color: 'var(--color-text-faint)', fontWeight: 500 }}>pending</span> : fmtFace(lot.priceUsd!)}
       </span>
-      <span className="num" style={pct != null ? { color: pct > 0 ? 'var(--color-up)' : pct < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 700 } : { color: 'var(--color-text-faint)' }}>
-        {pct != null ? fmtSignedPct(Math.round(pct)) : '—'}
+      <span className="num" style={pct != null ? undefined : { color: 'var(--color-text-faint)' }}>
+        {pct != null ? <SigPill dir={pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat'}>{fmtSignedPct(Math.round(pct))}</SigPill> : '—'}
       </span>
       <span style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
         {pending ? (

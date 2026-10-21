@@ -15,6 +15,7 @@
  * watch) — a phone collector can un-watch from the desk; the Ledger / Cards
  * toggle stays reachable at every width.
  */
+import { Thumb, SigPill } from '../thumb';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../../../types';
@@ -317,7 +318,8 @@ export default function WatchingRoom(_p: SectionProps) {
                 <span className="ck-why">
                   {reason && <span className="ck-tag" data-tone={reason.tag === 'Below market' ? 'up' : reason.tag === 'Lands soon' ? 'hot' : undefined}>{reason.tag}</span>}
                 </span>
-                <span className="work">
+                <span className="work ck-ph" style={{ '--ph': '52px' } as React.CSSProperties}>
+                  <Thumb src={lot.imageUrl} label={lot.title} size={52} tone={sig?.label === 'Below Market' ? 'up' : undefined} />
                   {displayMakerOf(lot) && <span className="ck-workmaker">{displayMakerOf(lot)!.name}</span>}
                   <span className="ck-work-line">
                     <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} className="ck-work-title">{title}</Link>
@@ -330,9 +332,9 @@ export default function WatchingRoom(_p: SectionProps) {
                   <DecisionLine lot={lot} estimate={false} when={false} abstain="quiet" style={{ marginTop: 3 }} />
                 </span>
                 <span className="num">{fromText(lot) ?? formatEstimate(lot) ?? '—'}</span>
-                <span className="num" style={sig ? { color: sigInk(sig.label), fontWeight: 700 } : { color: 'var(--color-text-faint)' }}
+                <span className="num" style={sig ? undefined : { color: 'var(--color-text-faint)' }}
                   aria-label={sig ? `${sig.label}, ${sigText(sig)}` : 'no signal'}>
-                  {sig ? sigText(sig) : '—'}
+                  {sig ? <SigPill dir={sig.label === 'Below Market' ? 'up' : 'down'}>{sigText(sig)}</SigPill> : '—'}
                 </span>
                 <span className="num" style={{ color: flipped ? 'var(--color-text-muted)' : dInk }}>
                   {flipped ? 'flipped' : dPP != null && dPP !== 0 ? `${dPP > 0 ? '+' : '−'}${Math.abs(dPP)}pp` : '—'}
@@ -370,6 +372,7 @@ export default function WatchingRoom(_p: SectionProps) {
             <div key={lot.id} className="ck-mrow-wrap">
               <button type="button" className="ck-mrow" data-nav-row data-open={open || undefined} aria-expanded={open} aria-controls={dossierId}
                 onClick={() => toggleRow(lot.id)}>
+                <Thumb src={lot.imageUrl} label={lot.title} size={56} tone={sig?.label === 'Below Market' ? 'up' : undefined} />
                 <span className="ck-mrow-main">
                   <span className="ck-mtitle">{title}</span>
                   <span className="ck-msub">
@@ -379,7 +382,7 @@ export default function WatchingRoom(_p: SectionProps) {
                   <DecisionLine lot={lot} estimate={false} when={false} abstain="quiet" style={{ marginTop: 2 }} />
                 </span>
                 <span className="ck-mrow-right">
-                  {sig && <span className="ck-mrow-sig"><b style={{ color: sigInk(sig.label) }} aria-label={`${sig.label}, ${sigText(sig)}`}>{sigText(sig)}</b> <span className="ck-mrow-sig-k">vs comps</span></span>}
+                  {sig && <span className="ck-mrow-sig" aria-label={`${sig.label}, ${sigText(sig)} vs comps`}><SigPill dir={sig.label === 'Below Market' ? 'up' : 'down'}>{sigText(sig)}</SigPill></span>}
                   <span className="ck-mham" style={days <= 1 ? { color: 'var(--color-fg)', fontWeight: 600 } : undefined}>
                     {days === 0 && lot.saleDateTime
                       ? <CloseClock iso={lot.saleDateTime} windowHours={24} />

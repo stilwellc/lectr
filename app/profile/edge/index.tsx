@@ -8,6 +8,7 @@
  * follows + now. The grading lives in ./edge.ts, the card in ./card.ts —
  * both plain .ts with unit tests. Styles: ./edge.css, existing tokens only.
  */
+import { Thumb } from '../desk/thumb';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { SectionProps, SectionMeta, DeskData } from '../desk/types';
@@ -59,7 +60,8 @@ function CallCard({ label, c }: { label: string; c: GradedCall }) {
   return (
     <div className="ns-well pe-call">
       <div className="ns-well-label">{label}</div>
-      <div className="ns-well-body">
+      <div className="ns-well-body pe-call-body">
+        <Link href={href} className="pe-call-ph" tabIndex={-1} aria-hidden="true"><Thumb src={c.img} label={c.maker || c.title} size={96} /></Link>
         <Link href={href} className="pe-call-title">{craftTitle(c.title, c.house)}</Link>
         <div className="pe-call-sub pe-muted">{[c.maker, c.house, formatDate(c.date)].filter(Boolean).join(' · ')}{c.provisional ? ' · result provisional' : ''}</div>
         <div className="pe-call-line">
@@ -117,7 +119,8 @@ function Receipts({ r }: { r: EdgeReport }) {
       <div role="list">
         {vis.map(c => (
           <div key={c.id} className="ns-ledger-row pe-rrow" role="listitem">
-            <span className="pe-rmain">
+            <span className="pe-rmain ck-ph" style={{ '--ph': '48px' } as React.CSSProperties}>
+              <Thumb src={c.img} label={c.maker || c.title} size={48} />
               <Link href={`/lot?id=${encodeURIComponent(c.id)}`} className="pe-rtitle">{craftTitle(c.title, c.house)}</Link>
               <span className="pe-rsub pe-muted">{[c.maker, c.marketLabel, formatDate(c.date)].filter(Boolean).join(' · ')}{c.provisional ? ' · provisional' : ''}</span>
             </span>

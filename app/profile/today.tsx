@@ -36,6 +36,7 @@ import { formatEstimate } from '../components/LotCard';
 import { AwayMark } from '../components/marks';
 import DecisionLine from '../components/DecisionLine';
 import { RoomHead } from './head';
+import { Thumb } from './desk/thumb';
 
 export interface TodayRead { key: string; tag: string; lot: AuctionLot; fact: React.ReactNode; tone?: 'up' | 'hot' }
 
@@ -113,10 +114,11 @@ function useNarrow(): boolean {
    maker · you…", "Michael Jordan · 8 sales,…"); the title keeps its one line */
 function ReadRow({ r, wrap = true }: { r: Row; wrap?: boolean }) {
   return (
-    <Link href={`/lot?id=${encodeURIComponent(r.lot.id)}`} className="ck-read" role="listitem" data-nav-row
+    <Link href={`/lot?id=${encodeURIComponent(r.lot.id)}`} className="ck-read ck-ph" role="listitem" data-nav-row
       data-decision={r.decision ? '' : undefined}
       // a pick in the strip is a pick (the retention tracker's pick_open)
       data-pick={r.group === 'top' ? r.lot.id : undefined}>
+      <Thumb src={r.lot.imageUrl} label={r.lot.title} size={64} tone={r.tone === 'up' ? 'up' : undefined} />
       <span className="ck-tag" data-tone={r.tone}>{r.tag}</span>
       <span className="ck-read-title">{craftTitle(r.lot.title, r.lot.auctionHouse)}</span>
       {/* a pick's reason is its honesty payload: in the picks strip it wraps,
@@ -126,6 +128,28 @@ function ReadRow({ r, wrap = true }: { r: Row; wrap?: boolean }) {
           reason) keeps its width and is never cut for it */}
       {r.decision && <span style={{ flex: '1 1 100%', minWidth: 0 }}>{r.decision}</span>}
     </Link>
+  );
+}
+
+/** TONIGHT — the story strip: every lot of yours that hammers tonight as a
+ *  round photo, its clock under it; a green ring is a lot reading under the
+ *  market. One glance before the rows (Oct 20 photo pass). */
+function Tonight({ rows }: { rows: Row[] }) {
+  if (rows.length < 2) return null;
+  return (
+    <div className="ck-tonight" role="list" aria-label="Hammers tonight">
+      {rows.map(r => {
+        const maker = displayMakerOf(r.lot)?.name;
+        return (
+          <Link key={r.key} href={`/lot?id=${encodeURIComponent(r.lot.id)}`} className="ck-story" role="listitem"
+            aria-label={`${craftTitle(r.lot.title, r.lot.auctionHouse)}${maker ? `, ${maker}` : ''}`}>
+            <Thumb src={r.lot.imageUrl} label={maker || r.lot.title} size={68} round tone={r.tone === 'up' ? 'up' : 'ink'} />
+            <span className="ck-story-t">{r.tag}</span>
+            {maker && <span className="ck-story-m">{maker}</span>}
+          </Link>
+        );
+      })}
+    </div>
   );
 }
 
@@ -311,6 +335,7 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
           sold) or could not price — no value is implied, high or low. A lot prints in one group only.
         </> }}
         sub={away ? <span className="ck-away-line">{away}</span> : null} />
+      <Tonight rows={closing} />
       {(leftCol || rightCol) && (
         <div className="ck-today-cols" data-split={leftCol && rightCol ? 'two' : 'one'}>
           {leftCol && <div>{left.map((x, i) => <React.Fragment key={i}>{x}</React.Fragment>)}{twoCol && more}</div>}

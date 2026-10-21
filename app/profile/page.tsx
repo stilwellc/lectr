@@ -198,7 +198,7 @@ function DeskMasthead() {
                 ['onesided', summary.totalEst > 0 && summary.oneSided > 0 ? <>{summary.oneSided} from one bound, not summed</> : null],
                 // a count of flags, not a market direction — ink (lamp law)
                 ['flagged', summary.flagged > 0
-                  ? <a href="#watching" className="ck-away-link" style={{ color: 'var(--color-fg)', fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{summary.flagged} below market</a>
+                  ? <a href="#watching" className="ck-mast-flag">{summary.flagged} below market</a>
                   : null],
                 ['details', hasDeskDetails
                   ? <button type="button" className="ck-deskdetails-btn" aria-expanded={deskDetails} aria-controls="desk-details"

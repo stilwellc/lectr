@@ -27,6 +27,7 @@
  * the plan with no ceiling line — every figure still labelled by what it is.
  * One clock: desk.now. Money: fmtFace. Every figure is budget.ts's.
  */
+import { Thumb } from '../desk/thumb';
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { SectionProps, SectionMeta, DeskData } from '../desk/types';
@@ -129,8 +130,9 @@ function PlanRowView({ r, now, estInPlan }: { r: PlanRow; now: number; estInPlan
   const tag = rowTag(r);
   const f = figureOf(r, estInPlan);
   return (
-    <Link href={lotHref(r.lot)} className="ck-read" role="listitem" data-nav-row data-summed={f.summed || undefined}
+    <Link href={lotHref(r.lot)} className="ck-read ck-ph" role="listitem" data-nav-row data-summed={f.summed || undefined}
       title={`${tag}: ${BASIS_TEXT[r.basis]}${r.oneSided ? ' (one published side — never summed)' : ''} · ${fmtFace(r.allIn)} all-in at ${r.premiumPct}% premium`}>
+      <Thumb src={r.lot.imageUrl} label={r.lot.title} size={64} tone={r.belowPct != null ? 'up' : undefined} />
       <span className="ck-tag" data-tone={r.belowPct != null ? 'up' : r.basis === 'max' ? 'hot' : undefined}>{tag}</span>
       <span className="ck-read-title">{craftTitle(r.lot.title, r.lot.auctionHouse)}</span>
       <span className="ck-read-fact">
@@ -239,8 +241,9 @@ function BuyRowView({ r, now, saved, onWatch }: { r: BuyRow; now: number; saved:
   const short = shortTitle(r.lot.title, r.lot.auctionHouse);
   return (
     <div className="ck-budget-buy">
-      <Link href={lotHref(r.lot)} className="ck-read" role="listitem" data-nav-row data-decision
+      <Link href={lotHref(r.lot)} className="ck-read ck-ph" role="listitem" data-nav-row data-decision
         title={r.call.derivation ? `${r.call.text} below market: ${r.call.derivation}${r.call.net ? ` · ${r.call.net}` : ''}` : `${r.call.text} below market — the engine's flag`}>
+        <Thumb src={r.lot.imageUrl} label={r.lot.title} size={64} tone="up" />
         <span className="ck-tag" data-tone="up">{r.call.text} below</span>
         <span className="ck-read-title">{craftTitle(r.lot.title, r.lot.auctionHouse)}</span>
         <span className="ck-read-fact" style={{ whiteSpace: 'normal' }}>

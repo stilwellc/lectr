@@ -15,6 +15,7 @@
  * Contract: default export (SectionProps) + meta(desk). Reads only the desk
  * it is handed and the entity buckets; one clock (desk.now).
  */
+import { Thumb } from '../desk/thumb';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { DeskData, SectionMeta, SectionProps } from '../desk/types';
@@ -228,7 +229,8 @@ function Row({ r, nowYear }: { r: PieceRow; nowYear: number }) {
   const e = r.engine;
   return (
     <div className="ns-ledger-row pf-row" data-nav-row>
-      <div className="pf-main">
+      <div className="pf-main ck-ph" style={{ '--ph': '72px' } as React.CSSProperties}>
+        <Thumb src={lot.imageUrl} label={lot.title} size={72} />
         <div className="pf-title">
           <Link href={`/lot?id=${encodeURIComponent(lot.id)}`}>{craftTitle(lot.title, lot.auctionHouse)}</Link>
         </div>

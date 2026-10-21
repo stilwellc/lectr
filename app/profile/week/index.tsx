@@ -29,6 +29,7 @@
  * Every read is ./week.ts (plain .ts, unit-tested); this file only prints.
  * One clock: desk.now.
  */
+import { Thumb } from '../desk/thumb';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -125,6 +126,9 @@ function Row({ r, now, titleById, onOpen }: { r: WeekRow; now: number; titleById
     <li className="ck-week-row" data-nav-row tabIndex={-1} data-kind={r.kind}
       data-conflict={conflict.length ? '' : undefined} data-soon={soon ? '' : undefined}
       onKeyDown={onKey} aria-label={`${KIND_TAG[r.kind]}: ${title}`}>
+      <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} className="ck-week-ph" tabIndex={-1} aria-hidden="true">
+        <Thumb src={lot.imageUrl} label={who || lot.title} wide />
+      </Link>
       <div className="ck-week-when">
         <span className="ck-tag" data-tone={r.kind === 'watch' ? 'hot' : undefined}>{KIND_TAG[r.kind]}</span>
         {r.timed

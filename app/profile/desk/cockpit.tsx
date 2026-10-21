@@ -32,6 +32,7 @@
  * that day (the week's day — the reader's day for a timed close); today
  * marked; tap → #week. Phone: cells stack, strip stays, weekday letters stay.
  */
+import { Thumb } from './thumb';
 import React, { useMemo } from 'react';
 import Link from 'next/link';
 import CloseClock from '../../components/CloseClock';
@@ -81,16 +82,20 @@ function LotLine({ lot, phone = false }: { lot: AuctionLot; phone?: boolean }) {
   const sub = [est, lot.auctionHouse].filter(Boolean).join(' · ');
   // a phone prints the FIGURE first and lets the title take two lines — a
   // single ellipsized line cut the estimate, not the noise (R2 f)
+  // the lot's photo leads its lines (the command center shows what it counts down to)
+  const ph = <Thumb src={lot.imageUrl} label={lot.title} size={phone ? 48 : 52} />;
   return phone ? (
-    <>
+    <span className="ck-lotline ck-ph" style={{ '--ph': '48px' } as React.CSSProperties}>
+      {ph}
       {sub && <span className="ck-ccell-sub">{sub}</span>}
       <span className="ck-ccell-lot">{who && <>{who} · </>}{craftTitle(lot.title, lot.auctionHouse)}</span>
-    </>
+    </span>
   ) : (
-    <>
+    <span className="ck-lotline ck-ph" style={{ '--ph': '52px' } as React.CSSProperties}>
+      {ph}
       <span className="ck-ccell-lot">{who && <>{who} · </>}{craftTitle(lot.title, lot.auctionHouse)}</span>
       {sub && <span className="ck-ccell-sub">{sub}</span>}
-    </>
+    </span>
   );
 }
 

@@ -27,6 +27,7 @@
  * the reader's previous visit — the site's one last-visit clock). The toggle
  * shows only when a previous visit exists.
  */
+import { Thumb, SigPill } from './desk/thumb';
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
@@ -201,6 +202,9 @@ function Row({ d, mode, sinceDay }: { d: Digest; mode: MarketMode; sinceDay: str
     : { v: live.live.toLocaleString('en-US'), cap: 'live', color: undefined };
   return (
     <Link href={hrefOf(name, d.s)} className="ck-mrow" role="listitem" data-nav-row>
+      {/* the name's face: its record, its biggest sale, else a flagged live lot */}
+      <Thumb src={record?.row.img ?? biggest?.row?.img ?? live.flaggedLots[0]?.imageUrl} label={name.label} size={52} round
+        tone={live.flagged > 0 ? 'up' : undefined} />
       <div className="ck-mrow-main">
         <span className="ck-mtitle">
           {name.label}
@@ -211,7 +215,9 @@ function Row({ d, mode, sinceDay }: { d: Digest; mode: MarketMode; sinceDay: str
         <span className="ck-msub"><span>{join(liveBits)}</span></span>
       </div>
       <div className="ck-mrow-right">
-        <b style={{ color: head.color }}>{head.v}</b>
+        {move && move.tone !== 'flat'
+          ? <SigPill dir={move.tone === 'up' ? 'up' : 'down'}>{head.v}</SigPill>
+          : <b style={{ color: head.color }}>{head.v}</b>}
         <span className="ck-mham">{head.cap}</span>
       </div>
     </Link>

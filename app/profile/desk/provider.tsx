@@ -19,6 +19,7 @@
  * for the rooms that predate the contract (Watching, Record, Collection,
  * History, the picks group) — new sections never need it.
  */
+import { SigPill } from './thumb';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { AuctionLot } from '../../types';
 import { useFullLotsOnDemand, type LedgerEntry } from '../../hooks/useRayData';
@@ -585,7 +586,7 @@ export function useDeskState(): DeskState {
       const printedBid = estText.includes('bid');
       rows.push({
         key: `bm-${claim(l).id}`, tag: 'Below market', lot: l, tone: 'up',
-        fact: <><b style={{ color: 'var(--color-up)', fontVariantNumeric: 'tabular-nums' }}>{sigText(sig)}</b> vs comps{estText ? <> · {estText}</> : null}{!printedBid && (l.currentBid || 0) > 0 ? <> · {fmtFace(l.currentBid!)} bid</> : null}</>,
+        fact: <><SigPill dir="up">{sigText(sig)}</SigPill> vs comps{estText ? <> · {estText}</> : null}{!printedBid && (l.currentBid || 0) > 0 ? <> · {fmtFace(l.currentBid!)} bid</> : null}</>,
       });
     }
     return rows.slice(0, 8);

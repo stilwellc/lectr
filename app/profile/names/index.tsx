@@ -30,6 +30,7 @@
  * more" with their live counts visible; the head reads "Names" with the
  * full title in its sub-line; every tap clears a 40px hit area.
  */
+import { Thumb } from '../desk/thumb';
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../../types';
@@ -224,6 +225,11 @@ function SaleRow({ s, now, href, onOpen }: { s: Sale; now: number; href: string;
         {w.sub && <span className="nm-n">{w.sub}</span>}
       </span>
       <span className="nm-sale-main">
+        {/* the sale's first lots as an overlapping photo stack */}
+        <span className="nm-sale-ph" aria-hidden="true">
+          {s.lots.filter(l => l.imageUrl).slice(0, 4).map(l => <Thumb key={l.id} src={l.imageUrl} label={l.title} size={40} />)}
+          {s.lots.length > 4 && <span className="nm-sale-ph-n">+{n2(s.lots.length - 4)}</span>}
+        </span>
         <span className="nm-sale-house">{s.house}{s.saleName ? <span className="nm-sale-name"> · {s.saleName}</span> : null}</span>
         <span className="nm-sale-fact">
           {one ? <span className="nm-sale-title">{one.title}</span> : <>{n2(s.lots.length)} lots</>}

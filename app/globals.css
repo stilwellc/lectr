@@ -5439,3 +5439,102 @@ html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] > .ray-band { bo
 /* (round 6) the phone watch card's signal says what it is measured against */
 .ck-page .ck-mrow-sig { white-space: nowrap; }
 .ck-page .ck-mrow-sig-k { font-size: 11px; color: var(--color-text-muted); font-weight: 400; }
+
+/* ── THE PHOTO + COLOR PASS (Oct 20 2026) ─────────────────────────────────
+   "a massive wall of black text on white paper like a book" → a command
+   center crossed with a feed: every lot row leads with its house photo, the
+   market reads as filled green/red pills (the only saturated voice — the
+   NORTHSTAR lamp law), tonight's hammers open as a story strip. */
+.ck-thumb {
+  --th: 56px;
+  position: relative; flex: none; display: block;
+  width: var(--th); height: var(--th); border-radius: 12px; overflow: hidden;
+  background: var(--color-bg-deep, #F1EEEB);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-fg) 8%, transparent);
+}
+.ck-thumb > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.ck-thumb-l {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font: 300 calc(var(--th) * 0.42)/1 var(--font-sans), sans-serif; color: var(--color-text-faint); letter-spacing: -0.02em;
+}
+.ck-thumb[data-round] { border-radius: 50%; }
+/* the ring sits off the photo (outline-offset), so it reads on any band */
+.ck-thumb[data-tone] { overflow: visible; }
+.ck-thumb[data-tone] > img, .ck-thumb[data-tone] > .ck-thumb-l { border-radius: inherit; overflow: hidden; }
+.ck-thumb[data-tone='up'] { outline: 2px solid var(--color-up); outline-offset: 2px; }
+.ck-thumb[data-tone='down'] { outline: 2px solid var(--color-down); outline-offset: 2px; }
+.ck-thumb[data-tone='ink'] { outline: 1.5px solid var(--color-fg); outline-offset: 2.5px; }
+:root[data-theme="dark"] .ck-thumb { background: #16181c; }
+
+
+/* a row that leads with a photo: photo | the row's own lines, stacked */
+.ck-page .ck-ph { display: grid; grid-template-columns: var(--ph, 64px) minmax(0, 1fr); column-gap: 14px; row-gap: 3px; align-items: start; }
+.ck-page .ck-ph > .ck-thumb { grid-column: 1; grid-row: 1 / span 6; --th: var(--ph, 64px); }
+.ck-page .ck-ph > :not(.ck-thumb) { grid-column: 2; min-width: 0; }
+.ck-page .ck-ph > .ck-tag { justify-self: start; }
+.ck-page .ck-read.ck-ph { padding-block: 12px; }
+.ck-page .ck-read.ck-ph > .ck-read-title { max-width: none; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 14px; }
+@media (max-width: 639.98px) { .ck-page .ck-ph { --ph: 56px; column-gap: 12px; } }
+
+/* the signal as a filled pill — green under the market, red over */
+.ck-sigpill {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px;
+  font: 500 12.5px/1 var(--font-sans), sans-serif; font-variant-numeric: tabular-nums; letter-spacing: 0;
+  color: #fff; background: var(--color-up); white-space: nowrap; vertical-align: 1px;
+}
+.ck-sigpill[data-dir='down'] { background: var(--color-down); }
+.ck-sigpill[data-dir='flat'] { background: color-mix(in srgb, var(--color-fg) 10%, transparent); color: var(--color-fg); }
+:root[data-theme="dark"] .ck-sigpill { color: #08090a; }
+:root[data-theme="dark"] .ck-sigpill[data-dir='flat'] { color: var(--color-fg); }
+
+/* TONIGHT — the story strip */
+.ck-page .ck-tonight {
+  display: flex; gap: 18px; overflow-x: auto; scroll-snap-type: x proximity; overscroll-behavior-x: contain;
+  padding: 6px 4px 14px; margin: 10px -4px 6px; scrollbar-width: none;
+}
+.ck-page .ck-tonight::-webkit-scrollbar { display: none; }
+.ck-page .ck-story { flex: none; width: 84px; display: grid; justify-items: center; gap: 6px; text-decoration: none; color: var(--color-fg); scroll-snap-align: start; padding-top: 4px; }
+.ck-page .ck-story .ck-thumb { transition: transform 150ms cubic-bezier(.4,0,.2,1); }
+.ck-page .ck-story:active .ck-thumb { transform: scale(0.98); }
+.ck-page .ck-story-t { font: 500 12px/1.2 var(--font-sans), sans-serif; font-variant-numeric: tabular-nums; }
+.ck-page .ck-story-m { font-size: 11.5px; line-height: 1.2; color: var(--color-text-muted); max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: -3px; }
+.ck-thumb[data-wide] { width: 100%; height: auto; aspect-ratio: 16 / 10; --th: 120px; border-radius: 12px; }
+.ck-thumb[data-wide] > img { object-fit: cover; object-position: center 40%; }
+.ck-page .ck-week-ph { display: block; margin-bottom: 10px; }
+.ck-page .ck-week-ph .ck-thumb { max-height: 168px; }
+/* a photo row with a figure (Bid plan): the figure keeps its own right column */
+@media (min-width: 640px) {
+  .ck-page .ck-ph:has(> .ck-budget-fig) { grid-template-columns: var(--ph, 64px) minmax(0, 1fr) auto; }
+  .ck-page .ck-ph > .ck-budget-fig { grid-column: 3; grid-row: 1 / span 3; align-self: start; margin-left: 0; }
+}
+/* the market's tags are tinted, not outlined: a green chip reads at a glance */
+.ck-page .ck-tag[data-tone='up'] { background: var(--color-up-soft, rgba(15,124,67,.11)); color: var(--color-up); box-shadow: none; border-color: transparent; }
+.ck-page .ck-tag[data-tone='down'] { background: var(--color-down-soft, rgba(193,62,44,.11)); color: var(--color-down-text); box-shadow: none; border-color: transparent; }
+.ck-page .ck-tag[data-tone='hot'] { background: color-mix(in srgb, var(--color-fg) 7%, transparent); box-shadow: none; border-color: transparent; }
+.ck-page .ck-mrow:has(> .ck-thumb) { align-items: center; justify-content: flex-start; }
+.ck-page .ck-mrow > .ck-mrow-main { flex: 1 1 auto; min-width: 0; }
+.ck-page .ck-mrow > .ck-mrow-right { flex: none; margin-left: auto; }
+.ck-page .nm-sale-ph { display: flex; align-items: center; margin: 2px 0 8px; }
+.ck-page .nm-sale-ph:empty { display: none; }
+.ck-page .nm-sale-ph .ck-thumb { border-radius: 10px; box-shadow: 0 0 0 2px var(--dt-band-a, var(--color-bg)); }
+.ck-page .nm-sale-ph .ck-thumb + .ck-thumb { margin-left: -8px; }
+.ck-page .dt-band[data-tone='b'] .nm-sale-ph .ck-thumb { box-shadow: 0 0 0 2px var(--dt-band-b); }
+.ck-page .nm-sale-ph-n { margin-left: 8px; font-size: 12px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.ck-page .pe-call-body { display: grid; grid-template-columns: 96px minmax(0, 1fr); column-gap: 16px; row-gap: 4px; }
+.ck-page .pe-call-body > .pe-call-ph { grid-row: 1 / span 4; }
+.ck-page .pe-call-body > :not(.pe-call-ph) { grid-column: 2; min-width: 0; }
+@media (max-width: 639.98px) { .ck-page .pe-call-body { grid-template-columns: 72px minmax(0, 1fr); column-gap: 14px; } .ck-page .pe-call-body .ck-thumb { --th: 72px !important; } }
+.ck-page .pe-rmain.ck-ph > .pe-rtitle, .ck-page .pe-rmain.ck-ph > .pe-rsub { display: block; }
+.ck-page .ck-lotline { margin: 6px 0 2px; }
+.ck-page .ck-lotline > .ck-ccell-lot, .ck-page .ck-lotline > .ck-ccell-sub { display: block; }
+.ck-page .ck-mast-flag {
+  display: inline-flex; align-items: center; height: 26px; padding: 0 11px; border-radius: 999px; vertical-align: 1px;
+  background: var(--color-up); color: #fff; font-weight: 500; font-size: 0.82em; text-decoration: none; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+:root[data-theme="dark"] .ck-page .ck-mast-flag { color: #08090a; }
+/* a ledger row with a photo centers its cells on the photo, not a baseline under it */
+.ck-page .ray-savedrow:has(> .work > .ck-thumb) { align-items: center; padding-block: 10px; }
+.ck-page .ray-savedrow > .work.ck-ph { align-items: center; row-gap: 2px; }
+.ck-page .ray-savedrow > .work.ck-ph > .ck-thumb { grid-row: 1 / span 3; align-self: center; }
+.ck-page .ck-mrow > .ck-thumb { align-self: center; }
+.ck-page .pe-rrow:has(.ck-thumb) { align-items: center; }

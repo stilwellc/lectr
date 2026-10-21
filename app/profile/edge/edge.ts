@@ -44,6 +44,8 @@ export type CallDir = 'below' | 'above';
 export interface GradedCall {
   id: string;
   title: string;
+  /** the lot's house photo (the desk leads every row with it) */
+  img?: string | null;
   maker: string | null;
   house: string;
   market: Market;
@@ -229,6 +231,7 @@ export function gradeDesk(input: EdgeInputs): EdgeReport {
     graded.push({
       id: lot.id,
       title: lot.title,
+      img: lot.imageUrl ?? null,
       maker: displayMakerOf(lot)?.name ?? null,
       house: lot.auctionHouse,
       market,
