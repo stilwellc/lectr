@@ -9,7 +9,6 @@ import { RecordMark } from '../../../components/marks';
 import { CellGrid, Cell, ColorCell } from '../../../components/cells';
 import { formatDate, craftTitle, fmtSignedPct } from '../../../utils';
 import { fmtFace } from '../../../lib/lot-face';
-import { collectionFigure } from './collection';
 import { RoomHead } from '../../head';
 import { useDeskInternals, type DeskInternals } from '../provider';
 import type { SectionProps, SectionMeta, DeskData } from '../types';
@@ -30,12 +29,12 @@ export function RecordTimeline({ series }: { series: { id: string; d: string; pc
   return (
     <div className="ck-rec-tl">
       <span className="kicker">Call by call</span>
-      <div className="ck-rec-tl-band" role="list" aria-label={`${series.length} judged calls in hammer order`}>
+      <div className="ck-rec-tl-band" role="group" aria-label={`${series.length} judged calls in hammer order`}>
         {series.map(x => {
           const flat = Math.round(x.pct) === 0;
           const up = x.pct > 0;
           return (
-            <button key={x.id} type="button" className="ck-rec-tl-bar" role="listitem" aria-pressed={picked === x.id}
+            <button key={x.id} type="button" className="ck-rec-tl-bar" aria-pressed={picked === x.id}
               aria-label={`${fmtSignedPct(Math.round(x.pct))} vs estimate, ${formatDate(x.d)} — ${craftTitle(x.title)}`}
               title={`${craftTitle(x.title)} — ${fmtSignedPct(Math.round(x.pct))} vs estimate · ${formatDate(x.d)}`}
               onClick={() => setPicked(p => (p === x.id ? null : x.id))}>
@@ -66,7 +65,7 @@ export function meta(_desk: DeskData, i: DeskInternals): SectionMeta | null {
 
 export default function RecordRoom(_p: SectionProps) {
   const i = useDeskInternals();
-  const { record, recordLedByAppraisal, collection, upcoming, summary, settledCount } = i;
+  const { record, recordLedByAppraisal, collection, settledCount } = i;
   return (
     <section id="record" className="ray-saved-section rail ray-enter" aria-label="Your record">
       <div className="ns-plate" style={{ paddingTop: 18 }}>
@@ -74,9 +73,7 @@ export default function RecordRoom(_p: SectionProps) {
           help={{ name: 'Your record', body: <>                    <b>Marked vs bought</b>: the engine&rsquo;s mark on your pieces against what you paid — only pieces the engine
             appraised that also carry a bought price enter the read, n stated. <b>Your record</b>: each settled watch judged against its estimate, median, all-in.
             The signed figure is green only when it is a real gain, red only when it is a real loss; with no signed read
-            yet it stays ink. <b>Collection</b>: pieces held — the engine&rsquo;s mark when every piece has one, else what you paid;
-            cost is never carried forward as an appraisal. <b>On the block</b>: your live watches, at estimate midpoint over the lots
-            that carry one. <b>Settled</b>: every watch that has hammered — the line-item receipts are under History.
+            yet it stays ink.  <b>Settled</b>: every watch that has hammered — the line-item receipts are under History.
           </> }}
           sub={!record && settledCount > 0 ? <>{settledCount} settled · awaiting judgment</> : null} />
         {/* THE DESK IN FIGURES — one forced-color cell carries the
@@ -106,29 +103,8 @@ export default function RecordRoom(_p: SectionProps) {
           ) : (
             <ColorCell dir="ink" stat="—" label="Your record" body="No signed read yet" />
           )}
-          {collection.rows.length > 0 && (
-            <Cell
-              stat={collection.rows.length.toLocaleString()}
-              statNote={collection.rows.length === 1 ? 'piece held' : 'pieces held'}
-              label="Collection"
-              body={(() => {
-                const f = collectionFigure(collection);
-                return f.kind === 'marked' ? `${f.text} marked by the engine · all ${collection.rows.length}`
-                  : f.kind === 'bought' ? `${f.text} bought${collection.appraisedN > 0 ? ` · ${collection.appraisedN} of ${collection.rows.length} marked (${fmtFace(collection.totalAppraised)})` : ' · none marked by the engine yet'}`
-                  : `Not marked yet · 0 of ${collection.rows.length} ${collection.rows.length === 1 ? 'piece has' : 'pieces have'} comps`;
-              })()}
-              href="#collection"
-            />
-          )}
-          {upcoming.length > 0 && (
-            <Cell
-              stat={upcoming.length.toLocaleString()}
-              statNote="watching, live"
-              label="On the block"
-              body={summary.totalEst > 0 ? `${fmtFace(summary.totalEst)} at est. midpoint${summary.flagged > 0 ? ` · ${summary.flagged} below market` : ''}` : 'tracked to the hammer'}
-              href="#watching"
-            />
-          )}
+          {/* (Oct 20 audit, one job per tab) the Collection and On-the-block cells
+              left: their figures lead their own tabs */}
           {settledCount > 0 && (
             <Cell
               stat={settledCount.toLocaleString()}

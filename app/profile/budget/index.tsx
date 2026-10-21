@@ -28,7 +28,7 @@
  * One clock: desk.now. Money: fmtFace. Every figure is budget.ts's.
  */
 import { Thumb } from '../desk/thumb';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { SectionProps, SectionMeta, DeskData } from '../desk/types';
 import type { AuctionLot } from '../../types';
@@ -116,10 +116,10 @@ function BandEditor({ desk, act, onDone }: SectionProps & { onDone?: () => void 
 /** the row's figure in words — what the plan prints and what its title spells out */
 function figureOf(r: PlanRow, estInPlan: boolean): { fig: string; sub: string; fact: string | null; summed: boolean } {
   if (r.oneSided && r.side) {
-    return { fig: oneSidedText(r.side, r.hammer, fmtFace), sub: `one side published · ${fmtFace(r.allIn)} all-in · not summed`, fact: null, summed: false };
+    return { fig: oneSidedText(r.side, r.hammer, fmtFace), sub: `one side published · ${fmtFace(r.allIn)} all-in`, fact: null, summed: false };
   }
   if (r.basis === 'est' && !estInPlan) {
-    return { fig: fmtFace(r.hammer), sub: `est midpoint · ${fmtFace(r.allIn)} all-in · not summed`, fact: `no max bid yet — the estimate midpoint would be ${fmtFace(r.hammer)}`, summed: false };
+    return { fig: fmtFace(r.hammer), sub: `est midpoint · ${fmtFace(r.allIn)} all-in`, fact: 'no max yet — set yours on Watching', summed: false };
   }
   return { fig: `${fmtFace(r.hammer)} → ${fmtFace(r.allIn)}`, sub: `all-in · ${r.premiumPct}% premium`, fact: r.basis === 'est' ? 'estimate midpoint, counted at your ask' : null, summed: true };
 }
@@ -130,7 +130,7 @@ function PlanRowView({ r, now, estInPlan }: { r: PlanRow; now: number; estInPlan
   const tag = rowTag(r);
   const f = figureOf(r, estInPlan);
   return (
-    <Link href={lotHref(r.lot)} className="ck-read ck-ph" role="listitem" data-nav-row data-summed={f.summed || undefined}
+    <Link href={lotHref(r.lot)} className="ck-read ck-ph" data-nav-row data-summed={f.summed || undefined}
       title={`${tag}: ${BASIS_TEXT[r.basis]}${r.oneSided ? ' (one published side — never summed)' : ''} · ${fmtFace(r.allIn)} all-in at ${r.premiumPct}% premium`}>
       <Thumb src={r.lot.imageUrl} label={r.lot.title} size={64} tone={r.belowPct != null ? 'up' : undefined} />
       <span className="ck-tag" data-tone={r.belowPct != null ? 'up' : r.basis === 'max' ? 'hot' : undefined}>{tag}</span>
@@ -199,7 +199,7 @@ function NightView({ n, plan, now, narrow, open }: { n: PlanNight; plan: BidPlan
       </div>
       {open ? (
         <>
-          <div role="list" aria-label={`${label} bid plan`}>
+          <div role="group" aria-label={`${label} bid plan`}>
             {rows.map(r => <PlanRowView key={r.lot.id} r={r} now={now} estInPlan={plan.estInPlan} />)}
           </div>
           {folded > 0 && (
@@ -241,7 +241,7 @@ function BuyRowView({ r, now, saved, onWatch }: { r: BuyRow; now: number; saved:
   const short = shortTitle(r.lot.title, r.lot.auctionHouse);
   return (
     <div className="ck-budget-buy">
-      <Link href={lotHref(r.lot)} className="ck-read ck-ph" role="listitem" data-nav-row data-decision
+      <Link href={lotHref(r.lot)} className="ck-read ck-ph" data-nav-row data-decision
         title={r.call.derivation ? `${r.call.text} below market: ${r.call.derivation}${r.call.net ? ` · ${r.call.net}` : ''}` : `${r.call.text} below market — the engine's flag`}>
         <Thumb src={r.lot.imageUrl} label={r.lot.title} size={64} tone="up" />
         <span className="ck-tag" data-tone="up">{r.call.text} below</span>
@@ -269,10 +269,14 @@ export default function BudgetDesk(props: SectionProps) {
   const [editing, setEditing] = useState(false);
   const [estInPlan, setEstInPlan] = useStoredFlag(EST_KEY, false);
   const [allNights, setAllNights] = useState(false);
-  const plan = useMemo(() => bidPlan(desk.saved, now, desk.price, { estInPlan }), [desk.saved, now, desk.price, estInPlan]);
+  // your own max leads each row (Oct 20 audit) — the engine's figure stays as context
+  const maxOf = useCallback((id: string) => { const m = desk.metaFor(id)?.maxUsd; return typeof m === 'number' && m > 0 ? m : null; }, [desk.metaFor]);
+  const plan = useMemo(() => bidPlan(desk.saved, now, desk.price, { estInPlan }, maxOf), [desk.saved, now, desk.price, estInPlan, maxOf]);
   const markets = useMemo(() => readerMarkets(desk.taste, desk.follows, desk.book), [desk.taste, desk.follows, desk.book]);
-  const buys = useMemo(() => budgetBuys(desk.book, now, desk.price, markets, desk.savedIds), [desk.book, now, desk.price, markets, desk.savedIds]);
-  const tease = useMemo(() => (markets.size === 0 ? marketTease(desk.book, now, desk.price, desk.savedIds) : []), [markets, desk.book, now, desk.price, desk.savedIds]);
+  // (perf) the book-wide scans read a 10-minute clock grain, not the 1-minute tick
+  const slow = Math.floor(now / 600_000) * 600_000;
+  const buys = useMemo(() => budgetBuys(desk.book, slow, desk.price, markets, desk.savedIds), [desk.book, slow, desk.price, markets, desk.savedIds]);
+  const tease = useMemo(() => (markets.size === 0 ? marketTease(desk.book, slow, desk.price, desk.savedIds) : []), [markets, desk.book, slow, desk.price, desk.savedIds]);
   const win = useMemo(() => winTotals(plan), [plan]);
   const live = plan.rows.length + plan.unpriced.length;
   // the markets in words: the list up to four, past that the count
@@ -339,7 +343,7 @@ export default function BudgetDesk(props: SectionProps) {
                 ? <>
                     {plan.rows.length} {plan.rows.length === 1 ? 'lot' : 'lots'} by close night · {basisMix(plan.rows)}
                     {plan.ceiling != null ? <> · ceiling {fmtFace(plan.ceiling)} a night</> : <> · no ceiling stated</>}
-                    {plan.nEst > 0 && <> · {plan.estInPlan ? 'estimate midpoints counted at your ask' : 'estimate midpoints listed, not summed'}</>}
+                    {plan.nEst > 0 && <> · {plan.estInPlan ? 'estimate midpoints counted at your ask' : 'estimate midpoints listed in grey, not summed'}</>}
                   </>
                 : <>Nothing you watch is on the block{desk.fullError ? ' — the archive did not arrive, so settled saves are unresolved' : ''}. Save a lot anywhere on lectr and it lands here under its close night.</>}
               actions={plan.nEst > 0
@@ -406,9 +410,9 @@ export default function BudgetDesk(props: SectionProps) {
                 {!tease.length && buys.candidates > buys.rows.length && <> · top {buys.rows.length} of {buys.candidates}</>}
               </>} />
             {tease.length ? (
-              <div role="list" aria-label="Below-market lots this week, by market">
+              <div role="group" aria-label="Below-market lots this week, by market">
                 {tease.map(t => (
-                  <Link key={t.market} href={`/value/${t.market}`} className="ck-read ck-budget-tease" role="listitem" data-nav-row
+                  <Link key={t.market} href={`/value/${t.market}`} className="ck-read ck-budget-tease" data-nav-row
                     title={`${t.n} Below Market ${t.n === 1 ? 'flag' : 'flags'} in ${t.label} closing within ${BUYS_WINDOW_DAYS} days, each on a comps pool of ${TEASE_MIN_N}+ sales — the market's value desk`}>
                     <span className="ck-read-title">{t.label}</span>
                     <span className="ck-read-fact">{t.n} below market this week · soonest {soonestWord(nightLabel(isoDayOf(t.soonestMs), now))}</span>
@@ -418,7 +422,7 @@ export default function BudgetDesk(props: SectionProps) {
                 <p className="ck-budget-empty">Tell the desk your markets — a follow, or the quick start&rsquo;s taps — and this reads them live, lot by lot.</p>
               </div>
             ) : buys.rows.length ? (
-              <div role="list" aria-label="Below-market lots inside your budget this week">
+              <div role="group" aria-label="Below-market lots inside your budget this week">
                 {buys.rows.map(r => (
                   <BuyRowView key={r.lot.id} r={r} now={now} saved={desk.savedIds.has(r.lot.id)} onWatch={() => act.toggleSave(r.lot)} />
                 ))}

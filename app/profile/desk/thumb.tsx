@@ -26,7 +26,7 @@ export function Thumb({ src, label, size = 56, round = false, wide = false, tone
   tone?: 'up' | 'down' | 'ink';
 }) {
   const letter = ((label || '').match(/[A-Za-zÀ-ÿ]/)?.[0] ?? '·').toUpperCase();   // a year or lot number never stands for the lot
-  const u = src ? sizedImg(httpsImg(src), wide ? 640 : Math.max(160, size * 3)) : undefined;
+  const u = src ? sizedImg(httpsImg(src), wide ? 400 : Math.max(160, size * 3)) : undefined;
   return (
     <span className="ck-thumb" data-round={round || undefined} data-wide={wide || undefined} data-tone={tone}
       style={{ '--th': `${size}px` } as React.CSSProperties} aria-hidden="true">

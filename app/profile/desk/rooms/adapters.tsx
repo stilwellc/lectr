@@ -12,6 +12,37 @@ import YourSignals from '../../signals';
 import { useDeskInternals, type DeskInternals } from '../provider';
 import { RoomHead } from '../../head';
 import type { SectionProps, SectionMeta, DeskData } from '../types';
+import Link from 'next/link';
+import { useDesk } from '../provider';
+import { Thumb } from '../thumb';
+import { fmtFace } from '../../../lib/lot-face';
+import { craftTitle } from '../../../utils';
+
+/** RESULTS TO CONFIRM (Oct 20 audit) — the settled watches not yet in your
+ *  collection, answered in place: "I won it" books the piece (the same toggle
+ *  History's row uses); the full list stays under Collection › History. */
+function ResultsInbox() {
+  const i = useDeskInternals();
+  const { desk } = useDesk();
+  const rows = i.sold.filter(l => l.status === 'sold' && !desk.ownedIds.has(i.savedIdOf(l.id)) && !desk.ownedIds.has(l.id)).slice(0, 4);
+  if (!rows.length) return null;
+  return (
+    <div className="ck-results" role="group" aria-label="Results to confirm">
+      <div className="ck-reads-head"><span className="kicker">Did you win? · {i.unclaimedWins}</span><i className="ck-reads-rule" /></div>
+      {rows.map(l => (
+        <div key={l.id} className="ck-result ck-ph" style={{ '--ph': '48px' } as React.CSSProperties}>
+          <Thumb src={l.imageUrl} label={l.title} size={48} />
+          <Link href={`/lot?id=${encodeURIComponent(l.id)}`} className="ck-result-t">{craftTitle(l.title, l.auctionHouse)}</Link>
+          <span className="ck-result-s">{l.auctionHouse}{l.priceUsd ? <> · hammered <b>{fmtFace(l.priceUsd)}</b></> : null}</span>
+          <span className="ck-result-a">
+            <button type="button" className="ray-own-btn" onClick={() => i.onSettledOwn(i.savedIdOf(l.id))}>I won it</button>
+          </span>
+        </div>
+      ))}
+      {i.unclaimedWins > rows.length && <a href="#settled" className="ck-away-link ck-result-more">See all {i.unclaimedWins} under History</a>}
+    </div>
+  );
+}
 
 /* ── TODAY ── */
 export function todayMeta(_desk: DeskData, i: DeskInternals): SectionMeta | null {
@@ -21,7 +52,7 @@ export function Today(_p: SectionProps) {
   const i = useDeskInternals();
   const { deal, deskView, signedOutView, closingWatches, reads, awayLine, unseenAlerts, todayTop, watchFirst, recsReady } = i;
   if (deskView) {
-    return <TodayBand loop={deal.loop} closingWatches={closingWatches} reads={reads} away={awayLine} top={todayTop} topLoading={watchFirst && !recsReady} phoneRows={watchFirst ? 2 : 3} picksN={deal.recs.length} />;
+    return <TodayBand loop={deal.loop} closingWatches={closingWatches} reads={reads} away={awayLine} top={todayTop} topLoading={watchFirst && !recsReady} phoneRows={watchFirst ? 2 : 3} picksN={deal.recs.length} results={<ResultsInbox />} />;
   }
   // signed out: no away facts; a signed-in empty desk keeps its inbox count
   return <TodayBand loop={deal.loop} closingWatches={[]} reads={[]} away={signedOutView ? null : (unseenAlerts > 0 ? awayLine : null)} picksN={deal.recs.length} />;

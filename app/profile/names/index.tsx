@@ -247,7 +247,7 @@ function SaleRow({ s, now, href, onOpen }: { s: Sale; now: number; href: string;
 }
 
 /** sales printed per name before "+N more" (in place) */
-const SALES_SHOWN = 3;
+const SALES_SHOWN = 2;
 
 function BlindLine({ bs, read, fail, slow, hasEntity }: { bs: BlindSpot | null; read: boolean; fail: boolean; slow: boolean; hasEntity: boolean }) {
   if (!hasEntity) return <p className="nm-blind">Nothing live</p>;
@@ -327,13 +327,15 @@ function NameRow({ r, sold, capped, now, narrow, onOpen, onFollow }: {
 
 /** names open per market on a phone (R2 b): the rest fold with their counts visible */
 const PHONE_OPEN = 1;
+/** (Oct 20 audit) a desk opens each market on its first names too — the room ran 12 screens */
+const DESK_OPEN = 4;
 
 function MarketGroup({ label, reads, now, narrow, sold, readSet, onOpen, onFollow }: {
   label: string; reads: NameRead[]; now: number; narrow: boolean; sold: Map<string, Sold> | undefined; readSet: Set<string>;
   onOpen: (l: AuctionLot) => void; onFollow: (n: DeskName) => void;
 }) {
   const [all, setAll] = useState(false);
-  const open = narrow && !all ? reads.slice(0, PHONE_OPEN) : reads;
+  const open = !all ? reads.slice(0, narrow ? PHONE_OPEN : DESK_OPEN) : reads;
   const folded = reads.slice(open.length);
   return (
     <div className="nm-group">
@@ -375,11 +377,14 @@ export default function NamesSection({ desk, act, narrow }: SectionProps) {
   const readIds = useMemo(() => names.filter(n => n.id).slice(0, MAX_READ).map(n => n.id!), [names]);
   const sold = useSoldSide(readIds, near, desk.lastCrawl || undefined);
 
+  // (perf) the live scan runs per name over the whole book: a 10-minute clock
+  // grain, not the desk's 1-minute tick (a lot's live/closed edge moves rarely)
+  const slow = Math.floor(now / 600_000) * 600_000;
   const reads = useMemo<NameRead[]>(() => names.map(n => {
-    const lots = liveLotsOf(n, desk.book, now);
+    const lots = liveLotsOf(n, desk.book, slow);
     const sales = salesOf(lots);
     return { name: n, sales, live: lots.length, flagged: sales.reduce((s, x) => s + x.flagged, 0) };
-  }), [names, desk.book, now]);
+  }), [names, desk.book, slow]);
 
   const lastSeenOf = (key: string): string | null => {
     const n = names.find(x => x.key === key);

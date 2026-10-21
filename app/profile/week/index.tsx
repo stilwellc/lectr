@@ -75,8 +75,21 @@ function recsOf(desk: DeskData): readonly { lot: AuctionLot }[] {
   return extra?.length ? [...desk.recs, ...extra] : desk.recs;
 }
 
+/* (Oct 20 audit, perf) planWeek scans the whole book; the desk object
+   changes every minute (its clock) and meta() runs on every render. The plan
+   is memoised on its inputs' identities and a 5-minute clock bucket — a row
+   moving between days at a 5-minute grain is invisible; the countdowns read
+   the live clock separately. */
+const PLAN_GRAIN = 5 * 60_000;
+let planMemo: { k: readonly unknown[]; plan: WeekPlan } | null = null;
 export function planOf(desk: DeskData): WeekPlan {
-  return planWeek({ now: desk.now, saved: desk.saved, savedIds: desk.savedIds, recs: recsOf(desk), book: desk.book, follows: desk.follows, collection: desk.collection });
+  const recs = recsOf(desk);
+  const bucket = Math.floor(desk.now / PLAN_GRAIN);
+  const k = [bucket, desk.saved, desk.savedIds, desk.recs, (desk as DeskData & { closingPicks?: unknown }).closingPicks, desk.book, desk.follows, desk.collection];
+  if (planMemo && planMemo.k.length === k.length && planMemo.k.every((x, i) => x === k[i])) return planMemo.plan;
+  const plan = planWeek({ now: bucket * PLAN_GRAIN, saved: desk.saved, savedIds: desk.savedIds, recs, book: desk.book, follows: desk.follows, collection: desk.collection });
+  planMemo = { k, plan };
+  return plan;
 }
 
 /* ── the .ics download (client only) ── */
@@ -260,7 +273,11 @@ function useShowPicks(plan: WeekPlan): [boolean, (v: boolean) => void] {
   return [show, set];
 }
 
-export default function WeekSection({ desk, narrow }: SectionProps) {
+export default function WeekSection({ desk }: SectionProps) {
+  // (Oct 20 audit) every width reads the week the phone's way: the day chips
+  // are the index, one day fills the room — seven 140px columns truncated
+  // every title on a desk. The day's cards lay out in a grid on wide screens.
+  const narrow = true;
   const router = useRouter();
   const plan = useMemo(() => planOf(desk), [desk]);
   const [showPicks, setShowPicks] = useShowPicks(plan);

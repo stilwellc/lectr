@@ -36,7 +36,10 @@ import { formatEstimate } from '../components/LotCard';
 import { AwayMark } from '../components/marks';
 import DecisionLine from '../components/DecisionLine';
 import { RoomHead } from './head';
-import { Thumb } from './desk/thumb';
+import { Thumb, SigPill } from './desk/thumb';
+import { StoryViewer } from './desk/story';
+import { useMyMax, overMax } from './desk/mymax';
+import { fmtFace } from '../lib/lot-face';
 
 export interface TodayRead { key: string; tag: string; lot: AuctionLot; fact: React.ReactNode; tone?: 'up' | 'hot' }
 
@@ -66,7 +69,7 @@ const dayWord = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString(
 function closeTag(l: AuctionLot): string {
   const c = closeMsOf(l);
   if (c == null) return 'Tonight';
-  return closeIsTimed(l) ? new Date(c).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'Today';
+  return closeIsTimed(l) ? new Date(c).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'Time TBC';   // (Oct 20 audit) every row here closes today — the tag says WHEN, or that the house gave no hour
 }
 
 /** every row's fact starts with WHO (one grammar across the band): the
@@ -113,8 +116,10 @@ function useNarrow(): boolean {
    honesty payload and was cut mid-word at 1440 ("Patek Philippe · Same
    maker · you…", "Michael Jordan · 8 sales,…"); the title keeps its one line */
 function ReadRow({ r, wrap = true }: { r: Row; wrap?: boolean }) {
+  const max = useMyMax(r.lot.id);
+  const over = overMax(r.lot, max);
   return (
-    <Link href={`/lot?id=${encodeURIComponent(r.lot.id)}`} className="ck-read ck-ph" role="listitem" data-nav-row
+    <Link href={`/lot?id=${encodeURIComponent(r.lot.id)}`} className="ck-read ck-ph" data-nav-row
       data-decision={r.decision ? '' : undefined}
       // a pick in the strip is a pick (the retention tracker's pick_open)
       data-pick={r.group === 'top' ? r.lot.id : undefined}>
@@ -124,6 +129,11 @@ function ReadRow({ r, wrap = true }: { r: Row; wrap?: boolean }) {
       {/* a pick's reason is its honesty payload: in the picks strip it wraps,
           never cut */}
       <span className="ck-read-fact" style={wrap ? { whiteSpace: 'normal' } : undefined}>{r.fact}</span>
+      {max != null && (
+        <span className={over ? 'ck-read-max' : 'ck-read-max'} data-over={over || undefined}>
+          {over ? <>The live bid has passed your max of <b>{fmtFace(max)}</b></> : <>Your max <b>{fmtFace(max)}</b></>}
+        </span>
+      )}
       {/* the decision rides its own line under the row — the fact (the
           reason) keeps its width and is never cut for it */}
       {r.decision && <span style={{ flex: '1 1 100%', minWidth: 0 }}>{r.decision}</span>}
@@ -135,13 +145,19 @@ function ReadRow({ r, wrap = true }: { r: Row; wrap?: boolean }) {
  *  round photo, its clock under it; a green ring is a lot reading under the
  *  market. One glance before the rows (Oct 20 photo pass). */
 function Tonight({ rows }: { rows: Row[] }) {
+  const [open, setOpen] = useState<number | null>(null);
   if (rows.length < 2) return null;
+  const stories = rows.map(r => ({ lot: r.lot, when: r.tag, pill: r.tone === 'up' ? <SigPill dir="up">Below market</SigPill> : undefined }));
   return (
-    <div className="ck-tonight" role="list" aria-label="Hammers tonight">
-      {rows.map(r => {
+    <>
+    {open != null && <StoryViewer stories={stories} start={open} onClose={() => setOpen(null)} />}
+    <div className="ck-tonight" role="group" aria-label="Hammers tonight">
+      {rows.map((r, n) => {
         const maker = displayMakerOf(r.lot)?.name;
         return (
-          <Link key={r.key} href={`/lot?id=${encodeURIComponent(r.lot.id)}`} className="ck-story" role="listitem"
+          <Link key={r.key} href={`/lot?id=${encodeURIComponent(r.lot.id)}`} className="ck-story"
+            // a plain tap opens the story; ⌘/ctrl-click keeps the link
+            onClick={e => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; e.preventDefault(); setOpen(n); }}
             aria-label={`${craftTitle(r.lot.title, r.lot.auctionHouse)}${maker ? `, ${maker}` : ''}`}>
             <Thumb src={r.lot.imageUrl} label={maker || r.lot.title} size={68} round tone={r.tone === 'up' ? 'up' : 'ink'} />
             <span className="ck-story-t">{r.tag}</span>
@@ -150,6 +166,7 @@ function Tonight({ rows }: { rows: Row[] }) {
         );
       })}
     </div>
+    </>
   );
 }
 
@@ -181,7 +198,7 @@ function TopSeat() {
   );
 }
 
-export default function TodayBand({ loop, closingWatches, reads, away, top = [], topLoading = false, phoneRows = PER_COL, picksN = 0 }: {
+export default function TodayBand({ loop, closingWatches, reads, away, top = [], topLoading = false, phoneRows = PER_COL, picksN = 0, results }: {
   loop: ReturnLoop | null;
   /** live watches that hammer today, soonest first */
   closingWatches: AuctionLot[];
@@ -195,6 +212,8 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
   /** rows a phone opens on (a desk with live watches opens on 2, so its
    *  own Watching room starts in the first screen) */
   phoneRows?: number;
+  /** results to confirm (Did you win?) — rides under the Tonight strip */
+  results?: React.ReactNode;
   /** the picks dealt right now — a first visit (no "since") with none
    *  closing tonight says what landed, not "nothing new" (R3#9) */
   picksN?: number;
@@ -276,25 +295,25 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
   const hidden = total - (shown.closing.length + shown.fresh.length + shown.rest.length);
   const picksLabel = `Top ${picks.length} for you`;
   const picksList = picks.length > 0 ? (
-    <div className="ck-reads" role="list" aria-label={picksLabel}>
+    <div className="ck-reads" role="group" aria-label={picksLabel}>
       <Head label={picksLabel} />
       {picks.map(r => <ReadRow key={r.key} r={r} wrap />)}
     </div>
   ) : topLoading ? <TopSeat /> : null;
   const closingList = shown.closing.length > 0 ? (
-    <div className="ck-reads" role="list" aria-label="Closing tonight">
+    <div className="ck-reads" role="group" aria-label="Closing tonight">
       <Head label="Closing tonight" />
       {shown.closing.map(r => <ReadRow key={r.key} r={r} />)}
     </div>
   ) : null;
   const freshList = shown.fresh.length > 0 ? (
-    <div className="ck-reads" role="list" aria-label={newLabel}>
+    <div className="ck-reads" role="group" aria-label={newLabel}>
       <Head label={newLabel} />
       {shown.fresh.map(r => <ReadRow key={r.key} r={r} />)}
     </div>
   ) : null;
   const readsList = shown.rest.length > 0 ? (
-    <div className="ck-reads" role="list" aria-label="Today's reads">
+    <div className="ck-reads" role="group" aria-label="Today's reads">
       <Head label="Today’s reads" />
       {shown.rest.map(r => <ReadRow key={r.key} r={r} />)}
     </div>
@@ -336,6 +355,7 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
         </> }}
         sub={away ? <span className="ck-away-line">{away}</span> : null} />
       <Tonight rows={closing} />
+      {results}
       {(leftCol || rightCol) && (
         <div className="ck-today-cols" data-split={leftCol && rightCol ? 'two' : 'one'}>
           {leftCol && <div>{left.map((x, i) => <React.Fragment key={i}>{x}</React.Fragment>)}{twoCol && more}</div>}

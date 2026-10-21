@@ -71,7 +71,9 @@ export function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSave
   }, [editing]);
   const below = useMemo(() => belowSignalOf(recs.map(r => r.lot), compLots), [recs, compLots]);
   const cols = useGridCols();
-  const narrow = cols === 1;
+  // (Oct 20 audit) a phone reads picks as photo cards too — the feed, not 56px rows;
+  // the compact row list stays for a reader who chose it (?picks=rows)
+  const narrow = cols === 1 && typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('picks') === 'rows';
   // two full rows of the desk's card grid (3 across at the rail's width,
   // 2 from 600–899) — one row on a desk whose own watches lead the page
   const page = compact ? (cols === 1 ? 3 : cols) : 6;

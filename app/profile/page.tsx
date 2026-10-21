@@ -17,7 +17,8 @@ import { DeskTabs, useDeskTab } from './tabs';
 import { useStalled } from './stall';
 import { closeDays, hammerWord } from './desk/derive';
 import { DeskProvider, useDeskState, useDeskInternals, useDesk, type DeskState } from './desk/provider';
-import { SECTIONS, SUB_ANCHORS, TAB_ORDER, mountedSections, keysLegend, missingSection, tabItemsOf, tabOf, EVERY_TAB, type DeskSection, type DeskTab } from './desk/sections';
+import { SECTIONS, SUB_ANCHORS, TAB_ORDER, mountedSections, keysLegend, missingSection, tabItemsOf, tabOf, EVERY_TAB, type DeskSection, type DeskTab, type TabItem } from './desk/sections';
+import type { DeskData } from './desk/types';
 import { LedgerGate } from './desk/rooms/history';
 import Cockpit from './desk/cockpit';
 import { useDeskKeys } from './desk/keys';
@@ -124,7 +125,7 @@ function Facts({ children }: { children: [string, React.ReactNode][] }) {
     <>
       {facts.map(([key, f], n) => (
         <React.Fragment key={key}>
-          <span className="ck-nb">{f}{n < facts.length - 1 && '\u00a0·'}</span>
+          <span className="ck-nb" data-k={key}>{f}{n < facts.length - 1 && '\u00a0·'}</span>
           {n < facts.length - 1 && ' '}
         </React.Fragment>
       ))}
@@ -134,8 +135,38 @@ function Facts({ children }: { children: [string, React.ReactNode][] }) {
 
 /** the masthead — the statement, the sub-line, the desk details, the
  *  archive warnings, then the cockpit */
-function DeskMasthead() {
+/** (Oct 20 audit) THE TAB'S OWN HEADLINE — one big figure per tab, the way a
+ *  trading app leads every screen with its number; Today and Watching keep
+ *  the desk's own line. Every figure is one the tab already prints below. */
+function tabHeadline(tab: DeskTab, tabs: readonly TabItem[], i: ReturnType<typeof useDeskInternals>, desk: DeskData): React.ReactNode | null {
+  const count = tabs.find(t => t.id === tab)?.count;
+  switch (tab) {
+    case 'today': {
+      const n = i.summary.closesToday;
+      return n > 0 ? <><Accent>{n}</Accent> of yours {n === 1 ? 'closes' : 'close'} today.</> : null;
+    }
+    case 'week': return count != null ? <><Accent>{count}</Accent> of yours hammer in 14 days.</> : null;
+    case 'budget': {
+      let sum = 0, n = 0;
+      for (const l of i.upcoming) { const m = desk.metaFor(l.id)?.maxUsd; if (typeof m === 'number' && m > 0) { sum += m; n++; } }
+      return n > 0
+        ? <>Your maxes: <Accent>{fmtFace(sum)}</Accent> on {n} {n === 1 ? 'lot' : 'lots'}.</>
+        : <>Your plan <Accent>to the hammer</Accent>.</>;
+    }
+    case 'for-you': return count != null ? <><Accent>{count}</Accent> picks for you.</> : null;
+    case 'names': return count != null ? <><Accent>{count}</Accent> names on your desk.</> : null;
+    case 'owned': return i.collection.rows.length > 0
+      ? <><Accent>{i.collection.rows.length}</Accent> {i.collection.rows.length === 1 ? 'piece' : 'pieces'}{i.collection.totalPaid > 0 ? <>, {fmtFace(i.collection.totalPaid)} paid</> : null}.</>
+      : null;
+    case 'record': return count != null ? <><Accent>{count}</Accent> {count === 1 ? 'call' : 'calls'} graded against the hammer.</> : null;
+    default: return null;
+  }
+}
+
+function DeskMasthead({ tab, tabs }: { tab: DeskTab; tabs: readonly TabItem[] }) {
   const i = useDeskInternals();
+  const { desk } = useDesk();
+  const own = tabHeadline(tab, tabs, i, desk);
   const { deskView, signedOutView, summary, collection, sold, soldOrphans, upcoming, orphanIds, savedIds, fromCache, lastCrawl, deskKicker, tunedLine, hasDeskDetails, changes, tasteLabels, tenure, auth, partialLoadFailed, fullSlow } = i;
   const [deskDetails, setDeskDetails] = useState(false);
   const savedLotsN = i.savedLots.length;
@@ -161,7 +192,7 @@ function DeskMasthead() {
           <Masthead
             kicker={deskKicker}
             serial={lastCrawl || undefined}
-            title={summary.totalEst > 0
+            title={own ?? (summary.totalEst > 0
               ? <>
                   Watching{' '}
                   <Accent>
@@ -182,7 +213,7 @@ function DeskMasthead() {
                 // nothing live: the desk is a record, not a watch — falling
                 // back to savedLots.length claimed "Watching 3 lots to the
                 // hammer" over a sub-line that said "0 live lots"
-                : <>Your desk: <Accent>{savedLotsN} settled {savedLotsN === 1 ? 'watch' : 'watches'}</Accent>, judged under Record.</>}
+                : <>Your desk: <Accent>{savedLotsN} settled {savedLotsN === 1 ? 'watch' : 'watches'}</Accent>, judged under Record.</>)}
             sub={
               // each fact carries its own trailing dot (no-break space), so a
               // separator can never start a line on a phone
@@ -194,6 +225,7 @@ function DeskMasthead() {
                   ? <>Next hammer {hammerWord(closeDays(summary.next))}{summary.next.saleDateTime && <CloseClock iso={summary.next.saleDateTime} windowHours={24} prefix=" · " />}</>
                   : null],
                 ['live', <>{upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}</>],
+                ['wins', i.unclaimedWins > 0 ? <a href="#settled" className="ck-away-link">{i.unclaimedWins} {i.unclaimedWins === 1 ? 'result' : 'results'} to confirm</a> : null],
                 ['priced', summary.totalEst > 0 ? <>{summary.priced} of {upcoming.length} priced at estimate midpoint</> : null],
                 ['onesided', summary.totalEst > 0 && summary.oneSided > 0 ? <>{summary.oneSided} from one bound, not summed</> : null],
                 // a count of flags, not a market direction — ink (lamp law)
@@ -259,9 +291,10 @@ function DeskBody() {
   const i = useDeskInternals();
   // a desk with nothing closing today opens on the picks (the quick start)
   const [tab, setTab] = useDeskTab(i.todayShows ? 'today' : 'for-you', i.landReady);
-  const sections = mountedSections(desk, i);
-  const tabs = tabItemsOf(desk, i);
-  const mountedIds = new Set(sections.map(s => s.id));
+  // (perf) the registry runs every room's meta()/when(): once per desk change, not per render
+  const sections = React.useMemo(() => mountedSections(desk, i), [desk, i]);
+  const tabs = React.useMemo(() => tabItemsOf(desk, i), [desk, i]);
+  const mountedIds = React.useMemo(() => new Set(sections.map(s => s.id)), [sections]);
   const order = TAB_ORDER[tab];
   const inTab = sections.filter(s => s.tab === tab && !EVERY_TAB.has(s.id))
     .sort((a, b) => (order ? order.indexOf(a.id) - order.indexOf(b.id) : 0));
@@ -271,7 +304,7 @@ function DeskBody() {
   const empty = !!tabs.find(t => t.id === tab)?.empty;
   return (
     <>
-      <div className="dt-head" data-tab={tab} data-compact={(tab !== 'today' && i.todayShows) || undefined}><DeskMasthead /></div>
+      <div className="dt-head" data-tab={tab} data-compact={(tab !== 'today' && i.todayShows) || undefined}><DeskMasthead tab={tab} tabs={tabs} /></div>
       <DeskTabs tabs={tabs} active={tab} onPick={setTab}
         help={<HelpChip name="Keys and tabs"><KeysHelp mountedIds={mountedIds} /></HelpChip>} />
       {/* not before the desk can land: the archive that resolves #settled & co. lands late */}

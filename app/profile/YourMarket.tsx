@@ -201,7 +201,7 @@ function Row({ d, mode, sinceDay }: { d: Digest; mode: MarketMode; sinceDay: str
     ? { v: pctText(move.pct), cap: 'YoY', color: move.tone === 'up' ? 'var(--color-up)' : 'var(--color-down-text)' }
     : { v: live.live.toLocaleString('en-US'), cap: 'live', color: undefined };
   return (
-    <Link href={hrefOf(name, d.s)} className="ck-mrow" role="listitem" data-nav-row>
+    <Link href={hrefOf(name, d.s)} className="ck-mrow" data-nav-row>
       {/* the name's face: its record, its biggest sale, else a flagged live lot */}
       <Thumb src={record?.row.img ?? biggest?.row?.img ?? live.flaggedLots[0]?.imageUrl} label={name.label} size={52} round
         tone={live.flagged > 0 ? 'up' : undefined} />
@@ -328,7 +328,7 @@ export default function YourMarket({ book, owned = [], mode: modeProp, since: si
                 : <>Nothing moved enough to say so {when} — the names you follow and own</>}
           </span>} />
         {shown.length > 0 && (
-          <div className="ck-reads ck-market-rows" role="list" aria-label={`Your names, ${when}`}>
+          <div className="ck-reads ck-market-rows" role="group" aria-label={`Your names, ${when}`}>
             {shown.map(d => <Row key={d.name.key} d={d} mode={mode} sinceDay={sinceDay} />)}
           </div>
         )}

@@ -88,14 +88,15 @@ export function nightLabel(day: string, now: number): string {
 
 /* ── the plan ──────────────────────────────────────────────────────────── */
 
-export type PlanBasis = 'max' | AnchorSrc;
+export type PlanBasis = 'mine' | 'max' | AnchorSrc;
 
 /** the one word a row's figure wears (the row tag) */
 export const BASIS_TAG: Record<PlanBasis, string> = {
-  max: 'Max bid', est: 'Est mid', proj: 'Proj close', engine: 'Value', bid: 'Live bid',
+  mine: 'My max', max: 'Max bid', est: 'Est mid', proj: 'Proj close', engine: 'Value', bid: 'Live bid',
 };
 /** the figure, in full (the row's title / the help strip) */
 export const BASIS_TEXT: Record<PlanBasis, string> = {
+  mine: 'your own max — the most you said you would pay (hammer, before premium)',
   max: 'the engine’s max bid — its walk-away hammer',
   est: 'the house estimate midpoint — hammer, before premium; not a bid you chose, so it is listed and not summed unless you ask',
   proj: 'the live bid projected to its close by this room’s measured multiple — hammer',
@@ -196,12 +197,16 @@ export interface PlanOptions {
 }
 
 /** ONE live watched lot's plan row — null when nothing prices it */
-export function planRowOf(lot: AuctionLot, now: number): PlanRow | null {
+export function planRowOf(lot: AuctionLot, now: number, myMax: number | null = null): PlanRow | null {
   const face = lotFace(lot);
   const anchor = prioStatic(lot, now);
   let hammer = 0;
   let basis: PlanBasis;
-  if (face.maxBid && face.maxBid.hammer > 0) {
+  // (Oct 20 audit) YOUR max leads: the plan is your money, the engine's figure is context
+  if (myMax != null && myMax > 0) {
+    hammer = myMax;
+    basis = 'mine';
+  } else if (face.maxBid && face.maxBid.hammer > 0) {
     hammer = face.maxBid.hammer;
     basis = 'max';
   } else if (anchor && anchor.a > 0) {
@@ -293,7 +298,7 @@ export function smallestDropSet(rows: readonly PlanRow[], ceiling: number): Plan
 const sum = (rows: readonly PlanRow[], k: 'hammer' | 'allIn') => rows.reduce((s, r) => s + r[k], 0);
 
 /** the bid plan: every live watched lot, by close night, against the ceiling */
-export function bidPlan(saved: readonly AuctionLot[], now: number, price: PricePref | null, opts: PlanOptions = {}): BidPlan {
+export function bidPlan(saved: readonly AuctionLot[], now: number, price: PricePref | null, opts: PlanOptions = {}, maxOf: (id: string) => number | null = () => null): BidPlan {
   const estInPlan = !!opts.estInPlan;
   const today = isoDayOf(now);
   const ceiling = price?.maxUsd ?? null;
@@ -301,7 +306,7 @@ export function bidPlan(saved: readonly AuctionLot[], now: number, price: PriceP
   const unpriced: AuctionLot[] = [];
   for (const l of saved) {
     if (!isOnBlock(l, today, now)) continue;
-    const r = planRowOf(l, now);
+    const r = planRowOf(l, now, maxOf(l.id));
     if (r) rows.push(r); else unpriced.push(l);
   }
   const byDay = new Map<string, PlanRow[]>();
@@ -348,8 +353,8 @@ export function bidPlan(saved: readonly AuctionLot[], now: number, price: PriceP
 export function basisMix(rows: readonly PlanRow[]): string {
   const n = new Map<PlanBasis, number>();
   for (const r of rows) n.set(r.basis, (n.get(r.basis) ?? 0) + 1);
-  const order: PlanBasis[] = ['max', 'est', 'proj', 'engine', 'bid'];
-  const word: Record<PlanBasis, string> = { max: 'at max bid', est: 'at estimate midpoint', proj: 'at projected close', engine: 'at lectr value', bid: 'at the live bid' };
+  const order: PlanBasis[] = ['mine', 'max', 'est', 'proj', 'engine', 'bid'];
+  const word: Record<PlanBasis, string> = { mine: 'at your max', max: 'at max bid', est: 'at estimate midpoint', proj: 'at projected close', engine: 'at lectr value', bid: 'at the live bid' };
   return order.filter(b => n.get(b)).map(b => `${n.get(b)} ${word[b]}`).join(' · ');
 }
 

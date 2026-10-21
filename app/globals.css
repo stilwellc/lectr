@@ -5247,7 +5247,7 @@ html[data-lectr-light] .dt-band[data-tone='b'] :is(.ns-cell:not(.ns-cell-color),
 .dt-empty-lead .ck-index-tap { margin-left: 6px; }
 .sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
-/* phone: all six tabs on screen (3×2), the room row scrolls with the page */
+/* phone: the tab grid (4×2 for eight tabs — see 'one job per tab' below), the room row scrolls with the page */
 @media (max-width: 639.98px) {
   .dt-bar { align-items: flex-start; gap: 0; }
   .dt-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; overflow: visible; margin-left: 0; }
@@ -5405,8 +5405,8 @@ html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] > .ray-band { bo
 .ck-page .pe-rnums > :last-child { justify-self: start; }
 @media (max-width: 639.98px) { .ck-page .pe-rnums { grid-template-columns: auto auto auto 1fr; justify-items: start; column-gap: 10px; } }
 /* dark: the soft wells and the month bars need an edge against the near-black ground */
-:root[data-theme="dark"] .ck-page .ns-well, :root.dark .ck-page .ns-well { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.09); background: #121418; }
-:root[data-theme="dark"] .ck-page .pe-mbar, :root.dark .ck-page .pe-mbar { background: rgba(255,255,255,0.34); }
+:root[data-theme="dark"] .ck-page .ns-well { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.09); background: #121418; }
+:root[data-theme="dark"] .ck-page .pe-mbar { background: rgba(255,255,255,0.34); }
 /* a stated signal keeps its label and value on one line */
 .ck-page .ck-sig-pair { white-space: nowrap; display: inline-flex; gap: 6px; align-items: baseline; }
 /* For you cards: the body has a real inset and titles hold two lines, so the meta lines share a height */
@@ -5438,7 +5438,6 @@ html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] > .ray-band { bo
 @media (max-width: 639.98px) { .ck-page .ck-week-days[data-narrow] { -webkit-mask-image: linear-gradient(to right, #000 86%, transparent); mask-image: linear-gradient(to right, #000 86%, transparent); } }
 /* (round 6) the phone watch card's signal says what it is measured against */
 .ck-page .ck-mrow-sig { white-space: nowrap; }
-.ck-page .ck-mrow-sig-k { font-size: 11px; color: var(--color-text-muted); font-weight: 400; }
 
 /* ── THE PHOTO + COLOR PASS (Oct 20 2026) ─────────────────────────────────
    "a massive wall of black text on white paper like a book" → a command
@@ -5546,3 +5545,115 @@ html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] > .ray-band { bo
   .dt-tab .dt-dot { position: absolute; top: 9px; right: 14%; }
   .dt-tab[aria-selected='true']::after { left: 22%; right: 22%; }
 }
+
+/* ── MY MAX (Oct 20 audit wave) ── */
+.ck-mymax {
+  display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 11px; border-radius: 999px;
+  border: 1px dashed var(--color-border-mid); background: none; cursor: pointer; white-space: nowrap;
+  font: 500 12px/1 var(--font-sans), sans-serif; color: var(--color-text-secondary);
+}
+.ck-mymax:hover { color: var(--color-fg); border-color: var(--color-fg); }
+.ck-mymax[data-set] { border-style: solid; border-color: var(--color-border); color: var(--color-fg); background: color-mix(in srgb, var(--color-fg) 4%, transparent); }
+.ck-mymax b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.ck-mymax[data-over] { border-color: var(--color-down); background: var(--color-down-soft, rgba(193,62,44,.11)); }
+.ck-mymax-over { color: var(--color-down-text); font-weight: 500; }
+.ck-mymax-edit { display: inline-flex; align-items: center; gap: 6px; }
+.ck-mymax-edit input {
+  width: 96px; height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--color-border-mid);
+  background: var(--color-bg, #fff); color: var(--color-fg); font: 500 13px/1 var(--font-sans), sans-serif; font-variant-numeric: tabular-nums;
+}
+.ck-mymax-edit input[data-bad] { border-color: var(--color-down); }
+.ck-mymax-edit input:focus { outline: 2px solid var(--color-fg); outline-offset: 1px; }
+.ck-mymax-btn { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--color-border); background: none; color: var(--color-fg); font: 500 12px/1 var(--font-sans), sans-serif; cursor: pointer; }
+.ck-mymax-btn[data-solid] { background: var(--color-fg); color: var(--color-bg, #fff); border-color: var(--color-fg); }
+.ck-page .ck-read-max { font-size: 12.5px; color: var(--color-text-secondary); }
+.ck-page .ck-read-max b { color: var(--color-fg); font-variant-numeric: tabular-nums; }
+.ck-page .ck-read-max[data-over] { color: var(--color-down-text); font-weight: 500; }
+.ck-page .ck-row-max { display: block; margin-top: 6px; }
+.ck-page .pe-mine { margin-bottom: 22px; }
+.ck-page .pe-mine-empty { margin: 0 0 18px; padding: 14px 16px; border-radius: 14px; background: color-mix(in srgb, var(--color-fg) 4%, transparent); font-size: 13.5px; line-height: 1.5; color: var(--color-text-secondary); }
+.ck-page .pe-mine-empty b { color: var(--color-fg); font-weight: 600; }
+.ck-page .pe-engine-head { margin-top: 6px; margin-bottom: 12px; }
+/* focus never lands under the sticky nav + tab bar (keyboard Tab, j/k) */
+html:has(.dt-wrap) { scroll-padding-top: calc(64px + var(--dt-h, 56px) + 12px); }
+.ck-page .ck-ph > .ck-thumb { --th: var(--ph, 64px) !important; } /* the row's track wins over a Thumb's own size prop */
+/* (Oct 20 audit) the phone's first screen: Today's header is its headline and
+   one line of tappable facts — the cockpit (Next hammer, Your calls, the 14-day
+   strip) reads on desktop; on a phone those live in the Tonight strip, Record
+   and Week. The basis caveats ride the desktop line only. */
+@media (max-width: 639.98px) {
+  .dt-head[data-tab='today'] .ck-cockpit { display: none; }
+  .dt-head .ray-masthead > p .ck-nb:is([data-k='priced'], [data-k='onesided']) { display: none; }
+  .dt-head .ray-masthead > p { font-size: 14.5px !important; line-height: 1.6; }
+  .dt-head .ray-masthead > p .ck-nb { white-space: nowrap; }
+}
+/* THE SHELF — Portfolio's photo grid */
+.ck-page .pf-viewpick { display: inline-flex; gap: 6px; margin-right: 6px; }
+.ck-page .pf-shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 18px 14px; margin: 18px 0 8px; }
+.ck-page .pf-tile { position: relative; display: grid; gap: 4px; text-decoration: none; color: var(--color-fg); min-width: 0; }
+.ck-page .pf-tile-ph { position: relative; display: block; aspect-ratio: 1; border-radius: 14px; overflow: hidden; background: var(--color-bg-deep, #F1EEEB); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-fg) 8%, transparent); }
+.ck-page .pf-tile-ph > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 300ms cubic-bezier(.4,0,.2,1); }
+.ck-page .pf-tile:hover .pf-tile-ph > img { transform: scale(1.03); }
+.ck-page .pf-tile-l { position: absolute; inset: 0; display: grid; place-items: center; font: 300 56px/1 var(--font-sans), sans-serif; color: var(--color-text-faint); }
+.ck-page .pf-tile-pill { position: absolute; top: 10px; right: 10px; }
+.ck-page .pf-tile-t { font-size: 13px; font-weight: 500; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 4px; }
+.ck-page .pf-tile-s { font-size: 12px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 639.98px) { .ck-page .pf-shelf { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 10px; } }
+:root[data-theme="dark"] .ck-page .pf-tile-ph { background: #16181c; }
+@media (prefers-reduced-motion: reduce) { .ck-page .pf-tile-ph > img { transition: none; } }
+/* dark: a white-ground house photo is dimmed a touch, so it never glares off the near-black page */
+:root[data-theme="dark"] .ck-page :is(.ck-thumb, .pf-tile-ph) > img { filter: brightness(0.86); }
+/* a grey (muted) budget figure is listed, not summed — the section's legend says so once */
+/* THE STORY VIEWER — Tonight's lots full-screen */
+.ck-storyview {
+  position: fixed; inset: 0; z-index: 1000; display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+  background: #0b0c0e; color: #f4f2ef; outline: none;
+  padding: max(10px, env(safe-area-inset-top)) 0 max(14px, env(safe-area-inset-bottom));
+}
+.ck-storyview-bars { display: flex; gap: 4px; padding: 6px 14px 10px; }
+.ck-storyview-bars i { flex: 1; height: 2.5px; border-radius: 2px; background: rgba(255,255,255,.22); }
+.ck-storyview-bars i[data-on] { background: #f4f2ef; }
+.ck-storyview-x { position: absolute; top: max(18px, calc(env(safe-area-inset-top) + 14px)); right: 12px; width: 44px; height: 44px; border-radius: 999px; border: none; background: rgba(255,255,255,.1); color: #f4f2ef; font: 300 26px/1 var(--font-sans), sans-serif; cursor: pointer; z-index: 2; }
+.ck-storyview-ph { position: relative; min-height: 0; display: grid; place-items: center; overflow: hidden; }
+.ck-storyview-ph > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.ck-storyview-l { font: 300 120px/1 var(--font-sans), sans-serif; color: rgba(255,255,255,.18); }
+.ck-storyview-nav { position: absolute; top: 0; bottom: 0; width: 34%; border: none; background: none; cursor: pointer; z-index: 1; }
+.ck-storyview-nav[data-side='prev'] { left: 0; } .ck-storyview-nav[data-side='next'] { right: 0; }
+.ck-storyview-nav:disabled { cursor: default; }
+.ck-storyview-nav:focus-visible { outline: 2px solid #f4f2ef; outline-offset: -4px; }
+.ck-storyview-body { display: grid; gap: 6px; padding: 14px 18px 0; max-width: 720px; width: 100%; margin: 0 auto; }
+.ck-storyview-when { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font: 500 13px/1.3 var(--font-sans), sans-serif; font-variant-numeric: tabular-nums; color: rgba(244,242,239,.8); }
+.ck-storyview-clock { color: #f4f2ef; font-weight: 600; }
+.ck-storyview-t { font: 400 20px/1.3 var(--font-sans), sans-serif; letter-spacing: -0.01em; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ck-storyview-s { font-size: 13.5px; color: rgba(244,242,239,.7); }
+.ck-storyview-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.ck-storyview .ck-mymax { height: 40px; padding: 0 16px; font-size: 13px; color: #f4f2ef; border-color: rgba(255,255,255,.35); background: none; }
+.ck-storyview .ck-mymax-edit input { background: #16181c; color: #f4f2ef; border-color: rgba(255,255,255,.35); height: 40px; }
+.ck-storyview .ck-mymax-btn { height: 40px; color: #f4f2ef; border-color: rgba(255,255,255,.35); }
+.ck-storyview .ck-mymax-btn[data-solid] { background: #f4f2ef; color: #0b0c0e; }
+.ck-storyview-btn { display: inline-flex; align-items: center; height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,.35); color: #f4f2ef; text-decoration: none; font: 500 13px/1 var(--font-sans), sans-serif; }
+.ck-storyview-btn[data-solid] { background: #f4f2ef; color: #0b0c0e; border-color: #f4f2ef; }
+.ck-storyview .ck-sigpill { color: #08090a; background: #57be87; }
+/* a tab's news badge — what is new since your last visit (ink; color stays the market's) */
+.dt-news {
+  display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--color-fg); color: var(--color-bg, #fff); font: 600 11px/1 var(--font-sans), sans-serif; font-variant-numeric: tabular-nums;
+}
+@media (max-width: 639.98px) { .dt-tab .dt-news { position: absolute; top: 6px; right: 10%; min-width: 16px; height: 16px; font-size: 10px; } }
+/* Did you win? — results to confirm on Today */
+.ck-page .ck-results { margin: 4px 0 18px; }
+.ck-page .ck-result { padding: 10px 0; border-bottom: 1px solid var(--hairline); }
+.ck-page .ck-result:last-of-type { border-bottom: none; }
+.ck-page .ck-result-t { font-size: 14px; font-weight: 500; color: var(--color-fg); text-decoration: none; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.ck-page .ck-result-s { font-size: 12.5px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.ck-page .ck-result-s b { color: var(--color-fg); font-weight: 600; }
+@media (min-width: 640px) {
+  .ck-page .ck-result.ck-ph { grid-template-columns: var(--ph) minmax(0, 1fr) auto; }
+  .ck-page .ck-result > .ck-result-a { grid-column: 3; grid-row: 1 / span 2; align-self: center; }
+}
+.ck-page .ck-result-more { display: inline-block; margin-top: 8px; font-size: 13px; }
+.ck-page .ck-keepline { margin: -4px 0 14px; font-size: 13px; color: var(--color-text-secondary); }
+/* dark: the quiet figure cells get an edge — black on near-black vanished */
+:root[data-theme="dark"] .ck-page .ns-cellgrid > :not(.ns-ccell) { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+/* phone: the news badge is a corner dot (a number over a 4-up grid collided with the word) */
+@media (max-width: 639.98px) { .dt-tab .dt-news { font-size: 0; min-width: 8px; width: 8px; height: 8px; padding: 0; top: 10px; right: 8%; } }

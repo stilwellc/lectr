@@ -15,6 +15,8 @@
  * watch) — a phone collector can un-watch from the desk; the Ledger / Cards
  * toggle stays reachable at every width.
  */
+import { MyMax } from '../mymax';
+import { safeHref } from '../../../lib/safe-href';
 import { Thumb, SigPill } from '../thumb';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -121,6 +123,9 @@ function RowDossier({ lot, meta, sig, onRemove, id }: {
         </div>
       </div>
       <div className="ck-dossier-actions">
+        {/* one action set on every live row: your max · bid at the house · open (Oct 20 audit) */}
+        <MyMax lot={lot} />
+        {safeHref(lot.url) && <a href={safeHref(lot.url)!} target="_blank" rel="noopener noreferrer">Bid at {lot.auctionHouse} ↗</a>}
         <Link href={`/lot?id=${encodeURIComponent(lot.id)}`}>Open the lot</Link>
         <button type="button" className="quiet" onClick={onRemove}>Remove watch</button>
       </div>
@@ -142,18 +147,20 @@ export default function WatchingRoom(_p: SectionProps) {
   const cnNext = closingNow.next;
   const { upcoming, summary, room, ledgerCols, signalById, metaFor, allLots, isSaved, savedIdOf, toggle, onCardToggle } = i;
 
-  const [savedView, setSavedView] = useState<SavedView>('ledger');
-  const [closersOpen, setClosersOpen] = useState(false);
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
+  // read in the initializer (the desk renders client-side only): a tab switch
+  // remounts this room, and an effect-based read flashed ledger → cards
+  const [savedView, setSavedView] = useState<SavedView>(() => {
+    if (typeof window === 'undefined') return 'ledger';
     try {
       // the URL is shareable state and wins; localStorage is the memory
       const uv = new URLSearchParams(window.location.search).get('view');
-      if (uv === 'cards' || uv === 'ledger') { setSavedView(uv); return; }
+      if (uv === 'cards' || uv === 'ledger') return uv;
       const v = localStorage.getItem(SAVEDVIEW_KEY) ?? localStorage.getItem('ray-savedview');
-      if (v === 'cards' || v === 'ledger') setSavedView(v);
+      if (v === 'cards' || v === 'ledger') return v;
     } catch { /* private mode */ }
-  }, []);
+    return 'ledger';
+  });
+  const [closersOpen, setClosersOpen] = useState(false);
   const pickView = (v: SavedView) => {
     setSavedView(v);
     try { localStorage.setItem(SAVEDVIEW_KEY, v); } catch { /* private mode */ }
@@ -238,8 +245,9 @@ export default function WatchingRoom(_p: SectionProps) {
       <div className="ns-plate" style={{ paddingTop: 18 }}>
       <RoomHead className="ray-enter" mark={<WatchMark size={17} />} title="Watching · on the block" style={{ marginBottom: 14 }}
         help={{ name: 'Watching', body: <>
-          Every bookmarked lot still on the block, sorted action-first: lands soon, then flagged below
-          market, then bid momentum, then quiet. Click a row (or press Enter on it) to open its dossier
+          Every bookmarked lot still on the block, soonest hammer first (the same day: flagged below
+          market, then bid momentum, then quiet). <b>vs comps</b> is the engine&rsquo;s read now; <b>since saved</b> is how far that read
+          moved since you saved the lot, in points. Open a row to set <b>My max</b> — the most you would pay. Click a row (or press Enter on it) to open its dossier
           in place — <b>j</b>/<b>k</b> walks the rows. The tag on each row says why it needs you now.
           Under a title, <b>worth up to</b> is the engine&rsquo;s max bid and the gap to the projected close
           beside it. A row with no such line is one the engine abstained on (too little like it has sold) or
@@ -260,6 +268,14 @@ export default function WatchingRoom(_p: SectionProps) {
             <button className="ray-savedview-btn" data-active={savedView === 'cards'} aria-pressed={savedView === 'cards'} onClick={() => pickView('cards')}>Cards</button>
           </div>
         } />
+      {/* (Oct 20 audit) a signed-out desk keeps its watches on this device only —
+          from the third watch the room says so, once, with the one tap that fixes it */}
+      {i.auth.authEnabled && !i.auth.user && upcoming.length >= 3 && (
+        <p className="ck-keepline">
+          These {upcoming.length} watches live on this device only.{' '}
+          <button type="button" className="ck-deskdetails-btn" onClick={() => i.auth.signInWithGoogle()}>Sign in to keep them everywhere</button>
+        </p>
+      )}
       {/* (Phase 2) CLOSING NOW — the ≤24h closers as a live ticker row,
           countdown + bids + decision line, above the ledger */}
       {/* (Oct 20) in the Ledger view the closers' rows lead the ledger already —
@@ -282,8 +298,8 @@ export default function WatchingRoom(_p: SectionProps) {
           <span className="kicker">Why now</span>
           <span className="kicker">Work</span>
           <span className="kicker r">Est</span>
-          <span className="kicker r"><Term k="signal now">Signal now</Term></span>
-          <span className="kicker r"><Term k="delta saved">Δ saved</Term></span>
+          <span className="kicker r"><Term k="signal now">vs comps</Term></span>
+          <span className="kicker r"><Term k="delta saved">since saved</Term></span>
           <span className="kicker r">Hammers</span>
         </div>
         {room.map(({ l: lot, reason }) => {
@@ -330,6 +346,8 @@ export default function WatchingRoom(_p: SectionProps) {
                   </span>
                   {/* (N2) the decision: the Est and Hammers columns print the rest */}
                   <DecisionLine lot={lot} estimate={false} when={false} abstain="quiet" style={{ marginTop: 3 }} />
+                  {/* a set max rides the row; setting one lives in Details */}
+                  {metaFor(lot.id)?.maxUsd ? <span className="ck-row-max"><MyMax lot={lot} compact /></span> : null}
                 </span>
                 <span className="num">{fromText(lot) ?? formatEstimate(lot) ?? '—'}</span>
                 <span className="num" style={sig ? undefined : { color: 'var(--color-text-faint)' }}
@@ -377,7 +395,7 @@ export default function WatchingRoom(_p: SectionProps) {
                   <span className="ck-mtitle">{title}</span>
                   <span className="ck-msub">
                     {reason && <span className="ck-tag" data-tone={reason.tag === 'Below market' ? 'up' : reason.tag === 'Lands soon' ? 'hot' : undefined}>{reason.tag}</span>}
-                    {[displayMakerOf(lot)?.name, fromText(lot) ?? formatEstimate(lot)].filter(Boolean).join(' · ')}
+                    {[displayMakerOf(lot)?.name, fromText(lot) ?? formatEstimate(lot), metaFor(lot.id)?.maxUsd ? `my max ${fmtFace(metaFor(lot.id)!.maxUsd!)}` : null].filter(Boolean).join(' · ')}
                   </span>
                   <DecisionLine lot={lot} estimate={false} when={false} abstain="quiet" style={{ marginTop: 2 }} />
                 </span>

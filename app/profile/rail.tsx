@@ -152,7 +152,9 @@ export function useHashLanding(ready: boolean): string | null {
   const [missing, setMissing] = useState<string | null>(null);
   useEffect(() => {
     if (!ready || done.current) return;
-    const id = decodeURIComponent(window.location.hash.slice(1));
+    // a malformed hash (#50%, a mangled share) must never throw out of an effect — it white-screened the app
+    let id = '';
+    try { id = decodeURIComponent(window.location.hash.slice(1)); } catch { done.current = true; return; }
     // a tab's own hash (#tab-watching) opens the tab — there is no room to land on
     if (!id || id.startsWith('tab-')) { done.current = true; return; }
     let tries = 0;

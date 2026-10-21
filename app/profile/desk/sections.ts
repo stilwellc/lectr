@@ -46,7 +46,7 @@ export type SectionGroup = 'now' | 'picks' | 'desk';
 /* ── THE TABS (Oct 20 2026) ────────────────────────────────────────────────
    The desk was ONE 24,000px column — 14 rooms stacked, a 27-screen scroll on
    desktop and 26 on a phone ("horrible and unusable"). The rooms now live in
-   six tabs; the page mounts ONE tab's rooms at a time. Nothing is removed:
+   tabs (eight since the one-job split); the page mounts ONE tab's rooms at a time. Nothing is removed:
    every room mounts under its tab, every #anchor / g-chord still lands (the
    jump switches tab first, then scrolls), and Account rides under every tab. */
 /* (Oct 20, later) ONE JOB PER TAB — "watching should only show what I'm
@@ -255,10 +255,24 @@ export interface TabItem extends DeskTabDef {
   count?: React.ReactNode;
   tone?: 'up' | 'down';
   dot?: boolean;
+  /** what is NEW since the last visit (an action or a result) — the tab's badge */
+  news?: number;
   /** the rooms mounted under it, as rail items (the in-tab jump row) */
   items: RailItem[];
   /** nothing mounted under it on this desk */
   empty: boolean;
+}
+
+/** your watches whose live bid has passed your own max — Watching's news (an action) */
+function overMaxN(desk: DeskData, i: DeskInternals): number {
+  let n = 0;
+  for (const l of i.upcoming ?? []) {
+    const max = desk.metaFor(l.id)?.maxUsd;
+    const bid = l.currentBid || 0;
+    const usd = !l.currency || l.currency === 'USD' ? bid : bid * (l.fxRate || 0);
+    if (typeof max === 'number' && max > 0 && l.priceUsd == null && usd > max) n++;
+  }
+  return n;
 }
 
 /** the tab bar for this desk: every tab (an empty one stays — it explains how it fills) */
@@ -277,6 +291,9 @@ export function tabItemsOf(desk: DeskData, i: DeskInternals): TabItem[] {
     const lead = items.find(r => r.id === ns && r.count != null && !r.quiet) ?? items.find(r => r.count != null && !r.quiet);
     // empty = no room under it has anything to say (a room can mount and
     // render nothing: Today with no closes, Market with no names)
-    return { ...t, count: TAB_NO_COUNT.has(t.id) ? undefined : lead?.count, tone: lead?.tone, dot: items.some(r => r.dot), items, empty: items.length === 0 };
+    // (Oct 20 audit) the badge is news, not inventory: results to confirm on
+    // Today, new bids on your watches, results settled since your last visit
+    const news = (t.id === 'today' ? i.unclaimedWins : t.id === 'watching' ? overMaxN(desk, i) : t.id === 'record' ? i.sinceLastN : 0) ?? 0;
+    return { ...t, news: news > 0 ? news : undefined, count: TAB_NO_COUNT.has(t.id) ? undefined : lead?.count, tone: lead?.tone, dot: items.some(r => r.dot), items, empty: items.length === 0 };
   });
 }

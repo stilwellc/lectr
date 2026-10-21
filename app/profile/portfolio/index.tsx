@@ -15,6 +15,9 @@
  * Contract: default export (SectionProps) + meta(desk). Reads only the desk
  * it is handed and the entity buckets; one clock (desk.now).
  */
+import { SigPill } from '../desk/thumb';
+import PlateImg from '../../components/PlateImg';
+
 import { Thumb } from '../desk/thumb';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -23,7 +26,7 @@ import { RoomHead } from '../head';
 import { READ_DEADLINE_MS, withTimeout } from '../stall';
 import { loadEntityDetail, loadEntitySummary } from '../../hooks/useEntities';
 import { CollectionMark } from '../../components/marks';
-import { craftTitle, formatDate } from '../../utils';
+import { craftTitle, formatDate, httpsImg, sizedImg } from '../../utils';
 import { makerLineOf } from '../../lib/lot-labels';
 import { fmtFace } from '../../lib/lot-face';
 import { COMMISSION_NOTE, TIER_LABEL } from './commission';
@@ -42,8 +45,18 @@ export function meta(desk: DeskData): SectionMeta {
 
 const dirOf = (delta: number | null): 'up' | 'down' | undefined => (delta == null || delta === 0 ? undefined : delta > 0 ? 'up' : 'down');
 
+const VIEW_KEY = 'lectr-portfolio-view';
 export default function Portfolio({ desk, narrow }: SectionProps) {
   const nowYear = yearOfNow(desk.now);
+  // the shelf leads (your pieces as photos); the ledger is one tap — remembered on the device
+  // the shelf leads only when most pieces carry a photo — a grid of monograms reads worse than the ledger
+  const photoShare = desk.collection.length ? desk.collection.filter(l => !!l.imageUrl).length / desk.collection.length : 0;
+  const [chosen, setChosen] = useState<'shelf' | 'ledger' | null>(() => {
+    try { const v = typeof window !== 'undefined' ? window.localStorage.getItem(VIEW_KEY) : null; return v === 'ledger' || v === 'shelf' ? v : null; } catch { return null; }
+  });
+  const view: 'shelf' | 'ledger' = chosen ?? (photoShare >= 0.5 ? 'shelf' : 'ledger');
+  const setView = setChosen;
+  const pickView = (v: 'shelf' | 'ledger') => { setView(v); try { window.localStorage.setItem(VIEW_KEY, v); } catch { /* private mode */ } };
   const pieces = useMemo(
     () => desk.collection.map(l => pieceOf(l, desk.metaFor(l.id), desk.ledger.get(l.id), desk.follows)),
     [desk.collection, desk.metaFor, desk.ledger, desk.follows],
@@ -144,6 +157,10 @@ export default function Portfolio({ desk, narrow }: SectionProps) {
             {resolving ? <> · resolving your pieces against the archive…</> : pending ? <> · reading the makers&rsquo; record…</> : null}
           </>}
           actions={<div className="pf-actions">
+            <span className="pf-viewpick" role="group" aria-label="Portfolio view">
+              <button type="button" className="ray-toolbar-pill" aria-pressed={view === 'shelf'} data-active={view === 'shelf'} onClick={() => pickView('shelf')}>Shelf</button>
+              <button type="button" className="ray-toolbar-pill" aria-pressed={view === 'ledger'} data-active={view === 'ledger'} onClick={() => pickView('ledger')}>Ledger</button>
+            </span>
             <button type="button" className="ray-toolbar-pill" onClick={onCsv} disabled={resolving || pending}
               title={resolving ? 'Waits for the archive to resolve every piece' : pending ? 'Waits for the makers’ record' : 'Every column with its basis — built on this device'}
               aria-label="Export your portfolio as CSV">Export CSV</button>
@@ -192,7 +209,33 @@ export default function Portfolio({ desk, narrow }: SectionProps) {
           {excludedNote && <> <b>{excludedNote}.</b></>}
         </p>
 
+        {/* THE SHELF (Oct 20 audit) — your pieces as a photo grid, an
+            Instagram profile's grid; the corner pill is the piece's move (the
+            same growth figure the ledger prints). Tap → the lot. */}
+        {view === 'shelf' && (
+          <div className="pf-shelf" role="group" aria-label="Your pieces">
+            {rows.map(r => {
+              const g = growthOf(r);
+              const lot = r.piece.lot;
+              const src = lot.imageUrl ? sizedImg(httpsImg(lot.imageUrl), 480) : undefined;
+              const who = makerLineOf(lot).name || lot.title;
+              return (
+                <Link key={r.piece.id} href={`/lot?id=${encodeURIComponent(lot.id)}`} className="pf-tile" aria-label={`${craftTitle(lot.title, lot.auctionHouse)}${g && g.pct !== 0 ? `, ${g.text} ${g.basis}` : ''}`}>
+                  <span className="pf-tile-ph" aria-hidden="true">
+                    <span className="pf-tile-l">{(who.match(/[A-Za-zÀ-ÿ]/)?.[0] ?? '·').toUpperCase()}</span>
+                    <PlateImg src={src} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
+                  </span>
+                  {g && g.pct !== 0 && <span className="pf-tile-pill"><SigPill dir={g.dir === 'up' ? 'up' : 'down'}>{g.text}</SigPill></span>}
+                  <span className="pf-tile-t">{craftTitle(lot.title, lot.auctionHouse)}</span>
+                  <span className="pf-tile-s">{r.piece.bought ? fmtFace(r.piece.bought.usd) : '—'}{who !== lot.title ? ` · ${who}` : ''}</span>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+
         {/* the ledger */}
+        {view === 'ledger' && <>
         <div className="kicker pf-head">
           <div>Piece</div>
           <div className="pf-cell">Bought</div>
@@ -202,7 +245,8 @@ export default function Portfolio({ desk, narrow }: SectionProps) {
         <div className="pf-rows">
           {visible.map(r => <Row key={r.piece.id} r={r} nowYear={nowYear} />)}
         </div>
-        {narrow && rows.length > FOLD_N && (
+        </>}
+        {view === 'ledger' && narrow && rows.length > FOLD_N && (
           <div className="pf-more">
             <button type="button" className="ray-show-more" onClick={() => setAll(a => !a)} aria-expanded={!folded}>
               {folded ? `Show all ${rows.length}` : 'Show fewer'}
@@ -265,14 +309,21 @@ function Row({ r, nowYear }: { r: PieceRow; nowYear: number }) {
 
       <div className="pf-cell">
         <span className="pf-cell-k kicker">Marked now</span>
-        {r.mark ? (
+        {r.mark && piece.bought && r.mark.year === piece.bought.year && Math.round(r.mark.value) === Math.round(piece.bought.usd) ? (
+          // (Oct 20 audit) bought this year: the index mark IS the price paid —
+          // printing "$40K / $40K" read as a circular claim. Say what it is.
+          <>
+            <div className="pf-cell-v"><span className="pf-cell-empty">= bought</span></div>
+            <div className="pf-cell-s" title={`${maker}’s yearly index starts at your ${piece.bought.year} price; it re-marks from ${piece.bought.year + 1}`}>re-marks from {piece.bought.year + 1}</div>
+          </>
+        ) : r.mark ? (
           <>
             <div className="pf-cell-v" title={growth?.source === 'mark' ? growth.title : undefined}>
               {fmtFace(r.mark.value)}
               {growth?.source === 'mark' && growth.pct !== 0 && <span className="pf-delta" data-dir={growth.dir}>{growth.text}</span>}
             </div>
             <div className="pf-cell-s" title={`${maker}’s yearly median ${r.mark.year}${r.mark.partial ? ' so far' : ''}, relative to ${piece.bought?.year} · n ${r.mark.n.toLocaleString()}${level === 'mix' ? ' · a mix of whatever sold under the name that year, not this object' : ''}`}>
-              {growth?.source === 'mark' && growth.pct !== 0 ? `${growth.basis} · ` : ''}{r.mark.year === nowYear ? `${r.mark.year} so far` : r.mark.year} · n {r.mark.n.toLocaleString()}{level === 'mix' ? ' · mix-driven' : ''}
+              {growth?.source === 'mark' && growth.pct !== 0 ? `${growth.basis} · ` : ''}{r.mark.year === nowYear ? `${r.mark.year} so far` : r.mark.year} · n {r.mark.n.toLocaleString()}{level === 'mix' ? ' · the name’s market, not this piece' : ''}
             </div>
           </>
         ) : (

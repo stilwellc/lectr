@@ -75,6 +75,18 @@ export interface GradedCall {
   agree: boolean | null;
 }
 
+/** MY MAX graded: the reader's own ceiling against the hammer (Oct 20 audit) */
+export interface MaxCall {
+  id: string; title: string; img?: string | null; maker: string | null; house: string; date: string;
+  max: number; price: number;
+  /** hammer vs your max, % (+ = the hammer ran past your max) */
+  missPct: number;
+  /** within ±EDGE_HIT_PCT of your max */
+  hit: boolean;
+  /** the hammer came in at or under your max — your price would have taken it */
+  inReach: boolean;
+}
+
 export interface MarketRow {
   market: Market | 'all';
   label: string;
@@ -127,6 +139,8 @@ export interface EdgeReport {
   /** the Record section's own number, for the card: median realized vs
    *  estimate over every settled save with an estimate (not only calls) */
   record: { n: number; med: number | null };
+  /** your max vs the hammer, hammer order */
+  mine: { calls: MaxCall[]; n: number; hits: number; inReach: number; medianMiss: number | null };
 }
 
 export interface EdgeInputs {
@@ -206,6 +220,7 @@ export function gradeDesk(input: EdgeInputs): EdgeReport {
   const excluded: Excluded = { noCall: 0, legacy: 0, noEstimate: 0 };
   let settled = 0;
   const judged: number[] = [];
+  const mine: MaxCall[] = [];
 
   for (const lot of input.saved) {
     const s = settledOf(lot, input.ledger);
@@ -217,6 +232,12 @@ export function gradeDesk(input: EdgeInputs): EdgeReport {
     const over = overEstimatePct({ ...lot, priceUsd: s.price });
     if (over != null) judged.push(over);
     const mid = estMidFor(lot, meta);
+    const max = meta?.maxUsd;
+    if (typeof max === 'number' && max > 0) {
+      const miss = (s.price / max - 1) * 100;
+      mine.push({ id: lot.id, title: lot.title, img: lot.imageUrl ?? null, maker: displayMakerOf(lot)?.name ?? null, house: lot.auctionHouse,
+        date: s.date, max, price: s.price, missPct: miss, hit: Math.abs(miss) <= EDGE_HIT_PCT, inReach: s.price <= max });
+    }
 
     const call = signalCallOf(meta ?? undefined);
     if (!call) { excluded.noCall++; continue; }
@@ -291,6 +312,11 @@ export function gradeDesk(input: EdgeInputs): EdgeReport {
     agreement: { agree: read.filter(c => c.agree).length, n: read.length },
     months,
     record: { n: judged.length, med: judged.length ? median(judged) : null },
+    mine: (() => {
+      mine.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+      return { calls: mine, n: mine.length, hits: mine.filter(c => c.hit).length, inReach: mine.filter(c => c.inReach).length,
+        medianMiss: mine.length >= EDGE_MIN_N ? median(mine.map(c => c.missPct)) : null };
+    })(),
   };
 }
 

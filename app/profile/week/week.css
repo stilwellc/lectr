@@ -326,3 +326,12 @@
 @media (max-width: 639.98px) {
   .ck-week-stats { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); padding-right: 24px; }
 }
+/* one day in view at every width: on a wide screen its cards sit in a grid */
+@media (min-width: 640px) {
+  .ck-week-days[data-narrow] .ck-week-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+  .ck-week-days[data-narrow] .ck-week-rows .ck-week-row[data-kind='name'] { background: color-mix(in srgb, var(--color-fg) 2%, transparent); border-radius: 12px; padding: 8px; }
+  .ck-week-chip { min-width: 56px; }
+  .ck-week-chipwrap { -webkit-mask-image: none; mask-image: none; }
+  .ck-week-chips { flex-wrap: wrap; overflow: visible; padding-right: 2px; }
+}
+.ck-week-days[data-narrow] .ck-week-row[data-kind='name'] .ck-thumb[data-wide] { width: 44px; height: 44px; aspect-ratio: 1; }

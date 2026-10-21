@@ -3,7 +3,7 @@
  * THE DESK TABS (Oct 20 2026) — the sticky bar that replaced the 14-pill
  * rail, and the one piece of state that decides which rooms mount.
  *
- *   - six tabs (desk/sections TABS); the active one comes from the address
+ *   - eight tabs (desk/sections TABS — one job each); the active one comes from the address
  *     bar's hash first (#budget → Watching, #settled → Collection, #tab-record
  *     → Record), then this tab session's last tab, then the desk's default
  *     (Today, or For you when Today has nothing to say)
@@ -139,11 +139,13 @@ export function DeskTabs({ tabs, active, onPick, help }: {
     const el = barRef.current;
     if (!el) return;
     const page = el.closest<HTMLElement>('.ck-page') ?? document.documentElement;
-    const set = () => page.style.setProperty('--dt-h', `${Math.round(el.offsetHeight)}px`);
+    // the root carries it too: html's scroll-padding keeps Tab / j-k focus out from under the sticky chrome (WCAG 2.4.11)
+    const root = document.documentElement;
+    const set = () => { const h = `${Math.round(el.offsetHeight)}px`; page.style.setProperty('--dt-h', h); root.style.setProperty('--dt-h', h); };
     set();
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(set) : null;
     ro?.observe(el);
-    return () => ro?.disconnect();
+    return () => { ro?.disconnect(); root.style.removeProperty('--dt-h'); };
   }, []);
   const pick = (t: DeskTab) => {
     onPick(t);
@@ -166,7 +168,8 @@ export function DeskTabs({ tabs, active, onPick, help }: {
     e.preventDefault();
     const i = tabs.findIndex(t => t.id === active);
     const n = k === 'Home' ? tabs[0] : k === 'End' ? tabs[tabs.length - 1] : tabs[(i + (k === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
-    pick(n.id);
+    // a transition: holding → through eight tabs never commits every tab's rooms in between
+    React.startTransition(() => pick(n.id));
     requestAnimationFrame(() => document.getElementById(`dt-tab-${n.id}`)?.focus());
   };
   return (
@@ -181,6 +184,10 @@ export function DeskTabs({ tabs, active, onPick, help }: {
                 <span className="dt-tab-label">{t.label}</span>
                 {t.count != null && !t.empty && <><span className="sr-only">, </span><b style={{ color: t.id === active ? undefined : toneInk(t.tone) }}>{t.count}</b></>}
                 {t.dot && <><i className="dt-dot" aria-hidden="true" /><span className="sr-only">, new matches</span></>}
+                {t.news != null && (() => {
+                  const what = t.id === 'today' ? 'results to confirm' : t.id === 'watching' ? 'live bids past your max' : 'settled since your last visit';
+                  return <span className="dt-news" title={`${t.news} ${what}`}>{t.news}<span className="sr-only"> {what}</span></span>;
+                })()}
                 {t.empty && <span className="sr-only">, nothing here yet</span>}
               </button>
             ))}

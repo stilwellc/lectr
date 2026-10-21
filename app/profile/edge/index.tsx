@@ -227,6 +227,48 @@ function DeskCard({ lines, preview, state, hasNumber }: { lines: CardLines; prev
   );
 }
 
+/** YOUR MAX vs THE HAMMER — the reader's own price, graded (leads the room) */
+function MyMaxBlock({ r }: { r: EdgeReport }) {
+  const m = r.mine;
+  if (m.n === 0) {
+    return (
+      <p className="pe-mine-empty">
+        <b>Grade your own price.</b> Set <b>My max</b> on a watch (Watching → open a row); when it hammers, this room grades your
+        max against the hammer — not only the engine&rsquo;s call.
+      </p>
+    );
+  }
+  const rows = m.calls.slice().reverse().slice(0, 6);
+  return (
+    <div className="pe-mine">
+      <div className="ck-reads-head"><span className="kicker">Your max vs the hammer · {m.n}</span><i className="ck-reads-rule" /></div>
+      <CellGrid min={200} className="ck-cells ck-figs">
+        <Cell stat={`${m.hits} of ${m.n}`} label={`Within ±${EDGE_HIT_PCT}% of your max`} body="your price called the hammer" />
+        <Cell stat={`${m.inReach} of ${m.n}`} label="In reach" body="the hammer came in at or under your max" />
+        <Cell stat={m.medianMiss == null ? '—' : pct(m.medianMiss)} statNote={m.medianMiss == null ? `prints at ${EDGE_MIN_N}` : undefined}
+          label="Median gap" body="hammer vs your max (+ = it ran past you)" />
+      </CellGrid>
+      <div role="list">
+        {rows.map(c => (
+          <div key={c.id} className="ns-ledger-row pe-rrow" role="listitem">
+            <span className="pe-rmain ck-ph" style={{ '--ph': '48px' } as React.CSSProperties}>
+              <Thumb src={c.img} label={c.maker || c.title} size={48} />
+              <Link href={`/lot?id=${encodeURIComponent(c.id)}`} className="pe-rtitle">{craftTitle(c.title, c.house)}</Link>
+              <span className="pe-rsub pe-muted">{[c.maker, c.house, formatDate(c.date)].filter(Boolean).join(' · ')}</span>
+            </span>
+            <span className="pe-rnums">
+              <span className="pe-muted">max {fmtFace(c.max)}</span>
+              <span>hammer {fmtFace(c.price)}</span>
+              <b>{pct(c.missPct)}</b>
+              <span className={c.inReach ? 'pe-hit' : 'pe-faint'}>{c.inReach ? 'in reach' : 'past you'}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function EdgeSection({ desk }: SectionProps) {
   const r = useMemo(() => reportOf(desk), [desk]);
   const lines = useMemo(() => cardLines(cardNumbersOf({
@@ -266,6 +308,8 @@ export default function EdgeSection({ desk }: SectionProps) {
               aria-label="Download the desk card as a PNG">Download PNG</button>
           ) : undefined} />
 
+        <MyMaxBlock r={r} />
+        <div className="ck-reads-head pe-engine-head"><span className="kicker">The engine&rsquo;s call when you saved · {r.n}</span><i className="ck-reads-rule" /></div>
         {gated ? (
           <p className="ck-outcome-line">
             {r.n === 0

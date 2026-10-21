@@ -77,6 +77,8 @@ export interface SavedMeta {
   paidUsd?: number | null;
   /** user's private note on the piece */
   note?: string | null;
+  /** MY MAX — the collector's own ceiling on the lot (USD hammer) */
+  maxUsd?: number | null;
 }
 interface SavedEntry extends SavedMeta { id: string; }
 
@@ -125,6 +127,7 @@ function readStored(): SavedEntry[] {
         artist: typeof e.artist === 'string' ? e.artist : null,
         paidUsd: typeof e.paidUsd === 'number' ? e.paidUsd : null,
         note: typeof e.note === 'string' ? e.note : null,
+        maxUsd: typeof e.maxUsd === 'number' ? e.maxUsd : null,
       });
     }
     return entries;
@@ -167,6 +170,8 @@ function rowToEntry(r: Record<string, unknown>): SavedEntry {
     artist: typeof r.saved_artist === 'string' ? r.saved_artist : null,
     paidUsd: typeof r.paid_usd === 'number' ? r.paid_usd : null,
     note: typeof r.note === 'string' ? r.note : null,
+    // max_usd arrives with migration 0010; absent before it
+    maxUsd: typeof r.max_usd === 'number' ? r.max_usd : null,
   };
 }
 function entryToRow(userId: string, e: SavedEntry) {
@@ -175,7 +180,7 @@ function entryToRow(userId: string, e: SavedEntry) {
 // The saved_title/saved_artist columns are ADDITIVE — until the migration runs,
 // PostgREST rejects a write that names them. Detect that one failure mode and
 // retry the write without the new columns so saving never breaks pre-migration.
-const NEW_COLS = /saved_title|saved_artist|paid_usd|note/i;
+const NEW_COLS = /saved_title|saved_artist|paid_usd|note|max_usd/i;
 function stripNewCols(row: ReturnType<typeof entryToRow>) {
   const { saved_title: _t, saved_artist: _a, paid_usd: _p, note: _n, ...rest } = row;
   return rest;
@@ -206,7 +211,7 @@ interface AccountValue {
   toggle: (id: string, lot?: AuctionLot) => void;
   /** ids of saved lots the user marked as OWNED (their collection) */
   ownedIds: string[];
-  setSavedFields: (lotId: string, patch: { paidUsd?: number | null; note?: string | null }) => void;
+  setSavedFields: (lotId: string, patch: { paidUsd?: number | null; note?: string | null; maxUsd?: number | null }) => void;
   toggleOwned: (id: string) => void;
   // login UI
   loginOpen: boolean;
@@ -438,7 +443,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   const savedIds = useMemo(() => entries.map(e => e.id), [entries]);
   const savedMeta = useMemo<Record<string, SavedMeta>>(() => {
     const out: Record<string, SavedMeta> = {};
-    for (const e of entries) out[e.id] = { savedAt: e.savedAt, estMid: e.estMid, signalPct: e.signalPct, bidCount: e.bidCount, owned: e.owned, title: e.title, artist: e.artist, paidUsd: e.paidUsd, note: e.note };
+    for (const e of entries) out[e.id] = { savedAt: e.savedAt, estMid: e.estMid, signalPct: e.signalPct, bidCount: e.bidCount, owned: e.owned, title: e.title, artist: e.artist, paidUsd: e.paidUsd, note: e.note, maxUsd: e.maxUsd };
     return out;
   }, [entries]);
   const isSaved = useCallback((id: string) => entries.some(e => e.id === id), [entries]);
@@ -473,10 +478,10 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   /** user-editable overrides (cost basis, note) — optimistic, id-keyed,
       rolled back on error. Pre-migration (columns missing) the write
       degrades to session-local state with a toast, never a hard failure. */
-  const setSavedFields = useCallback((lotId: string, patch: { paidUsd?: number | null; note?: string | null }) => {
+  const setSavedFields = useCallback((lotId: string, patch: { paidUsd?: number | null; note?: string | null; maxUsd?: number | null }) => {
     const cur = entriesRef.current.find(e => e.id === lotId);
     if (!cur) return;
-    const prevVals = { paidUsd: cur.paidUsd ?? null, note: cur.note ?? null };
+    const prevVals = { paidUsd: cur.paidUsd ?? null, note: cur.note ?? null, maxUsd: cur.maxUsd ?? null };
     const updated = { ...cur, ...patch };
     if (fetchInFlight.current) mutationLog.current.set(lotId, updated);
     setEntries(prev => prev.map(e => (e.id === lotId ? { ...e, ...patch } : e)));
@@ -487,6 +492,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     const row: Record<string, unknown> = {};
     if ('paidUsd' in patch) row.paid_usd = patch.paidUsd ?? null;
     if ('note' in patch) row.note = patch.note ?? null;
+    if ('maxUsd' in patch) row.max_usd = patch.maxUsd ?? null;
     supabase.from('saved_lots').update(row).eq('user_id', user.id).eq('lot_id', lotId)
       .then(({ error }) => {
         if (error) {

@@ -155,6 +155,8 @@ export interface DeskInternals {
   closingWatches: AuctionLot[]; awayLine: React.ReactNode | null; unseenAlerts: number;
   myFollows: Follow[]; marketOwned: AuctionLot[]; hasMarket: boolean; tunedLine: string | null;
   historyCount: number; hasRecordRoom: boolean; unclaimedWins: number;
+  /** watched lots that settled since the last visit (the Record tab's news) */
+  sinceLastN: number;
   givenName: string | null; deskKicker: string; tasteLabels: string[]; tenure: string | null; hasDeskDetails: boolean;
   /** the Today band renders (its rail pill's gate) */
   todayShows: boolean;
@@ -597,20 +599,27 @@ export function useDeskState(): DeskState {
   const room = useMemo(() => {
     // watchTagOf — the ONE classifier Today's reads shares
     const rows = upcoming.map(l => ({ l, reason: watchTagOf(l, signalById.get(l.id)) }));
+    // (Oct 20 audit) a watchlist reads in close order — the soonest hammer
+    // first, like every trading watchlist; the tag is the row's annotation,
+    // not its sort key. Same close day: the stronger reason first.
     rows.sort((a, b) => {
-      const ra = a.reason?.rank ?? 9;
-      const rb = b.reason?.rank ?? 9;
+      const ca = closeMsOf(a.l) ?? Infinity, cb = closeMsOf(b.l) ?? Infinity;
+      const da = closeDayOf(a.l), db = closeDayOf(b.l);
+      if (da !== db) return da.localeCompare(db);
+      const ra = a.reason?.rank ?? 9, rb = b.reason?.rank ?? 9;
       if (ra !== rb) return ra - rb;
-      if (ra === 0) return closeDays(a.l) - closeDays(b.l);
       if (ra === 1) {
-        const sa = signalById.get(a.l.id);
-        const sb = signalById.get(b.l.id);
         // the ONE flagged ranking — dealScore, never raw pct
-        return dealScore(b.l, sb?.pct ?? 0) - dealScore(a.l, sa?.pct ?? 0);
+        return dealScore(b.l, signalById.get(b.l.id)?.pct ?? 0) - dealScore(a.l, signalById.get(a.l.id)?.pct ?? 0);
       }
-      if (ra === 2) return (b.l.bidVelocity?.delta ?? 0) - (a.l.bidVelocity?.delta ?? 0);
-      return closeDayOf(a.l).localeCompare(closeDayOf(b.l));
+      return ca - cb;
     });
+    // sorted by close, "Lands soon" is the Hammers column said twice — the
+    // ledger drops it (Today's reads keep the classifier)
+    for (const r of rows) if (r.reason?.tag === 'Lands soon') r.reason = null;
+    // a tag every row wears says nothing: drop it (the clock column says it)
+    const tags = new Set(rows.map(r => r.reason?.tag ?? ''));
+    if (rows.length > 2 && tags.size === 1) for (const r of rows) r.reason = null;
     return rows;
   }, [upcoming, signalById]);
 
@@ -933,7 +942,7 @@ export function useDeskState(): DeskState {
     signalById, settledRows, settledCount, settledHasCall, record, recordLedByAppraisal,
     collection, exposure, collectionChart, summary, changes, reads, room, ledgerCols,
     closingWatches, awayLine, unseenAlerts, myFollows, marketOwned, hasMarket, tunedLine,
-    historyCount, hasRecordRoom, unclaimedWins, givenName, deskKicker, tasteLabels, tenure, hasDeskDetails,
+    historyCount, hasRecordRoom, unclaimedWins, sinceLastN: sinceLast?.n ?? 0, givenName, deskKicker, tasteLabels, tenure, hasDeskDetails,
     todayShows, isDesktop, upcomingCounts, badgeCount, onCardToggle, onSettledOwn, onSettledRemove,
     modalLot, closeModal,
   };
