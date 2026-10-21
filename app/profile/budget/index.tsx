@@ -270,7 +270,8 @@ export default function BudgetDesk(props: SectionProps) {
   const [estInPlan, setEstInPlan] = useStoredFlag(EST_KEY, false);
   const [allNights, setAllNights] = useState(false);
   // your own max leads each row (Oct 20 audit) — the engine's figure stays as context
-  const maxOf = useCallback((id: string) => { const m = desk.metaFor(id)?.maxUsd; return typeof m === 'number' && m > 0 ? m : null; }, [desk.metaFor]);
+  const metaFor = desk.metaFor;
+  const maxOf = useCallback((id: string) => { const m = metaFor(id)?.maxUsd; return typeof m === 'number' && m > 0 ? m : null; }, [metaFor]);
   const plan = useMemo(() => bidPlan(desk.saved, now, desk.price, { estInPlan }, maxOf), [desk.saved, now, desk.price, estInPlan, maxOf]);
   const markets = useMemo(() => readerMarkets(desk.taste, desk.follows, desk.book), [desk.taste, desk.follows, desk.book]);
   // (perf) the book-wide scans read a 10-minute clock grain, not the 1-minute tick
@@ -304,7 +305,7 @@ export default function BudgetDesk(props: SectionProps) {
           </> }}
           sub={<>
             {stated ? <>Band {stated} at hammer</> : <>No budget stated</>}
-            {live > 0 && <> · {live} live {live === 1 ? 'lot' : 'lots'} watched · <span className="ck-wide">plan </span>{fmtFace(plan.total)} at hammer on {plan.nCounted} across {plan.nights.length} {plan.nights.length === 1 ? 'night' : 'nights'}</>}
+            {live > 0 && <> · {live} live {live === 1 ? 'lot' : 'lots'} watched across {plan.nights.length} {plan.nights.length === 1 ? 'night' : 'nights'}</>}
             {plan.overNights > 0 && <> · {plan.overNights} {plan.overNights === 1 ? 'night' : 'nights'} over</>}
           </>}
           actions={stated && !editing ? <button type="button" className="ray-toolbar-pill ck-tune" onClick={() => setEditing(true)}>Edit band</button> : undefined} />

@@ -319,12 +319,12 @@
 .ck-week-daysum { white-space: normal; overflow: visible; }
 /* phone: the stat strip is one swipeable line */
 @media (max-width: 639.98px) {
-  .ck-week-stats { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: -2px; padding: 0 2px 2px; }
+  .ck-week-stats { flex-wrap: wrap; }
   .ck-week-stats::-webkit-scrollbar { display: none; }
   .ck-week-stat { font-size: 12.5px; padding: 4px 10px; flex: none; }
 }
 @media (max-width: 639.98px) {
-  .ck-week-stats { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); padding-right: 24px; }
+
 }
 /* one day in view at every width: on a wide screen its cards sit in a grid */
 @media (min-width: 640px) {
@@ -335,3 +335,5 @@
   .ck-week-chips { flex-wrap: wrap; overflow: visible; padding-right: 2px; }
 }
 .ck-week-days[data-narrow] .ck-week-row[data-kind='name'] .ck-thumb[data-wide] { width: 44px; height: 44px; aspect-ratio: 1; }
+
+.ck-week-chip { align-content: start; } /* a chip with no count keeps its number on the others' line */

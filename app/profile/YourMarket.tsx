@@ -214,12 +214,12 @@ function Row({ d, mode, sinceDay }: { d: Digest; mode: MarketMode; sinceDay: str
         {sold.length > 0 && <span className="ck-msub"><span>{join(sold)}</span></span>}
         <span className="ck-msub"><span>{join(liveBits)}</span></span>
       </div>
-      <div className="ck-mrow-right">
+      {((move && move.tone !== 'flat') || live.live > 0) && <div className="ck-mrow-right">
         {move && move.tone !== 'flat'
           ? <SigPill dir={move.tone === 'up' ? 'up' : 'down'}>{head.v}</SigPill>
           : <b style={{ color: head.color }}>{head.v}</b>}
         <span className="ck-mham">{head.cap}</span>
-      </div>
+      </div>}
     </Link>
   );
 }

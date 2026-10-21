@@ -79,6 +79,7 @@ const MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'
 /** "Tonight" / "Tomorrow" / "Tue Oct 14" — the night's word on the desk's clock */
 export function nightLabel(day: string, now: number): string {
   const today = isoDayOf(now);
+  if (day && day < today) return 'Result pending';
   if (day === today) return 'Tonight';
   if (day === isoDayOf(now + 864e5)) return 'Tomorrow';
   const d = new Date(`${day}T12:00:00`);

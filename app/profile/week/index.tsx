@@ -338,9 +338,8 @@ export default function WeekSection({ desk }: SectionProps) {
     : <>
       {/* (Oct 20 clean-up) the week's numbers as a stat strip; the fine print rides one quiet line under it */}
       <span className="ck-week-stats">
-        {plan.yours > 0
-          ? <span className="ck-week-stat"><b>{plan.yours}</b> of yours {plan.yours === 1 ? 'hammers' : 'hammer'} in {WEEK_DAYS} days</span>
-          : <span className="ck-week-stat">None of your watches or picks close in the next {WEEK_DAYS} days</span>}
+        {/* the count of yours IS the tab's headline — the strip starts at the money */}
+        {plan.yours === 0 && <span className="ck-week-stat">None of your watches or picks close in the next {WEEK_DAYS} days</span>}
         {plan.priced > 0 && <span className="ck-week-stat"><b>{formatPrice(plan.estTotal)}</b> at estimate midpoint</span>}
         {plan.watches > 0 && <span className="ck-week-stat"><b>{plan.watches}</b> {plan.watches === 1 ? 'watch' : 'watches'}</span>}
         {plan.picks > 0 && <span className="ck-week-stat"><b>{plan.picks}</b> {plan.picks === 1 ? 'pick' : 'picks'}{showPicks ? '' : ' · hidden'}</span>}

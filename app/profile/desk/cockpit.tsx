@@ -137,7 +137,8 @@ export default function Cockpit() {
   // next is the fallback for a lot with no close instant. With nothing
   // watched: the soonest pick, else the soonest sale of one of your names
   const cn = useMemo(() => closingNowOf(desk.saved, desk.now), [desk.saved, desk.now]);
-  const nextWatch = cn.rows[0]?.lot ?? cn.next?.lot ?? summary.next;
+  // a lot past its sale day (result pending) is never the NEXT hammer
+  const nextWatch = cn.rows[0]?.lot ?? cn.next?.lot ?? (summary.next && closeDays(summary.next) >= 0 ? summary.next : null);
   const nextRow: WeekRow | null = useMemo(() => {
     if (nextWatch) return null;
     const yours = plan.rows.filter(r => r.kind === 'pick').sort((a, b) => a.closeMs - b.closeMs)[0];

@@ -150,10 +150,11 @@ export default function Portfolio({ desk, narrow }: SectionProps) {
             (the other sits in the hover and the CSV). <b>Timing</b> sets the maker&rsquo;s 12-month median against its last {TIMING_YEARS} complete years, each with
             five or more sales. The CSV holds every column with its basis; it is built on this device.
           </> }}
+          // the figure cells below print pieces / bought / marked — the sub-line
+          // keeps only what they don't say: the basis caveat and the reading state
           sub={<>
-            {totals.pieces} {totals.pieces === 1 ? 'piece' : 'pieces'}
-            {head.bought && <> · bought {head.bought.v}{totals.paidN < totals.boughtN ? (totals.paidN ? ` (${totals.paidN} at your figure)` : ' at the realized price') : ''}</>}
-            {latest && <> · marked {fmtFace(latest.value!)} {latest.partial ? `${latest.year} so far` : `in ${latest.year}`} across {index.included.length} indexed</>}
+            {totals.paidN < totals.boughtN ? (totals.paidN ? `${totals.paidN} of ${totals.boughtN} at your figure, the rest at the realized price` : 'bought at the realized price') : 'bought at your figures'}
+            {latest && <> · marked across {index.included.length} indexed</>}
             {resolving ? <> · resolving your pieces against the archive…</> : pending ? <> · reading the makers&rsquo; record…</> : null}
           </>}
           actions={<div className="pf-actions">
@@ -354,7 +355,7 @@ function Row({ r, nowYear }: { r: PieceRow; nowYear: number }) {
         ) : (
           <>
             <div className="pf-cell-v"><span className="pf-cell-empty">—</span></div>
-            <div className="pf-cell-s" title={e.why}>{e.live ? 'on the block · no value tonight' : `not read yet · fills when the nightly values it (sold within ${SETTLED_MONTHS} months)`}</div>
+            <div className="pf-cell-s" title={e.live ? e.why : `${e.why ? `${e.why} · ` : ''}fills when the nightly values it (sold within ${SETTLED_MONTHS} months)`}>{e.live ? 'on the block · no value tonight' : 'not read yet'}</div>
           </>
         )}
       </div>

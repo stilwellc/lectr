@@ -362,7 +362,7 @@ export default function WatchingRoom(_p: SectionProps) {
                     <span className="sub">+{newBids} {newBids === 1 ? 'bid' : 'bids'}</span>
                   ) : null}
                 </span>
-                <span style={{ textAlign: 'right', fontSize: 13, color: days === 0 ? 'var(--color-fg)' : 'var(--color-text-secondary)', fontWeight: days <= 1 ? 600 : 500, whiteSpace: 'nowrap' }}>
+                <span style={{ textAlign: 'right', fontSize: 13, color: days === 0 ? 'var(--color-fg)' : 'var(--color-text-secondary)', fontWeight: days >= 0 && days <= 1 ? 600 : 500, whiteSpace: 'nowrap' }}>
                   {days === 0 && lot.saleDateTime
                     ? <CloseClock iso={lot.saleDateTime} windowHours={24} />
                     : hammerWord(days)}
@@ -401,7 +401,7 @@ export default function WatchingRoom(_p: SectionProps) {
                 </span>
                 <span className="ck-mrow-right">
                   {sig && <span className="ck-mrow-sig" aria-label={`${sig.label}, ${sigText(sig)} vs comps`}><SigPill dir={sig.label === 'Below Market' ? 'up' : 'down'}>{sigText(sig)}</SigPill></span>}
-                  <span className="ck-mham" style={days <= 1 ? { color: 'var(--color-fg)', fontWeight: 600 } : undefined}>
+                  <span className="ck-mham" style={days >= 0 && days <= 1 ? { color: 'var(--color-fg)', fontWeight: 600 } : undefined}>
                     {days === 0 && lot.saleDateTime
                       ? <CloseClock iso={lot.saleDateTime} windowHours={24} />
                       : hammerWord(days)}

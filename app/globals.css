@@ -5661,3 +5661,23 @@ html:has(.dt-wrap) { scroll-padding-top: calc(64px + var(--dt-h, 56px) + 12px); 
 /* phone: the news badge is a corner dot (a number over a 4-up grid collided with the word) */
 @media (max-width: 639.98px) { .dt-tab .dt-news { font-size: 0; min-width: 8px; width: 8px; height: 8px; padding: 0; top: 10px; right: 8%; } }
 .ck-page .ck-dailyemail { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 10px; }
+
+/* (polish 9) the Ledger/Cards toggle: one ring (the base border no longer doubles it); 40px targets on a phone */
+.ck-page .ck-head-actions .ray-savedview-btn { border: none; }
+@media (max-width: 639.98px) { .ck-page .ck-head-actions :is(.ck-week-act, .ray-savedview-btn) { min-height: 40px; } }
+/* Record's figure cells: an odd last cell spans the row on a phone (no empty quarter) */
+@media (max-width: 639.98px) { .ck-page .ck-figs > :last-child:nth-child(odd) { grid-column: 1 / -1 !important; } }
+/* Watching's Hammers column fits 'result pending' */
+.ck-page .ray-saved-cols { grid-template-columns: 92px minmax(0, 1fr) 156px 96px 104px 128px; }
+.ck-page .ray-saved-ledger[data-nosig] .ray-saved-cols { grid-template-columns: 92px minmax(0, 1fr) 156px 104px 128px; }
+.ck-page .ray-saved-ledger[data-nodelta] .ray-saved-cols { grid-template-columns: 92px minmax(0, 1fr) 156px 96px 128px; }
+/* a phone's news dot hugs its word */
+@media (max-width: 639.98px) { .dt-tab .dt-news { right: calc(50% - 34px); } }
+/* pick cards round their frame like their photo */
+.ck-page .ck-picks .ray-lot-card { border-radius: 16px; overflow: hidden; }
+/* Record's call rows on a phone: the figures sit under the title's text, close to it */
+@media (max-width: 639.98px) {
+  .ck-page .pe-rrow { gap: 4px; }
+  .ck-page .pe-rrow:has(.ck-thumb) > .pe-rnums { padding-left: 60px; }
+  .ck-page .pe-rmain.ck-ph { padding-bottom: 0; margin-bottom: 0; }
+}

@@ -24,7 +24,8 @@ export const closeDays = (l: AuctionLot): number => daysUntil(closeDayOf(l));
 
 export function hammerWord(days: number): string {
   if (isNaN(days)) return 'scheduled';
-  if (days < 0) return `hammered ${-days} ${days === -1 ? 'day' : 'days'} ago`;
+  // past its sale day but still on the desk: the house hasn't posted the result
+  if (days < 0) return 'result pending';
   if (days === 0) return 'today';
   if (days === 1) return 'tomorrow';
   return `in ${days} days`;
