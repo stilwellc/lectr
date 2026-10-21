@@ -103,6 +103,15 @@ const whoOf = (l: AuctionLot): string | null => displayMakerOf(l)?.name ?? null;
 /** the user asked for no motion: scrolls jump instead of gliding */
 const reduceMotion = (): boolean => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
+/** a 14px calendar glyph (the day head's add-to-calendar and the row's) */
+function CalIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+      <rect x="2.5" y="3.5" width="11" height="10" rx="2" /><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3" />
+    </svg>
+  );
+}
+
 const TBC_TITLE = 'The house published the sale day, not a close time';
 
 function Row({ r, now, titleById, onOpen }: { r: WeekRow; now: number; titleById: ReadonlyMap<string, WeekRow>; onOpen: (lot: AuctionLot) => void }) {
@@ -160,8 +169,8 @@ function Row({ r, now, titleById, onOpen }: { r: WeekRow; now: number; titleById
           carries the house in its name (R5#4) */}
       <div className="ck-week-acts">
         {href && <a className="ck-week-act" href={href} target="_blank" rel="noopener noreferrer" aria-label={`Bid at ${lot.auctionHouse} (opens the house’s page)`} title={`Bid at ${lot.auctionHouse}`}>Bid <Flick size={10} /></a>}
-        <button type="button" className="ck-week-act" onClick={() => downloadIcs([r], now, `${r.day} ${title.slice(0, 40)}`)}
-          aria-label={`Add ${title} to your calendar (.ics, made on this device)`} title="Add this close to your calendar (.ics, made on this device)">Calendar</button>
+        <button type="button" className="ck-week-act ck-week-act-cal" onClick={() => downloadIcs([r], now, `${r.day} ${title.slice(0, 40)}`)}
+          aria-label={`Add ${title} to your calendar (.ics, made on this device)`} title="Add this close to your calendar (.ics, made on this device)"><CalIcon /><span className="ck-week-act-t">Calendar</span></button>
       </div>
     </li>
   );
@@ -193,8 +202,8 @@ function DayCol({ d, now, titleById, onOpen, open, onMore }: { d: WeekDay; now: 
     <section className="ck-week-day" id={`week-${d.day}`} data-today={d.offset === 0 ? '' : undefined} data-empty={d.rows.length ? undefined : ''} aria-label={dayName}>
       <div className="ck-week-dayhead">
         <div className="ck-week-dayname">
-          <span className="kicker">{w.wd}{word ? <> · {word}</> : null}</span>
-          <b>{w.md}</b>
+          <b>{w.wd}, {w.md}</b>
+          {word && <span className="ck-week-dayword">{word}</span>}
         </div>
         {d.rows.length > 0 ? (
           <div className="ck-week-daysum" title={sub ?? undefined}>
@@ -206,7 +215,7 @@ function DayCol({ d, now, titleById, onOpen, open, onMore }: { d: WeekDay; now: 
         {yours.length > 0 && (
           <button type="button" className="ck-week-act ck-week-daycal" onClick={() => downloadIcs(yours, now, `week ${d.day}`)}
             aria-label={`Add your ${yours.length === 1 ? 'close' : `${yours.length} closes`} on ${w.wd} ${w.md} to your calendar (.ics)`}
-            title={`Add your ${yours.length === 1 ? 'close' : `${yours.length} closes`} on ${w.md} to your calendar (.ics)`}>Calendar</button>
+            title={`Add your ${yours.length === 1 ? 'close' : `${yours.length} closes`} on ${w.md} to your calendar (.ics)`}><CalIcon /></button>
         )}
       </div>
       {d.rows.length > 0 ? (
@@ -219,7 +228,8 @@ function DayCol({ d, now, titleById, onOpen, open, onMore }: { d: WeekDay; now: 
           )}
           {shownNames.length > 0 && (
             <>
-              {yours.length > 0 && <div className="ck-week-namesrule"><span className="kicker">Your names</span><i className="ck-reads-rule" /></div>}
+              {/* the rule names the group, so a name row needs no "Name" tag of its own */}
+              <div className="ck-week-namesrule" data-first={yours.length ? undefined : ''}><span className="kicker">Your names</span><i className="ck-reads-rule" /></div>
               <ul className="ck-week-rows" aria-label={`Your names on ${w.md}`}>
                 {shownNames.map(r => <Row key={r.lot.id} r={r} now={now} titleById={titleById} onOpen={onOpen} />)}
               </ul>
@@ -309,13 +319,24 @@ export default function WeekSection({ desk, narrow }: SectionProps) {
   const sub = loading ? 'Reading the block…' : plan.rows.length === 0
     ? <>Nothing of yours hammers in the next {WEEK_DAYS} days{plan.nextBeyond ? <> — your next close is <Link href={`/lot?id=${encodeURIComponent(plan.nextBeyond.lot.id)}`} className="ck-away-link">{craftTitle(plan.nextBeyond.lot.title, plan.nextBeyond.lot.auctionHouse)}</Link> on {dayWords(plan.nextBeyond.day).wd}, {dayWords(plan.nextBeyond.day).md}</> : '. Watch a lot or follow a name and it lands here'}.</>
     : <>
-      {plan.yours > 0
-        ? <><b>{plan.yours}</b> of yours {plan.yours === 1 ? 'hammers' : 'hammer'} in the next {WEEK_DAYS} days{plan.watches && plan.picks ? ` — ${plan.watches} ${plan.watches === 1 ? 'watch' : 'watches'}, ${plan.picks} ${plan.picks === 1 ? 'pick' : 'picks'}${showPicks ? '' : ' (picks hidden)'}` : plan.watches ? ` — ${plan.watches === 1 ? 'a watch' : 'all watches'}` : ` — ${plan.picks === 1 ? 'a pick' : 'all picks'}${showPicks ? '' : ' (hidden)'}`}</>
-        : <>None of your watches or picks close in the next {WEEK_DAYS} days</>}
-      {plan.priced > 0 && <> · <b>{formatPrice(plan.estTotal)}</b> at estimate midpoint{plan.priced < plan.yours ? ` (${plan.priced} of ${plan.yours} priced)` : ''}</>}
-      {plan.conflicts > 0 && <> · <span className="ck-week-dayconf">{plan.conflicts} {plan.conflicts === 1 ? 'overlap' : 'overlaps'}</span></>}
-      {plan.nameRows > 0 && <> · {plan.nameRows} {plan.nameRows === 1 ? 'sale' : 'sales'} of your names ({plan.names.slice(0, 4).join(', ')}{plan.names.length > 4 ? ` +${plan.names.length - 4}` : ''})</>}
-      {plan.beyond > 0 && <> · {plan.beyond} more of yours after {dayWords(plan.dayKeys[WEEK_DAYS - 1]).md}</>}
+      {/* (Oct 20 clean-up) the week's numbers as a stat strip; the fine print rides one quiet line under it */}
+      <span className="ck-week-stats">
+        {plan.yours > 0
+          ? <span className="ck-week-stat"><b>{plan.yours}</b> of yours {plan.yours === 1 ? 'hammers' : 'hammer'} in {WEEK_DAYS} days</span>
+          : <span className="ck-week-stat">None of your watches or picks close in the next {WEEK_DAYS} days</span>}
+        {plan.priced > 0 && <span className="ck-week-stat"><b>{formatPrice(plan.estTotal)}</b> at estimate midpoint</span>}
+        {plan.watches > 0 && <span className="ck-week-stat"><b>{plan.watches}</b> {plan.watches === 1 ? 'watch' : 'watches'}</span>}
+        {plan.picks > 0 && <span className="ck-week-stat"><b>{plan.picks}</b> {plan.picks === 1 ? 'pick' : 'picks'}{showPicks ? '' : ' · hidden'}</span>}
+        {plan.nameRows > 0 && <span className="ck-week-stat"><b>{plan.nameRows}</b> {plan.nameRows === 1 ? 'sale' : 'sales'} of your names</span>}
+        {plan.conflicts > 0 && <span className="ck-week-stat ck-week-dayconf"><b>{plan.conflicts}</b> {plan.conflicts === 1 ? 'overlap' : 'overlaps'}</span>}
+      </span>
+      <span className="ck-week-fine">
+        {[
+          plan.priced > 0 && plan.priced < plan.yours ? `${plan.priced} of ${plan.yours} priced` : null,
+          plan.nameRows > 0 ? `${plan.names.slice(0, 4).join(', ')}${plan.names.length > 4 ? ` +${plan.names.length - 4}` : ''}` : null,
+          plan.beyond > 0 ? `${plan.beyond} more of yours after ${dayWords(plan.dayKeys[WEEK_DAYS - 1]).md}` : null,
+        ].filter(Boolean).join(' · ')}
+      </span>
     </>;
 
   const actions = plan.rows.length > 0 ? (

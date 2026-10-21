@@ -226,3 +226,103 @@
   .ck-week-days, .ck-week-cn-track, .ck-week-chips { scroll-behavior: auto; transition: none; }
   .ck-week-row, .ck-week-act, .ck-week-chip, .ck-week-cn-card { transition: none; }
 }
+
+/* ══ THE CLEAN-UP (Oct 20 2026, after the photo pass) ══════════════════════
+   The week read as seven ruled columns of text with photos dropped in:
+   uneven heads, hairlines between everything, mono everywhere, a sentence
+   for a summary. Now: a stat strip, one-line day heads, rows as soft cards
+   (photo on top for yours; a compact photo row for your names' sales),
+   Inter figures, pill "more", and a phone card that reads photo | text. */
+
+/* the summary: figures first, the fine print under */
+.ck-week-stats { display: flex; flex-wrap: wrap; gap: 6px 8px; margin: 2px 0 6px; }
+.ck-week-stat {
+  display: inline-flex; align-items: baseline; gap: 5px; padding: 5px 11px; border-radius: 999px;
+  background: color-mix(in srgb, var(--color-fg) 5%, transparent);
+  font-size: 13px; color: var(--color-text-secondary); white-space: nowrap;
+}
+.ck-week-stat b { color: var(--color-fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.ck-week-fine { display: block; font-size: 12px; color: var(--color-text-muted); line-height: 1.5; }
+.ck-week-fine:empty { display: none; }
+
+/* figures in Inter */
+.ck-week-daysum, .ck-week-time, .ck-week-clock, .ck-week-vel, .ck-week-chip b, .ck-week-chip i {
+  font-family: var(--font-sans), sans-serif; font-variant-numeric: tabular-nums;
+}
+
+/* the day head: "Tue, Oct 20 · today" on one line, the day's figures under, the calendar glyph at the right */
+.ck-week-dayhead {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 8px;
+  padding: 10px 2px 10px; border-bottom: none;
+}
+.ck-page .ck-week-days:not([data-narrow]) .ck-week-dayhead { min-height: 0; }
+.ck-week-dayname { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.ck-week-dayname b { font-size: 14px; white-space: nowrap; }
+.ck-week-dayword { font-size: 12px; color: var(--color-text-muted); white-space: nowrap; }
+.ck-week-day[data-today] .ck-week-dayword { color: var(--color-fg); font-weight: 500; }
+.ck-week-daysum { grid-column: 1; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.4; }
+.ck-week-daycal.ck-week-act {
+  grid-column: 2; grid-row: 1 / span 2; flex: none; width: 32px; height: 32px; min-height: 32px; padding: 0;
+  justify-content: center; border-radius: 999px; text-decoration: none; color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+.ck-week-daycal.ck-week-act:hover { color: var(--color-fg); border-color: var(--color-border-mid); }
+
+/* rows as soft cards — no hairlines between them */
+.ck-week-rows { gap: 10px; }
+.ck-week-row {
+  border-bottom: none; border-radius: 14px; padding: 8px 8px 10px;
+  background: color-mix(in srgb, var(--color-fg) 3%, transparent);
+}
+.ck-week-row:hover { background: color-mix(in srgb, var(--color-fg) 6%, transparent); }
+.ck-week-row .ck-week-ph { margin: 0 0 4px; }
+.ck-week-row .ck-week-ph .ck-thumb { border-radius: 10px; max-height: 150px; }
+.ck-week-fact { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* your names' sales: a compact row — small photo | lines — so yours lead the column */
+.ck-week-row[data-kind='name'] { grid-template-columns: 44px minmax(0, 1fr); column-gap: 10px; background: none; padding: 6px 4px; }
+.ck-week-row[data-kind='name']:hover { background: color-mix(in srgb, var(--color-fg) 4%, transparent); }
+.ck-week-row[data-kind='name'] > .ck-week-ph { grid-column: 1; grid-row: 1 / span 6; margin: 2px 0 0; }
+.ck-week-row[data-kind='name'] > :not(.ck-week-ph) { grid-column: 2; min-width: 0; }
+.ck-week-row[data-kind='name'] .ck-thumb[data-wide] { width: 44px; height: 44px; aspect-ratio: 1; border-radius: 10px; }
+.ck-week-row[data-kind='name'] .ck-week-decision { display: none; }
+.ck-week-row[data-kind='name'] .ck-week-title { -webkit-line-clamp: 2; font-weight: 500; }
+.ck-week-namesrule { padding: 14px 2px 4px; }
+
+/* actions: Bid ↗ and the calendar glyph, quiet */
+.ck-week-acts { gap: 2px 12px; }
+.ck-week-act-cal { gap: 5px; }
+.ck-week-days:not([data-narrow]) .ck-week-act-cal .ck-week-act-t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* "+N more" as a pill */
+.ck-week-more.ck-today-more {
+  align-self: flex-start; margin-top: 10px; padding: 0 14px; min-height: 34px; border-radius: 999px;
+  border: 1px solid var(--color-border); text-decoration: none; font-weight: 500; font-size: 12.5px; line-height: 1.3;
+  white-space: normal; text-align: left;
+}
+.ck-week-more.ck-today-more:hover { border-color: var(--color-border-mid); background: var(--color-hover-item); }
+
+/* phone: one whole day per swipe (the chips are the index — no sliver of the next day);
+   a card reads photo | text, the actions pill under the text */
+.ck-week-days[data-narrow] { --week-col: 100%; -webkit-mask-image: none !important; mask-image: none !important; }
+.ck-week-days[data-narrow] .ck-week-row:not([data-kind='name']) { grid-template-columns: 96px minmax(0, 1fr); column-gap: 12px; padding: 10px; }
+.ck-week-days[data-narrow] .ck-week-row:not([data-kind='name']) > .ck-week-ph { grid-column: 1; grid-row: 1 / span 8; margin: 0; }
+.ck-week-days[data-narrow] .ck-week-row:not([data-kind='name']) > :not(.ck-week-ph) { grid-column: 2; min-width: 0; }
+.ck-week-days[data-narrow] .ck-week-row .ck-thumb[data-wide] { width: 96px; aspect-ratio: 1; max-height: none; }
+.ck-week-days[data-narrow] .ck-week-title { -webkit-line-clamp: 2; }
+.ck-week-days[data-narrow] .ck-week-acts .ck-week-act { min-height: 36px; padding: 0 12px; }
+/* a name row's tag is the group's rule above it; its time keeps the line */
+.ck-week-row[data-kind='name'] .ck-week-when > .ck-tag { display: none; }
+.ck-week-row[data-kind='name'] .ck-week-when { flex-wrap: wrap; }
+.ck-week-namesrule[data-first] { padding-top: 4px; }
+/* the day's figures wrap rather than cut */
+.ck-week-daysum { white-space: normal; overflow: visible; }
+/* phone: the stat strip is one swipeable line */
+@media (max-width: 639.98px) {
+  .ck-week-stats { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: -2px; padding: 0 2px 2px; }
+  .ck-week-stats::-webkit-scrollbar { display: none; }
+  .ck-week-stat { font-size: 12.5px; padding: 4px 10px; flex: none; }
+}
+@media (max-width: 639.98px) {
+  .ck-week-stats { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); padding-right: 24px; }
+}
