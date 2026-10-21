@@ -1363,7 +1363,7 @@ function ValueDesk() {
                           median gap {signalMagnitude('Below Market', Math.round(summary.medianGap))}
                         </span>{' '}
                         · {formatPrice(summary.totalEst)} at estimate · {summary.artists} makers
-                        {summary.soonest && <> · <span style={{ whiteSpace: 'nowrap' }}>first hammer {formatDate(trueSaleDay(summary.soonest.lot))}</span></>}
+                        {summary.soonest && <>{' '}<span style={{ whiteSpace: 'nowrap' }}>· first hammer {formatDate(trueSaleDay(summary.soonest.lot))}</span></>}
                       </>
                     : partial ? <>The engine abstains rather than force a thin call · — live lots read in scope</>
                     : <>The engine abstains rather than force a thin call · {appraisedCount > 0 ? <>{appraisedCount.toLocaleString()} live lots read in scope</> : <>{liveLots.length.toLocaleString()} live lots in scope, none read yet</>}{nextHammer && <> · next hammer {formatDate(trueSaleDay(nextHammer))}</>}</>}
@@ -1887,11 +1887,11 @@ function ValueDesk() {
                    comps read and its bid projection) printed twice, back to
                    back — every call stays, stacked under the one realized price */
                 settledByLot.map(({ id, calls }) => {
-                  const s0 = calls[0];
+                  const s0 = calls.find(c => c.t) || calls[0];
                   return (
                     <Link key={id} href={`/lot/${encodeURIComponent(id)}`} className="vd-tape-row">
                       <span style={{ minWidth: 0 }}>
-                        <span className="vd-tape-title" style={{ display: 'block', color: 'var(--color-fg)', fontWeight: 600 }}>{s0.t ? craftTitle(s0.t) : id}</span>
+                        <span className="vd-tape-title" style={{ display: 'block', color: 'var(--color-fg)', fontWeight: 600 }}>{s0.t ? craftTitle(s0.t) : s0.h ? `${s0.h} lot (title not on file)` : 'Untitled lot'}</span>
                         <span className="vd-tape-maker" style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>{s0.a ? (ARTIST_LABEL[s0.a] || s0.a) : ''}{s0.h ? ` · ${s0.h}` : ''}</span>
                       </span>
                       <span className="vd-tape-cells">
@@ -2016,7 +2016,7 @@ function ValueDesk() {
           border-left: 1px solid var(--color-hair, rgba(255,255,255,0.06));
         }
         .vd-dial:first-child { border-left: none; padding-left: 2px; }
-        .vd-dial-k { font-size: 10px; letter-spacing: 0.18em; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .vd-dial-k { font-size: 11px; letter-spacing: 0.01em; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .vd-dial-v {
           font-family: var(--font-mono), monospace;
           font-size: 27px; font-weight: 500; letter-spacing: -0.01em;
@@ -2115,7 +2115,7 @@ function ValueDesk() {
              rides first in ink and the bucket drops to the muted line */
           .ray-value-row-maker, .ray-value-row-title { display: block; }
           .ray-value-row > span:nth-child(2) { display: flex !important; flex-direction: column; }
-          .ray-value-row .ray-value-row-title { order: -1; font-size: 13.5px; font-weight: 600; color: var(--color-fg); }
+          .ray-value-row .ray-value-row-title { order: -1; font-size: 13.5px; font-weight: 600; color: var(--color-fg); white-space: normal; display: -webkit-box !important; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
           .ray-value-row .ray-value-row-maker { font-size: 12px; font-weight: 400; color: var(--color-text-muted); }
         }
         /* the label tail rides the maker line where the line has room; the
@@ -2239,7 +2239,7 @@ function ValueDesk() {
         .vd-dist-bars { display: flex; align-items: flex-end; gap: 3px; height: 120px; width: 100%; justify-content: center; }
         .vd-dist-bar { width: min(26px, 40%); min-height: 2px; }
         .vd-dist-bar-f { background: var(--paper-up, #1B7A48); }
-        .vd-dist-bar-u { background: rgba(28, 23, 18, 0.28); }
+        .vd-dist-bar-u { background: var(--pa-3, rgba(28, 23, 18, 0.3)); } /* flips on dark paper — the control bars were invisible */
         .vd-dist-pcts { font-family: var(--font-mono), monospace; font-size: 11px; color: var(--paper-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
         .vd-dist-pcts b { color: var(--paper-up-text); font-weight: 700; }
         .vd-dist-label { font-size: 10.5px; color: var(--paper-muted); text-align: center; line-height: 1.25; }
@@ -2262,7 +2262,7 @@ function ValueDesk() {
         .vd-empty-links { display: flex; flex-wrap: wrap; gap: 10px 26px; justify-content: center; }
 
         /* ── ROOM 2c projection desk ── */
-        .vd-annex { padding-top: calc(var(--space-4) + var(--space-2)); }
+        .vd-annex { padding-top: calc(var(--space-4) + var(--space-2)); padding-bottom: var(--space-4); }
         .vd-annex-row {
           display: grid;
           grid-template-columns: 44px minmax(0, 1fr) auto;

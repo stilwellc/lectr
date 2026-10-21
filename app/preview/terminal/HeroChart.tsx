@@ -60,6 +60,10 @@ interface Props {
   /** print every line's label at its end persistently (the direct-label
       grammar; default only ≤3-series charts do) */
   alwaysLabels?: boolean;
+  /** drop the line-end labels (a legend under the chart names every layer) */
+  hideLineLabels?: boolean;
+  /** the suffix on the 0% tick — ' · est' on demand-vs-estimate charts; '' on a rebased index */
+  zeroNote?: string;
   /** an explicit x axis (every period, in order). With it, a line BREAKS
       where it skips a period — a missing year is a gap on the axis, never a
       smooth bridge — and a point with no neighbour draws as a dot. */
@@ -173,7 +177,7 @@ function usePane(lines: HeroLine[], periods: string[], w: number, h: number, pad
 export default function HeroChart({
   anchor, layers = [], subLayers = [], subLabel, highlight,
   height = 280, subHeight = 84, compact = false, play, flip = false,
-  hideTickLabels = false, band = false, alwaysLabels = false, periods: axis,
+  hideTickLabels = false, band = false, alwaysLabels = false, hideLineLabels = false, zeroNote = ' · est', periods: axis,
 }: Props) {
   const reduce = useReducedMotion();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -293,7 +297,7 @@ export default function HeroChart({
               <line x1={0} x2={W} y1={y} y2={y} className={isZero ? styles.hcRuleZero : styles.hcRule} />
               {!hideTickLabels && (
                 <text x={W - 4} y={y - 5} textAnchor="end" className={`${styles.hcTick}${mainUnit === 'pct' ? ` ${styles.pctData}` : ''}`}>
-                  {tickLabels.get(t)}{isZero && !flipped ? ' · est' : ''}
+                  {tickLabels.get(t)}{isZero && !flipped ? zeroNote : ''}
                 </text>
               )}
             </g>
@@ -331,7 +335,7 @@ export default function HeroChart({
               {pts.length > 0 && (
                 <circle cx={main.xOf.get(pts[pts.length - 1].period)} cy={main.yOf(pts[pts.length - 1].value)} r={2.2} fill={line.color} />
               )}
-              {(highlight === line.key || alwaysLabels || mainLines.length <= 3) && pts.length > 0 && (
+              {!hideLineLabels && (highlight === line.key || alwaysLabels || mainLines.length <= 3) && pts.length > 0 && (
                 <text x={Math.min(W - 4, (main.xOf.get(pts[pts.length - 1].period) ?? 0) + 8)}
                   y={main.yOf(pts[pts.length - 1].value) + 3}
                   textAnchor={(main.xOf.get(pts[pts.length - 1].period) ?? 0) > W - 80 ? 'end' : 'start'}

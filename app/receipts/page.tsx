@@ -139,7 +139,7 @@ export default function ReceiptsPage() {
               <div className="rcp-head">
                 <span className="kicker">The forward tape · calls logged live, graded at the hammer</span>
                 <i className="rcp-rule" />
-                {record && <span className="kicker" style={{ fontVariantNumeric: 'tabular-nums' }}>as of {record.asOf}</span>}
+                {record && <span className="kicker" style={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>as of {record.asOf}</span>}
               </div>
 
               {record ? (
@@ -161,7 +161,7 @@ export default function ReceiptsPage() {
                       <span className="rcp-sub">
                         {record.quiet.medRatio != null
                           ? <>hammer vs appraisal, median, both all-in · {record.quiet.underPct}% cleared at/below · {record.quiet.graded} graded</>
-                          : <>{record.quiet.n} calls on the tape · {record.quiet.graded} settled · publishes at 20 graded · graded vs appraisal, both all-in</>}
+                          : <>{record.quiet.n} calls on the tape · {record.quiet.graded} settled · the median publishes once 20 have sold · graded vs appraisal, both all-in</>}
                       </span>
                     </div>
                   )}

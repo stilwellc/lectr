@@ -11,6 +11,7 @@
  * past year / beat rate / houses) → the yearly line in a framed chart →
  * sections as registration plates with dotted comp rows.
  */
+import { fmtFace } from '../lib/lot-face';
 import React, { useMemo } from 'react';
 import Link from 'next/link';
 import ArtistNav from './ArtistNav';
@@ -235,13 +236,13 @@ export default function RefPage({ refKey }: { refKey: string }) {
                     {' · '}{formatDate(s.d, { month: 'short', year: 'numeric' })}
                   </span>
                 </span>
-                <span className="lectr-lot-comp-p">{formatPrice(s.p)}</span>
+                <span className="lectr-lot-comp-p">{fmtFace(s.p)}</span>
               </Link>
             ))}
           </div>
           <p className="nsp-note">
-            Medians over every {makerName} sale lectr has catalogued for this reference — the yearly line is a
-            mix-affected level, not an appreciation rate.
+            Medians over every {makerName} sale lectr has catalogued for this reference{entry.yearly.length >= 3
+              ? <> — the yearly line is a mix-affected level, not an appreciation rate.</> : '.'}
           </p>
         </section>
 

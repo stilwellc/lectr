@@ -52,7 +52,7 @@ import { lotSubjectOf } from '../../lib/maker-subjects';
 import { isFlagged } from '../../lib/flags';
 import { taxonOf, SPORTS, type CatKey } from '../../lib/taxonomy';
 import { ARTIST_LABEL, ARTIST_MARKET, MAKER_MARKETS, MARKETS, type Market } from '../../constants';
-import { closeCut, formatDate, formatPrice, getUpcomingCounts, httpsImg, sizedImg, tidyTitle, trueSaleDay } from '../../utils';
+import { closeCut, formatDate, formatPrice, getUpcomingCounts, httpsImg, sizedImg, tidyTitle, trueSaleDay, unshoutTitle } from '../../utils';
 import { signedPct } from '../SubMarketDirectory';
 import { yoyIntervalText } from '../../lib/entity/ledger';
 import type { AuctionLot } from '../../types';
@@ -276,7 +276,8 @@ export default function EntityPage({ id, seed }: { id: string; seed?: EntitySeed
   const recImg = httpsImg(rec?.img ?? null);
   const recImgDead = !!recImg && recImgDeadSrc === recImg;
   const onRecImgDead = () => setRecImgDeadSrc(recImg ?? null);
-  const recTitle = tidyTitle(rec?.t);
+  // a feed title scraped all-lowercase reads as a typo in the header: case it
+  const recTitle = (() => { const t = tidyTitle(rec?.t); return t && t === t.toLowerCase() ? unshoutTitle(t) : t; })();
   const recId = rec?.id ? recLinkOf(rec.id) : null;
   const houses = detail?.houses ?? sd?.houses ?? [];
   const verified = (summary?.verified as VerifiedMover | null) ?? null;
@@ -382,7 +383,7 @@ export default function EntityPage({ id, seed }: { id: string; seed?: EntitySeed
                     ) : null}
                     {recId ? <Link href={`/lot?id=${encodeURIComponent(recId)}`} style={{ color: 'inherit', textDecoration: 'none' }}>{formatPrice(rec.p)}</Link> : formatPrice(rec.p)}
                   </div>
-                  <div className="s nsp-clamp2" title={[recTitle, rec.h, rec.d ? rec.d.slice(0, 4) : null].filter(Boolean).join(' · ') || undefined}>{[recTitle ? (recTitle.length > 40 ? closeCut(recTitle.slice(0, 40), 40) : recTitle) : null, rec.h, rec.d ? rec.d.slice(0, 4) : null].filter(Boolean).join(' · ')}</div>
+                  <div className="s nsp-clamp2" title={[recTitle, rec.h, rec.d ? rec.d.slice(0, 4) : null].filter(Boolean).join(' · ') || undefined}>{[recTitle ? (recTitle.length > 72 ? closeCut(recTitle.slice(0, 72), 72) : recTitle) : null, rec.h, rec.d ? rec.d.slice(0, 4) : null].filter(Boolean).join('\u00a0· ')}</div>
                 </div>
               ) : null}
               {/* (r8, QA3 N7) the YoY and the verified index are two reads on two

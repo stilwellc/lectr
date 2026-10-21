@@ -160,7 +160,7 @@ export function CopyLinkButton({ id, style, compact }: {
     stays lamp-lawful — up/down only ever carry the signal's own direction. */
 /** a sub past this many characters cannot sit beside label + figure on a
     phone (≈150px left at 360) — it rides under them (.lectr-lot-lrow-long) */
-const LONG_SUB = 44;
+const LONG_SUB = 36;
 function LeaderRow({ k, v, tone, sub, children }: {
   k: string; v?: string; tone?: 'up' | 'down'; sub?: string; children?: React.ReactNode;
 }) {
@@ -1154,7 +1154,9 @@ export default function LotPage({ lotId, initialLot }: {
               </span>
               {/* the catalogue id on one line — a 60-character Goldin uuid
                   wrapped to two lines above the title on every phone */}
-              <span className="no" title={lot.id}>no. {lot.id}</span>
+              {/* the house's lot number when it has one; a raw feed id (a uuid) is not
+                  for readers — Copy link still carries it */}
+              {lot.lotNumber != null ? <span className="no" title={lot.id}>Lot {lot.lotNumber}</span> : null}
             </div>
 
             {/* the SHORT title carries the h1; a catalogue description the
@@ -1163,7 +1165,7 @@ export default function LotPage({ lotId, initialLot }: {
             {titleParts.rest && <p className="lectr-lot-medium">{titleParts.rest}</p>}
             {(lot.year || lot.medium) && (
               <p className="lectr-lot-medium">
-                {[lot.year, lot.medium ? deglue(cleanText(lot.medium)) : null, lot.dimensions].filter(Boolean).join(' · ')}
+                {[lot.year, lot.medium && !/^dummy\b/i.test(lot.medium.trim()) ? deglue(cleanText(lot.medium)) : null, lot.dimensions].filter(Boolean).join(' · ')}
               </p>
             )}
 

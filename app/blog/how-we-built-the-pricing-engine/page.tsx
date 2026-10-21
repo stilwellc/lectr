@@ -34,7 +34,7 @@ const wrap: React.CSSProperties = { maxWidth: 728, margin: '0 auto', padding: '0
 const h2: React.CSSProperties = { fontFamily: 'var(--font-sans), sans-serif', fontSize: 24, fontWeight: 450, letterSpacing: '-0.02em', lineHeight: 1.2, margin: '46px 0 12px' };
 const p: React.CSSProperties = { fontSize: 17, lineHeight: 1.65, color: 'var(--color-text-secondary)', margin: '0 0 16px' };
 const strong: React.CSSProperties = { color: 'var(--color-fg)', fontWeight: 600 };
-const table: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', margin: '6px 0 20px', fontSize: 14 };
+const table: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', margin: '6px 0 20px', fontSize: 14, tableLayout: 'fixed', overflowWrap: 'anywhere' };
 const th: React.CSSProperties = { textAlign: 'left', padding: '8px 12px', borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-muted)', fontWeight: 600, fontSize: 12.5 };
 const td: React.CSSProperties = { padding: '8px 12px', borderBottom: '1px solid var(--hairline)', color: 'var(--color-text-secondary)' };
 const tdNum: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--color-fg)' };
@@ -146,7 +146,7 @@ export default function PricingEnginePost() {
               <tr><td style={td}>title / creator line</td><td style={td}>maker · vertical (the router)</td><td style={td}>which market; the per-maker index</td></tr>
               <tr><td style={td}>reference / model line</td><td style={td}>reference · modelKey (Daytona ≠ Datejust)</td><td style={td}>the within-maker mix control</td></tr>
               <tr><td style={td}>catalogue wording</td><td style={td}>form (26-form taxonomy) · size · medium · decade</td><td style={td}>the hedonic controls + the comp gate</td></tr>
-              <tr><td style={td}>card title</td><td style={td}>_card fingerprint: player·year·set·cardNo·grade</td><td style={td}>the repeat-sales index key</td></tr>
+              <tr><td style={td}>card title</td><td style={td}>_card fingerprint: player · year · set · cardNo · grade</td><td style={td}>the repeat-sales index key</td></tr>
               <tr><td style={td}>native price + sale year</td><td style={td}>USD via a dated FX table</td><td style={td}>every money figure on the site</td></tr>
             </tbody>
           </table>

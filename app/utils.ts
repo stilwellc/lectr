@@ -79,6 +79,8 @@ const ENTITY: Record<string, string> = { '&amp;': '&', '&lt;': '<', '&gt;': '>',
 export function cleanText(raw?: string | null): string {
   let t = (raw || '').replace(HTML_TAG, ' ');
   t = t.replace(/&[a-z#0-9]+;/gi, m => ENTITY[m.toLowerCase()] ?? ' ');
+  // a field cut mid-entity ("oil on&nbsp") — drop the half-entity at the end
+  t = t.replace(/&#?[a-z0-9]{0,8}$/i, '');
   return t.replace(/\s+/g, ' ').trim();
 }
 

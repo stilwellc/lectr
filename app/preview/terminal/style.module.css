@@ -1204,7 +1204,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .demandSvg { width: 100%; height: 72px; display: block; overflow: visible; }
 .demandPath { stroke: var(--paper-ink, #1C1712); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .demandBase { stroke: var(--seal-ink, rgba(90, 82, 64, 0.55)); stroke-width: 1; stroke-dasharray: 2 6; }
-.demandDot { fill: var(--paper-ink, #1C1712); }
+.demandDot { fill: var(--paper-ink, #1C1712); stroke: var(--paper-ink, #1C1712); stroke-width: 5.2px; stroke-linecap: round; }
 .demandEnds {
   display: flex;
   justify-content: space-between;
@@ -1251,7 +1251,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   /* the right read caps at 42% of the row so long descriptive values
      ("Typical $963 · Record $1.65M") wrap instead of crushing the label
      to "Spac…" — index figures are narrower and never hit the cap */
-  grid-template-columns: minmax(0, 1.25fr) 104px fit-content(42%);
+  grid-template-columns: minmax(0, 1.25fr) 104px fit-content(36%);
   gap: 14px;
   align-items: center;
   width: 100%;
@@ -1381,7 +1381,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
   .tapeRow {
     /* cap the right read here too — an overflowing nowrap tag was printing
        "REPEAT-SALE INDEXCI +104…" as one unbroken run at 390px */
-    grid-template-columns: minmax(0, 1fr) fit-content(55%);
+    grid-template-columns: minmax(0, 1fr) fit-content(46%);
     gap: 12px;
     min-height: 56px;
     padding: 8px 14px;
@@ -2059,7 +2059,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .mtHero .beamEnds, .mHero .beamEnds { color: var(--tt-muted); }
 .mtHero .demandPath, .mHero .demandPath { stroke: var(--tt-secondary); }
 .mtHero .demandBase, .mHero .demandBase { stroke: rgba(154, 143, 125, 0.5); }
-.mtHero .demandDot, .mHero .demandDot { fill: var(--tt-butter); }
+.mtHero .demandDot, .mHero .demandDot { fill: var(--tt-butter); stroke: var(--tt-butter); }
 /* the CI beam reads direction too — a hedonic/repeat-sale move IS a market
    move, so its interval and point estimate carry the same green-up/red-down
    ink the demand sparklines do, rather than a flat butter that made the
@@ -2092,11 +2092,11 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
 .mtHero [data-dir='up'] .demandDot,
 .mHero [data-dir='up'] .demandDot,
 .mtStage [data-dir='up'] .demandDot,
-.mtMon [data-dir='up'] .demandDot { fill: var(--color-up, #57BE87) !important; }
+.mtMon [data-dir='up'] .demandDot { fill: var(--color-up, #57BE87) !important; stroke: var(--color-up, #57BE87) !important; }
 .mtHero [data-dir='down'] .demandDot,
 .mHero [data-dir='down'] .demandDot,
 .mtStage [data-dir='down'] .demandDot,
-.mtMon [data-dir='down'] .demandDot { fill: var(--color-down, #CC6A5C) !important; }
+.mtMon [data-dir='down'] .demandDot { fill: var(--color-down, #CC6A5C) !important; stroke: var(--color-down, #CC6A5C) !important; }
 .mtHero .demandEnds, .mHero .demandEnds { color: var(--tt-faint); }
 
 @media (max-width: 700px) {
@@ -2140,7 +2140,7 @@ button.mStat:active { background: var(--lw-06, rgba(255, 255, 255, 0.06)); }
    (figures are the lit facts, labels are furniture), the instrument cell
    equal to its grid column, and hairlines that dim down the board as the
    lamp's light falls off. */
-.mtHero .mtRow { min-height: clamp(50px, 6vh, 60px); grid-template-columns: minmax(0, 1.3fr) 116px minmax(0, 1fr); column-gap: 24px; }
+.mtHero .mtRow { min-height: clamp(50px, 6vh, 60px); grid-template-columns: minmax(0, 1fr) 116px auto; column-gap: 24px; }
 .mtHero .mtLabel { font-size: 16px; line-height: 20px; font-weight: 570; letter-spacing: -0.011em; color: rgba(237, 230, 218, 0.87); }
 .mtHero .mtTag { font-size: 10px; line-height: 12px; font-weight: 600; letter-spacing: 0.12em; }
 .mtHero .mtLabelBlock { gap: 4px; }

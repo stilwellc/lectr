@@ -211,7 +211,7 @@ const demandN = (r: { qN: number; q: string }) => `n ${fmtInt(r.qN)} · ${r.q.re
 const demandNTitle = (r: { qN: number; q: string }) =>
   `Median hammer over estimate across the ${fmtInt(r.qN)} estimated ${r.qN === 1 ? 'sale' : 'sales'} of the 12 months to the end of ${r.q}`;
 
-const fmtCI = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`;
+const fmtCI = (v: number) => { const r = Math.round(v); return r === 0 ? '0' : `${r > 0 ? '+' : '−'}${Math.abs(r)}`; }; // never '−0'
 
 /** the phone tag — same claim, fewer letters (the two-line tracker gives the
     tag ~120px; 'REPEAT-SALE INDEX · POKÉMON' clipped at any honest size) */

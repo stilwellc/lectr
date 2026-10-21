@@ -308,8 +308,8 @@ function OutcomeCurve({ dist }: { dist: typeof distribution }) {
   return (
     <figure className="dist">
       <div className="dist-legend">
-        <span className="dist-key dist-key-u"><i />Unflagged control<b>{summary.unflaggedBelowPct.toFixed(1)}% below estimate</b></span>
-        <span className="dist-key dist-key-f"><i />Flagged by lectr<b>{summary.flaggedBelowPct.toFixed(1)}% below estimate</b></span>
+        <span className="dist-key dist-key-u"><i />Unflagged control<b>{summary.unflaggedBelowPct.toFixed(1)}% sold under the estimate</b></span>
+        <span className="dist-key dist-key-f"><i />Flagged by lectr<b>{summary.flaggedBelowPct.toFixed(1)}% sold under the estimate</b></span>
       </div>
 
       <div className="dist-plot">
@@ -1200,7 +1200,7 @@ const DECK_CSS = `
   .dk-curve-cap {
     position: absolute; right: 0; top: -18px;
     font-family: var(--font-mono), monospace; font-size: var(--d-label);
-    letter-spacing: .08em; text-transform: uppercase;
+    text-transform: none;
     color: var(--color-text-faint);
   }
   .dk-curve, .dk-curve-ticks { margin-inline: calc(50% - 50vw); padding-inline: 0; }
@@ -1349,7 +1349,7 @@ const DECK_CSS = `
   .value-before i, .value-after i {
     display: block; font-style: normal;
     font-family: var(--font-mono), monospace; font-size: var(--d-label);
-    letter-spacing: 0.08em; text-transform: uppercase;
+    text-transform: none;
     color: var(--color-text-faint); margin-bottom: 3px;
   }
   .value-after i { color: var(--color-butter-text); }
@@ -1381,11 +1381,11 @@ const DECK_CSS = `
   .close-sub b { color: var(--color-fg); }
   .deck-more {
     display: inline; padding: 14px 0; margin: -14px 0;
-    color: var(--color-fg); font-weight: 600; text-decoration: none;
-    border-bottom: 1px solid var(--hairline);
+    color: var(--color-fg); font-weight: 600;
+    text-decoration: underline; text-decoration-color: var(--hairline); text-underline-offset: 3px;
   }
   .deck-more svg { margin-left: 5px; vertical-align: -1px; }
-  .deck-more:hover { border-bottom-color: var(--color-fg); }
+  .deck-more:hover { text-decoration-color: var(--color-fg); }
   .close-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
   @media (max-width: 700px) {
     .close-actions { flex-direction: column; align-items: stretch; }
@@ -1474,7 +1474,7 @@ const DECK_CSS = `
   .comp-table th {
     text-align: left; font-weight: 600; padding: 0 0 6px;
     color: var(--color-text-faint); font-size: var(--d-label);
-    letter-spacing: 0.08em; text-transform: uppercase;
+    text-transform: none;
     border-bottom: 1px solid var(--hairline);
   }
   .comp-table td { padding: 7px 0; border-bottom: 1px solid var(--hairline); vertical-align: top; }
@@ -1652,7 +1652,7 @@ const DECK_CSS = `
   .dist-line-f { fill: none; stroke: var(--color-butter); stroke-width: 2.5; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
   .dist-foot {
     display: flex; margin: 2px 0 0; padding-left: 42px;
-    font-size: var(--d-label); letter-spacing: 0.1em; text-transform: uppercase;
+    font-size: var(--d-label); text-transform: none;
     color: var(--color-text-faint); font-family: var(--font-mono), monospace;
   }
   .dist-foot-u { width: 33.333%; text-align: right; padding-right: 10px; white-space: nowrap; }
@@ -1668,7 +1668,7 @@ const DECK_CSS = `
   .rec-table { width: 100%; border-collapse: collapse; margin-top: clamp(30px, 3.6vw, 44px); }
   .rec-table th, .rec-table td { text-align: left; vertical-align: baseline; }
   .rec-table thead th {
-    font-size: var(--d-label); letter-spacing: 0.08em; text-transform: uppercase;
+    font-size: var(--d-label); text-transform: none;
     color: var(--color-text-faint); font-weight: 600;
     padding: 0 0 9px; border-bottom: 1px solid var(--hairline);
   }

@@ -53,7 +53,8 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
       : fmtFace(o.priceUsd);
     if (mobile) {
       return (
-        <div className="ray-settled-mrow">
+        <div className="ray-settled-mrow ck-ph" style={{ '--ph': '56px' } as React.CSSProperties}>
+          <Thumb label={(meta?.artist ? makerLineOf({ artist: meta.artist, title: meta.title }).name : '') || name} size={56} />
           <div className="ck-mtitle">{name}</div>
           <div className="ck-mline">
             <span className="ck-msub">
@@ -85,16 +86,20 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
     return (
       <div className="ray-settled-cols ray-savedrow" style={{ display: 'grid' }}>
         <span className="maker">{(meta?.artist ? makerLineOf({ artist: meta.artist, title: meta.title }).name : '') || '—'}</span>
-        <span className="work">{name}<span style={{ color: 'var(--color-text-faint)' }}> · archive</span></span>
+        {/* an archived save carries no photo: its maker's initial keeps the column's edge */}
+        <span className="work ck-ph" style={{ '--ph': '40px', alignItems: 'center' } as React.CSSProperties}>
+          <Thumb label={(meta?.artist ? makerLineOf({ artist: meta.artist, title: meta.title }).name : '') || name} size={40} />
+          <span style={{ alignSelf: 'center', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}<span style={{ color: 'var(--color-text-faint)' }}> · archive</span></span>
+        </span>
         <span className="num" style={{ color: meta?.estMid != null ? undefined : 'var(--color-text-faint)' }}
           title={meta?.estMid != null ? 'The estimate as it stood when you saved the lot' : 'No estimate published'}>
           {meta?.estMid != null ? <>{fmtFace(meta.estMid)}<span className="sub">at save</span></> : '—'}
         </span>
         <CallCell meta={meta} />
         <span className="num" style={{ fontWeight: 600 }}>{price}</span>
-        <span className="num" style={vsSaveEst != null ? { color: vsSaveEst > 0 ? 'var(--color-up)' : vsSaveEst < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)', fontWeight: 700 } : { color: 'var(--color-text-faint)' }}
+        <span className="num" style={vsSaveEst != null ? undefined : { color: 'var(--color-text-faint)' }}
           title={vsSaveEst != null ? 'vs the estimate at save — all-in price against the estimate midpoint' : 'No estimate on file — outside the vs-est median'}>
-          {vsSaveEst != null ? <>{fmtSignedPct(vsSaveEst)}<span className="sub">vs est at save</span></> : '—'}
+          {vsSaveEst != null ? <><SigPill dir={vsSaveEst > 0 ? 'up' : vsSaveEst < 0 ? 'down' : 'flat'}>{fmtSignedPct(vsSaveEst)}</SigPill><span className="sub">vs est at save</span></> : '—'}
         </span>
         <span style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
           {o.provisional ? (

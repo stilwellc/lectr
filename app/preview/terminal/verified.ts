@@ -77,4 +77,5 @@ export function verifiedMovers(market: MarketData | null, scope?: Market): Verif
   return out.sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct));
 }
 
-export const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`;
+// a true minus (matches the CI line) and never a '−0.0'
+export const fmtPct = (n: number) => { const r = Math.round(n * 10) / 10; return `${r >= 0 ? '+' : '−'}${Math.abs(r).toFixed(1)}%`; };

@@ -163,7 +163,7 @@ function tabHeadline(tab: DeskTab, tabs: readonly TabItem[], i: ReturnType<typeo
   }
 }
 
-function DeskMasthead({ tab, tabs }: { tab: DeskTab; tabs: readonly TabItem[] }) {
+function DeskMasthead({ tab, tabs, cockpit = true }: { tab: DeskTab; tabs: readonly TabItem[]; cockpit?: boolean }) {
   const i = useDeskInternals();
   const { desk } = useDesk();
   const own = tabHeadline(tab, tabs, i, desk);
@@ -279,7 +279,8 @@ function DeskMasthead({ tab, tabs }: { tab: DeskTab; tabs: readonly TabItem[] })
         </>
       )}
       {/* ══ 0b · THE COCKPIT — three registration cells + the 14-day strip ══ */}
-      <Cockpit />
+      {/* (perf) a compact header hides the cockpit — so it doesn't mount (it scans the week) */}
+      {cockpit && <Cockpit />}
     </section>
   );
 }
@@ -304,7 +305,7 @@ function DeskBody() {
   const empty = !!tabs.find(t => t.id === tab)?.empty;
   return (
     <>
-      <div className="dt-head" data-tab={tab} data-compact={(tab !== 'today' && i.todayShows) || undefined}><DeskMasthead tab={tab} tabs={tabs} /></div>
+      <div className="dt-head" data-tab={tab} data-compact={(tab !== 'today' && i.todayShows) || undefined}><DeskMasthead tab={tab} tabs={tabs} cockpit={!(tab !== 'today' && i.todayShows)} /></div>
       <DeskTabs tabs={tabs} active={tab} onPick={setTab}
         help={<HelpChip name="Keys and tabs"><KeysHelp mountedIds={mountedIds} /></HelpChip>} />
       {/* not before the desk can land: the archive that resolves #settled & co. lands late */}

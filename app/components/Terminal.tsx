@@ -309,7 +309,7 @@ export function CallPlate({
                   exit; the lot-page CTA above still carries the journey */}
               {safeHref(lot.url) && (
                 <a className="ray-call-btn ray-call-btn-quiet" href={safeHref(lot.url)} target="_blank" rel="noopener noreferrer">
-                  View lot <Flick size={10} style={{ marginLeft: 5 }} />
+                  {lot.auctionHouse ? `At ${lot.auctionHouse}` : 'At the house'} <Flick size={10} style={{ marginLeft: 5 }} />
                 </a>
               )}
             </div>

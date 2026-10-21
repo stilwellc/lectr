@@ -193,7 +193,7 @@ function tapeTag(r: SubMarketRead): string {
 }
 
 // signed integer for CI terminals: +79 / −4
-const fmtCI = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`;
+const fmtCI = (v: number) => { const r = Math.round(v); return r === 0 ? '0' : `${r > 0 ? '+' : '−'}${Math.abs(r)}`; }; // never '−0'
 
 /** The volume an INDEX read was fitted on. A repeat-sale CI is estimated
  *  from resale PAIRS (indexSeries.n is pairs per period — MarketTape prints
@@ -248,7 +248,8 @@ export function DemandLine({ series, mini = false, dir }: { series: { period: st
         <path d={`${pts.d} L 100 72 L 0 72 Z`} fill={`url(#${gid})`} stroke="none" className={styles.demandFill} />
         <line x1="0" y1={pts.medianY} x2="100" y2={pts.medianY} className={styles.demandBase} vectorEffect="non-scaling-stroke" />
         <path d={pts.d} className={styles.demandPath} fill="none" vectorEffect="non-scaling-stroke" />
-        <circle cx="100" cy={pts.endY} r="2.6" className={styles.demandDot} />
+        {/* a zero-length round-capped stroke: non-scaling, so it stays a dot inside the stretched viewBox (a circle squashed to an oval) */}
+        <path d={`M 100 ${pts.endY} l 0 0`} className={styles.demandDot} vectorEffect="non-scaling-stroke" />
       </svg>
       {!mini && (
         <div className={styles.demandEnds}>
@@ -538,7 +539,7 @@ function TapeRow({ r, active, onPick }: { r: SubMarketRead; active: boolean; onP
           <span className={styles.tapeGlyph} aria-hidden>
             <MarketIcon market={r.vertical as Market} size={13} />
           </span>
-          {r.label}
+          {r.label.replace(' · ', '\u00a0· ')}
         </span>
         <span className={styles.tapeTag}>{tapeTag(r)}</span>
       </Link>

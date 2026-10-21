@@ -11,7 +11,7 @@ import styles from './style.module.css';
 const EASE = [0.22, 1, 0.36, 1] as const;
 
 // signed integer for CI terminals: +79 / −4
-const fmtCI = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)}`;
+const fmtCI = (v: number) => { const r = Math.round(v); return r === 0 ? '0' : `${r > 0 ? '+' : '−'}${Math.abs(r)}`; }; // never '−0'
 
 /* ── THE CI BEAM — the caliper. A 1px rule, tick terminals at the
    95% bounds, a solid diamond at the point estimate. Never a slider. */

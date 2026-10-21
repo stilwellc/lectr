@@ -120,7 +120,7 @@ button.mkx-live-more { width: 100%; background: none; border: none; border-top: 
 .mk-id { min-width: 0; display: flex; align-items: baseline; gap: 8px; flex-wrap: nowrap; overflow: hidden; }
 .mk-name { flex: 0 0 auto; max-width: 100%; font-size: 13.5px; font-weight: 550; color: var(--color-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mk-tags { display: inline-flex; flex: 0 1 auto; gap: 5px; flex-wrap: nowrap; min-width: 0; overflow: hidden; }
-.mk-tag { display: inline-block; padding: 1px 7px; font-family: var(--font-mono), monospace; font-size: 10px; letter-spacing: 0.05em; color: var(--color-text-muted); border: 1px solid var(--color-border); border-radius: 100px; white-space: nowrap; }
+.mk-tag { display: inline-block; padding: 1px 7px; font-family: var(--font-mono), monospace; font-size: 10px; letter-spacing: 0.05em; color: var(--color-text-muted); border: 1px solid var(--color-border); border-radius: 100px; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
 .mk-tag-verified { color: var(--color-text-secondary); border-color: var(--color-border-mid); }
 .mk-flagdot { display: inline-block; width: 6px; height: 6px; border-radius: 100px; background: var(--color-fg); margin-right: 6px; vertical-align: 1px; }
 .mk-cell { display: none; }

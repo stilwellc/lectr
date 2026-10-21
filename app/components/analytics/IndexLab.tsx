@@ -159,7 +159,7 @@ export default function IndexLab({ marketData, scope }: { marketData: MarketData
           : <>like-for-like cohort index, rebased Δ% over the window · layers: the market&rsquo;s tracked sub-markets</>}
         {hedonicAbstain && (
           <span style={{ display: 'block', marginTop: 4 }}>
-            The hedonic index abstains over {tf}: {hedonicAbstain}. It is not drawn.
+            The hedonic index isn’t drawn over {tf} — {hedonicAbstain}.
           </span>
         )}
       </div>
@@ -173,6 +173,7 @@ export default function IndexLab({ marketData, scope }: { marketData: MarketData
         compact
         play={false}
         band={hasHedonic}
+        hideLineLabels
       />
       <div className="ray-il-legend">
         {key(hasHedonic ? 'Hedonic index' : 'Cohort index', '', built.anchorLast, 'anchor')}

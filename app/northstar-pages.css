@@ -175,7 +175,7 @@ a.nsp-more:hover { color: var(--color-fg); }
   .nsp-byline .s { max-width: 100%; }
   .nsp-read-stat { font-size: 32px; }
   .nsp-section { margin-top: 32px; }
-  .nsp-lval { flex-wrap: wrap; }
+  .nsp-lval { flex-wrap: wrap; margin-left: auto; }
   .nsp-lsub { white-space: normal; }
   .nsp-lv { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .nsp-links { gap: 8px; }
@@ -185,3 +185,6 @@ a.nsp-more:hover { color: var(--color-fg); }
   .nsp-section.nsp-live { margin-top: 14px; }
   .nsp-live > .nsp-shead { display: none; }
 }
+
+/* a plated live book follows the byline: its frame is the divider (no stray double rule) */
+.nsp-byline:has(+ .ns-plate) { border-bottom: 0; padding-bottom: 0; }

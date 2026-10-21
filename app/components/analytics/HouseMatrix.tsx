@@ -64,7 +64,7 @@ export default function HouseMatrix({ marketData, scope }: {
       <div className="ray-hm-scroll">
         <div
           className="ray-hm-grid"
-          style={{ gridTemplateColumns: `minmax(84px, 1.4fr) repeat(${cols.length}, minmax(58px, 1fr))` }}
+          style={{ gridTemplateColumns: cols.length <= 2 ? `minmax(84px, 240px) repeat(${cols.length}, minmax(58px, 180px))` : `minmax(84px, 1.4fr) repeat(${cols.length}, minmax(58px, 1fr))` }}
         >
           <span className="ray-hm-corner">house</span>
           {cols.map(c => <span key={c} className="ray-hm-col">{c}</span>)}

@@ -1021,7 +1021,7 @@ function MakersLedger() {
                       <span className="mk-group-read">
                         {g.flags > 0 && <b className="mk-group-flags">{g.flags} flagged</b>}
                         {g.live > 0 && <>{g.flags > 0 ? ' · ' : ''}{g.live.toLocaleString()} on the block</>}
-                        {g.demandNow !== null && <>{g.flags > 0 || g.live > 0 ? ' · ' : ''}demand <b data-dir={dirOf(g.demandNow)} title={g.demandQ ? `Median hammer over estimate, the 12 months to the end of ${g.demandQ}` : undefined}>{signedPct(g.demandNow)}</b></>}
+                        {g.demandNow !== null && <>{g.flags > 0 || g.live > 0 ? ' · ' : ''}{Math.round(g.demandNow) === 0 ? <span title={g.demandQ ? `Median hammer over estimate, the 12 months to the end of ${g.demandQ}` : undefined}>at estimate</span> : <>demand <b data-dir={dirOf(g.demandNow)} title={g.demandQ ? `Median hammer over estimate, the 12 months to the end of ${g.demandQ}` : undefined}>{signedPct(g.demandNow)}</b></>}</>}
                       </span>
                       <div className="mk-cols">
                         <span /><span className="mk-col-name">{nameHead(g.key)}</span>

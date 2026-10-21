@@ -50,7 +50,14 @@ function rebaseToDelta(series: { period: string; value: number; n: number }[]): 
 function pickChart(row: DrillRow, label: string): HeroLine | null {
   const color = LAYER_PALETTE[0];
   if (row.readType === 'index' && row.indexSeries && row.indexSeries.length >= 4) {
-    return { key: row.slug, label: `${label} · Δ%`, color, unit: 'pct', points: rebaseToDelta(row.indexSeries) };
+    // (Oct 21 polish) rebase at the start of the headline's own window ("3Y"),
+    // so the line ends at the figure the card above prints — rebased to the
+    // series' first quarter it ended at a loss under a "+42%" card
+    const yrs = parseInt(row.index?.horizon ?? '', 10) || 0;
+    const per = /Q\d/i.test(row.indexSeries[0]?.period ?? '') ? 4 : 1;
+    const span = yrs * per;
+    const s = span > 0 && row.indexSeries.length > span + 1 ? row.indexSeries.slice(-(span + 1)) : row.indexSeries;
+    return { key: row.slug, label: `${label} · Δ%`, color, unit: 'pct', points: rebaseToDelta(s) };
   }
   if (row.readType === 'demand' && row.demandSeries && row.demandSeries.length >= 4) {
     return { key: row.slug, label: `${label} · demand`, color, unit: 'pct', points: row.demandSeries.map(p => ({ period: p.period, value: p.value, n: p.n })) };
@@ -252,7 +259,7 @@ export default function SubPage({ slug }: { slug: string }) {
               <span className="nsp-shctx">every point a real reading</span>
             </div>
             <div className="nsp-chart">
-              <HeroChart anchor={chart} play={false} height={220} />
+              <HeroChart anchor={chart} play={false} height={220} zeroNote={row.readType === 'demand' ? ' · est' : ''} />
             </div>
           </section>
         )}

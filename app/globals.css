@@ -1412,12 +1412,10 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   font-family: var(--font-mono-data), ui-monospace, monospace;
   font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   font-variant-numeric: tabular-nums;
   color: #62666d;
 }
-.ray-close-spec b { font-weight: 500; color: var(--color-text-secondary, #d0d6e0); }
+.ray-close-spec b { font-weight: 500; color: var(--color-text-secondary, #d0d6e0); white-space: nowrap; }
 .ray-close-spec b.up { color: var(--color-up, #57be87); }
 .ray-close-spec span + span::before { content: '·'; margin: 0 10px; color: #62666d; }
 .ray-close-spec a { color: inherit; text-decoration: none; transition: color 160ms var(--ease-signature); }
@@ -2145,6 +2143,8 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
   .ray-feedtable td.t-work { width: 100%; max-width: 0; }
   .ray-feedtable td.t-work .t-artist { overflow: hidden; text-overflow: ellipsis; }
   .ray-feedtable .t-cat { white-space: normal; width: 150px; min-width: 150px; line-height: 1.4; }
+  /* the work title fills its column and ellipsizes only when it runs out of room */
+  .ray-feedtable .t-title { max-width: 100%; }
 }
 /* the data cells speak mono — dates, days, bids, estimates, signals */
 .ray-feedtable .t-date, .ray-feedtable .t-days, .ray-feedtable .t-bids,
@@ -2157,9 +2157,9 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-feedtable .t-days { color: var(--color-text-secondary); }
 .ray-feedtable .t-bids { color: var(--color-text-muted); }
 .ray-feedtable .t-cat {
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 12.5px;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--color-text-muted);
 }
 .ray-feedtable .t-est { color: var(--color-fg); font-weight: 600; }
@@ -3430,11 +3430,14 @@ html .lectr-recplate-k {
   font-family: var(--font-mono), monospace; font-size: 12.5px;
   font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; color: var(--color-fg);
 }
-.rcp-kind { display: block; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-faint); }
+.rcp-kind { display: block; font-size: 10.5px; color: var(--color-text-faint); }
 @media (max-width: 720px) {
   .rcp-cols { grid-template-columns: minmax(0, 1fr) 96px 84px; }
   .rcp-cols > :nth-child(1), .rcp-cols > :nth-child(3) { display: none; }
   .rcp-cols.kicker > :nth-child(1), .rcp-cols.kicker > :nth-child(3) { display: none; }
+  /* the maker rides its own small line; the title gets two lines (it was cut after the year) */
+  .rcp-work { white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+  .rcp-work b { display: block; margin-right: 0; font-size: 11.5px; color: var(--color-text-muted); font-weight: 500; }
 }
 
 /* ── COCKPIT INPUT CRAFT (Aug 27): glossary, help strips, sticky heads,
