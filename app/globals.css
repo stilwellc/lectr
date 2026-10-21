@@ -5657,3 +5657,4 @@ html:has(.dt-wrap) { scroll-padding-top: calc(64px + var(--dt-h, 56px) + 12px); 
 :root[data-theme="dark"] .ck-page .ns-cellgrid > :not(.ns-ccell) { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
 /* phone: the news badge is a corner dot (a number over a 4-up grid collided with the word) */
 @media (max-width: 639.98px) { .dt-tab .dt-news { font-size: 0; min-width: 8px; width: 8px; height: 8px; padding: 0; top: 10px; right: 8%; } }
+.ck-page .ck-dailyemail { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 10px; }

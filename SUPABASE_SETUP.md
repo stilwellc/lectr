@@ -22,6 +22,8 @@ project converge on the same schema):
 | 0004 | `migrations/0004_indexes_and_constraints.sql` | alert/search indexes; **dedupes** `saved_searches` then adds `unique (user_id, query)` |
 | 0005 | `migrations/0005_drop_emailed_at.sql` | drops the dead email-digest column (NO EMAIL FEATURES) |
 | 0006 | `migrations/0006_retention_purge.sql` | `retention_purge()` (seen alerts > 90d, snapshots capped at 400/user) + its pg_cron schedule |
+| 0010 | `migrations/0010_my_max.sql` | `saved_lots.max_usd` — the reader's own max on a watch |
+| 0011 | `migrations/0011_daily_desk_email.sql` | `email_prefs` (opt-in, off by default) + `email_daily_recipients()` (service only) + `email_unsubscribe(token)` (anon) |
 | 0007 | `migrations/0007_abuse_limits.sql` | length/range CHECKs (`NOT VALID` — new writes only) + per-user row caps via trigger: 1000 saved lots, 200 searches, 500 snapshots (service key exempt) |
 
 For 0006 enable **pg_cron** first (Database → Extensions) so the schedule
@@ -79,7 +81,8 @@ in the nav, the save button prompts sign-in, and `/saved` becomes per-user.
 Existing localStorage saves upload to the account on first sign-in.
 
 ## Standing laws
-- **NO EMAIL FEATURES.** Alerts live in-product only. No mailer, no digest, no
-  Resend key — the schema carries no email column (0005 removes the last one).
+- **ONE EMAIL, OPT-IN** (amended Oct 21 2026): alerts live in-product; the
+  only mail is the Daily Desk, which a reader turns on in Account (0011,
+  `RESEND_API_KEY` secret, `scripts/daily-desk-send.ts`). No other mailer.
 - The `lots` table is a **query layer**, never the source of truth (R2 is). See
   `docs/data-pipeline.md` for its retention contract.

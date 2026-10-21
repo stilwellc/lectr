@@ -15,3 +15,10 @@ compatibility_date = "2025-09-01"
 [[r2_buckets]]
 binding = "CORPUS"
 bucket_name = "lectr-data"
+
+# The Daily Desk email's unsubscribe (functions/api/email/unsubscribe.ts) calls
+# the anon-callable public.email_unsubscribe(token) RPC. Both values are the
+# PUBLIC ones the site already ships (NEXT_PUBLIC_SUPABASE_*) — no secret here.
+[vars]
+SUPABASE_URL = "https://tiwrdomqydtnmgljsqsi.supabase.co"
+SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpd3Jkb21xeWR0bm1nbGpzcXNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQwNjA3MTcsImV4cCI6MjA5OTYzNjcxN30.3upmXkNbtO-kNTdohNtrxp3AI9lTa0OVRfo1KiHtWuc"

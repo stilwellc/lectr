@@ -310,8 +310,9 @@ older than 90 days and caps `collection_snapshots` at 400 rows per user,
 scheduled nightly by pg_cron at 07:20 UTC (or call it via RPC with the
 service key where pg_cron is off).
 
-**NO EMAIL FEATURES** (standing law, Aug 28 2026): alerts live in-product
-only. The email digest and its `emailed_at` column are gone.
+**ONE EMAIL, OPT-IN** (amended Oct 21 2026; was "no email features", Aug 28):
+alerts live in-product. The old digest and its `emailed_at` column stay gone;
+the ONE email is the opt-in Daily Desk (Oct 21 2026, at the owner's request): `supabase/migrations/0011_daily_desk_email.sql`, `scripts/daily-desk-send.ts`, `.github/workflows/daily-desk.yml`.
 
 ## 3. The lot API — lot-level history without the corpus (Oct 2026)
 

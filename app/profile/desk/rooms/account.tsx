@@ -1,6 +1,7 @@
 'use client';
 /** ACCOUNT — who is signed in, where the desk lives, sign out (lifted from
  *  page.tsx unchanged); push opt-in rides here. */
+import { useDailyEmail } from '../../../lib/email-prefs';
 import React from 'react';
 import PushOptIn from '../../../components/retention/PushOptIn';
 import { TrackOnMount } from '../../../components/retention/trackers';
@@ -38,9 +39,28 @@ export default function AccountStrip(_p: SectionProps) {
         )}
         <a href="#on-device" className="ck-away-link">Clear on-device signals</a>
       </div>
+      <DailyEmailOptIn user={authEnabled ? user : null} />
       {/* notifications for this device — renders nothing until push is configured */}
       <PushOptIn />
       <TrackOnMount event="profile_view" onceKey="profile" />
     </section>
+  );
+}
+
+/** THE DAILY DESK email — opt-in, signed-in only; renders nothing until the table exists */
+function DailyEmailOptIn({ user }: { user: Parameters<typeof useDailyEmail>[0] }) {
+  const { state, busy, set } = useDailyEmail(user);
+  if (!user || state === 'unavailable' || state === 'loading') return null;
+  const on = state === 'on';
+  return (
+    <div className="ck-account-in ck-dailyemail">
+      <span>
+        <b>Daily Desk email</b> — each morning: your watches closing, bids past your max, your results and three picks.
+        {on ? <> On, to {user.email}.</> : null}
+      </span>
+      <button type="button" className="ray-toolbar-pill" data-active={on} aria-pressed={on} disabled={busy} onClick={() => set(!on)}>
+        {on ? 'Turn off' : 'Email me the Daily Desk'}
+      </button>
+    </div>
   );
 }

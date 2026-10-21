@@ -1,7 +1,9 @@
 # Retention: the return loop and how we measure it
 
-Standing law: **no email features.** No address capture, no digests, no
-waitlist mail. Everything below lives in the product (browser push, the
+Standing law (amended Oct 21 2026): **one email, opt-in only** — the Daily
+Desk (off by default, turned on in Account, one-click unsubscribe; `supabase/migrations/0011_daily_desk_email.sql`, `scripts/daily-desk-send.ts`, `.github/workflows/daily-desk.yml`).
+No waitlist mail, no other digests, no address capture beyond the account's
+own. Everything below lives in the product (browser push, the
 calendar, the in-app inbox) and every measurement is identity-free.
 
 Schema: `supabase/migrations/0008_return_loop.sql`, tested locally on PGlite

@@ -26,7 +26,7 @@
  *   npx tsx scripts/push-send.ts [--kinds close24,close1,hammer] [--source https://lectr.bid]
  *                                [--upcoming public/data/ray/upcoming.json] [--dry-run] [--strict]
  *
- * NO EMAIL FEATURES: the VAPID subject is the site URL, not a mailto.
+ * The VAPID subject is the site URL, not a mailto (the one email is the opt-in Daily Desk — daily-desk-send.ts).
  */
 import fs from 'fs';
 import path from 'path';

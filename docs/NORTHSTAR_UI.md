@@ -123,7 +123,7 @@ REINFORCED by the north star:
   product art.** Signals stay the only saturated voice; chrome goes even quieter.
 - **No glow / flat identification** — ElevenLabs agrees (ring-shadows ≤ 4px blur only).
 - **Honest reads, printed-bid gate, signed-signal law** — content laws, untouched.
-- **NO EMAIL FEATURES** — untouched, forever.
+- **ONE EMAIL, OPT-IN** — the Daily Desk only (amended Oct 21 2026 at the owner's request); no other email.
 
 Superseded old laws (north star overrides, tastefully): the blanket "no eyebrow kickers"
 ban — ElevenLabs kickers are quiet gray sentence-case Inter, not tracked-uppercase slop;

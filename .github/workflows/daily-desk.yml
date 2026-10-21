@@ -1,0 +1,41 @@
+# THE DAILY DESK EMAIL (Oct 21 2026) — the morning send of each opted-in
+# reader's own desk (scripts/daily-desk-send.ts; opt-in table + recipients RPC
+# in supabase/migrations/0011). Runs after the nightly has settled results and
+# the morning close board has refreshed bids. Inert until RESEND_API_KEY is set
+# (renders and logs only); once a day per reader (email_prefs.last_sent_on +
+# a Resend idempotency key), so a manual re-run never double-sends.
+name: Daily Desk email
+on:
+  schedule:
+    # 12:20 UTC = 8:20 New York (EDT) / 7:20 (EST)
+    - cron: '20 12 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Render and log only — send nothing'
+        type: boolean
+        default: false
+concurrency:
+  group: daily-desk
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Send the Daily Desk
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          DAILY_DESK_FROM: ${{ vars.DAILY_DESK_FROM || 'lectr <desk@lectr.bid>' }}
+        # no preview artifact: a rendered email is a reader's private desk
+        run: npx tsx scripts/daily-desk-send.ts ${{ inputs.dry_run && '--dry-run' || '' }}

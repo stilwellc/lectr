@@ -867,7 +867,7 @@ jobs:
         run: bash scripts/data-store.sh pull-version "$VERSION"
       # Each script retries Supabase calls with bounded backoff internally
       # (4 tries, 2s→4s→8s); a failure that survives that is real and goes
-      # RED here. NO EMAIL FEATURES (standing law).
+      # RED here. (The one email, the opt-in Daily Desk, runs in daily-desk.yml.)
       - name: Sync lots table
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
