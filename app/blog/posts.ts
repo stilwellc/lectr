@@ -14,6 +14,36 @@ export const POSTS: { slug: string; date: string; title: string; dek: string; hr
     dek: 'The systems walk-through — crawlers, the identity ledger, the engine, and the nightly replay, section by section.',
   },
   {
+    slug: 'q3-2026-art',
+    date: '2026-10-22',
+    title: 'Art in Q3: a thin summer that cleared almost everything',
+    dek: 'A $38M quarter, about a third of last summer’s, with no eight-figure lot to carry it. What did come up sold — 92% of it — and nearly half the money arrived in a single late-September week in Hong Kong.',
+  },
+  {
+    slug: 'q3-2026-watches',
+    date: '2026-10-22',
+    title: 'Watches in Q3: one Hong Kong weekend made the quarter',
+    dek: '586 watches sold for $41.1M, four times Q3 2025, but one Sotheby’s Hong Kong sale made $30.1M of it. Strip it out and the summer was flat in dollars, sharper against estimates. Cartier ran hottest.',
+  },
+  {
+    slug: 'q3-2026-design',
+    date: '2026-10-22',
+    title: 'Design in Q3: the Nakashima quarter',
+    dek: 'A quiet summer quarter, nearly all Wright and nearly all Nakashima, and hotter than Q3 2025: the median lot sold at 1.37× its estimate midpoint and 70% beat the high estimate.',
+  },
+  {
+    slug: 'q3-2026-sports',
+    date: '2026-10-22',
+    title: 'Sports in Q3: Pelé’s World Cup shirt tops a $195M quarter',
+    dek: '31,840 lots for $195.5M. A World Cup summer put soccer at the top, Ohtani took two of the three biggest lots, and because these are bid sales we report it by volume and record, not as a return.',
+  },
+  {
+    slug: 'q3-2026-science',
+    date: '2026-10-22',
+    title: 'Science in Q3: one skeleton was the quarter',
+    dek: 'The summer sales arrived and one lot outweighed everything else: a $50.1M Tyrannosaurus. The quarter with him and without him — fossils and space running hot, meteorites soft, and what last July can and can’t tell you.',
+  },
+  {
     slug: 'q2-2026-art',
     date: '2026-07-16',
     title: 'Art in Q2: trophies cleared, the middle got picky',

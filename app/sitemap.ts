@@ -50,7 +50,7 @@ export const dynamic = 'force-static';
 export default function sitemap(): MetadataRoute.Sitemap {
   const liveMarkets = MARKETS.filter(m => m.live && m.key !== 'all').map(m => m.key);
   const staticRoutes = ['', '/art', '/design', '/watches', '/science', '/sports', '/tcg', '/culture', '/value', '/analytics', '/makers', '/sub', '/receipts', '/about', '/blog',
-    '/blog/how-we-built-the-pricing-engine', '/blog/q2-2026-art', '/blog/q2-2026-watches', '/blog/q2-2026-design', '/blog/q2-2026-sports', '/blog/q2-2026-science', '/blog/corrections',
+    '/blog/how-we-built-the-pricing-engine', '/blog/q2-2026-art', '/blog/q2-2026-watches', '/blog/q2-2026-design', '/blog/q2-2026-sports', '/blog/q2-2026-science', '/blog/q3-2026-art', '/blog/q3-2026-watches', '/blog/q3-2026-design', '/blog/q3-2026-sports', '/blog/q3-2026-science', '/blog/corrections',
     ...liveMarkets.map(k => `/analytics/${k}`),
     ...liveMarkets.map(k => `/value/${k}`),
     ...liveMarkets.map(k => `/makers/m/${k}`)];

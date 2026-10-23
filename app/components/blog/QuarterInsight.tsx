@@ -40,6 +40,7 @@ export interface HeadlineLot {
 
 export default function QuarterInsight({
   market, title, dek, date, stats, children, topSales, movers, coolers, footnote, headline,
+  quarter = 'Q2 2026', months = 'April–June', moversHeader = 'Median vs Q2 2025', basis = 'hammer',
 }: {
   market: string;
   title: string;
@@ -52,6 +53,15 @@ export default function QuarterInsight({
   coolers?: Mover[];
   footnote?: string;
   headline?: HeadlineLot;
+  /** the series this note belongs to — "Q3 2026" (Q2 2026 notes predate the prop) */
+  quarter?: string;
+  /** the quarter's months, for the coverage footnote — "July–September" */
+  months?: string;
+  /** what the Movers figure is, said plainly ("Demand vs estimate", "Median vs Q3 2025") */
+  moversHeader?: string;
+  /** 'sold': vs-estimate reads compare the PUBLISHED sold price to the estimate (the site's
+   *  basis rule since Aug 4 2026 — app/lib/demand.ts). 'hammer': the Q2 2026 notes' wording. */
+  basis?: 'hammer' | 'sold';
 }) {
   return (
     <div className="terminal-shell" style={{ minHeight: '100vh', background: 'var(--color-bg)', color: 'var(--color-fg)', fontFamily: 'var(--font-sans), sans-serif' }}>
@@ -75,7 +85,7 @@ export default function QuarterInsight({
             </div>
             <div>
               <span className="k" style={{ display: 'block' }}>Series</span>
-              <span className="v" style={{ display: 'block' }}>Q2 2026 in review</span>
+              <span className="v" style={{ display: 'block' }}>{quarter} in review</span>
             </div>
           </div>
           <p style={{ ...p, fontSize: 17 }}>{dek}</p>
@@ -95,7 +105,7 @@ export default function QuarterInsight({
             ))}
           </div>
           {/* the stat plate signs itself — FIG. folio in the light catalogue only */}
-          <FigCap>The quarter&rsquo;s headline measures, from the {market} sales lectr tracked in Q2 2026.</FigCap>
+          <FigCap>The quarter&rsquo;s headline measures, from the {market} sales lectr tracked in {quarter}.</FigCap>
         </figure>
 
         <article style={wrap}>
@@ -154,7 +164,7 @@ export default function QuarterInsight({
             <>
               <h2 style={h2}>Movers</h2>
               <table style={table}>
-                <thead><tr><th style={th}>Maker</th><th style={{ ...th, textAlign: 'right' }}>Median vs Q2 2025</th><th style={{ ...th, textAlign: 'right' }}>Sales</th></tr></thead>
+                <thead><tr><th style={th}>Maker</th><th style={{ ...th, textAlign: 'right' }}>{moversHeader}</th><th style={{ ...th, textAlign: 'right' }}>Sales</th></tr></thead>
                 <tbody>
                   {[...(movers || []), ...(coolers || [])].map(m => (
                     <tr key={m.label}>
@@ -169,9 +179,10 @@ export default function QuarterInsight({
           ) : null}
 
           <p style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--color-text-faint)', margin: '30px 0 0', borderTop: '1px solid var(--hairline)', paddingTop: 14 }}>
-            Figures cover the {market} sales lectr tracked in Q2 2026 (April–June) — our coverage, not the
-            entire market. Prices are premium-inclusive as published by the houses; &ldquo;vs estimate&rdquo;
-            reads are taken at the hammer, since estimates are set on hammer. Small samples are flagged
+            Figures cover the {market} sales lectr tracked in {quarter} ({months}) — our coverage, not the
+            entire market. Prices are premium-inclusive as published by the houses; {basis === 'sold'
+              ? <>&ldquo;vs estimate&rdquo; reads compare that published sold price to the estimate midpoint, so at most houses they include the buyer&rsquo;s premium.</>
+              : <>&ldquo;vs estimate&rdquo; reads are taken at the hammer, since estimates are set on hammer.</>} Small samples are flagged
             where they occur.{footnote ? ` ${footnote}` : ''}
           </p>
           <p style={{ marginTop: 22 }}>
