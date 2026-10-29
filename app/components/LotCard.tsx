@@ -325,7 +325,7 @@ function LotCard({
           {lot.auctionHouse}
           {catLabel ? ` · ${catLabel}` : ''}
           {isPastPending
-            ? ` · hammered ${formatDate(closeDayOf(lot))} · results pending`
+            ? ` · hammered ${formatDate(closeDayOf(lot))} · result pending`
             : isNoSale
             ? ` · bought in`
             : <> · {isUpcoming ? 'hammers ' : ''}{formatDate(closeDayOf(lot))}{isUpcoming && lot.saleDateTime && <CloseClock iso={lot.saleDateTime} windowHours={24} prefix=" · " />}{isUpcoming && lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}</>}
@@ -546,7 +546,7 @@ function LotCard({
           {lot.auctionHouse}
           {catLabel ? ` · ${catLabel}` : ''}
           {isPastPending
-            ? ` · hammered ${formatDate(closeDayOf(lot))} · results pending`
+            ? ` · hammered ${formatDate(closeDayOf(lot))} · result pending`
             : isNoSale
             ? ` · bought in`
             : <> · {isUpcoming ? 'hammers ' : ''}{formatDate(closeDayOf(lot))}{isUpcoming && lot.saleDateTime && <CloseClock iso={lot.saleDateTime} windowHours={24} prefix=" · " />}{isUpcoming && lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}</>}

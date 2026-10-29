@@ -17,7 +17,7 @@
  */
 import Link from 'next/link';
 import { useMemo } from 'react';
-import { recommend, pickStrips, tonightEndMs, type Rec, type RecLot, type Taste } from '../lib/recs';
+import { recommend, pickStrips, tonightEndMs, type Rec, type RecLot, type Taste, recNote } from '../lib/recs';
 import { isNewLot, type HouseBaselines } from '../lib/feed-filters';
 import { closeMsOf } from '../lib/priority';
 import { closeIsTimed } from '../lib/house-tz';
@@ -83,7 +83,9 @@ function StripHead({ label }: { label: string }) {
 function StripRow({ r, tag, tone, when = true }: { r: Rec<RecLot>; tag: string; tone?: 'hot' | 'up'; when?: boolean }) {
   const l = r.lot as AuctionLot;
   const maker = makerLineOf(l).name;
-  const why = r.short || r.reason;
+  // the profile's reason (recs.recNote, the short form) — a pick without a
+  // short form keeps its extra why, as the picks room prints it
+  const why = recNote(r, { short: true });
   // the reason usually names the maker already ("Like your Andy Warhol prints")
   const fact = why.toLowerCase().includes(maker.toLowerCase()) ? why : `${maker} · ${why}`;
   return (

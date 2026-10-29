@@ -95,7 +95,11 @@ print the same strings for the same lot — the estimate through
 never a `$`), the signal through `comps.signalMagnitude`, the close on the
 reader's day (`closeDayOf`; a date-only sale on its HOUSE day on every
 surface, the paper included), my max and "bid passed it" through the same
-USD bid.
+USD bid. The home feed's card and picks strips and /value's rows read the
+same helpers (estimate-text, `lotFace().call.text`, `closeDayOf`, `liveBidUsd`,
+`recs.recNote` for a pick's reason, `words.myMaxText` on a watched lot) — a
+source guard in `lot-parity.test.ts` pins them; every Watch/Save control
+writes the desk's saved meta through the one path, `account.entryFromLot`.
 
 Standing honesty rules: green/red only on a MEASURED delta (a miss off your
 call is ink); a reference band is a labelled range that never enters a total;

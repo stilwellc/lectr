@@ -56,7 +56,9 @@ import { CellGrid, FigureCell, FigGate, FigReplay, FigPools } from '../component
 import { closeDayOf, getUpcomingCounts, formatPrice, formatDate, craftTitle, httpsImg, sizedImg, fmtSignedPct, localToday, isOnBlock, trueSaleDay, toneOf } from '../utils';
 import { closeMs as closeAt } from '../lib/house-tz';
 import { dealScore, signalMagnitude, estUsdBand } from '../lib/comps';
-import { lotFace, FACE_LABEL, fmtFace } from '../lib/lot-face';
+import { lotFace, FACE_LABEL, fmtFace, liveBidUsd } from '../lib/lot-face';
+import { myMaxText } from '../profile/desk/words';
+import { idAliases } from '../lib/recs';
 import { recordLead, recordScope, RECORD_MIN_N } from '../lib/record-lead';
 import { medianOr } from '../lib/stats';
 import { gapRead, sleeperRead, valueFloor, GAP_CELL_GATE, type GapRead, type SleeperRead } from '../lib/lanes';
@@ -361,7 +363,7 @@ function GapAnnex({ rows, total, measured, validated, receipts, activeKey, play,
           <span className="vd-cell">
             {formatPrice(g.allIn)} → {formatPrice(g.floor)}
           </span>
-          <span className="vd-cell">{(lot.currentBid || 0) > 0 ? formatPrice(lot.currentBid!) : 'no bids'}</span>
+          <span className="vd-cell">{liveBidUsd(lot) != null ? fmtFace(liveBidUsd(lot)!) : 'no bids'}</span>
           <span className="vd-cell">
             {lot.saleDateTime && (Date.parse(lot.saleDateTime) - Date.now()) < 24 * 3600e3 && (Date.parse(lot.saleDateTime) > Date.now())
               ? <span className="vd-breathe" style={{ color: 'var(--color-fg)', fontWeight: 600 }}><CloseClock iso={lot.saleDateTime} windowHours={24} /></span>
@@ -390,7 +392,7 @@ function GapAnnex({ rows, total, measured, validated, receipts, activeKey, play,
               </div>
               <div>
                 <span className="kicker">The projection</span>
-                <p>the live bid × its room&rsquo;s measured close multiple — the projected close the lot page prints · current bid {(lot.currentBid || 0) > 0 ? formatPrice(lot.currentBid!) : 'none'}</p>
+                <p>the live bid × its room&rsquo;s measured close multiple — the projected close the lot page prints · current bid {liveBidUsd(lot) != null ? fmtFace(liveBidUsd(lot)!) : 'none'}</p>
               </div>
               <div>
                 <span className="kicker">The tape</span>
@@ -738,7 +740,13 @@ function ValueDesk() {
   const activeLabel = activeKey === 'all' ? 'collectible' : activeKey === 'tcg' ? 'TCG' : MARKETS.find(m => m.key === activeKey)!.label.toLowerCase();
   const mktSet = useMemo(() => marketArtists(activeKey), [activeKey]);
   const marketLots = useMemo(() => allLots.filter(l => mktSet.has(l.artist)), [allLots, mktSet]);
-  const { savedIds, toggle, isSaved } = useSavedLots();
+  const { savedIds, toggle, isSaved, savedMeta } = useSavedLots();
+  // (pass 19) a watched lot's My max, in the desk's words — the save may sit under an aliased id
+  const myMaxOf = useCallback((lotId: string): number | null => {
+    const sid = savedIds.find(id => id === lotId || idAliases(id).includes(lotId));
+    const m = sid ? savedMeta[sid]?.maxUsd : null;
+    return typeof m === 'number' && m > 0 ? m : null;
+  }, [savedIds, savedMeta]);
   // One modal for the whole page — the call plate and every row open the
   // same comps view, and a lot can be saved without closing it.
   const [modalLot, setModalLotRaw] = useState<AuctionLot | null>(null);
@@ -1568,6 +1576,10 @@ function ValueDesk() {
                       <span className="ray-value-row-title" style={{ display: 'block' }}>
                         {craftTitle(d.lot.title, d.lot.auctionHouse)}
                       </span>
+                      {/* (pass 19) a watched lot's My max — the desk row's and the lot page's words (desk/words myMaxText) */}
+                      {myMaxOf(d.lot.id) != null && (
+                        <span className="ray-value-row-est" style={{ display: 'block', color: 'var(--color-text-secondary)' }}>{myMaxText(d.lot, myMaxOf(d.lot.id))}</span>
+                      )}
                       {/* its own line: inside the nowrap/ellipsis title the date was the first thing cut */}
                       <span className="ray-value-mobdate">
                         <span className="ray-value-mobdate-in">

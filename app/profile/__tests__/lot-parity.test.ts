@@ -191,3 +191,39 @@ test('the lot page keeps to the desk\'s My max and pending words (source guard)'
   assert.doesNotMatch(src, /results pending</, 'one phrase: the desk\'s');
   assert.match(src, /window\.history\.back\(\)/, 'the way back is history.back() — the desk\'s restore lands the reader where they left');
 });
+
+/* ── pass 19: the surfaces before the desk — the home feed's card and strips, /value ── */
+
+test('a pick\'s reason: the home feed\'s card, the picks strips and the profile\'s room print recs.recNote for the same rec (full on the room, short on a strip)', () => {
+  const { recNote } = require('../../lib/recs') as typeof import('../../lib/recs');
+  const rec = { reason: 'Because you saved Flowers', why: ['same name', 'in your $1K–$3K range'], short: 'Like your Warhol prints' };
+  assert.equal(recNote(rec), 'Because you saved Flowers · same name');
+  assert.equal(recNote(rec, { short: true }), 'Like your Warhol prints');
+  const noShort = { reason: 'Because you saved Flowers', why: ['same name'] };
+  assert.equal(recNote(noShort, { short: true }), recNote(noShort), 'no short form: the strip prints what the room prints');
+  const discover = { reason: 'New to you · prints near Andy Warhol’s prices', why: ['discover'] };
+  assert.match(recNote(discover), /^New to you · /, 'the discover lane is in the reason itself');
+});
+
+test('the feed, the strips and /value keep to the shared rules (source guard): estimate-text, the one signal text, closeDayOf, the USD bid, recNote, myMaxText, the one save path', () => {
+  const read = (p: string) => fs.readFileSync(path.join(__dirname, '..', '..', p), 'utf8');
+  const card = read('components/LotCard.tsx');
+  assert.match(card, /\{isNoSale \? 'Bought in' : formatEstimate\(lot\)\}/, 'the card\'s price slot is estimate-text\'s');
+  assert.match(card, /lotFace\(lot\)\.call\?\.text \?\? signalMagnitude\(buySignal\.label, buySignal\.pct\)/, 'the card\'s signal is lot-face\'s');
+  assert.match(card, /result pending/); assert.doesNotMatch(card, /results pending/, 'one phrase: the desk\'s');
+  assert.match(card, /onToggleSave\(lot\.id, lot\)/, 'the card\'s save carries the lot (account.entryFromLot writes bid_count, est_mid, the signed signal)');
+  const strips = read('components/PickStrips.tsx');
+  assert.match(strips, /recNote\(r, \{ short: true \}\)/, 'a strip row prints the profile\'s reason');
+  const browser = read('components/LotBrowser.tsx');
+  assert.match(browser, /full: recNote\(r\), short: recNote\(r, \{ short: true \}\)/, 'the home feed\'s note is recNote');
+  const value = read('value/page.tsx');
+  assert.match(value, /liveBidUsd\(lot\) != null \? fmtFace\(liveBidUsd\(lot\)!\) : 'no bids'/, '/value\'s bid cell is the USD bid');
+  assert.doesNotMatch(value, /formatPrice\(lot\.currentBid/, 'no raw bid under a $ sign');
+  assert.match(value, /myMaxText\(d\.lot, myMaxOf\(d\.lot\.id\)\)/, '/value prints the desk\'s My max words on a watched lot');
+  assert.match(value, /toggle\(d\.lot\.id, d\.lot\)/, '/value\'s save carries the lot');
+  // the one save path: every toggle that CREATES a save passes the lot (an unsave may not)
+  const account = read('lib/account.tsx');
+  assert.match(account, /toggleEntries\(entriesRef\.current, lotId, \(\) => entryFromLot\(lotId, lot\)\)/);
+  assert.match(account, /bidCount: lot\?\.bidCount \?\? null/, 'bid_count at save — the desk\'s "new bids since you saved" baseline');
+  assert.match(account, /signalPct: lot\?\.signal/, 'the signed signal at save — the desk\'s Δ saved and Your calls');
+});
