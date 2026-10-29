@@ -46,7 +46,9 @@ import './portfolio.css';
 
 export function meta(desk: DeskData): SectionMeta {
   const n = desk.collection.length;
-  return { id: 'portfolio', label: 'Portfolio', count: n || null, quiet: n === 0 };
+  // (pass 15) before the archive lands the collection is the device's kept
+  // rows — a count the Collection room cannot yet back: print none until loaded
+  return { id: 'portfolio', label: 'Portfolio', count: desk.fullLoaded ? n || null : null, quiet: n === 0 };
 }
 
 const dirOf = (delta: number | null): 'up' | 'down' | undefined => (delta == null || delta === 0 ? undefined : delta > 0 ? 'up' : 'down');

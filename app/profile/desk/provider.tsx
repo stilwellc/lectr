@@ -29,11 +29,10 @@ import { signalCallOf, useAuth } from '../../lib/account';
 import { useDailyEmail } from '../../lib/email-prefs';
 import { useAlerts } from '../../lib/alerts';
 import { useCollectionSnapshots } from '../../lib/snapshots';
-import { lotSignal, formatEstimate } from '../../components/LotCard';
+import { lotSignal } from '../../components/LotCard';
 import { dealScore, scienceReferenceBand, cultureReferenceBand, makerReferenceBand } from '../../lib/comps';
 import { lotVerdict } from '../../lib/verdict';
 import { drillRowFor, drillSlugFor, type DrillRow } from '../../lib/submarkets';
-import { sleeperRead } from '../../lib/lanes';
 import Flick from '../../components/Flick';
 import { useReturnLoop, type ReturnLoop } from '../../components/PickStrips';
 import { useLastVisit, houseBaselines } from '../../lib/feed-filters';
@@ -52,13 +51,15 @@ import { drillLabelOf } from '../../lib/lot-labels';
 import { useStalled, useAfterPaint } from '../stall';
 import { readSettledRows, writeSettledRows, type SettledRows } from '../settled-cache';
 import {
-  closeDays, isPastPending, sigText, watchTagOf, TAG_SOON_DAYS, type LiveSignal,
+  closeDays, isPastPending, sigText, watchTagOf, type LiveSignal,
   resolveSaved, splitOrphans, partitionSaved, watchSummaryOf, watchChangesOf, recordOf, sinceLastOf, unclaimedOf,
-  collectionTotalsOf, exposureOf, tenureOf, pendingResultsOf, type WatchSummary, type RecordRead, type CollectionTotals,
+  collectionTotalsOf, exposureOf, tenureOf, settledShelfOf, type WatchSummary, type RecordRead, type CollectionTotals,
 } from './derive';
 import { fmtFace } from '../../lib/lot-face';
 import { markBasisText } from './rooms/collection-logic';
 import { todayReadsOf, hammersIn } from './rooms/today-logic';
+import { PICKS_KEY, WEEK_PICKS_EVENT } from '../week/week';
+import { storageGet } from '../../lib/safe-storage';
 import type { DeskData, DeskActions } from './types';
 
 /* ══ LOTS YOU MAY LIKE — the desk's recommender (app/lib/recs). The deal is
@@ -133,10 +134,14 @@ export interface DeskInternals {
   orphanIds: string[]; soldOrphans: { id: string; priceUsd: number; saleDate: string; provisional: boolean }[]; goneOrphans: string[];
   ledgerState: LedgerState; setLedgerState: (s: LedgerState) => void;
   signalById: Map<string, LiveSignal | null>;
-  settledRows: SettledRowData[]; settledCount: number; settledHasCall: boolean;
-  /** of `settledCount`, the watches past their sale day the house hasn't
-   *  resulted (closed, no price): "awaiting results", never "settled" */
-  pendingResultsN: number;
+  /** the settled shelf (./derive settledShelfOf): `settledCount` is every row
+   *  on it, `pendingResultsN` the rows awaiting results (no price yet, or a
+   *  provisional archive result), `settledN` the rows the word "settled" may
+   *  count — the ONE definition every head prints */
+  settledRows: SettledRowData[]; settledCount: number; settledN: number; pendingResultsN: number; settledHasCall: boolean;
+  /** the week's picks toggle as the device remembers it (null until read,
+   *  and on the server) — read in an effect, mirrored from the room's flips */
+  weekPicksShown: boolean | null;
   record: RecordRead | null; recordLedByAppraisal: boolean;
   collection: CollectionRead; exposure: { row: DrillRow; n: number; held: number }[];
   collectionChart: { anchor: { key: string; label: string; color: string; unit: 'money'; points: { period: string; value: number; n: number }[] }; layers: { key: string; label: string; color: string; unit: 'money'; points: { period: string; value: number; n: number }[] }[] } | null;
@@ -529,8 +534,18 @@ export function useDeskState(): DeskState {
   const recordLedByAppraisal = collection.deltaPct != null && collection.totalPaid > 0 && collection.appraisedPaidN > 0;
   const settledHasCall = useMemo(() => settledRows.some(r => !!signalCallOf(r.kind === 'lot' ? metaFor(r.lot.id) : savedMeta[r.o.id])), [settledRows, metaFor, savedMeta]);
   // the one settled count every surface prints (Settled head, the cell room)
-  const settledCount = sold.length + soldOrphans.length;
-  const pendingResultsN = pendingResultsOf(sold);
+  const shelf = useMemo(() => settledShelfOf(sold, soldOrphans), [sold, soldOrphans]);
+  const settledCount = shelf.total, settledN = shelf.settled, pendingResultsN = shelf.pending;
+  // the week's picks toggle: the device's memory, read once after mount and
+  // kept in step with the room's flips — never a storage read during render
+  const [weekPicksShown, setWeekPicksShown] = useState<boolean | null>(null);
+  useEffect(() => {
+    const v = storageGet(PICKS_KEY);
+    setWeekPicksShown(v === '1' ? true : v === '0' ? false : null);
+    const on = (e: Event) => { const d = (e as CustomEvent<boolean>).detail; setWeekPicksShown(typeof d === 'boolean' ? d : null); };
+    window.addEventListener(WEEK_PICKS_EVENT, on);
+    return () => window.removeEventListener(WEEK_PICKS_EVENT, on);
+  }, []);
 
   const hasDeskDetails = summary.totalEst > 0 || changes.moved > 0 || changes.newBids > 0 || tasteLabels.length > 0 || !!tenure || !!user;
   const deskKicker = givenName ? `${givenName}’s desk` : 'My desk';
@@ -716,7 +731,7 @@ export function useDeskState(): DeskState {
     fullSlow, partialLoadFailed, pageLoading, landReady,
     recTaste, recsReady, deal, todayTop, watchFirst, deskView, signedOutView, coldOut,
     upcoming, sold, other, orphanIds, soldOrphans, goneOrphans, ledgerState, setLedgerState,
-    signalById, settledRows, settledCount, settledHasCall, pendingResultsN, record, recordLedByAppraisal,
+    signalById, settledRows, settledCount, settledN, pendingResultsN, settledHasCall, weekPicksShown, record, recordLedByAppraisal,
     collection, exposure, collectionChart, summary, changes, reads, room, ledgerCols,
     closingWatches, awayLine, unseenAlerts, myFollows, marketOwned, hasMarket, tunedLine,
     historyCount, hasRecordRoom, unclaimedWins, sinceLastN: sinceLast?.n ?? 0, givenName, deskKicker, tasteLabels, tenure, hasDeskDetails,

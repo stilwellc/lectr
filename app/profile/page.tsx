@@ -117,11 +117,11 @@ function MissingLanding({ sections }: { sections: readonly DeskSection[] }) {
  *  archive warnings, then the cockpit */
 function DeskMasthead() {
   const i = useDeskInternals();
-  const { deskView, signedOutView, summary, collection, sold, soldOrphans, upcoming, orphanIds, savedIds, fromCache, lastCrawl, deskKicker, tunedLine, hasDeskDetails, changes, tasteLabels, tenure, auth, partialLoadFailed, fullSlow } = i;
+  const { deskView, signedOutView, summary, collection, upcoming, orphanIds, savedIds, fromCache, lastCrawl, deskKicker, tunedLine, hasDeskDetails, changes, tasteLabels, tenure, auth, partialLoadFailed, fullSlow } = i;
   const [deskDetails, setDeskDetails] = useState(false);
   const savedLotsN = i.savedLots.length;
-  // settled = a result posted; a watch past its day with no result is awaiting results, not settled
-  const settledN = sold.length + soldOrphans.length - i.pendingResultsN;
+  // settled = a result posted (derive.settledShelfOf — the one definition); the pending rows are said beside it
+  const settledN = i.settledN;
   // (Oct 29) the fold opens only when something CHANGED since the saves — a
   // signal moved, a bid landed; the basis, taste and tenure lines ride inside
   // it then (the cockpit prints the basis on its own cell either way)

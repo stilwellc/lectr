@@ -34,6 +34,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link';
 import type { AuctionLot } from '../../types';
 import type { SectionProps, SectionMeta, DeskData } from '../desk/types';
+import type { DeskInternals } from '../desk/provider';
 import { RoomHead } from '../head';
 import { HorizonMark } from '../../components/marks';
 import DecisionLine from '../../components/DecisionLine';
@@ -46,7 +47,7 @@ import { houseTzOf } from '../../lib/house-tz';
 import { storageGet, storageSet } from '../../lib/safe-storage';
 import { craftTitle, formatPrice } from '../../utils';
 import {
-  planWeek, viewOf, pickDefault, weekLeadOf, ownedWords, dayWords, offsetWord, localClock, houseClock, countdownText, velocityText, bidsText,
+  planWeek, viewOf, pickDefault, weekLeadOf, ownedWords, PICKS_KEY, WEEK_PICKS_EVENT, dayWords, offsetWord, localClock, houseClock, countdownText, velocityText, bidsText,
   CLOSING_NOW_MS, NAME_ROWS_OPEN, WATCH_ROWS_OPEN, PICK_ROWS_OPEN, WEEK_DAYS, cityOf, type WeekPlan, type WeekRow, type WeekDay,
 } from './week';
 import { icsCalendar, eventOfRow, icsFileName } from './ics';
@@ -55,17 +56,17 @@ import './week.css';
 
 export { ClosingNow };
 
-/** the device's memory of the picks toggle ('1' shown / '0' hidden; absent = the week decides) */
-export const PICKS_KEY = 'lectr-week-picks';
+export { PICKS_KEY };
 
 /* ── the rail's entry: the pill carries YOURS (watches + picks on the
       week), never the names' sales (R1#8, R3) — the sub-line keeps those ── */
-export function meta(desk: DeskData): SectionMeta {
+export function meta(desk: DeskData, i: DeskInternals): SectionMeta {
   const plan = planOf(desk);
   // (pass 13) the pill counts what the room lists: the device's picks toggle
-  // (useShowPicks reads the same key) decides whether the picks are in it
-  const v = storageGet(PICKS_KEY);
-  const show = pickDefault(plan, v === '1' ? true : v === '0' ? false : null);
+  // decides whether the picks are in it — read ONCE in the provider's effect
+  // (DeskInternals.weekPicksShown), never from storage during render (SSR
+  // and the first client render agree on the plan's default)
+  const show = pickDefault(plan, i.weekPicksShown ?? null);
   return { id: 'week', label: 'Your week', count: weekLeadOf(plan, show) || undefined, quiet: plan.rows.length === 0 };
 }
 
@@ -276,7 +277,11 @@ function useShowPicks(plan: WeekPlan): [boolean, (v: boolean) => void] {
     setRemembered(v === '1' ? true : v === '0' ? false : null);
   }, []);
   const show = pickDefault(plan, remembered);
-  const set = useCallback((v: boolean) => { setRemembered(v); storageSet(PICKS_KEY, v ? '1' : '0'); }, []);
+  const set = useCallback((v: boolean) => {
+    setRemembered(v); storageSet(PICKS_KEY, v ? '1' : '0');
+    // the provider mirrors the toggle (DeskInternals.weekPicksShown) for the tab's count
+    try { window.dispatchEvent(new CustomEvent(WEEK_PICKS_EVENT, { detail: v })); } catch { /* no window */ }
+  }, []);
   return [show, set];
 }
 

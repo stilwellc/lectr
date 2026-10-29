@@ -68,10 +68,10 @@ rooms for inline arithmetic in figure slots — `head-figures-pure.test.ts`).
 
 | figure | source | rule |
 |---|---|---|
-| saves → rows, orphans, shelves | `desk/derive.ts` `resolveSaved` · `splitOrphans` · `partitionSaved` | aliases walked before an orphan is declared; a ledger not loaded is never "withdrawn"; a row past its sale day with no result is on the settled shelf but **awaiting results**, never settled (`pendingResultsOf`) |
+| saves → rows, orphans, shelves | `desk/derive.ts` `resolveSaved` · `splitOrphans` · `partitionSaved` · `settledShelfOf` | aliases walked before an orphan is declared; a ledger not loaded is never "withdrawn"; ONE settled count: `settledN` = the shelf − the rows **awaiting results** (no price yet, or a provisional archive result) — History, the masthead and the Record's cell all print it, the pending count beside it |
 | Watching total · priced · one-bound · flagged · next · closes today | `derive.watchSummaryOf` ← `desk/priced.ts pricedTotal` | **estimate aliases are USD** (the build converts; a GBP Bonhams lot carries no fxRate and its `estimateLow/High` ARE dollars — never convert again); a one-bound estimate is "from $X", counted, never summed; `closedEarlierToday` is said apart from `closesToday` (the close instant is behind the minute clock) |
 | what changed (moved signals, new bids) | `derive.watchChangesOf` | a legacy direction-unknown save never counts as moved; new bids = live count − saved `bid_count`, no baseline → no claim |
-| the record (median vs estimate, n, split, series) | `derive.recordOf` | judged = sold with a price against an estimate (`utils.overEstimatePct`, premium inside); **`oneSidedN`** says how many were judged against a one-bound estimate; the flagged-vs-rest split prints at 3 + 3 |
+| the record (median vs estimate, n, split, series) | `derive.recordOf` | judged = sold with a price against an estimate (`utils.overEstimatePct`, premium inside); **`oneSidedN`** says how many were judged against a one-bound estimate; **`afterHammerN`** how many were saved after their hammer (the lot is still judged — its outcome is a fact about the lot — but the line says so); the flagged-vs-rest split prints at 3 + 3 |
 | since your last visit | `derive.sinceLastOf` | SETTLED means a result posted (`status: 'sold'`), never a pending row |
 | Did you win? · one-tap clear | `derive.unclaimedOf` | one filter for the count and the ids it dismisses: sold, not owned, not dismissed, orphans not provisional |
 | collection totals | `derive.collectionTotalsOf` | the appraisal total is the ENGINE's over the pieces it appraised; "marked vs bought" reads `appraisedOfPaid` vs `appraisedPaid` (the SAME pieces, n said) |
@@ -81,7 +81,9 @@ rooms for inline arithmetic in figure slots — `head-figures-pure.test.ts`).
 | Portfolio marks, growth, if sold now | `portfolio/portfolio.ts` | appraisal = the engine's `lotVerdict` only (never a client re-appraisal); every mark prints n comps and `as of`; "if sold now" = expected hammer less the house tier's ASSUMED commission, named as such; a maker's YoY is /makers' own words |
 | Budget plan · all-in | `budget/budget.ts` · `lib/premiums.ts` | your max leads, then the engine's max bid, then the labelled anchor; a night SUMS only engine/room-priced rows (estimate midpoints listed apart unless asked; one-bound never); all-in = the house schedule **on the sale date** (era-dated REA, Wright/Rago/LAMA, Christie's/Sotheby's tiers), the row saying "assumed" when no schedule is on file (`premiumSource`) |
 | Names: live count, soonest sale, pulse | `names/names.ts` | the calendar sums USD aliases once; a category follow has no entity and no sold history; the 12-mo median never prints without its n and scope; **one sale has no YoY** (`pulseOf` drops n < 2) |
-| Your week · the 14-day strip | `week/week.ts planWeek` · `viewOf` · `weekLeadOf` · `desk/cockpit-logic hammerStrip` | watch > pick > name, once each; a timed close lands on the reader's day, a date-only sale on its house day; names never add to the money; the tab counts what the room LISTS (hidden picks are not counted); the strip equals the week day by day (`tab-parity.test.ts`) |
+| Your week · the 14-day strip | `week/week.ts planWeek` · `viewOf` · `weekLeadOf` · `desk/cockpit-logic hammerStrip` | watch > pick > name, once each; a timed close lands on the reader's day, a date-only sale on its house day; names never add to the money; the tab counts what the room LISTS (hidden picks are not counted) — the device's toggle reaches the meta through `DeskInternals.weekPicksShown`, read in the provider's effect and mirrored from `WEEK_PICKS_EVENT`, never a storage read in render; the strip equals the week day by day (`tab-parity.test.ts`) |
+| picks live | `desk/cockpit-logic picksLiveOf` | ONE count for the For-you tab, the picks room's "N picked" and the cockpit's picks-only cell: the deal's recs (the return loop's closers print on Today, not under For you) |
+| Collection's tab count | `portfolio/index.tsx meta` | Portfolio's piece count, printed only once the archive loaded — before it the collection is the device's kept rows, a number the Collection room cannot yet back |
 | Today's reads | `desk/rooms/today-logic.ts todayReadsOf` | one read per lot in evidence order (hot > quiet > soon > comps > below), `READS_MAX` 8; **the velocity freshness gate**: "+5 bids in 24h" prints only while the crawl is fresh (`LotCard.crawlIsFresh`: today's stamp or an ISO inside 24h); a percentile is cited only from the median up |
 | the section bar's figures | `sections.tabItemsOf` | each equals its room's head figure on the same desk (`tab-parity.test.ts`) |
 
@@ -138,24 +140,20 @@ All additive and idempotent; the client tolerates each absence
 - **The picks**: `scripts/recs-sweep.ts` (eleven desks, read as the owner) and
   `scripts/recs-eval.ts` (holdout, personas, reason truth) — PICKS.md §7.
 
-## 7 · Known gaps (Oct 29)
+## 7 · Known gaps (Oct 29, after pass 15)
 
 - `utils.overEstimatePct` judges a one-bound estimate against its single
   bound as the "midpoint" (the app-wide convention, kept identical to the
   demand index); the desk SAYS so (`oneSidedN`, `estSide`) rather than
-  changing the basis.
-- The Record judges every settled save, including one saved after it sold;
-  only Your calls excludes it (`afterHammer`). A results' `vsEst` in the paper
-  reads the save-time `est_mid`, built with the same one-bound fallback.
-- `settledCount` ("N settled watches" on History) is `sold + soldOrphans`; the
-  pending split is printed beside it, not removed from it.
-- The cockpit's picks-only cell counts `recs ∪ closingPicks`; the For-you tab
-  counts `recs` — they can differ by the return loop's closers.
-- A row saved with no `savedAt` cannot be dated against the hammer and is
-  graded as a call.
-- Collection's tab count is Portfolio's `desk.collection.length`; before the
-  archive lands it includes the device's kept settled rows while the
-  collection room counts resolved rows — equal once loaded.
-- The week's meta reads the device's picks toggle through `safe-storage`;
-  during SSR there is no device and the count is the default's (picks hidden
-  when a watch is on the week).
+  changing the basis. The paper's results `vsEst` reads the save-time
+  `est_mid`, built with the same fallback.
+- The Record judges a watch saved after it sold and says how many
+  (`afterHammerN`); only Your calls excludes them. A save with no `savedAt`
+  cannot be dated against the hammer and is graded as a call (the account's
+  rows and the device's saves always carry one — `entryFromLot`).
+- A player tie whose save carries no year reads no era (the named-tie
+  softening compares the save's year and the lot's); the pick's `why` says
+  "era not read · your save carries no year". A lot's SALE year is not the
+  player's era and never stands in; players.json's era (`playerEras`) gates
+  the ladder rung, not the named tie.
+- A named tie's era softening (×0.6) does not read `playerEras`; the rung does.
