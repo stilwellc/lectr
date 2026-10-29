@@ -25,6 +25,18 @@ export const overMax = (lot: AuctionLot, max: number | null): boolean => {
   return max != null && lot.priceUsd == null && usd != null && usd > max;
 };
 
+/** THE WORDS, one read for the desk row's pill and the lot page's line
+ *  (pass 16/17 parity): "My max $18K · bid passed it" when the live bid (USD)
+ *  is past it, "My max $18K · $2K of room" when a bid sits under it, "My max
+ *  $18K" with no readable bid; null with no max set */
+export function myMaxText(lot: Pick<AuctionLot, 'currentBid' | 'currency' | 'fxRate' | 'priceUsd'>, max: number | null): string | null {
+  if (max == null || !(max > 0)) return null;
+  const usd = lot.priceUsd == null ? liveBidUsd(lot) : null;
+  if (usd != null && usd > max) return `My max ${fmtFace(max)} · bid passed it`;
+  if (usd != null) return `My max ${fmtFace(max)} · ${fmtFace(max - usd)} of room`;
+  return `My max ${fmtFace(max)}`;
+}
+
 const parse = (s: string): number | null => {
   const t = s.trim().toLowerCase().replace(/[$,\s]/g, '');
   if (!t) return null;
@@ -33,10 +45,19 @@ const parse = (s: string): number | null => {
   return Math.round(Number(m[1]) * (m[2] === 'm' ? 1e6 : m[2] === 'k' ? 1e3 : 1));
 };
 
-/** "Set my max" → an inline field (accepts 18000, 18k, $1.2m); Enter saves, Esc cancels */
+/** the desk's My max: the editor fed from the desk contract (DeskActions.setSavedFields) */
 export function MyMax({ lot, compact = false }: { lot: AuctionLot; compact?: boolean }) {
   const { act } = useDesk();
   const max = useMyMax(lot.id);
+  return <MyMaxEditor lot={lot} max={max} compact={compact} onSave={n => act.setSavedFields(lot.id, { maxUsd: n })} onClear={() => act.setSavedFields(lot.id, { maxUsd: null })} />;
+}
+
+/** "Set my max" → an inline field (accepts 18000, 18k, $1.2m); Enter saves,
+ *  Esc cancels. Props-driven so the lot page (no DeskProvider) mounts the
+ *  SAME editor on the same persistence path (account setSavedFields). */
+export function MyMaxEditor({ lot, max, compact = false, onSave, onClear }: {
+  lot: AuctionLot; max: number | null; compact?: boolean; /** null = the field was emptied (clears the max) */ onSave: (maxUsd: number | null) => void; onClear: () => void;
+}) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState('');
   const [bad, setBad] = useState(false);
@@ -45,10 +66,11 @@ export function MyMax({ lot, compact = false }: { lot: AuctionLot; compact?: boo
   const save = () => {
     const n = parse(val);
     if (Number.isNaN(n)) { setBad(true); return; }
-    act.setSavedFields(lot.id, { maxUsd: n });
+    onSave(n);
     setEditing(false); setBad(false);
   };
   const over = overMax(lot, max);
+  const words = myMaxText(lot, max);
   if (editing) {
     return (
       <span className="ck-mymax-edit" onClick={e => e.stopPropagation()}>
@@ -57,7 +79,7 @@ export function MyMax({ lot, compact = false }: { lot: AuctionLot; compact?: boo
           onChange={e => { setVal(e.target.value); setBad(false); }}
           onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }} />
         <button type="button" className="ck-mymax-btn" data-solid onClick={save}>Save</button>
-        {max != null && <button type="button" className="ck-mymax-btn" onClick={() => { act.setSavedFields(lot.id, { maxUsd: null }); setEditing(false); }}>Clear</button>}
+        {max != null && <button type="button" className="ck-mymax-btn" onClick={() => { onClear(); setEditing(false); }}>Clear</button>}
       </span>
     );
   }
@@ -65,8 +87,10 @@ export function MyMax({ lot, compact = false }: { lot: AuctionLot; compact?: boo
     <button type="button" className="ck-mymax" data-set={max != null || undefined} data-over={over || undefined} data-compact={compact || undefined}
       onClick={e => { e.stopPropagation(); setVal(max != null ? String(max) : ''); setEditing(true); }}
       title={max != null ? `Your max: ${fmtFace(max)}${over ? ' — the live bid has passed it' : ''}. Tap to change.` : 'Set the most you would pay (hammer, before premium) — Record grades it against the hammer'}
-      aria-label={max != null ? `My max ${fmtFace(max)}${over ? ', the live bid has passed it' : ''}; change` : 'Set my max'}>
-      {max != null ? <>My max <b>{fmtFace(max)}</b>{over && <span className="ck-mymax-over"> · bid passed it</span>}</> : 'Set my max'}
+      aria-label={words ? `${words.replace(' · ', ', ')}; change` : 'Set my max'}>
+      {max != null && words
+        ? <>My max <b>{fmtFace(max)}</b>{over ? <span className="ck-mymax-over"> · bid passed it</span> : words.includes(' · ') ? <span className="ck-mymax-room">{words.slice(words.indexOf(' · '))}</span> : null}</>
+        : 'Set my max'}
     </button>
   );
 }

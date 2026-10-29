@@ -165,3 +165,29 @@ test('the lot page keeps to the shared rules (source guard): the signal read is 
   assert.match(src, /daysWord\(closeDayOf\(lot\)\)/);
   assert.match(src, /return formatEstimate\(lot\);/);
 });
+
+test('My max: the lot page prints the desk row\'s words (desk/mymax myMaxText) — passed, room, or the max alone; the paper\'s over flag agrees', () => {
+  const { myMaxText, overMax } = require('../desk/mymax') as typeof import('../desk/mymax');
+  assert.equal(myMaxText(usdBid, 1000), 'My max $1K · bid passed it');          // $1,272 bid
+  assert.equal(myMaxText(usdBid, 1500), 'My max $1.5K · $228 of room');
+  assert.equal(myMaxText(eur, 11_000), 'My max $11K · $200 of room');          // €10,000 × 1.08 = $10,800
+  assert.equal(myMaxText(eur, 10_500), `My max ${fmtFace(10_500)} · bid passed it`);   // fmtFace: whole K from $10K → "$11K"
+  assert.equal(myMaxText(noEst, 500), 'My max $500', 'no bid: no claim either way');
+  assert.equal(myMaxText(lot({ id: 'gbp', currency: 'GBP', currentBid: 20_000 }), 1000), 'My max $1K', 'an unconvertible bid is never read against a USD max');
+  assert.equal(myMaxText(usdBid, null), null);
+  assert.equal(myMaxText(lot({ id: 'sold', status: 'sold', priceUsd: 2000, currentBid: 2000 }), 1000), 'My max $1K', 'a sold lot has no live bid to pass a max');
+  for (const [l, max] of [[usdBid, 1000], [eur, 11_000], [eur, 10_500]] as [AuctionLot, number][]) {
+    const words = myMaxText(l, max)!;
+    assert.equal(overMax(l, max), words.endsWith('bid passed it'), `${l.id} @ ${max}`);
+    assert.equal(paperRow(l, max)!.over, overMax(l, max), `${l.id} @ ${max}: the paper's over flag`);
+  }
+});
+
+test('the lot page keeps to the desk\'s My max and pending words (source guard)', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'components', 'LotPage.tsx'), 'utf8');
+  assert.match(src, /<MyMaxEditor lot=\{lot\} max=\{myMax\}/, 'the same editor as the desk row');
+  assert.match(src, /setSavedFields\(savedId, \{ maxUsd: n \}\)/, 'the same persistence path, by the saved id');
+  assert.match(src, /result pending\{savedId \? ' · the result lands on your desk under Record' : ''\}/);
+  assert.doesNotMatch(src, /results pending</, 'one phrase: the desk\'s');
+  assert.match(src, /window\.history\.back\(\)/, 'the way back is history.back() — the desk\'s restore lands the reader where they left');
+});
