@@ -114,10 +114,16 @@
  * single of the same sport and sub near one save's price is a tie of its
  * own, so a one-card hockey desk gets hockey.
  *
- * (Oct 29, pass 4) THIS WEEK FIRST: of the first 12 seats, no more than a
- * third go to lots closing past 14 days (or undated) while a nearer lot
+ * (Oct 29, pass 4–5) THIS WEEK FIRST: of every 12-seat screen, no more than
+ * a third go to lots closing past 14 days (or undated) while a nearer lot
  * weighs within 80% of the far one — the far lot waits, it is never dropped
- * (windowFactor's curve is untouched). TOP OF THE DEAL (topOf): the Today
+ * (windowFactor's curve is untouched). EVIDENCE: a priced, dated lot with a
+ * bid on it edges an equal tie that has none (×1.05 — under the rotation
+ * band, so it breaks ties and nothing more). The discover lane also takes
+ * lots only a WEAK tie reaches (another maker's print at your price, the
+ * sport cut) — ranked by what matters most, not by likeness — and gates on
+ * the interquartile span of the saves when the learned band is too wide to
+ * print, so every desk with priced saves gets its seats. TOP OF THE DEAL (topOf): the Today
  * band's strip takes the deal's first n, any lane, never all n from one
  * house while another house's pick weighs within 80%.
  *
@@ -656,8 +662,12 @@ const BAND_SIGMA = 0.35;     // decades past the band edge → fit falls off on 
 const BAND_FLOOR = 0.45;     // a lot far outside the band keeps this much (soft, not a filter)
 const SPAN_GRACE = 0.3;      // decades past the desk's span before the kernel bites (×2 each way)
 const UNPRICED = 0.8;        // a lot with no price yet, against one that has
+const EVIDENCE = 1.05;       // priced, dated, bid on — under the rotation band: it breaks ties, no more
+const IQR_GRACE = 0.1;       // decades past the saves' interquartile span the lane still reaches (×1.26)
 
 const medianOf = (xs: number[]) => { const a = xs.slice().sort((x, y) => x - y); const m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
+/** the q-quantile of SORTED xs, interpolated */
+const quantile = (xs: readonly number[], q: number) => { const p = (xs.length - 1) * q, i = Math.floor(p), f = p - i; return xs[i + 1] != null ? xs[i] + f * (xs[i + 1] - xs[i]) : xs[i]; };
 
 /**
  * THE READER'S PRICE BAND per category (Oct 11): what they own and save,
@@ -1507,8 +1517,9 @@ function scoreCore<L extends RecLot>(pool: readonly L[], taste: Taste, opts: Rec
     // sports memorabilia — never a second lift where it does), and a lot with
     // no photo is half a pick — the owner's list led with letter tiles
     const lift = (flagged && !EDGE_CATS.has(f.cat) ? 1.2 : 1) * (imageOf(l as Pick<AuctionLot, 'id' | 'imageUrl'>) ? 1 : 0.5);
-    // (pass 3) no price yet: it cannot lead on a price it does not have
-    const placed = f.logA == null ? UNPRICED : 1;
+    // (pass 3) no price yet: it cannot lead on a price it does not have;
+    // (pass 5) a priced, dated lot with a bid on it edges an equal tie without
+    const placed = f.logA == null ? UNPRICED : close != null && (l.bidCount ?? 0) >= 1 ? EVIDENCE : 1;
     const score = tasteV * (T.qBase + (1 - T.qBase) * q) * windowFactor(close, nowMs) * band.fit * said.fit * spanFit(f, band.band) * placed * quiet * lift;
     return { score, flagged, inBand: band.inside, inStated: said.inside, out: statedSide(f.logA, taste.stated) ?? undefined };
   };
@@ -1603,7 +1614,17 @@ function scoreCore<L extends RecLot>(pool: readonly L[], taste: Taste, opts: Rec
   function buildDiscover(): Row[] {
     const cuts = tasteCuts(taste, members);
     if (!cuts.length) return [];
-    const have = new Set(rows.map(r => r.l));
+    // (pass 5) a lot only a WEAK tie reaches (another maker's print at your
+    // price, the sport cut) is the lane's too — ranked by what matters most
+    // and the engine's read, not by likeness to one save
+    const have = new Set(rows.filter(r => !r.best.parts?.weak).map(r => r.l));
+    // the saves' prices per category, for the lane's gate when the band says nothing
+    const catSaves = new Map<CatKey, number[]>();
+    for (const s of lotSeeds) {
+      if ((s.kind !== 'owned' && s.kind !== 'saved') || s.f!.logA == null) continue;
+      let xs = catSaves.get(s.f!.cat); if (!xs) catSaves.set(s.f!.cat, (xs = [])); xs.push(s.f!.logA);
+    }
+    catSaves.forEach(xs => xs.sort((a, b) => a - b));
     const byCat = new Map<CatKey, TasteCut[]>();
     for (const c of cuts) { let xs = byCat.get(c.cat); if (!xs) byCat.set(c.cat, (xs = [])); xs.push(c); }
     const found: Row[] = [];
@@ -1638,7 +1659,11 @@ function scoreCore<L extends RecLot>(pool: readonly L[], taste: Taste, opts: Rec
       // a band too wide to print holds nothing: the cut's own level gates then
       // (a $100K print was "near your saves' prices" on a $7K–40K desk)
       const bandSays = !!band.band && Math.pow(10, band.band.hi - band.band.lo) <= BAND_SAY_MAX;
-      const priced = bandSays ? band.inside : taste.stated ? said.inside : best.logA != null && Math.abs(f.logA - best.logA) <= CUT_PRICE_SPAN;
+      // (pass 5) three or more priced saves: their interquartile span; fewer: the cut's own level
+      const xs = catSaves.get(f.cat) ?? [];
+      const priced = bandSays ? band.inside : taste.stated ? said.inside
+        : xs.length >= 3 ? f.logA >= quantile(xs, 0.25) - IQR_GRACE && f.logA <= quantile(xs, 0.75) + IQR_GRACE
+        : best.logA != null && Math.abs(f.logA - best.logA) <= CUT_PRICE_SPAN;
       if (!priced) continue;
       const pr = priorityOf(l, nowMs);
       const q = pr ? pr.score / 100 : 0.1;
@@ -1931,7 +1956,8 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
   // (pass 4) THIS WEEK FIRST — how many of the seats so far close past FAR_DAYS
   const nowMs = opts.nowMs ?? Date.now();
   const isFar = (r: Row) => { const c = closeMsOf(r.l); return c == null || c - nowMs > FAR_DAYS * 864e5; };
-  let farDealt = 0;
+  // far seats dealt, per 12-seat screen (pass 5: every screen, not only the first)
+  const farBy: number[] = [];
   const farCap = Math.floor(WEEK_SEATS * T.farShare);
   /** the lane's next pick, under the deal's house and sale caps — false when none is left */
   const dealDiscover = (): boolean => {
@@ -1954,7 +1980,7 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
   };
   const take = (r: Row, k: ReturnType<typeof keysOf>) => {
     out.push(r);
-    if (out.length <= WEEK_SEATS && isFar(r)) farDealt++;
+    if (isFar(r)) { const sc = Math.floor((out.length - 1) / WEEK_SEATS); farBy[sc] = (farBy[sc] ?? 0) + 1; }
     bump(perEnt, k.ent); bump(perSale, k.sale); bump(perHouse, k.house);
     // a discover pick is nobody's tie: it charges no seed, one per name, and
     // spreads across the reader's cuts
@@ -2023,7 +2049,7 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
     // seats for lots closing past two weeks while something nearer weighs
     // within farYield of them — the far lot waits its turn, never dropped
     // (weighed without the day's jitter: the rule reads scores, not the shuffle)
-    else if (best && out.length < WEEK_SEATS && T.farShare < 1 && isFar(best) && farDealt >= farCap && near && nearV / jit(near) >= T.farYield * (bestV / jit(best))) best = near;
+    else if (best && T.farShare < 1 && isFar(best) && (farBy[Math.floor(out.length / WEEK_SEATS)] ?? 0) >= farCap && near && nearV / jit(near) >= T.farYield * (bestV / jit(best))) best = near;
     if (!best) {
       // stuck: open the fallback ladder before lifting a cap; lift the caps
       // (one seat at a time — the strongest seed takes the next, the others
@@ -2146,7 +2172,11 @@ function explain(l: RecLot, f: Feat, best: { seed: Seed; parts?: SimParts; ladde
         const a = Math.pow(10, f.logA);
         if (hi / lo <= BAND_SAY_MAX) band = bandSuffix(a, lo, hi);
       }
-      return { reason: `Like your ${name} ${nounOf(f.cat, f.sub, f.medium)}${band}`, why };
+      // (pass 5) a named tie reaches whatever the name sold (an Omega menu is
+      // still Omega's) — but the group noun promises a KIND: a Type I photo is
+      // not one of "your Michael Jordan cards"
+      const noun = kindFits({ ...l, ek: f.ek }) ? nounOf(f.cat, f.sub, f.medium) : 'pieces';
+      return { reason: `Like your ${name} ${noun}${band}`, why };
     }
   }
   // a franchise the desk keeps returning to speaks as the group, whoever

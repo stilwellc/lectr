@@ -33,7 +33,7 @@ export interface KindLot {
 }
 
 /** a word that says the lot IS a timepiece (English, French, German, Italian, Spanish; model lines) */
-const WATCH_WORD = /\b(?:watch(?:es)?|wristwatch|pocket ?watch|montre|chronograph|chronographe|uhr|orologio|reloj|tourbillon|ref(?:erence)?\.?\s*[0-9]|calibre|cal\.\s*[0-9]|movement|mouvement|daytona|submariner|speedmaster|seamaster|royal oak|nautilus|aquanaut|calatrava|reverso|santos|tank|datejust|day-date|gmt-master|explorer|carrera)\b/i;
+const WATCH_WORD = /\b(?:watch(?:es)?|wristwatch|pocket ?watch|montre|chronograph|chronographe|uhr|orologio|reloj|tourbillon|ref(?:erence)?\.?\s*[0-9]|calibre|cal\.\s*[0-9]|movement|mouvement|daytona|submariner|speedmaster|seamaster|royal oak|nautilus|aquanaut|calatrava|reverso|santos|tank|datejust|day-date|gmt-master|explorer|carrera|perpetual|annual calendar|repeater|moon ?phase|complication|automatic|quartz|ellipse|cellini)\b/i;
 /** jewelry, paper and table things a watch house's name rides on */
 const NOT_A_WATCH = /\b(?:menu|collier|necklace|pendant|brooch|earrings?|cufflinks?|bangle|tiara|book|poster|lithograph|letter|cover|photo(?:graph)?|print|program|invitation)\b/i;
 /** things a card sub is sometimes handed that are not cards (never a
@@ -47,7 +47,7 @@ const NOT_A_CARD = /\b(?:vinyl (?:in sleeve|record|album|lp)|record album|lp rec
  *  or signed JERSEY / ball / bat (never a "Jersey Number Card", a "Game-Used
  *  Patch" or a "Rookie Ticket" parallel), a painted shikishi art board, a
  *  poster. Sold as "baseball cards" to a vintage-baseball desk. */
-const NOT_A_CARD_MEM = /\b(?:type\s*[i1]\b[^,]{0,30}?\bphoto(?:graph)?s?|original\s+(?:type\s*[i1]\s+)?(?:news service\s+)?photo(?:graph)?s?|news service photo|wire photo|press photo|photo(?:graph)? by\b|replica (?:jersey|helmet)|(?:signed|game[- ]worn|game[- ]used|match[- ]worn|autographed) (?:jersey|ball|bat|helmet|glove|puck|cleats?|basketball|football|baseball|stick)\b(?!\s*(?:card|patch|swatch|relic|number|cut))|shikishi|art board|\bposter\b)/i;
+const NOT_A_CARD_MEM = /\b(?:type\s*[i1]\b[^,]{0,30}?\bphoto(?:graph)?s?|original\s+(?:type\s*[i1]\s+)?(?:news service\s+)?photo(?:graph)?s?|news service photo|wire photo|press photo|photo(?:graph)? by\b|replica (?:jersey|helmet)|(?:signed|game[- ]worn|game[- ]used|match[- ]worn|autographed) (?:jersey|ball|bat|helmet|glove|puck|cleats?|basketball|football|baseball|stick)\b(?!\s*(?:card|patch|swatch|relic|number|cut))|shikishi|art board|\bposter\b|strategy guide|guide ?book|handbook|player'?s guide|(?:trailer|film) reel|\b(?:vhs|dvd|blu-ray|laserdisc)\b|magazine|comic book|\bmanga\b|figurine|\bfigure\b|keychain|pin set|lanyard)/i;
 /** a lot whose subject is a person or film of ANOTHER market (Michael Jackson's
  *  "Moonwalk" autobiography filed under Apollo) is not a space piece */
 const OFF_MARKET_SUBJECT = /^sj:(?!science\|)/;
