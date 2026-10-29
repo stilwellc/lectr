@@ -15,7 +15,9 @@ import { signalMagnitude } from '../../lib/comps';
 import { sleeperRead } from '../../lib/lanes';
 import { idAliases } from '../../lib/recs';
 import { closeDayOf, localToday, median, overEstimatePct } from '../../utils';
-import { pricedTotal } from './priced';
+import { closeMsOf } from '../../lib/priority';
+import { pricedTotal, liveBidUsd } from './priced';
+export { liveBidUsd };
 
 /** Terminal's shared daysUntil, kept on the desk's NaN convention (every
     comparison here is NaN-safe; a null would need `?? NaN` at 14 call sites) */
@@ -176,11 +178,16 @@ export interface WatchSummary {
   priced: number;
   /** live watches with a one-sided estimate ("from $X") — counted, never summed */
   oneSided: number;
-  flagged: number; next: AuctionLot | null; closesToday: number;
+  flagged: number; next: AuctionLot | null;
+  /** watches whose close day is today and whose close is still ahead */
+  closesToday: number;
+  /** watches whose close day is today but whose published close instant has
+   *  passed (results pending) — "closed earlier today", never "closes today" */
+  closedEarlierToday: number;
 }
 
 /* ── WATCHING summary ── */
-export function watchSummaryOf(upcoming: readonly AuctionLot[], signalById: ReadonlyMap<string, SignalRead>): WatchSummary {
+export function watchSummaryOf(upcoming: readonly AuctionLot[], signalById: ReadonlyMap<string, SignalRead>, nowMs: number = Date.now()): WatchSummary {
   // ONE "priced" rule (./priced, R4#3): a sum of estimate MIDPOINTS over the
   // lots with BOTH bounds — every surface that prints it labels it so ("at
   // estimate midpoint · N of M priced"); a one-sided estimate is "from $X"
@@ -189,9 +196,21 @@ export function watchSummaryOf(upcoming: readonly AuctionLot[], signalById: Read
   const flagged = upcoming.filter(l => signalById.get(l.id)?.label === 'Below Market').length;
   const todayIso = localToday();
   const next = upcoming.find(l => { const d = closeDayOf(l).slice(0, 10); return !!d && d >= todayIso; }) || null;
-  const closesToday = upcoming.filter(l => closeDays(l) === 0).length;
-  return { totalEst, priced, oneSided, flagged, next, closesToday };
+  const today = upcoming.filter(l => closeDays(l) === 0);
+  const closedEarlierToday = today.filter(l => closedBy(l, nowMs)).length;
+  return { totalEst, priced, oneSided, flagged, next, closesToday: today.length - closedEarlierToday, closedEarlierToday };
 }
+
+/** the lot's published close instant (house-tz closeMsOf: a date-only sale
+ *  closes when its day ends where it is sold) is behind the clock */
+export const closedBy = (l: AuctionLot, nowMs: number): boolean => {
+  const ms = closeMsOf(l);
+  return ms != null && ms <= nowMs;
+};
+
+/** the settled shelf's rows the house hasn't resulted yet (past their sale
+ *  day, still 'upcoming') — "awaiting results", never "settled" */
+export const pendingResultsOf = (sold: readonly AuctionLot[]): number => sold.filter(l => l.status !== 'sold').length;
 
 /* ── what changed since the saves: signals that moved, bids that landed ── */
 export function watchChangesOf(upcoming: readonly AuctionLot[], metaFor: MetaOf, signalById: ReadonlyMap<string, SignalRead>): { moved: number; newBids: number } {
@@ -350,16 +369,7 @@ export function tenureOf(savedIds: readonly string[], savedMeta: Readonly<Record
   return new Date(min).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
-/* ── MY MAX vs the live bid ── */
-/** a live bid in USD — the row's currency through its dated rate; a non-USD
- *  bid with no rate cannot be read against a USD max and returns null (never
- *  a native figure read as dollars, never a false alarm) */
-export function liveBidUsd(l: Pick<AuctionLot, 'currentBid' | 'currency' | 'fxRate'>): number | null {
-  const bid = l.currentBid || 0;
-  if (!(bid > 0)) return null;
-  if (!l.currency || l.currency === 'USD') return bid;
-  return l.fxRate && l.fxRate > 0 ? bid * l.fxRate : null;
-}
+/* ── MY MAX vs the live bid (./priced liveBidUsd — the Daily Desk reads the same rule) ── */
 /** your watches whose live bid has passed your own max — the ids (Watching's
  *  news, the Needs-you count). A lot already priced (sold) is never over max. */
 export function overMaxIdsOf(upcoming: readonly AuctionLot[], maxOf: (lotId: string) => number | null | undefined): string[] {
@@ -375,10 +385,13 @@ export const overMaxOf = (upcoming: readonly AuctionLot[], maxOf: (lotId: string
 
 /* ── NEEDS YOU — what waits on the reader, COUNTED ONCE: a watch that is both
    past your max and closing today is one thing, not two. The facts keep their
-   own counts (the cell prints each); `n` is the union. ── */
-export function needsYouOf(upcoming: readonly AuctionLot[], maxOf: (lotId: string) => number | null | undefined, unclaimedWins: number): { n: number; overMax: number; closesToday: number; results: number } {
+   own counts (the cell prints each); `n` is the union. A watch that closed
+   earlier today waits on the HOUSE (results pending), not the reader: it is
+   said apart and never counted. ── */
+export function needsYouOf(upcoming: readonly AuctionLot[], maxOf: (lotId: string) => number | null | undefined, unclaimedWins: number, nowMs: number = Date.now()): { n: number; overMax: number; closesToday: number; closedEarlierToday: number; results: number } {
   const over = overMaxIdsOf(upcoming, maxOf);
-  const closing = upcoming.filter(l => closeDays(l) === 0).map(l => l.id);
+  const today = upcoming.filter(l => closeDays(l) === 0);
+  const closing = today.filter(l => !closedBy(l, nowMs)).map(l => l.id);
   const live = new Set(over.concat(closing)).size;
-  return { n: live + unclaimedWins, overMax: over.length, closesToday: closing.length, results: unclaimedWins };
+  return { n: live + unclaimedWins, overMax: over.length, closesToday: closing.length, closedEarlierToday: today.length - closing.length, results: unclaimedWins };
 }

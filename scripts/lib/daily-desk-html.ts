@@ -121,7 +121,7 @@ function glance(origin: string, g: DeskEmail['glance']) {
     ? `${g.next.time ? `<b style="color:${INK};font-weight:500">${esc(g.next.time)}</b> · ` : ''}${g.next.above ? 'first under Needs you' : esc(g.next.title)}`
     : 'no watch on a clock';
   return `<tr><td style="padding:18px 0 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid ${LINE};border-bottom:1px solid ${LINE}">
-<tr>${cell('Watching', n2(g.watching), g.est ? `${esc(g.est)} at estimate` : g.watching ? 'live lots' : 'nothing live', `${desk}#tab-watching`, true)}${cell('Next hammer', g.next ? g.next.when : '—', nextLine, nextHref, false)}</tr>
+<tr>${cell('Watching', n2(g.watching), g.est ? `${esc(g.est)} at estimate midpoint${g.estBasis ? ` · ${esc(g.estBasis)}` : ''}` : g.watching ? 'live lots' : 'nothing live', `${desk}#tab-watching`, true)}${cell('Next hammer', g.next ? g.next.when : '—', nextLine, nextHref, false)}</tr>
 <tr><td colspan="2" style="border-top:1px solid ${LINE};font-size:0;line-height:0">&nbsp;</td></tr>
 <tr>${cell('This week', n2(g.week), g.week ? `${n2(g.weekWatches)} ${g.weekWatches === 1 ? 'watch' : 'watches'} + ${n2(g.weekPicks)} ${g.weekPicks === 1 ? 'pick' : 'picks'} closing` : 'nothing of yours closing', `${desk}#tab-week`, true)}${cell('Picks', n2(g.picks), g.picks ? 'for you' : 'none today', `${desk}#tab-for-you`, false)}</tr>
 </table></td></tr>`;
@@ -311,7 +311,7 @@ function renderText(e: DeskEmail, o: RenderOpts): string {
   const t: string[] = [`lectr · The Daily Desk · ${o.dateLabel}`,
     ...(e.welcome ? ['', `Welcome to the Daily Desk — your first edition. Every morning at ${SEND_HOUR} AM it brings what needs you, your watches and collection, the week, what’s new for the names you follow, the picks and the market.`, `Turn it off any time: ${origin}/profile#account`] : []),
     '', e.headline, e.preheader, '',
-    `Watching ${g.watching}${g.est ? ` (${g.est} at estimate midpoint)` : ''} · Next hammer ${g.next ? `${g.next.when}${g.next.time ? ` ${g.next.time}` : ''} — ${g.next.above ? 'first under needs you' : g.next.title}` : '—'} · This week ${g.week} (${g.weekWatches} watches + ${g.weekPicks} picks) · ${g.picks} picks`,
+    `Watching ${g.watching}${g.est ? ` (${g.est} at estimate midpoint${g.estBasis ? ` · ${g.estBasis}` : ''})` : ''} · Next hammer ${g.next ? `${g.next.when}${g.next.time ? ` ${g.next.time}` : ''} — ${g.next.above ? 'first under needs you' : g.next.title}` : '—'} · This week ${g.week} (${g.weekWatches} watches + ${g.weekPicks} picks) · ${g.picks} picks`,
     ...(e.edition.length ? [`In this edition: ${e.edition.join(' · ')}`] : []), ''];
   const metaOf = (i: DeskItem) => [i.maker, i.house, i.est].filter(Boolean).join(' · ');
   const line = (i: DeskItem | PickItem) => `- ${i.title}${i.when ? ` (${i.when})` : ''}${metaOf(i) ? ` · ${metaOf(i)}` : ''}${i.sig ? ` · ${i.sig.text}` : ''}${i.over ? ` · bid ${i.bid} passed your max` : i.max ? ` · your max ${i.max}` : ''}${'note' in i && i.note ? `\n  ${i.note}` : ''}\n  ${lotUrl(origin, i.id)}`;

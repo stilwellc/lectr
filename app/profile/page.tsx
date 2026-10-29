@@ -134,6 +134,8 @@ function DeskMasthead() {
   const { deskView, signedOutView, summary, collection, sold, soldOrphans, upcoming, orphanIds, savedIds, fromCache, lastCrawl, deskKicker, tunedLine, hasDeskDetails, changes, tasteLabels, tenure, auth, partialLoadFailed, fullSlow } = i;
   const [deskDetails, setDeskDetails] = useState(false);
   const savedLotsN = i.savedLots.length;
+  // settled = a result posted; a watch past its day with no result is awaiting results, not settled
+  const settledN = sold.length + soldOrphans.length - i.pendingResultsN;
   // (Oct 29) the fold opens only when something CHANGED since the saves — a
   // signal moved, a bid landed; the basis, taste and tenure lines ride inside
   // it then (the cockpit prints the basis on its own cell either way)
@@ -168,10 +170,10 @@ function DeskMasthead() {
                       <CountUp to={summary.totalEst} format={fmtFace} duration={1100} animate={!fromCache} />
                     </span>
                   </Accent>{' '}
-                  to the hammer.
+                  to the hammer{summary.priced < upcoming.length ? <> across {summary.priced} of {upcoming.length} lots</> : null}.
                 </>
               : collection.rows.length > 0
-                ? <>Your desk: <Accent>{collection.rows.length} owned</Accent>, {sold.length + soldOrphans.length} settled.</>
+                ? <>Your desk: <Accent>{collection.rows.length} owned</Accent>, {settledN} settled{i.pendingResultsN > 0 ? <> · {i.pendingResultsN} awaiting results</> : null}.</>
                 : upcoming.length === 0 && savedLotsN === 0 && orphanIds.length > 0
                 ? <>Your desk: <Accent>{orphanIds.length} settled {orphanIds.length === 1 ? 'watch' : 'watches'}</Accent>, resolving results.</>
                 : upcoming.length > 0
@@ -181,7 +183,7 @@ function DeskMasthead() {
                 // nothing live: the desk is a record, not a watch — falling
                 // back to savedLots.length claimed "Watching 3 lots to the
                 // hammer" over a sub-line that said "0 live lots"
-                : <>Your desk: <Accent>{savedLotsN} settled {savedLotsN === 1 ? 'watch' : 'watches'}</Accent>, judged under Record.</>)}
+                : <>Your desk: <Accent>{settledN} settled {settledN === 1 ? 'watch' : 'watches'}</Accent>{i.pendingResultsN > 0 ? <>, {i.pendingResultsN} awaiting results</> : null}, judged under Record.</>)}
             // (Oct 28) the next hammer, the live count, the results to confirm, the
             // flags and the total's basis are the cockpit's cells now — on every
             // tab and every width — so the sub-line keeps only the What-changed fold

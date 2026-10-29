@@ -635,3 +635,45 @@ test('an RR lot without a crawled photo prints its CDN preview; a lot with none 
   assert.ok(html.includes('preview/3518936_1.jpg'));
   assert.ok(html.includes('>Z</div>'));
 });
+
+/* ── THE DESK'S OWN RULES in the paper (Oct 29 2026): the estimate total and
+   the live bid read app/profile/desk/priced, the same rules the cockpit prints ── */
+
+test('the glance total reads the desk\'s priced rule: USD as the build left it (a GBP lot without a rate sums at face, a EUR lot once through est*Usd), one bound counted apart and never summed', () => {
+  const usd = lot('usd', 50 * H);                                                                                     // 1,000–2,000 → 1,500
+  // the live book's Bonhams shape: currency GBP, no fxRate, estimateLow/High already dollars (£700/£900 at 1.33)
+  const gbp = lot('gbp', 60 * H, { currency: 'GBP', estimateLow: 931, estimateHigh: 1197 } as Partial<AuctionLot>);  // 1,064
+  // a converted EUR lot: native + USD twins + the alias — read ONCE, never native × rate again
+  const eur = lot('eur', 70 * H, { currency: 'EUR', fxRate: 1.08, estLowNative: 1000, estHighNative: 2000, estLowUsd: 1080, estHighUsd: 2160, estimateLow: 1080, estimateHigh: 2160 } as Partial<AuctionLot>); // 1,620
+  const from = lot('rr', 80 * H, { auctionHouse: 'RR Auction', estimateLow: 700, estimateHigh: null } as Partial<AuctionLot>);
+  const bidOnly = lot('bid', 90 * H, { estimateLow: null, estimateHigh: null, currentBid: 402, bidCount: 10 } as Partial<AuctionLot>);
+  const d = planDesk({ now: NOW, watches: ['usd', 'gbp', 'eur', 'rr', 'bid'].map(lot_id => ({ lot_id })), live: liveMap([usd, gbp, eur, from, bidOnly]), sold: [], picks: [] })!;
+  assert.equal(d.glance.est, '$4.2K');            // 1,500 + 1,064 + 1,620 = 4,184
+  assert.deepEqual([d.glance.watching, d.glance.priced, d.glance.oneSided], [5, 3, 1]);
+  assert.equal(d.glance.estBasis, '3 of 5 priced · 1 from one bound, not summed');
+  const { html, text } = render(d);
+  assert.ok(html.includes('$4.2K at estimate midpoint · 3 of 5 priced · 1 from one bound, not summed'));
+  assert.ok(text.includes('Watching 5 ($4.2K at estimate midpoint · 3 of 5 priced · 1 from one bound, not summed)'));
+  assert.ok(d.preheader.includes('5 watching · $4.2K to the hammer across 3'));
+  // every watch priced: no basis to qualify (the strip stays as it was)
+  const all = planDesk({ now: NOW, watches: [{ lot_id: 'usd' }], live: liveMap([usd]), sold: [], picks: [] })!;
+  assert.equal(all.glance.estBasis, null);
+  assert.ok(render(all).text.includes('Watching 1 ($1.5K at estimate midpoint)'));
+});
+
+test('a bid past your max reads the bid in USD: a EUR bid through its rate; a non-USD bid with no rate is never read as dollars (no false alarm, no room claimed)', () => {
+  const eurOver = lot('eurOver', 50 * H, { currency: 'EUR', fxRate: 1.08, currentBid: 1000, bidCount: 2 } as Partial<AuctionLot>);   // $1,080 > $1,050
+  const eurUnder = lot('eurUnder', 60 * H, { currency: 'EUR', fxRate: 1.08, currentBid: 1000, bidCount: 2 } as Partial<AuctionLot>); // $1,080 < $1,100
+  const noRate = lot('noRate', 70 * H, { currency: 'GBP', currentBid: 2000, bidCount: 2 } as Partial<AuctionLot>);
+  const d = planDesk({
+    now: NOW, watches: [{ lot_id: 'eurOver', max_usd: 1050 }, { lot_id: 'eurUnder', max_usd: 1100 }, { lot_id: 'noRate', max_usd: 1000 }],
+    live: liveMap([eurOver, eurUnder, noRate]), sold: [], picks: [],
+  })!;
+  assert.deepEqual(d.overMax.map(i => i.id), ['eurOver']);
+  assert.equal(d.overMax[0].bid, '$1.1K');
+  const under = d.desk.find(r => r.id === 'eurUnder')!, unread = d.desk.find(r => r.id === 'noRate')!;
+  assert.equal(under.room, '$20 under your max $1.1K');
+  assert.equal(unread.bid, null);
+  assert.equal(unread.room, 'your max $1K');
+  assert.equal(unread.over, false);
+});

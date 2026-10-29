@@ -193,14 +193,17 @@ export default function Cockpit() {
   // first one's home.
   const overMax = overMaxN(desk, i);
   // counted once: a watch past your max that also closes today is one thing (derive.needsYouOf)
-  const needs = needsYouOf(upcoming, id => desk.metaFor(id)?.maxUsd, i.unclaimedWins).n;
+  // a watch that closed earlier today waits on the house, not you: said apart, never counted
+  const ny = needsYouOf(upcoming, id => desk.metaFor(id)?.maxUsd, i.unclaimedWins, desk.now);
+  const needs = ny.n;
   const needsHref = overMax > 0 ? '#watching' : summary.closesToday > 0 ? '#today' : i.todayShows ? '#results' : '#settled';
   const needsFacts = [
     overMax > 0 ? `${overMax} ${overMax === 1 ? 'bid' : 'bids'} past your max` : null,
     summary.closesToday > 0 ? `${summary.closesToday} ${summary.closesToday === 1 ? 'closes' : 'close'} today` : null,
     i.unclaimedWins > 0 ? `${i.unclaimedWins} ${i.unclaimedWins === 1 ? 'result' : 'results'} to confirm` : null,
+    ny.closedEarlierToday > 0 ? `${ny.closedEarlierToday} closed earlier today · results pending` : null,
   ].filter(Boolean) as string[];
-  const showNeeds = live || needs > 0;
+  const showNeeds = live || needs > 0 || ny.closedEarlierToday > 0;
   const nCells = cold ? 3 : showNeeds ? 4 : 3;
 
   return (
@@ -267,7 +270,7 @@ export default function Cockpit() {
           <Cell k="Needs you"
             v={needs > 0 ? needs.toLocaleString() : '0'}
             note={needs === 0 ? 'all clear' : needs === 1 ? 'thing' : 'things'}
-            body={needs > 0 ? needsFacts.join(' · ') : 'No bid past your max, nothing of yours closing today, no result waiting on you.'}
+            body={needsFacts.length ? needsFacts.join(' · ') : 'No bid past your max, nothing of yours closing today, no result waiting on you.'}
             href={needs > 0 ? needsHref : undefined} />
         )}
 

@@ -53,7 +53,7 @@ import { readSettledRows, writeSettledRows, type SettledRows } from '../settled-
 import {
   closeDays, isPastPending, sigText, watchTagOf, TAG_SOON_DAYS, type LiveSignal,
   resolveSaved, splitOrphans, partitionSaved, watchSummaryOf, watchChangesOf, recordOf, sinceLastOf, unclaimedOf,
-  collectionTotalsOf, exposureOf, tenureOf, type WatchSummary, type RecordRead, type CollectionTotals,
+  collectionTotalsOf, exposureOf, tenureOf, pendingResultsOf, type WatchSummary, type RecordRead, type CollectionTotals,
 } from './derive';
 import { fmtFace } from '../../lib/lot-face';
 import type { DeskData, DeskActions } from './types';
@@ -132,6 +132,9 @@ export interface DeskInternals {
   ledgerState: LedgerState; setLedgerState: (s: LedgerState) => void;
   signalById: Map<string, LiveSignal | null>;
   settledRows: SettledRowData[]; settledCount: number; settledHasCall: boolean;
+  /** of `settledCount`, the watches past their sale day the house hasn't
+   *  resulted (closed, no price): "awaiting results", never "settled" */
+  pendingResultsN: number;
   record: RecordRead | null; recordLedByAppraisal: boolean;
   collection: CollectionRead; exposure: { row: DrillRow; n: number; held: number }[];
   collectionChart: { anchor: { key: string; label: string; color: string; unit: 'money'; points: { period: string; value: number; n: number }[] }; layers: { key: string; label: string; color: string; unit: 'money'; points: { period: string; value: number; n: number }[] }[] } | null;
@@ -375,7 +378,9 @@ export function useDeskState(): DeskState {
   }, [snaps]);
 
   /* ── WATCHING summary ── */
-  const summary = useMemo<WatchSummary>(() => watchSummaryOf(upcoming, signalById), [upcoming, signalById]);
+  // `now`: the minute clock — a close that passes while the tab is open moves
+  // from "closes today" to "closed earlier today" without a reload
+  const summary = useMemo<WatchSummary>(() => watchSummaryOf(upcoming, signalById, now), [upcoming, signalById, now]);
 
   const changes = useMemo(() => watchChangesOf(upcoming, metaFor, signalById), [upcoming, metaFor, signalById]);
 
@@ -597,6 +602,7 @@ export function useDeskState(): DeskState {
   const settledHasCall = useMemo(() => settledRows.some(r => !!signalCallOf(r.kind === 'lot' ? metaFor(r.lot.id) : savedMeta[r.o.id])), [settledRows, metaFor, savedMeta]);
   // the one settled count every surface prints (Settled head, the cell room)
   const settledCount = sold.length + soldOrphans.length;
+  const pendingResultsN = pendingResultsOf(sold);
 
   const hasDeskDetails = summary.totalEst > 0 || changes.moved > 0 || changes.newBids > 0 || tasteLabels.length > 0 || !!tenure || !!user;
   const deskKicker = givenName ? `${givenName}’s desk` : 'My desk';
@@ -782,7 +788,7 @@ export function useDeskState(): DeskState {
     fullSlow, partialLoadFailed, pageLoading, landReady,
     recTaste, recsReady, deal, todayTop, watchFirst, deskView, signedOutView, coldOut,
     upcoming, sold, other, orphanIds, soldOrphans, goneOrphans, ledgerState, setLedgerState,
-    signalById, settledRows, settledCount, settledHasCall, record, recordLedByAppraisal,
+    signalById, settledRows, settledCount, settledHasCall, pendingResultsN, record, recordLedByAppraisal,
     collection, exposure, collectionChart, summary, changes, reads, room, ledgerCols,
     closingWatches, awayLine, unseenAlerts, myFollows, marketOwned, hasMarket, tunedLine,
     historyCount, hasRecordRoom, unclaimedWins, sinceLastN: sinceLast?.n ?? 0, givenName, deskKicker, tasteLabels, tenure, hasDeskDetails,
