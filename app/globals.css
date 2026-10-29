@@ -5583,7 +5583,8 @@ html:has(.dk-sbar) { scroll-padding-top: calc(64px + var(--dt-h, 0px) + 12px); }
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), rgba(0, 0, 0, 0.4) calc(100% - 4px), transparent);
   mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), rgba(0, 0, 0, 0.4) calc(100% - 4px), transparent);
 }
-.dk-fold-bar { display: flex; justify-content: flex-start; padding: 28px 0 0; }
+/* (pass 4) padding-BLOCK only: `padding: 28px 0 0` wiped the rail's gutter and every Show-all sat 56px left of its room head */
+.dk-fold-bar { display: flex; justify-content: flex-start; padding-block: 28px 0; }
 .dk-fold-btn {
   display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 18px; border-radius: 999px;
   border: none; background: var(--color-fg); color: var(--color-bg, #fff); cursor: pointer;
@@ -5696,3 +5697,56 @@ html:not([data-lectr-light]) .ck-page .dt-pair .dt-pair-col[data-tone='ink'] .ra
 .ck-week-quiet-hidden { color: var(--color-text-muted); }
 .ck-week-quiet-hidden .ck-week-act { display: inline; padding: 0; min-height: 0; vertical-align: baseline; }
 .ck-week-chip i[data-hidden] { color: var(--color-text-faint); }
+
+/* ── pass 4 (Oct 29): the Daily Desk nudge, the What-changed list, the dossier card, the strip's day taps ── */
+/* THE NUDGE — one quiet line at the Today band's foot, its × a 44px target */
+.dk-nudge { display: flex; align-items: center; gap: 10px; padding-block: 14px 0; font-size: 13px; color: var(--color-text-secondary); }
+.dk-nudge p { margin: 0; min-width: 0; }
+.dk-nudge-link { font-weight: 600; color: var(--color-fg); text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px; white-space: nowrap; }
+.dk-nudge-link:hover { text-decoration-color: var(--color-fg); }
+.dk-nudge-x { flex: none; display: grid; place-items: center; width: 28px; height: 28px; margin-left: auto; border-radius: 50%; border: none; background: none; cursor: pointer; font: 400 18px/1 var(--font-sans), sans-serif; color: var(--color-text-muted); position: relative; }
+.dk-nudge-x::before { content: ''; position: absolute; inset: -8px; }
+.dk-nudge-x:hover { color: var(--color-fg); background: var(--color-hover-item); }
+.dk-nudge-x:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 1px; }
+/* the Account row's paper line wraps; its pill keeps to one line */
+.ck-dailyemail > span { max-width: 820px; line-height: 1.55; }
+
+/* WHAT CHANGED — a short list, one fact a line, counts in ink */
+.ck-deskdetails-list { margin: 6px 0 8px; padding: 0; list-style: none; display: grid; gap: 4px; max-width: 760px; font-size: 13px; line-height: 1.5; color: var(--color-text-secondary); }
+.ck-deskdetails-list li { padding-left: 14px; position: relative; }
+.ck-deskdetails-list li::before { content: ''; position: absolute; left: 0; top: 0.72em; width: 5px; height: 1px; background: var(--color-border-mid); }
+.ck-deskdetails-list b { color: var(--color-fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* THE DOSSIER as a card under its row — the Collection plate's language:
+   16px radius, a hairline, the elevated ground; the row above reads as its head */
+.ck-page .dk-item > .ck-dossier {
+  margin: 2px 2px 12px; padding: 16px 18px 18px; border: 1px solid var(--hairline); border-top: 1px solid var(--hairline);
+  border-radius: 16px; background: var(--color-bg-elevated); box-shadow: 0 1px 0 var(--hairline);
+}
+html:not([data-lectr-light]) .ck-page .dk-item > .ck-dossier { background: #16181c; border-color: rgba(255, 255, 255, 0.10); box-shadow: none; }
+.ck-page .dk-row[data-open] { border-radius: 12px 12px 0 0; }
+/* the close affordance: the Details control reads "Close" with its chevron
+   turned — on a phone too, where the chevron alone used to stand (a pill) */
+@media (max-width: 639.98px) {
+  .ck-page .dk-expand[aria-expanded='true'] { min-width: 0; height: 36px; min-height: 36px; padding: 0 12px 0 14px; gap: 4px; border: 1px solid var(--color-border-mid); border-radius: 999px; font-size: 12.5px; color: var(--color-fg); }
+  .ck-page .dk-expand[aria-expanded='true'] .dk-expand-t { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
+  .ck-page .dk-expand[aria-expanded='true'] .dk-expand-chev { font-size: 14px; }
+  .ck-page .dk-item > .ck-dossier { padding: 14px 14px 16px; border-radius: 14px; }
+}
+
+/* THE STRIP's taps: a bar is a button on its day, the caption a button on the week */
+.ck-page .ck-hstrip { cursor: default; }
+.ck-page .ck-hstrip:hover { background: none; }
+.ck-page .ck-hbar { background: none; border: none; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; border-radius: 4px; }
+.ck-page .ck-hbar:disabled { cursor: default; }
+.ck-page .ck-hbar:not(:disabled):hover b { color: var(--color-fg); }
+.ck-page .ck-hbar:not(:disabled):hover i { outline: 1px solid var(--color-fg); outline-offset: -1px; }
+.ck-page .ck-hbar:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+.ck-page .ck-hstrip-cap { background: none; border: none; padding: 4px 8px; margin: 0 -8px; font: inherit; color: var(--color-text-secondary); text-align: left; cursor: pointer; border-radius: 8px; transition: background 150ms var(--ease-house, ease); }
+.ck-page .ck-hstrip-cap:not(:disabled):hover { background: var(--color-hover-item); }
+.ck-page .ck-hstrip-cap:disabled { cursor: default; }
+.ck-page .ck-hstrip-cap:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 1px; }
+@media (max-width: 639.98px) {
+  .ck-page .ck-hbar { min-height: 40px; align-content: end; }
+  .ck-page .ck-hstrip-cap { margin: 0; padding: 2px 0; width: 100%; }
+}

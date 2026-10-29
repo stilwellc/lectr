@@ -14,6 +14,7 @@ import { useHashLanding, jump, JUMP_EVENT, OPEN_TAB_EVENT, MISSING_EVENT } from 
 import { HelpChip } from './help';
 import { Clamp, Closed } from './desk/fold';
 import { SectionBar, type BarItem } from './desk/sectionbar';
+import { DailyNudge } from './desk/nudge';
 import { useStalled } from './stall';
 import { DeskProvider, useDeskState, useDeskInternals, useDesk, type DeskState } from './desk/provider';
 import { SECTIONS, SUB_ANCHORS, TAB_ORDER, mountedSections, keysLegend, missingSection, tabItemsOf, tabOf, EVERY_TAB, type DeskSection, type DeskTab } from './desk/sections';
@@ -133,6 +134,10 @@ function DeskMasthead() {
   const { deskView, signedOutView, summary, collection, sold, soldOrphans, upcoming, orphanIds, savedIds, fromCache, lastCrawl, deskKicker, tunedLine, hasDeskDetails, changes, tasteLabels, tenure, auth, partialLoadFailed, fullSlow } = i;
   const [deskDetails, setDeskDetails] = useState(false);
   const savedLotsN = i.savedLots.length;
+  // (Oct 29) the fold opens only when something CHANGED since the saves — a
+  // signal moved, a bid landed; the basis, taste and tenure lines ride inside
+  // it then (the cockpit prints the basis on its own cell either way)
+  const changed = hasDeskDetails && (changes.moved > 0 || changes.newBids > 0);
   return (
     <section id="desk" className="rail ray-enter ck-desk" style={{ paddingTop: 24 }}>
       {signedOutView ? (
@@ -180,27 +185,24 @@ function DeskMasthead() {
             // (Oct 28) the next hammer, the live count, the results to confirm, the
             // flags and the total's basis are the cockpit's cells now — on every
             // tab and every width — so the sub-line keeps only the What-changed fold
-            sub={hasDeskDetails
+            sub={changed
               ? <button type="button" className="ck-deskdetails-btn" aria-expanded={deskDetails} aria-controls="desk-details"
                   onClick={() => setDeskDetails(v => !v)}>What changed</button>
               : undefined}
           />
-          {/* the rest of the old sub-line — coverage, moves, taste, tenure */}
-          {hasDeskDetails && deskDetails && (
+          {/* what changed since the saves, one line each — counts in ink (a count
+              has no sign: the lamp is for measured deltas only); then the basis,
+              taste and tenure lines the old sub-line carried */}
+          {changed && deskDetails && (
             <div className="ck-deskdetails" id="desk-details">
-              <p>
-                {summary.totalEst > 0 && <>{fmtFace(summary.totalEst)} at estimate midpoint · {summary.priced} of {upcoming.length} lots priced</>}
-                {(changes.moved > 0 || changes.newBids > 0) && (
-                  <>
-                    {summary.totalEst > 0 ? ' · ' : ''}since you saved
-                    {changes.moved > 0 && <> · {changes.moved} {changes.moved === 1 ? 'signal' : 'signals'} moved</>}
-                    {changes.newBids > 0 && <> · {changes.newBids} new {changes.newBids === 1 ? 'bid' : 'bids'}</>}
-                  </>
-                )}
-                {tasteLabels.length > 0 && <> · you watch {tasteLabels.join(' · ')}</>}
-                {tenure && <> · since {tenure}</>}
-                {auth.authEnabled && auth.user && <> · signed in as {auth.user.email || 'you'} · <a href="#account" className="ck-away-link">Account</a></>}
-              </p>
+              <ul className="ck-deskdetails-list">
+                {changes.moved > 0 && <li><b>{changes.moved}</b> {changes.moved === 1 ? 'signal' : 'signals'} moved since you saved — the rows say which way</li>}
+                {changes.newBids > 0 && <li><b>{changes.newBids}</b> new {changes.newBids === 1 ? 'bid' : 'bids'} on your watches since you saved</li>}
+                {summary.totalEst > 0 && <li>{fmtFace(summary.totalEst)} at estimate midpoint · {summary.priced} of {upcoming.length} lots priced</li>}
+                {tasteLabels.length > 0 && <li>you watch {tasteLabels.join(' · ')}</li>}
+                {tenure && <li>on the desk since {tenure}</li>}
+                {auth.authEnabled && auth.user && <li>signed in as {auth.user.email || 'you'} · <a href="#account" className="ck-away-link">Account</a></li>}
+              </ul>
             </div>
           )}
 
@@ -312,7 +314,8 @@ function DeskBody() {
     const ids = idsOf(rooms.map(r => r.id));
     const inner = rooms.map(s => { const C = s.Component!; return <C key={s.id} desk={desk} act={act} narrow={narrow} />; });
     barItems.push({ id: g, label: item?.label ?? rooms[0].label, count: item?.count, tone: item?.tone, target: rooms[0].id });
-    cols.push({ g, room: rooms[0].id, node: g === 'today' ? inner : <Clamp ids={ids} label={item?.label ?? rooms[0].label} count={item?.count} whole={cold}>{inner}</Clamp> });
+    // Today's foot carries the Daily Desk nudge (a signed-in reader without the paper)
+    cols.push({ g, room: rooms[0].id, node: g === 'today' ? <>{inner}<DailyNudge /></> : <Clamp ids={ids} label={item?.label ?? rooms[0].label} count={item?.count} whole={cold}>{inner}</Clamp> });
   }
   // pass 2: the bands. Record + Collection read side by side at ≥ 900px (one
   // band, two columns — "how am I doing" in one glance), stacked on a phone;

@@ -175,6 +175,12 @@ export default function Cockpit() {
     const id = ids.has('week') ? 'week' : ids.has('watching') ? 'watching' : null;
     if (id) jump(id);
   };
+  // (Oct 29) a bar lands on ITS day in Your week (#week-YYYY-MM-DD, the day
+  // card's own anchor — the fold opens on the way); without the week, the room
+  const dayTarget = (day: string) => {
+    const ids = new Set(mountedSections(desk, i).map(s => s.id));
+    if (ids.has('week')) jump(`week-${day}`); else stripTarget();
+  };
   const hits = edge ? edge.graded.filter(c => c.hit).length : 0;
   const scopeLine = tonight
     ? ` · ${[tonight.picks ? `${tonight.picks} ${tonight.picks === 1 ? 'pick' : 'picks'}` : null, tonight.names ? `${tonight.names} of your names` : null].filter(Boolean).join(' and ')} ${tonight.picks + tonight.names === 1 ? 'closes' : 'close'} tonight`
@@ -306,25 +312,30 @@ export default function Cockpit() {
         </Link>
       )}
 
-      {/* THE 14-DAY HAMMER STRIP — the week's rows: watches bold, picks and your names light */}
-      <button type="button" className="ck-hstrip" onClick={stripTarget} disabled={total === 0}
-        aria-label={`${stripCaption(strip)} — ${total ? 'open your week' : 'nothing to open yet'}`}>
-        <span className="ck-hstrip-bars" aria-hidden>
-          {strip.map(d => (
-            <span key={d.day} className="ck-hbar" data-today={d.today || undefined} data-n={d.n || undefined} data-w={d.watches || undefined} data-mix={(d.watches > 0 && d.watches < d.n) || undefined}
-              title={`${d.today ? 'Today' : dayLabel(d.day)} · ${d.n ? `${d.n} closing${d.watches !== d.n ? ` (${d.watches} ${d.watches === 1 ? 'watch' : 'watches'}, ${d.n - d.watches} ${d.picks && !d.names ? 'picks' : d.names && !d.picks ? 'of your names' : 'picks / your names'})` : ''}${d.est > 0 ? ` · ${fmtFace(d.est)} at estimate midpoint` : ''}` : 'nothing closing'}`}>
-              <i style={{ height: d.n ? `${Math.max(14, Math.round((d.n / max) * 100))}%` : undefined }}>
-                {d.n > 0 && d.watches > 0 && d.watches < d.n && <u style={{ height: `${Math.round((d.watches / d.n) * 100)}%` }} />}
-              </i>
-              <b>{d.dow}</b>
-            </span>
-          ))}
+      {/* THE 14-DAY HAMMER STRIP — the week's rows: watches bold, picks and your
+          names light. Each bar is a tap on its day; the caption opens the week */}
+      <div className="ck-hstrip" data-empty={total === 0 || undefined}>
+        <span className="ck-hstrip-bars" role="group" aria-label="The next 14 days, a bar per day">
+          {strip.map(d => {
+            const words = `${d.today ? 'Today' : dayLabel(d.day)} · ${d.n ? `${d.n} closing${d.watches !== d.n ? ` (${d.watches} ${d.watches === 1 ? 'watch' : 'watches'}, ${d.n - d.watches} ${d.picks && !d.names ? 'picks' : d.names && !d.picks ? 'of your names' : 'picks / your names'})` : ''}${d.est > 0 ? ` · ${fmtFace(d.est)} at estimate midpoint` : ''}` : 'nothing closing'}`;
+            return (
+              <button key={d.day} type="button" className="ck-hbar" disabled={total === 0} onClick={() => dayTarget(d.day)}
+                data-today={d.today || undefined} data-n={d.n || undefined} data-w={d.watches || undefined} data-mix={(d.watches > 0 && d.watches < d.n) || undefined}
+                title={words} aria-label={`${words} — open the day in your week`}>
+                <i aria-hidden style={{ height: d.n ? `${Math.max(14, Math.round((d.n / max) * 100))}%` : undefined }}>
+                  {d.n > 0 && d.watches > 0 && d.watches < d.n && <u style={{ height: `${Math.round((d.watches / d.n) * 100)}%` }} />}
+                </i>
+                <b aria-hidden>{d.dow}</b>
+              </button>
+            );
+          })}
         </span>
-        <span className="ck-hstrip-cap">
+        <button type="button" className="ck-hstrip-cap" onClick={stripTarget} disabled={total === 0}
+          aria-label={`${stripCaption(strip)} — ${total ? 'open your week' : 'nothing to open yet'}`}>
           <span className="kicker">Next 14 days</span>
-          <span>{total === 0 ? (cold ? 'your watched lots land here, day by day' : 'nothing of yours closes in the next 14 days') : stripCaption(strip)}</span>
-        </span>
-      </button>
+          <span title={total ? stripCaption(strip) : undefined}>{total === 0 ? (cold ? 'your watched lots land here, day by day' : 'nothing of yours closes in the next 14 days') : stripCaption(strip)}</span>
+        </button>
+      </div>
     </div>
   );
 }

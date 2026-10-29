@@ -89,6 +89,13 @@ export function SectionBar({ items }: { items: BarItem[] }) {
     const read = () => {
       raf = 0;
       const bar = ref.current;
+      // the scroll fallback for the observer: the cockpit back on screen hides
+      // the bar, the cockpit gone above shows it — on every browser, every scroll
+      const cockpit = document.querySelector<HTMLElement>('.ck-cockpit');
+      if (cockpit) {
+        const r = cockpit.getBoundingClientRect();
+        if (r.bottom > navHeight()) setShow(false); else if (r.top < 0) setShow(true);
+      }
       const line = navHeight() + (show && bar ? bar.offsetHeight : 0) + 24;
       let c: string | null = null, last = -Infinity;
       const seen = new Set<string>();
