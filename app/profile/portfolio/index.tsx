@@ -128,7 +128,8 @@ export default function Portfolio({ desk, narrow }: SectionProps) {
               ? <>Resolving your {owned} {owned === 1 ? 'piece' : 'pieces'} against the archive…</>
               : owned > 0
                 ? <>Your {owned} {owned === 1 ? 'piece is' : 'pieces are'} not in the archive this desk could load — nothing to re-mark yet.</>
-                : <>Mark a settled win <b style={{ color: 'var(--color-fg)' }}>I won it</b> and it joins here — re-marked year by year at its maker&rsquo;s own medians, beside the engine&rsquo;s read and what a sale would leave you.</>}
+                : <>Mark a settled win <b style={{ color: 'var(--color-fg)' }}>I won it</b> and it joins here — re-marked year by year at its maker&rsquo;s own medians, beside the engine&rsquo;s read and what a sale would leave you.
+                    {desk.saved.some(l => l.status === 'sold') && <> <a href="#settled" className="dk-empty-tap">History</a></>}</>}
           </p>
         </div>
       </section>

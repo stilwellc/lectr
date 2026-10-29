@@ -165,9 +165,10 @@ export function RecsRoom({ book, deal, compLots, taste, ready, isSaved, onToggle
                 </>}
           </div>
         ) : cold ? (
-          <QuickStart book={book} mode="cold" surface="profile" />
+          // the cold start and the Tune editor sit on the room's own spacing (rooms.css .dk-tune)
+          <div className="dk-tune"><QuickStart book={book} mode="cold" surface="profile" /></div>
         ) : editing ? (
-          <div ref={editRef} style={{ marginBottom: 20 }}>
+          <div ref={editRef} className="dk-tune">
             <QuickStart book={book} mode="edit" surface="profile" onClose={() => setEditing(false)} />
           </div>
         ) : null}

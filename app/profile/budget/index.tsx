@@ -304,12 +304,15 @@ export default function BudgetDesk(props: SectionProps) {
           </>}
           actions={stated && !editing ? <button type="button" className="ray-toolbar-pill ck-tune" onClick={() => setEditing(true)}>Edit band</button> : undefined} />
 
-        {(!stated || editing) && (
-          <>
-            {!stated && <p className="ck-budget-empty">Pick a floor and a ceiling — <b>one tap</b> — and the plan reads against it. Until then every figure below is labelled by what it is, with no ceiling line.</p>}
-            <BandEditor {...props} onDone={stated ? () => setEditing(false) : undefined} />
-          </>
-        )}
+        {/* (pass 5) no band: one quiet line in the room's voice and its one tap — the editor opens on it */}
+        {editing ? (
+          <BandEditor {...props} onDone={() => setEditing(false)} />
+        ) : !stated ? (
+          <p className="ck-budget-empty dk-empty">
+            No band stated — every figure below is labelled by what it is, with no ceiling line.{' '}
+            <button type="button" className="dk-empty-tap" onClick={() => setEditing(true)}>Set a band</button>
+          </p>
+        ) : null}
 
         <div className="ck-gauge ck-budget-gauge" role="list" aria-label="Budget figures">
           <div className="ck-gauge-cell" role="listitem" title={stated ? 'Your stated range — hammer basis (the quick start)' : 'No price range stated'}>
@@ -333,6 +336,13 @@ export default function BudgetDesk(props: SectionProps) {
         {/* ── Bid plan ── */}
         <div className="ck-subroom">
           <div>
+            {/* (pass 5) nothing on the block: the plan is one quiet line and its tap, no head */}
+            {plan.rows.length === 0 && plan.unpriced.length === 0 ? (
+              <p className="dk-empty" style={{ margin: 0 }}>
+                Bid plan — nothing you watch is on the block{desk.fullError ? ' (the archive did not arrive, so settled saves are unresolved)' : ''}; a lot saved anywhere on lectr lands here under its close night.{' '}
+                <a href="#for-you" className="dk-empty-tap">Watch a lot</a>
+              </p>
+            ) : (
             <RoomHead level={3} title="Bid plan" style={{ marginBottom: 10 }}
               sub={plan.rows.length
                 ? <>
@@ -346,6 +356,7 @@ export default function BudgetDesk(props: SectionProps) {
                     Show estimate midpoints in the plan
                   </button>
                 : undefined} />
+            )}
             {plan.nights.map((n, i) => (
               <NightView key={n.day || 'none'} n={n} plan={plan} now={now} narrow={narrow} open={i < openNights} />
             ))}

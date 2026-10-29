@@ -24,8 +24,16 @@
 /* a private note on a piece: its own line in the meta, ink-secondary */
 .dk-meta > .dk-note { flex: 1 1 100%; white-space: normal; }
 
-/* the pills a row's slot holds (Watch · More like this · Not for me · I won it): desk height 28, a phone 36 */
-.dk-act .ray-toolbar-pill, .dk-act .ray-own-btn { display: inline-flex; align-items: center; min-height: 28px; padding: 0 12px; font-size: 12px; line-height: 1; }
+/* the pills a row's slot holds (Watch · More like this · Not for me · I won
+   it · Bid · Calendar · Comps · See lots · My max): ONE size — 28px on a
+   desk, 40px on a phone — whatever the control was elsewhere (pass 5) */
+.dk-act .ray-toolbar-pill, .dk-act .ray-own-btn,
+.dk-act .ck-week-act, .dk-act .dk-link {
+  display: inline-flex; align-items: center; min-height: 28px; padding: 0 12px; font-size: 12px; font-weight: 500; line-height: 1;
+  border: 1px solid var(--color-border); border-radius: 999px; text-decoration: none; color: var(--color-text-secondary); background: none;
+}
+.dk-act .ck-week-act:hover, .dk-act .dk-link:hover { color: var(--color-fg); border-color: var(--color-border-mid); text-decoration: none; }
+.dk-pill .ck-mymax { height: 28px; }
 .dk-act .ck-pick-more { min-width: 36px; min-height: 28px; }
 .dk-act .ray-own-x { min-height: 28px; }
 /* the Remove ×'s hit area grows left and down, never past the row's edge */
@@ -33,7 +41,7 @@
 @media (max-width: 639.98px) {
   .dk-act .ray-toolbar-pill, .dk-act .ray-own-btn { min-height: 40px; padding: 0 12px; font-size: 12.5px; }
   .dk-act .ck-pick-more, .dk-act .ray-own-x { min-width: 44px; min-height: 44px; }
-  .dk-act .ck-week-act, .dk-act .dk-link { min-height: 40px; }
+  .dk-act .ck-week-act, .dk-act .dk-link { min-height: 40px; padding: 0 12px; }
   .dk-pill .ck-mymax { height: 40px; }
 }
 
@@ -130,3 +138,19 @@
   .dk-dossier-close { margin-left: 0; }
   .dk-dossier-comps .dk-link { min-height: 44px; }
 }
+
+/* ══ THE EMPTY LINE (pass 5) — a room with nothing in it is one quiet line
+   in its own voice and its one tap: no head of its own, no empty rule ══ */
+.dk-empty { font-size: 13px; line-height: 1.6; color: var(--color-text-muted); margin: 8px 0 0; max-width: 720px; }
+.dk-empty b { color: var(--color-fg); font-weight: 600; }
+.dk-empty-tap {
+  display: inline-flex; align-items: center; vertical-align: middle; margin-left: 4px;
+  min-height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--color-border);
+  background: none; cursor: pointer; font: 500 12px/1 var(--font-sans), sans-serif; color: var(--color-fg); text-decoration: none;
+}
+.dk-empty-tap:hover { border-color: var(--color-border-mid); }
+@media (max-width: 639.98px) { .dk-empty-tap { min-height: 40px; padding: 0 14px; } }
+
+/* the picks' Tune editor and the cold start sit on the room's spacing: the row's 2px edge, a hairline above */
+.dk-tune { margin: 4px 0 14px; padding: 12px 2px 4px; border-top: 1px solid var(--hairline); }
+.dk-tune > div { margin-top: 0 !important; }

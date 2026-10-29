@@ -86,7 +86,7 @@ function OutcomeRow({ o }: { o: PickOutcome }) {
   const est = p.est ? `${fmtFace(p.est[0])}–${fmtFace(p.est[1])}` : null;
   return (
     <DeskRow lot={{ id: p.id, title: p.lot.title, auctionHouse: p.lot.auctionHouse }} who={maker || p.lot.title} wrap
-      sub={<>{maker ? `${maker} · ` : ''}{shownLine(o)}</>}
+      sub={<>{[maker, p.lot.auctionHouse].filter(Boolean).map(x => `${x} · `).join('')}{shownLine(o)}</>}
       figureKind="hammer" figure={soldCell(o)} figureSub={dayText(o.date) || null}
       meta={<>
         <span className="dk-meta-fact" title={p.v ? `lectr value when shown, all-in (expected hammer ${fmtFace(p.v.h)} · likely ${fmtFace(p.v.lo)}–${fmtFace(p.v.hi)} hammer · ${p.v.c} confidence)` : 'The engine made no value call on this lot'}>

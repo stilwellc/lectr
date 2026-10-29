@@ -125,7 +125,7 @@ function Receipts({ r }: { r: EdgeReport }) {
       <div className="dk-list" role="list">
         {vis.map(c => (
           <DeskRow key={c.id} lot={{ id: c.id, title: c.title, auctionHouse: c.house, imageUrl: c.img }} who={c.maker || c.title} attrs={{ role: 'listitem' }}
-            sub={`${[c.maker, c.marketLabel, formatDate(c.date)].filter(Boolean).join(' · ')}${c.provisional ? ' · provisional' : ''}`}
+            sub={`${[c.maker, c.house, c.marketLabel, formatDate(c.date)].filter(Boolean).join(' · ')}${c.provisional ? ' · provisional' : ''}`}
             meta={<span className="dk-meta-fact">called <b>{fmtFace(c.called)}</b> <span className="pe-muted">({pct(c.callPct)} vs est. {fmtFace(c.estMid)})</span></span>}
             figureKind="hammer" figure={fmtFace(c.price)}
             figureSub={<><b style={missInk(c.missPct)}>{pct(c.missPct)}</b> off your call · <span className={c.hit ? 'pe-hit' : 'pe-faint'}>{c.hit ? 'hit' : 'miss'}</span></>} />
@@ -268,6 +268,8 @@ export default function EdgeSection({ desk }: SectionProps) {
   const card = useDeskCard(lines, day);
   const hasNumber = cardHasNumber(lines);
   const gated = r.n < EDGE_MIN_N;
+  // (pass 5) nothing graded on either side yet: the room is one quiet line and its tap
+  const empty = r.n === 0 && r.mine.n === 0;
   const ex = r.excluded;
   const whyNot = [
     ex.noCall ? `${ex.noCall} settled ${ex.noCall === 1 ? 'watch' : 'watches'} carried no signal when saved` : null,
@@ -298,9 +300,16 @@ export default function EdgeSection({ desk }: SectionProps) {
               aria-label="Download the desk card as a PNG">Download PNG</button>
           ) : undefined} />
 
-        <MyMaxBlock r={r} />
-        <div className="ck-reads-head pe-engine-head"><span className="kicker">The engine&rsquo;s call when you saved · {r.n}</span><i className="ck-reads-rule" /></div>
-        {gated ? (
+        {empty ? (
+          <p className="ck-outcome-line dk-empty">
+            {r.settled === 0
+              ? <>No settled watch yet — calls grade as your watches hammer, and <b>My max</b> on a watch grades your own price too.</>
+              : <>{r.settled} settled, none graded yet{whyNot ? <> — {whyNot}</> : null}. <b>My max</b> on a live watch grades your own price when it hammers.</>}{' '}
+            <a href="#watching" className="dk-empty-tap">Watching</a>
+          </p>
+        ) : <MyMaxBlock r={r} />}
+        {!empty && <div className="ck-reads-head pe-engine-head"><span className="kicker">The engine&rsquo;s call when you saved · {r.n}</span><i className="ck-reads-rule" /></div>}
+        {empty ? null : gated ? (
           <p className="ck-outcome-line">
             {r.n === 0
               ? <><b>No call graded yet.</b> The record reads at {EDGE_MIN_N} graded calls.</>
@@ -347,8 +356,8 @@ export default function EdgeSection({ desk }: SectionProps) {
           </>
         )}
 
-        {!gated ? null : r.n > 0 && <Receipts r={r} />}
-        <DeskCard lines={lines} preview={card.preview} state={card.state} hasNumber={hasNumber} />
+        {!gated || empty ? null : r.n > 0 && <Receipts r={r} />}
+        {(!empty || hasNumber) && <DeskCard lines={lines} preview={card.preview} state={card.state} hasNumber={hasNumber} />}
       </div>
     </section>
   );

@@ -62,17 +62,6 @@ const CLOSING_OPEN = 3;
 /** the picks strip's size */
 export const TOP_N = 3;
 
-/** the strongest picks not already claimed by the band's Closing tonight
- *  (a pick closing tonight prints there, under its close) */
-export function topPicksOf<R extends { lot: { id: string } }>(recs: readonly R[], claimed: ReadonlySet<string>, n = TOP_N): R[] {
-  const out: R[] = [];
-  for (const r of recs) {
-    if (out.length >= n) break;
-    if (!claimed.has(r.lot.id)) out.push(r);
-  }
-  return out;
-}
-
 const dayWord = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
 function closeTag(l: AuctionLot): string {
@@ -81,12 +70,14 @@ function closeTag(l: AuctionLot): string {
   return closeIsTimed(l) ? new Date(c).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'Time TBC';   // (Oct 20 audit) every row here closes today — the tag says WHEN, or that the house gave no hour
 }
 
-/** every row's fact starts with WHO (one grammar across the band): the
- *  maker or the lot's subject — a pseudo-maker bucket is left out, never
- *  printed as a name (maker-subjects.displayMakerOf) */
+/** every row's sub-line starts with WHO · HOUSE (the desk's one order:
+ *  maker · house · the rest): the maker or the lot's subject — a
+ *  pseudo-maker bucket is left out, never printed as a name
+ *  (maker-subjects.displayMakerOf) — then the house, then the reason */
 const whoOf = (l: AuctionLot): string | null => displayMakerOf(l)?.name ?? null;
 const lead = (l: AuctionLot, rest: React.ReactNode): React.ReactNode => {
   const who = whoOf(l);
+  const house = l.auctionHouse || null;
   // a reason that already names the maker ("Same maker · you own Patek
   // Philippe") is not prefixed with it a second time
   // a price band never breaks at its dash ("$25K–" / "50K" at 1440)
@@ -99,10 +90,11 @@ const lead = (l: AuctionLot, rest: React.ReactNode): React.ReactNode => {
     const yours = new RegExp(`\\byour ${esc}\\b\\s*`, 'i');
     // (only when something follows the name — "Like your Charizard" stays whole)
     const m = rest.match(yours);
-    if (m && /^\s*[a-z]/i.test(rest.slice(m.index! + m[0].length))) return <>{who} · {rest.replace(yours, 'your ')}</>;
-    if (rest.toLowerCase().includes(who.toLowerCase())) return rest;
+    if (m && /^\s*[a-z]/i.test(rest.slice(m.index! + m[0].length))) return <>{[who, house].filter(Boolean).join(' · ')} · {rest.replace(yours, 'your ')}</>;
+    if (rest.toLowerCase().includes(who.toLowerCase())) return house ? <>{house} · {rest}</> : rest;
   }
-  return who ? <>{who} · {rest}</> : rest;
+  const pre = [who, house].filter(Boolean).join(' · ');
+  return pre ? <>{pre} · {rest}</> : rest;
 };
 
 function pickFact(r: Rec<AuctionLot>): React.ReactNode {

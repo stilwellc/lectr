@@ -283,7 +283,18 @@ export default function YourMarket({ book, owned = [], mode: modeProp, since: si
     return rankNames(out) as Digest[];
   }, [names, readIds, sold, book, today, mode, sinceDay, baselines, from, recordFrom, nowMs]);
 
-  if (!ready || names.length === 0) return null;
+  if (!ready) return null;
+  // (pass 5) no names: one quiet line in the room's voice and its one tap
+  if (names.length === 0) {
+    return (
+      <section id="market" className="rail" aria-label="Your market">
+        <p className="dk-empty">
+          No names yet — follow a maker, player or subject and the 12-month pulse of its market reads here.{' '}
+          <a href="#signals" className="dk-empty-tap">Follow a name</a>
+        </p>
+      </section>
+    );
+  }
 
   const loading = sold === undefined && readIds.length > 0;
   // a name whose sold side failed is never "quiet" — nothing is known of it
