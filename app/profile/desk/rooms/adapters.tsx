@@ -12,19 +12,21 @@ import YourSignals from '../../signals';
 import { useDeskInternals, type DeskInternals } from '../provider';
 import { RoomHead } from '../../head';
 import type { SectionProps, SectionMeta, DeskData } from '../types';
-import Link from 'next/link';
 import { useDesk } from '../provider';
-import { Thumb } from '../thumb';
+import { DeskRow, rowWhoOf } from '../row';
 import { fmtFace } from '../../../lib/lot-face';
-import { craftTitle } from '../../../utils';
+
+/** rows the inbox opens on — the rest are one tap under History (THE DESK v4: the first screen is the point) */
+const RESULTS_OPEN = 3;
 
 /** RESULTS TO CONFIRM (Oct 20 audit) — the settled watches not yet in your
  *  collection, answered in place: "I won it" books the piece (the same toggle
- *  History's row uses); the full list stays under Collection › History. */
+ *  History's row uses); the full list stays under Collection › History.
+ *  (THE DESK v4) each result is a DeskRow — the hammer is its figure. */
 function ResultsInbox() {
   const i = useDeskInternals();
   const { desk } = useDesk();
-  const rows = i.sold.filter(l => l.status === 'sold' && !desk.ownedIds.has(i.savedIdOf(l.id)) && !desk.ownedIds.has(l.id) && !i.metaFor(l.id)?.dismissed).slice(0, 4);
+  const rows = i.sold.filter(l => l.status === 'sold' && !desk.ownedIds.has(i.savedIdOf(l.id)) && !desk.ownedIds.has(l.id) && !i.metaFor(l.id)?.dismissed).slice(0, RESULTS_OPEN);
   if (!rows.length) return null;
   return (
     <div id="results" className="ck-results" role="group" aria-label="Results to confirm">
@@ -36,16 +38,14 @@ function ResultsInbox() {
           None were me{i.unclaimedWins > 1 ? ` · clear all ${i.unclaimedWins}` : ''}
         </button>
       </div>
-      {rows.map(l => (
-        <div key={l.id} className="ck-result ck-ph" style={{ '--ph': '48px' } as React.CSSProperties}>
-          <Thumb src={l.imageUrl} label={l.title} size={48} />
-          <Link href={`/lot?id=${encodeURIComponent(l.id)}`} className="ck-result-t">{craftTitle(l.title, l.auctionHouse)}</Link>
-          <span className="ck-result-s">{l.auctionHouse}{l.priceUsd ? <> · hammered <b>{fmtFace(l.priceUsd)}</b></> : null}</span>
-          <span className="ck-result-a">
-            <button type="button" className="ray-own-btn" onClick={() => i.onSettledOwn(i.savedIdOf(l.id))}>I won it</button>
-          </span>
-        </div>
-      ))}
+      <div className="dk-list">
+        {rows.map(l => (
+          <DeskRow key={l.id} lot={l}
+            sub={[rowWhoOf(l), l.auctionHouse].filter(Boolean).join(' · ')}
+            figure={l.priceUsd ? fmtFace(l.priceUsd) : <span data-quiet>result pending</span>}
+            action={<button type="button" className="ray-own-btn" onClick={() => i.onSettledOwn(i.savedIdOf(l.id))}>I won it</button>} />
+        ))}
+      </div>
       {i.unclaimedWins > rows.length && <a href="#settled" className="ck-away-link ck-result-more">See all {i.unclaimedWins} under History</a>}
     </div>
   );

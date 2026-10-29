@@ -11,8 +11,8 @@
  * Renders nothing until at least one logged pick has closed.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import type { AuctionLot } from '../types';
+import { DeskRow } from './desk/row';
 import { useAccount } from '../lib/account';
 import { useSoldLedger, type LedgerEntry } from '../hooks/useRayData';
 import {
@@ -23,7 +23,7 @@ import { SIGNALS_EVENT } from '../lib/recs-signals';
 import { fmtFace, FACE_LABEL } from '../lib/lot-face';
 import { displayMakerOf } from '../lib/maker-subjects';
 import { HorizonMark } from '../components/marks';
-import { craftTitle, fmtSignedPct } from '../utils';
+import { fmtSignedPct } from '../utils';
 import { RoomHead } from './head';
 import { useStalled } from './stall';
 
@@ -75,69 +75,31 @@ function soldCell(o: PickOutcome): React.ReactNode {
   return fmtFace(o.price!);
 }
 
-function OutcomeRow({ o, mobile }: { o: PickOutcome; mobile: boolean }) {
+/** (THE DESK v4) the outcome as the desk's one row: the sold price is the
+ *  figure (its day under), what lectr said then and how the sale landed
+ *  against it (the lamp's ink) on the meta line */
+function OutcomeRow({ o }: { o: PickOutcome }) {
   const p = o.pick;
-  const title = craftTitle(p.lot.title, p.lot.auctionHouse);
   // the maker or the lot's subject (a Goldin card names its player, never
   // the "Sports Cards" bucket) — nothing when neither is known
   const maker = displayMakerOf(p.lot as unknown as AuctionLot)?.name ?? null;
-  const href = `/lot?id=${encodeURIComponent(p.id)}`;
   const est = p.est ? `${fmtFace(p.est[0])}–${fmtFace(p.est[1])}` : null;
-  if (mobile) {
-    return (
-      <div className="ray-settled-mrow">
-        <Link href={href} style={{ color: 'inherit', textDecoration: 'none' }}><div className="ck-mtitle">{title}</div></Link>
-        <div className="ck-mline">
-          <span className="ck-msub">{maker ? <>{maker} · </> : null}{shownLine(o)}</span>
-          <span className="ck-mnum"><b>{soldCell(o)}</b></span>
-        </div>
-        <div className="ck-mline" style={{ marginTop: 2 }}>
-          <span className="ck-msub">
-            {p.v ? <>{FACE_LABEL.value} {fmtFace(p.v.a)} then{o.inRange != null && <> · {o.inRange ? 'in' : 'out of'} range</>}</> : <>no lectr value then</>}
-          </span>
-          {o.vsValue != null && (
-            <span className="ck-msub" style={{ flex: 'none' }}>
-              <b style={pctTone(Math.round(o.vsValue))}>{fmtSignedPct(Math.round(o.vsValue))}</b> vs lectr
-            </span>
-          )}
-        </div>
-        {est && (
-          <div className="ck-mline" style={{ marginTop: 2 }}>
-            <span className="ck-msub">est. {est} then</span>
-            {o.vsEst != null && (
-              <span className="ck-msub" style={{ flex: 'none' }}>
-                <b style={pctTone(Math.round(o.vsEst))}>{fmtSignedPct(Math.round(o.vsEst))}</b> vs est
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
   return (
-    <div className="ray-settled-cols ray-savedrow" style={{ display: 'grid' }}>
-      <span className="maker"><Link href={href} style={{ color: 'inherit', textDecoration: 'none' }}>{maker ?? '—'}</Link></span>
-      <span className="work">
-        <Link href={href} style={{ color: 'inherit', textDecoration: 'none' }}>{title}</Link>
-        <span style={{ display: 'block', whiteSpace: 'normal', fontSize: 11.5, marginTop: 3, color: 'var(--color-text-muted)' }}>{shownLine(o)}</span>
-      </span>
-      <span className="num" style={est ? undefined : { color: 'var(--color-text-faint)' }} title="The house estimate when lectr showed the pick">
-        {est ?? '—'}
-      </span>
-      <span className="num" style={p.v ? undefined : { color: 'var(--color-text-faint)' }}
-        title={p.v ? `lectr value when shown, all-in (expected hammer ${fmtFace(p.v.h)} · likely ${fmtFace(p.v.lo)}–${fmtFace(p.v.hi)} hammer · ${p.v.c} confidence)` : 'The engine made no value call on this lot'}>
-        {p.v ? <>{fmtFace(p.v.a)}<span className="sub">{o.inRange == null ? 'all-in' : o.inRange ? 'in range' : 'out of range'}</span></> : '—'}
-      </span>
-      <span className="num" style={{ fontWeight: 600 }}>{soldCell(o)}<span className="sub">{dayText(o.date)}</span></span>
-      <span className="num" style={pctTone(o.vsValue == null ? null : Math.round(o.vsValue))}
-        title={o.vsValue != null ? 'Sold price vs the lectr value shown, both all-in' : 'No lectr value when shown'}>
-        {o.vsValue != null ? fmtSignedPct(Math.round(o.vsValue)) : '—'}
-      </span>
-      <span className="num" style={pctTone(o.vsEst == null ? null : Math.round(o.vsEst))}
-        title={o.vsEst != null ? 'Sold price vs the estimate midpoint when shown' : 'No estimate when shown'}>
-        {o.vsEst != null ? fmtSignedPct(Math.round(o.vsEst)) : '—'}
-      </span>
-    </div>
+    <DeskRow lot={{ id: p.id, title: p.lot.title, auctionHouse: p.lot.auctionHouse }} who={maker || p.lot.title} wrap
+      sub={<>{maker ? `${maker} · ` : ''}{shownLine(o)}</>}
+      figure={soldCell(o)} figureSub={dayText(o.date) || null}
+      meta={<>
+        <span className="dk-meta-fact" title={p.v ? `lectr value when shown, all-in (expected hammer ${fmtFace(p.v.h)} · likely ${fmtFace(p.v.lo)}–${fmtFace(p.v.hi)} hammer · ${p.v.c} confidence)` : 'The engine made no value call on this lot'}>
+          {p.v ? <>{FACE_LABEL.value} <b>{fmtFace(p.v.a)}</b> then{o.inRange != null && <> · {o.inRange ? 'in' : 'out of'} range</>}</> : <>no lectr value then</>}
+          {o.vsValue != null && <> · <b style={pctTone(Math.round(o.vsValue))} title="Sold price vs the lectr value shown, both all-in">{fmtSignedPct(Math.round(o.vsValue))}</b> vs lectr</>}
+        </span>
+        {est && (
+          <span className="dk-meta-fact" title="The house estimate when lectr showed the pick">
+            est. {est} then
+            {o.vsEst != null && <> · <b style={pctTone(Math.round(o.vsEst))} title="Sold price vs the estimate midpoint when shown">{fmtSignedPct(Math.round(o.vsEst))}</b> vs est</>}
+          </span>
+        )}
+      </>} />
   );
 }
 
@@ -153,20 +115,8 @@ function OutcomeGroup({ label, rows, note }: { label: string; rows: PickOutcome[
     <div style={{ marginTop: 18 }}>
       <div className="ck-reads-head"><span className="kicker">{label} · {rows.length}</span><i className="ck-reads-rule" /></div>
       {note && <p className="ck-sig-note" style={{ margin: '4px 0 8px' }}>{note}</p>}
-      <div className="ray-settled-desk" style={{ marginTop: 8 }}>
-        <div className="ray-settled-cols ray-settled-head kicker" style={{ padding: '0 2px 8px' }}>
-          <span>Maker</span>
-          <span>Pick</span>
-          <span style={{ textAlign: 'right' }}>Est then</span>
-          <span style={{ textAlign: 'right' }}>lectr then</span>
-          <span style={{ textAlign: 'right' }}>Sold</span>
-          <span style={{ textAlign: 'right' }}>vs lectr</span>
-          <span style={{ textAlign: 'right' }}>vs est</span>
-        </div>
-        {vis.map(o => <OutcomeRow key={o.pick.id} o={o} mobile={false} />)}
-      </div>
-      <div className="ray-settled-mobile">
-        {vis.map(o => <OutcomeRow key={o.pick.id} o={o} mobile />)}
+      <div className="dk-list" style={{ marginTop: 4 }}>
+        {vis.map(o => <OutcomeRow key={o.pick.id} o={o} />)}
       </div>
       {shown < rows.length && (
         <div className="ck-more-row" style={{ marginTop: 14 }}>

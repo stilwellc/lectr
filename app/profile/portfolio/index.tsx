@@ -14,11 +14,16 @@
  *
  * Contract: default export (SectionProps) + meta(desk). Reads only the desk
  * it is handed and the entity buckets; one clock (desk.now).
+ *
+ * (THE DESK v4, Oct 29 2026) the ledger's row is the desk's one row
+ * (../desk/row DeskRow): Marked now is the figure with the row's one growth
+ * figure beside it in the lamp's ink (the mark against what you paid), its
+ * basis under; bought, the engine read (with if-sold-now) and the maker's
+ * reads (record · YoY · timing) ride the meta lines. The shelf stays.
  */
 import { SigPill } from '../desk/thumb';
 import PlateImg from '../../components/PlateImg';
-
-import { Thumb } from '../desk/thumb';
+import { DeskRow } from '../desk/row';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { DeskData, SectionMeta, SectionProps } from '../desk/types';
@@ -236,17 +241,11 @@ export default function Portfolio({ desk, narrow }: SectionProps) {
         )}
 
         {/* the ledger */}
-        {view === 'ledger' && <>
-        <div className="kicker pf-head">
-          <div>Piece</div>
-          <div className="pf-cell">Bought</div>
-          <div className="pf-cell">Marked now</div>
-          <div className="pf-cell pf-cell-wide">Engine read</div>
-        </div>
-        <div className="pf-rows">
-          {visible.map(r => <Row key={r.piece.id} r={r} nowYear={nowYear} />)}
-        </div>
-        </>}
+        {view === 'ledger' && (
+          <div className="dk-list pf-rows">
+            {visible.map(r => <Row key={r.piece.id} r={r} nowYear={nowYear} />)}
+          </div>
+        )}
         {view === 'ledger' && narrow && rows.length > FOLD_N && (
           <div className="pf-more">
             <button type="button" className="ray-show-more" onClick={() => setAll(a => !a)} aria-expanded={!folded}>
@@ -272,93 +271,56 @@ function Row({ r, nowYear }: { r: PieceRow; nowYear: number }) {
   const level = levelKindOf(piece.entityId);
   const reading = r.ent === undefined && indexableEntity(piece.entityId);
   const e = r.engine;
+  const indexable = indexableEntity(piece.entityId);
+  // the figure: Marked now — "= bought" the year it was bought (the index
+  // starts at the price paid; printing "$40K / $40K" read as a circular claim)
+  const bought = piece.bought;
+  const sameAsBought = !!(r.mark && bought && r.mark.year === bought.year && Math.round(r.mark.value) === Math.round(bought.usd));
+  const figure = sameAsBought ? <span data-quiet>= bought</span>
+    : r.mark ? <span title={growth?.source === 'mark' ? growth.title : undefined}>{fmtFace(r.mark.value)}{growth?.source === 'mark' && growth.pct !== 0 && <span className="dk-delta" data-dir={growth.dir}>{growth.text}</span>}</span>
+    : <span data-quiet>—</span>;
+  const figureSub = sameAsBought && bought?.year != null
+    ? <span title={`${maker}’s yearly index starts at your ${bought.year} price; it re-marks from ${bought.year + 1}`}>re-marks from {bought.year + 1}</span>
+    : r.mark
+      ? <span title={`${maker}’s yearly median ${r.mark.year}${r.mark.partial ? ' so far' : ''}, relative to ${piece.bought?.year} · n ${r.mark.n.toLocaleString()}${level === 'mix' ? ' · a mix of whatever sold under the name that year, not this object' : ''}`}>
+          {growth?.source === 'mark' && growth.pct !== 0 ? `${growth.basis} · ` : ''}{r.mark.year === nowYear ? `${r.mark.year} so far` : r.mark.year} · n {r.mark.n.toLocaleString()}{level === 'mix' ? ' · the name’s market' : ''}
+        </span>
+      : reading ? 'reading…' : `no index · ${r.noIndex ?? ''}`;
   return (
-    <div className="ns-ledger-row pf-row" data-nav-row>
-      <div className="pf-main ck-ph" style={{ '--ph': '72px' } as React.CSSProperties}>
-        <Thumb src={lot.imageUrl} label={lot.title} size={72} />
-        <div className="pf-title">
-          <Link href={`/lot?id=${encodeURIComponent(lot.id)}`}>{craftTitle(lot.title, lot.auctionHouse)}</Link>
-        </div>
-        <div className="pf-meta">
-          <span>{[maker, (lot.auctionHouse as string) === 'archive' ? 'archive record' : lot.auctionHouse, day ? formatDate(day) : ''].filter(Boolean).join(' · ')}</span>
-        </div>
-        <div className="pf-reads">
-          {reading ? <span>reading {maker || 'the maker'}&rsquo;s record…</span> : (
-            <>
-              {r.record ? (
-                <span title={`${maker}’s top sale on file${r.record.title ? `: ${r.record.title}` : ''}`}>
-                  Record <span className="num">{fmtFace(r.record.usd)}</span>{r.record.house ? ` · ${r.record.house}` : ''}{r.record.day ? ` · ${r.record.day.slice(0, 4)}` : ''}
-                  {r.record.yours && <> <span className="ray-coll-chip">your piece</span></>}
-                </span>
-              ) : indexableEntity(piece.entityId) ? <span title="no sale on file for this maker">Record —</span> : <span title="no reader names a maker or a player for this piece — the row carries no index">No named maker</span>}
-              {growth?.source === 'yoy'
-                ? <span title={growth.title}>YoY <span className="num" data-dir={growth.dir}>{growth.text}</span> · {r.trend!.basis}</span>
-                : !growth && indexableEntity(piece.entityId) ? <span title="No year-over-year read: too few of the same items sold in both years, or the read is too uncertain to call">YoY —</span> : null}
-              {r.timing
-                ? <span title={r.timing.title}>{r.timing.text}</span>
-                : indexableEntity(piece.entityId) && r.ent ? <span title={`Timing needs a 12-month median with five or more sales and at least three of the last ${TIMING_YEARS} complete years with five or more`}>Timing —</span> : null}
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="pf-cell" title={piece.bought ? (piece.bought.basis === 'paid' ? 'Your recorded cost basis' : 'Realized price — set what you paid in the Collection room to override') : 'No price on file'}>
-        <span className="pf-cell-k kicker">Bought</span>
-        <div className="pf-cell-v">{piece.bought ? fmtFace(piece.bought.usd) : <span className="pf-cell-empty">—</span>}</div>
-        <div className="pf-cell-s">{piece.bought ? (piece.bought.basis === 'paid' ? 'your figure' : 'realized') : 'no price'}{piece.bought?.year ? ` · ${piece.bought.year}` : ''}</div>
-      </div>
-
-      <div className="pf-cell">
-        <span className="pf-cell-k kicker">Marked now</span>
-        {r.mark && piece.bought && r.mark.year === piece.bought.year && Math.round(r.mark.value) === Math.round(piece.bought.usd) ? (
-          // (Oct 20 audit) bought this year: the index mark IS the price paid —
-          // printing "$40K / $40K" read as a circular claim. Say what it is.
-          <>
-            <div className="pf-cell-v"><span className="pf-cell-empty">= bought</span></div>
-            <div className="pf-cell-s" title={`${maker}’s yearly index starts at your ${piece.bought.year} price; it re-marks from ${piece.bought.year + 1}`}>re-marks from {piece.bought.year + 1}</div>
-          </>
-        ) : r.mark ? (
-          <>
-            <div className="pf-cell-v" title={growth?.source === 'mark' ? growth.title : undefined}>
-              {fmtFace(r.mark.value)}
-              {growth?.source === 'mark' && growth.pct !== 0 && <span className="pf-delta" data-dir={growth.dir}>{growth.text}</span>}
-            </div>
-            <div className="pf-cell-s" title={`${maker}’s yearly median ${r.mark.year}${r.mark.partial ? ' so far' : ''}, relative to ${piece.bought?.year} · n ${r.mark.n.toLocaleString()}${level === 'mix' ? ' · a mix of whatever sold under the name that year, not this object' : ''}`}>
-              {growth?.source === 'mark' && growth.pct !== 0 ? `${growth.basis} · ` : ''}{r.mark.year === nowYear ? `${r.mark.year} so far` : r.mark.year} · n {r.mark.n.toLocaleString()}{level === 'mix' ? ' · the name’s market, not this piece' : ''}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="pf-cell-v"><span className="pf-cell-empty">—</span></div>
-            <div className="pf-cell-s">{reading ? 'reading…' : `no index · ${r.noIndex ?? ''}`}</div>
-          </>
-        )}
-      </div>
-
-      <div className="pf-cell pf-cell-wide">
-        <span className="pf-cell-k kicker">Engine read</span>
+    <DeskRow lot={lot} who={maker || lot.title}
+      sub={[maker, (lot.auctionHouse as string) === 'archive' ? 'archive record' : lot.auctionHouse, day ? formatDate(day) : ''].filter(Boolean).join(' · ')}
+      figure={figure} figureSub={figureSub}
+      meta={<>
+        {/* bought · the engine read (its if-sold-now) · the maker's reads */}
+        <span className="dk-meta-fact" title={piece.bought ? (piece.bought.basis === 'paid' ? 'Your recorded cost basis' : 'Realized price — set what you paid in the Collection room to override') : 'No price on file'}>
+          bought <b>{piece.bought ? fmtFace(piece.bought.usd) : '—'}</b>{piece.bought ? ` · ${piece.bought.basis === 'paid' ? 'your figure' : 'realized'}` : ' · no price'}{piece.bought?.year ? ` · ${piece.bought.year}` : ''}
+        </span>
         {e.kind === 'value' ? (
-          <>
-            <div className="pf-cell-v" title={`The engine’s expected all-in on this lot${e.asOfText ? `, ${e.asOfText}` : ', read nightly while it is on the block'} · ${e.appraisal.compN} comps · ${e.appraisal.confidence} confidence`}>{fmtFace(e.appraisal.allIn)}</div>
-            <div className="pf-cell-s">{e.asOfText ?? 'live · read nightly'} · {e.appraisal.compN} comps · {e.appraisal.confidence}</div>
-            {e.soldNow && (
-              <div className="pf-cell-s" title={`${fmtFace(e.appraisal.hammer)} expected hammer less ${Math.round(e.soldNow.rate * 100)}% assumed seller’s commission (${TIER_LABEL[e.soldNow.tier]})`}>
-                {fmtFace(e.soldNow.net)} if sold now · after {Math.round(e.soldNow.rate * 100)}% at {e.soldNow.house}
-              </div>
-            )}
-          </>
+          <span className="dk-meta-fact" title={`The engine’s expected all-in on this lot${e.asOfText ? `, ${e.asOfText}` : ', read nightly while it is on the block'} · ${e.appraisal.compN} comps · ${e.appraisal.confidence} confidence`}>
+            engine <b>{fmtFace(e.appraisal.allIn)}</b> · {e.asOfText ?? 'live · read nightly'} · {e.appraisal.compN} comps · {e.appraisal.confidence}
+            {e.soldNow && <span title={`${fmtFace(e.appraisal.hammer)} expected hammer less ${Math.round(e.soldNow.rate * 100)}% assumed seller’s commission (${TIER_LABEL[e.soldNow.tier]})`}> · <b>{fmtFace(e.soldNow.net)}</b> if sold now, after {Math.round(e.soldNow.rate * 100)}% at {e.soldNow.house}</span>}
+          </span>
         ) : e.kind === 'abstain' ? (
-          <>
-            <div className="pf-cell-v"><span className="pf-cell-empty">—</span></div>
-            <div className="pf-cell-s" title={`The engine read this row and declined: ${e.code}`}>engine declined · {e.why}</div>
-          </>
+          <span className="dk-meta-fact" title={`The engine read this row and declined: ${e.code}`}>engine declined · {e.why}</span>
         ) : (
+          <span className="dk-meta-fact" title={e.live ? e.why : `${e.why ? `${e.why} · ` : ''}fills when the nightly values it (sold within ${SETTLED_MONTHS} months)`}>{e.live ? 'engine · on the block, no value tonight' : 'engine · not read yet'}</span>
+        )}
+        {reading ? <span className="dk-meta-fact">reading {maker || 'the maker'}&rsquo;s record…</span> : (
           <>
-            <div className="pf-cell-v"><span className="pf-cell-empty">—</span></div>
-            <div className="pf-cell-s" title={e.live ? e.why : `${e.why ? `${e.why} · ` : ''}fills when the nightly values it (sold within ${SETTLED_MONTHS} months)`}>{e.live ? 'on the block · no value tonight' : 'not read yet'}</div>
+            {r.record ? (
+              <span className="dk-meta-fact" title={`${maker}’s top sale on file${r.record.title ? `: ${r.record.title}` : ''}`}>
+                record <b>{fmtFace(r.record.usd)}</b>{r.record.house ? ` · ${r.record.house}` : ''}{r.record.day ? ` · ${r.record.day.slice(0, 4)}` : ''}
+                {r.record.yours && <> <span className="ray-coll-chip">your piece</span></>}
+              </span>
+            ) : indexable ? <span className="dk-meta-fact" title="no sale on file for this maker">record —</span> : <span className="dk-meta-fact" title="no reader names a maker or a player for this piece — the row carries no index">no named maker</span>}
+            {growth?.source === 'yoy'
+              ? <span className="dk-meta-fact" title={growth.title}>YoY <b data-dir={growth.dir} className="dk-dir">{growth.text}</b> · {r.trend!.basis}</span>
+              : !growth && indexable ? <span className="dk-meta-fact" title="No year-over-year read: too few of the same items sold in both years, or the read is too uncertain to call">YoY —</span> : null}
+            {r.timing
+              ? <span className="dk-meta-fact" title={r.timing.title}>{r.timing.text}</span>
+              : indexable && r.ent ? <span className="dk-meta-fact" title={`Timing needs a 12-month median with five or more sales and at least three of the last ${TIMING_YEARS} complete years with five or more`}>timing —</span> : null}
           </>
         )}
-      </div>
-    </div>
+      </>} />
   );
 }

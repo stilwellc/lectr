@@ -58,6 +58,8 @@
   font-variant-numeric: tabular-nums;
 }
 .dk-meta > .ck-tag { position: relative; z-index: 1; }
+/* a control on the meta line (a drill chip, the piece editor's tap) sits above the stretched link */
+.dk-meta a, .dk-meta button { position: relative; z-index: 1; }
 .dk-meta .ck-sigpill { height: 20px; font-size: 12px; }
 /* a fact in the meta line: ink-secondary, figures tabular */
 .dk-meta-fact { white-space: nowrap; }

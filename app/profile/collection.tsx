@@ -22,16 +22,16 @@ import { idAliases } from '../lib/recs';
 import { useAfterPaint } from './stall';
 import { collectionPicks, type HeldInput, type MatchedLadder, type PickKind } from '../lib/collection-picks';
 import { loadEntityDetail } from '../hooks/useEntities';
-import { useLotModal } from '../lib/use-lot-modal';
-import LotCard from '../components/LotCard';
-import ComparableModal from '../components/ComparableModal';
-import { FeedRow, belowSignalOf, feedTone } from '../components/LotBrowser';
+import { belowSignalOf, feedTone } from '../components/LotBrowser';
 import { CollectionMark } from '../components/marks';
 import { RoomHead } from './head';
 import { withTimeout, READ_DEADLINE_MS } from './stall';
-import { useGridCols } from './grid';
+import { DeskRow, priceFigureOf, rowWhoOf } from './desk/row';
+import { craftTitle } from '../utils';
 
 const KIND_LABEL: Record<PickKind, string> = { upgrade: 'Upgrades', set: 'Sets', series: 'Series', maker: 'More by' };
+/** a row's tag: the kind of tie, singular */
+const KIND_TAG: Record<PickKind, string> = { upgrade: 'Upgrade', set: 'Set', series: 'Series', maker: 'More by' };
 const KINDS: PickKind[] = ['upgrade', 'set', 'series', 'maker'];
 
 /** the held lots, as the desk knows them (resolved row, else the snapshot) */
@@ -103,14 +103,10 @@ export default function ForYourCollection({ book, pool, compLots, ready, lastCra
   const shownKind = kind && counts[kind] > 0 ? kind : null;
   const list = useMemo(() => (shownKind ? picks.filter(p => p.kind === shownKind) : picks), [picks, shownKind]);
 
-  const cols = useGridCols();
-  const narrow = cols === 1;
-  // a room inside the picks group: one row of cards (three rows on a phone),
-  // Show more deals the rest
-  const page = cols === 1 ? 3 : cols;
+  // a room inside the picks group: three rows open, Show more deals the rest
+  const page = 3;
   const [shown, setShown] = useState<number | null>(null);
   const visible = shown ?? page;
-  const [openLot, setOpenLot] = useLotModal<AuctionLot>();
   const below = useMemo(() => belowSignalOf(list.map(p => p.lot), compLots), [list, compLots]);
 
   if (!result || !result.read.held) return null;
@@ -154,22 +150,23 @@ export default function ForYourCollection({ book, pool, compLots, ready, lastCra
           </div>
         )}
 
-        {picks.length === 0 ? null : narrow ? (
-          <div>
-            {list.slice(0, visible).map(p => (
-              <div key={p.lot.id} data-pick data-nav-row>
-                <FeedRow stack lot={p.lot} onOpen={() => setOpenLot(p.lot)} tone={feedTone(p.lot, below.ids, below.hasSig)} note={p.reason} />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="ray-saved-grid ck-picks">
-            {list.slice(0, visible).map((p, i) => (
-              <div key={p.lot.id} data-pick data-nav-row className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms` } as React.CSSProperties}>
-                <LotCard lot={p.lot} showArtist subjectMaker allLots={compLots} saved={isSaved(p.lot.id)} onToggleSave={onToggleSave}
-                  lastCrawl={lastCrawl} note={p.reason} />
-              </div>
-            ))}
+        {picks.length === 0 ? null : (
+          <div className="dk-list">
+            {list.slice(0, visible).map(p => {
+              const price = priceFigureOf(p.lot);
+              const saved = isSaved(p.lot.id);
+              return (
+                // the reason says which of your lots it was read from — it wraps, never cut
+                <DeskRow key={p.lot.id} lot={p.lot} pick={p.lot.id} wrap tone={feedTone(p.lot, below.ids, below.hasSig)}
+                  tag={{ text: KIND_TAG[p.kind] }}
+                  sub={<>{[rowWhoOf(p.lot), p.lot.auctionHouse].filter(Boolean).join(' · ')} · <b>{p.reason}</b></>}
+                  figure={<span data-quiet={price.quiet || undefined}>{price.fig}</span>} figureSub={price.sub}
+                  action={<button type="button" className="ray-toolbar-pill" data-active={saved} aria-pressed={saved} onClick={() => onToggleSave(p.lot.id, p.lot)}
+                    aria-label={saved ? `Stop watching ${craftTitle(p.lot.title, p.lot.auctionHouse)}` : `Watch ${craftTitle(p.lot.title, p.lot.auctionHouse)}`}>
+                    {saved ? 'Watching' : 'Watch'}
+                  </button>} />
+              );
+            })}
           </div>
         )}
 
@@ -181,7 +178,6 @@ export default function ForYourCollection({ book, pool, compLots, ready, lastCra
           </div>
         )}
       </div>
-      {openLot && <ComparableModal lot={openLot} allLots={compLots} onClose={() => setOpenLot(null)} />}
     </section>
   );
 }

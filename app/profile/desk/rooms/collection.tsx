@@ -3,6 +3,12 @@
  * YOUR COLLECTION — the certificate for what you own (lifted from page.tsx
  * unchanged): byline, the appraisal-vs-bought chart, where it trades, the
  * piece ledger with its cost-basis/note editor.
+ *
+ * (THE DESK v4, Oct 29 2026) a piece is the desk's one row (../row
+ * DeskRow): the engine's mark is the figure, its measured delta vs bought
+ * beside it in the lamp's ink, the mark's basis under; what you paid (your
+ * basis or the realized price), the drill chip, your note and the editor's
+ * tap ride the meta line; the editor opens under the row.
  */
 import React, { useState } from 'react';
 import Link from 'next/link';
@@ -17,6 +23,7 @@ import { RoomHead } from '../../head';
 import { useDeskInternals, type DeskInternals } from '../provider';
 import type { SectionProps, SectionMeta, DeskData } from '../types';
 import { Term } from './shared';
+import { DeskRow } from '../row';
 
 /** Inline cost-basis + note editor for a collection piece. Paid overrides
     the hammer price in every collection figure; the note is private ink on
@@ -166,63 +173,39 @@ export default function CollectionRoom(_p: SectionProps) {
           </p>
         ) : (
           <>
-        <div className="kicker ck-piece-head" style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '14px 0 6px', color: 'var(--paper-muted, var(--color-text-muted))' }}>
-          <div style={{ flex: 1 }}>Piece</div>
-          <div style={{ width: 92, textAlign: 'right' }}>Bought</div>
-          <div style={{ width: 128, textAlign: 'right' }}><Term k="appraisal">Engine mark</Term></div>
+        {/* the one column head left: the figure's name, with its glossary term */}
+        <div className="kicker ck-piece-head" style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '14px 2px 4px', color: 'var(--paper-muted, var(--color-text-muted))' }}>
+          <div style={{ flex: 1 }}>Piece · bought</div>
+          <div style={{ textAlign: 'right' }}><Term k="appraisal">Engine mark</Term> · vs bought</div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <div className="dk-list ck-pieces">
           {collection.rows.map(({ lot, paid, paidIsOverride, note, savedId, appraised, basis, deltaPct, drill, drillSlug }) => (
-            <React.Fragment key={lot.id}>
-              {/* the spec-sheet row — dotted hairline ledger (ns-ledger-row);
-                  a phone stacks it: title (2 lines), meta, then
-                  Bought · Appraisal side by side with their labels */}
-              <div className="ns-ledger-row ck-piece" style={{ gap: 12 }}>
-                <div className="ck-piece-main">
-                  <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                    <div className="ck-piece-title">{craftTitle(lot.title, lot.auctionHouse)}</div>
-                  </Link>
-                  <div className="ck-piece-meta">
-                    <span>{[makerLineOf(lot).name, labelLineOf(lot), lot.auctionHouse, closeDayOf(lot) ? formatDate(closeDayOf(lot)) : ''].filter(Boolean).join(' · ')}</span>
-                    {drill && drillSlug && (
-                      <Link href={`/sub/${drillSlug.replace(':', '/')}`} className="ray-coll-chip">{drillLabelOf(drillSlug, drill.label)}</Link>
-                    )}
-                    <button type="button" className="ck-piece-editbtn"
-                      aria-expanded={editPiece === lot.id}
-                      aria-label={`Edit cost basis and note for ${craftTitle(lot.title, lot.auctionHouse)}`}
-                      onClick={() => setEditPiece(p => (p === lot.id ? null : lot.id))}>
-                      {paidIsOverride || note ? 'edit' : 'set what you paid'}
-                    </button>
-                  </div>
-                  {note && <div className="ck-piece-note">{note}</div>}
-                </div>
-                <div className="ck-piece-paid"
-                  title={paidIsOverride ? 'Your recorded cost basis' : 'Realized price — set what you paid to override'}>
-                  <span className="ck-piece-k kicker">Bought</span>
-                  {paid != null ? fmtFace(paid) : '—'}
-                  {paidIsOverride && <span className="ck-piece-basis">your basis</span>}
-                </div>
-                <div className="ck-piece-appr">
-                  <span className="ck-piece-k kicker">Engine mark</span>
-                  <div className="ck-piece-v">
-                    {appraised != null ? fmtFace(appraised) : '—'}
-                    {deltaPct != null && deltaPct !== 0 && (
-                      <span style={{ marginLeft: 6, fontSize: 12, fontWeight: 600, color: deltaPct > 0 ? 'var(--color-up)' : 'var(--color-down-text)' }}>
-                        {deltaPct > 0 ? '+' : '−'}{Math.abs(deltaPct)}%
-                      </span>
-                    )}
-                  </div>
-                  <div className="ck-piece-src">
-                    {basis ?? (fullLoaded ? 'no comps yet' : fullError ? 'couldn’t load comps' : fullSlow ? 'comps slow to load' : 'appraising…')}
-                  </div>
-                </div>
-              </div>
-              {editPiece === lot.id && (
+            <DeskRow key={lot.id} lot={lot}
+              sub={[makerLineOf(lot).name, labelLineOf(lot), lot.auctionHouse, closeDayOf(lot) ? formatDate(closeDayOf(lot)) : ''].filter(Boolean).join(' · ')}
+              meta={<>
+                <span className="dk-meta-fact" title={paidIsOverride ? 'Your recorded cost basis' : 'Realized price — set what you paid to override'}>
+                  bought <b>{paid != null ? fmtFace(paid) : '—'}</b>{paidIsOverride ? ' · your basis' : ''}
+                </span>
+                {drill && drillSlug && (
+                  <Link href={`/sub/${drillSlug.replace(':', '/')}`} className="ray-coll-chip">{drillLabelOf(drillSlug, drill.label)}</Link>
+                )}
+                <button type="button" className="ck-piece-editbtn"
+                  aria-expanded={editPiece === lot.id}
+                  aria-label={`Edit cost basis and note for ${craftTitle(lot.title, lot.auctionHouse)}`}
+                  onClick={() => setEditPiece(p => (p === lot.id ? null : lot.id))}>
+                  {paidIsOverride || note ? 'edit' : 'set what you paid'}
+                </button>
+                {note && <span className="ck-piece-note dk-note">{note}</span>}
+              </>}
+              figure={appraised != null
+                ? <>{fmtFace(appraised)}{deltaPct != null && deltaPct !== 0 && <span className="dk-delta" data-dir={deltaPct > 0 ? 'up' : 'down'}>{deltaPct > 0 ? '+' : '−'}{Math.abs(deltaPct)}%</span>}</>
+                : <span data-quiet>—</span>}
+              figureSub={basis ?? (fullLoaded ? 'no comps yet' : fullError ? 'couldn’t load comps' : fullSlow ? 'comps slow to load' : 'appraising…')}
+              below={editPiece === lot.id ? (
                 <PieceEditor paid={paidIsOverride ? paid : null} note={note}
                   onSave={patch => setSavedFields(savedId, patch)}
                   onClose={() => setEditPiece(null)} />
-              )}
-            </React.Fragment>
+              ) : null} />
           ))}
         </div>
           </>

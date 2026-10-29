@@ -7,8 +7,14 @@
  * A pure function of DeskData (desk/types.ts): saved + metaFor + ledger +
  * follows + now. The grading lives in ./edge.ts, the card in ./card.ts —
  * both plain .ts with unit tests. Styles: ./edge.css, existing tokens only.
+ *
+ * (THE DESK v4, Oct 29 2026) a receipt is the desk's one row (../desk/row
+ * DeskRow): the hammer is the figure, the miss off your call (ink, never a
+ * lamp) and hit / miss under it; what you called (or your max) on the meta
+ * line. The calibration table keeps its column heads; the desk card stays.
  */
 import { Thumb } from '../desk/thumb';
+import { DeskRow } from '../desk/row';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { SectionProps, SectionMeta, DeskData } from '../desk/types';
@@ -116,21 +122,13 @@ function Receipts({ r }: { r: EdgeReport }) {
   return (
     <div className="pe-receipts">
       <div className="ck-reads-head"><span className="kicker">Every call · {r.n}</span><i className="ck-reads-rule" /></div>
-      <div role="list">
+      <div className="dk-list" role="list">
         {vis.map(c => (
-          <div key={c.id} className="ns-ledger-row pe-rrow" role="listitem">
-            <span className="pe-rmain ck-ph" style={{ '--ph': '48px' } as React.CSSProperties}>
-              <Thumb src={c.img} label={c.maker || c.title} size={48} />
-              <Link href={`/lot?id=${encodeURIComponent(c.id)}`} className="pe-rtitle">{craftTitle(c.title, c.house)}</Link>
-              <span className="pe-rsub pe-muted">{[c.maker, c.marketLabel, formatDate(c.date)].filter(Boolean).join(' · ')}{c.provisional ? ' · provisional' : ''}</span>
-            </span>
-            <span className="pe-rnums">
-              <span className="pe-muted">called {fmtFace(c.called)}</span>
-              <span>hammer {fmtFace(c.price)}</span>
-              <b style={missInk(c.missPct)}>{pct(c.missPct)}</b>
-              <span className={c.hit ? 'pe-hit' : 'pe-faint'}>{c.hit ? 'hit' : 'miss'}</span>
-            </span>
-          </div>
+          <DeskRow key={c.id} lot={{ id: c.id, title: c.title, auctionHouse: c.house, imageUrl: c.img }} who={c.maker || c.title} attrs={{ role: 'listitem' }}
+            sub={`${[c.maker, c.marketLabel, formatDate(c.date)].filter(Boolean).join(' · ')}${c.provisional ? ' · provisional' : ''}`}
+            meta={<span className="dk-meta-fact">called <b>{fmtFace(c.called)}</b> <span className="pe-muted">({pct(c.callPct)} vs est. {fmtFace(c.estMid)})</span></span>}
+            figure={fmtFace(c.price)}
+            figureSub={<><b style={missInk(c.missPct)}>{pct(c.missPct)}</b> off your call · <span className={c.hit ? 'pe-hit' : 'pe-faint'}>{c.hit ? 'hit' : 'miss'}</span></>} />
         ))}
       </div>
       {rows.length > ROWS && (
@@ -248,21 +246,13 @@ function MyMaxBlock({ r }: { r: EdgeReport }) {
         <Cell stat={m.medianMiss == null ? '—' : pct(m.medianMiss)} statNote={m.medianMiss == null ? `prints at ${EDGE_MIN_N}` : undefined}
           label="Median gap" body="hammer vs your max (+ = it ran past you)" />
       </CellGrid>
-      <div role="list">
+      <div className="dk-list" role="list">
         {rows.map(c => (
-          <div key={c.id} className="ns-ledger-row pe-rrow" role="listitem">
-            <span className="pe-rmain ck-ph" style={{ '--ph': '48px' } as React.CSSProperties}>
-              <Thumb src={c.img} label={c.maker || c.title} size={48} />
-              <Link href={`/lot?id=${encodeURIComponent(c.id)}`} className="pe-rtitle">{craftTitle(c.title, c.house)}</Link>
-              <span className="pe-rsub pe-muted">{[c.maker, c.house, formatDate(c.date)].filter(Boolean).join(' · ')}</span>
-            </span>
-            <span className="pe-rnums">
-              <span className="pe-muted">max {fmtFace(c.max)}</span>
-              <span>hammer {fmtFace(c.price)}</span>
-              <b>{pct(c.missPct)}</b>
-              <span className={c.inReach ? 'pe-hit' : 'pe-faint'}>{c.inReach ? 'in reach' : 'past you'}</span>
-            </span>
-          </div>
+          <DeskRow key={c.id} lot={{ id: c.id, title: c.title, auctionHouse: c.house, imageUrl: c.img }} who={c.maker || c.title} attrs={{ role: 'listitem' }}
+            sub={[c.maker, c.house, formatDate(c.date)].filter(Boolean).join(' · ')}
+            meta={<span className="dk-meta-fact">your max <b>{fmtFace(c.max)}</b></span>}
+            figure={fmtFace(c.price)}
+            figureSub={<><b style={missInk(c.missPct)}>{pct(c.missPct)}</b> · <span className={c.inReach ? 'pe-hit' : 'pe-faint'}>{c.inReach ? 'in reach' : 'past you'}</span></>} />
         ))}
       </div>
     </div>

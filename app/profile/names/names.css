@@ -44,26 +44,10 @@
 .nm-spark { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; }
 .nm-spark svg { display: block; }
 
-/* the calendar: when · house + fact · action */
+/* the calendar: DeskRows (../styles/row.css) under the pulse; the fold line keeps its seat */
 .nm-sales { list-style: none; margin: 8px 0 0; padding: 0; }
-.nm-sale {
-  display: grid; grid-template-columns: 112px minmax(0, 1fr) auto; column-gap: 14px; align-items: baseline;
-  padding: 7px 0; border-top: 1px solid var(--hairline-soft, var(--hairline));
-}
-.nm-sale-when { display: grid; gap: 1px; }
-.nm-sale-when b { font-family: var(--font-mono), monospace; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--color-fg); white-space: nowrap; }
-.nm-sale[data-soon] .nm-sale-when b { color: var(--color-fg); }
-.nm-sale-main { display: grid; gap: 1px; min-width: 0; }
-.nm-sale-house { font-size: 13px; font-weight: 600; color: var(--color-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nm-sale-name { font-weight: 400; color: var(--color-text-secondary); }
-.nm-sale-fact {
-  font-size: 12.5px; color: var(--color-text-muted); line-height: 1.5;
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
-}
-.nm-sale-title { color: var(--color-text-secondary); }
 .nm-flag { color: var(--color-fg); font-weight: 600; }
-.nm-sale-act { white-space: nowrap; }
-.nm-sale-more { grid-template-columns: 1fr; padding-top: 8px; }
+.nm-sale-more { padding: 8px 2px 0; list-style: none; }
 .nm-link {
   font: inherit; font-size: 12.5px; font-weight: 600; color: var(--color-fg);
   background: none; border: none; padding: 0; cursor: pointer;
@@ -78,20 +62,10 @@
 }
 .nm-blind .nm-when { color: var(--color-fg); font-weight: 600; }
 
-/* two columns of markets side by side is too dense for the calendar rows —
-   one column everywhere; a wide desk lets the sale fact breathe */
-@media (min-width: 900px) {
-  .nm-sale { grid-template-columns: 132px minmax(0, 1fr) auto; }
-}
-/* the phone: the head wraps the figure under the name, sales stack */
+/* the phone: the head wraps the figure under the name */
 @media (max-width: 639.98px) {
   .nm-head { flex-wrap: wrap; row-gap: 4px; }
   .nm-fig { margin-left: auto; }
-  .nm-sale { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; }
-  .nm-sale-when { grid-column: 1 / -1; display: flex; gap: 8px; align-items: baseline; }
-  .nm-sale-main { grid-column: 1; }
-  .nm-sale-act { grid-column: 2; align-self: end; }
-  .nm-sale-house { white-space: normal; }
 }
 
 /* ── the review fix wave (Oct 11 2026) ── */
@@ -117,5 +91,4 @@
   .nm-link { padding: 8px 0; min-height: 40px; }
   .nm-name { position: relative; }
   .nm-name::before { content: ''; position: absolute; inset: -9px 0; }
-  .nm-sale-act { align-self: center; }
 }

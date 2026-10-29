@@ -1,0 +1,60 @@
+/* ══ THE ROOMS' SEATS FOR THE ROW (THE DESK v4, pass 2, Oct 29 2026) — what
+   each room adds around desk/row.tsx: the quiet text action, the lamp delta
+   beside a figure, the pills a row's action slot holds, the paper band's
+   pieces. Tokens only; the grammar itself is row.css. ══ */
+
+/* the quiet text action in a row's slot (Comps · See lots) — the week's Bid / Calendar look */
+.dk-link {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: none; border: none; padding: 2px 0; margin: 0; min-height: 26px;
+  font: inherit; font-size: 12.5px; font-weight: 600; color: var(--color-text-secondary);
+  text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px;
+  cursor: pointer; white-space: nowrap;
+  transition: color var(--duration-fast) var(--ease-signature), text-decoration-color var(--duration-fast) var(--ease-signature);
+}
+.dk-link:hover { color: var(--color-fg); text-decoration-color: var(--color-fg); }
+.dk-link:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; border-radius: 3px; }
+
+/* a measured delta beside a figure (the engine's mark vs bought, a mark vs paid): the lamp's ink, nothing else */
+.dk-delta { margin-left: 6px; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.dk-delta[data-dir='up'], .dk-dir[data-dir='up'] { color: var(--color-up); }
+.dk-delta[data-dir='down'], .dk-dir[data-dir='down'] { color: var(--color-down-text); }
+.dk-dir { font-weight: 500; }
+
+/* a private note on a piece: its own line in the meta, ink-secondary */
+.dk-meta > .dk-note { flex: 1 1 100%; white-space: normal; }
+
+/* the pills a row's slot holds (Watch · More like this · Not for me · I won it): desk height 28, a phone 36 */
+.dk-act .ray-toolbar-pill, .dk-act .ray-own-btn { display: inline-flex; align-items: center; min-height: 28px; padding: 0 12px; font-size: 12px; line-height: 1; }
+.dk-act .ck-pick-more { min-width: 36px; min-height: 28px; }
+.dk-act .ray-own-x { min-height: 28px; }
+/* the Remove ×'s hit area grows left and down, never past the row's edge */
+.dk-act .ray-own-x::before { inset: -8px 0 -8px -8px; }
+@media (max-width: 639.98px) {
+  .dk-act .ray-toolbar-pill, .dk-act .ray-own-btn { min-height: 36px; padding: 0 14px; font-size: 12.5px; }
+  .dk-act .ck-pick-more, .dk-act .ray-own-x { min-width: 44px; min-height: 44px; }
+}
+
+/* a "Not for me" undo seat inside a list: one slim strip between rows */
+.dk-list > [role='status'] { padding: 12px 2px; border-top: 1px solid var(--hairline); }
+
+/* Today: the results inbox opens on three rows; its heads keep their seat */
+.ck-page .ck-results .dk-list { margin-top: 2px; }
+.ck-page .ck-results .dk-item:first-child > .dk-row { border-top: none; }
+.ck-page .ck-result-more { display: inline-block; margin-top: 8px; font-size: 12.5px; }
+
+/* the picks: a rule above the first row under the head */
+.ck-picks-list { border-top: 1px solid var(--hairline); }
+
+/* Names: the sales under the pulse; the "+N more sales" line keeps the fold's seat */
+.nm-sales.dk-list .nm-sale-more { border-top: 1px solid var(--hairline); }
+
+/* Your collection sits on the paper band: the row reads the band's remapped tokens; the editor hangs under it */
+.ray-band .dk-row:hover, .ray-band .dk-row[data-open] { background: color-mix(in srgb, var(--color-fg) 4%, transparent); }
+.ray-band .dk-item > .ck-piece-edit { margin: 0 2px 8px; }
+.ck-pieces { border-top: 1px solid var(--hairline); }
+
+/* History / Your calls / outcomes: a hit or a miss is ink, never a lamp */
+.dk-figsub .pe-hit { color: var(--color-text-secondary); }
+.dk-figsub .pe-faint { color: var(--color-text-faint); }
+.dk-figsub .ck-sigpill { height: 18px; font-size: 11.5px; padding: 0 7px; vertical-align: 0; }
