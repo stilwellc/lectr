@@ -292,10 +292,12 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
     shown = { closing: c, fresh: cut(fresh), rest: cut(rest) };
   } else {
     const c = closing.slice(0, CLOSING_OPEN);
-    // (W19) with the picks strip in the right column the left one stacks
-    // closing + new + reads; its facts now wrap (never cut), so the reads
-    // open on two and the rest fold — Watching keeps its head in the first screen
-    shown = { closing: c, fresh: fresh.slice(0, PER_COL - c.length), rest: rest.slice(0, picks.length ? PER_COL - 1 : PER_COL) };
+    // (pass 3) beside the picks strip the left column opens on PER_COL rows in
+    // all — closing first, then new, then reads — so Closing tonight and Top 3
+    // sit side by side as three rows each and the rest ride "+N more today";
+    // with no picks strip the reads keep their own column
+    const f = fresh.slice(0, Math.max(0, PER_COL - c.length));
+    shown = { closing: c, fresh: f, rest: rest.slice(0, picks.length ? Math.max(0, PER_COL - c.length - f.length) : PER_COL) };
   }
   const hidden = total - (shown.closing.length + shown.fresh.length + shown.rest.length);
   const picksLabel = `Top ${picks.length} for you`;
@@ -330,6 +332,8 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
   const left: React.ReactNode[] = [];
   const right: React.ReactNode[] = [];
   if (narrow) left.push(closingList, picksList, freshList, quietPicks, readsList);
+  // (pass 3) nothing closing: the picks take the full width as three rows, the rest under them
+  else if (picksList && !closingList) left.push(picksList, freshList, quietPicks, readsList);
   else if (picksList) { left.push(closingList, freshList, quietPicks, readsList); right.push(picksList); }
   else { left.push(closingList, freshList, quietPicks); right.push(readsList); }
   const leftCol = left.some(Boolean);
