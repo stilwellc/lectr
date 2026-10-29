@@ -296,7 +296,9 @@ function NameRow({ r, sold, capped, now, onOpen, onFollow }: {
   return (
     <div className="nm-row" role="listitem" data-live={live || undefined}>
       <div className="nm-head">
-        <Link href={href} className="nm-name" data-nav-row>{name.label}</Link>
+        {/* (pass 7) a category or collection follow is not a person: say so before its label */}
+        {!name.id && <span className="ck-tag nm-kind">{name.follow.kind === 'cat' ? 'Category' : 'Collection'}</span>}
+        <Link href={href} className="nm-name" data-nav-row aria-label={!name.id ? `${name.follow.kind === 'cat' ? 'Category' : 'Collection'}: ${name.label}` : undefined}>{name.label}</Link>
         {who && <span className="nm-who">{who}</span>}
         {!name.followed && (
           <button type="button" className="nm-follow" onClick={() => onFollow(name)} aria-label={`Follow ${name.label}`}>Follow</button>
@@ -313,7 +315,7 @@ function NameRow({ r, sold, capped, now, onOpen, onFollow }: {
       )}
       {/* (Oct 20) said once in the room's figure line; each capped name just says so */}
       {name.id && capped && <p className="nm-pulse">Calendar only</p>}
-      {!name.id && <p className="nm-pulse">{name.follow.kind === 'cat' ? 'Category' : 'Collection'} follow · live lots only — no single name to read a sold history for</p>}
+      {!name.id && <p className="nm-pulse">{name.follow.kind === 'cat' ? 'A category you follow — every live lot filed under it; no one name, so no sold history to read' : 'A collection follow · live lots only — no single name to read a sold history for'}</p>}
       {live ? (
         <ul className="nm-sales dk-list" aria-label={`${name.label}, upcoming sales`}>
           {(allSales ? r.sales : r.sales.slice(0, SALES_SHOWN)).map(s => <SaleRow key={s.key} s={s} now={now} href={href} onOpen={onOpen} />)}
