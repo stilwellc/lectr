@@ -1729,7 +1729,6 @@ body { font-family: var(--font-sans); letter-spacing: -0.011em; }
 .ray-lot-card:hover .ray-lot-comps { color: var(--color-fg); }
 @media (max-width: 768px) { .ray-lot-img { height: 220px !important; } }
 
-
 /* ── the mark system (components/marks.tsx) — a room head's constructed
    monoline glyph. Inline beside kickers/titles; inherits muted ink. ── */
 .ray-sect-mark {
@@ -2486,7 +2485,6 @@ body {
   100% { filter: brightness(1); }
 }
 
-
 /* the pill row never clips invisibly — the right edge admits there's more */
 .ray-markets-fade {
   overflow-x: auto;
@@ -2503,7 +2501,6 @@ body {
     mask-image: linear-gradient(90deg, #000, #000 calc(100% - 44px), transparent);
   }
 }
-
 
 /* ════════════════════════════════════════════════════════════════════
    THE RESTRUCTURE — home is one route with one job: the board and the
@@ -3089,14 +3086,12 @@ html .lectr-recplate-k {
   .ray-engine-cta { display: block; }
 }
 
-
 /* #5 · bid-velocity marker on lot cards — descriptive count, butter accent */
 .ray-lot-bidvel {
   display: block; margin-top: 3px;
   font-size: 10.5px; letter-spacing: 0.02em;
   color: var(--color-butter, #e8b95b);
 }
-
 
 /* #5 · bid-velocity marker on feed rows/cards — descriptive count, butter accent */
 .ray-bidvel {
@@ -3105,7 +3100,6 @@ html .lectr-recplate-k {
 }
 .ray-bidvel-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--color-butter, #e8dab6); flex: none; }
 .ray-bidvel-sub { display: block; font-size: 10.5px; color: var(--color-butter, #e8dab6); letter-spacing: 0.02em; }
-
 
 /* ══════════════════════════════════════════════════════════════════════
    THE COCKPIT — /profile (Aug 24 2026 rebuild). The collector's command
@@ -3229,28 +3223,6 @@ html .lectr-recplate-k {
   .ck-read-title { max-width: 100%; flex: 1 1 100%; }
 }
 
-/* ── the room: reason tags fused into the watching ledger ── */
-.ray-saved-cols {
-  display: grid;
-  grid-template-columns: 92px minmax(0, 1fr) 110px 96px 104px 104px;
-  gap: 0 16px; align-items: baseline;
-}
-.ray-saved-ledger-head { padding: 0 2px 8px; }
-.ray-savedrow {
-  padding: 11px 2px; border-top: 1px solid var(--hairline);
-  text-decoration: none; color: inherit;
-  transition: background var(--duration-fast) var(--ease-signature);
-}
-.ray-savedrow:hover { background: var(--color-hover-item); }
-.ray-savedrow .maker { font-size: 13px; font-weight: 600; color: var(--color-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.ray-savedrow .work { font-size: 13px; color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.ray-savedrow .num {
-  font-family: var(--font-mono), monospace; font-size: 12px;
-  font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; color: var(--color-fg);
-}
-.ray-savedrow .num .sub { display: block; font-size: 10px; color: var(--color-text-faint); letter-spacing: 0.02em; }
-.ray-saved-ledger .kicker.r { text-align: right; }
-.ck-why { min-width: 0; }
 .ck-tag {
   display: inline-block;
   font-family: var(--font-mono), monospace;
@@ -3261,19 +3233,11 @@ html .lectr-recplate-k {
 }
 .ck-tag[data-tone='up'] { color: var(--color-up); border-color: color-mix(in srgb, var(--color-up) 35%, transparent); }
 .ck-tag[data-tone='hot'] { color: var(--color-fg); border-color: var(--color-border-mid); }
-.ck-workmaker { display: block; font-size: 11px; font-weight: 600; color: var(--color-fg); }
 
 /* view toggle: quiet elevated fill, never a butter lamp — reachable at every
    width (R2 c: a phone collector picks Cards too) */
 .ray-savedview-toggle { display: inline-flex; gap: 5px; }
-.ray-saved-ledger { display: none; }
-.ck-mledger { display: block; }
-.ray-saved-section[data-view='cards'] .ck-mledger { display: none; }
-@media (min-width: 900px) {
-  .ck-mledger { display: none; }
-  .ray-saved-section[data-view='ledger'] .ray-saved-ledger { display: block; }
-  .ray-saved-section[data-view='cards'] .ray-saved-ledger { display: none; }
-}
+
 .ray-savedview-btn {
   font-family: var(--font-sans), sans-serif;
   font-size: 11.5px; font-weight: 600; letter-spacing: -0.01em;
@@ -3294,17 +3258,14 @@ html .lectr-recplate-k {
   text-decoration: none; color: inherit;
 }
 .ck-mrow[data-open] { background: var(--color-hover-item); }
-.ck-mrow-chev { font-size: 16px; line-height: 1; color: var(--color-text-faint); transition: transform 150ms var(--ease-house, ease); }
-.ck-mrow[data-open] .ck-mrow-chev { transform: rotate(90deg); }
-.ck-mrow-wrap .ck-dossier { border-top: none; }
+
 .ck-mrow-main { min-width: 0; display: grid; gap: 3px; }
 .ck-mrow-right { flex: none; display: grid; gap: 3px; justify-items: end; text-align: right; }
 .ck-mrow-right b { font-family: var(--font-mono), monospace; font-size: 13px; font-variant-numeric: tabular-nums; }
 .ck-mtitle { font-size: 13.5px; font-weight: 600; color: var(--color-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ck-msub { font-size: 11.5px; color: var(--color-text-muted); display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
-.ck-mnum { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
 .ck-mham { font-size: 11.5px; color: var(--color-text-muted); white-space: nowrap; }
-.ck-mline { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: 4px; }
 
 /* ── THE RECORD — the page's receipt at display scale ── */
 .ck-record {
@@ -3324,12 +3285,6 @@ html .lectr-recplate-k {
 .ck-record-split { display: grid; gap: 6px; max-width: 420px; }
 .ck-record-splitline { font-size: 13px; line-height: 1.55; color: var(--color-fg); }
 
-/* ── settled ledger ── */
-.ray-settled-cols {
-  display: grid;
-  grid-template-columns: minmax(100px, 140px) minmax(0, 1fr) 100px 88px 100px 88px 86px;
-  gap: 0 14px; align-items: baseline;
-}
 .ray-own-btn {
   font-family: var(--font-sans), sans-serif; font-size: 10.5px; font-weight: 600;
   padding: 3px 10px; border-radius: 8px; cursor: pointer;
@@ -3345,12 +3300,6 @@ html .lectr-recplate-k {
 @media (max-width: 899.98px) {
   .ray-own-btn, .ray-call-btn-quiet { min-height: 44px; }
 }
-.ray-settled-mobile { display: none; }
-@media (max-width: 899.98px) {
-  .ray-settled-desk { display: none; }
-  .ray-settled-mobile { display: block; }
-}
-.ray-settled-mrow { padding: 12px 0; border-top: 1px solid var(--hairline); }
 
 /* ── collection extras ── */
 .ray-coll-exposure-row {
@@ -3386,7 +3335,6 @@ html .lectr-recplate-k {
   --chart-line-2: var(--paper-faint, #8d8578);
   --chart-cursor: rgba(28, 23, 18, 0.30);
 }
-
 
 /* ══ /receipts — THE RECORD: the forward tape + the replayed record ══ */
 .rcp-block { margin-top: 34px; }
@@ -3500,31 +3448,10 @@ html .lectr-recplate-k {
   .ray-settled-head { padding-top: 6px; }
 }
 
-/* keyboard walk — the j/k focus ring: 2px ink like every button (R5),
-   on the row itself or on the ledger row whose Details button holds focus */
-.ray-savedrow:focus-visible, .ck-mrow:focus-visible, .ck-read:focus-visible,
-.ck-expandrow:has(.ck-expand-btn:focus-visible) {
+/* keyboard walk — the j/k focus ring: 2px ink like every button (R5), .ck-mrow:focus-visible, .ck-read:focus-visible {
   outline: 2px solid var(--color-fg); outline-offset: -2px;
   background: var(--color-hover-item);
 }
-.ck-expandrow:has(.ck-expand-btn:focus-visible) .ck-expand-btn:focus-visible { outline: none; }
-.ck-expandrow { cursor: pointer; }
-.ck-expandrow[data-open] { background: var(--color-hover-item); }
-/* the row's title link + its Details button (R5#2: a link and a button side
-   by side — never a role=button wrapper around a link) */
-.ck-work-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.ck-work-title { color: inherit; text-decoration: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ck-work-title:hover { text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px; }
-.ck-expand-btn {
-  flex: none; display: inline-flex; align-items: center; gap: 2px;
-  min-height: 24px; padding: 0 8px; border-radius: 999px;
-  background: none; border: 1px solid var(--color-border); cursor: pointer;
-  font-family: var(--font-sans), sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0; color: var(--color-text-muted);
-  transition: color var(--duration-fast) var(--ease-signature), border-color var(--duration-fast) var(--ease-signature);
-}
-.ck-expand-btn:hover, .ck-expand-btn[aria-expanded='true'] { color: var(--color-fg); border-color: var(--color-border-mid); }
-.ck-expand-chev { display: inline-block; transition: transform 150ms var(--ease-house, ease); }
-.ck-expand-btn[aria-expanded='true'] .ck-expand-chev { transform: rotate(90deg); }
 
 /* the in-place dossier — a watch opens on its own row, nothing navigates */
 .ck-dossier {
@@ -3550,10 +3477,7 @@ html .lectr-recplate-k {
 .ck-dossier-actions a:hover, .ck-dossier-actions button:hover { text-decoration-color: var(--color-fg); }
 .ck-dossier-actions .quiet { color: var(--color-text-muted); font-weight: 500; }
 
-/* settled desk never bleeds the rail on odd widths — clip, NOT auto:
-   an auto scroll container would re-anchor the sticky head to itself
-   and un-pin it from the viewport */
-.ray-settled-desk { overflow-x: clip; }
+/* settled desk never bleeds the rail on odd widths — clip { overflow-x: clip; }
 
 /* the quiet unwatch × on settled rows — "Remove" under an "Own it" head
    read as removing OWNERSHIP; the × says what it is (drop the watch) */
@@ -3616,7 +3540,6 @@ html .lectr-recplate-k {
 .ck-piece-edit input:focus { border-color: var(--color-border-mid); }
 /* the paper band flips the ramp — keep inputs legible on beige */
 .ray-band .ck-piece-edit input { background: var(--lw-55, rgba(255, 255, 255, 0.55)); color: var(--paper-fg, #1c1a14); border-color: rgba(0,0,0,0.18); }
-
 
 /* ═══════════════════════════════════════════════════════════════════════
    THE PORCELAIN — the light transformation (Aug 28 2026, POC).
@@ -3715,7 +3638,6 @@ html[data-lectr-light] {
   --ray-cat-sculpture: #7A6236;
   --ray-cat-design: #6B6150;
   --ray-cat-unknown: #665C4C;
-
 
   /* FOCUS / SELECTION / SHADOWS */
   --focus-ring: 2px solid #1C1917;
@@ -3841,7 +3763,6 @@ html[data-lectr-light] {
   --lw-92: rgba(28, 25, 23, 0.92);
 }
 
-
 /* bid-velocity chips: butter's attention job passes to INK on porcelain —
    vermilion here would read directional beside signed columns */
 html[data-lectr-light] .ray-bidvel,
@@ -3868,9 +3789,6 @@ html[data-lectr-light] {
   --ba-72: rgba(122, 90, 20, 0.9);
   --ba-85: rgba(122, 90, 20, 0.95);
 }
-
-
-
 
 /* ── THE PORCELAIN: the Colophon becomes the closing INK VAULT — the maker's
    plate stays engraved in the dark, porcelain ink on the near-black band
@@ -3973,7 +3891,6 @@ html[data-lectr-light] [class*='rcpt'] {
   --pa-8: rgba(28, 23, 18, 0.8);
 }
 
-
 /* ═══════════════════════════════════════════════════════════════════════
    THE CATALOGUE LANGUAGE — wave one (Aug 29). Light is not a palette, it
    is a MEDIUM. Six practices the black ground could never print:
@@ -4012,11 +3929,7 @@ html[data-lectr-light] .terminal-shell .glass-quiet {
 html[data-lectr-light] .ray-lot-card { box-shadow: var(--lift-1); border-color: rgba(28, 25, 23, 0.09); }
 html[data-lectr-light] .ray-lot-card:hover { box-shadow: var(--lift-2); transform: translateY(-1px); }
 html[data-lectr-light] .ray-lot-card { transition: box-shadow var(--duration-fast) var(--ease-signature), transform var(--duration-fast) var(--ease-signature); }
-/* the pinned things lift off the page as they stick */
-html[data-lectr-light] .ray-saved-ledger-head,
-html[data-lectr-light] .ray-settled-head {
-  box-shadow: 0 10px 18px -14px rgba(28, 25, 23, 0.35);
-}
+
 html[data-lectr-light] .comp-modal-panel,
 html[data-lectr-light] .ray-sheet { box-shadow: var(--lift-3) !important; }
 
@@ -4082,10 +3995,7 @@ html[data-lectr-light] .ray-sigrow .ray-sigrow-ctx { color: var(--color-text-sec
 html[data-lectr-light] .ray-sigrow .ray-sigrow-dots [data-on='true'] { background: var(--color-fg); }
 
 /* ── 5 · THE GOLD PENCIL — the auctioneer's tick in the margin of every
-   flagged row. A short gold stroke, hand-placed left of the row; the
-   ledger reads like a marked-up catalogue. ── */
-html[data-lectr-light] .ray-savedrow:has(.ck-tag[data-tone='up'])::before,
-html[data-lectr-light] .ck-read:has(.ck-tag[data-tone='up'])::before {
+   flagged row. A short gold stroke, html[data-lectr-light] .ck-read:has(.ck-tag[data-tone='up'])::before {
   content: '';
   position: absolute;
   left: -14px;
@@ -4097,7 +4007,6 @@ html[data-lectr-light] .ck-read:has(.ck-tag[data-tone='up'])::before {
   background: var(--color-butter, #8F6B1E);
   opacity: 0.85;
 }
-html[data-lectr-light] .ray-savedrow,
 html[data-lectr-light] .ck-read { position: relative; }
 
 /* ── 6 · DENSITY — display figures drop to pen weight and grow. Thin
@@ -4199,7 +4108,6 @@ html[data-lectr-light] {
   --lab-design: #2E7D6E;
   --lab-watches: #6B4FA1;
 }
-
 
 /* ── THE OBSERVATORY, mobile discipline (Collin: if it can't look good on
    mobile, it leaves the mobile view) ── */
@@ -4726,27 +4634,7 @@ a.ck-ccell:focus-visible { outline: 2px solid var(--color-fg); outline-offset: -
 
 /* the rail's (?) — the keys legend, pinned at the rail's right edge; 
 
-
-
-
-
-
 /* PHONE (R2 d): one row — where you are, and the Sections sheet */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 /* a deep link to a room this desk doesn't have yet: one line under the rail */
 .ck-landnote { padding: 12px 0 0; }
@@ -4790,15 +4678,7 @@ html[data-lectr-light] .ck-index-mark svg { width: 12px !important; height: 12px
 /* ── THE PILL RAIL (every width): sticky under the site nav — the nav is
    64px tall (10px padding + 44px row), so top 64; 
 
-
-
-
-
 /* a quiet section's pill: folded to its word in faint ink, still a link */
-
-
-
-
 
 @media (max-width: 639.98px) {
   
@@ -4833,9 +4713,6 @@ html[data-lectr-light] .ck-index-mark svg { width: 12px !important; height: 12px
 }
 .ck-today-more:hover { text-decoration-color: var(--color-fg); }
 
-/* ── For you on phone: the row + its ⋯ (44px-wide target, full row height) ── */
-.ck-pickrow { display: grid; grid-template-columns: minmax(0, 1fr) 40px; align-items: stretch; border-bottom: 1px solid var(--hairline-soft); }
-.ck-pickrow .ray-feedrow { border-bottom: none !important; }
 .ck-pick-more {
   display: flex; align-items: center; justify-content: center;
   min-height: 44px; width: 40px; padding: 0;
@@ -4985,12 +4862,6 @@ html[data-lectr-light] .ck-index-mark svg { width: 12px !important; height: 12px
 /* a hidden pick's Undo spans the row as one slim strip in the card's
    outline; the grid packs densely so no blank card slot is left behind */
 .ck-picks { grid-auto-flow: row dense; }
-.ck-undoseat { grid-column: 1 / -1; }
-.ck-undoseat > [role='status'] {
-  padding: 12px 16px !important; border: 1px solid var(--hairline); border-radius: 12px;
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px;
-}
-.ck-undoseat > [role='status'] > span:first-child { display: inline !important; color: var(--color-fg); }
 
 /* the phone pick row (FeedRow stack): reason wraps, price under it */
 .ray-feedrow-stack { align-items: flex-start; padding-block: 12px; }
@@ -5010,26 +4881,16 @@ html[data-lectr-light] .ck-index-mark svg { width: 12px !important; height: 12px
 .ray-feedrow-price .ray-bidvel { margin-left: 8px; }
 
 /* collection pieces: desktop = title | bought | appraisal; a phone stacks
-   them — title (2 lines), meta, then Bought · Appraisal under their labels */
-.ck-piece-main { min-width: 0; flex: 1; }
-.ck-piece-title { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ck-piece-meta { font-size: 12px; color: var(--color-text-muted); display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.ck-piece-paid { width: 92px; text-align: right; flex-shrink: 0; font-size: 14.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.ck-piece-basis { display: block; font-size: 10px; font-weight: 500; color: var(--color-text-faint); }
-.ck-piece-appr { width: 128px; text-align: right; flex-shrink: 0; }
-.ck-piece-v { font-size: 14.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.ck-piece-src { font-size: 11px; color: var(--color-text-muted); }
-.ck-piece-k { display: none; }
+   them — title (2 lines), meta { min-width: 0; flex: 1; }
+
 @media (max-width: 639.98px) {
   .ck-piece-head { display: none !important; }
-  .ck-piece { display: grid !important; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 16px !important; padding-block: 12px; }
-  .ck-piece-main { grid-column: 1 / -1; }
-  .ck-piece-title {
-    white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.35;
-  }
-  .ck-piece-meta { margin-top: 3px; }
-  .ck-piece-paid, .ck-piece-appr { width: auto; text-align: left; }
-  .ck-piece-k { display: block; margin-bottom: 1px; color: var(--paper-muted, var(--color-text-muted)); }
+  
+  
+  
+  
+  
+  
   .ck-piece-editbtn::before { inset: -13px -8px; }
 }
 
@@ -5046,7 +4907,6 @@ html[data-lectr-light] .ck-index-mark svg { width: 12px !important; height: 12px
   .ck-tune::before { content: ""; position: absolute; inset: -7px -2px; }
   .ck-piece-editbtn::before { inset: -13px -8px; }
 }
-
 
 /* ════════════════════════════════════════════════════════════════════
    /profile POLISH (Oct 11 2026) — one page, one grammar. Tokens, type,
@@ -5086,10 +4946,6 @@ html[data-lectr-light] .ray-band .ck-head[data-level='2'] h2.ray-h2 { padding-to
 html[data-lectr-light] .ray-band .ck-head[data-level='2'] h2.ray-h2::after { content: ''; position: absolute; top: 3px; left: 0; right: 0; border-top: 1px solid var(--hairline); }
 .ray-band .ck-head-sub { color: var(--paper-muted, var(--color-text-muted)); }
 
-/* the settled ledger folds "Your call" when no row recorded one */
-.ray-settled-desk[data-nocall] .ray-settled-cols > :nth-child(4) { display: none; }
-.ray-settled-desk[data-nocall] .ray-settled-cols { grid-template-columns: minmax(100px, 140px) minmax(0, 1fr) 110px 100px 88px 86px; }
-
 /* ── THE PICKS GROUP: Lots you may like + For your collection + How your
    picks did read as one room — one plate, the followers as sub-rooms ── */
 .ck-group { padding-bottom: 44px; }
@@ -5127,23 +4983,12 @@ html[data-lectr-light] .ray-band .ck-head[data-level='2'] h2.ray-h2::after { con
 /* ── THE RAIL scales: groups parted by a hairline, a soft fade on the side
    that scrolls, the active pill brought to the middle (rail.tsx) ── */
 
-
-
-
 /* ── YOUR MARKET: two columns of names on a desktop (a full-width row left
    a 900px gap between the name and its figure) ── */
 .ck-market-rows { margin-top: 12px; }
 @media (min-width: 900px) {
   .ck-market-rows { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 40px; }
 }
-
-/* ── the watching ledger folds a column that is empty on every row ── */
-.ray-saved-ledger[data-nosig] .ray-saved-cols > :nth-child(4),
-.ray-saved-ledger[data-nodelta] .ray-saved-cols > :nth-child(5) { display: none; }
-.ray-saved-ledger[data-nosig] .ray-saved-cols { grid-template-columns: 92px minmax(0, 1fr) 120px 104px 104px; }
-.ray-saved-ledger[data-nodelta] .ray-saved-cols { grid-template-columns: 92px minmax(0, 1fr) 120px 96px 104px; }
-.ray-saved-ledger[data-nosig][data-nodelta] .ray-saved-cols { grid-template-columns: 92px minmax(0, 1fr) 140px 120px; }
-
 
 /* home: a jump to the feed (/?tab=you, the below lens) lands its head under the nav */
 #on-the-block { scroll-margin-top: 72px; }
@@ -5257,7 +5102,7 @@ html[data-lectr-light] .dt-band[data-tone='b'] :is(.ns-cell:not(.ns-cell-color),
 
 /* every landing and every sticky ledger head sits under the measured bar */
 .ck-page [id] { scroll-margin-top: calc(var(--dt-stick) + 12px); }
-.ck-page .ray-saved-ledger-head, .ck-page .ray-settled-head { top: var(--dt-stick) !important; }
+
 .dt-empty { padding-block: 34px 8px; }
 .dt-empty-lead { margin: 0 0 6px; font-size: 15px; color: var(--color-text-secondary); }
 .dt-empty-lead .ck-index-tap { margin-left: 6px; }
@@ -5393,21 +5238,13 @@ html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] .dk-fold-in > .r
 }
 /* one left edge for everything in a room */
 .ck-page :is(.ck-reads-head, .ck-read, .nm-row, .ck-week-dayhead, .ck-week-namesrule, .ray-savedrow, .ray-saved-ledger-head, .ck-budget-more) { padding-inline: 2px; }
-/* ledgers: an Est cell wide enough for "No reserve · opening bid", the numeral spine holds */
-.ck-page .ray-saved-cols { grid-template-columns: 92px minmax(0, 1fr) 156px 96px 104px 104px; }
-.ck-page .ray-saved-ledger[data-nosig] .ray-saved-cols { grid-template-columns: 92px minmax(0, 1fr) 156px 104px 104px; }
-.ck-page .ray-saved-ledger[data-nodelta] .ray-saved-cols { grid-template-columns: 92px minmax(0, 1fr) 156px 96px 104px; }
-.ck-page .ray-saved-ledger[data-nosig][data-nodelta] .ray-saved-cols { grid-template-columns: 92px minmax(0, 1fr) 156px 120px; }
-.ck-page .ray-savedrow .num:nth-child(3) { white-space: normal; text-wrap: balance; }
-.ck-page .ray-settled-cols { grid-template-columns: minmax(100px, 140px) minmax(0, 1fr) 156px 88px 100px 88px 86px; }
-.ck-page .ray-settled-desk[data-nocall] .ray-settled-cols { grid-template-columns: minmax(100px, 140px) minmax(0, 1fr) 156px 100px 88px 86px; }
-.ck-page .ray-settled-cols > :last-child { justify-self: end; }
+/* ledgers: an Est cell wide enough for "No reserve · opening bid" { grid-template-columns: 92px minmax(0, 1fr) 156px 96px 104px 104px; }
+
 /* the figures the round-3 list missed: Inter, tabular */
 .ck-page :is(.ray-savedrow .num, .ray-savedrow .num .sub, .ck-week-cn-clock, .ck-gauge-v) { font-family: var(--font-sans), sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -0.005em; }
 .ck-page .ck-gauge-v { font-weight: 300; }
 .ck-page .ns-ccell-stat { font-family: var(--font-sans), sans-serif; font-weight: 300; letter-spacing: -0.03em; }
-/* Names calendar edges: the when-column, "+N more sales" left, the live-count spine, the trend label on its line */
-.ck-page .nm-sale-when .nm-n { margin-left: 0; }
+/* Names calendar edges: the when-column, "+N more sales" left, the live-count spine { margin-left: 0; }
 .ck-page .nm-sale.nm-sale-more { grid-template-columns: 1fr; }
 .ck-page .nm-sale-more .nm-link { justify-self: start; text-align: left; }
 .ck-page .nm-fig .ck-mham { min-width: 5.6em; text-align: left; display: inline-block; }
@@ -5416,10 +5253,7 @@ html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] .dk-fold-in > .r
 /* Your week: day heads share a height, so the first cards line up across the days */
 @media (min-width: 900px) { .ck-page .ck-week-days:not([data-narrow]) .ck-week-dayhead { min-height: 108px; align-content: start; } }
 .ck-page .ck-week-cn-title { min-height: calc(2 * 1.35em + 6px); }
-/* every call's figures on fixed columns (called · hammer · miss) */
-.ck-page .pe-rnums { display: grid; grid-template-columns: 7.5em 8.5em 4.5em 2.6em; justify-items: end; column-gap: 12px; white-space: nowrap; }
-.ck-page .pe-rnums > :last-child { justify-self: start; }
-@media (max-width: 639.98px) { .ck-page .pe-rnums { grid-template-columns: auto auto auto 1fr; justify-items: start; column-gap: 10px; } }
+
 /* dark: the soft wells and the month bars need an edge against the near-black ground */
 :root[data-theme="dark"] .ck-page .ns-well { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.09); background: #121418; }
 :root[data-theme="dark"] .ck-page .pe-mbar { background: rgba(255,255,255,0.34); }
@@ -5453,8 +5287,6 @@ html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] .dk-fold-in > .r
 @media (max-width: 639.98px) { .ck-page .dt-head:not([data-compact]) .ray-masthead > p { font-size: 15px; } }
 /* phone week: the next day peeks as a fade, not letter slivers */
 @media (max-width: 639.98px) { .ck-page .ck-week-days[data-narrow] { -webkit-mask-image: linear-gradient(to right, #000 86%, transparent); mask-image: linear-gradient(to right, #000 86%, transparent); } }
-/* (round 6) the phone watch card's signal says what it is measured against */
-.ck-page .ck-mrow-sig { white-space: nowrap; }
 
 /* ── THE PHOTO + COLOR PASS (Oct 20 2026) ─────────────────────────────────
    "a massive wall of black text on white paper like a book" → a command
@@ -5481,7 +5313,6 @@ html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] .dk-fold-in > .r
 .ck-thumb[data-tone='down'] { outline: 2px solid var(--color-down); outline-offset: 2px; }
 .ck-thumb[data-tone='ink'] { outline: 1.5px solid var(--color-fg); outline-offset: 2.5px; }
 :root[data-theme="dark"] .ck-thumb { background: #16181c; }
-
 
 /* a row that leads with a photo: photo | the row's own lines, stacked */
 .ck-page .ck-ph { display: grid; grid-template-columns: var(--ph, 64px) minmax(0, 1fr); column-gap: 14px; row-gap: 3px; align-items: start; }
@@ -5516,8 +5347,7 @@ html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] .dk-fold-in > .r
 .ck-page .ck-story-m { font-size: 11.5px; line-height: 1.2; color: var(--color-text-muted); max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: -3px; }
 .ck-thumb[data-wide] { width: 100%; height: auto; aspect-ratio: 16 / 10; --th: 120px; border-radius: 12px; }
 .ck-thumb[data-wide] > img { object-fit: cover; object-position: center 40%; }
-.ck-page .ck-week-ph { display: block; margin-bottom: 10px; }
-.ck-page .ck-week-ph .ck-thumb { max-height: 168px; }
+
 /* a photo row with a figure (Bid plan): the figure keeps its own right column */
 @media (min-width: 640px) {
   .ck-page .ck-ph:has(> .ck-budget-fig) { grid-template-columns: var(--ph, 64px) minmax(0, 1fr) auto; }
@@ -5530,17 +5360,12 @@ html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] .dk-fold-in > .r
 .ck-page .ck-mrow:has(> .ck-thumb) { align-items: center; justify-content: flex-start; }
 .ck-page .ck-mrow > .ck-mrow-main { flex: 1 1 auto; min-width: 0; }
 .ck-page .ck-mrow > .ck-mrow-right { flex: none; margin-left: auto; }
-.ck-page .nm-sale-ph { display: flex; align-items: center; margin: 2px 0 8px; }
-.ck-page .nm-sale-ph:empty { display: none; }
-.ck-page .nm-sale-ph .ck-thumb { border-radius: 10px; box-shadow: 0 0 0 2px var(--dt-band-a, var(--color-bg)); }
-.ck-page .nm-sale-ph .ck-thumb + .ck-thumb { margin-left: -8px; }
-.ck-page .dt-band[data-tone='b'] .nm-sale-ph .ck-thumb { box-shadow: 0 0 0 2px var(--dt-band-b); }
-.ck-page .nm-sale-ph-n { margin-left: 8px; font-size: 12px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+
 .ck-page .pe-call-body { display: grid; grid-template-columns: 96px minmax(0, 1fr); column-gap: 16px; row-gap: 4px; }
 .ck-page .pe-call-body > .pe-call-ph { grid-row: 1 / span 4; }
 .ck-page .pe-call-body > :not(.pe-call-ph) { grid-column: 2; min-width: 0; }
 @media (max-width: 639.98px) { .ck-page .pe-call-body { grid-template-columns: 72px minmax(0, 1fr); column-gap: 14px; } .ck-page .pe-call-body .ck-thumb { --th: 72px !important; } }
-.ck-page .pe-rmain.ck-ph > .pe-rtitle, .ck-page .pe-rmain.ck-ph > .pe-rsub { display: block; }
+
 .ck-page .ck-lotline { margin: 6px 0 2px; }
 .ck-page .ck-lotline > .ck-ccell-lot, .ck-page .ck-lotline > .ck-ccell-sub { display: block; }
 .ck-page .ck-mast-flag {
@@ -5548,12 +5373,10 @@ html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] .dk-fold-in > .r
   background: var(--color-up); color: #fff; font-weight: 500; font-size: 0.82em; text-decoration: none; white-space: nowrap; font-variant-numeric: tabular-nums;
 }
 :root[data-theme="dark"] .ck-page .ck-mast-flag { color: #08090a; }
-/* a ledger row with a photo centers its cells on the photo, not a baseline under it */
-.ck-page .ray-savedrow:has(> .work > .ck-thumb) { align-items: center; padding-block: 10px; }
-.ck-page .ray-savedrow > .work.ck-ph { align-items: center; row-gap: 2px; }
-.ck-page .ray-savedrow > .work.ck-ph > .ck-thumb { grid-row: 1 / span 3; align-self: center; }
+/* a ledger row with a photo centers its cells on the photo { align-items: center; padding-block: 10px; }
+
 .ck-page .ck-mrow > .ck-thumb { align-self: center; }
-@media (min-width: 640px) { .ck-page .pe-rrow:has(.ck-thumb) { align-items: center; } }
+
 /* (one job per tab) eight tabs: a phone shows them 4×2, the count under the word */
 @media (max-width: 639.98px) {
   .dt-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -5583,10 +5406,7 @@ html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] .dk-fold-in > .r
 .ck-mymax-edit input:focus { outline: 2px solid var(--color-fg); outline-offset: 1px; }
 .ck-mymax-btn { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--color-border); background: none; color: var(--color-fg); font: 500 12px/1 var(--font-sans), sans-serif; cursor: pointer; }
 .ck-mymax-btn[data-solid] { background: var(--color-fg); color: var(--color-bg, #fff); border-color: var(--color-fg); }
-.ck-page .ck-read-max { font-size: 12.5px; color: var(--color-text-secondary); }
-.ck-page .ck-read-max b { color: var(--color-fg); font-variant-numeric: tabular-nums; }
-.ck-page .ck-read-max[data-over] { color: var(--color-down-text); font-weight: 500; }
-.ck-page .ck-row-max { display: block; margin-top: 6px; }
+
 .ck-page .pe-mine { margin-bottom: 22px; }
 .ck-page .pe-mine-empty { margin: 0 0 18px; padding: 14px 16px; border-radius: 14px; background: color-mix(in srgb, var(--color-fg) 4%, transparent); font-size: 13.5px; line-height: 1.5; color: var(--color-text-secondary); }
 .ck-page .pe-mine-empty b { color: var(--color-fg); font-weight: 600; }
@@ -5660,15 +5480,7 @@ html:has(.dk-sbar) { scroll-padding-top: calc(64px + var(--dt-h, 0px) + 12px); }
 }
 .ck-page .ck-results-clear:hover { color: var(--color-fg); }
 .ck-page .ck-results-clear:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; border-radius: 4px; }
-.ck-page .ck-result { padding: 10px 0; border-bottom: 1px solid var(--hairline); }
-.ck-page .ck-result:last-of-type { border-bottom: none; }
-.ck-page .ck-result-t { font-size: 14px; font-weight: 500; color: var(--color-fg); text-decoration: none; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
-.ck-page .ck-result-s { font-size: 12.5px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
-.ck-page .ck-result-s b { color: var(--color-fg); font-weight: 600; }
-@media (min-width: 640px) {
-  .ck-page .ck-result.ck-ph { grid-template-columns: var(--ph) minmax(0, 1fr) auto; }
-  .ck-page .ck-result > .ck-result-a { grid-column: 3; grid-row: 1 / span 2; align-self: center; }
-}
+
 .ck-page .ck-result-more { display: inline-block; margin-top: 8px; font-size: 13px; }
 .ck-page .ck-keepline { margin: -4px 0 14px; font-size: 13px; color: var(--color-text-secondary); }
 /* dark: the quiet figure cells get an edge — black on near-black vanished */
@@ -5682,10 +5494,7 @@ html:has(.dk-sbar) { scroll-padding-top: calc(64px + var(--dt-h, 0px) + 12px); }
 @media (max-width: 639.98px) { .ck-page .ck-head-actions :is(.ck-week-act, .ray-savedview-btn) { min-height: 40px; } }
 /* Record's figure cells: an odd last cell spans the row on a phone (no empty quarter) */
 @media (max-width: 639.98px) { .ck-page .ck-figs > :last-child:nth-child(odd) { grid-column: 1 / -1 !important; } }
-/* Watching's Hammers column fits 'result pending' */
-.ck-page .ray-saved-cols { grid-template-columns: 92px minmax(0, 1fr) 156px 96px 104px 128px; }
-.ck-page .ray-saved-ledger[data-nosig] .ray-saved-cols { grid-template-columns: 92px minmax(0, 1fr) 156px 104px 128px; }
-.ck-page .ray-saved-ledger[data-nodelta] .ray-saved-cols { grid-template-columns: 92px minmax(0, 1fr) 156px 96px 128px; }
+
 /* a phone's news dot hugs its word */
 @media (max-width: 639.98px) { .dt-tab .dt-news { right: calc(50% - 34px); } }
 /* pick cards round their frame like their photo */

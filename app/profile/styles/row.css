@@ -22,7 +22,8 @@
 /* the grid: photo | lines | figure; the second line holds the decision
    (under the lines) and the controls (under the figure) — the photo spans
    both and stays centred */
-.dk-row > .ck-thumb { grid-column: 1; grid-row: 1 / span 2; }
+.dk-row > .ck-thumb, .dk-row > .dk-photo { grid-column: 1; grid-row: 1 / span 2; }
+.dk-row > .dk-photo { position: relative; display: block; width: var(--dk-th); height: var(--dk-th); }
 .dk-row > .dk-main { grid-column: 2; grid-row: 1; }
 .dk-row > .dk-decision { grid-column: 2; grid-row: 2; }
 .dk-row > .dk-right { grid-column: 3; grid-row: 1; align-self: start; }
@@ -68,6 +69,16 @@
 .dk-decision { min-width: 0; }
 .dk-decision .ck-decision { font-size: 11.5px; line-height: 1.5; white-space: normal; margin-top: 1px; }
 .dk-decision .ck-decision > span { white-space: normal; }
+
+/* ── a compact row (the results strip): 44px, a 32px photo, the figure and
+   the action on the row's one line — the inbox reads as a strip, not a list ── */
+.dk-row[data-compact] { --dk-th: 32px; min-height: 44px; padding: 6px 2px; column-gap: 10px; grid-template-columns: var(--dk-th) minmax(0, 1fr) auto auto; }
+.dk-row[data-compact] > .dk-main { gap: 1px; }
+.dk-row[data-compact] .dk-title { font-size: 13.5px; }
+.dk-row[data-compact] .dk-sub { font-size: 11.5px; }
+.dk-row[data-compact] > .dk-right { grid-column: 3; grid-row: 1; align-self: center; padding-top: 0; }
+.dk-row[data-compact] > .dk-acts { grid-column: 4; grid-row: 1; align-self: center; justify-self: end; margin: 0; }
+.dk-row[data-compact] .dk-fig { font-size: 13.5px; }
 
 /* ── the right column: the figure, its sub, the pill, the action ── */
 .dk-right {
@@ -125,7 +136,7 @@
   .dk-row > .dk-main { align-self: start; }
   .dk-row > .dk-right { grid-row: 1; }
   .dk-row > .dk-decision { grid-column: 2 / span 2; grid-row: 2; margin-top: 1px; }
-  .dk-row > .dk-acts { grid-column: 2 / span 2; grid-row: 3; justify-self: stretch; justify-content: flex-start; flex-wrap: wrap; gap: 6px 8px; margin-top: 2px; }
+  .dk-row:not([data-compact]) > .dk-acts { grid-column: 2 / span 2; grid-row: 3; justify-self: stretch; justify-content: flex-start; flex-wrap: wrap; gap: 6px 8px; margin-top: 2px; }
   /* the Details control: the chevron alone at the line's right end, a 44px
      target that hangs past the row's edge */
   .dk-expand { margin-left: auto; min-width: 44px; min-height: 44px; padding: 0; border: none; justify-content: center; font-size: 18px; color: var(--color-text-faint); }

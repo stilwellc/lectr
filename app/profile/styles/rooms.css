@@ -38,14 +38,41 @@
 /* a "Not for me" undo seat inside a list: one slim strip between rows */
 .dk-list > [role='status'] { padding: 12px 2px; border-top: 1px solid var(--hairline); }
 
-/* Today: the results inbox opens on three rows; its heads keep their seat */
-.ck-page .ck-results .dk-list { margin-top: 2px; }
+/* Today: the first screen is the point (pass 3) — the results inbox is a
+   compact strip of three 44px rows, the groups sit closer, every row is
+   tighter than a room's; the story strip keeps its photos, less air */
+.ck-page .ck-results { margin: 2px 0 10px; }
+.ck-page .ck-results .dk-list { margin-top: 0; }
 .ck-page .ck-results .dk-item:first-child > .dk-row { border-top: none; }
-.ck-page .ck-result-more { display: inline-block; margin-top: 8px; font-size: 12.5px; }
+.ck-page .ck-result-more { display: inline-block; margin-top: 4px; font-size: 12.5px; }
+.ck-page .ck-today .ck-reads { margin-top: 12px; }
+.ck-page .ck-today-cols > div > .ck-reads:first-child, .ck-page .ck-today-cols > .ck-reads { margin-top: 8px; }
+.ck-page .ck-today .dk-row:not([data-compact]) { padding: 7px 2px; min-height: 54px; }
+.ck-page .ck-today .dk-row:not([data-compact]) > .dk-main { gap: 2px; }
+.ck-page .ck-tonight { padding: 4px 4px 8px; margin: 6px -4px 0; }
+.ck-page .ck-today .ck-today-more { margin-top: 4px; }
 
 /* the picks: a rule above the first row under the head */
 .ck-picks-list { border-top: 1px solid var(--hairline); }
 
+/* Names: a sale of several lots leads with its photos stacked — four round
+   thumbs overlapping in the row's photo slot (the story strip's grammar),
+   the count past them as a small pill */
+.dk-stack { position: relative; display: block; width: var(--dk-th); height: var(--dk-th); }
+.dk-stack > .ck-thumb { position: absolute; --th: 32px; width: 32px; height: 32px; box-shadow: 0 0 0 2px var(--dt-band-a, var(--color-bg)); }
+.dt-band[data-tone='b'] .dk-stack > .ck-thumb { box-shadow: 0 0 0 2px var(--dt-band-b, var(--color-bg)); }
+.dk-stack > .ck-thumb:nth-child(1) { left: 0; top: 0; z-index: 4; }
+.dk-stack > .ck-thumb:nth-child(2) { left: 22px; top: 2px; z-index: 3; }
+.dk-stack > .ck-thumb:nth-child(3) { left: 2px; top: 22px; z-index: 2; }
+.dk-stack > .ck-thumb:nth-child(4) { left: 24px; top: 24px; z-index: 1; }
+.dk-stack[data-n='1'] > .ck-thumb, .dk-stack[data-n='0'] > .ck-thumb { --th: 44px; width: 44px; height: 44px; left: 6px; top: 6px; }
+.dk-stack-n {
+  position: absolute; right: -4px; bottom: -4px; z-index: 5;
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font: 500 10.5px/1 var(--font-sans), sans-serif; font-variant-numeric: tabular-nums;
+  color: var(--color-bg, #fff); background: var(--color-fg);
+}
 /* Names: the sales under the pulse; the "+N more sales" line keeps the fold's seat */
 .nm-sales.dk-list .nm-sale-more { border-top: 1px solid var(--hairline); }
 

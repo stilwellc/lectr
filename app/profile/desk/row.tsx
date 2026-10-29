@@ -100,6 +100,10 @@ export interface DeskRowProps {
   children?: React.ReactNode;
   /** always under the row, inside the item (an editor, a note) */
   below?: React.ReactNode;
+  /** a 44px row (the results strip): 32px photo, the figure and the action on the row's one line */
+  compact?: boolean;
+  /** something other than the lot's photo in the photo slot (a sale's stack of lots) */
+  photo?: React.ReactNode;
 }
 
 /** the default sub-line: maker · house · estimate (ONE "priced" rule — a
@@ -124,7 +128,7 @@ export function priceFigureOf(lot: AuctionLot): { fig: string; sub: string | nul
 /** the lot's own URL on the desk */
 export const lotHref = (lot: Pick<RowLot, 'id'>) => `/lot?id=${encodeURIComponent(lot.id)}`;
 
-export function DeskRow({ lot, href, who, title, sub, wrap = false, tag, meta, figure, figureSub, pill, decision, action, tone, expand, pick, as = 'div', attrs, className, children, below }: DeskRowProps) {
+export function DeskRow({ lot, href, who, title, sub, wrap = false, tag, meta, figure, figureSub, pill, decision, action, tone, expand, pick, as = 'div', attrs, className, children, below, compact, photo }: DeskRowProps) {
   const Outer = as;
   const t = title ?? craftTitle(lot.title, lot.auctionHouse);
   const letterOf = who === undefined ? rowWhoOf(lot) : who;
@@ -132,8 +136,8 @@ export function DeskRow({ lot, href, who, title, sub, wrap = false, tag, meta, f
   const hasRight = figure != null || figureSub != null;
   return (
     <Outer className={`dk-item${className ? ` ${className}` : ''}`} {...attrs}>
-      <div className="dk-row" data-nav-row data-pick={pick} data-open={expand?.open || undefined} data-expand={expand ? '' : undefined}>
-        <Thumb src={lot.imageUrl} label={letterOf || lot.title} size={56} tone={tone} />
+      <div className="dk-row" data-nav-row data-pick={pick} data-open={expand?.open || undefined} data-expand={expand ? '' : undefined} data-compact={compact || undefined}>
+        {photo ? <span className="dk-photo" aria-hidden="true">{photo}</span> : <Thumb src={lot.imageUrl} label={letterOf || lot.title} size={compact ? 32 : 56} tone={tone} />}
         <div className="dk-main">
           <Link href={href ?? lotHref(lot)} className="dk-title" data-nav-focus={expand ? undefined : ''} title={t}>{t}</Link>
           {sub != null && sub !== '' && <span className="dk-sub" data-wrap={wrap || undefined}>{sub}</span>}

@@ -32,11 +32,13 @@
  *
  * (THE DESK v4, Oct 29 2026) a sale is the desk's one row (../desk/row
  * DeskRow): the lot's photo and title (a sale of several lots: its first
- * photo, "N lots · house · sale"), the estimate band / live bids / flags on
- * the sub-line, the close as the figure; Comps (the one-lot sale's modal)
- * or See lots in the action slot.
+ * lots as an overlapping photo stack — the "it's a sale" read — and "N lots
+ * · house · sale"), the estimate band / live bids / flags on the sub-line,
+ * the close as the figure; Comps (the one-lot sale's modal) or See lots in
+ * the action slot.
  */
 import { DeskRow, type RowLot } from '../desk/row';
+import { Thumb } from '../desk/thumb';
 import { craftTitle } from '../../utils';
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -225,11 +227,19 @@ function PulseLine({ p, label }: { p: Pulse; label: string }) {
 function SaleRow({ s, now, href, onOpen }: { s: Sale; now: number; href: string; onOpen: (l: AuctionLot) => void }) {
   const w = whenText(s, now);
   const one = s.lots.length === 1 ? s.lots[0] : null;
-  // a sale of several lots prints as one row: its first photo, the count, the house and the sale
-  const lead = s.lots.find(l => l.imageUrl) ?? s.lots[0];
-  const lot: RowLot = one ?? { id: s.key, title: `${n2(s.lots.length)} lots · ${s.house}${s.saleName ? ` · ${s.saleName}` : ''}`, auctionHouse: s.house, imageUrl: lead?.imageUrl };
+  // a sale of several lots prints as one row: its first lots as an overlapping
+  // photo stack (up to four, the count past them), "N lots · house · sale"
+  const stack = one ? [] : s.lots.filter(l => l.imageUrl).slice(0, 4);
+  const lot: RowLot = one ?? { id: s.key, title: `${n2(s.lots.length)} lots · ${s.house}${s.saleName ? ` · ${s.saleName}` : ''}`, auctionHouse: s.house, imageUrl: stack[0]?.imageUrl };
+  const photo = one ? undefined : (
+    <span className="dk-stack" data-n={stack.length}>
+      {stack.map(l => <Thumb key={l.id} src={l.imageUrl} label={l.title} size={32} round />)}
+      {stack.length === 0 && <Thumb label={s.house} size={32} round />}
+      {s.lots.length > stack.length && <span className="dk-stack-n">+{n2(s.lots.length - stack.length)}</span>}
+    </span>
+  );
   return (
-    <DeskRow as="li" lot={lot} href={one ? undefined : href} title={one ? craftTitle(one.title, one.auctionHouse) : lot.title} who={one ? undefined : s.house}
+    <DeskRow as="li" lot={lot} photo={photo} href={one ? undefined : href} title={one ? craftTitle(one.title, one.auctionHouse) : lot.title} who={one ? undefined : s.house}
       attrs={{ 'data-soon': w.soon ? '' : undefined }}
       sub={<>
         {one ? <>{s.house}{s.saleName ? ` · ${s.saleName}` : ''} · </> : null}

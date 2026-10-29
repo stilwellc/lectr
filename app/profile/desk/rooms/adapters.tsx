@@ -16,7 +16,7 @@ import { useDesk } from '../provider';
 import { DeskRow, rowWhoOf } from '../row';
 import { fmtFace } from '../../../lib/lot-face';
 
-/** rows the inbox opens on — the rest are one tap under History (THE DESK v4: the first screen is the point) */
+/** rows the inbox opens on, as a compact strip — the rest are one tap under History (THE DESK v4: the first screen is the point) */
 const RESULTS_OPEN = 3;
 
 /** RESULTS TO CONFIRM (Oct 20 audit) — the settled watches not yet in your
@@ -40,7 +40,7 @@ function ResultsInbox() {
       </div>
       <div className="dk-list">
         {rows.map(l => (
-          <DeskRow key={l.id} lot={l}
+          <DeskRow key={l.id} lot={l} compact
             sub={[rowWhoOf(l), l.auctionHouse].filter(Boolean).join(' · ')}
             figure={l.priceUsd ? fmtFace(l.priceUsd) : <span data-quiet>result pending</span>}
             action={<button type="button" className="ray-own-btn" onClick={() => i.onSettledOwn(i.savedIdOf(l.id))}>I won it</button>} />
