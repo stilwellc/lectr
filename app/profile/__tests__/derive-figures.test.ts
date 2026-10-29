@@ -327,3 +327,27 @@ test('recordOf: the watches judged against a ONE-BOUND estimate are counted (the
   assert.equal(r.n, 3);
   assert.equal(r.oneSidedN, 2);
 });
+
+test('settledShelfOf: ONE settled count — total on the shelf, the rows awaiting results (no price yet, a provisional archive result), settled = the rest', () => {
+  const sold = [
+    lot({ id: 's1', status: 'sold', priceUsd: 10, saleDate: '2026-10-01' }),
+    lot({ id: 'p1', status: 'upcoming', saleDate: '2026-10-20' }),
+    lot({ id: 'p2', status: 'upcoming', saleDate: '2026-10-21', resultsPending: true }),
+  ];
+  const orphans = [{ provisional: false }, { provisional: true }];
+  assert.deepEqual(D.settledShelfOf(sold, orphans), { total: 5, settled: 2, pending: 3 });
+  assert.deepEqual(D.settledShelfOf([], []), { total: 0, settled: 0, pending: 0 });
+});
+
+test('recordOf: the Record still judges a watch saved after its hammer, and says how many (afterHammerN); a save on the sale day is not one', () => {
+  const sold = [
+    lot({ id: 'late', status: 'sold', priceUsd: 1200, saleDate: '2026-10-01', estimateLow: 800, estimateHigh: 1200 }),
+    lot({ id: 'sameDay', status: 'sold', priceUsd: 1200, saleDate: '2026-10-02', estimateLow: 800, estimateHigh: 1200 }),
+    lot({ id: 'before', status: 'sold', priceUsd: 1200, saleDate: '2026-10-03', estimateLow: 800, estimateHigh: 1200 }),
+  ];
+  const metas: Record<string, SavedMeta> = { late: meta({ savedAt: '2026-10-05T10:00:00.000Z' }), sameDay: meta({ savedAt: '2026-10-02T10:00:00.000Z' }), before: meta({ savedAt: '2026-09-20T10:00:00.000Z' }) };
+  const r = D.recordOf(sold, id => metas[id])!;
+  assert.equal(r.n, 3);
+  assert.equal(r.afterHammerN, 1);
+  assert.equal(D.recordOf(sold, () => undefined)!.afterHammerN, 0, 'no save date → nothing claimed');
+});

@@ -342,6 +342,13 @@ export function planWeek(input: WeekInput): WeekPlan {
 
 /* ── the view: what the columns show ── */
 
+/** the device's memory of the picks toggle ('1' shown / '0' hidden; absent = the week decides) */
+export const PICKS_KEY = 'lectr-week-picks';
+/** fired on window when the room flips the toggle (detail: boolean) — the
+ *  provider mirrors it into DeskInternals.weekPicksShown so the tab's count
+ *  follows without a window read in render */
+export const WEEK_PICKS_EVENT = 'lectr-week-picks';
+
 export interface WeekView {
   /** picks are shown (false: watches + names only) */
   picks: boolean;

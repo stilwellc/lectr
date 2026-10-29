@@ -115,7 +115,7 @@ export function meta(_desk: DeskData, i: DeskInternals): SectionMeta | null {
 export default function HistoryRoom(_p: SectionProps) {
   const i = useDeskInternals();
   const { narrow } = useDesk();
-  const { sold, soldOrphans, goneOrphans, orphanIds, other, settledRows, settledCount, record, unclaimedWins,
+  const { sold, soldOrphans, goneOrphans, orphanIds, other, settledRows, record, unclaimedWins,
     metaFor, savedMeta, ownedLotIds, ownedIdSet, savedIdOf, onSettledOwn, onSettledRemove, ledgerState, allLots, isSaved, onCardToggle, toggle, isDesktop } = i;
   // a phone opens on the most recent rows; the rest are one tap
   const [allSettled, setAllSettled] = useState(false);
@@ -127,7 +127,7 @@ export default function HistoryRoom(_p: SectionProps) {
         <div className="ns-plate" style={{ paddingTop: 18 }}>
         {/* the rail's "History" lands here — one name for one room */}
         <RoomHead mark={<TapeMark size={17} />} title="History" style={{ marginBottom: 4 }}
-          sub={<>{settledCount - i.pendingResultsN} settled {settledCount - i.pendingResultsN === 1 ? 'watch' : 'watches'}{i.pendingResultsN > 0 && <> · {i.pendingResultsN} awaiting results</>}{record && <> · {record.n} judged vs estimate</>}</>} />
+          sub={<>{i.settledN} settled {i.settledN === 1 ? 'watch' : 'watches'}{i.pendingResultsN > 0 && <> · {i.pendingResultsN} awaiting results</>}{record && <> · {record.n} judged vs estimate</>}</>} />
         {unclaimedWins > 0 && (
           <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: '0 0 14px' }}>
             Won any of these? Mark it <b style={{ color: 'var(--color-fg)' }}>I won it</b> and the piece joins your collection, appraised against the live market.

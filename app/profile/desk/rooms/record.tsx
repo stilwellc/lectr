@@ -65,7 +65,7 @@ export function meta(_desk: DeskData, i: DeskInternals): SectionMeta | null {
 
 export default function RecordRoom(_p: SectionProps) {
   const i = useDeskInternals();
-  const { record, recordLedByAppraisal, collection, settledCount } = i;
+  const { record, recordLedByAppraisal, collection, settledCount, settledN, pendingResultsN } = i;
   return (
     <section id="record" className="ray-saved-section rail ray-enter" aria-label="Your record">
       <div className="ns-plate" style={{ paddingTop: 18 }}>
@@ -75,7 +75,7 @@ export default function RecordRoom(_p: SectionProps) {
             The signed figure is green only when it is a real gain, red only when it is a real loss; with no signed read
             yet it stays ink.  <b>Settled</b>: every watch that has hammered — the line-item receipts are under History.
           </> }}
-          sub={!record && settledCount > 0 ? <>{settledCount} settled · awaiting judgment</> : null} />
+          sub={!record && settledCount > 0 ? <>{settledN} settled{pendingResultsN > 0 && <> · {pendingResultsN} awaiting results</>} · awaiting judgment</> : null} />
         {/* THE DESK IN FIGURES — one forced-color cell carries the
             desk's signed read (collection.deltaPct / record.med exactly
             as computed; zero or none → ink abstention); the quiet cells
@@ -97,7 +97,7 @@ export default function RecordRoom(_p: SectionProps) {
               dir={record.med > 0 ? 'up' : record.med < 0 ? 'down' : 'ink'}
               stat={fmtSignedPct(Math.round(record.med))}
               label="Your record"
-              body={`${record.n} judged · median vs estimate${record.oneSidedN ? ` · ${record.oneSidedN} vs a one-bound estimate` : ''}`}
+              body={`${record.n} judged · median vs estimate${record.oneSidedN ? ` · ${record.oneSidedN} vs a one-bound estimate` : ''}${record.afterHammerN ? ` · ${record.afterHammerN} saved after the hammer` : ''}`}
               href="#settled"
             />
           ) : (
@@ -107,10 +107,10 @@ export default function RecordRoom(_p: SectionProps) {
               left: their figures lead their own tabs */}
           {settledCount > 0 && (
             <Cell
-              stat={settledCount.toLocaleString()}
-              statNote={settledCount === 1 ? 'settled watch' : 'settled watches'}
+              stat={settledN.toLocaleString()}
+              statNote={settledN === 1 ? 'settled watch' : 'settled watches'}
               label="Settled"
-              body={record ? `${record.n} judged · ${fmtFace(record.realized)} realized` : 'awaiting judgment'}
+              body={`${record ? `${record.n} judged · ${fmtFace(record.realized)} realized` : 'awaiting judgment'}${pendingResultsN > 0 ? ` · ${pendingResultsN} awaiting results` : ''}`}
               href="#settled"
             />
           )}
@@ -127,7 +127,7 @@ export default function RecordRoom(_p: SectionProps) {
                 </span>
               )}
               <span className="ck-record-s">
-                {record.n} {record.n === 1 ? 'watch' : 'watches'} <Term k="judged">judged</Term> <Term k="vs estimate">vs estimate</Term> · median, all-in{record.oneSidedN > 0 && <> · {record.oneSidedN} vs a one-bound estimate</>} · {fmtFace(record.realized)} realized ·{' '}
+                {record.n} {record.n === 1 ? 'watch' : 'watches'} <Term k="judged">judged</Term> <Term k="vs estimate">vs estimate</Term> · median, all-in{record.oneSidedN > 0 && <> · {record.oneSidedN} vs a one-bound estimate</>}{record.afterHammerN > 0 && <> · {record.afterHammerN} saved after the hammer</>} · {fmtFace(record.realized)} realized ·{' '}
                 <a href="#settled" className="ck-away-link">receipts below</a>
               </span>
             </div>

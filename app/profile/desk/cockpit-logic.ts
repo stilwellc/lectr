@@ -119,3 +119,11 @@ export function stripCaption(days: readonly StripDay[]): string {
         .filter(Boolean).join(' · ') + (total === 1 ? ' closes' : ' close');
   return `${what} in 14 days · next ${when}${busy}`;
 }
+
+/** ONE count of "picks live" for the For-you tab, the picks room's head
+ *  ("N picked") and the cockpit's picks-only cell: the deal's recs — what the
+ *  For-you room LISTS. The return loop's closing picks print on Today as
+ *  "Closing tonight" and are not counted here (they are not under For you). */
+export function picksLiveOf(desk: { recs: readonly unknown[] }): number {
+  return desk.recs.length;
+}

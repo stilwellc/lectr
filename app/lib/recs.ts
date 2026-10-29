@@ -2255,7 +2255,14 @@ function explain(l: RecLot, f: Feat, best: { seed: Seed; parts?: SimParts; ladde
   if (s.query) return { reason: `Matches your search “${s.label}”`, why: ['saved search'] };
   const p = best.parts!;
   if (p.card) why.push('same card');
-  else if (p.entity) why.push(`same ${entityWord(f.ek)}`);
+  else if (p.entity) {
+    why.push(`same ${entityWord(f.ek)}`);
+    // (pass 15) a player tie's era is read off the save's year (the ×0.6
+    // softening, PLAYER_ERA_SPAN); a save with no year reads no era — a
+    // lot's SALE year is not the player's era (a 1973 jersey sells in 2026),
+    // so nothing stands in, and the pick says so instead of gating silently
+    if (f.ek?.startsWith('pl:') && f.year != null && s.f?.year == null) why.push('era not read · your save carries no year');
+  }
   else if (p.franchise) why.push(`also ${franchiseName(f) ?? 'the same franchise'}`);
   else if (p.drill) why.push('same model line');
   const shared = p.shared.filter(k => FX_WORD[k]).map(k => FX_WORD[k]);

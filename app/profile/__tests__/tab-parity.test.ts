@@ -13,7 +13,6 @@ import type { AuctionLot } from '../../types';
 import type { DeskData } from '../desk/types';
 import type { DeskInternals } from '../desk/provider';
 import { pinClock } from '../../lib/__tests__/helpers/pin-clock';
-import { storageSet } from '../../lib/safe-storage';
 import { fmtSignedPct, localToday } from '../../utils';
 
 process.env.TZ = 'America/New_York';
@@ -23,7 +22,8 @@ const NOW = Date.now();
 (Module as unknown as { _extensions: Record<string, (m: unknown, f: string) => void> })._extensions['.css'] = () => {};
 declare const require: NodeRequire;
 const { tabItemsOf } = require('../desk/sections') as typeof import('../desk/sections');
-const { planOf, PICKS_KEY } = require('../week') as typeof import('../week');
+const { planOf } = require('../week') as typeof import('../week');
+const { picksLiveOf } = require('../desk/cockpit-logic') as typeof import('../desk/cockpit-logic');
 const { planWeek, weekLeadOf, pickDefault } = require('../week/week') as typeof import('../week/week');
 const { hammerStrip } = require('../desk/cockpit-logic') as typeof import('../desk/cockpit-logic');
 const { deskNamesOf, namesTotals, liveLotsOf, salesOf } = require('../names/names') as typeof import('../names/names');
@@ -61,19 +61,25 @@ const collection = { rows: [{ lot: owned, paid: 5000, paidIsOverride: false, not
   totalPaid: 5000, totalAppraised: 6000, appraisedPaid: 5000, appraisedOfPaid: 6000, deltaPct: 20, appraisedN: 1, appraisedPaidN: 1, pendingOwned: [] };
 const i = {
   deskView: true, signedOutView: false, watchFirst: true, upcoming: watches, todayShows: true, hasMarket: true, unseenAlerts: 0,
-  hasRecordRoom: true, record, collection, historyCount: 1, orphanIds: [], settledCount: 1, pendingResultsN: 0, other: [], unclaimedWins: 0, sinceLastN: 0,
+  hasRecordRoom: true, record, collection, historyCount: 1, orphanIds: [], settledCount: 1, settledN: 1, pendingResultsN: 0, other: [], unclaimedWins: 0, sinceLastN: 0,
+  weekPicksShown: null,
 } as unknown as DeskInternals;
 
-const tabs = () => Object.fromEntries(tabItemsOf(desk, i).map(t => [t.id, t]));
+const tabs = (over: Partial<DeskInternals> = {}, d: DeskData = desk) => Object.fromEntries(tabItemsOf(d, { ...i, ...over } as DeskInternals).map(t => [t.id, t]));
 
 test('Watching = the room\'s "N live lots"; For you = the room\'s "N picked"; Record = the record\'s median; Collection = the pieces; Names = the roster', () => {
   const t = tabs();
   assert.equal(t.watching.count, i.upcoming.length);
   assert.equal(t['for-you'].count, desk.recs.length);
+  assert.equal(t['for-you'].count, picksLiveOf(desk), 'the cockpit\'s picks-only cell and the tab read ONE count');
   assert.equal(t.record.count, fmtSignedPct(Math.round(record.med)));
   assert.equal(t.record.count, '+73%');
   assert.equal(t.owned.count, desk.collection.length);
   assert.equal(desk.collection.length, collection.rows.length);
+  // before the archive lands the collection is the device's kept rows and the
+  // Collection room has no resolved row yet — the tab prints no count it can't back
+  const preLoad = { ...collection, rows: [], totalPaid: 0, totalAppraised: 0, appraisedPaid: 0, appraisedOfPaid: 0, deltaPct: null, appraisedN: 0, appraisedPaidN: 0 };
+  assert.equal(tabs({ collection: preLoad, historyCount: 0, settledCount: 0, settledN: 0 } as Partial<DeskInternals>, { ...desk, fullLoaded: false } as DeskData).owned.count, undefined);
   const names = deskNamesOf(desk.follows, desk.collection, desk.saved);
   const reads = names.map(n => { const lots = liveLotsOf(n, desk.book, NOW); return { name: n, sales: salesOf(lots), live: lots.length, flagged: 0 }; });
   assert.equal(t.names.count, names.length);
@@ -88,10 +94,10 @@ test('Week = the rows the room LISTS: yours (watches + picks) while picks show; 
   assert.equal(pickDefault(plan, null), false);
   assert.equal(tabs().week.count, weekLeadOf(plan, false));
   assert.equal(tabs().week.count, 3, 'the tab said 5 while the room listed 3 and "2 picks · hidden" (the mismatch pass 13 fixes)');
-  storageSet(PICKS_KEY, '1');
-  assert.equal(tabs().week.count, 5);
-  storageSet(PICKS_KEY, '0');
-  assert.equal(tabs().week.count, 3);
+  // the device's toggle reaches the meta through DeskInternals (read in the provider's effect) — never a storage read in render
+  assert.equal(tabs({ weekPicksShown: true }).week.count, 5);
+  assert.equal(tabs({ weekPicksShown: false }).week.count, 3);
+  assert.equal(tabs({ weekPicksShown: null }).week.count, 3, 'the server and the first client render agree on the default');
   assert.equal(weekLeadOf({ yours: 5, watches: 0 }, false), 0, 'picks-only desk with picks hidden: no count (the room says so)');
 });
 

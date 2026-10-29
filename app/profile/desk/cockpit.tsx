@@ -48,7 +48,7 @@ import { closeDays, hammerWord, needsYouOf } from './derive';
 import { useDesk, useDeskInternals } from './provider';
 import { jump } from '../rail';
 import { mountedSections, overMaxN } from './sections';
-import { dayLabel, hammerStrip, streakOf, stripCaption } from './cockpit-logic';
+import { dayLabel, hammerStrip, picksLiveOf, streakOf, stripCaption } from './cockpit-logic';
 import { closingNowOf, planWeek, localDayOf, type WeekRow } from '../week/week';
 import { gradeDesk, EDGE_HIT_PCT } from '../edge/edge';
 import type { AuctionLot } from '../../types';
@@ -121,14 +121,11 @@ export default function Cockpit() {
     const recs = desk.closingPicks.length ? desk.recs.concat(desk.closingPicks.filter(r => !seen.has(r.lot.id))) : desk.recs;
     return planWeek({ now: desk.now, saved: desk.saved, savedIds: desk.savedIds, recs, book: desk.book, follows: desk.follows, collection: desk.collection });
   }, [desk]);
-  const picksLive = useMemo(() => {
-    const ids = new Set(desk.recs.map(r => r.lot.id));
-    for (const r of desk.closingPicks) ids.add(r.lot.id);
-    return ids.size;
-  }, [desk.recs, desk.closingPicks]);
+  // ONE "picks live" count with the For-you tab and the picks room's head (cockpit-logic.picksLiveOf)
+  const picksLive = picksLiveOf(desk);
   // the three desks
   const live = deskView;
-  const cold = !live && plan.rows.length === 0 && picksLive === 0;
+  const cold = !live && plan.rows.length === 0 && picksLive === 0 && desk.closingPicks.length === 0;
   const picksOnly = !live && !cold;
   const strip = useMemo(
     () => hammerStrip(plan.rows.map(r => ({ day: r.day, est: r.estMid ?? 0, kind: r.kind })), todayKey),

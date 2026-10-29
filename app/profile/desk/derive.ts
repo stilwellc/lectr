@@ -212,6 +212,19 @@ export const closedBy = (l: AuctionLot, nowMs: number): boolean => {
  *  day, still 'upcoming') — "awaiting results", never "settled" */
 export const pendingResultsOf = (sold: readonly AuctionLot[]): number => sold.filter(l => l.status !== 'sold').length;
 
+/** THE SETTLED SHELF, counted once for every surface (History's head, the
+ *  masthead, the Record's cell, the tab badges):
+ *    total     every row on the shelf — resolved sold / past-pending rows +
+ *              the archive orphans the ledger answered for
+ *    pending   the rows AWAITING RESULTS: past their day with no price, and
+ *              the orphans the ledger knows only provisionally
+ *    settled   total − pending — the only count the word "settled" may wear */
+export function settledShelfOf(sold: readonly AuctionLot[], soldOrphans: readonly { provisional: boolean }[]): { total: number; settled: number; pending: number } {
+  const total = sold.length + soldOrphans.length;
+  const pending = pendingResultsOf(sold) + soldOrphans.filter(o => o.provisional).length;
+  return { total, settled: total - pending, pending };
+}
+
 /* ── what changed since the saves: signals that moved, bids that landed ── */
 export function watchChangesOf(upcoming: readonly AuctionLot[], metaFor: MetaOf, signalById: ReadonlyMap<string, SignalRead>): { moved: number; newBids: number } {
   let moved = 0;
@@ -238,6 +251,11 @@ export interface RecordRead {
   /** of n, the watches judged against a ONE-BOUND estimate (utils.overEstimatePct
    *  reads the published bound as the midpoint) — the line says so */
   oneSidedN: number;
+  /** of n, the watches SAVED AFTER their hammer — the Record still judges the
+   *  lot (its outcome vs its estimate is a fact about the lot), but a bookmark
+   *  on a result is not the reader's eye; Your calls excludes them, the Record
+   *  says how many it holds */
+  afterHammerN: number;
   split: { flagged: number | null; flaggedN: number; rest: number | null; restN: number } | null;
   series: { id: string; d: string; pct: number; title: string }[];
 }
@@ -272,7 +290,8 @@ export function recordOf(sold: readonly AuctionLot[], metaFor: MetaOf): RecordRe
     .slice(-60)
     .map(x => ({ id: x.l.id, d: (x.l.saleDate || '').slice(0, 10), pct: x.pct, title: x.l.title }));
   const oneSidedN = judged.filter(x => !((x.l.estimateLow || 0) > 0 && (x.l.estimateHigh || 0) > 0)).length;
-  return { n: judged.length, realized, med, oneSidedN, split, series };
+  const afterHammerN = judged.filter(x => { const at = (metaFor(x.l.id)?.savedAt || '').slice(0, 10), d = (x.l.saleDate || '').slice(0, 10); return !!at && !!d && at > d; }).length;
+  return { n: judged.length, realized, med, oneSidedN, afterHammerN, split, series };
 }
 
 /* ── since your last visit — the watches that SETTLED after the previous

@@ -542,3 +542,18 @@ test('pass 8: a Namath desk whose save carries NO year still gates on the 1965�
   const got = ids(recommend([kraft, csonka], t, { nowMs: NOW }));
   assert.ok(!got.includes(kraft.id) && got.includes(csonka.id), `the corpus era gates: ${got.join(',')}`);
 });
+
+test('pass 15: a player tie whose save carries no year says the era was not read — a lot\'s sale year is not the player\'s era, so nothing stands in', () => {
+  const mem = (title: string, est: number, o: Partial<RecLot> = {}): RecLot => ({ id: `ge-${++seq}`, artist: 'sports-memorabilia', title, subCat: 'game-used', drill: 'football', auctionHouse: 'Goldin', saleName: 'Weekly', saleDate: at(4).slice(0, 10), saleDateTime: at(4), currentBid: est, bidCount: 4, currency: 'USD', status: 'upcoming', imageUrl: PHOTO, ...o });
+  const namath = mem('JOE NAMATH NEW YORK JETS TEAM ISSUED HOME JERSEY', 3000, { playerSlug: 'joe-namath', ek: 'pl:joe-namath' });
+  const namath25 = mem('2025 Joe Namath Signed Jets Jersey', 2800, { playerSlug: 'joe-namath', ek: 'pl:joe-namath' });
+  const t = buildTaste({ saved: [{ id: namath.id, lot: namath, savedAt: at(-3) }], follows: [], nowMs: NOW });
+  const [r] = recommend([namath25], t, { nowMs: NOW });
+  assert.ok(r, 'the named tie deals (nothing gates with no year anywhere)');
+  assert.ok(r.why.includes('era not read · your save carries no year'), r.why.join(' | '));
+  // a dated save reads its era and says nothing of the kind
+  const dated = mem('1973 Joe Namath Jets Game Worn Jersey', 3000, { playerSlug: 'joe-namath', ek: 'pl:joe-namath' });
+  const td = buildTaste({ saved: [{ id: dated.id, lot: dated, savedAt: at(-3) }], follows: [], nowMs: NOW });
+  const [rd] = recommend([namath25], td, { nowMs: NOW });
+  assert.ok(rd && !rd.why.some(w => w.startsWith('era not read')), rd?.why.join(' | '));
+});

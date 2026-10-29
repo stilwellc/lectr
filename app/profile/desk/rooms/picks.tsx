@@ -14,6 +14,7 @@
  * the discover lane, "Below market" the engine's flag — rather than regrouped
  * under seed heads, so the strongest ties still lead and Show more pages on.
  */
+import { picksLiveOf } from '../cockpit-logic';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { AuctionLot } from '../../../types';
 import { RankMark } from '../../../components/marks';
@@ -226,7 +227,7 @@ export function RecsRoom({ book, deal, compLots, taste, ready, isSaved, onToggle
 }
 
 export function meta(desk: DeskData): SectionMeta {
-  return { id: 'for-you', label: 'For you', count: desk.recs.length || undefined };
+  return { id: 'for-you', label: 'For you', count: picksLiveOf(desk) || undefined };
 }
 
 /** the group: For you → For your collection → How your picks did */
