@@ -71,8 +71,10 @@ Rungs deal strictly below every real tie, each saying its rung and whose it is:
   another maker of the same category · sub near the anchor's prices; another
   player of the same sport and era — in memorabilia inside the same sub, and
   within ±15 years of the player's ERA (the median year of the desk's saves of
-  the name, else `TasteInput.playerEras` handed in — players.json carries no
-  career years yet), unless the reader follows the name. Another PERSON (every signer on the culture
+  the name, else players.json's `era` — the 10th–90th percentile of the sold
+  cards' years from ≥5 dated lots, built by scripts/build-market, read by
+  app/lib/player-era and handed in as `TasteInput.playerEras` by the profile's
+  taste hook, the Daily Desk runner and the sweep), unless the reader follows the name. Another PERSON (every signer on the culture
   market is one family) needs a shared ANCHOR beyond the sub: the franchise the
   desk keeps (and only that when it keeps one), else the DOMAIN (film & TV /
   music by facet, a historical line, a space program), an ERA within 25 years,
@@ -152,10 +154,9 @@ the prices, a photo, ≤14 days), a tie seat on the persona's want.
 - The house cap wins over this-week-first: on a Bonhams-heavy watch desk the
   second screen fills with 16–20-day Christie's / Sotheby's lots because every
   nearer lot left is Bonhams past 40%.
-- A player's era comes from the desk's saves of the name (or a span the caller
-  hands in); players.json has no career years, so a save with no year on it
-  and no handed-in span gates nothing. A build step could derive the span from
-  the sold archive's card years.
+- A player's era is the desk's saves of the name, else players.json's `era`
+  (card years of the sold cards; ≥5 dated lots). A player under that floor, or
+  one the corpus knows only by objects, has none — and gates nothing.
 - The league reader is a word list (WNBA teams and stars, CFL teams, NPB clubs
   and issuers); a league the list does not name reads as the main league.
 - A lot with no price and no bid can lead when nothing behind it has a bid

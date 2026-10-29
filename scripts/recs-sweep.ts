@@ -23,6 +23,7 @@ import { taxonOf } from '../app/lib/taxonomy';
 import { makerFollow, entityFollow, catFollow, type Follow } from '../app/lib/follows';
 import { closeMsOf } from '../app/lib/priority';
 import { imageOf } from '../app/lib/house-images';
+import { playerErasOf } from '../app/lib/player-era';
 
 const args = process.argv.slice(2);
 const flag = (k: string): string | null => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] ?? null : null; };
@@ -35,6 +36,9 @@ const all: RecLot[] = book.lots || book;
 const NOW = (Date.parse(book.generatedAt ?? '') || Date.now()) + 3600e3;
 const TODAY = new Date(NOW - 7 * 3600e3).toISOString().slice(0, 10); // US-local day, as the eval reads it
 const pool = all.filter(l => isOnBlock(l as Parameters<typeof isOnBlock>[0], TODAY, NOW));
+// the players' career eras (players.json next to the book; absent = none)
+const playersPath = path.join(path.dirname(src), 'players.json');
+const playerEras = fs.existsSync(playersPath) ? playerErasOf((JSON.parse(fs.readFileSync(playersPath, 'utf8')) as { players?: Parameters<typeof playerErasOf>[0] extends Iterable<infer P> | null | undefined ? P[] : never }).players) : new Map<string, { lo: number; hi: number }>();
 console.log(`${pool.length} lots on the block as of ${new Date(NOW).toISOString()} (${path.relative(process.cwd(), src)})`);
 
 const cat = (c: string) => (l: RecLot) => taxonOf(l).cat === c;
@@ -58,7 +62,7 @@ const pick = (f: (l: RecLot) => boolean, n: number, distinctBy?: (l: RecLot) => 
 
 function desk(name: string, saved: RecLot[], follows: Follow[] = []) {
   if (only && !name.startsWith(only)) return;
-  const t = buildTaste({ saved: saved.map(l => ({ id: l.id, lot: l, savedAt: new Date(NOW - 3 * 864e5).toISOString() })), follows, nowMs: NOW });
+  const t = buildTaste({ saved: saved.map(l => ({ id: l.id, lot: l, savedAt: new Date(NOW - 3 * 864e5).toISOString() })), follows, playerEras, nowMs: NOW });
   const rs = recommend(pool, t, { nowMs: NOW, n: N });
   const houses = new Map<string, number>();
   for (const r of rs) houses.set(r.lot.auctionHouse ?? '?', (houses.get(r.lot.auctionHouse ?? '?') ?? 0) + 1);

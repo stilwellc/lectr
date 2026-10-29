@@ -61,6 +61,8 @@ export interface PlayerRec {
   slug: string; name?: string; n: number; sport: string | null;
   cats: Record<string, { n: number; medUsd: number | null; ttmMedUsd: number | null }>;
   yearly?: { y: number; med: number; n: number }[];
+  /** (pass 8) the career era: 10th–90th percentile of the sold cards' years (app/lib/player-era) */
+  era?: { from: number; to: number; n: number } | null;
   objects: { id: string; d: string; p: number; t: string; cat: string }[];
   recent?: { id?: string; d: string; p: number; t: string; cat: string }[];
 }

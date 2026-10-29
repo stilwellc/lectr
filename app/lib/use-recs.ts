@@ -27,6 +27,8 @@ import { useFollows } from './follows';
 import { buildTaste, idAliases, type Taste, type SavedInput, type RecLot } from './recs';
 import { usePricePref, useInterests } from './interests';
 import { readSignals, signalsToTaste, SIGNALS_EVENT, SIGNALS_KEY, type SignalStore } from './recs-signals';
+import { loadPlayers } from '../hooks/useEntities';
+import { playerErasOf } from './player-era';
 
 /** the on-device signal store (app/lib/recs-signals). Read once on mount
  *  (null until then — the server and the first client render know nothing,
@@ -66,6 +68,18 @@ export function useTaste(book: readonly AuctionLot[]): TasteState {
   const price = usePricePref();
   // the quick start's markets, as a stable key (a new array each read)
   const marketsKey = useInterests().markets.join(',');
+  // (pass 8) the players' CAREER ERAS (players.json → app/lib/player-era), read
+  // once and only when the desk carries a player at all — the player rung
+  // gates on them when a save's title has no year. Until they land the taste
+  // deals without them; their arrival re-deals once.
+  const [eras, setEras] = useState<ReadonlyMap<string, { lo: number; hi: number }> | null>(null);
+  const hasPlayer = useMemo(() => savedIds.length > 0 || follows.some(f => f.kind === 'maker'), [savedIds.length, follows]);
+  useEffect(() => {
+    if (eras || !hasPlayer) return;
+    let on = true;
+    loadPlayers().then(m => { if (on) setEras(playerErasOf(m ? Array.from(m.values()) : null)); }).catch(() => { if (on) setEras(new Map()); });
+    return () => { on = false; };
+  }, [eras, hasPlayer]);
   const anySignal = !!signals && signals.ev.length + signals.marks.length > 0;
   const byId = useMemo(() => {
     const m = new Map<string, AuctionLot>();
@@ -99,9 +113,10 @@ export function useTaste(book: readonly AuctionLot[]): TasteState {
       searches: searches.map(s => ({ id: s.id, name: s.name, query: s.query, createdAt: s.created_at })),
       extra, negative: { ...negative, lots }, price,
       markets: marketsKey ? marketsKey.split(',') : [],
+      playerEras: eras ?? undefined,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedIds, savedMeta, byId, follows, searches, day, signals, price, marketsKey]);
+  }, [savedIds, savedMeta, byId, follows, searches, day, signals, price, marketsKey, eras]);
   return {
     taste,
     ready: savedReady && followsReady && signals !== null,

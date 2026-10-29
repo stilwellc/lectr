@@ -14,6 +14,7 @@ import { readSignals, recordSignal, signalsToTaste, VIEWED_DAYS, type KV } from 
 import { reasonKindOf } from '../pick-log';
 import { kindFits } from '../object-kind';
 import { catFollow, makerFollow, entityFollow } from '../follows';
+import { playerErasOf } from '../player-era';
 
 // local noon: a day's rotation reads the reader's calendar
 const NOW = new Date(2026, 9, 12, 12, 0, 0).getTime();
@@ -525,4 +526,19 @@ test('a followed name whose live median is a grail leans its prior to the lower 
   const tj = buildTaste({ saved: [], follows: [makerFollow('michael-jordan', 'Michael Jordan')], nowMs: NOW });
   const rj = recommend(wide, tj, { nowMs: NOW, n: 3, tune: { rotate: 0, discover: 0 } });
   assert.ok(rj.every(r => Number(r.lot.currentBid) >= 300), `the median leads, not the $60 sticker: ${rj.map(r => r.lot.currentBid).join(',')}`);
+});
+
+test('pass 8: a Namath desk whose save carries NO year still gates on the 1965–1977 era read from players.json', () => {
+  const mem = (title: string, est: number, o: Partial<RecLot> = {}): RecLot => ({ id: `ge-${++seq}`, artist: 'sports-memorabilia', title, subCat: 'game-used', drill: 'football', auctionHouse: 'Goldin', saleName: 'Weekly', saleDate: at(4).slice(0, 10), saleDateTime: at(4), currentBid: est, bidCount: 4, currency: 'USD', status: 'upcoming', imageUrl: PHOTO, ...o });
+  const namath = mem('JOE NAMATH NEW YORK JETS TEAM ISSUED HOME JERSEY', 3000, { playerSlug: 'joe-namath', ek: 'pl:joe-namath' });
+  const kraft = mem('Crucial Catch - Packers Tucker Kraft Signed Game Worn Jersey (10/19/2025)', 4500, { playerSlug: 'tucker-kraft', ek: 'pl:tucker-kraft', auctionHouse: 'NFL Auctions' });
+  const csonka = mem('1972 Larry Csonka Miami Dolphins Game Worn Home Jersey', 3200, { playerSlug: 'larry-csonka', ek: 'pl:larry-csonka' });
+  // what players.json carries for the name (the build's 10th–90th percentile of his sold cards' years)
+  const eras = playerErasOf([{ slug: 'joe-namath', era: { from: 1965, to: 1977, n: 217 } }]);
+  const without = buildTaste({ saved: [{ id: namath.id, lot: namath, savedAt: at(-3) }], follows: [], nowMs: NOW });
+  assert.ok(ids(recommend([kraft, csonka], without, { nowMs: NOW })).includes(kraft.id), 'with no year anywhere, nothing gates');
+  const t = buildTaste({ saved: [{ id: namath.id, lot: namath, savedAt: at(-3) }], follows: [], playerEras: eras, nowMs: NOW });
+  assert.deepEqual(t.playerEras?.get('pl:joe-namath'), { lo: 1965, hi: 1977 });
+  const got = ids(recommend([kraft, csonka], t, { nowMs: NOW }));
+  assert.ok(!got.includes(kraft.id) && got.includes(csonka.id), `the corpus era gates: ${got.join(',')}`);
 });
