@@ -57,6 +57,25 @@ export function fromText(l: EstBounds): string | null {
 
 export interface PricedTotal { total: number; priced: number; oneSided: number; n: number }
 
+/** the basis every head prints beside a summed total — "3 of 4 priced · 1
+ *  from one bound, not summed"; null when every row is priced (nothing to
+ *  qualify) */
+export function pricedBasisText(t: Pick<PricedTotal, 'priced' | 'oneSided' | 'n'>): string | null {
+  if (t.priced >= t.n) return null;
+  return [`${t.priced} of ${t.n} priced`, t.oneSided > 0 ? `${t.oneSided} from one bound, not summed` : null].filter(Boolean).join(' · ');
+}
+
+/** a live bid in USD — the row's currency through its dated rate; a non-USD
+ *  bid with no rate cannot be read against a USD max and returns null (never
+ *  a native figure read as dollars, never a false alarm). The cockpit's
+ *  over-max count and the Daily Desk's read the same rule. */
+export function liveBidUsd(l: { currentBid?: number | null; currency?: string | null; fxRate?: number | null }): number | null {
+  const bid = l.currentBid || 0;
+  if (!(bid > 0)) return null;
+  if (!l.currency || l.currency === 'USD') return bid;
+  return l.fxRate && l.fxRate > 0 ? bid * l.fxRate : null;
+}
+
 /** Σ midpoints over the priced rows + the counts every head prints
  *  ("$212K at estimate midpoint · 3 of 4 priced · 1 from $700") */
 export function pricedTotal(lots: readonly EstBounds[]): PricedTotal {

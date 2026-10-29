@@ -85,7 +85,7 @@ test('watchSummaryOf: flagged = rows whose live signal reads Below Market', () =
 /* ── closes today, on the reader's calendar ─────────────────────────────── */
 
 test('watchSummaryOf: closesToday reads the reader\'s day — a 10 PM ET close (02:00Z tomorrow) is today; a 7 PM ET close tomorrow is not; a date-only sale day is its day', () => {
-  const tonight = lot({ id: 'tonight', saleDate: '2026-10-30', saleDateTime: '2026-10-30T02:00:00Z', auctionHouse: 'Goldin' });   // 10 PM ET Oct 29
+  const tonight = lot({ id: 'tonight', saleDate: '2026-10-30', saleDateTime: '2026-10-30T03:30:00Z', auctionHouse: 'Goldin' });   // 11:30 PM ET Oct 29 — still ahead of the 10:30 PM clock
   const tomorrow = lot({ id: 'tomorrow', saleDate: '2026-10-30', saleDateTime: '2026-10-30T23:00:00Z', auctionHouse: 'Goldin' }); // 7 PM ET Oct 30
   const dayOnly = lot({ id: 'day', saleDate: '2026-10-29' });
   const later = lot({ id: 'later', saleDate: '2026-11-02' });
@@ -120,7 +120,7 @@ test('needsYouOf: a watch both past your max and closing today is ONE thing; res
   const onlyClosing = lot({ id: 'closing', saleDate: '2026-10-29' });
   const onlyOver = lot({ id: 'over', saleDate: '2026-11-03', currentBid: 1500 });
   const n = D.needsYouOf([both, onlyClosing, onlyOver], id => (id === 'both' || id === 'over' ? 1000 : null), 2);
-  assert.deepEqual(n, { n: 3 + 2, overMax: 2, closesToday: 2, results: 2 });
+  assert.deepEqual(n, { n: 3 + 2, overMax: 2, closesToday: 2, closedEarlierToday: 0, results: 2 });
 });
 
 /* ── the Did-you-win inbox ──────────────────────────────────────────────── */
@@ -268,4 +268,51 @@ test('tenureOf: the oldest save\'s month, once older than 30 days', () => {
   assert.equal(D.tenureOf(['a', 'b'], metas), 'March 2026');
   assert.equal(D.tenureOf(['b'], { b: meta({ savedAt: '2026-10-20T10:00:00.000Z' }) }), null);
   assert.equal(D.tenureOf([], {}), null);
+});
+
+/* ── closed earlier today, awaiting results, and the paper's parity ──────── */
+
+test('watchSummaryOf / needsYouOf: a watch whose published close passed earlier today is "closed earlier today" (results pending), never "closes today" and never counted as needing you', () => {
+  const now = Date.now(); // 10:30 PM ET
+  const earlier = lot({ id: 'earlier', saleDate: '2026-10-30', saleDateTime: '2026-10-29T18:00:00Z', auctionHouse: 'Goldin', closeKind: 'online', currentBid: 500 } as Partial<AuctionLot>); // 2 PM ET today
+  const tonight = lot({ id: 'tonight', saleDate: '2026-10-30', saleDateTime: '2026-10-30T03:00:00Z', auctionHouse: 'Goldin', closeKind: 'online' } as Partial<AuctionLot>); // 11 PM ET today
+  const dayOnly = lot({ id: 'day', saleDate: '2026-10-29', auctionHouse: 'Phillips' }); // closes when its day ends where it is sold — still ahead at 10:30 PM
+  const s = D.watchSummaryOf([earlier, tonight, dayOnly], sig([]), now);
+  assert.equal(s.closesToday, 2);
+  assert.equal(s.closedEarlierToday, 1);
+  const ny = D.needsYouOf([earlier, tonight, dayOnly], () => null, 0, now);
+  assert.deepEqual(ny, { n: 2, overMax: 0, closesToday: 2, closedEarlierToday: 1, results: 0 });
+  // past your max AND closed earlier: the bid still needs you (it is said), the close does not
+  const ny2 = D.needsYouOf([earlier, tonight], id => (id === 'earlier' ? 1 : null), 1, now);
+  assert.deepEqual(ny2, { n: 2 + 1, overMax: 1, closesToday: 1, closedEarlierToday: 1, results: 1 });
+});
+
+test('pendingResultsOf: the settled shelf\'s rows the house hasn\'t resulted — "awaiting results", not "settled"', () => {
+  const sold = [
+    lot({ id: 's1', status: 'sold', priceUsd: 10, saleDate: '2026-10-01' }),
+    lot({ id: 'p1', status: 'upcoming', saleDate: '2026-10-20' }),
+    lot({ id: 'p2', status: 'upcoming', saleDate: '2026-10-21', resultsPending: true }),
+  ];
+  assert.equal(D.pendingResultsOf(sold), 2);
+  assert.equal(D.pendingResultsOf([]), 0);
+});
+
+test('parity: the Daily Desk\'s glance total is the desk\'s own total (pricedTotal) over the same watches', () => {
+  const { planDesk } = require('../../../scripts/lib/daily-desk') as typeof import('../../../scripts/lib/daily-desk');
+  const { pricedTotal, liveBidUsd } = require('../desk/priced') as typeof import('../desk/priced');
+  const rows = [
+    lot({ id: 'usd', saleDate: '2026-11-02', saleDateTime: '2026-11-02T23:00:00Z', estimateLow: 1000, estimateHigh: 3000 }),
+    lot({ id: 'gbp', saleDate: '2026-11-03', saleDateTime: '2026-11-03T23:00:00Z', currency: 'GBP', estimateLow: 931, estimateHigh: 1197 }),
+    lot({ id: 'eur', saleDate: '2026-11-04', saleDateTime: '2026-11-04T23:00:00Z', currency: 'EUR', fxRate: 1.08, estLowUsd: 1080, estHighUsd: 2160, estimateLow: 1080, estimateHigh: 2160, currentBid: 1000 }),
+    lot({ id: 'rr', saleDate: '2026-11-05', saleDateTime: '2026-11-05T23:00:00Z', estimateLow: 700 }),
+  ];
+  const desk = D.watchSummaryOf(rows, sig([]));
+  const paper = planDesk({ now: Date.now(), tz: 'America/New_York', watches: rows.map(l => ({ lot_id: l.id, max_usd: 1050 })), live: new Map(rows.map(l => [l.id, l])), sold: [], picks: [] })!;
+  const t = pricedTotal(rows);
+  assert.equal(desk.totalEst, t.total);
+  assert.deepEqual([paper.glance.priced, paper.glance.oneSided], [desk.priced, desk.oneSided]);
+  assert.deepEqual([desk.priced, desk.oneSided], [t.priced, t.oneSided]);
+  // the over-max read: the same USD bid on both surfaces
+  assert.equal(D.liveBidUsd, liveBidUsd);
+  assert.deepEqual(paper.overMax.map(i => i.id), D.overMaxIdsOf(rows, () => 1050));
 });

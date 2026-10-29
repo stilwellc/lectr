@@ -58,6 +58,9 @@ import { parseEntityId, CAT_MARKET } from '../../app/lib/entity/key';
 import { pageHrefOf } from '../../app/lib/entity/kinds';
 import { isFlagged } from '../../app/lib/flags';
 import { isNewLot, houseBaselines } from '../../app/lib/feed-filters';
+// THE DESK'S OWN RULES (app/profile/desk/priced — pure, no React): the one
+// "priced" read behind every summed estimate and the one USD read of a live bid
+import { pricedTotal, pricedBasisText, liveBidUsd } from '../../app/profile/desk/priced';
 import { ARTIST_MARKET } from '../../app/constants';
 import type { CatKey } from '../../app/lib/taxonomy';
 
@@ -139,6 +142,10 @@ export interface Glance {
   watching: number;
   /** their estimate midpoints summed in USD (two-sided estimates only), formatted; null when none */
   est: string | null;
+  /** the total's basis: watches with BOTH bounds (summed) and with one bound ("from $X", counted, never summed) */
+  priced: number; oneSided: number;
+  /** "3 of 4 priced · 1 from one bound, not summed" beside `est`; null when every watch is priced */
+  estBasis: string | null;
   /** the soonest watched close: the day word (today / tomorrow / Wed, Nov 11), its clock when the house gave one, the lot */
   next: { id: string; title: string; when: string; time: string | null; /** the lot already prints under needs-you */ above: boolean } | null;
   /** what Closing this week counts: your watches + picks on the calendar */
@@ -173,7 +180,8 @@ export interface DeskEmail {
   market: MarketLine[];
 }
 
-const bidUsdOf = (l: AuctionLot) => { const b = l.currentBid || 0; return !b ? 0 : !l.currency || l.currency === 'USD' ? b : b * (l.fxRate || 0); };
+/** the live bid in USD (desk/priced liveBidUsd); 0 when there is none or it cannot be converted */
+const bidUsdOf = (l: AuctionLot) => liveBidUsd(l) ?? 0;
 const pct = (x: number) => `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(Math.round(x))}%`;
 const n2 = (n: number) => n.toLocaleString('en-US');
 const dayKeyIn = (ms: number, tz: string) => new Date(ms).toLocaleDateString('en-CA', { timeZone: tz });
@@ -520,14 +528,12 @@ export function planDesk(input: PlanInput): DeskEmail | null {
   // THE SEND RULE — a newspaper publishes daily; only an empty desk is skipped
   if (!watches.length && !follows.length && !results.length && !pickItems.length) return null;
 
-  // THE GLANCE — the cockpit's figures
-  let estUsd = 0;
-  for (const l of liveWatched) {
-    const lo = l.estimateLow ?? 0, hi = l.estimateHigh ?? 0;
-    if (!(lo > 0) || !(hi > 0)) continue;
-    const mid = (lo + hi) / 2;
-    estUsd += !l.currency || l.currency === 'USD' ? mid : mid * (l.fxRate || 0);
-  }
+  // THE GLANCE — the cockpit's figures. The estimate total is the desk's own
+  // rule (pricedTotal): both bounds, USD as the build left them — the raw
+  // estimateLow/High ARE dollars (a GBP Bonhams lot carries no fxRate and used
+  // to add nothing here; one with a rate was converted twice)
+  const est = pricedTotal(liveWatched);
+  const estUsd = est.total;
   const soonest = deskAll.find(x => x.ms != null) ?? null;
   // what Closing this week counts: your watches + picks on the calendar (the picks closing today used to be missing here)
   const weekAll = week.watches + week.picks;
@@ -539,6 +545,7 @@ export function planDesk(input: PlanInput): DeskEmail | null {
   const glance: Glance = {
     watching: liveWatched.length,
     est: estUsd > 0 ? fmtFace(estUsd) : null,
+    priced: est.priced, oneSided: est.oneSided, estBasis: estUsd > 0 ? pricedBasisText(est) : null,
     next: soonest ? (() => {
       const w = whenText(soonest.ms, now, tz, closeIsTimed(soonest.l)) || 'scheduled';
       const m = /^(today|tomorrow)\s+(.+)$/.exec(w);
@@ -573,7 +580,7 @@ export function planDesk(input: PlanInput): DeskEmail | null {
     closing.length && !lead.includes('close') ? `${closing.length} closing` : null,
     results.length && !lead.includes('sold') ? `${results.length + resultsMore} sold` : null,
     collection.length ? `${plural(collection.length + collectionMore, 'piece')} you own` : null,
-    glance.watching ? `${glance.watching} watching${glance.est ? ` · ${glance.est} to the hammer` : ''}` : null,
+    glance.watching ? `${glance.watching} watching${glance.est ? ` · ${glance.est} to the hammer${glance.priced < glance.watching ? ` across ${glance.priced}` : ''}` : ''}` : null,
     input.pendingResults ? `${n2(input.pendingResults)} ${input.pendingResults === 1 ? 'result' : 'results'} waiting` : null,
   ].filter(Boolean).slice(0, 5).join(' · ');
   // IN THIS EDITION — the sections present, with their counts

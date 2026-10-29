@@ -127,7 +127,7 @@ export default function HistoryRoom(_p: SectionProps) {
         <div className="ns-plate" style={{ paddingTop: 18 }}>
         {/* the rail's "History" lands here — one name for one room */}
         <RoomHead mark={<TapeMark size={17} />} title="History" style={{ marginBottom: 4 }}
-          sub={<>{settledCount} settled {settledCount === 1 ? 'watch' : 'watches'}{record && <> · {record.n} judged vs estimate</>}</>} />
+          sub={<>{settledCount - i.pendingResultsN} settled {settledCount - i.pendingResultsN === 1 ? 'watch' : 'watches'}{i.pendingResultsN > 0 && <> · {i.pendingResultsN} awaiting results</>}{record && <> · {record.n} judged vs estimate</>}</>} />
         {unclaimedWins > 0 && (
           <p style={{ fontSize: 12.5, color: 'var(--color-text-muted)', margin: '0 0 14px' }}>
             Won any of these? Mark it <b style={{ color: 'var(--color-fg)' }}>I won it</b> and the piece joins your collection, appraised against the live market.
