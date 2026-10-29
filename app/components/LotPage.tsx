@@ -18,7 +18,7 @@ import { safeHref } from '../lib/safe-href';
 import { closeDayOf, isLiveUpcoming, localToday, splitTitle, deglue, formatDate, craftTitle, httpsImg, sizedImg, cleanText, getUpcomingCounts, houseColors, refLabel } from '../utils';
 import { isSportsScienceObject, FORM_LABEL, signalMagnitude, scienceReferenceBand, cultureReferenceBand, contextComps } from '../lib/comps';
 import { enginePoolOf } from '../lib/engine-pool';
-import { lotFace, fmtFace, medianRowId, FACE_LABEL, projectedCloseFace, splitOtherWorks, otherWorksLabel, otherWorksCount, formNoun } from '../lib/lot-face';
+import { lotFace, fmtFace, liveBidUsd, medianRowId, FACE_LABEL, projectedCloseFace, splitOtherWorks, otherWorksLabel, otherWorksCount, formNoun } from '../lib/lot-face';
 import { lotAllInFactor } from '../lib/premiums';
 import { lotFloor } from '../lib/verdict';
 import { formatEstimate, lotSignal, confidenceMeter } from './LotCard';
@@ -86,7 +86,8 @@ function estimateFace(lot: AuctionLot): string {
   if (lot.estimateLow && lot.estimateHigh) return `${estimateFaceOnly(lot)} est.`;
   // a bid sale's live bid is the honest number (formatEstimate's rule)
   if (lot.currentBid && lot.currentBid > 0) {
-    return `${fmtFace(lot.currentBid)} bid${lot.bidCount ? ` · ${lot.bidCount} ${lot.bidCount === 1 ? 'bid' : 'bids'}` : ''}`;
+    // (Oct 29 parity) the desk, the paper and this page read one live bid in USD (lot-face.liveBidUsd)
+    return `${fmtFace(liveBidUsd(lot) ?? lot.currentBid)} bid${lot.bidCount ? ` · ${lot.bidCount} ${lot.bidCount === 1 ? 'bid' : 'bids'}` : ''}`;
   }
   if (lot.estimateLow || lot.estimateHigh) return `${estimateFaceOnly(lot)} est.`;
   return formatEstimate(lot);
@@ -777,7 +778,8 @@ export default function LotPage({ lotId, initialLot }: {
   const closeClock = useMemo(() => {
     if (!lot || !mounted || !closeIsTimed(lot)) return null;
     const ms = houseCloseMs(lot);
-    return ms == null ? null : new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(':00 ', ' ');
+    // (Oct 29 parity) the same clock string the desk row and the paper print ("7:00 PM")
+    return ms == null ? null : new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   }, [lot, mounted]);
 
   const poolPartial = !!called && !corpusSettled
@@ -1356,8 +1358,8 @@ export default function LotPage({ lotId, initialLot }: {
               {isActionable && (lot.currentBid || 0) > 0 && (
                 <LeaderRow
                   k="All-in today"
-                  v={fmtFace(Math.round(lot.currentBid! * lotAllInFactor(lot, lot.currentBid)))}
-                  sub={`${fmtFace(lot.currentBid!)} bid + ~${Math.round((lotAllInFactor(lot, lot.currentBid) - 1) * 100)}% premium`}
+                  v={fmtFace(Math.round((liveBidUsd(lot) ?? lot.currentBid!) * lotAllInFactor(lot, lot.currentBid)))}
+                  sub={`${fmtFace(liveBidUsd(lot) ?? lot.currentBid!)} bid + ~${Math.round((lotAllInFactor(lot, lot.currentBid) - 1) * 100)}% premium`}
                 />
               )}
               {isActionable && (() => {
