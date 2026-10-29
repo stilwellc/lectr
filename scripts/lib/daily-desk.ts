@@ -76,6 +76,8 @@ export const FRESH_GROUPS = 5;
 export const PICKS_N = 8;
 export const NAME_ROWS = 8;
 export const WEEK_DAYS_N = 7;
+/** the subject line's cap (Gmail shows ~70 on a desktop list, ~40 on a phone) */
+export const SUBJECT_MAX = 60;
 /** the engine's weekly record prints only on this many graded calls */
 export const RECORD_MIN_N = 5;
 const DAY_MS = 86_400_000;
@@ -87,7 +89,7 @@ export interface WatchRow {
   /** an owned piece: what the collector paid (cost basis), the maker slug snapshot */
   paid_usd?: number | null; saved_artist?: string | null;
 }
-export interface SoldRow { id: string; title?: string | null; house?: string | null; price_usd?: number | null; sale_date?: string | null; image_url?: string | null }
+export interface SoldRow { id: string; title?: string | null; house?: string | null; price_usd?: number | null; sale_date?: string | null; image_url?: string | null; /** the maker / collection slug (the collection's maker read when the save kept none) */ artist?: string | null }
 export interface PickLane { kind: 'follow' | 'saved' | 'new'; label: string; /** the saved seed's maker (lanes of one maker merge) */ who?: string | null }
 export interface PickIn { lot: AuctionLot; note: string; lane?: PickLane | null }
 /** a name's last settled sale (the entity detail bucket's newest row) */
@@ -112,7 +114,7 @@ export interface DeskRow extends DeskItem {
 }
 export interface ResultItem { id: string; title: string; house: string; img: string | null; hammer: string; vsMax: string | null; inReach: boolean | null; vsEst: string | null; /** the sale day ("Oct 21") — results spanning days group by it */ day: string }
 /** an owned piece with its maker's latest settled hammer (never an appraisal) */
-export interface CollectionItem { id: string; title: string; maker: string | null; img: string | null; paid: string | null; latest: { id: string; hammer: string; day: string; house: string } | null }
+export interface CollectionItem { id: string; title: string; maker: string | null; house: string | null; img: string | null; paid: string | null; latest: { id: string; hammer: string; day: string; house: string } | null }
 export interface PickItem extends DeskItem { note: string; lane: PickLane | null }
 export interface WeekCell { day: string; dow: string; date: string; today: boolean; watches: number; picks: number; names: number }
 export interface WeekCalendar { days: WeekCell[]; watches: number; picks: number; names: number }
@@ -325,14 +327,18 @@ export function planDesk(input: PlanInput): DeskEmail | null {
   const resultsMore = resultsAll.length - results.length;
 
   // YOUR COLLECTION — the owned pieces with their maker's latest settled hammer (the entity bucket's newest row; never an appraisal)
+  // a settled piece's title, house, photo and maker come from its sold row when the save kept none
+  const soldById = new Map(sold.map(r => [baseId(r.id), r]));
   const ownedRows = watches.filter(w => w.owned);
   const collection: CollectionItem[] = ownedRows.slice(0, COLLECTION_ROWS).map(w => {
     const l = live.get(baseId(w.lot_id)) ?? null;
-    const m = ownedMakerOf(w, l);
+    const sr = soldById.get(baseId(w.lot_id)) ?? null;
+    const m = ownedMakerOf(w, l, sr?.artist);
     const latest = m.id ? input.nameSold?.get(m.id) ?? null : null;
+    const house = l?.auctionHouse || sr?.house || null;
     return {
-      id: w.lot_id, title: cut(craftTitle(l?.title || w.saved_title || 'Piece', l?.auctionHouse || undefined), TITLE_CAP), maker: m.label,
-      img: l ? sizedImg(httpsImg(imageOf(l)), 240) ?? null : sizedImg(httpsImg(rrPreviewImage(w.lot_id)), 240) ?? null,
+      id: w.lot_id, title: cut(craftTitle(l?.title || w.saved_title || sr?.title || 'Untitled piece', house || undefined), TITLE_CAP), maker: m.label, house,
+      img: l ? sizedImg(httpsImg(imageOf(l)), 240) ?? null : sizedImg(httpsImg(sr?.image_url || rrPreviewImage(w.lot_id)), 240) ?? null,
       paid: w.paid_usd && w.paid_usd > 0 ? fmtFace(w.paid_usd) : null,
       latest: latest ? { id: latest.id, hammer: fmtFace(latest.p), day: dayLabel(latest.d, { month: 'short', day: 'numeric' }), house: latest.h } : null,
     };
@@ -574,8 +580,10 @@ export function planDesk(input: PlanInput): DeskEmail | null {
     names.length ? `Your names (${names.length} live)` : null,
     market.length ? `The market (${market.length})` : null,
   ].filter((x): x is string => !!x);
+  // THE SUBJECT — the count + noun form when needs-you leads ("2 bids past your max"), never a period, ~60 chars
+  const subjectLead = overMax.length ? `${overMax.length} ${overMax.length === 1 ? 'bid' : 'bids'} past your max` : lead;
   return {
-    subject: `Your desk: ${lead}`,
+    subject: cut(`Your desk: ${subjectLead}`, SUBJECT_MAX).replace(/[.\s]+$/, ''),
     preheader: facts || 'Your watches, your names, what’s new and the market — every morning.',
     headline: `${lead[0].toUpperCase()}${lead.slice(1)}.`,
     glance, overMax, closing, results, resultsMore, edition, collection, collectionMore,
@@ -615,14 +623,14 @@ export function catLabelOf(key: string): string {
 
 /** an owned piece's maker: the live lot's entity (lot-follow), else the saved_artist snapshot — the id the
  *  entity bucket is read by, and the printed name. The runner reads buckets for these ids too. */
-export function ownedMakerOf(w: Pick<WatchRow, 'saved_artist'>, lot: AuctionLot | null): { id: string | null; label: string | null } {
+export function ownedMakerOf(w: Pick<WatchRow, 'saved_artist'>, lot: AuctionLot | null, soldArtist?: string | null): { id: string | null; label: string | null } {
   if (lot) {
     const f = lotFollowOf(lot);
     if (f) return { id: entityIdOfFollow(f), label: f.label };
     const name = makerLineOf(lot).name;
     return { id: null, label: name || null };
   }
-  const slug = w.saved_artist || '';
+  const slug = w.saved_artist || soldArtist || '';
   if (!slug) return { id: null, label: null };
   const id = makerEntityId(slug);
   // a collection slug (science-tech, meteorites, game-used) is a category, not a maker: no name, no hammer line

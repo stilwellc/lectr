@@ -89,7 +89,7 @@ ${r.vsMax ? `<div style="padding-top:7px">${pill(r.inReach ? `in reach · ${r.vs
 
 /** an owned piece: photo · title · maker · bought $X · the maker's latest hammer (linked) */
 function collectionRow(origin: string, c: CollectionItem) {
-  const meta = [c.maker, c.paid ? `bought ${c.paid}` : null].filter(Boolean).join(' · ');
+  const meta = [c.maker, c.house, c.paid ? `bought ${c.paid}` : null].filter(Boolean).join(' · ');
   const latest = c.latest
     ? `<div style="font:400 13px/1.45 ${FONT};color:${INK};padding-top:4px">${esc(c.maker ? `${c.maker}’s` : 'The maker’s')} latest hammer <b style="font-weight:600">${esc(c.latest.hammer)}</b> · <a href="${lotUrl(origin, c.latest.id)}" style="color:${MUTED};text-decoration:none">${esc(c.latest.day)} at ${esc(c.latest.house)}</a></div>`
     : '';
@@ -169,7 +169,30 @@ function marketLedger(origin: string, lines: MarketLine[]) {
   return section('The market', rows, 'read off today’s build: the engine’s record, the block tonight, what’s new');
 }
 
-export function renderDesk(e: DeskEmail, o: { origin: string; unsubUrl: string; dateLabel: string }): { html: string; text: string } {
+/** Gmail clips a message over ~102 KB (the rest sits behind "View entire message"): the HTML stays under this */
+export const SIZE_CAP = 95_000;
+/** what a fat edition gives up, in order, until it fits: picks to 6, New for you to 3 groups, the desk to 8 rows, names to 6 */
+const TRIMS: ((e: DeskEmail) => DeskEmail)[] = [
+  e => ({ ...e, picks: e.picks.slice(0, 6) }),
+  e => (e.fresh ? { ...e, fresh: { ...e.fresh, moreGroups: e.fresh.moreGroups + Math.max(0, e.fresh.groups.length - 3), groups: e.fresh.groups.slice(0, 3) } } : e),
+  e => ({ ...e, deskMore: e.deskMore + Math.max(0, e.desk.length - 8), desk: e.desk.slice(0, 8) }),
+  e => ({ ...e, quietNames: [...e.names.slice(6).map(n => n.label), ...e.quietNames], names: e.names.slice(0, 6) }),
+];
+
+export function renderDesk(e: DeskEmail, o: { origin: string; unsubUrl: string; dateLabel: string; /** the size guard's cap in bytes (tests lower it) */ sizeCap?: number }): { html: string; text: string; trimmed: boolean } {
+  const cap = o.sizeCap ?? SIZE_CAP;
+  let html = renderHtml(e, o, false);
+  // the size guard: trim, in order, until the page fits the inbox
+  let trimmed = false;
+  for (let k = 0; html.length > cap && k < TRIMS.length; k++) {
+    e = TRIMS[k](e);
+    trimmed = true;
+    html = renderHtml(e, o, true);
+  }
+  return { html, text: renderText(e, o), trimmed };
+}
+
+function renderHtml(e: DeskEmail, o: { origin: string; unsubUrl: string; dateLabel: string }, trimmed: boolean): string {
   const { origin } = o;
 
   // NEEDS YOU
@@ -253,12 +276,16 @@ ${body}
 <tr><td style="padding:30px 0 6px" align="left"><a href="${pageUrl(origin, '/profile')}" style="display:inline-block;padding:12px 20px;border-radius:999px;background:${INK};color:#fff;font:500 14px/1 ${FONT};text-decoration:none">Open your desk</a></td></tr>
 </table></td></tr>
 <tr><td style="padding:18px 24px 26px;font:400 12px/1.6 ${FONT};color:${FAINT};border-top:1px solid ${LINE}">
-You get this because you turned on the Daily Desk email on lectr. Figures are lectr&rsquo;s reads from public auction data, not appraisals.<br>
+You get this because you turned on the Daily Desk email on lectr. Figures are lectr&rsquo;s reads from public auction data, not appraisals.${trimmed ? ' Trimmed for your inbox &mdash; the whole desk is on lectr.' : ''}<br>
 <a href="${esc(o.unsubUrl)}" style="color:${MUTED}">Unsubscribe</a> · <a href="${origin}/profile#account" style="color:${MUTED}">Email settings</a>
 </td></tr></table></td></tr></table></body></html>`;
 
-  // the plain-text edition
-  // THE PLAIN-TEXT EDITION — every section the HTML prints, in the same order
+  return html;
+}
+
+/** THE PLAIN-TEXT EDITION — every section the HTML prints, in the same order */
+function renderText(e: DeskEmail, o: { origin: string; unsubUrl: string; dateLabel: string }): string {
+  const { origin } = o;
   const g = e.glance;
   const t: string[] = [`lectr · The Daily Desk · ${o.dateLabel}`, '', e.headline, e.preheader, '',
     `Watching ${g.watching}${g.est ? ` (${g.est} at estimate midpoint)` : ''} · Next hammer ${g.next ? `${g.next.when}${g.next.time ? ` ${g.next.time}` : ''} — ${g.next.above ? 'first under needs you' : g.next.title}` : '—'} · This week ${g.week} (${g.weekWatches} watches + ${g.weekPicks} picks) · ${g.picks} picks`,
@@ -299,7 +326,7 @@ You get this because you turned on the Daily Desk email on lectr. Figures are le
   t.push('');
   if (e.collection.length) {
     head('Your collection', `${e.collection.length + e.collectionMore} pieces you own · what you paid, and the maker’s latest settled hammer on file — not an appraisal`);
-    for (const c of e.collection) t.push(`- ${c.title}${c.maker ? ` · ${c.maker}` : ''}${c.paid ? ` · bought ${c.paid}` : ''}${c.latest ? ` · ${c.maker ? `${c.maker}’s` : 'the maker’s'} latest hammer ${c.latest.hammer}, ${c.latest.day}, ${c.latest.house}` : ''}\n  ${lotUrl(origin, c.id)}`);
+    for (const c of e.collection) t.push(`- ${c.title}${c.maker ? ` · ${c.maker}` : ''}${c.house ? ` · ${c.house}` : ''}${c.paid ? ` · bought ${c.paid}` : ''}${c.latest ? ` · ${c.maker ? `${c.maker}’s` : 'the maker’s'} latest hammer ${c.latest.hammer}, ${c.latest.day}, ${c.latest.house}` : ''}\n  ${lotUrl(origin, c.id)}`);
     if (e.collectionMore) t.push(`  and ${e.collectionMore} more: ${origin}/profile#owned`);
     t.push('');
   }
@@ -338,5 +365,5 @@ You get this because you turned on the Daily Desk email on lectr. Figures are le
     t.push('');
   }
   t.push(`Open your desk: ${origin}/profile`, '', 'You get this because you turned on the Daily Desk email on lectr. Figures are lectr’s reads from public auction data, not appraisals.', `Unsubscribe: ${o.unsubUrl}`, `Email settings: ${origin}/profile#account`);
-  return { html, text: t.join('\n') };
+  return t.join('\n');
 }

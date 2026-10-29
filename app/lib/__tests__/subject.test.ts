@@ -6,6 +6,19 @@ import { makerLineOf, catalogMakerLineOf, registerPlayerDossiers } from '../lot-
 import { craftTitle, expandLeadYear, splitTitle } from '../../utils';
 import { makerHref } from '../entity/retired';
 
+test('subject: a catalogue form word between the name and its verb is read past, never as the name (Oct 29)', () => {
+  // "Ada Lovelace Third-Person" printed as a maker line on the Daily Desk; the War-Dated Edison letter had none
+  assert.equal(personOf('Ada Lovelace Third-Person Autograph Letter Signed Requesting a Private Riding Lesson (1835)'), 'Ada Lovelace');
+  assert.equal(personOf('Thomas Edison War-Dated Typed Letter Signed on the 1914 West Orange Laboratory Fire'), 'Thomas Edison');
+  assert.equal(personOf('Abraham Lincoln Civil War-Dated Document Signed as President'), 'Abraham Lincoln');
+  assert.equal(personOf('Albert Einstein Lengthy Handwritten Letter Signed on Relativity'), 'Albert Einstein');
+  // the desk's maker line reads the same person on a cs: collection lot
+  const edison = { id: 'rr-1', artist: 'science-tech', title: 'Thomas Edison War-Dated Typed Letter Signed on the 1914 West Orange Laboratory Fire', ek: 'cs:historical:science' };
+  assert.equal(makerLineOf(edison as Parameters<typeof makerLineOf>[0]).name, 'Thomas Edison');
+  const ada = { id: 'rr-2', artist: 'science-tech', title: 'Ada Lovelace Third-Person Autograph Letter Signed Requesting a Private Riding Lesson (1835)' };
+  assert.equal(makerLineOf(ada as Parameters<typeof makerLineOf>[0]).name, 'Ada Lovelace');
+});
+
 test('subject: the signer / athlete leading a memorabilia title', () => {
   assert.equal(personOf('Sylvester Stallone Signed Rocky IV Photograph - 16x20 - Beckett'), 'Sylvester Stallone');
   assert.equal(personOf('Reggie Bush Game-Used, Photo-Matched, Signed USC Trojans Jersey'), 'Reggie Bush');
@@ -56,7 +69,8 @@ test('subject: (r5) qualifiers, parentheses, possessives, royals, debuts, surnam
   assert.equal(personOf("Guns N' Roses Band-Signed Drumhead (4 Signatures)"), null);
   assert.equal(personOf('Pink Floyd U.S. Debut Full Ticket - Winterland Ballroom'), null);
   assert.equal(personOf('Boston Red Sox Signed Baseball'), null);
-  assert.equal(personOf('Rutherford B. Hayes War-Dated Autograph Note Signed'), null);
+  // (Oct 29) "War-Dated" is a catalogue form word, read past: the president is the signer
+  assert.equal(personOf('Rutherford B. Hayes War-Dated Autograph Note Signed'), 'Rutherford B. Hayes');
   assert.equal(personOf('Computer Pioneers (5) Signature Display - Steve Wozniak, David Packard'), null);
 });
 

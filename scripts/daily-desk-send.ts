@@ -192,7 +192,7 @@ async function main() {
   const sold = new Map<string, SoldRow>();
   for (const c of chunks(offBlock, 100)) {
     const ids = c.flatMap(id => [id, `${id}~`]);
-    for (const r of await restAll<SoldRow>(`lots?select=id,title,house,price_usd,sale_date,image_url&status=eq.sold&id=in.${inList(ids)}`)) sold.set(baseId(r.id), r);
+    for (const r of await restAll<SoldRow>(`lots?select=id,title,house,artist,price_usd,sale_date,image_url&status=eq.sold&id=in.${inList(ids)}`)) sold.set(baseId(r.id), r);
   }
   // the name behind a pick's saved-lot seed, for its lane head: the live lot's entity, else the snapshot title's leading name
   const titleById = new Map(watches.map(w => [baseId(w.lot_id), w.saved_title || '']));
