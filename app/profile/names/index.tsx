@@ -247,7 +247,8 @@ function SaleRow({ s, now, href, onOpen }: { s: Sale; now: number; href: string;
         {estText(s)}
         {s.flagged > 0 && <> · <b className="nm-flag">{s.flagged === s.lots.length && s.lots.length > 1 ? 'all' : s.flagged} below market</b></>}
       </>}
-      figure={<span className="dk-clock" data-soon={w.soon || undefined}>{w.lead}</span>} figureSub={w.sub}
+      subText={[one ? `${s.house}${s.saleName ? ` · ${s.saleName}` : ''}` : null, estText(s), s.flagged > 0 ? `${s.flagged} below market` : null].filter(Boolean).join(' · ')}
+      figure={<span className="dk-clock" data-soon={w.soon || undefined}>{w.lead}</span>} figureKind="clock" figureText={w.lead} figureSub={w.sub}
       action={one
         ? <button type="button" className="dk-link" onClick={() => onOpen(one)} aria-label={`Comps for ${one.title}`}>Comps</button>
         : <Link href={href} className="dk-link" aria-label={`See ${s.lots.length} lots at ${s.house}`}>See lots</Link>} />

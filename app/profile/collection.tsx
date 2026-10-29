@@ -160,6 +160,7 @@ export default function ForYourCollection({ book, pool, compLots, ready, lastCra
                 <DeskRow key={p.lot.id} lot={p.lot} pick={p.lot.id} wrap tone={feedTone(p.lot, below.ids, below.hasSig)}
                   tag={{ text: KIND_TAG[p.kind] }}
                   sub={<>{[rowWhoOf(p.lot), p.lot.auctionHouse].filter(Boolean).join(' · ')} · <b>{p.reason}</b></>}
+                  subText={[rowWhoOf(p.lot), p.lot.auctionHouse, p.reason].filter(Boolean).join(' · ')} figureText={price.fig}
                   figure={<span data-quiet={price.quiet || undefined}>{price.fig}</span>} figureKind={price.kind} figureSub={price.sub}
                   action={<button type="button" className="ray-toolbar-pill" data-active={saved} aria-pressed={saved} onClick={() => onToggleSave(p.lot.id, p.lot)}
                     aria-label={saved ? `Stop watching ${craftTitle(p.lot.title, p.lot.auctionHouse)}` : `Watch ${craftTitle(p.lot.title, p.lot.auctionHouse)}`}>

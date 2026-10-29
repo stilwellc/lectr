@@ -27,15 +27,20 @@ export function Thumb({ src, label, size = 56, round = false, wide = false, tone
 }) {
   const letter = ((label || '').match(/[A-Za-zÀ-ÿ]/)?.[0] ?? '·').toUpperCase();   // a year or lot number never stands for the lot
   const u = src ? sizedImg(httpsImg(src), wide ? 400 : Math.max(160, size * 3)) : undefined;
+  // (pass 6) a photo is decorative — the row's text says what it is; the
+  // initial that stands in for a missing photo is labelled as that
+  const a11y = u ? { 'aria-hidden': 'true' as const } : { role: 'img', 'aria-label': `${letter} — no photo${label ? ` of ${label}` : ''}` };
   return (
     <span className="ck-thumb" data-round={round || undefined} data-wide={wide || undefined} data-tone={tone}
-      style={{ '--th': `${size}px` } as React.CSSProperties} aria-hidden="true">
+      style={{ '--th': `${size}px` } as React.CSSProperties} {...a11y}>
       <span className="ck-thumb-l">{letter}</span>
       <PlateImg src={u} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
     </span>
   );
 }
 
-export function SigPill({ dir, children, title }: { dir: 'up' | 'down' | 'flat'; children: React.ReactNode; title?: string }) {
-  return <span className="ck-sigpill" data-dir={dir} title={title}>{children}</span>;
+export function SigPill({ dir, children, title, label }: { dir: 'up' | 'down' | 'flat'; children: React.ReactNode; title?: string;
+  /** the pill's meaning in words ("+12% vs estimate") — never the colour alone */
+  label?: string }) {
+  return <span className="ck-sigpill" data-dir={dir} title={title} role={label ? 'img' : undefined} aria-label={label}>{children}</span>;
 }

@@ -81,14 +81,18 @@ function RowDossier({ lot, meta, sig, allLots, act, onRemove, onClose, id }: {
   const hasEst = (lot.estimateLow || 0) > 0 || (lot.estimateHigh || 0) > 0;
   const vel = lot.bidVelocity && lot.bidVelocity.delta > 0 ? lot.bidVelocity : null;
   const title = craftTitle(lot.title, lot.auctionHouse);
+  // (pass 6) focus moves into the opened dossier (the region itself, so the
+  // reader hears its name first); Close hands it back to Details
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => { ref.current?.focus({ preventScroll: true }); }, []);
   return (
-    <div className="ck-dossier dk-dossier" id={id} role="region" aria-label={`Details for ${lot.title}`}>
+    <div className="ck-dossier dk-dossier" id={id} role="region" aria-label={`Details for ${title}`} tabIndex={-1} ref={ref}>
       <SavedDelta lot={lot} meta={meta} sig={sig} />
       {/* the facts, one line of pills (they wrap on a phone, never clip) */}
       <div className="dk-dossier-pills" role="list" aria-label="The lot's facts">
         {sig && (
           <span className="dk-fact" role="listitem" title={`${GLOSSARY['signal now']}${sig.basis != null && sig.basis > 0 ? ` · ${sig.basis} comps` : ''}`}>
-            <SigPill dir={sig.label === 'Below Market' ? 'up' : 'down'}>{sigText(sig)}</SigPill> vs comps{sig.basis != null && sig.basis > 0 ? ` · ${sig.basis}` : ''}
+            <SigPill dir={sig.label === 'Below Market' ? 'up' : 'down'} label={`${sig.label}, ${sigText(sig)}`}>{sigText(sig)}</SigPill> vs comps{sig.basis != null && sig.basis > 0 ? ` · ${sig.basis}` : ''}
           </span>
         )}
         {hasEst && (
@@ -129,7 +133,7 @@ function RowDossier({ lot, meta, sig, allLots, act, onRemove, onClose, id }: {
             {comps.rows.slice(0, DOSSIER_COMPS).map(c => (
               <DeskRow key={c.id} lot={c} compact
                 sub={[rowWhoOf(c), c.auctionHouse, closeDayOf(c) ? formatDate(closeDayOf(c)) : null].filter(Boolean).join(' · ')}
-                figure={c.priceUsd ? fmtFace(c.priceUsd) : <span data-quiet>—</span>} figureKind="hammer" />
+                figure={c.priceUsd ? fmtFace(c.priceUsd) : <span data-quiet>—</span>} figureKind="hammer" figureText={c.priceUsd ? fmtFace(c.priceUsd) : 'no price'} />
             ))}
           </div>
         </div>
@@ -352,8 +356,8 @@ export default function WatchingRoom(_p: SectionProps) {
                   meta={<>
                     <span className="dk-meta-fact" style={days >= 0 && days <= 1 ? { color: 'var(--color-fg)' } : undefined}>{hammer}</span>
                     {sig && (
-                      <span title={GLOSSARY['signal now']} aria-label={`${sig.label}, ${sigText(sig)} vs comps`}>
-                        <SigPill dir={sig.label === 'Below Market' ? 'up' : 'down'}>{sigText(sig)}</SigPill>
+                      <span title={GLOSSARY['signal now']}>
+                        <SigPill dir={sig.label === 'Below Market' ? 'up' : 'down'} label={`${sig.label}, ${sigText(sig)} vs comps`}>{sigText(sig)}</SigPill>
                       </span>
                     )}
                     {(flipped || (dPP != null && dPP !== 0)) && (
@@ -364,13 +368,14 @@ export default function WatchingRoom(_p: SectionProps) {
                     {vel ? <span className="dk-meta-fact">+{vel.delta} {vel.delta === 1 ? 'bid' : 'bids'}/{Math.round(vel.hours)}h</span>
                       : newBids > 0 ? <span className="dk-meta-fact">+{newBids} {newBids === 1 ? 'bid' : 'bids'} since saved</span> : null}
                   </>}
-                  figure={bid ? fmtFace(bid) : <span data-quiet={twoSided ? undefined : ''}>{est}</span>} figureKind={bid ? 'bid' : 'est'}
+                  figure={bid ? fmtFace(bid) : <span data-quiet={twoSided ? undefined : ''}>{est}</span>} figureKind={bid ? 'bid' : 'est'} figureText={bid ? fmtFace(bid) : est}
                   figureSub={bid ? bidsSubOf(lot) : twoSided ? 'estimate' : null}
                   pill={<MyMax lot={lot} compact />}
                   decision={<DecisionLine lot={lot} estimate={false} when={false} abstain="quiet" style={{ marginTop: 0 }} />}
                   expand={{ open, id: dossierId, onToggle: () => toggleRow(lot.id) }}>
                   <RowDossier lot={lot} meta={m} sig={sig} id={dossierId} allLots={allLots} act={act}
-                    onRemove={() => { setOpenRow(null); toggle(savedIdOf(lot.id)); }} onClose={() => setOpenRow(null)} />
+                    onRemove={() => { setOpenRow(null); toggle(savedIdOf(lot.id)); }}
+                    onClose={() => { setOpenRow(null); requestAnimationFrame(() => document.querySelector<HTMLElement>(`[aria-controls="${dossierId}"]`)?.focus()); }} />
                 </DeskRow>
               );
             })}

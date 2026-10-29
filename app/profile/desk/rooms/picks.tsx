@@ -195,6 +195,7 @@ export function RecsRoom({ book, deal, compLots, taste, ready, isSaved, onToggle
                 <DeskRow key={r.lot.id} lot={r.lot} pick={r.lot.id} wrap tone={tone}
                   // the reason is the row's honesty payload — it wraps, never cut
                   sub={<>{[rowWhoOf(r.lot), r.lot.auctionHouse].filter(Boolean).join(' · ')} · <b>{recNote(r)}</b></>}
+                  subText={[rowWhoOf(r.lot), r.lot.auctionHouse, recNote(r)].filter(Boolean).join(' · ')} figureText={price.fig}
                   tag={r.lane === 'discover' ? { text: 'New to you' } : r.flagged ? { text: 'Below market', tone: 'up' } : null}
                   figure={<span data-quiet={price.quiet || undefined}>{price.fig}</span>} figureKind={price.kind} figureSub={price.sub}
                   decision={<DecisionLine lot={r.lot} estimate={false} abstain="quiet" />}

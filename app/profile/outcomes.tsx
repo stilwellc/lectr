@@ -87,7 +87,8 @@ function OutcomeRow({ o }: { o: PickOutcome }) {
   return (
     <DeskRow lot={{ id: p.id, title: p.lot.title, auctionHouse: p.lot.auctionHouse }} who={maker || p.lot.title} wrap
       sub={<>{[maker, p.lot.auctionHouse].filter(Boolean).map(x => `${x} · `).join('')}{shownLine(o)}</>}
-      figureKind="hammer" figure={soldCell(o)} figureSub={dayText(o.date) || null}
+      subText={[maker, p.lot.auctionHouse, shownLine(o)].filter(Boolean).join(' · ')}
+      figureKind="hammer" figure={soldCell(o)} figureText={o.state === 'settling' ? 'price settling' : o.state === 'unsold' ? (o.why === 'withdrawn' ? 'withdrawn' : 'bought in') : fmtFace(o.price!)} figureSub={dayText(o.date) || null}
       meta={<>
         <span className="dk-meta-fact" title={p.v ? `lectr value when shown, all-in (expected hammer ${fmtFace(p.v.h)} · likely ${fmtFace(p.v.lo)}–${fmtFace(p.v.hi)} hammer · ${p.v.c} confidence)` : 'The engine made no value call on this lot'}>
           {p.v ? <>{FACE_LABEL.value} <b>{fmtFace(p.v.a)}</b> then{o.inRange != null && <> · {o.inRange ? 'in' : 'out of'} range</>}</> : <>no lectr value then</>}

@@ -153,6 +153,9 @@ function Row({ r, now, titleById }: { r: WeekRow; now: number; titleById: Readon
         {bids ? <> · {bids}</> : null}
         {vel ? <> · <span className="ck-week-vel" title="bids added in the trailing window — the engine's bid velocity (descriptive, not a price)"><i aria-hidden>↑</i>{vel.replace(/^\+/, '')}</span></> : null}
       </>}
+      subText={[who, own, lot.auctionHouse, est || null, bids, vel].filter(Boolean).join(' · ')}
+      figureText={r.timed ? localClock(r.closeMs) : 'time to be confirmed'}
+      figureSubText={soon ? (r.timed && lot.saleDateTime ? countdownText(r.closeMs, now) : `day ends ${countdownText(r.closeMs, now)} in ${cityOf(houseTzOf(lot))}`) : null}
       // the figure: the close on the reader's clock; inside 24h the countdown rides under it
       figureKind="clock"
       figure={r.timed

@@ -42,7 +42,7 @@ function ResultsInbox() {
         {rows.map(l => (
           <DeskRow key={l.id} lot={l} compact
             sub={[rowWhoOf(l), l.auctionHouse].filter(Boolean).join(' · ')}
-            figureKind="hammer" figure={l.priceUsd ? fmtFace(l.priceUsd) : <span data-quiet>result pending</span>}
+            figureKind="hammer" figure={l.priceUsd ? fmtFace(l.priceUsd) : <span data-quiet>result pending</span>} figureText={l.priceUsd ? fmtFace(l.priceUsd) : 'result pending'}
             action={<button type="button" className="ray-own-btn" onClick={() => i.onSettledOwn(i.savedIdOf(l.id))}>I won it</button>} />
         ))}
       </div>

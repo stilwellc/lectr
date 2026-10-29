@@ -31,9 +31,19 @@
  * stretched link and keeps its own tap target (≥ 44px on a phone).
  *
  * INPUT CRAFT: the row is [data-nav-row]; j/k (../keys) focuses its
- * [data-nav-focus] control — the title link (Enter opens the lot) or, on an
- * expanding row, the Details button (Enter opens the dossier, as the ledger
- * always did). The focus ring draws on the row (.dk-row:has(:focus-visible)).
+ * [data-nav-focus] control — the title link, always: Enter opens the lot,
+ * Shift+Enter (or `o`) opens Details where the row has them. Tab walks the
+ * title, then the row's controls, then the next row. The focus ring draws
+ * on the row (.dk-row:has(:focus-visible)).
+ *
+ * THE ACCESSIBLE NAME (pass 6): the title link carries the row as one
+ * sentence — the tag first, the title, the sub-line, then the figure with
+ * its meaning ("estimate $2.3M–$3.45M" · "live bid $8K, 12 bids" ·
+ * "hammered $1.3K, +12% vs estimate" · "closes 8:30 AM, in 14h"). A caller
+ * whose sub or figure is a node passes the words (subText / figureText /
+ * figureSubText); a string prop needs nothing more. The photo is
+ * decorative (aria-hidden) when it is a photo; the initial that stands in
+ * for a missing one is labelled.
  *
  * Styles: ../styles/row.css (imported by the profile layout).
  */
@@ -82,6 +92,12 @@ export interface DeskRowProps {
    *  one sub style: an estimate range, a live bid ("N bids" under), a hammer
    *  (the lamp pill under); a clock or a mark keep the same seat */
   figureKind?: 'est' | 'bid' | 'hammer' | 'clock' | 'mark' | 'plan';
+  /** the figure in words, for the accessible name (needed when `figure` is a node) */
+  figureText?: string | null;
+  /** the figure's sub in words (needed when `figureSub` is a node) */
+  figureSubText?: string | null;
+  /** the sub-line in words (needed when `sub` is a node) */
+  subText?: string | null;
   /** the small line under the figure (bids, a countdown) */
   figureSub?: React.ReactNode;
   /** the pill under the figure (My max) */
@@ -137,10 +153,33 @@ export const bidsSubOf = (lot: Pick<AuctionLot, 'bidCount'>): string =>
 /** the lot's own URL on the desk */
 export const lotHref = (lot: Pick<RowLot, 'id'>) => `/lot?id=${encodeURIComponent(lot.id)}`;
 
-export function DeskRow({ lot, href, who, title, sub, wrap = false, tag, meta, figure, figureKind, figureSub, pill, decision, action, tone, expand, pick, as = 'div', attrs, className, children, below, compact, photo }: DeskRowProps) {
+/** the figure as a sentence part: its kind names what the number is */
+export function figureWordsOf(kind: DeskRowProps['figureKind'], fig: string | null, sub: string | null): string | null {
+  if (!fig) return null;
+  const tail = sub ? `, ${sub}` : '';
+  switch (kind) {
+    case 'est': return `estimate ${fig}`;
+    case 'bid': return `live bid ${fig}${tail}`;
+    case 'hammer': return `hammered ${fig}${tail}`;
+    case 'clock': return `closes ${fig}${tail}`;
+    case 'mark': return `marked ${fig}${tail}`;
+    case 'plan': return `plan ${fig}${tail}`;
+    default: return `${fig}${tail}`;
+  }
+}
+const textOf = (x: React.ReactNode): string | null => (typeof x === 'string' || typeof x === 'number' ? String(x) : null);
+
+export function DeskRow({ lot, href, who, title, sub, wrap = false, tag, meta, figure, figureKind, figureText, figureSub, figureSubText, subText, pill, decision, action, tone, expand, pick, as = 'div', attrs, className, children, below, compact, photo }: DeskRowProps) {
   const Outer = as;
   const t = title ?? craftTitle(lot.title, lot.auctionHouse);
   const letterOf = who === undefined ? rowWhoOf(lot) : who;
+  // the row as one sentence: tag · title · sub-line · the figure with its meaning
+  const name = [
+    tag ? textOf(tag.text) : null,
+    t,
+    subText === undefined ? textOf(sub) : subText,
+    figureWordsOf(figureKind, figureText === undefined ? textOf(figure) : figureText, figureSubText === undefined ? textOf(figureSub) : figureSubText),
+  ].filter(Boolean).join('. ');
   const showMeta = !!tag || meta != null;
   const hasRight = figure != null || figureSub != null;
   return (
@@ -149,7 +188,7 @@ export function DeskRow({ lot, href, who, title, sub, wrap = false, tag, meta, f
         {/* the photo through imageOf: an RR Auction lot gets its preview from its id */}
         {photo ? <span className="dk-photo" aria-hidden="true">{photo}</span> : <Thumb src={imageOf({ id: lot.id, imageUrl: lot.imageUrl ?? null })} label={letterOf || lot.title} size={compact ? 32 : 56} tone={tone} />}
         <div className="dk-main">
-          <Link href={href ?? lotHref(lot)} className="dk-title" data-nav-focus={expand ? undefined : ''} title={t}>{t}</Link>
+          <Link href={href ?? lotHref(lot)} className="dk-title" data-nav-focus="" title={t} aria-label={name}>{t}</Link>
           {sub != null && sub !== '' && <span className="dk-sub" data-wrap={wrap || undefined}>{sub}</span>}
           {showMeta && (
             <span className="dk-meta">
@@ -174,7 +213,7 @@ export function DeskRow({ lot, href, who, title, sub, wrap = false, tag, meta, f
             {pill != null && <span className="dk-pill">{pill}</span>}
             {action != null && <span className="dk-act">{action}</span>}
             {expand && (
-              <button type="button" className="dk-expand" data-nav-focus aria-expanded={expand.open} aria-controls={expand.id}
+              <button type="button" className="dk-expand" aria-expanded={expand.open} aria-controls={expand.id}
                 aria-label={`${expand.open ? 'Close' : 'Open'} details for ${t}`} onClick={expand.onToggle}>
                 <span className="dk-expand-t">{expand.open ? 'Close' : 'Details'}</span><span aria-hidden className="dk-expand-chev">›</span>
               </button>

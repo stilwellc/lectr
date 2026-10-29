@@ -46,11 +46,13 @@ import { RoomHead } from './head';
 import { Thumb, SigPill } from './desk/thumb';
 import { StoryViewer } from './desk/story';
 import { useMyMax, MyMax } from './desk/mymax';
-import { DeskRow, CloseFigure, CloseFigureSub } from './desk/row';
+import { DeskRow, CloseFigure, CloseFigureSub, closeFigureOf, useRowNow } from './desk/row';
 
 export interface TodayRead { key: string; tag: string; lot: AuctionLot; fact: React.ReactNode; tone?: 'up' | 'hot' }
 
 type Row = { key: string; group: 'closing' | 'top' | 'new' | 'reads'; tag: React.ReactNode; tone?: 'up' | 'hot'; lot: AuctionLot; fact: React.ReactNode;
+  /** the fact in words, for the row's accessible name (a node fact passes its words) */
+  factText?: string;
   /** (N2) the pick's decision line — projected close · worth up to · gap */
   decision?: React.ReactNode };
 
@@ -100,6 +102,8 @@ const lead = (l: AuctionLot, rest: React.ReactNode): React.ReactNode => {
 function pickFact(r: Rec<AuctionLot>): React.ReactNode {
   return lead(r.lot, r.short || r.reason);
 }
+/** the same fact in words */
+const pickFactText = (r: Rec<AuctionLot>): string => [whoOf(r.lot), r.lot.auctionHouse, r.short || r.reason].filter(Boolean).join(' · ');
 
 function useNarrow(): boolean {
   const [n, setN] = useState(false);
@@ -119,8 +123,11 @@ function useNarrow(): boolean {
 function ReadRow({ r, wrap = true }: { r: Row; wrap?: boolean }) {
   const max = useMyMax(r.lot.id);
   const closing = r.group === 'closing';
+  const clock = closeFigureOf(r.lot, useRowNow());
   return (
     <DeskRow lot={r.lot} wrap={wrap} sub={r.fact} decision={r.decision}
+      subText={r.factText ?? (typeof r.fact === 'string' ? r.fact : [whoOf(r.lot), r.lot.auctionHouse].filter(Boolean).join(' · '))}
+      figureText={clock.main} figureSubText={clock.sub}
       // a pick in the strip is a pick (the retention tracker's pick_open)
       pick={r.group === 'top' ? r.lot.id : undefined}
       tone={r.tone === 'up' ? 'up' : undefined}
@@ -235,30 +242,32 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
         // the fact prints the estimate; the figure prints the close (the hour, the countdown): the line adds the rest
         decision: <DecisionLine lot={l} estimate={false} when={false} abstain="quiet" style={{ marginTop: 0 }} />,
         fact: lead(l, <>your watch{est ? <> · {est}</> : null}</>),
+        factText: [whoOf(l), l.auctionHouse, 'your watch', est].filter(Boolean).join(' · '),
       });
     }
     for (const r of loop?.closing ?? []) {
       if (!take(r.lot.id)) continue;
-      closing.push({ key: `cp-${r.lot.id}`, group: 'closing', tone: r.flagged ? 'up' : 'hot', lot: r.lot, tag: closeTag(r.lot), fact: pickFact(r),
+      closing.push({ key: `cp-${r.lot.id}`, group: 'closing', tone: r.flagged ? 'up' : 'hot', lot: r.lot, tag: closeTag(r.lot), fact: pickFact(r), factText: pickFactText(r),
         decision: <DecisionLine lot={r.lot} when={false} abstain="quiet" style={{ marginTop: 0 }} /> });
     }
     const picks: Row[] = [];
     for (const r of top) {
       if (!take(r.lot.id)) continue;
       picks.push({ key: `t-${r.lot.id}`, group: 'top', lot: r.lot, tone: r.flagged ? 'up' : undefined,
-        tag: r.flagged ? 'Below market' : 'For you', fact: pickFact(r),
+        tag: r.flagged ? 'Below market' : 'For you', fact: pickFact(r), factText: pickFactText(r),
         decision: <DecisionLine lot={r.lot} abstain="quiet" style={{ marginTop: 0 }} /> });
     }
     const fresh: Row[] = [];
     for (const r of loop?.fresh ?? []) {
       if (!take(r.lot.id)) continue;
-      fresh.push({ key: `n-${r.lot.id}`, group: 'new', lot: r.lot, tag: 'New', fact: pickFact(r),
+      fresh.push({ key: `n-${r.lot.id}`, group: 'new', lot: r.lot, tag: 'New', fact: pickFact(r), factText: pickFactText(r),
         decision: <DecisionLine lot={r.lot} abstain="quiet" style={{ marginTop: 0 }} /> });
     }
     const rest: Row[] = [];
     for (const x of reads) {
       if (!take(x.lot.id)) continue;
-      rest.push({ key: x.key, group: 'reads', tone: x.tone, lot: x.lot, tag: x.tag, fact: lead(x.lot, x.fact) });
+      rest.push({ key: x.key, group: 'reads', tone: x.tone, lot: x.lot, tag: x.tag, fact: lead(x.lot, x.fact),
+        factText: [whoOf(x.lot), x.lot.auctionHouse, typeof x.fact === 'string' ? x.fact : null].filter(Boolean).join(' · ') });
     }
     return { closing, picks, fresh, rest };
   }, [loop, closingWatches, reads, top]);
