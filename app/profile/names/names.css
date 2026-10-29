@@ -18,6 +18,8 @@
 }
 .nm-name:hover { text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px; }
 .nm-who { font-size: 11.5px; color: var(--color-text-muted); white-space: nowrap; }
+/* a category / collection follow wears its kind before the label (pass 7) */
+.nm-kind { flex: none; align-self: center; }
 .nm-fig { margin-left: auto; flex: none; display: flex; align-items: baseline; gap: 6px; }
 .nm-fig b { font-family: var(--font-mono), monospace; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--color-fg); }
 .nm-row:not([data-live]) .nm-fig b { color: var(--color-text-muted); }

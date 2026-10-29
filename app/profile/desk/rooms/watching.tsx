@@ -19,7 +19,7 @@
 import { MyMax } from '../mymax';
 import { safeHref } from '../../../lib/safe-href';
 import { SigPill } from '../thumb';
-import { DeskRow, rowSubOf, rowWhoOf, bidsSubOf } from '../row';
+import { DeskRow, rowWhoOf, bidsSubOf, priceFigureOf } from '../row';
 import { contextComps } from '../../../lib/comps';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -87,6 +87,8 @@ function RowDossier({ lot, meta, sig, allLots, act, onRemove, onClose, id }: {
   useEffect(() => { ref.current?.focus({ preventScroll: true }); }, []);
   return (
     <div className="ck-dossier dk-dossier" id={id} role="region" aria-label={`Details for ${title}`} tabIndex={-1} ref={ref}>
+      {/* (pass 7) the full title — the row above keeps one line and an ellipsis */}
+      <p className="dk-dossier-title">{title}</p>
       <SavedDelta lot={lot} meta={meta} sig={sig} />
       {/* the facts, one line of pills (they wrap on a phone, never clip) */}
       <div className="dk-dossier-pills" role="list" aria-label="The lot's facts">
@@ -338,11 +340,12 @@ export default function WatchingRoom(_p: SectionProps) {
               const open = openRow === lot.id;
               const dossierId = `ck-dossier-${lot.id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
               const bid = (lot.currentBid || 0) > 0 ? lot.currentBid! : 0;
-              // the estimate as the figure: the range alone, "estimate" under it (a
-              // one-sided "from $X" and the no-estimate words print as they are)
-              const estText = fromText(lot) ?? formatEstimate(lot);
-              const twoSided = /est\.$/.test(estText) && !fromText(lot);
-              const est = twoSided ? estText.replace(/ est\.$/, '') : estText;
+              // the estimate as the figure: the range alone, "estimate" under it; a
+              // one-sided "from $X" prints as it is; the house's no-estimate words
+              // ("No reserve · opening bid") as a short quiet figure, the rest under
+              const price = priceFigureOf(lot);
+              const twoSided = price.kind === 'est' && !price.quiet && !fromText(lot);
+              const est = price.fig;
               // the hammer, in words — the Hammers column's fact, on the meta line
               const hammer = days === 0 && lot.saleDateTime
                 ? <CloseClock iso={lot.saleDateTime} windowHours={24} prefix="hammers " />
@@ -350,8 +353,10 @@ export default function WatchingRoom(_p: SectionProps) {
               return (
                 <DeskRow key={lot.id} lot={lot} as="div" attrs={{ 'data-flip-id': lot.id, role: 'listitem' }}
                   tone={sig?.label === 'Below Market' ? 'up' : undefined}
-                  // with a live bid as the figure the sub-line keeps the estimate; without one the estimate IS the figure
-                  sub={bid ? rowSubOf(lot) : [displayMakerOf(lot)?.name, lot.auctionHouse].filter(Boolean).join(' · ')}
+                  // with a live bid as the figure the sub-line keeps a two-sided estimate
+                  // (a one-sided one is the decision line's "estimate from $X"); without
+                  // a bid the estimate IS the figure — the sub-line never repeats the figure
+                  sub={[displayMakerOf(lot)?.name, lot.auctionHouse, bid && twoSided ? `${est} est.` : null].filter(Boolean).join(' · ')}
                   tag={reason ? { text: reason.tag, tone: reason.tag === 'Below market' ? 'up' : reason.tag === 'Lands soon' ? 'hot' : undefined } : null}
                   meta={<>
                     <span className="dk-meta-fact" style={days >= 0 && days <= 1 ? { color: 'var(--color-fg)' } : undefined}>{hammer}</span>
@@ -368,8 +373,8 @@ export default function WatchingRoom(_p: SectionProps) {
                     {vel ? <span className="dk-meta-fact">+{vel.delta} {vel.delta === 1 ? 'bid' : 'bids'}/{Math.round(vel.hours)}h</span>
                       : newBids > 0 ? <span className="dk-meta-fact">+{newBids} {newBids === 1 ? 'bid' : 'bids'} since saved</span> : null}
                   </>}
-                  figure={bid ? fmtFace(bid) : <span data-quiet={twoSided ? undefined : ''}>{est}</span>} figureKind={bid ? 'bid' : 'est'} figureText={bid ? fmtFace(bid) : est}
-                  figureSub={bid ? bidsSubOf(lot) : twoSided ? 'estimate' : null}
+                  figure={bid ? fmtFace(bid) : <span data-quiet={price.quiet || undefined}>{est}</span>} figureKind={bid ? 'bid' : 'est'} figureText={bid ? fmtFace(bid) : est}
+                  figureSub={bid ? bidsSubOf(lot) : price.sub}
                   pill={<MyMax lot={lot} compact />}
                   decision={<DecisionLine lot={lot} estimate={false} when={false} abstain="quiet" style={{ marginTop: 0 }} />}
                   expand={{ open, id: dossierId, onToggle: () => toggleRow(lot.id) }}>
