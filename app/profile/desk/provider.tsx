@@ -56,6 +56,7 @@ import {
   collectionTotalsOf, exposureOf, tenureOf, pendingResultsOf, type WatchSummary, type RecordRead, type CollectionTotals,
 } from './derive';
 import { fmtFace } from '../../lib/lot-face';
+import { markBasisText } from './rooms/collection-logic';
 import type { DeskData, DeskActions } from './types';
 
 /* ══ LOTS YOU MAY LIKE — the desk's recommender (app/lib/recs). The deal is
@@ -314,7 +315,8 @@ export function useDeskState(): DeskState {
         // ×5-sane) — no client appraisal / realized band
         const vd = lotVerdict(l);
         const appraised = vd ? vd.expectedAllIn : null;
-        const basis = vd ? `${vd.compN} comps` : null;
+        // the mark's basis says how many comps and how stale (rooms/collection-logic)
+        const basis = vd ? markBasisText(vd.compN, l.valueAsOf, Number(todayKey.slice(0, 4)), l.status === 'upcoming') : null;
         let refRange: string | null = null;
         if (appraised == null && fullLoaded) {
           const mkt = ARTIST_MARKET[l.artist];
@@ -355,7 +357,7 @@ export function useDeskState(): DeskState {
     }
     // (R4#4, R1#4) the totals — ./derive collectionTotalsOf
     return { rows, ...collectionTotalsOf(rows), pendingOwned };
-  }, [savedLots, ownedLotIds, allLots, fullLoaded, marketData, soldOrphans, ownedIdSet, savedMeta, metaFor, savedIdOf]);
+  }, [savedLots, ownedLotIds, allLots, fullLoaded, marketData, soldOrphans, ownedIdSet, savedMeta, metaFor, savedIdOf, todayKey]);
 
   /* ── sub-market exposure — the MARKET's read, labeled as such ── */
   const exposure = useMemo(() => exposureOf(collection.rows), [collection]);

@@ -41,6 +41,13 @@ const TIERED: Record<string, [number, number][]> = {
   'Bonhams': [[1_000_000, 1.28], [Infinity, 1.20]], // measured p90 1.28 low bands
 };
 
+/** the house has a schedule on file (flat, tiered or era-dated) — false means
+ *  every factor for it is the 1.25 ASSUMPTION, and a printed "25% premium"
+ *  must say so */
+export function premiumScheduleKnown(house: string | null | undefined): boolean {
+  return !!house && (house in FLAT || house in TIERED || house in DATED_PREMIUMS || house in DATED_TIERED_PREMIUMS);
+}
+
 /** realized = hammer × factor for this house at this hammer level. */
 export function houseAllInFactor(house: string | null | undefined, hammerUsd?: number | null): number {
   if (!house) return 1.25;

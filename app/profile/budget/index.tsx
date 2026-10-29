@@ -47,8 +47,7 @@ import { DepthMark } from '../../components/marks';
 import { RoomHead } from '../head';
 import {
   bidPlan, budgetBuys, marketTease, readerMarkets, winTotals, basisMix, nightLabel, isoDayOf, rowTag,
-  BASIS_TEXT, BUYS_WINDOW_DAYS, TEASE_MIN_N, type BidPlan, type PlanRow, type PlanNight, type BuyRow,
-} from './budget';
+  BASIS_TEXT, BUYS_WINDOW_DAYS, TEASE_MIN_N, type BidPlan, type PlanRow, type PlanNight, type BuyRow, premiumText } from './budget';
 import { oneSidedText } from './priced';
 import './budget.css';
 
@@ -126,7 +125,7 @@ function figureOf(r: PlanRow, estInPlan: boolean): { fig: string; sub: string; f
   if (r.basis === 'est' && !estInPlan) {
     return { fig: fmtFace(r.hammer), sub: `est midpoint · ${fmtFace(r.allIn)} all-in`, fact: 'no max yet — set yours on Watching', summed: false };
   }
-  return { fig: `${fmtFace(r.hammer)} → ${fmtFace(r.allIn)}`, sub: `all-in · ${r.premiumPct}% premium`, fact: r.basis === 'est' ? 'estimate midpoint, counted at your ask' : null, summed: true };
+  return { fig: `${fmtFace(r.hammer)} → ${fmtFace(r.allIn)}`, sub: `all-in · ${premiumText(r)}`, fact: r.basis === 'est' ? 'estimate midpoint, counted at your ask' : null, summed: true };
 }
 
 function PlanRowView({ r, now, estInPlan }: { r: PlanRow; now: number; estInPlan: boolean }) {
@@ -136,7 +135,7 @@ function PlanRowView({ r, now, estInPlan }: { r: PlanRow; now: number; estInPlan
   const f = figureOf(r, estInPlan);
   return (
     <DeskRow lot={r.lot} tone={r.belowPct != null ? 'up' : undefined}
-      attrs={{ 'data-summed': f.summed ? '' : undefined, title: `${tag}: ${BASIS_TEXT[r.basis]}${r.oneSided ? ' (one published side — never summed)' : ''} · ${fmtFace(r.allIn)} all-in at ${r.premiumPct}% premium` }}
+      attrs={{ 'data-summed': f.summed ? '' : undefined, title: `${tag}: ${BASIS_TEXT[r.basis]}${r.oneSided ? ' (one published side — never summed)' : ''} · ${fmtFace(r.allIn)} all-in at ${premiumText(r)}` }}
       tag={{ text: tag, tone: r.belowPct != null ? 'up' : r.basis === 'max' || r.basis === 'mine' ? 'hot' : undefined }}
       sub={<>
         {who ? <>{who} · </> : null}{r.lot.auctionHouse}
