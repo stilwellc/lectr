@@ -25,6 +25,7 @@ import { useDeskKeys } from './desk/keys';
 
 /* ============================================================
    MY PROFILE — THE DESK v3 (Oct 11 2026). The page is a shell:
+   (the standing law of this page, in one sitting: docs/DESK.md)
 
      1. useDeskState() resolves everything ONCE, in the one order
         (saves → corpus → settled cache → taste → stall deadlines →

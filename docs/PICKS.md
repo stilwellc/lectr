@@ -4,6 +4,8 @@
 feed's For-you tab, the Today strip (`topOf`) and the Daily Desk email, so they
 agree. This page is the law in one sitting; the file's header is the long form,
 `app/lib/__tests__/recs*.test.ts` the proof. Last revised Oct 29 2026 (passes 1–7).
+The desk that reads these picks — its page, rows and every other figure — is
+[DESK.md](DESK.md).
 
 ## 1 · What is weighed
 
