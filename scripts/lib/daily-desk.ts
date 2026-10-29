@@ -13,9 +13,12 @@
  *   overMax   a live bid already past the reader's own max      ┐
  *   closing   watches that hammer within 36h, soonest first     │ NEEDS YOU
  *   results   watches sold since the last email (vs est, vs max)┘
- *   desk      EVERY live watch (DESK_ROWS, then "and N more"): bid + count,
- *             the engine's read, when it closes, and MOVEMENT — bids added
- *             since the save (saved_lots.bid_count) and the room to your max
+ *   desk      every live watch NOT already under needs-you (a lot prints
+ *             once in the paper; "+ the N above" keeps the count honest),
+ *             DESK_ROWS then "and N more": bid + count, the engine's read,
+ *             when it closes, and MOVEMENT — bids added since the save
+ *             (saved_lots.bid_count; no baseline → no claim) and the room
+ *             to your max
  *   week      a 7-day calendar of your watches, picks and your names' lots
  *   fresh     NEW FOR YOU — lots the crawl first saw since the last Desk
  *             (lot.firstSeen, the feed's own isNewLot: onboarding floods
@@ -27,7 +30,10 @@
  *   market    3–5 lines read off the served files: the engine's calls
  *             settled this week (receipts), the flag record (backtest), the
  *             biggest hammer yesterday in your markets, the most-bid lot
- *             tonight, below-market flags on the block, first-seen today
+ *             tonight, below-market flags on the block, first-seen today,
+ *             and YESTERDAY ON LECTR — your names' sales settled yesterday
+ *             (the detail buckets' recent rows; the sold ledger is 19 MB
+ *             and is never read here)
  * Every figure is derived from the payload; nothing here is invented.
  */
 import type { AuctionLot } from '../../app/types';
@@ -110,7 +116,7 @@ export interface Glance {
   /** their estimate midpoints summed in USD (two-sided estimates only), formatted; null when none */
   est: string | null;
   /** the soonest watched close: the day word (today / tomorrow / Wed, Nov 11), its clock when the house gave one, the lot */
-  next: { id: string; title: string; when: string; time: string | null } | null;
+  next: { id: string; title: string; when: string; time: string | null; /** the lot already prints under needs-you */ above: boolean } | null;
   /** watched closes inside 7 days (the 36h window included) */
   week: number;
   picks: number;
@@ -122,6 +128,8 @@ export interface DeskEmail {
   /** the reader has watches at all (settled ones included) — the empty states read it */
   watched: number;
   desk: DeskRow[]; deskMore: number;
+  /** live watches printed under needs-you instead (never twice) */
+  deskAbove: number;
   week: WeekCalendar;
   fresh: FreshSection | null;
   picks: PickItem[];
@@ -232,6 +240,8 @@ export interface PlanInput {
   book?: readonly AuctionLot[];
   /** entity id → its last settled sale (null: none on file) */
   nameSold?: ReadonlyMap<string, LastSale | null>;
+  /** entity id → the detail bucket's recent settled rows (yesterday on lectr reads them) */
+  nameRecent?: ReadonlyMap<string, readonly LastSale[]>;
   receipts?: ReceiptsIn | null;
   backtest?: BacktestIn | null;
 }
@@ -277,13 +287,15 @@ export function planDesk(input: PlanInput): DeskEmail | null {
       };
     });
 
-  // YOUR DESK TODAY — every live watch, soonest close first (undated last)
+  // YOUR DESK TODAY — every live watch, soonest close first (undated last); a lot under needs-you prints there only
   const deskAll = liveWatched
     .map(l => ({ l, ms: closeMsOf(l) }))
     .filter(x => x.ms == null || x.ms >= now)
     .sort((a, b) => (a.ms ?? Infinity) - (b.ms ?? Infinity));
-  const desk = deskAll.slice(0, DESK_ROWS).map(x => deskRowOf(x.l, byId.get(baseId(x.l.id)), now, tz));
-  const deskMore = Math.max(0, deskAll.length - desk.length);
+  const deskRest = deskAll.filter(x => !used.has(baseId(x.l.id)));
+  const desk = deskRest.slice(0, DESK_ROWS).map(x => deskRowOf(x.l, byId.get(baseId(x.l.id)), now, tz));
+  const deskMore = Math.max(0, deskRest.length - desk.length);
+  const deskAbove = deskAll.length - deskRest.length;
 
   // the picks, laned: follow → saved → new to you, each lane's label kept in first-seen order
   const laneRank = { follow: 0, saved: 1, new: 2 } as const;
@@ -369,8 +381,13 @@ export function planDesk(input: PlanInput): DeskEmail | null {
   const weekAgo = dayKeyIn(now - WEEK_MS, tz);
   const settled = rows.filter(r => (r.r ?? 0) > 0 && r.p > 0 && (r.sd || '') >= weekAgo && (r.sd || '') <= today);
   const med = median(settled.map(r => (r.r as number) / r.p));
+  // r = realized USD, p = the call's predicted all-in USD (calls-ledger): the median r/p, said with its sign
   if (settled.length >= RECORD_MIN_N && med != null) {
-    market.push({ strong: `${n2(settled.length)} calls graded this week`, text: `the median hammer landed at ${Math.round(med * 100)}% of what the engine said before the sale`, href: '/receipts' });
+    const off = Math.round((med - 1) * 100);
+    market.push({
+      strong: off === 0 ? 'Hammers landed on the engine’s calls this week' : `Hammers ran ${Math.abs(off)}% ${off < 0 ? 'under' : 'over'} the engine’s calls this week`,
+      text: `median of ${n2(settled.length)} calls graded against the hammer, realized vs the call, both all-in`, href: '/receipts',
+    });
   }
   const bt = input.backtest;
   if (bt?.flagged && bt.unflagged && bt.flagged.n > 0) {
@@ -391,11 +408,27 @@ export function planDesk(input: PlanInput): DeskEmail | null {
     const bid = bidUsdOf(most.l);
     market.push({ strong: `${plural(most.l.bidCount!, 'bid')} on the most-bid lot closing tonight`, text: `${cut(craftTitle(most.l.title, most.l.auctionHouse), 56)} at ${most.l.auctionHouse}${bid > 0 ? `, ${fmtFace(bid)} bid` : ''}`, href: `/lot?id=${encodeURIComponent(most.l.id)}` });
   }
+  // YESTERDAY ON LECTR — your names' sales settled yesterday (the detail buckets' recent rows)
+  const yday: { n: MarketName; r: LastSale }[] = [];
+  for (const n of roster) {
+    if (!n.id) continue;
+    for (const r of input.nameRecent?.get(n.id) || []) if (r.d === yesterday && r.p > 0) yday.push({ n, r });
+  }
+  yday.sort((a, b) => b.r.p - a.r.p);
+  if (yday.length) {
+    const top = yday[0];
+    const who = Array.from(new Set(yday.map(x => x.n.label)));
+    market.push({
+      strong: `Yesterday on lectr: ${plural(yday.length, 'sale')} by your names settled`,
+      text: `${fmtFace(top.r.p)} for ${cut(craftTitle(top.r.t, top.r.h), 48)} (${top.n.label}) at ${top.r.h}${yday.length > 1 ? `, ${yday.length - 1} more${who.length > 1 ? ` across ${who.slice(0, 3).join(', ')}` : ''}` : ''}`,
+      href: `/lot?id=${encodeURIComponent(top.r.id)}`,
+    });
+  }
   const flagged = onBlock.filter(isFlagged).length;
   if (flagged) market.push({ strong: `${plural(flagged, 'lot')} on the block the engine reads below market`, text: `of ${n2(onBlock.length)} live`, href: '/value' });
   const seenToday = onBlock.filter(l => (l.firstSeen || '').slice(0, 10) >= yesterday).length;
   if (seenToday) market.push({ strong: `${plural(seenToday, 'lot')} first seen since yesterday`, text: 'new on the block across every house lectr reads', href: '/?tab=new' });
-  market.splice(5);
+  market.splice(6);
 
   // THE SEND RULE — a newspaper publishes daily; only an empty desk is skipped
   if (!watches.length && !follows.length && !results.length && !pickItems.length) return null;
@@ -416,7 +449,7 @@ export function planDesk(input: PlanInput): DeskEmail | null {
     next: soonest ? (() => {
       const w = whenText(soonest.ms, now, tz, closeIsTimed(soonest.l)) || 'scheduled';
       const m = /^(today|tomorrow)\s+(.+)$/.exec(w);
-      return { id: soonest.l.id, title: cut(craftTitle(soonest.l.title, soonest.l.auctionHouse), 40), when: m ? m[1] : w, time: m && m[2] !== '(time TBC)' ? m[2] : null };
+      return { id: soonest.l.id, title: cut(craftTitle(soonest.l.title, soonest.l.auctionHouse), 40), when: m ? m[1] : w, time: m && m[2] !== '(time TBC)' ? m[2] : null, above: used.has(baseId(soonest.l.id)) };
     })() : null,
     week: weekAll,
     picks: pickItems.length,
@@ -449,7 +482,7 @@ export function planDesk(input: PlanInput): DeskEmail | null {
     preheader: facts || 'Your watches, your names, what’s new and the market — every morning.',
     headline: `${lead[0].toUpperCase()}${lead.slice(1)}.`,
     glance, overMax, closing, results,
-    watched: watches.length, desk, deskMore, week, fresh, picks: pickItems, names, market,
+    watched: watches.length, desk, deskMore, deskAbove, week, fresh, picks: pickItems, names, market,
   };
 }
 
@@ -462,6 +495,16 @@ export function laneOf(r: { seed: { kind: string; label: string; follow?: unknow
   return { kind: 'new', label: 'New to you' };
 }
 
+/** a name's settled rows from its detail bucket (recent ∪ top, once each) */
+export function recentOf(d: { recent?: readonly LastSale[]; top?: readonly LastSale[] } | null | undefined): LastSale[] {
+  const seen = new Set<string>();
+  const out: LastSale[] = [];
+  for (const r of [...(d?.recent || []), ...(d?.top || [])]) {
+    if (!r.p || !r.d || seen.has(r.id)) continue;
+    seen.add(r.id); out.push({ id: r.id, p: r.p, d: r.d, h: r.h, t: r.t });
+  }
+  return out;
+}
 /** a name's last settled sale from its detail bucket (recent ∪ top, newest day) */
 export function lastSaleOf(d: { recent?: readonly LastSale[]; top?: readonly LastSale[] } | null | undefined): LastSale | null {
   let best: LastSale | null = null;

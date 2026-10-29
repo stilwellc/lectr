@@ -32,7 +32,7 @@ import { marketNamesOf } from '../app/lib/your-market';
 import { bucketOf } from '../app/lib/page-data';
 import type { EntityDetail } from '../app/lib/entity/model';
 import { baseId } from './lib/push-plan';
-import { planDesk, laneOf, lastSaleOf, type WatchRow, type SoldRow, type LastSale, type ReceiptsIn, type BacktestIn } from './lib/daily-desk';
+import { planDesk, laneOf, lastSaleOf, recentOf, type WatchRow, type SoldRow, type LastSale, type ReceiptsIn, type BacktestIn } from './lib/daily-desk';
 import { renderDesk } from './lib/daily-desk-html';
 
 const SB = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '');
@@ -101,16 +101,17 @@ async function loadLive(): Promise<AuctionLot[]> {
   const j = await loadServed<{ lots?: AuctionLot[] }>('upcoming.json', true);
   return j?.lots || [];
 }
-/** the followed names' last settled hammers: one detail bucket per name, each bucket read once */
-async function loadNameSold(ids: ReadonlySet<string>): Promise<Map<string, LastSale | null>> {
-  const out = new Map<string, LastSale | null>();
+/** the followed names' settled side (last hammer + recent rows): one detail bucket per name, each bucket read once */
+async function loadNameSold(ids: ReadonlySet<string>): Promise<{ sold: Map<string, LastSale | null>; recent: Map<string, LastSale[]> }> {
+  const sold = new Map<string, LastSale | null>();
+  const recent = new Map<string, LastSale[]>();
   const buckets = new Map<string, string[]>();
   for (const id of Array.from(ids)) { const b = bucketOf(id); buckets.set(b, [...(buckets.get(b) || []), id]); }
   for (const [b, list] of Array.from(buckets)) {
     const file = await loadServed<Record<string, EntityDetail>>(`pages/entity-${b}.json`);
-    for (const id of list) out.set(id, lastSaleOf(file?.[id]));
+    for (const id of list) { sold.set(id, lastSaleOf(file?.[id])); recent.set(id, recentOf(file?.[id])); }
   }
-  return out;
+  return { sold, recent };
 }
 
 interface Recipient { user_id: string; email: string; unsub_token: string; last_sent_on: string | null }
@@ -169,7 +170,7 @@ async function main() {
   const backtest = await loadServed<BacktestIn>('backtest.json');
   const nameIds = new Set<string>();
   for (const fs_ of Array.from(follows.values())) for (const n of marketNamesOf(fs_, [])) if (n.id) nameIds.add(n.id);
-  const nameSold = await loadNameSold(nameIds);
+  const { sold: nameSold, recent: nameRecent } = await loadNameSold(nameIds);
   // 5 · settled results for watched lots off the block
   const offBlock = Array.from(new Set(watches.map(w => baseId(w.lot_id)).filter(id => !live.has(id))));
   const sold = new Map<string, SoldRow>();
@@ -190,7 +191,7 @@ async function main() {
       const taste = buildTaste({ saved, follows: myFollows, nowMs: now });
       const picks = recommend(pool, taste, { nowMs: now, n: 12 }).map(p => ({ lot: p.lot as AuctionLot, note: recNote(p), lane: laneOf(p) }));
       const mySold = mine.map(w => sold.get(baseId(w.lot_id))).filter((s): s is SoldRow => !!s);
-      const desk = planDesk({ now, tz: TZ, watches: mine, live, sold: mySold, picks, lastSentOn: r.last_sent_on, follows: myFollows, book, nameSold, receipts, backtest });
+      const desk = planDesk({ now, tz: TZ, watches: mine, live, sold: mySold, picks, lastSentOn: r.last_sent_on, follows: myFollows, book, nameSold, nameRecent, receipts, backtest });
       if (!desk) { skipped++; continue; }
       const unsubUrl = `${ORIGIN}/api/email/unsubscribe?t=${encodeURIComponent(r.unsub_token)}`;
       const { html, text } = renderDesk(desk, { origin: ORIGIN, unsubUrl, dateLabel });

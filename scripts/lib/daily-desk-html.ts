@@ -86,36 +86,42 @@ ${r.vsMax ? `<div style="padding-top:7px">${pill(r.inReach ? `in reach · ${r.vs
 </td></tr></table></td></tr>`;
 }
 
-/** THE GLANCE — four figures in one hairline-parted row (the desk's cockpit) */
+/** THE GLANCE — four figures as a 2×2 of hairline-parted cells (the desk's
+ *  cockpit). Two rows always: a four-across strip was cramped at 390px and
+ *  Gmail strips the media queries that would have folded it. */
 function glance(origin: string, g: DeskEmail['glance']) {
-  const cell = (k: string, v: string, b: string, href: string, first = false) =>
-    `<td valign="top" width="25%" style="padding:10px ${first ? '0' : '10px'} 10px ${first ? '0' : '10px'};${first ? '' : `border-left:1px solid ${LINE}`}">
+  const cell = (k: string, v: string, b: string, href: string, first: boolean) =>
+    `<td valign="top" width="50%" style="padding:12px ${first ? '14px 12px 0' : '0 12px 14px'};${first ? '' : `border-left:1px solid ${LINE}`}">
 <div style="font:400 12px/1.3 ${FONT};color:${MUTED};white-space:nowrap">${esc(k)}</div>
-<a href="${href}" style="display:block;padding-top:4px;font:300 24px/1.1 ${FONT};color:${INK};letter-spacing:-0.02em;text-decoration:none">${esc(v)}</a>
+<a href="${href}" style="display:block;padding-top:4px;font:300 26px/1.1 ${FONT};color:${INK};letter-spacing:-0.02em;text-decoration:none">${esc(v)}</a>
 <div style="padding-top:4px;font:400 12px/1.4 ${FONT};color:${MUTED}">${b}</div></td>`;
   const desk = pageUrl(origin, '/profile');
   const nextHref = g.next ? lotUrl(origin, g.next.id) : `${desk}#tab-watching`;
-  return `<tr><td style="padding:18px 0 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid ${LINE};border-bottom:1px solid ${LINE}"><tr>
-${cell('Watching', n2(g.watching), g.est ? `${esc(g.est)} at estimate` : g.watching ? 'live lots' : 'nothing live', `${desk}#tab-watching`, true)}
-${cell('Next hammer', g.next ? g.next.when : '—', g.next ? `${g.next.time ? `<b style="color:${INK};font-weight:500">${esc(g.next.time)}</b> · ` : ''}${esc(g.next.title)}` : 'no watch on a clock', nextHref)}
-${cell('This week', n2(g.week), 'close in 7 days', `${desk}#tab-week`)}
-${cell('Picks', n2(g.picks), g.picks ? 'for you' : 'none today', `${desk}#tab-for-you`)}
-</tr></table></td></tr>`;
+  // the next-hammer lot already printed under needs-you: its clock, not a third mention of the title
+  const nextLine = g.next
+    ? `${g.next.time ? `<b style="color:${INK};font-weight:500">${esc(g.next.time)}</b> · ` : ''}${g.next.above ? 'first under Needs you' : esc(g.next.title)}`
+    : 'no watch on a clock';
+  return `<tr><td style="padding:18px 0 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid ${LINE};border-bottom:1px solid ${LINE}">
+<tr>${cell('Watching', n2(g.watching), g.est ? `${esc(g.est)} at estimate` : g.watching ? 'live lots' : 'nothing live', `${desk}#tab-watching`, true)}${cell('Next hammer', g.next ? g.next.when : '—', nextLine, nextHref, false)}</tr>
+<tr><td colspan="2" style="border-top:1px solid ${LINE};font-size:0;line-height:0">&nbsp;</td></tr>
+<tr>${cell('This week', n2(g.week), 'close in 7 days', `${desk}#tab-week`, true)}${cell('Picks', n2(g.picks), g.picks ? 'for you' : 'none today', `${desk}#tab-for-you`, false)}</tr>
+</table></td></tr>`;
 }
 
 /** THE WEEK — seven day columns: yours (watches + picks) large, your names' lots small; today on a cream well */
 function calendar(origin: string, w: WeekCalendar) {
   const cells = w.days.map(d => {
     const yours = d.watches + d.picks;
-    return `<td valign="top" width="14%" style="padding:10px 2px 10px;text-align:center;${d.today ? `background:${WELL};border-radius:10px;` : ''}">
+    // seven cells share ~330px on a phone: short words, no wrapping, the names count as "89 n."
+    return `<td valign="top" width="14%" style="padding:10px 0;text-align:center;white-space:nowrap;${d.today ? `background:${WELL};border-radius:10px;` : ''}">
 <div style="font:500 12px/1.3 ${FONT};color:${d.today ? INK : MUTED}">${esc(d.today ? 'Today' : d.dow)}</div>
-<div style="font:400 11px/1.3 ${FONT};color:${FAINT}">${esc(d.date)}</div>
+<div style="font:400 10.5px/1.3 ${FONT};color:${FAINT}">${esc(d.date.replace(/^(\w{3})\w* /, '$1 '))}</div>
 <div style="padding-top:6px;font:300 24px/1.1 ${FONT};color:${yours ? INK : LINE};letter-spacing:-0.02em">${yours || '·'}</div>
-<div style="padding-top:3px;font:400 11px/1.3 ${FONT};color:${d.names ? MUTED : 'transparent'}">${d.names ? `${n2(d.names)} ${d.names === 1 ? 'name' : 'names'}` : '–'}</div>
+<div style="padding-top:3px;font:400 10.5px/1.3 ${FONT};color:${d.names ? MUTED : 'transparent'}">${d.names ? `${n2(d.names)} n.` : '–'}</div>
 </td>`;
   }).join('');
   const sub = w.watches + w.picks + w.names
-    ? `${n2(w.watches)} ${w.watches === 1 ? 'watch' : 'watches'} · ${n2(w.picks)} ${w.picks === 1 ? 'pick' : 'picks'} · ${n2(w.names)} by your names — the large figure is yours (watches + picks), the small one your names’ lots`
+    ? `${n2(w.watches)} ${w.watches === 1 ? 'watch' : 'watches'} · ${n2(w.picks)} ${w.picks === 1 ? 'pick' : 'picks'} · ${n2(w.names)} by your names — the large figure is yours (watches + picks), “n.” your names’ lots`
     : 'nothing of yours or your names’ closes in the next seven days';
   return section('Closing this week', `<tr><td style="padding:12px 0 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${cells}</tr></table></td></tr>${more(origin, 'Your week on the desk', '/profile#tab-week')}`, sub);
 }
@@ -158,9 +164,11 @@ export function renderDesk(e: DeskEmail, o: { origin: string; unsubUrl: string; 
     : e.watched ? section('Needs you', empty('Nothing today — no bid has passed your max, nothing of yours closes before tomorrow night, no result waits on you.')) : '';
 
   // YOUR DESK TODAY
+  const above = e.deskAbove ? `<tr><td style="padding:12px 0 0;font:400 13px/1.4 ${FONT};color:${MUTED}">+ the ${n2(e.deskAbove)} above under Needs you</td></tr>` : '';
   const deskBody = e.desk.length
-    ? e.desk.map(r => deskRow(origin, r)).join('') + (e.deskMore ? more(origin, `and ${n2(e.deskMore)} more on your desk`, '/profile#tab-watching') : '')
-    : empty(e.watched ? `Nothing of yours is live right now — your ${n2(e.watched)} watched ${e.watched === 1 ? 'lot has' : 'lots have'} settled or rolled off the block.` : 'You’re not watching anything yet. Save a lot on lectr and it reports here every morning.');
+    ? e.desk.map(r => deskRow(origin, r)).join('') + (e.deskMore ? more(origin, `and ${n2(e.deskMore)} more on your desk`, '/profile#tab-watching') : '') + above
+    : e.deskAbove ? empty(`All ${n2(e.deskAbove)} of your live ${e.deskAbove === 1 ? 'watch is' : 'watches are'} under Needs you.`)
+      : empty(e.watched ? `Nothing of yours is live right now — your ${n2(e.watched)} watched ${e.watched === 1 ? 'lot has' : 'lots have'} settled or rolled off the block.` : 'You’re not watching anything yet. Save a lot on lectr and it reports here every morning.');
   const deskSection = section('Your desk today', deskBody, e.desk.length ? `${n2(e.glance.watching)} live ${e.glance.watching === 1 ? 'watch' : 'watches'}, soonest close first · bid, bids added since you saved it, the engine’s read, the room to your max` : null);
 
   // NEW FOR YOU
@@ -233,6 +241,7 @@ You get this because you turned on the Daily Desk email on lectr. Figures are le
     t.push('YOUR DESK TODAY');
     for (const r of e.desk) t.push(`- ${r.title}${r.when ? ` (${r.when})` : ''}${[r.bid ? `bid ${r.bid}` : '', r.bids, r.moved, r.room, r.sig?.text].filter(Boolean).map(x => ` · ${x}`).join('')}\n  ${lotUrl(origin, r.id)}`);
     if (e.deskMore) t.push(`  and ${e.deskMore} more: ${origin}/profile#tab-watching`);
+    if (e.deskAbove) t.push(`  + the ${e.deskAbove} above under needs you`);
     t.push('');
   }
   t.push('CLOSING THIS WEEK', e.week.days.map(d => `${d.today ? 'Today' : d.dow} ${d.watches + d.picks}${d.names ? ` (+${d.names} names)` : ''}`).join(' · '), '');
