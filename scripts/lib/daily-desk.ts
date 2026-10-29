@@ -200,16 +200,24 @@ function cut(s: string, n: number): string {
 }
 const plural = (n: number, one: string, many = one.endsWith('h') ? `${one}es` : `${one}s`) => `${n2(n)} ${n === 1 ? one : many}`;
 
-/** "today 7:00 PM" / "tomorrow" / "Thu" — the reader's clock (tz from the runner) */
-export function whenText(ms: number | null, now: number, tz: string, timed = true): string | null {
+/** "today 7:00 PM" / "tomorrow" / "Thu" — the reader's clock (tz from the runner).
+ *  A sale the house dates without an hour lands on its HOUSE day (`day`,
+ *  house-tz houseCloseDayOf — what the desk row, the cockpit and the lot page
+ *  print): its close instant is the end of that day where it is sold, which
+ *  the reader's calendar can read as the next morning (pass 16: "Fri, Nov 6"
+ *  for a Nov 5 sale). The week calendar already placed it on the house day. */
+export function whenText(ms: number | null, now: number, tz: string, timed = true, day?: string | null): string | null {
   if (ms == null) return null;
-  const d0 = dayKeyIn(now, tz), d1 = dayKeyIn(now + DAY_MS, tz), d = dayKeyIn(ms, tz);
+  const d0 = dayKeyIn(now, tz), d1 = dayKeyIn(now + DAY_MS, tz);
+  const d = !timed && day && /^\d{4}-\d{2}-\d{2}/.test(day) ? day.slice(0, 10) : dayKeyIn(ms, tz);
   // a sale the house dates without an hour: the day, never an invented clock
   const time = timed ? new Date(ms).toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' }) : '(time TBC)';
   if (d === d0) return `today ${time}`;
   if (d === d1) return `tomorrow ${time}`;
-  return new Date(ms).toLocaleDateString('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' });
+  return timed ? new Date(ms).toLocaleDateString('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }) : dayLabel(d, { weekday: 'short', month: 'short', day: 'numeric' });
 }
+/** the day a date-only lot's `when` reads — its house day; a timed close reads its instant */
+const untimedDayOf = (l: AuctionLot): string | null => (closeIsTimed(l) ? null : houseCloseDayOf(l));
 
 /** the day a close lands on: the reader's day for a timed close, the house's sale day for a date-only one */
 function dayOf(l: AuctionLot, ms: number, tz: string): string {
@@ -222,8 +230,9 @@ function itemOf(l: AuctionLot, w: WatchRow | undefined, now: number, tz: string)
   const bid = bidUsdOf(l);
   return {
     id: l.id, title: cut(craftTitle(l.title, l.auctionHouse), TITLE_CAP), maker: makerLineOf(l).name || null, house: l.auctionHouse,
-    img: sizedImg(httpsImg(imageOf(l)), 240) ?? null, est: formatEstimate(l), when: whenText(closeMsOf(l), now, tz, closeIsTimed(l)),
-    sig: sig ? { dir: sig.label === 'Below Market' ? 'up' : 'down', text: sig.label === 'Below Market' ? `${signalMagnitude(sig.label, sig.pct)} below market` : `${Math.min(Math.abs(sig.pct), 99)}% above market` } : null,
+    img: sizedImg(httpsImg(imageOf(l)), 240) ?? null, est: formatEstimate(l), when: whenText(closeMsOf(l), now, tz, closeIsTimed(l), untimedDayOf(l)),
+    // the one magnitude every surface prints (comps.signalMagnitude: "+38%", "3.2×", "−12%"), then the call's side
+    sig: sig ? { dir: sig.label === 'Below Market' ? 'up' : 'down', text: `${signalMagnitude(sig.label, sig.pct)} vs comps · ${sig.label.toLowerCase()}` } : null,
     max: max != null ? fmtFace(max) : null, bid: bid > 0 ? fmtFace(bid) : null, over: max != null && bid > max,
     bids: l.bidCount && l.bidCount > 0 ? plural(l.bidCount, 'bid') : null,
   };
@@ -458,7 +467,7 @@ export function planDesk(input: PlanInput): DeskEmail | null {
       const last = n.id ? input.nameSold?.get(n.id) ?? null : null;
       return {
         label: n.label, href: nameHref(n), live: ls.length,
-        soonest: soon ? { when: whenText(soon.ms, now, tz, closeIsTimed(soon.l)) || 'scheduled', house: soon.l.auctionHouse } : null,
+        soonest: soon ? { when: whenText(soon.ms, now, tz, closeIsTimed(soon.l), untimedDayOf(soon.l)) || 'scheduled', house: soon.l.auctionHouse } : null,
         last: last ? { id: last.id, hammer: fmtFace(last.p), day: dayLabel(last.d, { month: 'short', day: 'numeric' }), house: last.h, title: cut(craftTitle(last.t, last.h), 60) } : null,
         note: n.id ? null : n.follow.kind === 'cat' ? 'category follow · live lots only' : 'live lots only',
       };
@@ -547,7 +556,7 @@ export function planDesk(input: PlanInput): DeskEmail | null {
     est: estUsd > 0 ? fmtFace(estUsd) : null,
     priced: est.priced, oneSided: est.oneSided, estBasis: estUsd > 0 ? pricedBasisText(est) : null,
     next: soonest ? (() => {
-      const w = whenText(soonest.ms, now, tz, closeIsTimed(soonest.l)) || 'scheduled';
+      const w = whenText(soonest.ms, now, tz, closeIsTimed(soonest.l), untimedDayOf(soonest.l)) || 'scheduled';
       const m = /^(today|tomorrow)\s+(.+)$/.exec(w);
       return { id: soonest.l.id, title: cut(craftTitle(soonest.l.title, soonest.l.auctionHouse), 40), when: m ? m[1] : w, time: m && m[2] !== '(time TBC)' ? m[2] : null, above: used.has(baseId(soonest.l.id)) };
     })() : null,

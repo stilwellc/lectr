@@ -87,6 +87,16 @@ rooms for inline arithmetic in figure slots — `head-figures-pure.test.ts`).
 | Today's reads | `desk/rooms/today-logic.ts todayReadsOf` | one read per lot in evidence order (hot > quiet > soon > comps > below), `READS_MAX` 8; **the velocity freshness gate**: "+5 bids in 24h" prints only while the crawl is fresh (`LotCard.crawlIsFresh`: today's stamp or an ISO inside 24h); a percentile is cited only from the median up |
 | the section bar's figures | `sections.tabItemsOf` | each equals its room's head figure on the same desk (`tab-parity.test.ts`) |
 
+**One lot, one set of figures** (`lot-parity.test.ts`): the desk row, the
+dossier, the cockpit's Next-hammer line, the Daily Desk row and the lot page
+print the same strings for the same lot — the estimate through
+`estimate-text.formatEstimate` (fmtFace money), the live bid through
+`lot-face.liveBidUsd` (USD; an unconvertible bid keeps its currency code,
+never a `$`), the signal through `comps.signalMagnitude`, the close on the
+reader's day (`closeDayOf`; a date-only sale on its HOUSE day on every
+surface, the paper included), my max and "bid passed it" through the same
+USD bid.
+
 Standing honesty rules: green/red only on a MEASURED delta (a miss off your
 call is ink); a reference band is a labelled range that never enters a total;
 abstention prints its reason (a failed fetch is never a fact about a lot);
