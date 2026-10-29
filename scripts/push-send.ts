@@ -61,7 +61,7 @@ async function rest(p: string, init: RequestInit = {}): Promise<Response> {
       });
       if (res.ok) return res;
       const msg = `${init.method || 'GET'} ${p.split('?')[0]} → ${res.status} ${(await res.text()).slice(0, 200)}`;
-      if (res.status < 500 && res.status !== 408 && res.status !== 429) throw Object.assign(new Error(msg), { fatal: true });
+      if (res.status < 500 && res.status !== 408 && res.status !== 429) throw Object.assign(new Error(msg), { fatal: true, status: res.status });
       last = new Error(msg);
     } catch (e) {
       if ((e as { fatal?: boolean }).fatal) throw e;
@@ -112,9 +112,19 @@ async function main() {
   const users = Array.from(subsByUser.keys());
 
   // 2 · what they watch
+  // (pass 18) owned / result_dismissed silence a hammer push the reader already
+  // knows about; max_usd lets a close push say where the bid stands — each
+  // arrives with its migration (0010 / 0012), so fall back without them
   const watches: Watch[] = [];
+  const SELECTS = ['user_id,lot_id,saved_title,owned,max_usd,result_dismissed', 'user_id,lot_id,saved_title,owned,max_usd', 'user_id,lot_id,saved_title,owned', 'user_id,lot_id,saved_title'];
+  let sel = 0;
   for (const c of chunks(users, 100)) {
-    watches.push(...await restAll<Watch>(`saved_lots?select=user_id,lot_id,saved_title&user_id=in.${inList(c)}`));
+    for (;;) {
+      try { watches.push(...await restAll<Watch>(`saved_lots?select=${SELECTS[sel]}&user_id=in.${inList(c)}`)); break; } catch (e) {
+        if ((e as { status?: number }).status !== 400 || sel === SELECTS.length - 1) throw e;
+        sel++;
+      }
+    }
   }
   const watchedIds = Array.from(new Set(watches.map(w => baseId(w.lot_id))));
   console.log(`[push-send] ${subs.length} subscription(s) · ${users.length} user(s) · ${watchedIds.length} watched lot(s) · kinds ${Array.from(kinds).join(',')}`);

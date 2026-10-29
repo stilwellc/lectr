@@ -10,6 +10,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { AuctionLot } from '../../types';
 import { fmtFace, liveBidUsd } from '../../lib/lot-face';
 import { useDesk } from './provider';
+import { myMaxText } from './words';
 
 /** the reader's max on a lot (null = none set) */
 export function useMyMax(lotId: string): number | null {
@@ -25,17 +26,8 @@ export const overMax = (lot: AuctionLot, max: number | null): boolean => {
   return max != null && lot.priceUsd == null && usd != null && usd > max;
 };
 
-/** THE WORDS, one read for the desk row's pill and the lot page's line
- *  (pass 16/17 parity): "My max $18K · bid passed it" when the live bid (USD)
- *  is past it, "My max $18K · $2K of room" when a bid sits under it, "My max
- *  $18K" with no readable bid; null with no max set */
-export function myMaxText(lot: Pick<AuctionLot, 'currentBid' | 'currency' | 'fxRate' | 'priceUsd'>, max: number | null): string | null {
-  if (max == null || !(max > 0)) return null;
-  const usd = lot.priceUsd == null ? liveBidUsd(lot) : null;
-  if (usd != null && usd > max) return `My max ${fmtFace(max)} · bid passed it`;
-  if (usd != null) return `My max ${fmtFace(max)} · ${fmtFace(max - usd)} of room`;
-  return `My max ${fmtFace(max)}`;
-}
+/** THE WORDS (./words myMaxText — pure, shared with the lot page and the push) */
+export { myMaxText };
 
 const parse = (s: string): number | null => {
   const t = s.trim().toLowerCase().replace(/[$,\s]/g, '');

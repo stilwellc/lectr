@@ -31,8 +31,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { JUMP_EVENT, OPEN_TAB_EVENT } from '../rail';
 import { noteOpen, noteNear, noteClosed, wasOpen, wasNear, wasClosedOpen, snapFor } from './restore';
 
-/** does `id` (a room id, an anchor inside one, a week day) belong to this fold? */
-function owns(ids: readonly string[], id: string | undefined): boolean {
+/** does `id` (a room id, an anchor inside one, a week day) belong to this fold?
+ *  Exported for the landing tests (push-parity): a push's /profile#anchor opens
+ *  the fold that owns it. */
+export function owns(ids: readonly string[], id: string | undefined): boolean {
   if (!id) return false;
   if (ids.includes(id)) return true;
   if (id.startsWith('week-') && ids.includes('week')) return true;
