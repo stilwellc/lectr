@@ -23,6 +23,8 @@ import { lotAllInFactor } from '../lib/premiums';
 import { lotFloor } from '../lib/verdict';
 import { formatEstimate, lotSignal, confidenceMeter } from './LotCard';
 import { daysWord, Colophon } from './Terminal';
+import { MyMaxEditor } from '../profile/desk/mymax';
+import { idAliases } from '../lib/recs';
 import ArtistNav from './ArtistNav';
 import FollowButton from './FollowButton';
 import { lotFollowOf } from '../lib/lot-follow';
@@ -54,7 +56,7 @@ import { COPY_BTN_STYLE_ID, COPY_BTN_CSS, LOTPAGE_CSS } from './lotpage-css';
  *   /lot/<id> (static)  — the flagged set, prerendered with initialLot so the
  *                         first paint (and the crawler) sees real content.
  * Sold lots print the realized price, never ask-forward framing; lots past
- * their hammer with no result say "results pending".
+ * their hammer with no result say "result pending" (the desk's phrase).
  */
 
 /** THE VALUE FLOOR a reader may bid against — lanes.ts valueFloor, the ONE
@@ -173,6 +175,29 @@ function LeaderRow({ k, v, tone, sub, children }: {
         <span className={`lectr-lot-lv${tone ? ` ${tone}` : ''}`}>{children ?? v}</span>
       </span>
     </div>
+  );
+}
+
+/** (pass 17) THE WAY BACK — a reader who arrived from their desk gets one
+ *  slim line at the top: history.back() lands them where they left it (the
+ *  desk's restore, profile/desk/restore). The referrer decides (links stay
+ *  clean); `?from=desk` is honoured too. Rendered after mount only. */
+function BackToDesk() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    try {
+      const ref = document.referrer ? new URL(document.referrer) : null;
+      const fromRef = !!ref && ref.origin === window.location.origin && /^\/profile(?:\/|$)/.test(ref.pathname);
+      const fromQuery = new URLSearchParams(window.location.search).get('from') === 'desk';
+      setShow((fromRef || fromQuery) && window.history.length > 1);
+    } catch { setShow(false); }
+  }, []);
+  if (!show) return null;
+  return (
+    <button type="button" className="lectr-lot-back" onClick={() => window.history.back()}
+      style={{ display: 'inline-flex', alignItems: 'center', minHeight: 44, padding: '0 4px', margin: '2px 0 -6px', border: 0, background: 'none', cursor: 'pointer', font: '500 12.5px/1 var(--font-sans), sans-serif', color: 'var(--color-text-secondary)' }}>
+      <span aria-hidden>←</span>&nbsp;Back to your desk
+    </button>
   );
 }
 
@@ -368,7 +393,11 @@ export default function LotPage({ lotId, initialLot }: {
   // eventually show has been given up — it just arrives on demand.
   const { allLots, loading, fullLoaded, fullError, lastCrawl, market, totalLots, sources, requestFullLots } =
     useFullLotsOnDemand(false);
-  const { savedIds, isSaved, toggle } = useSavedLots();
+  const { savedIds, isSaved, toggle, savedMeta, setSavedFields } = useSavedLots();
+  // (pass 17) the save this lot sits under — the saved id may be an alias of
+  // the canonical id (the desk resolves saves the same way, derive.resolveSaved)
+  const savedId = useMemo(() => savedIds.find(id => id === lotId || idAliases(id).includes(lotId)) ?? null, [savedIds, lotId]);
+  const myMax = useMemo(() => { const m = savedId ? savedMeta[savedId]?.maxUsd : null; return typeof m === 'number' && m > 0 ? m : null; }, [savedId, savedMeta]);
   // Date.now() lives behind mount so SSG HTML (built on another day) never
   // hydrates against a different "in Nd" string.
   const [mounted, setMounted] = useState(false);
@@ -965,6 +994,7 @@ export default function LotPage({ lotId, initialLot }: {
       {wantsArchive && <ArchiveProbe onState={setArchive} />}
       <div className="lectr-lot rail">
         <style dangerouslySetInnerHTML={{ __html: LOTPAGE_CSS }} />
+        <BackToDesk />
 
         <div className="lectr-lot-grid" style={{ paddingTop: 12 }}>
           {/* the plate column — the photograph, then the object's paper trail
@@ -1193,7 +1223,8 @@ export default function LotPage({ lotId, initialLot }: {
                 {isWithdrawn
                   ? <div className="s">withdrawn before the sale</div>
                   : isPastPending
-                  ? <div className="s">results pending</div>
+                  // the desk's phrase; a watched lot says where the result lands
+                  ? <div className="s">result pending{savedId ? ' · the result lands on your desk under Record' : ''}</div>
                   : !isSold && mounted && !isNaN(new Date(closeDayOf(lot)).getTime())
                     // the house's published close, on the reader's clock
                     ? <div className="s">{daysWord(closeDayOf(lot))}{closeClock ? ` · closes ${closeClock}` : ''}</div>
@@ -1361,6 +1392,17 @@ export default function LotPage({ lotId, initialLot }: {
                   v={fmtFace(Math.round((liveBidUsd(lot) ?? lot.currentBid!) * lotAllInFactor(lot, lot.currentBid)))}
                   sub={`${fmtFace(liveBidUsd(lot) ?? lot.currentBid!)} bid + ~${Math.round((lotAllInFactor(lot, lot.currentBid) - 1) * 100)}% premium`}
                 />
+              )}
+              {/* (pass 17) MY MAX — the reader's own ceiling, the same editor and
+                  words as the desk row (desk/mymax): "My max $18K · bid passed it"
+                  / "· $2K of room"; set or changed here on the same persistence
+                  path (account setSavedFields, by the saved id) */}
+              {isActionable && savedId && (
+                <LeaderRow k="My max">
+                  <span className="lectr-lot-mymax">
+                    <MyMaxEditor lot={lot} max={myMax} onSave={n => setSavedFields(savedId, { maxUsd: n })} onClear={() => setSavedFields(savedId, { maxUsd: null })} />
+                  </span>
+                </LeaderRow>
               )}
               {isActionable && (() => {
                 // (Oct 6 2026, wave 3) the engine's own max bid (verdict.ts —
