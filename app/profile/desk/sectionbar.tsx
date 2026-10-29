@@ -114,8 +114,20 @@ export function SectionBar({ items }: { items: BarItem[] }) {
     const onJump = (e: Event) => {
       const id = (e as CustomEvent<{ id: string }>).detail?.id;
       if (!id) return;
+      // (pass 5) a landing below the cockpit shows the bar NOW and writes its
+      // height, synchronously — the jump's re-anchor (rail.tsx settleOn) reads
+      // the scroll-margin right after this event, and a bar that appeared a
+      // frame later left the room's head 44px under it
+      const el = document.getElementById(id);
+      const bar = ref.current;
+      if (el && bar && !el.closest('.dt-head')) {
+        const h = `${Math.round(bar.offsetHeight)}px`;
+        (bar.closest<HTMLElement>('.ck-page') ?? document.documentElement).style.setProperty('--dt-h', h);
+        document.documentElement.style.setProperty('--dt-h', h);
+        setShow(true);
+      }
       // the band that holds the landing (a room, an anchor in one, the More band itself)
-      const band = document.getElementById(id)?.closest<HTMLElement>('[data-group]');
+      const band = el?.closest<HTMLElement>('[data-group]');
       const g = band?.dataset.group ?? tabOf(id);
       if (g && items.some(t => t.id === g)) { setCur(g); hold.current = Date.now() + 900; }
     };

@@ -10,7 +10,6 @@
  * shows it without an account — local mode has no auth.
  */
 import React, { useState } from 'react';
-import { useDailyEmail } from '../../lib/email-prefs';
 import { useDeskInternals } from './provider';
 import { jump } from '../rail';
 
@@ -28,9 +27,9 @@ export function useDailyPreview(): boolean {
 }
 
 export function DailyNudge() {
-  const { auth } = useDeskInternals();
+  // ONE read of the preference, the provider's (the Account toggle shares it)
+  const { auth, daily: { state } } = useDeskInternals();
   const user = auth.authEnabled ? auth.user : null;
-  const { state } = useDailyEmail(user);
   const preview = useDailyPreview();
   // the session's memory, read once (client-only render: the initializer may read storage)
   const [dismissed, setDismissed] = useState(() => {

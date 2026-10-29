@@ -14,6 +14,13 @@
  *   closed   (the More rooms — Budget, Signals, Market, History) one row:
  *            the room's mark, name, figure and one-line hint, and the tap
  *            that mounts it; an open room closes from a "Close" at its foot.
+ *   seat     (pass 5, Oct 29) a clamped room below the first screen does not
+ *            mount until it is within one viewport of the reader
+ *            (IntersectionObserver, rootMargin 100%): until then a seat as
+ *            tall as the clamp holds its place, so nothing below it jumps.
+ *            A jump, a g-chord or a deep link into the room mounts it first
+ *            (owns()); the section bar's figures never depend on it (they
+ *            come from the registry, sections.ts tabItemsOf).
  *
  * Every anchor keeps landing: a jump() to a room (or an anchor inside it)
  * opens its fold first — OPEN_TAB_EVENT fires when the target isn't in the
@@ -94,9 +101,41 @@ const plain = (c: React.ReactNode): boolean => typeof c === 'number' || (typeof 
 /** the fold's motion: max-height from the cut to the room's height and back,
  *  on the house easing; reduced motion = no transition (CSS) */
 const FOLD_MS = 360;
+/** how far ahead of the reader a seat mounts its room: one viewport */
+const SEAT_MARGIN = '100% 0px';
+
+/** true once the seat is within SEAT_MARGIN of the viewport (or at once:
+ *  not lazy, no observer, or a landing names the room) */
+function useNear(el: HTMLElement | null, lazy: boolean, ids: readonly string[]): [boolean, () => void] {
+  // mounted at once: not lazy, no observer, or the address bar already names
+  // the room (client-only render: the initializer may read it)
+  const [near, setNear] = useState(() => {
+    if (!lazy || typeof window === 'undefined') return true;
+    if (typeof IntersectionObserver === 'undefined') return true;
+    let id = '';
+    try { id = decodeURIComponent(window.location.hash.slice(1)); } catch { /* ignore */ }
+    return owns(ids, id);
+  });
+  const wake = () => setNear(true);
+  // a jump / chord / link into the room: mount before the landing polls for it
+  useEffect(() => {
+    if (near) return;
+    const on = (e: Event) => { if (owns(ids, (e as CustomEvent<{ id: string }>).detail?.id)) setNear(true); };
+    window.addEventListener(OPEN_TAB_EVENT, on);
+    window.addEventListener(JUMP_EVENT, on);
+    return () => { window.removeEventListener(OPEN_TAB_EVENT, on); window.removeEventListener(JUMP_EVENT, on); };
+  }, [near, ids]);
+  useEffect(() => {
+    if (near || !el) return;
+    const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) setNear(true); }, { rootMargin: SEAT_MARGIN });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [near, el]);
+  return [near, wake];
+}
 
 /** a room folded to its first screen */
-export function Clamp({ ids, label, count, whole = false, children }: {
+export function Clamp({ ids, label, count, whole = false, lazy = false, children }: {
   /** the ids a jump may name that live inside (the room, its anchors) */
   ids: readonly string[];
   /** the room's name, for the Show-all line ("Show all 8 · Watching") */
@@ -104,6 +143,8 @@ export function Clamp({ ids, label, count, whole = false, children }: {
   count?: React.ReactNode;
   /** the room reads whole — never a fold (a cold desk's quick start) */
   whole?: boolean;
+  /** the room mounts only within a viewport of the reader; a seat holds its place until then */
+  lazy?: boolean;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -118,6 +159,8 @@ export function Clamp({ ids, label, count, whole = false, children }: {
   const [anim, setAnim] = useState<'open' | 'close' | null>(null);
   const inner = useRef<HTMLDivElement | null>(null);
   const outer = useRef<HTMLDivElement | null>(null);
+  const [seatEl, setSeatEl] = useState<HTMLDivElement | null>(null);
+  const [near] = useNear(seatEl, lazy, ids);
   useOpensOnJump(ids, setOpen);
   // does the room overflow its clamp? measured, so a short room shows no fold;
   // where does it cut? on the last whole row, so no row is ever halved
@@ -137,7 +180,7 @@ export function Clamp({ ids, label, count, whole = false, children }: {
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(read) : null;
     ro?.observe(el);
     return () => ro?.disconnect();
-  }, [whole]);
+  }, [whole, near]);
   // the travel: set the far end, let the transition run, then release the height
   const timer = useRef(0);
   useEffect(() => () => window.clearTimeout(timer.current), []);
@@ -159,6 +202,18 @@ export function Clamp({ ids, label, count, whole = false, children }: {
       timer.current = window.setTimeout(() => { setAnim(null); setHeight(null); }, FOLD_MS + 40);
     }
   };
+  // THE SEAT: the clamp's height, a quiet skeleton, until the reader is a screen away
+  if (!near) {
+    return (
+      <div ref={setSeatEl} className="dk-fold dk-seat" aria-busy="true" aria-label={`${label} — loads as you scroll`}>
+        <div className="dk-seat-in rail" aria-hidden>
+          <i className="ray-sk" style={{ width: 220, height: 26 }} />
+          <i className="ray-sk" style={{ width: '46%', height: 12, marginTop: 12 }} />
+          {[0, 1, 2].map(k => <i key={k} className="ray-sk dk-seat-row" />)}
+        </div>
+      </div>
+    );
+  }
   return (
     <div ref={outer} className="dk-fold" data-open={open || (measured && !tall) || undefined} data-empty={empty || undefined} data-anim={anim ?? undefined}
       style={cut != null ? ({ '--fold-cut': `${cut}px` } as React.CSSProperties) : undefined}>
