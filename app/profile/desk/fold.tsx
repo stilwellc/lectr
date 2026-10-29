@@ -55,22 +55,27 @@ export function Clamp({ ids, label, count, children }: {
   const inner = useRef<HTMLDivElement | null>(null);
   const outer = useRef<HTMLDivElement | null>(null);
   useOpensOnJump(ids, setOpen);
-  // does the room overflow its clamp? measured, so a short room shows no fold
+  // does the room overflow its clamp? measured on the CONTENT (never the
+  // clamped box itself — reading the box's height while clamping it made the
+  // fold open and close in a loop on the live desk), so a short room shows no fold
   useEffect(() => {
     const el = inner.current, box = outer.current;
     if (!el || !box) return;
+    let raf = 0;
     const read = () => {
+      raf = 0;
       const max = parseFloat(getComputedStyle(box).getPropertyValue('--fold-max')) || 520;
       setTall(el.offsetHeight > max + 40);
     };
+    const on = () => { if (!raf) raf = requestAnimationFrame(read); };
     read();
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(read) : null;
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(on) : null;
     ro?.observe(el);
-    return () => ro?.disconnect();
+    return () => { ro?.disconnect(); if (raf) cancelAnimationFrame(raf); };
   }, []);
   return (
     <div ref={outer} className="dk-fold" data-open={open || !tall || undefined}>
-      <div className="dk-fold-in" ref={inner}>{children}</div>
+      <div className="dk-fold-in"><div className="dk-fold-content" ref={inner}>{children}</div></div>
       {tall && (
         <div className="dk-fold-bar rail">
           <button type="button" className="dk-fold-btn" aria-expanded={open} onClick={() => setOpen(v => !v)}>

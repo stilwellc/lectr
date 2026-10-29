@@ -255,20 +255,31 @@ function DeskBody() {
   const sections = React.useMemo(() => mountedSections(desk, i), [desk, i]);
   const groups = React.useMemo(() => tabItemsOf(desk, i), [desk, i]);
   const mountedIds = React.useMemo(() => new Set(sections.map(s => s.id)), [sections]);
-  // a tab hash — the email's "#tab-watching", an old link — lands on the group's first room
+  // a tab hash — the email's "#tab-watching", an old link, the hash the old
+  // tab bar left in a reader's address bar — lands on the group's first room
+  // (a room hash is useHashLanding's); the browser's back/forward (hashchange)
+  // lands too. Once: never a second lander fighting the first (the live desk
+  // "spazzed" with two).
+  const landed = React.useRef(false);
   React.useEffect(() => {
     if (!i.landReady) return;
-    const land = () => {
+    const land = (fromChange: boolean) => {
       let id = '';
       try { id = decodeURIComponent(window.location.hash.slice(1)); } catch { return; }
       if (!id) return;
       const g = tabOf(id);
-      if (id.startsWith('tab-') && g) { const room = firstRoomOf(g, sections); if (room) jump(room); return; }
-      if (g) jump(id);
+      if (id.startsWith('tab-')) {
+        if (!g) return;
+        // Today is the top of the page: nothing to land on
+        if (g === 'today') { try { window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}`); } catch { /* ignore */ } return; }
+        const room = firstRoomOf(g, sections); if (room) jump(room); return;
+      }
+      if (fromChange && g) jump(id);
     };
-    land();
-    window.addEventListener('hashchange', land);
-    return () => window.removeEventListener('hashchange', land);
+    if (!landed.current) { landed.current = true; land(false); }
+    const onChange = () => land(true);
+    window.addEventListener('hashchange', onChange);
+    return () => window.removeEventListener('hashchange', onChange);
   }, [i.landReady, sections]);
   // the ids a jump may name inside a room (the room, its anchors)
   const idsOf = (ids: string[]) => ids.concat(Object.entries(SUB_ANCHORS).filter(([, room]) => ids.includes(room)).map(([a]) => a));
