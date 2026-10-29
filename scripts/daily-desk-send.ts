@@ -19,8 +19,12 @@
  * QUIET FAILURE like push-send: a failure is a ::warning:: and exit 0
  * (--strict exits 1).
  *
- *   npx tsx scripts/daily-desk-send.ts [--dry-run] [--preview-dir out/dd] [--only-user <uuid>]
+ *   npx tsx scripts/daily-desk-send.ts [--dry-run] [--preview-dir out/dd] [--only <email or uuid>]
  *                                      [--force] [--strict] [--upcoming public/data/ray/upcoming.json]
+ * --preview-dir writes <user_id>.html + .txt per recipient (the workflow's
+ * dry_run uploads them as the daily-desk-preview artifact); --only takes
+ * the recipient's address or user id (--only-user still works); --force
+ * sends even to a reader already sent today.
  */
 import fs from 'fs';
 import path from 'path';
@@ -47,7 +51,7 @@ const flag = (n: string) => process.argv.includes(`--${n}`);
 const DRY = flag('dry-run') || !RESEND;
 const STRICT = flag('strict');
 const FORCE = flag('force');
-const ONLY = arg('only-user', '');
+const ONLY = arg('only', '') || arg('only-user', '');
 const PREVIEW = arg('preview-dir', '');
 const warn = (m: string) => console.log(`::warning title=daily-desk::${m}`);
 
@@ -139,7 +143,11 @@ async function main() {
 
   // 1 · who asked for it
   let rcpt = (await (await rest('rpc/email_daily_recipients', { method: 'POST', body: '{}' })).json()) as Recipient[];
-  if (ONLY) rcpt = rcpt.filter(r => r.user_id === ONLY);
+  if (ONLY) {
+    const who = ONLY.trim().toLowerCase();
+    rcpt = rcpt.filter(r => r.user_id === who || (r.email || '').toLowerCase() === who);
+    if (!rcpt.length) warn(`--only ${ONLY.replace(/^(.).*(@.*)$/, '$1…$2')} matched no opted-in, confirmed recipient`);
+  }
   if (!FORCE) rcpt = rcpt.filter(r => r.last_sent_on !== today);
   if (!rcpt.length) { console.log('[daily-desk] 0 recipients due today'); return; }
   const users = rcpt.map(r => r.user_id);
@@ -195,7 +203,7 @@ async function main() {
       if (!desk) { skipped++; continue; }
       const unsubUrl = `${ORIGIN}/api/email/unsubscribe?t=${encodeURIComponent(r.unsub_token)}`;
       const { html, text } = renderDesk(desk, { origin: ORIGIN, unsubUrl, dateLabel });
-      if (PREVIEW) fs.writeFileSync(path.join(PREVIEW, `${r.user_id}.html`), html);
+      if (PREVIEW) { fs.writeFileSync(path.join(PREVIEW, `${r.user_id}.html`), html); fs.writeFileSync(path.join(PREVIEW, `${r.user_id}.txt`), text); }
       if (DRY) { console.log(`[daily-desk] would send "${desk.subject}" to ${r.email.replace(/^(.).*(@.*)$/, '$1…$2')}`); continue; }
       if (await send(r.email, desk.subject, html, text, unsubUrl, `daily-desk/${r.user_id}/${today}`)) {
         sent++;

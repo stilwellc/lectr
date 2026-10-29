@@ -22,7 +22,8 @@
  *   week      a 7-day calendar of your watches, picks and your names' lots
  *   fresh     NEW FOR YOU — lots the crawl first saw since the last Desk
  *             (lot.firstSeen, the feed's own isNewLot: onboarding floods
- *             excluded) by a name or market the reader follows
+ *             excluded) grouped by the follow that reaches them ("By Andy
+ *             Warhol · 3", "Charizard · 12"), FRESH_PER_GROUP rows each
  *   picks     the recommender's picks with their reasons, laned "Because
  *             you follow X" / "Because you saved Y" / "New to you"
  *   names     one ledger line per followed name: live lots, the soonest
@@ -61,7 +62,9 @@ export const WEEK_MS = 7 * 86_400_000;
 export const MAX_ROWS = 6;
 /** live watches printed in full before "and N more" */
 export const DESK_ROWS = 12;
-export const FRESH_ROWS = 6;
+/** new-for-you rows per follow group, and groups per paper */
+export const FRESH_PER_GROUP = 3;
+export const FRESH_GROUPS = 5;
 export const PICKS_N = 8;
 export const NAME_ROWS = 8;
 export const WEEK_DAYS_N = 7;
@@ -101,7 +104,8 @@ export interface ResultItem { id: string; title: string; house: string; img: str
 export interface PickItem extends DeskItem { note: string; lane: PickLane | null }
 export interface WeekCell { day: string; dow: string; date: string; today: boolean; watches: number; picks: number; names: number }
 export interface WeekCalendar { days: WeekCell[]; watches: number; picks: number; names: number }
-export interface FreshSection { since: string; items: DeskItem[]; more: number }
+export interface FreshGroup { label: string; href: string; items: DeskItem[]; more: number; total: number }
+export interface FreshSection { since: string; groups: FreshGroup[]; /** groups past FRESH_GROUPS */ moreGroups: number; total: number }
 export interface NameLine {
   label: string; href: string; live: number;
   soonest: { when: string; house: string } | null;
@@ -148,7 +152,11 @@ function cut(s: string, n: number): string {
   if (s.length <= n) return s;
   const h = s.slice(0, n - 1);
   const sp = h.lastIndexOf(' ');
-  return `${(sp > n * 0.5 ? h.slice(0, sp) : h).replace(/[\s,;:.—–-]+$/, '')}…`;
+  let out = sp > n * 0.5 ? h.slice(0, sp) : h;
+  // a parenthesis the cut opened and never closed ("… catalans (Two") goes with its tail
+  const paren = out.lastIndexOf('(');
+  if (paren > n * 0.5 && !out.includes(')', paren)) out = out.slice(0, paren);
+  return `${out.replace(/[\s,;:.—–-]+$/, '')}…`;
 }
 const plural = (n: number, one: string, many = `${one}s`) => `${n2(n)} ${n === 1 ? one : many}`;
 
@@ -217,11 +225,11 @@ function marketOfLot(l: AuctionLot): string | null {
 const nameMatches = (n: Pick<MarketName, 'id' | 'follow'>, l: AuctionLot) =>
   n.id ? entityIdOf(l) === n.id : affinityOf(l, [n.follow]) > 0;
 
-function nameHref(n: MarketName): string {
+function nameHref(n: MarketName, tab = 'all'): string {
   if (n.id) return pageHrefOf(n.id) || '/makers';
   if (n.follow.kind === 'cat') {
     const [cat, sub] = n.follow.key.split(':');
-    return `/?${new URLSearchParams({ cat, ...(sub ? { sub } : {}), tab: 'all' }).toString()}`;
+    return `/?${new URLSearchParams({ cat, ...(sub ? { sub } : {}), tab }).toString()}`;
   }
   return `/makers/${encodeURIComponent(n.follow.key)}`;
 }
@@ -344,15 +352,27 @@ export function planDesk(input: PlanInput): DeskEmail | null {
     const lastDesk = input.lastSentOn && input.lastSentOn < today ? input.lastSentOn : null;
     const prev = lastDesk ?? dayKeyIn(now - 2 * DAY_MS, tz);
     const baselines = houseBaselines(book, today);
-    const hits = onBlock
-      .filter(l => !watchedIds.has(baseId(l.id)) && isNewLot(l, { today, prevVisitDay: prev, baselines }))
-      .map(l => ({ l, a: Math.max(affinityOf(l, freshFollows as Follow[]), roster.some(n => n.id && nameMatches(n, l)) ? 1 : 0) }))
-      .filter(x => x.a > 0)
-      .sort((a, b) => (b.a - a.a) || ((closeMsOf(a.l) ?? Infinity) - (closeMsOf(b.l) ?? Infinity)));
+    // the follow that reaches each lot: a name first (maker / player / subject), then a category — one group per follow
+    const reach = [...roster.filter(n => n.id), ...roster.filter(n => !n.id && n.follow.kind === 'cat')];
+    const byGroup = new Map<string, { n: MarketName; lots: AuctionLot[] }>();
+    for (const l of onBlock) {
+      if (watchedIds.has(baseId(l.id)) || !isNewLot(l, { today, prevVisitDay: prev, baselines })) continue;
+      const n = reach.find(x => nameMatches(x, l));
+      if (!n) continue;
+      const g = byGroup.get(n.key);
+      if (g) g.lots.push(l); else byGroup.set(n.key, { n, lots: [l] });
+    }
+    const groupsAll = Array.from(byGroup.values()).sort((a, b) => b.lots.length - a.lots.length || a.n.label.localeCompare(b.n.label));
+    const groups: FreshGroup[] = groupsAll.slice(0, FRESH_GROUPS).map(g => {
+      const lots = g.lots.sort((a, b) => (closeMsOf(a) ?? Infinity) - (closeMsOf(b) ?? Infinity));
+      return {
+        label: g.n.follow.kind === 'maker' ? `By ${g.n.label}` : g.n.label, href: nameHref(g.n, 'new'),
+        items: lots.slice(0, FRESH_PER_GROUP).map(l => itemOf(l, undefined, now, tz)), more: Math.max(0, lots.length - FRESH_PER_GROUP), total: lots.length,
+      };
+    });
     fresh = {
       since: `first seen on lectr since ${lastDesk ? `your last Desk (${dayLabel(lastDesk, { weekday: 'short', month: 'short', day: 'numeric' })})` : 'yesterday'}, on the block and by a name or category you follow — house onboarding floods left out`,
-      items: hits.slice(0, FRESH_ROWS).map(x => itemOf(x.l, undefined, now, tz)),
-      more: Math.max(0, hits.length - FRESH_ROWS),
+      groups, moreGroups: groupsAll.length - groups.length, total: groupsAll.reduce((s, g) => s + g.lots.length, 0),
     };
   }
 
@@ -462,7 +482,7 @@ export function planDesk(input: PlanInput): DeskEmail | null {
     : closesToday ? `${closesToday} of yours ${closesToday === 1 ? 'closes' : 'close'} today`
       : closing.length ? `${closing.length} of yours ${closing.length === 1 ? 'closes' : 'close'} in the next 36 hours`
         : results.length ? `${results.length} of your watches sold`
-          : fresh?.items.length ? `${plural(fresh.items.length + fresh.more, 'new lot')} for the names you follow`
+          : fresh?.total ? `${plural(fresh.total, 'new lot')} for the names you follow`
             : weekAll ? `${weekAll} of yours ${weekAll === 1 ? 'closes' : 'close'} this week`
               : namesLive ? `${namesLive} of your names ${namesLive === 1 ? 'is' : 'are'} on the block`
                 : pickItems.length ? `${plural(pickItems.length, 'pick')} for you`
@@ -473,7 +493,7 @@ export function planDesk(input: PlanInput): DeskEmail | null {
     closing.length && !lead.includes('close') ? `${closing.length} closing` : null,
     weekAll && !lead.includes('this week') ? `${weekAll} close this week` : null,
     results.length && !lead.includes('sold') ? `${results.length} sold` : null,
-    fresh?.items.length && !lead.includes('new') ? `${fresh.items.length + fresh.more} new for you` : null,
+    fresh?.total && !lead.includes('new') ? `${fresh.total} new for you` : null,
     pickItems.length && !lead.includes('pick') ? `${plural(pickItems.length, 'pick')}` : null,
     namesLive && !lead.includes('names') ? `${namesLive} of your names live` : null,
   ].filter(Boolean).join(' · ');
@@ -487,11 +507,12 @@ export function planDesk(input: PlanInput): DeskEmail | null {
 }
 
 /** the pick's lane from the recommender's seed — the runner's one read of a Rec */
-export function laneOf(r: { seed: { kind: string; label: string; follow?: unknown; broad?: boolean; market?: string }; tier?: number }): PickLane {
+export function laneOf(r: { seed: { kind: string; label: string; follow?: unknown; broad?: boolean; market?: string; who?: string }; tier?: number }): PickLane {
   const s = r.seed;
   if (s.market || (r.tier ?? 1) > 1) return { kind: 'new', label: 'New to you' };
   if (s.kind === 'follow' && s.follow) return { kind: 'follow', label: `Because you follow ${cut(s.label, 48)}` };
-  if (s.kind === 'saved' || s.kind === 'owned') return { kind: 'saved', label: `Because you ${s.kind === 'owned' ? 'own' : 'saved'} ${cut(s.label, 48)}` };
+  // a saved lot's handle: its maker line + the short title ("Pablo Picasso · Deux buveurs catalans"), capped at a whole word
+  if (s.kind === 'saved' || s.kind === 'owned') return { kind: 'saved', label: `Because you ${s.kind === 'owned' ? 'own' : 'saved'} ${cut(s.who && !s.label.includes(s.who) ? `${s.who} · ${s.label}` : s.label, 48)}` };
   return { kind: 'new', label: 'New to you' };
 }
 

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AuctionLot } from '../../app/types';
-import { planDesk, whenText, laneOf, lastSaleOf, PICKS_N, DESK_ROWS, FRESH_ROWS, NAME_ROWS, WEEK_DAYS_N } from '../lib/daily-desk';
+import { planDesk, whenText, laneOf, lastSaleOf, PICKS_N, DESK_ROWS, FRESH_PER_GROUP, FRESH_GROUPS, NAME_ROWS, WEEK_DAYS_N } from '../lib/daily-desk';
 import { renderDesk } from '../lib/daily-desk-html';
 
 const NOW = Date.parse('2026-10-21T12:20:00Z');
@@ -132,24 +132,41 @@ test('new for you reads firstSeen since the last Desk, by a followed name, and s
   const book = [fresh1, fresh2, old, other, watched];
   const d = planDesk({ now: NOW, watches: [{ lot_id: 'wt' }], live: liveMap(book), sold: [], picks: [], follows: [FOLLOW_WARHOL], book, lastSentOn: '2026-10-19' })!;
   assert.ok(d.fresh);
-  assert.deepEqual(d.fresh.items.map(i => i.id).sort(), ['f1', 'f2']);
+  const ids = (f: NonNullable<typeof d.fresh>) => f.groups.flatMap(g => g.items.map(i => i.id)).sort();
+  assert.deepEqual(ids(d.fresh), ['f1', 'f2']);
+  assert.equal(d.fresh.total, 2);
+  assert.deepEqual(d.fresh.groups.map(g => [g.label, g.href, g.total, g.more]), [['By Andy Warhol', '/makers/andy-warhol', 2, 0]]);
   assert.match(d.fresh.since, /first seen on lectr since your last Desk \(Mon, Oct 19\)/);
   assert.match(d.subject, /2 new lots for the names you follow/);
   // no last send: the first paper reads since yesterday (the watched lot is never "new for you")
   const d2 = planDesk({ now: NOW, watches: [{ lot_id: 'wt' }], live: liveMap(book), sold: [], picks: [], follows: [FOLLOW_WARHOL], book })!;
-  assert.deepEqual(d2.fresh!.items.map(i => i.id).sort(), ['f1', 'f2']);
+  assert.deepEqual(ids(d2.fresh!), ['f1', 'f2']);
   assert.match(d2.fresh!.since, /since yesterday,/);
   // a Desk sent yesterday: only today's first-seen lots are new
   const d4 = planDesk({ now: NOW, watches: [], live: liveMap(book), sold: [], picks: [], follows: [FOLLOW_WARHOL], book, lastSentOn: YESTERDAY })!;
-  assert.deepEqual(d4.fresh!.items.map(i => i.id).sort(), ['f1', 'wt']);
+  assert.deepEqual(ids(d4.fresh!), ['f1', 'wt']);
   // a book without firstSeen stamps makes no "new" claim at all
   const bare = book.map(l => ({ ...l, firstSeen: undefined })) as AuctionLot[];
   assert.equal(planDesk({ now: NOW, watches: [], live: liveMap(bare), sold: [], picks: [], follows: [FOLLOW_WARHOL], book: bare })!.fresh, null);
-  // the cap
-  const many = Array.from({ length: FRESH_ROWS + 2 }, (_, k) => warhol(`m${k}`, (k + 30) * H, { firstSeen: TODAY } as Partial<AuctionLot>));
-  const d3 = planDesk({ now: NOW, watches: [], live: liveMap(many), sold: [], picks: [], follows: [FOLLOW_WARHOL], book: many })!;
-  assert.equal(d3.fresh!.items.length, FRESH_ROWS);
-  assert.equal(d3.fresh!.more, 2);
+  // groups: one per follow that reaches the lot (a name before a category), FRESH_PER_GROUP rows each, "+N more" to the name's page / the feed's new tab
+  const many = Array.from({ length: FRESH_PER_GROUP + 2 }, (_, k) => warhol(`m${k}`, (k + 30) * H, { firstSeen: TODAY } as Partial<AuctionLot>));
+  const zard = Array.from({ length: 2 }, (_, k) => lot(`z${k}`, (k + 40) * H, { artist: 'pokemon', ek: 'sj:tcg|k:charizard', title: `Charizard ${k}`, firstSeen: TODAY } as unknown as Partial<AuctionLot>));
+  const prints = Array.from({ length: 3 }, (_, k) => lot(`p${k}`, (k + 50) * H, { artist: 'kaws', subCat: 'prints', category: 'print', firstSeen: TODAY } as unknown as Partial<AuctionLot>));
+  const book3 = [...many, ...zard, ...prints];
+  const d3 = planDesk({
+    now: NOW, watches: [], live: liveMap(book3), sold: [], picks: [], book: book3,
+    follows: [FOLLOW_WARHOL, { kind: 'entity' as const, key: 'sj:tcg|k:charizard', label: 'Charizard' }, { kind: 'cat' as const, key: 'fine-art:prints', label: 'Fine art · Prints & multiples' }],
+  })!;
+  assert.deepEqual(d3.fresh!.groups.map(g => [g.label, g.total, g.items.length, g.more]), [['By Andy Warhol', 5, FRESH_PER_GROUP, 2], ['Fine art · Prints & multiples', 3, 3, 0], ['Charizard', 2, 2, 0]]);
+  assert.equal(d3.fresh!.groups[1].href, '/?cat=fine-art&sub=prints&tab=new');
+  assert.equal(d3.fresh!.total, 10);
+  assert.equal(d3.fresh!.moreGroups, 0);
+  assert.ok(d3.fresh!.groups.length <= FRESH_GROUPS);
+  const h3 = render(d3).html;
+  assert.ok(h3.includes('By Andy Warhol · 5'));
+  assert.ok(h3.includes('+2 more by Andy Warhol'));
+  assert.ok(h3.includes('/makers/andy-warhol?utm_source=daily-desk'));
+  assert.ok(render(d3).text.includes('By Andy Warhol · 5'));
   assert.ok(render(d).html.includes('New for you'));
 });
 
@@ -178,6 +195,9 @@ test('picks skip lots you already watch, cap at PICKS_N and sit in lanes: follow
 test('laneOf reads the recommender seed; lastSaleOf takes the newest settled row', () => {
   assert.deepEqual(laneOf({ seed: { kind: 'follow', label: 'Andy Warhol', follow: {} } }), { kind: 'follow', label: 'Because you follow Andy Warhol' });
   assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Companion (Flayed)' } }), { kind: 'saved', label: 'Because you saved Companion (Flayed)' });
+  // a saved lot's handle: maker · short title, closed at a whole word inside 48 chars; the maker is not repeated when the title already says it
+  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Deux buveurs catalans (Two Catalan Drinkers), pl. 12, from La Suite Vollard', who: 'Pablo Picasso' } }), { kind: 'saved', label: 'Because you saved Pablo Picasso · Deux buveurs catalans…' });
+  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Shohei Ohtani bat', who: 'Shohei Ohtani' } }), { kind: 'saved', label: 'Because you saved Shohei Ohtani bat' });
   assert.deepEqual(laneOf({ seed: { kind: 'owned', label: 'Chair' } }), { kind: 'saved', label: 'Because you own Chair' });
   assert.equal(laneOf({ seed: { kind: 'follow', label: 'TCG', market: 'tcg' } }).kind, 'new');
   assert.equal(laneOf({ seed: { kind: 'follow', label: 'KAWS', follow: {} }, tier: 2 }).kind, 'new');
@@ -211,7 +231,11 @@ test('your names: one ledger line per followed name — live count, soonest sale
   const { html, text } = render(d);
   assert.ok(html.includes('Your names'));
   assert.ok(html.includes('Last hammer'));
-  assert.ok(text.includes('last hammer $48K Oct 14'));
+  assert.ok(text.includes('YOUR NAMES'));
+  assert.ok(text.includes('- Andy Warhol: 2 live · soonest tomorrow'));
+  assert.ok(text.includes('last hammer $48K Oct 14 at Christie\'s — Flowers'));
+  assert.ok(text.includes('https://lectr.bid/makers/andy-warhol?utm_source=daily-desk'));
+  assert.ok(text.includes('category follow · live lots only'));
 });
 
 test('names cap at NAME_ROWS, live names first', () => {
@@ -257,6 +281,9 @@ test('the market: every line is derived from the served files, each linked into 
   assert.ok(html.includes('The market'));
   assert.ok(html.includes('https://lectr.bid/receipts?utm_source=daily-desk'));
   assert.ok(text.includes('THE MARKET'));
+  assert.ok(text.includes('- Hammers ran 10% over the engine’s calls this week — median of 8 calls'));
+  assert.ok(text.includes('https://lectr.bid/receipts?utm_source=daily-desk'));
+  assert.ok(text.includes('- 76 bids on the most-bid lot closing tonight'));
   // no files, no market claims; the record needs RECORD_MIN_N graded calls
   const d2 = planDesk({ now: NOW, watches: [{ lot_id: 'hot' }], live: liveMap([tonight]), sold: [], picks: [], book: [tonight], receipts: { rows: rows.slice(0, 2) } })!;
   assert.ok(!d2.market.some(m => m.href === '/receipts'));
@@ -290,6 +317,20 @@ test('yesterday on lectr: your names’ sales settled yesterday, from the detail
   assert.ok(!planDesk({ ...base, nameRecent: new Map([['pl:mickey-mantle', [row('m0', '2026-10-10', 99_000)]]]) })!.market.some(m => m.strong?.startsWith('Yesterday')));
   assert.ok(!planDesk(base)!.market.some(m => m.strong?.startsWith('Yesterday')));
   assert.ok(render(d).html.includes('Yesterday on lectr'));
+  assert.ok(render(d).text.includes('- Yesterday on lectr: 3 sales by your names settled — $243K for Card w1 (Andy Warhol)'));
+});
+
+test('the plain-text edition carries every section: needs you, the desk, the week, new for you, the picks’ lanes, names, market', () => {
+  const over = lot('over', 70 * H, { currentBid: 500, bidCount: 3 }), rest = lot('rest', 80 * H, { currentBid: 100, bidCount: 2 });
+  const d = planDesk({
+    now: NOW, watches: [{ lot_id: 'over', max_usd: 400 }, { lot_id: 'rest', max_usd: 900, bid_count: 1 }, { lot_id: 'x', max_usd: 10_000, est_mid: 8_000 }],
+    live: liveMap([over, rest]), sold: [{ id: 'x', title: 'Card', house: 'REA', price_usd: 12_000, sale_date: '2026-10-20' }], lastSentOn: '2026-10-20',
+    picks: [{ lot: lot('p1', 72 * H), note: 'Like your prints', lane: { kind: 'follow', label: 'Because you follow KAWS' } }],
+  })!;
+  const { text } = render(d);
+  for (const s of ['NEEDS YOU', 'Bids past your max', 'Results to confirm', 'Did you win it? https://lectr.bid/profile#results', '+20% vs your max $10K', 'YOUR DESK TODAY', '+1 bid since you saved it', '$800 under your max $900', '+ the 1 above under needs you', 'CLOSING THIS WEEK', 'THE PICKS', 'Because you follow KAWS', 'Open your desk: https://lectr.bid/profile', 'Email settings: https://lectr.bid/profile#account']) {
+    assert.ok(text.includes(s), `text edition lacks "${s}"`);
+  }
 });
 
 test('the lead picks the richest fact: needs you, closing, results, new, the week, the names, the market', () => {
