@@ -46,7 +46,7 @@ import { isFlagged } from '../../lib/flags';
 import { closeMsOf } from '../../lib/priority';
 import { closeIsTimed, houseCloseDayOf } from '../../lib/house-tz';
 import { estBandOf } from '../budget/priced';
-import { isOnBlock } from '../../utils';
+import { onBlockOf } from '../../lib/live-pool';
 import type { CatKey } from '../../lib/taxonomy';
 
 /** names whose sold side is read (each costs one entities file + one
@@ -124,8 +124,8 @@ export function groupByMarket(names: readonly DeskName[]): { market: Market; lab
 export function liveLotsOf(name: Pick<MarketName, 'id' | 'follow'>, book: readonly AuctionLot[], now: number): AuctionLot[] {
   const today = isoDayOf(now);
   const out: AuctionLot[] = [];
-  for (const l of book) {
-    if (!isOnBlock(l, today, now)) continue;
+  // (pass 6) the shared on-block index: one scan of the book for every name, not one per name
+  for (const l of onBlockOf(book, today, now)) {
     if (name.id ? entityIdOf(l) !== name.id : affinityOf(l, [name.follow]) <= 0) continue;
     out.push(l);
   }

@@ -73,7 +73,7 @@ export function useDeskKeys(): void {
       // `?` opens the keys legend (the same chip the (?) button toggles — at the
       // desk's foot since the tab bar went, Oct 29; it scrolls into view with the strip)
       if (e.key === '?') {
-        const btn = document.querySelector<HTMLElement>('.dk-keys .ck-helpbtn, .dt-help .ck-helpbtn');
+        const btn = document.querySelector<HTMLElement>('.dk-keys .ck-helpbtn, .ck-account .ck-helpbtn, .dt-help .ck-helpbtn');
         if (btn) { btn.click(); btn.focus(); btn.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); e.preventDefault(); }
         return;
       }

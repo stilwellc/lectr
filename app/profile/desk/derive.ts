@@ -8,6 +8,7 @@
  * fixture.
  */
 import type { AuctionLot } from '../../types';
+import { bookIndex } from '../../lib/live-pool';
 import { signalCallOf, type SavedMeta } from '../../lib/account';
 import { daysUntil as daysUntilOrNull } from '../../components/Terminal';
 import { lotSignal } from '../../components/LotCard';
@@ -103,7 +104,8 @@ export function resolveSaved(savedIds: readonly string[], allLots: readonly Auct
   savedIdByLotId: Map<string, string>;
   orphanIds: string[];
 } {
-  const byId = new Map(allLots.map(l => [l.id, l]));
+  // (polish pass 6) the shared book index — one id → lot map per book, not one per reader of it
+  const byId = bookIndex(allLots);
   const resolve = (id: string): AuctionLot | undefined => {
     for (const a of idAliases(id)) {
       const hit = byId.get(a);

@@ -14,12 +14,19 @@ export default function CloseClock({
   windowHours = 48,
   prefix,
   className,
+  clock = true,
+  tail = true,
 }: {
   iso?: string | null;
   /** show only when the close is within this many hours (default 48) */
   windowHours?: number;
   prefix?: string;
   className?: string;
+  /** print the wall-clock time ("7:15 PM") — off for a bare countdown */
+  clock?: boolean;
+  /** print the countdown ("in 3h 40m") — off for the time alone (a phone's
+   *  cockpit cell, Oct 29 2026: the pair overflowed a 90px cell) */
+  tail?: boolean;
 }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -33,20 +40,20 @@ export default function CloseClock({
   const ms = at - now;
   if (ms > windowHours * 3_600_000) return null;
 
-  const clock = new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  let tail: string;
+  const clockText = new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  let tailText: string;
   if (ms <= 0) {
     // closed (or closing as we speak) — results usually post shortly after
-    if (ms > -3_600_000) tail = 'closing now';
+    if (ms > -3_600_000) tailText = 'closing now';
     else return null;
   } else {
     const h = Math.floor(ms / 3_600_000);
     const m = Math.floor((ms % 3_600_000) / 60_000);
-    tail = h > 0 ? `in ${h}h ${m}m` : `in ${m}m`;
+    tailText = h > 0 ? `in ${h}h ${m}m` : `in ${m}m`;
   }
   return (
     <span className={className} style={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-      {prefix}{ms <= 0 ? tail : <>{clock} · {tail}</>}
+      {prefix}{ms <= 0 ? tailText : [clock ? clockText : null, tail ? tailText : null].filter(Boolean).join(' · ')}
     </span>
   );
 }

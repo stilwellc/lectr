@@ -5750,3 +5750,118 @@ html:not([data-lectr-light]) .ck-page .dk-item > .ck-dossier { background: #1618
 .dk-seat-in > .ray-sk { display: block; }
 .dk-seat-row { width: 100%; height: 56px; margin-top: 14px; border-radius: 10px; opacity: 0.7; }
 @media (max-width: 639.98px) { .dk-seat-in { padding-top: 40px; } .dk-seat-row { height: 48px; } }
+
+/* ── pass 6 (Oct 29): the billboard nits — ten, numbered ── */
+/* 1 · Show all is a SECONDARY action: the north star's white ring-shadow pill
+   (NORTHSTAR §2.4), never the ink pill six times down a page; Show less and
+   Close are the quiet twin. Dark: the elevated ground with a hairline. The
+   text sits on the 14px step (the bar's, the rows' titles) — 13.5 was the
+   one off-step size on the page. */
+.ck-page .dk-fold-btn {
+  background: var(--color-bg, #fff); color: var(--color-fg); font-weight: 500; font-size: 14px;
+  box-shadow: 0 0 1px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.04), 0 2px 4px rgba(0, 0, 0, 0.04);
+  transition: background 150ms var(--ease-signature, cubic-bezier(.4, 0, .2, 1)), transform 150ms var(--ease-signature, cubic-bezier(.4, 0, .2, 1));
+}
+.ck-page .dk-fold-btn:hover { opacity: 1; background: var(--color-bg-elevated, #F5F3F1); }
+.ck-page .dk-fold-btn:active { transform: scale(0.98); }
+.ck-page .dk-fold-btn b { font-weight: 600; }
+.ck-page .dk-fold-sep { opacity: 0.45; }
+.ck-page .dk-fold-btn-quiet { background: transparent; box-shadow: inset 0 0 0 1px var(--color-border-mid, var(--hairline)); color: var(--color-text-secondary); }
+html:not([data-lectr-light]) .ck-page .dk-fold-btn { background: #1d2026; color: var(--color-fg); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
+html:not([data-lectr-light]) .ck-page .dk-fold-btn:hover { background: #242830; }
+html:not([data-lectr-light]) .ck-page .dk-fold-btn-quiet { background: transparent; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
+
+/* 2 · the cockpit's cell bodies read one fact a line (cockpit.tsx): no line
+   opens on a "·", none ends on one; the lines keep a 2px air */
+.ck-ccell-b { gap: 2px; }
+.ck-ccell-b > span { display: block; min-width: 0; }
+
+/* 3 · the registration marks close the plate: the cells' bottom rule carries
+   the same crop dots as its top (NORTHSTAR §1.5 — every frame × rule meets a mark) */
+.ck-ccells > .ck-ccell { position: relative; }
+.ck-ccells > .ck-ccell:first-child::before, .ck-ccells > .ck-ccell:last-child::after {
+  content: ''; position: absolute; bottom: -2px; width: 3px; height: 3px; border-radius: 50%; background: var(--color-border-mid); pointer-events: none;
+}
+.ck-ccells > .ck-ccell:first-child::before { left: -1.5px; }
+.ck-ccells > .ck-ccell:last-child::after { right: -1.5px; }
+
+/* 4 · the section bar's weight: the current group is ink and underlined,
+   not bold — lightness, not boldness (NORTHSTAR §2.2); the counts stay light */
+.ck-page .dk-sbar-item[aria-current] { font-weight: 500; }
+.ck-page .dk-sbar-item[aria-current] b { font-weight: 500; }
+/* a phone's scrolling row fades at its right edge instead of cutting a word */
+@media (max-width: 639.98px) {
+  .ck-page .dk-sbar-in { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); padding-right: 36px; }
+}
+
+/* 5 · "What changed" is a control, so it wears the north star's quiet pill
+   (cream, 30px, 13.5/500), not an underlined word under a 44px headline */
+.ck-page .ck-deskdetails-btn {
+  display: inline-flex; align-items: center; gap: 2px; min-height: 30px; padding: 0 12px; border-radius: 999px;
+  background: var(--color-bg-elevated, #F5F3F1); color: var(--color-fg); text-decoration: none;
+  font-size: 13.5px; font-weight: 500; letter-spacing: -0.005em;
+  transition: background 150ms var(--ease-signature, cubic-bezier(.4, 0, .2, 1)), transform 150ms var(--ease-signature, cubic-bezier(.4, 0, .2, 1));
+}
+.ck-page .ck-deskdetails-btn:hover { background: var(--color-border, #EBE8E4); color: var(--color-fg); }
+.ck-page .ck-deskdetails-btn:active { transform: scale(0.98); }
+.ck-page .ck-deskdetails-btn::after { margin-left: 2px; color: var(--color-text-muted); }
+.ck-page .ck-deskdetails-btn[aria-expanded='true'] { background: var(--color-fg); color: var(--color-bg); }
+.ck-page .ck-deskdetails-btn[aria-expanded='true']::after { color: inherit; }
+html:not([data-lectr-light]) .ck-page .ck-deskdetails-btn { background: #1d2026; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
+html:not([data-lectr-light]) .ck-page .ck-deskdetails-btn:hover { background: #242830; }
+html:not([data-lectr-light]) .ck-page .ck-deskdetails-btn[aria-expanded='true'] { background: var(--color-fg); color: #131519; box-shadow: none; }
+.ck-page .ck-deskdetails { margin: 10px 0 2px; }
+/* the What-changed list: a hanging indent, the dash on the first line's centre */
+.ck-deskdetails-list li { padding-left: 16px; }
+.ck-deskdetails-list li::before { top: 0.78em; width: 6px; }
+
+/* 6 · the strip caption on a phone: one line that ends on a word — the
+   counts and the next day (cockpit.tsx shortCaption); the long line above 640 */
+.ck-hstrip-short { display: none; }
+@media (max-width: 639.98px) {
+  .ck-cockpit .ck-hstrip-cap > .ck-hstrip-long:not(:only-child) { display: none; }
+  .ck-cockpit .ck-hstrip-cap > .ck-hstrip-short { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* 7 · the More head is a room head (h3, 22/400) like Account's, not a
+   15px kicker — one head register down the whole page */
+.ck-page .dk-more-h { margin: 0; }
+.ck-page .dk-more-head { align-items: baseline; gap: 14px; padding-bottom: 14px; }
+.ck-page .dk-more-head .dk-more-sub { font-size: 13px; }
+
+/* 8 · band rhythm: the More band keeps the rooms' 56 (40 on a phone) from
+   its seam to its head and 56 after its last row; the foot's Account sits
+   40 under its own seam — the same scale as every band (not a third one) */
+.ck-page .dk-more { padding-block: 56px 56px; }
+.ck-page .dt-band-foot > section.ck-account { padding-block: 40px 0 !important; }
+@media (max-width: 639.98px) {
+  .ck-page .dk-more { padding-block: 40px 40px; }
+  .ck-page .dt-band-foot > section.ck-account { padding-block: 28px 0 !important; }
+}
+
+/* 9 · the Account foot: its dotted rule gave the title 4px (it read as an
+   underline) — 12px of air like a room's sub-line; the keys legend's (?) sits
+   on the head's row (desk/keyshelp portal), not alone at the band's foot */
+.ck-page .ck-account .ck-head { margin-bottom: 0 !important; }
+.ck-page .dt-band-foot .ck-account-in { margin-top: 10px; padding-top: 14px; }
+.ck-page .ck-account .ck-head-row { align-items: center; }
+.ck-page .ck-account .ck-head-row .ck-helpbtn { margin-left: 2px; }
+.ck-page .ck-account .ck-head-row .ck-help { order: 5; flex: 1 1 100%; }
+.ck-page .dt-band-foot > .dk-keys { padding-top: 16px; }
+
+/* 10 · the nudge, the More hints and the fold's sentences share the 13px
+   secondary step; the strip caption and the cell bodies the 12.5 caption step */
+.ck-page .dk-nudge { font-size: 13px; }
+.ck-page .dk-closed-h { font-size: 13px; }
+
+/* 11 · THE PHONE CELL CLIPS (Oct 29, owner's desk): the value stays inside
+   its cell at 390 — the time alone for a close today (the countdown moved to
+   the next-lot line), a day word wraps, a figure clips with an ellipsis */
+.ck-ccell-vphone { display: none; }
+@media (max-width: 639.98px) {
+  .ck-ccells .ck-ccell { min-width: 0; overflow: hidden; }
+  .ck-ccells .ck-ccell-v { display: block; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ck-ccells .ck-ccell-vwide { display: none; }
+  .ck-ccells .ck-ccell-vphone { display: inline; }
+  .ck-ccells .ck-ccell-v > .ck-ccell-vword { display: block; white-space: normal; overflow-wrap: anywhere; font-size: 14px; line-height: 1.15; }
+}

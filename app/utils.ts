@@ -630,7 +630,16 @@ export function makeAuctionIcs(lot: {
  *  block today". `saleDateTime`, when set, is the genuinely-parsed timestamp
  *  and always wins. Every liveness comparison runs on this, never on the raw
  *  (possibly crawl-day) saleDate. */
+/** (pass 6) per-lot memo, guarded on the three fields the read uses */
+const saleDayCache = new WeakMap<object, { dt: string | null | undefined; sd: string | null | undefined; h: string | null | undefined; v: string }>();
 export function trueSaleDay(l: { saleDate?: string | null; saleDateTime?: string | null; auctionHouse?: string | null }): string {
+  const hit = saleDayCache.get(l);
+  if (hit && hit.dt === l.saleDateTime && hit.sd === l.saleDate && hit.h === l.auctionHouse) return hit.v;
+  const v = trueSaleDayRead(l);
+  saleDayCache.set(l, { dt: l.saleDateTime, sd: l.saleDate, h: l.auctionHouse, v });
+  return v;
+}
+function trueSaleDayRead(l: { saleDate?: string | null; saleDateTime?: string | null; auctionHouse?: string | null }): string {
   const dt = l.saleDateTime;
   // a Christie's local-midnight DAY stamp marks the sale-local day, not a moment
   if (dt && isDayStamp(l)) return dayOfDayStamp(dt);

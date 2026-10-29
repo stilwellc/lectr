@@ -29,6 +29,7 @@
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { JUMP_EVENT, OPEN_TAB_EVENT } from '../rail';
+import { noteOpen, noteNear, noteClosed, wasOpen, wasNear, wasClosedOpen, snapFor } from './restore';
 
 /** does `id` (a room id, an anchor inside one, a week day) belong to this fold? */
 function owns(ids: readonly string[], id: string | undefined): boolean {
@@ -45,8 +46,10 @@ function useOpensOnJump(ids: readonly string[], setOpen: (v: boolean) => void) {
     window.addEventListener(JUMP_EVENT, on);
     return () => { window.removeEventListener(OPEN_TAB_EVENT, on); window.removeEventListener(JUMP_EVENT, on); };
   }, [ids, setOpen]);
-  // a deep link into this fold on load (the landing polls for the element)
+  // a deep link into this fold on load (the landing polls for the element) —
+  // not on a return (restore.ts): the fold is what the reader left it
   useEffect(() => {
+    if (snapFor(window.location.pathname)) return;
     let id = '';
     try { id = decodeURIComponent(window.location.hash.slice(1)); } catch { return; }
     if (owns(ids, id)) setOpen(true);
@@ -112,10 +115,13 @@ function useNear(el: HTMLElement | null, lazy: boolean, ids: readonly string[]):
   const [near, setNear] = useState(() => {
     if (!lazy || typeof window === 'undefined') return true;
     if (typeof IntersectionObserver === 'undefined') return true;
+    // a return to the desk (restore.ts): the rooms that were mounted mount again
+    if (wasNear(ids)) return true;
     let id = '';
     try { id = decodeURIComponent(window.location.hash.slice(1)); } catch { /* ignore */ }
     return owns(ids, id);
   });
+  useEffect(() => { if (near && lazy) noteNear(ids[0]); }, [near, lazy, ids]);
   const wake = () => setNear(true);
   // a jump / chord / link into the room: mount before the landing polls for it
   useEffect(() => {
@@ -147,7 +153,9 @@ export function Clamp({ ids, label, count, whole = false, lazy = false, children
   lazy?: boolean;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  // a return to the desk (restore.ts) opens the folds that were open
+  const [open, setOpen] = useState(() => wasOpen(ids));
+  useEffect(() => { noteOpen(ids[0], open); }, [open, ids]);
   const [tall, setTall] = useState(false);
   const [empty, setEmpty] = useState(false);
   // not before the first measure: a tall room mounts clamped at --fold-max
@@ -243,7 +251,8 @@ export function Closed({ ids, label, count, mark, hint, children }: {
   hint?: string;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(() => wasClosedOpen(ids));
+  useEffect(() => { noteClosed(ids[0], open); }, [open, ids]);
   const box = useRef<HTMLDivElement | null>(null);
   useOpensOnJump(ids, setOpen);
   const close = () => { backToTop(box.current); setOpen(false); };

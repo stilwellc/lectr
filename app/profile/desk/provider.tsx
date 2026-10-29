@@ -20,6 +20,7 @@
  * History, the picks group) — new sections never need it.
  */
 import { SigPill } from './thumb';
+import { onBlockNow, bookIndex } from '../../lib/live-pool';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { AuctionLot } from '../../types';
 import { useFullLotsOnDemand, type LedgerEntry } from '../../hooks/useRayData';
@@ -68,10 +69,9 @@ const EMPTY_RECS: readonly Rec<AuctionLot>[] = [];
 export interface Deal { pool: AuctionLot[]; recs: Rec<AuctionLot>[]; loop: ReturnLoop | null }
 function useDeal(book: AuctionLot[], taste: Taste, ready: boolean): Deal {
   // the block (isOnBlock — every live count's pool), re-cut per book
-  const pool = useMemo(() => {
-    const today = localToday(), now = Date.now();
-    return book.filter(l => l.status === 'upcoming' && isOnBlock(l, today, now));
-  }, [book]);
+  // (pass 6) the shared on-block index (lib/live-pool onBlockOf): one scan per
+  // book, day and 10-minute bucket, the same array Names / Your market / Budget read
+  const pool = useMemo<AuctionLot[]>(() => onBlockNow<AuctionLot>(book), [book]);
   // (r9) a narrow taste (one followed maker) deals deeper — Show more walks it
   const recs = useMemo(() => (ready && taste.seeds.length ? recommend(pool, taste, { n: Math.max(RECS_MAX, recDepth(taste)) }) : []), [ready, pool, taste]);
   // THE RETURN LOOP — what is new in your picks since you were last here,
@@ -387,7 +387,11 @@ export function useDeskState(): DeskState {
 
   const changes = useMemo(() => watchChangesOf(upcoming, metaFor, signalById), [upcoming, metaFor, signalById]);
 
-  const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
+  // (pass 6) counted over the on-block index, not the whole book: the index
+  // holds every lot on the block at its 10-minute floor (a superset of now),
+  // and getUpcomingCounts re-reads isOnBlock at now — the same counts, 6k
+  // lots read instead of 355k
+  const upcomingCounts = useMemo(() => getUpcomingCounts(onBlockNow(allLots)), [allLots]);
 
   /* ── THE READS — the desk's insight layer: hot vs quiet vs landing vs
      underpriced, each with its measured evidence. Facts only. The selection

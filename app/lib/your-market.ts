@@ -31,7 +31,8 @@ import { lotFollowOf } from './lot-follow';
 import { isFlagged } from './flags';
 import { closeMsOf } from './priority';
 import { isNewLot, type HouseBaselines } from './feed-filters';
-import { isOnBlock } from '../utils';
+import { onBlockOf } from './live-pool';
+import { localToday } from '../utils';
 
 /** names whose sold side is read (each costs an entity-<bb>.json bucket) */
 export const MAX_READ = 16;   // one constant for Your market AND the Names calendar (profile/names re-exports it)
@@ -215,8 +216,8 @@ export function liveFactsOf(name: Pick<MarketName, 'follow' | 'id'>, book: reado
   const by = now + WEEK_DAYS * DAY;
   let live = 0, closing = 0, fresh = 0;
   const flaggedLots: AuctionLot[] = [];
-  for (const l of book) {
-    if (!(o.today ? isOnBlock(l, o.today, now) : isOnBlock(l, undefined, now))) continue;
+  // (pass 6) the shared on-block index (lib/live-pool): one scan for every name
+  for (const l of onBlockOf(book, o.today ?? localToday(), now)) {
     // a name with an entity: the lot's entity key (the build's `ek`, else the
     // same function computed — the /makers attribution); else the follow's matcher
     if (name.id ? entityIdOf(l) !== name.id : affinityOf(l, [name.follow]) <= 0) continue;

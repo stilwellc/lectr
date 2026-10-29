@@ -1617,6 +1617,34 @@ function sciTitleIdentity(l: Pick<AuctionLot, 'title' | 'artist'>): string | nul
   return null;
 }
 
+/* ── THE SOLD INDEX (desk pass 6, Oct 29 2026) ──
+   The three reference bands each filtered the WHOLE book (355k rows) per
+   lot — a collection of eight pieces was eight full scans, ~100 ms, on
+   every book change. One pass per book identity buckets the sold, priced
+   rows by maker (book order kept within a bucket) and keeps the culture
+   engine's sold rows in book order; the bands apply their lot-dependent
+   predicates to the bucket. Same rows, same order, same bands. */
+const soldIndexCache = new WeakMap<readonly AuctionLot[], { byArtist: Map<string, AuctionLot[]>; culture: AuctionLot[] }>();
+function soldIndexOf(allLots: readonly AuctionLot[]): { byArtist: Map<string, AuctionLot[]>; culture: AuctionLot[] } {
+  const hit = soldIndexCache.get(allLots);
+  if (hit) return hit;
+  const byArtist = new Map<string, AuctionLot[]>();
+  const culture: AuctionLot[] = [];
+  for (const l of allLots) {
+    if (l.status !== 'sold' || !((l.priceUsd || 0) > 0)) continue;
+    let b = byArtist.get(l.artist);
+    if (!b) { b = []; byArtist.set(l.artist, b); }
+    b.push(l);
+    if (CULTURE_SLUGS_ENGINE.has(l.artist) && (l as AuctionLot & { source?: string }).source !== 'sothebys-algolia') culture.push(l);
+  }
+  const v = { byArtist, culture };
+  soldIndexCache.set(allLots, v);
+  return v;
+}
+const NO_LOTS: AuctionLot[] = [];
+/** the sold, priced rows of one maker, in book order */
+const soldOfArtist = (allLots: readonly AuctionLot[], artist: string): readonly AuctionLot[] => soldIndexOf(allLots).byArtist.get(artist) ?? NO_LOTS;
+
 /** Science reference band — same slug + canonical form + (entity OR curated
  *  title identity), fossils get a ≥3-word-overlap fallback when the anchor
  *  has no identity. Measured: coverage 5.0%→38.5% (7.6×), med|err| 50–55%,
@@ -1639,8 +1667,8 @@ export function scienceReferenceBand(lot: AuctionLot, allLots: AuctionLot[]): Re
   const words = new Set(normalizeTitle(title).split(' ').filter(w => w.length > 3));
   const scored: [number, AuctionLot][] = [];
   const shapeA = lotShapeOf(lot.title);
-  for (const l of allLots) {
-    if (l.id === lot.id || l.artist !== lot.artist || l.status !== 'sold' || !l.priceUsd) continue;
+  for (const l of soldOfArtist(allLots, lot.artist)) {
+    if (l.id === lot.id) continue;
     if (isCompExcluded(l) || !shapesCompatible(shapeA, lotShapeOf(l.title))) continue;
     if (!forms.has(formOf(l)) || sciLeakedArt(l)) continue;
     let idHit = false, sc = 0;
@@ -1692,9 +1720,8 @@ export function makerReferenceBand(lot: AuctionLot, allLots: AuctionLot[]): Refe
   const scope = MAKER_BAND_FORMS[form];
   if (!scope) return null;
   const shapeA = lotShapeOf(lot.title);
-  const all = allLots.filter(l =>
-    l.id !== lot.id && l.artist === lot.artist && l.status === 'sold'
-    && (l.priceUsd || 0) > 0 && formOf(l) === form
+  const all = soldOfArtist(allLots, lot.artist).filter(l =>
+    l.id !== lot.id && formOf(l) === form
     && !isCompExcluded(l) && shapesCompatible(shapeA, lotShapeOf(l.title)));
   if (all.length < 5) return null;
   const cutoff = new Date(Date.now() - 5 * 365.25 * 86_400_000).toISOString().slice(0, 10);
@@ -1717,10 +1744,8 @@ export function makerReferenceBand(lot: AuctionLot, allLots: AuctionLot[]): Refe
 export function cultureReferenceBand(lot: AuctionLot, allLots: AuctionLot[]): ReferenceBand | null {
   if (!CULTURE_SLUGS_ENGINE.has(lot.artist)) return null;
   const shapeA = lotShapeOf(lot.title);
-  const sold = allLots.filter(l =>
-    l.id !== lot.id && CULTURE_SLUGS_ENGINE.has(l.artist) && l.status === 'sold' && l.priceUsd
-    && (l as AuctionLot & { source?: string }).source !== 'sothebys-algolia'
-    && !isCompExcluded(l) && shapesCompatible(shapeA, lotShapeOf(l.title)));
+  const sold = soldIndexOf(allLots).culture.filter(l =>
+    l.id !== lot.id && !isCompExcluded(l) && shapesCompatible(shapeA, lotShapeOf(l.title)));
   const nt = normalizeTitle(cleanGoldinTitle(lot.title || ''));
   const bandOf = (pool: AuctionLot[], kind: ReferenceBand['kind']): ReferenceBand | null => {
     if (pool.length < 3) return null;
