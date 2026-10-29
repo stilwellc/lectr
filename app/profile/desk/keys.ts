@@ -7,6 +7,10 @@
  * rail's (?)); `?` opens that legend. Typing surfaces and overlays keep
  * their own keys.
  *
+ * (pass 6) Enter on a walked row opens its lot (the title link's own
+ * Enter); Shift+Enter or `o` opens the row's Details where it has them
+ * (the DeskRow's [data-expand] row, its .dk-expand button).
+ *
  * (Oct 11 review) THE CURSOR FOLLOWS THE JUMP: a jump (rail, g-chord, deep
  * link) focuses the section, so j continues from the first row of THAT room
  * instead of the row the reader left behind — "where am I" is the row that
@@ -71,6 +75,13 @@ export function useDeskKeys(): void {
       if (e.key === '?') {
         const btn = document.querySelector<HTMLElement>('.dk-keys .ck-helpbtn, .dt-help .ck-helpbtn');
         if (btn) { btn.click(); btn.focus(); btn.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); e.preventDefault(); }
+        return;
+      }
+      // Details on the row under the cursor: Shift+Enter or `o`
+      if ((e.key === 'Enter' && e.shiftKey) || e.key === 'o') {
+        const row = t?.closest<HTMLElement>('[data-nav-row][data-expand]');
+        const btn = row?.querySelector<HTMLElement>('.dk-expand');
+        if (btn) { btn.click(); e.preventDefault(); }
         return;
       }
       if (e.key !== 'j' && e.key !== 'k') return;

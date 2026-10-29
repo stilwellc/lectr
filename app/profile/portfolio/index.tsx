@@ -234,7 +234,7 @@ export default function Portfolio({ desk, narrow }: SectionProps) {
                     <span className="pf-tile-l">{(who.match(/[A-Za-zÀ-ÿ]/)?.[0] ?? '·').toUpperCase()}</span>
                     <PlateImg src={src} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
                   </span>
-                  {g && g.pct !== 0 && <span className="pf-tile-pill"><SigPill dir={g.dir === 'up' ? 'up' : 'down'}>{g.text}</SigPill></span>}
+                  {g && g.pct !== 0 && <span className="pf-tile-pill"><SigPill dir={g.dir === 'up' ? 'up' : 'down'} label={`${g.text} ${g.basis}`}>{g.text}</SigPill></span>}
                   <span className="pf-tile-t">{craftTitle(lot.title, lot.auctionHouse)}</span>
                   <span className="pf-tile-s">{r.piece.bought ? fmtFace(r.piece.bought.usd) : '—'}{who !== lot.title ? ` · ${who}` : ''}</span>
                 </Link>
@@ -293,6 +293,8 @@ function Row({ r, nowYear }: { r: PieceRow; nowYear: number }) {
     <DeskRow lot={lot} who={maker || lot.title}
       sub={[maker, (lot.auctionHouse as string) === 'archive' ? 'archive record' : lot.auctionHouse, day ? formatDate(day) : ''].filter(Boolean).join(' · ')}
       figure={figure} figureKind="mark" figureSub={figureSub}
+      figureText={sameAsBought ? 'the same as bought' : r.mark ? `${fmtFace(r.mark.value)}${growth?.source === 'mark' && growth.pct !== 0 ? ` ${growth.text} ${growth.basis}` : ''}` : 'no index'}
+      figureSubText={sameAsBought && bought?.year != null ? `re-marks from ${bought.year + 1}` : r.mark ? `${r.mark.year}, n ${r.mark.n.toLocaleString()}` : reading ? 'reading' : `no index, ${r.noIndex ?? ''}`}
       meta={<>
         {/* bought · the engine read (its if-sold-now) · the maker's reads */}
         <span className="dk-meta-fact" title={piece.bought ? (piece.bought.basis === 'paid' ? 'Your recorded cost basis' : 'Realized price — set what you paid in the Collection room to override') : 'No price on file'}>

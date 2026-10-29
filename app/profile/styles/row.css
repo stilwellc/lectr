@@ -154,7 +154,8 @@
   .dk-acts > .dk-expand { flex: 0 0 44px; }
   /* the Details control: the chevron alone at the line's right end, a 44px
      target that hangs past the row's edge */
-  .dk-expand { margin-left: auto; min-width: 44px; min-height: 44px; padding: 0; border: none; justify-content: center; font-size: 18px; color: var(--color-text-faint); }
+  /* (the page's own sheet sizes .dk-expand too — this seat wins by specificity) */
+  .ck-page .dk-row > .dk-acts > .dk-expand, .dk-expand { margin-left: auto; min-width: 44px; min-height: 44px; height: 44px; padding: 0; border: none; justify-content: center; font-size: 18px; color: var(--color-text-muted); }
   .dk-expand-t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .dk-expand[aria-expanded='true'] { color: var(--color-fg); }
   .dk-pill .ck-mymax { height: 30px; }
@@ -179,3 +180,12 @@ html:not([data-lectr-light]) .dk-row:has(:focus-visible) { background: rgba(242,
 .ck-week-cn .dk-list { margin: 0; }
 /* motion: nothing floats */
 @media (prefers-reduced-motion: reduce) { .dk-row, .dk-expand, .dk-expand-chev { transition: none; } }
+
+/* ── contrast (pass 6, axe AA) ── the market's tags are 12px on a soft fill:
+   their ink deepens toward the page's ink so they clear 4.5:1 on the hover
+   fill too (the lamp keeps its hue); the decision line's words read in
+   secondary ink, its figures stay ink */
+.dk-meta > .ck-tag[data-tone='up'] { color: color-mix(in srgb, var(--color-up) 72%, var(--color-fg)); }
+.dk-meta > .ck-tag[data-tone='down'] { color: color-mix(in srgb, var(--color-down-text) 72%, var(--color-fg)); }
+.dk-decision .ck-decision { color: var(--color-text-secondary); }
+.dk-decision .ck-decision b { color: var(--color-fg); }

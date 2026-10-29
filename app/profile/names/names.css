@@ -86,9 +86,10 @@
 .nm-follow::before, .nm-link::before { content: ''; position: absolute; inset: -8px -6px; }
 .nm-link { min-height: 24px; display: inline-block; }
 @media (max-width: 639.98px) {
-  .nm-follow { min-height: 32px; padding: 7px 12px; }
-  .nm-follow::before, .nm-link::before { inset: -6px -8px; }
-  .nm-link { padding: 8px 0; min-height: 40px; }
+  /* (pass 6) the box itself clears 44px on a phone, not only its halo */
+  .nm-follow { min-height: 44px; padding: 0 14px; display: inline-flex; align-items: center; }
+  .nm-follow::before, .nm-link::before { inset: -2px -8px; }
+  .nm-link { padding: 10px 0; min-height: 44px; display: inline-flex; align-items: center; }
   .nm-name { position: relative; }
   .nm-name::before { content: ''; position: absolute; inset: -9px 0; }
 }

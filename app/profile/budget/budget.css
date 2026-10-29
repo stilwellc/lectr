@@ -88,7 +88,7 @@
   .ck-budget-fig .sub { white-space: normal; }
   /* the band's chips (the quick start's 36px pills) clear 40px on a phone (R2 c) */
   .ck-budget-band-row .ray-toolbar-pill { position: relative; }
-  .ck-budget-band-row .ray-toolbar-pill::before { content: ''; position: absolute; inset: -3px -1px; }
+  .ck-budget-band-row .ray-toolbar-pill::before { content: ''; position: absolute; inset: -4px -1px; }
   .ck-budget-win .ns-ledger-row { flex-wrap: wrap; }
   .ck-budget-win-main { flex: 1 1 100%; }
   .ck-budget-tease .ck-budget-fig { margin-left: auto; }

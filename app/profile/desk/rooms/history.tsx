@@ -74,12 +74,13 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
       <DeskRow lot={{ id: o.id, title: name }} title={name} who={maker || name}
         sub={[maker || 'archive', meta?.estMid != null ? `est. ${fmtFace(meta.estMid)} at save` : null].filter(Boolean).join(' · ')}
         meta={callFact ?? undefined}
-        figureKind="hammer"
+        figureKind="hammer" figureText={o.provisional ? 'price settling' : fmtFace(o.priceUsd)}
         figure={o.provisional
           ? <span data-quiet title="Sold — final price settling; the house posts results shortly after the close.">settling…</span>
           : fmtFace(o.priceUsd)}
+        figureSubText={vsSaveEst != null ? `${fmtSignedPct(vsSaveEst)} vs estimate at save` : 'no estimate on file'}
         figureSub={vsSaveEst != null
-          ? <><SigPill dir={vsSaveEst > 0 ? 'up' : vsSaveEst < 0 ? 'down' : 'flat'}>{fmtSignedPct(vsSaveEst)}</SigPill> <span title={GLOSSARY['vs estimate']}>vs est at save</span></>
+          ? <><SigPill dir={vsSaveEst > 0 ? 'up' : vsSaveEst < 0 ? 'down' : 'flat'} label={`${fmtSignedPct(vsSaveEst)} vs estimate at save`}>{fmtSignedPct(vsSaveEst)}</SigPill> <span title={GLOSSARY['vs estimate']}>vs est at save</span></>
           : <span title="No estimate on file — outside the vs-est median">archive</span>}
         action={actions(name, !o.provisional, 'price settling')} />
     );
@@ -92,9 +93,10 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
     <DeskRow lot={lot} who={makerLineOf(lot).name || lot.title}
       sub={[makerLineOf(lot).name, lot.auctionHouse, formatEstimate(lot)].filter(Boolean).join(' · ')}
       meta={callFact ?? undefined}
-      figureKind="hammer" figure={pending ? <span data-quiet>pending</span> : fmtFace(lot.priceUsd!)}
+      figureKind="hammer" figure={pending ? <span data-quiet>pending</span> : fmtFace(lot.priceUsd!)} figureText={pending ? 'result pending' : fmtFace(lot.priceUsd!)}
+      figureSubText={pct != null ? `${fmtSignedPct(Math.round(pct))} vs estimate` : pending ? null : 'no estimate on file'}
       figureSub={pct != null
-        ? <><SigPill dir={pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat'}>{fmtSignedPct(Math.round(pct))}</SigPill> <span title={GLOSSARY['vs estimate']}>vs est</span></>
+        ? <><SigPill dir={pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat'} label={`${fmtSignedPct(Math.round(pct))} vs estimate`}>{fmtSignedPct(Math.round(pct))}</SigPill> <span title={GLOSSARY['vs estimate']}>vs est</span></>
         : pending ? null : <span title="No estimate on file — outside the vs-est median">no estimate</span>}
       // no price yet — claiming it now would enter a $null piece into the
       // collection; the button arrives with the result

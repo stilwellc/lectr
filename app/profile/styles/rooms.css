@@ -39,10 +39,14 @@
 /* the Remove ×'s hit area grows left and down, never past the row's edge */
 .dk-act .ray-own-x::before { inset: -8px 0 -8px -8px; }
 @media (max-width: 639.98px) {
-  .dk-act .ray-toolbar-pill, .dk-act .ray-own-btn { min-height: 40px; padding: 0 12px; font-size: 12.5px; }
+  /* (pass 6) every control on a phone row clears 44px */
+  .dk-act .ray-toolbar-pill, .dk-act .ray-own-btn { min-height: 44px; padding: 0 12px; font-size: 12.5px; }
   .dk-act .ck-pick-more, .dk-act .ray-own-x { min-width: 44px; min-height: 44px; }
-  .dk-act .ck-week-act, .dk-act .dk-link { min-height: 40px; padding: 0 12px; }
-  .dk-pill .ck-mymax { height: 40px; }
+  .dk-act .ck-week-act, .dk-act .dk-link { min-height: 44px; padding: 0 12px; }
+  .dk-pill .ck-mymax { height: 44px; }
+  /* a control on the meta line (the drill chip, the piece editor's tap) grows a 44px hit area */
+  .dk-meta a, .dk-meta button { position: relative; }
+  .dk-meta a::before, .dk-meta button::before { content: ''; position: absolute; inset: -12px -6px; }
 }
 
 /* a "Not for me" undo seat inside a list: one slim strip between rows */
@@ -149,8 +153,13 @@
   background: none; cursor: pointer; font: 500 12px/1 var(--font-sans), sans-serif; color: var(--color-fg); text-decoration: none;
 }
 .dk-empty-tap:hover { border-color: var(--color-border-mid); }
-@media (max-width: 639.98px) { .dk-empty-tap { min-height: 40px; padding: 0 14px; } }
+@media (max-width: 639.98px) { .dk-empty-tap { min-height: 44px; padding: 0 14px; } }
 
 /* the picks' Tune editor and the cold start sit on the room's spacing: the row's 2px edge, a hairline above */
 .dk-tune { margin: 4px 0 14px; padding: 12px 2px 4px; border-top: 1px solid var(--hairline); }
 .dk-tune > div { margin-top: 0 !important; }
+
+/* motion: nothing in a row's slot, a pill or the dossier moves for a reader who asked for none */
+@media (prefers-reduced-motion: reduce) {
+  .dk-link, .dk-empty-tap, .dk-dossier-close, .dk-expand, .dk-fact, .dk-act .ck-week-act, .dk-act .ray-toolbar-pill { transition: none; }
+}
