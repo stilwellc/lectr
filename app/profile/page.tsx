@@ -74,7 +74,7 @@ function KeysHelp({ mountedIds }: { mountedIds: ReadonlySet<string> }) {
   const legend = keysLegend(SECTIONS.filter(s => mountedIds.has(s.id)));
   return (
     <>
-      <b>j</b>/<b>k</b> walk the rows; <b>Enter</b> opens the row under the cursor (a watch&rsquo;s dossier, a lot).
+      <b>j</b>/<b>k</b> walk the rows; <b>Enter</b> opens the row&rsquo;s lot; <b>Shift+Enter</b> (or <b>o</b>) opens its Details where a row has them &mdash; the dossier takes focus, and Close hands it back.
       Press <b>g</b> then a letter to open that room and land on it:{' '}
       {legend.map((k, idx) => (
         <React.Fragment key={k.key}>
