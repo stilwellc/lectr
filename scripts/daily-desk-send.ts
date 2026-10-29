@@ -179,6 +179,16 @@ async function main() {
       if (f) follows.set(r.user_id, [...(follows.get(r.user_id) || []), f]);
     }
   }
+  // 3b · their quick-start interests (user_interests, migration 0013 — absent pre-migration: none)
+  const interests = new Map<string, { markets: string[]; price: { minUsd: number | null; maxUsd: number | null } }>();
+  try {
+    for (const c of chunks(users, 100)) {
+      for (const r of await restAll<{ user_id: string; markets: string[] | null; min_usd: number | string | null; max_usd: number | string | null }>(`user_interests?select=user_id,markets,min_usd,max_usd&user_id=in.${inList(c)}`)) {
+        const n = (v: number | string | null) => { const x = v == null ? NaN : Number(v); return Number.isFinite(x) && x > 0 ? x : null; };
+        interests.set(r.user_id, { markets: r.markets ?? [], price: { minUsd: n(r.min_usd), maxUsd: n(r.max_usd) } });
+      }
+    }
+  } catch (e) { warn(`user_interests not readable (${(e as Error).message}) — picks run without markets / stated ranges`); }
   // 4 · the live book + the block's pool for picks; the market's files; the names' last hammers
   const book = await loadLive();
   const live = new Map(book.map(l => [baseId(l.id), l]));
@@ -215,7 +225,7 @@ async function main() {
       const mine = watches.filter(w => w.user_id === r.user_id);
       const saved: SavedInput[] = mine.map(w => ({ id: w.lot_id, lot: (live.get(baseId(w.lot_id)) as RecLot | undefined) ?? null, owned: !!w.owned, title: w.saved_title ?? null, estMid: w.est_mid ?? null }));
       const myFollows = follows.get(r.user_id) || [];
-      const taste = buildTaste({ saved, follows: myFollows, playerEras, nowMs: now });
+      const taste = buildTaste({ saved, follows: myFollows, playerEras, markets: interests.get(r.user_id)?.markets, price: interests.get(r.user_id)?.price ?? null, nowMs: now });
       const picks = recommend(pool, taste, { nowMs: now, n: 12 }).map(p => ({ lot: p.lot as AuctionLot, note: recNote(p), lane: laneOf(p, whoFor(p.seed)) }));
       const mySold = mine.map(w => sold.get(baseId(w.lot_id))).filter((s): s is SoldRow => !!s);
       const pendingResults = mine.filter(w => !w.owned && !w.result_dismissed && sold.has(baseId(w.lot_id))).length;
