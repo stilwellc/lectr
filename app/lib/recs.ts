@@ -3,6 +3,10 @@
  * held-out eval, scripts/recs-eval.ts). ONE recommender for the profile's
  * For-you room and the home feed's For-you tab, so the two agree.
  *
+ * THE STANDING LAW, in one page: docs/PICKS.md (what is weighed, what ties,
+ * the ladder, the lane, the caps, the reason grammar, how to re-read picks).
+ * This header is the long form.
+ *
  * THE TASTE PROFILE is a list of SEEDS — the things the reader told us,
  * each with a weight by how strongly it speaks:
  *
@@ -415,6 +419,8 @@ export function yearOf(title: string): number | null {
 const FORM_CATS: ReadonlySet<CatKey> = new Set<CatKey>(['entertainment', 'historical', 'sports-memorabilia', 'space-science']);
 const FORMS: [string, RegExp][] = [
   ['prop', /\b(?:props?|costume|wardrobe|screen[- ](?:used|worn|matched)|production[- ](?:used|made)|hero prop)\b/i],
+  // a photographic / art print BY a photographer is a print, not a figure's signed photograph (pass 6)
+  ['print', /\b(?:photographic|art|gicl[ée]e|lithographic|archival|pigment|fine art) print\b|\bprint by\b/i],
   ['photograph', /\b(?:photo(?:graph)?s?|still|8\s?x\s?10|11\s?x\s?14|portrait|publicity shot)\b/i],
   ['letter', /\b(?:letter|ALS|TLS|typed letter|autograph letter|note|postcard|telegram)\b/i],
   ['document', /\b(?:cheque|check|contract|document|receipt|invoice|certificate|voucher|manuscript|agreement|affidavit)\b/i],
@@ -1279,6 +1285,9 @@ function ladderTier(c: Feat, a: LadderAnchor, stated = false): { tier: LadderTie
     // a range, inside it (the caller gates that: a $50K-and-up Patek reader
     // whose Patek lots on the block run $2K still wants the $60K Daytona)
     if (a.fam.startsWith('mk|')) { if (stated || price == null || price >= 0.3) return { tier: 2, via: null }; }
+    // (pass 6) another PLAYER in memorabilia is a family inside the same sub
+    // only — a ticket desk is not handed a bobblehead
+    else if (a.fam.startsWith('pl|') && c.cat === 'sports-memorabilia') { if (c.sub === a.sub) return { tier: 2, via: null }; }
     else if (!a.fam.endsWith('|p')) return { tier: 2, via: null };
     else if (c.sub === a.sub) {
       // (Oct 29) another PERSON: every signer on the culture market is one
@@ -2306,8 +2315,10 @@ function cutReason(f: Feat, p: SimParts, lotSeeds: Seed[]): string | null {
     const lo = Math.min(...prices), hi = Math.max(...prices), a = Math.pow(10, f.logA);
     if (hi / lo <= BAND_SAY_MAX) band = bandSuffix(a, lo, hi);
   }
-  // one priced save is a price, not a range
-  if (p.weak) return prices.length >= 2 ? `More ${noun} in your range${band}` : `More ${noun} near your save’s price`;
+  // one priced save is a price, not a range; "in your range" only when the
+  // band prints (inside or near it) — a $4K print for a $7K–40K desk is near
+  // one save, not in the range (pass 6)
+  if (p.weak) return prices.length >= 2 ? (band ? `More ${noun} in your range${band}` : `More ${noun} near your saves’ prices`) : `More ${noun} near your save’s price`;
   if (!words.length) return null;
   return `More ${words.join(' ')} ${noun} like yours${band}`;
 }

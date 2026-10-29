@@ -22,6 +22,7 @@ import { isOnBlock } from '../app/utils';
 import { taxonOf } from '../app/lib/taxonomy';
 import { makerFollow, entityFollow, catFollow, type Follow } from '../app/lib/follows';
 import { closeMsOf } from '../app/lib/priority';
+import { imageOf } from '../app/lib/house-images';
 
 const args = process.argv.slice(2);
 const flag = (k: string): string | null => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] ?? null : null; };
@@ -63,7 +64,7 @@ function desk(name: string, saved: RecLot[], follows: Follow[] = []) {
   for (const r of rs) houses.set(r.lot.auctionHouse ?? '?', (houses.get(r.lot.auctionHouse ?? '?') ?? 0) + 1);
   const far = rs.filter(r => { const c = closeMsOf(r.lot); return c == null || c - NOW > 14 * 864e5; }).length;
   console.log(`\n== ${name} · saves: ${saved.map(l => `${l.title.slice(0, 38)} (${usd(l)})`).join(' | ') || '—'}${follows.length ? ` · follows: ${follows.map(f => f.label).join(', ')}` : ''}`);
-  console.log(`   ${rs.length} picks · ${rs.filter(r => r.tier && r.tier > 1).length} ladder · ${rs.filter(r => r.lane === 'discover').length} discover · ${far} past 14 days · houses ${Array.from(houses.entries()).map(([k, v]) => `${k.slice(0, 9)}:${v}`).join(' ')} · no photo ${rs.filter(r => !r.lot.imageUrl).length} · unpriced ${rs.filter(r => !priced(r.lot)).length}`);
+  console.log(`   ${rs.length} picks · ${rs.filter(r => r.tier && r.tier > 1).length} ladder · ${rs.filter(r => r.lane === 'discover').length} discover · ${far} past 14 days · houses ${Array.from(houses.entries()).map(([k, v]) => `${k.slice(0, 9)}:${v}`).join(' ')} · no photo ${rs.filter(r => !imageOf(r.lot as Parameters<typeof imageOf>[0])).length} · unpriced ${rs.filter(r => !priced(r.lot)).length}`);
   rs.forEach((r, i) => console.log(`${String(i).padStart(2)} ${r.lane === 'discover' ? 'D ' : r.tier && r.tier > 1 ? `L${r.tier}` : '  '} ${(r.lot.auctionHouse ?? '').slice(0, 9).padEnd(9)} ${usd(r.lot).padStart(9)} ${days(r.lot).padStart(7)} ${r.lot.title.slice(0, 52).padEnd(52)} | ${r.reason.slice(0, 92)}`));
 }
 

@@ -443,6 +443,40 @@ async function main() {
   const POP_PRINT = /^(?:andy-warhol|keith-haring|roy-lichtenstein|kaws|david-hockney|jean-michel-basquiat|banksy|takashi-murakami|alex-katz|robert-indiana|ed-ruscha|jeff-koons|tom-wesselmann|james-rosenquist|robert-rauschenberg|jasper-johns|damien-hirst|george-condo|kenny-scharf|futura-2000)$/;
   const ROCK = /\b(beatles|lennon|mccartney|harrison|ringo|rolling stones|jagger|keith richards|elvis|hendrix|led zeppelin|jimmy page|robert plant|queen|freddie mercury|bowie|pink floyd|the who|doors|jim morrison|nirvana|cobain|kiss|ac\/dc|springsteen|dylan|pearl jam|guns n|metallica|clapton|grateful dead|janis joplin|ramones|sex pistols|u2|bon jovi|aerosmith|van halen|eagles|fleetwood|prince|stones)\b/i;
   const SW = /\b(star wars|mandalorian|andor|ahsoka|jedi|sith|stormtrooper|lightsaber|grogu|boba fett|darth|chewbacca|skywalker|obi-wan|empire strikes|clone wars|rogue one|ewok|snowtrooper|bowcaster)\b/i;
+  /** (pass 6) THE LANE'S OWN LAW — a discover seat is not "the followed name" by
+   *  construction; it is judged on what it claims: the cut (category · sub) of a
+   *  save, a "More like this" lot or a followed name's live lots (a category
+   *  follow's whole kind), a photo, closing inside 14 days, the lane's own words,
+   *  and the price the recommender gated on, in its order — the desk's prices
+   *  when three or more are priced (its band, read here as the interquartile
+   *  span ×1.26 or the median ×2), else the stated range, else one or two
+   *  saves' median ×2.5, else the followed name's live median ×2.5. Entity keys
+   *  are the build's stamps (every served lot carries ek). The base has no
+   *  lanes: every seat of its is a tie, judged as before. */
+  const laneWant = (p: { desk: L[]; follows: Follow[]; more: string[]; price?: { minUsd: number | null; maxUsd: number | null } | null }, x: RecsMod.Rec, l: L): boolean => {
+    if (!/^New to you · /.test(x.reason) || !kindFits(l)) return false;
+    const cutOf = (d: L) => `${T(d).cat}|${T(d).sub}`;
+    const ekS = (d: L) => String(d.ek ?? '');
+    const deskish = [...p.desk, ...p.more.map(id => byId.get(id)).filter((d): d is L => !!d)];
+    const followLots = pool.filter(c => p.follows.some(fo => fo.kind === 'maker' ? (c.artist === fo.key || c.playerSlug === fo.key || ekS(c) === `mk:${fo.key}` || ekS(c) === `pl:${fo.key}`) : fo.kind === 'entity' ? ekS(c) === fo.key : false));
+    const cuts = new Set([...deskish, ...followLots].map(cutOf));
+    const catCuts = p.follows.filter(fo => fo.kind === 'cat').map(fo => fo.key.split(':'));
+    if (!cuts.has(cutOf(l)) && !catCuts.some(([c, sub]) => T(l).cat === c && (!sub || T(l).sub === sub || subMatches(c as never, sub, T(l).sub)))) return false;
+    const close = closeMsOf(l);
+    if (close == null || close - NOW > 14 * D) return false;
+    if (!l.imageUrl && !/^rr/.test(String(l.id))) return false;
+    const u = shown(l);
+    if (u == null) return false;
+    const inCat = (ls: L[]) => ls.filter(d => T(d).cat === T(l).cat).map(usd).filter((v): v is number => v != null).sort((a, b) => a - b);
+    const q = (xs: number[], k: number) => { const pos = (xs.length - 1) * k, i = Math.floor(pos); return xs[i + 1] != null ? xs[i] + (pos - i) * (xs[i + 1] - xs[i]) : xs[i]; };
+    const px = inCat(deskish);
+    if (px.length >= 3) { const m = q(px, 0.5); return u >= Math.min(q(px, 0.25) / 1.26, m / 2) && u <= Math.max(q(px, 0.75) * 1.26, m * 2); }
+    if (p.price && (p.price.minUsd != null || p.price.maxUsd != null)) return (p.price.minUsd == null || u >= p.price.minUsd) && (p.price.maxUsd == null || u <= p.price.maxUsd);
+    const fx = px.length ? px : inCat(followLots);
+    if (!fx.length) return true;
+    const m = q(fx, 0.5);
+    return u >= m / 2.5 && u <= m * 2.5;
+  };
   interface R1P { id: string; who: string; follows: Follow[]; interests: { markets: string[]; minUsd: number | null; maxUsd: number | null }; ev: Record<string, unknown>[]; more: string[]; hit: (l: L) => boolean }
   const R1: R1P[] = [
     { id: 'p01-warhol-haring', who: 'Warhol/Haring prints < $20K', follows: [mk('andy-warhol', 'Andy Warhol'), mk('keith-haring', 'Keith Haring'), cat('fine-art:prints', 'Fine Art · Prints & Multiples')], interests: { markets: ['art'], minUsd: null, maxUsd: 20000 },
@@ -492,7 +526,7 @@ async function main() {
       let hits = 0; const misses: string[] = [];
       for (const x of rec) {
         const l = x.lot as L; const s = stem(l);
-        const ok = p.hit(l) && !seen.has(s);
+        const ok = ((x as RecsMod.Rec).lane === 'discover' ? laneWant({ desk: [], follows: p.follows, more: p.more, price: p.interests }, x as RecsMod.Rec, l) : p.hit(l)) && !seen.has(s);
         seen.add(s);
         if (ok) hits++; else misses.push(`${String(l.title).slice(0, 58)} ($${Math.round(usd(l) ?? 0)}) ← ${x.reason.slice(0, 60)}`);
       }
@@ -602,7 +636,7 @@ async function main() {
       const cats = new Set([...desk.map(d => T(d).cat), ...follows.map(f => f.key.split(':')[0])]);
       return kindFits(l) && (cats.has(T(l).cat) || desk.length === 0) ? '' : 'rung outside the anchor’s category';
     }
-    if ((m = r.match(/^More (.+?) (cards|prints|works|watches|pieces|ceramics|sculpture|Pokémon cards)(?: like yours| in your range| near your save’s price)/))) {
+    if ((m = r.match(/^More (.+?) (cards|prints|works|watches|pieces|ceramics|sculpture|Pokémon cards)(?: like yours| in your range| near your saves?’s? prices?)/))) {
       if (!kindFits(l)) return `not the kind of object (${mediumOf(l)})`;
       if (m[2] === 'prints' && mediumOf(l) !== 'fine-art:prints') return `not a print (${mediumOf(l)})`;
       for (const w of m[1].toLowerCase().split(' ')) {
@@ -700,6 +734,7 @@ async function main() {
       const rec = R.recommend(pool, taste, { nowMs: NOW, n: Math.max(24, R.recDepth(taste)) }).slice(0, 24);
       let want = 0, fr = 0, off = 0, junk = 0, fill = 0; const bad: string[] = [];
       const kinds = (jk[name] ??= { claim: 0, vacuous: 0, format: 0 });
+      const laneOk = (x: RecsMod.Rec, l: L) => laneWant(p, x, l);
       for (const x of rec) {
         const l = x.lot as L;
         const f = falseOf(x as RecsMod.Rec, p.desk, p.follows, taste.stated?.text ?? null);
@@ -708,7 +743,7 @@ async function main() {
         const u0 = shown(l);
         const priceOff = deskPx.length >= 2 && u0 != null && (u0 < med(deskPx) / 10 || u0 > med(deskPx) * 10);
         const o = !p.world(l) || priceOff;
-        if (p.want(l)) want++;
+        if ((x as RecsMod.Rec).lane === 'discover' ? laneOk(x as RecsMod.Rec, l) : p.want(l)) want++;
         if (f) { fr++; kinds[/^mixed-unit/.test(f) ? 'format' : /^vacuous/.test(f) ? 'vacuous' : 'claim']++; }
         if (o) off++;
         if (f || o) { junk++; bad.push(`${f ? `FALSE(${f})` : priceOff ? 'PRICE' : 'OFF'} ${title(l).slice(0, 50)} ($${Math.round(usd(l) ?? 0)}) ← ${R.recNote(x).slice(0, 90)}`); }
