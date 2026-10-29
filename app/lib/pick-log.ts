@@ -70,7 +70,7 @@ export const OUTCOME_MIN_N = 5;
 export const LOG_MAX_PER_PASS = 24;
 
 export type PickSurface = 'p' | 'h';
-export type PickReason = 'owned' | 'saved' | 'follow' | 'search' | 'signal' | 'kin';
+export type PickReason = 'owned' | 'saved' | 'follow' | 'search' | 'signal' | 'kin' | 'discover';
 
 export interface PickSnap {
   title: string;
@@ -132,7 +132,7 @@ const defaultKV = (): PickKV | null => (typeof window !== 'undefined' ? deviceKV
 
 const isNum = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
 const pos = (x: unknown): x is number => isNum(x) && x > 0;
-const REASONS = new Set<string>(['owned', 'saved', 'follow', 'search', 'signal', 'kin']);
+const REASONS = new Set<string>(['owned', 'saved', 'follow', 'search', 'signal', 'kin', 'discover']);
 const CONF = new Set<string>(['high', 'medium', 'low']);
 const SNAP_STR = ['auctionHouse', 'saleName', 'saleDate', 'saleDateTime', 'currency'] as const;
 
@@ -212,8 +212,10 @@ function writePicks(st: PickStore, kv: PickKV | null): void {
   }
 }
 
-/** the reason's kind, from the rec's seed (a fallback rung reads 'kin') */
-export function reasonKindOf(r: Pick<Rec, 'seed' | 'tier'>): PickReason {
+/** the reason's kind, from the rec's seed (a fallback rung reads 'kin', the
+ *  discover lane 'discover' — its seed only names the cut) */
+export function reasonKindOf(r: Pick<Rec, 'seed' | 'tier' | 'lane'>): PickReason {
+  if (r.lane === 'discover') return 'discover';
   if (r.tier && r.tier > 1) return 'kin';
   const k = r.seed?.kind;
   return k === 'owned' || k === 'saved' || k === 'follow' || k === 'search' || k === 'signal' ? k : 'follow';

@@ -584,6 +584,12 @@ async function main() {
       const hay = `${title(l)} ${makerLineOf(l).name} ${l.artist} ${ekA(l) ?? ''}`.toLowerCase();
       return q.some(w => hay.includes(w)) ? '' : 'search word not on the lot';
     }
+    // the discover lane claims no tie: only that the desk (or a followed name) keeps this cut
+    if (/^New to you · /.test(r)) {
+      const cut = `${T(l).cat}|${T(l).sub}`;
+      const mine = desk.some(d => `${T(d).cat}|${T(d).sub}` === cut) || follows.some(f => f.kind === 'maker' || f.kind === 'entity');
+      return kindFits(l) && mine ? '' : 'a cut the desk does not keep';
+    }
     // a seed lot (save / own / watch / a looked-at lot) or an entity page
     const sl = s.lotId ? (byId.get(s.lotId) ?? desk.find(d => d.id === s.lotId)) as L | undefined : undefined;
     if (/^Because you (?:looked at|asked for more like) /.test(r) && !sl && s.follow) {
