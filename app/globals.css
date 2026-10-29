@@ -5245,7 +5245,7 @@ html:not([data-lectr-light]) .ck-page {
 .dt-panel > .dt-band:first-child { border-top: none; }
 /* Collection: its house plate (.ray-band), full bleed — no rounded slab, no slivers */
 .dt-band[data-tone='ink'] { padding: 0; border-top: none; background: transparent; }
-.dt-band[data-tone='ink'] > .ray-band { margin: 0 !important; border-radius: 0; border-block: none; padding-block: 34px 44px !important; }
+.dt-band[data-tone='ink'] .dk-fold-in > .ray-band { margin: 0 !important; border-radius: 0; border-block: none; padding-block: 34px 44px !important; }
 .dt-band-foot { background: var(--dt-band-foot); border-top: 1px solid var(--dt-seam-foot); padding-block: 4px 28px; }
 /* the band IS the break: no registration rule, no print double-rule over a room title inside one */
 .dt-band .ns-plate { border-top: none; }
@@ -5272,7 +5272,7 @@ html[data-lectr-light] .dt-band[data-tone='b'] :is(.ns-cell:not(.ns-cell-color),
   .dt-help { display: none; }
   .dt-rooms { padding-block: 12px 0; }
   .dt-band { padding-block: 2px 30px; }
-  .dt-band[data-tone='ink'] > .ray-band { padding-block: 26px 34px !important; }
+  .dt-band[data-tone='ink'] .dk-fold-in > .ray-band { padding-block: 26px 34px !important; }
 }
 
 /* the cockpit with the Watching cell folded into the masthead: two cells */
@@ -5289,7 +5289,7 @@ html[data-lectr-light] .dt-band[data-tone='b'] :is(.ns-cell:not(.ns-cell-color),
 /* dark: the Collection plate is the deepest GRAY on the ramp — never the beige
    certificate (a tan field breaks the dark desk); its paper tokens re-point to
    the dark ink set. Light keeps the ink vault (the approved house plate). */
-html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] > .ray-band {
+html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] .dk-fold-in > .ray-band {
   /* literal values (the .terminal-shell dark set): .ray-band maps --color-* to
      --paper-* on this element, so pointing --paper-* back at --color-* would be
      a cycle and the browser would drop both */
@@ -5372,7 +5372,7 @@ html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] .ray-sect-mark {
 .dt-band-foot > * { margin-bottom: 0 !important; padding-bottom: 0 !important; }
 
 /* dark: the Collection plate stands off its neighbours with a hairline at each edge */
-html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] > .ray-band { border-block: 1px solid rgba(255, 255, 255, 0.10) !important; }
+html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] .dk-fold-in > .ray-band { border-block: 1px solid rgba(255, 255, 255, 0.10) !important; }
 
 /* ── round 4 (Oct 20 alignment audit) ── */
 /* a fact never breaks inside itself above 360px ("4 below market") */
@@ -5592,7 +5592,7 @@ html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] > .ray-band { bo
 .ck-page .pe-mine-empty b { color: var(--color-fg); font-weight: 600; }
 .ck-page .pe-engine-head { margin-top: 6px; margin-bottom: 12px; }
 /* focus never lands under the sticky nav + tab bar (keyboard Tab, j/k) */
-html:has(.dt-wrap) { scroll-padding-top: calc(64px + var(--dt-h, 56px) + 12px); }
+html:has(.dk-sbar) { scroll-padding-top: calc(64px + var(--dt-h, 0px) + 12px); }
 .ck-page .ck-ph > .ck-thumb { --th: var(--ph, 64px) !important; } /* the row's track wins over a Thumb's own size prop */
 /* (Oct 28) the phone's first screen: the headline, the cockpit's one-row strip
    (four figures), the next lot's line and the 14-day bars — then Today's rooms */
@@ -5697,48 +5697,131 @@ html:has(.dt-wrap) { scroll-padding-top: calc(64px + var(--dt-h, 56px) + 12px); 
   .ck-page .pe-rmain.ck-ph { padding-bottom: 0; margin-bottom: 0; }
 }
 
-/* ── THE DESK v4 (Oct 29 2026): one page, layered — the folds ──
+/* ── THE DESK v4 (Oct 29 2026): one page, layered — the section bar, the
+   folds, the rhythm ──
    A room mounts whole; a fold shows its first screen and one Show-all; the
-   More rooms close to a row. No tab bar: the sticky offset is the nav alone. */
+   More rooms close to a row. The sticky offset is the nav alone until the
+   section bar shows (sectionbar.tsx measures itself into --dt-h). */
 .ck-page { --dt-h: 0px; }
-.dk-fold { --fold-max: 560px; position: relative; }
+
+/* THE SECTION BAR — fixed under the nav, slid up out of sight while the
+   cockpit is on screen; one row of the groups with their figures */
+.dk-sbar {
+  position: fixed; top: 64px; left: 0; right: 0; z-index: 24;
+  background: var(--dt-head); box-shadow: 0 1px 0 var(--dt-seam);
+  transform: translateY(-100%); opacity: 0; pointer-events: none;
+  transition: transform 200ms var(--ease-house, ease), opacity 160ms var(--ease-house, ease);
+}
+.dk-sbar[data-show] { transform: none; opacity: 1; pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) { .dk-sbar { transition: none; } }
+.dk-sbar-in {
+  display: flex; align-items: stretch; gap: 2px; margin-left: -12px;
+  overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; scroll-padding-inline: 16px;
+}
+.dk-sbar-in::-webkit-scrollbar { display: none; }
+.dk-sbar-item {
+  flex: none; position: relative; display: inline-flex; align-items: center; gap: 6px;
+  min-height: 44px; padding: 0 12px; border: none; background: none; cursor: pointer;
+  font: inherit; font-size: 14px; font-weight: 450; letter-spacing: -0.01em; white-space: nowrap;
+  color: var(--color-text-muted); transition: color 150ms var(--ease-house, ease);
+}
+.dk-sbar-item b { font-family: var(--font-sans), sans-serif; font-size: 12.5px; font-weight: 450; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.dk-sbar-item:hover { color: var(--color-fg); }
+.dk-sbar-item[aria-current] { color: var(--color-fg); font-weight: 600; }
+.dk-sbar-item[aria-current] b { color: var(--color-fg); }
+.dk-sbar-item[aria-current]::after {
+  content: ''; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--color-fg);
+}
+.dk-sbar-item:focus-visible { outline: 2px solid var(--color-fg); outline-offset: -4px; border-radius: 8px; }
+
+/* THE RHYTHM — one scale: 56 from a band's seam to its room head, 40 between
+   rooms in one band, 28 from a fold's cut to its button; a band ends 56 after
+   its last line. The band IS the break (its seam, its ground): no room keeps
+   its own padding, no plate its own rule. */
+.ck-page .dt-band { padding-block: 0 56px; }
+.ck-page .dt-band .ray-saved-section, .ck-page .dt-band .ck-today { padding-block: 56px 0; }
+.ck-page .dt-band .dk-fold-in > * + * { padding-top: 40px; }
+.ck-page .dt-band .dk-fold-in > .ck-signin-section { padding-top: 28px; }
+/* the Collection group: Portfolio on the band, then the house plate, which ends the band */
+.ck-page .dt-band[data-tone='ink'] { padding-block: 0; }
+.ck-page .dt-band[data-tone='ink'] .dk-fold-in > .ray-saved-section:last-child { padding-bottom: 56px; }
+.ck-page .dt-band[data-tone='ink'] .dk-fold-in > .ray-band { padding-block: 40px 56px !important; }
+.ck-page .dt-band[data-tone='ink'] .dk-fold-bar { padding-bottom: 56px; }
+/* the foot: the index, then Account, then the keys — quiet, on the stone */
+.ck-page .dt-band-foot { padding-block: 0 40px; }
+.ck-page .dt-band-foot > section { padding-block: 40px 0 !important; }
+.ck-page .dt-band-foot .ck-becomes .ns-plate { padding-top: 0 !important; }
+.ck-page .dt-band-foot .ck-account-in { padding-top: 12px; }
+.dk-keys { display: flex; justify-content: flex-end; padding-top: 20px; }
+
+/* THE FOLD */
+.dk-fold { --fold-max: 560px; position: relative; scroll-margin-top: calc(var(--dt-stick) + 12px); }
+/* clamped: the cut sits on the last whole row (--fold-cut, measured), the
+   fade covers only the hair under it — never a row's text */
 .dk-fold:not([data-open]) .dk-fold-in {
-  max-height: var(--fold-max); overflow: hidden;
-  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 120px), transparent);
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 120px), transparent);
+  max-height: var(--fold-cut, var(--fold-max)); overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), rgba(0, 0, 0, 0.4) calc(100% - 4px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), rgba(0, 0, 0, 0.4) calc(100% - 4px), transparent);
 }
-.dk-fold-bar { display: flex; justify-content: flex-start; padding: 0 0 36px; margin-top: -8px; }
-.dk-fold[data-open] .dk-fold-bar { padding-top: 0; margin-top: -24px; }
+.dk-fold-bar { display: flex; justify-content: flex-start; padding: 28px 0 0; }
 .dk-fold-btn {
-  display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 18px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 18px; border-radius: 999px;
   border: none; background: var(--color-fg); color: var(--color-bg, #fff); cursor: pointer;
-  font: 500 13.5px/1 var(--font-sans), sans-serif; letter-spacing: -0.01em;
+  font: 500 13.5px/1 var(--font-sans), sans-serif; letter-spacing: -0.01em; white-space: nowrap;
 }
-.dk-fold-btn b { font-weight: 500; opacity: 0.72; font-variant-numeric: tabular-nums; }
+.dk-fold-btn b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.dk-fold-sep { opacity: 0.55; }
 .dk-fold-btn:hover { opacity: 0.88; }
 .dk-fold-btn:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 3px; }
-/* the More rooms */
-.dk-more { padding-block: 28px 20px; }
-.dk-more-head { padding-bottom: 6px; }
-.dk-closed { border-top: 1px solid var(--hairline); }
+/* the quiet twin (Close): an edge, not a fill */
+.dk-fold-btn-quiet { background: transparent; color: var(--color-text-secondary); box-shadow: inset 0 0 0 1px var(--color-border-mid, var(--hairline)); }
+.dk-fold-btn-quiet:hover { color: var(--color-fg); box-shadow: inset 0 0 0 1px var(--color-fg); opacity: 1; }
+/* a room that renders nothing leaves no band (the fold wraps it, so :empty can't see it) */
+.ck-page .dt-band:has(> .dk-fold[data-empty]) { display: none; }
+
+/* THE MORE ROOMS — one row each, ≥ 56px: mark · name · figure · hint · chevron */
+.ck-page .dk-more { padding-block: 40px 56px; }
+.dk-more-head { display: flex; align-items: baseline; gap: 12px; padding-bottom: 12px; }
+.dk-more-head .kicker { font-size: 15px; font-weight: 500; color: var(--color-fg); letter-spacing: -0.01em; }
+.dk-more-sub { font-size: 13px; color: var(--color-text-muted); }
+.dk-closed { border-top: 1px solid var(--hairline); scroll-margin-top: calc(var(--dt-stick) + 12px); }
 .dk-closed:last-child { border-bottom: 1px solid var(--hairline); }
 .dk-closed-row {
   display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding-block: 8px;
   background: none; border: none; cursor: pointer; text-align: left; color: var(--color-fg); font: inherit;
 }
-.dk-closed-row .ray-sect-mark { display: inline-grid; place-items: center; width: 27px; height: 27px; border-radius: 7px; background: var(--color-fg); color: var(--color-bg); flex: none; }
+.dk-closed-row .ray-sect-mark { display: inline-grid; place-items: center; width: 27px; height: 27px; border-radius: 7px; background: var(--color-fg); color: var(--color-bg); flex: none; margin: 0; vertical-align: 0; }
 .dk-closed-row .ray-sect-mark svg { width: 15px; height: 15px; }
 .dk-closed-l { font-size: 16px; font-weight: 500; letter-spacing: -0.01em; white-space: nowrap; }
 .dk-closed-l b { font-weight: 450; color: var(--color-text-muted); margin-left: 8px; font-variant-numeric: tabular-nums; }
 .dk-closed-h { flex: 1 1 auto; min-width: 0; font-size: 13px; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dk-closed-chev { margin-left: auto; flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--color-border-mid); font-size: 16px; color: var(--color-text-secondary); }
+.dk-closed-chev { margin-left: auto; flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--color-border-mid); color: var(--color-text-secondary); }
+/* the chevron: a drawn mark, turned when the room is open */
+.dk-closed-chev i { display: block; width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-2px) rotate(45deg); transition: transform 180ms var(--ease-house, ease); }
+.dk-closed[data-open] .dk-closed-chev i { transform: translateY(2px) rotate(225deg); }
 .dk-closed-row:hover .dk-closed-chev { color: var(--color-fg); box-shadow: inset 0 0 0 1px var(--color-fg); }
 .dk-closed-row:focus-visible { outline: 2px solid var(--color-fg); outline-offset: -2px; border-radius: 8px; }
-.dk-closed-in { padding-bottom: 12px; }
-.dk-closed-in > .ray-saved-section { padding-top: 8px; }
-.dk-keys { display: flex; justify-content: flex-end; padding-top: 10px; }
+.dk-closed-in { padding-bottom: 28px; }
+.ck-page .dk-closed-in > .ray-saved-section { padding-block: 8px 0; }
+.dk-closed-foot { display: flex; padding-top: 28px; }
+
 @media (max-width: 639.98px) {
+  .dk-sbar-in { margin-left: -8px; }
+  .dk-sbar-item { padding: 0 10px; font-size: 13.5px; min-height: 44px; }
+  .dk-sbar-item[aria-current]::after { left: 10px; right: 10px; }
   .dk-fold { --fold-max: 480px; }
+  .ck-page .dt-band { padding-block: 0 40px; }
+  .ck-page .dt-band .ray-saved-section, .ck-page .dt-band .ck-today { padding-block: 40px 0; }
+  .ck-page .dt-band .dk-fold-in > * + * { padding-top: 28px; }
+  .ck-page .dt-band[data-tone='ink'] .dk-fold-in > .ray-saved-section:last-child { padding-bottom: 40px; }
+  .ck-page .dt-band[data-tone='ink'] .dk-fold-in > .ray-band { padding-block: 28px 40px !important; }
+  .ck-page .dt-band[data-tone='ink'] .dk-fold-bar { padding-bottom: 40px; }
+  .ck-page .dt-band-foot { padding-block: 0 28px; }
+  .ck-page .dt-band-foot > section { padding-block: 28px 0 !important; }
+  .dk-fold-bar { padding-top: 20px; }
+  .ck-page .dk-more { padding-block: 28px 40px; }
   .dk-closed-h { display: none; }
   .dk-closed-l { font-size: 15px; }
+  .dk-closed-in { padding-bottom: 20px; }
+  .dk-closed-foot { padding-top: 20px; }
 }

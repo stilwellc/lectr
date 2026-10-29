@@ -13,6 +13,7 @@ import { fmtFace } from '../lib/lot-face';
 import { useHashLanding, jump, JUMP_EVENT, OPEN_TAB_EVENT, MISSING_EVENT } from './rail';
 import { HelpChip } from './help';
 import { Clamp, Closed } from './desk/fold';
+import { SectionBar, type BarItem } from './desk/sectionbar';
 import { useStalled } from './stall';
 import { DeskProvider, useDeskState, useDeskInternals, useDesk, type DeskState } from './desk/provider';
 import { SECTIONS, SUB_ANCHORS, TAB_ORDER, mountedSections, keysLegend, missingSection, tabItemsOf, tabOf, EVERY_TAB, type DeskSection, type DeskTab } from './desk/sections';
@@ -45,6 +46,9 @@ import { useDeskKeys } from './desk/keys';
    calls + the record, Collection = portfolio + collection — and as what
    every #anchor, g-chord, push link and email link (#tab-watching) resolves
    through. Nothing is removed; everything is one scroll and one tap away.
+   Past the cockpit a slim sticky SECTION BAR (desk/sectionbar.tsx) carries
+   the groups and their figures — Today · Watching 8 · For you 24 · … · More —
+   the current one underlined, each a jump to its room.
 
    The collector's three questions still order the desk: what needs
    me now (Today, Watching), what lectr sees for me (the picks, my
@@ -245,9 +249,13 @@ function firstRoomOf(group: DeskTab, sections: readonly DeskSection[]): string |
   return rooms[0]?.id ?? sections.find(s => s.tab === group && !EVERY_TAB.has(s.id))?.id ?? null;
 }
 
+/** the More band's own anchor — the section bar's last stop (not a room: no tab resolves it) */
+const MORE_ID = 'more';
+
 /** the desk: masthead + cockpit → Today → every room folded to its first
  *  screen, each on its own band (alternating grounds: the color break
- *  between rooms) → the More rooms closed to a row → Account */
+ *  between rooms) → the More rooms closed to a row → Account; the section
+ *  bar reads the bands back (one item per band, in band order) */
 function DeskBody() {
   const { desk, act, narrow } = useDesk();
   const i = useDeskInternals();
@@ -286,6 +294,7 @@ function DeskBody() {
   const always = sections.filter(s => EVERY_TAB.has(s.id));
   let band = 0;
   const bands: React.ReactNode[] = [];
+  const barItems: BarItem[] = [];
   for (const g of GROUP_ORDER) {
     const order = TAB_ORDER[g];
     const rooms = sections.filter(s => s.tab === g && !EVERY_TAB.has(s.id) && !MORE.has(s.id))
@@ -295,6 +304,7 @@ function DeskBody() {
     const ids = idsOf(rooms.map(r => r.id));
     const inner = rooms.map(s => { const C = s.Component!; return <C key={s.id} desk={desk} act={act} narrow={narrow} />; });
     const tone = rooms.some(s => s.id === 'collection') ? 'ink' : band++ % 2 ? 'b' : 'a';
+    barItems.push({ id: g, label: item?.label ?? rooms[0].label, count: item?.count, tone: item?.tone, target: rooms[0].id });
     bands.push(
       <div key={g} className="dt-band" data-tone={tone} data-room={rooms[0].id} data-group={g}>
         {g === 'today'
@@ -304,16 +314,18 @@ function DeskBody() {
     );
   }
   const more = sections.filter(s => MORE.has(s.id));
+  if (more.length > 0) barItems.push({ id: MORE_ID, label: 'More', count: more.length, target: MORE_ID });
   return (
     <>
       <div className="dt-head"><DeskMasthead /></div>
+      <SectionBar items={barItems} />
       {/* not before the desk can land: the archive that resolves #settled & co. lands late */}
       {i.landReady && <MissingLanding sections={sections} />}
       <div id="dt-panel" className="dt-panel">
         {bands}
         {more.length > 0 && (
-          <div className="dt-band dk-more" data-tone={band % 2 ? 'b' : 'a'} aria-label="More rooms">
-            <div className="rail dk-more-head"><span className="kicker">More</span></div>
+          <div id={MORE_ID} className="dt-band dk-more" data-tone={band % 2 ? 'b' : 'a'} data-group={MORE_ID} aria-label="More rooms">
+            <div className="rail dk-more-head"><span className="kicker">More</span><span className="dk-more-sub">{more.length} rooms, each one tap</span></div>
             {more.map(s => {
               const C = s.Component!;
               const m = s.meta(desk, i);
