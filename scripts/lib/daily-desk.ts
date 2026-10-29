@@ -61,6 +61,7 @@ import { isNewLot, houseBaselines } from '../../app/lib/feed-filters';
 // THE DESK'S OWN RULES (app/profile/desk/priced — pure, no React): the one
 // "priced" read behind every summed estimate and the one USD read of a live bid
 import { pricedTotal, pricedBasisText, liveBidUsd } from '../../app/profile/desk/priced';
+import { vsMaxText } from '../../app/profile/desk/words';
 import { ARTIST_MARKET } from '../../app/constants';
 import type { CatKey } from '../../app/lib/taxonomy';
 
@@ -184,7 +185,7 @@ export interface DeskEmail {
 const bidUsdOf = (l: AuctionLot) => liveBidUsd(l) ?? 0;
 const pct = (x: number) => `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(Math.round(x))}%`;
 const n2 = (n: number) => n.toLocaleString('en-US');
-const dayKeyIn = (ms: number, tz: string) => new Date(ms).toLocaleDateString('en-CA', { timeZone: tz });
+export const dayKeyIn = (ms: number, tz: string) => new Date(ms).toLocaleDateString('en-CA', { timeZone: tz });
 const dayLabel = (day: string, o: Intl.DateTimeFormatOptions) => new Date(`${day}T12:00:00Z`).toLocaleDateString('en-US', { ...o, timeZone: 'UTC' });
 /** a catalogue-length title closed at a whole word inside the cap (the Goldin bat ran five lines) */
 const TITLE_CAP = 96;
@@ -343,7 +344,7 @@ export function planDesk(input: PlanInput): DeskEmail | null {
       return {
         id: s.id, title: cut(craftTitle(s.title || w?.saved_title || 'Lot', s.house || undefined), TITLE_CAP), house: s.house || '', img: sizedImg(httpsImg(s.image_url || rrPreviewImage(s.id)), 240) ?? null,
         hammer: fmtFace(price),
-        vsMax: max != null ? `${pct((price / max - 1) * 100)} vs your max ${fmtFace(max)}` : null,
+        vsMax: vsMaxText(price, max),
         inReach: max != null ? price <= max : null,
         vsEst: est != null ? `${pct((price / est - 1) * 100)} vs the estimate` : null,
         day: s.sale_date ? dayLabel(s.sale_date.slice(0, 10), { weekday: 'short', month: 'short', day: 'numeric' }) : 'date to come',

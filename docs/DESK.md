@@ -118,6 +118,30 @@ Review recipe: `npx tsx scripts/daily-desk-send.ts --dry-run --preview-dir out/d
 [--only <email>]` renders every reader's paper to files without sending; in
 the workflow the dry run uploads them as the `daily-desk-preview` artifact.
 
+### The push (the third surface)
+
+`scripts/lib/push-plan.ts` (pure) + `scripts/push-send.ts` + `public/sw.js`.
+Kinds: close24 · close1 · hammer · matches, one per user × lot × kind EVER
+(`push_log`), ≤ 3 per kind per run with the rest in one summary. Its words
+are the desk's: money through `fmtFace`, the live bid through `liveBidUsd`,
+My max through `words.myMaxText` ("My max $8K · bid passed it"), a result
+against your max through `words.vsMaxText` ("+25% vs your max $10K"), the
+close through the paper's `whenText` on the reader's clock (`READER_TZ`) —
+"closes today 7:00 PM"; a date-only sale's "Sells today / tomorrow" is the
+READER's day, never UTC's. The forecast is named all-in. A hammer push never
+fires for a save the reader marked **owned** or **dismissed** (the sender
+reads both columns, falling back without their migrations), and never
+twice for one event (`dedupeKey` over the base id; `x` and `x~` are one lot).
+
+A push may open: `/lot?id=<id>`, `/profile`, and the anchors in
+`PUSH_ANCHORS` — `#results` (Today's inbox), `#watching`, `#record`,
+`#settled` (History, a More room: the tap-to-mount fold opens on landing),
+`#signals` (the matches note). Each resolves through `tabOf` (tabs.test) and
+is owned by its group's fold (`fold.owns`, push-parity.test), so the landing
+(rail.tsx `useHashLanding` → `OPEN_TAB_EVENT` / `JUMP_EVENT`) opens the fold
+and scrolls to the room. The service worker focuses an open lectr window and
+navigates it, else opens one.
+
 ## 5 · The account's migrations
 
 | migration | gives | without it |

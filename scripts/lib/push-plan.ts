@@ -21,7 +21,14 @@
  * the overflow collapses into one summary pointing at /profile (every lot in
  * it is still logged, so it never re-fires).
  */
-import { craftTitle, formatPrice } from '../../app/utils';
+import { craftTitle } from '../../app/utils';
+// THE DESK'S WORDS (pass 18 parity): money through fmtFace, the live bid in USD
+// through liveBidUsd, My max and vs-your-max through words.ts, the close's day
+// and clock through the paper's whenText on the reader's clock — never a
+// formatter of this file's own
+import { fmtFace, liveBidUsd } from '../../app/lib/lot-face';
+import { myMaxText, vsMaxText, READER_TZ } from '../../app/profile/desk/words';
+import { whenText, dayKeyIn } from './daily-desk';
 
 export type Kind = 'close24' | 'close1' | 'hammer' | 'matches';
 export const KINDS: Kind[] = ['close24', 'close1', 'hammer', 'matches'];
@@ -43,6 +50,10 @@ export interface LiveLot {
   saleDate?: string;
   saleDateTime?: string | null;
   currentBid?: number;
+  bidCount?: number;
+  /** the row's currency and dated rate — the bid prints in USD (liveBidUsd) */
+  currency?: string | null;
+  fxRate?: number | null;
   value?: { compValueUsd?: number } | null;
 }
 export interface SettledLot {
@@ -53,7 +64,21 @@ export interface SettledLot {
   price_usd?: number | null;
   sale_date?: string | null;
 }
-export interface Watch { user_id: string; lot_id: string; saved_title?: string | null }
+export interface Watch {
+  user_id: string; lot_id: string; saved_title?: string | null;
+  /** the reader marked it won — they know the result (no hammer push) */
+  owned?: boolean | null;
+  /** "none of these were me" — the result is not news to them (no hammer push) */
+  result_dismissed?: boolean | null;
+  /** My max (migration 0010): the close push says where the bid stands against it */
+  max_usd?: number | null;
+}
+
+/** the /profile anchors a push may open — each lands in the fold that owns it
+ *  (docs/DESK.md §4): results (Today's inbox), watching, record, settled
+ *  (History), signals (the matches note). tabs.test asserts resolution,
+ *  push-parity.test the landing. */
+export const PUSH_ANCHORS: readonly string[] = ['/profile#results', '/profile#watching', '/profile#record', '/profile#settled', '/profile#signals'];
 export interface Payload { title: string; body: string; url: string; tag: string }
 export interface Planned { userId: string; kind: Kind; lotIds: string[]; payload: Payload }
 
@@ -62,6 +87,10 @@ export const baseId = (id: string) => id.replace(/~+$/, '');
 export const dedupeKey = (userId: string, lotId: string, kind: Kind) => `${userId}|${baseId(lotId)}|${kind}`;
 
 const DAY = 86_400_000;
+/** the reader's calendar day (the desk's and the paper's clock), never UTC's:
+ *  a Nov 5 date-only sale read at 02:00Z Nov 5 is still Nov 4 evening on the
+ *  desk — "Sells tomorrow", not "Sells today" */
+const readerDay = (ms: number) => dayKeyIn(ms, READER_TZ);
 const utcDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
 /** Which close kind (if any) a live lot is in right now. */
@@ -78,7 +107,7 @@ export function closeKindFor(lot: LiveLot, now: number): Kind | null {
   // before or the day of, never a fake "within the hour"
   const d = (lot.saleDate || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
-  return d === utcDay(now) || d === utcDay(now + DAY) ? 'close24' : null;
+  return d === readerDay(now) || d === readerDay(now + DAY) ? 'close24' : null;
 }
 
 export function isFreshHammer(s: SettledLot, now: number): boolean {
@@ -93,18 +122,38 @@ const short = (raw: string | null | undefined, max = 70) => {
 };
 const lotUrl = (id: string) => `/lot?id=${encodeURIComponent(baseId(id))}`; // the universal permalink
 
-export function payloadFor(kind: Kind, ctx: { id: string; title?: string | null; house?: string | null; bid?: number | null; forecast?: number | null; price?: number | null; dateOnly?: boolean; sameDay?: boolean }): Payload {
+export interface PayloadCtx {
+  id: string; title?: string | null; house?: string | null;
+  /** the live bid IN USD (liveBidUsd) and its count */
+  bid?: number | null; bids?: number | null;
+  /** the engine's forecast — value.compValueUsd, an ALL-IN figure (said so) */
+  forecast?: number | null;
+  /** the realized price (hammer kind) */
+  price?: number | null;
+  /** the reader's max (My max): the close push says where the bid stands, the hammer push how the result landed */
+  max?: number | null;
+  /** the close in the reader's words ("today 7:00 PM", "tomorrow 2:00 PM", "Thu, Nov 5") */
+  when?: string | null;
+  dateOnly?: boolean; sameDay?: boolean;
+  /** the lot's currency fields, for the My max words' bid read */
+  currency?: string | null; fxRate?: number | null; currentBid?: number | null;
+}
+
+export function payloadFor(kind: Kind, ctx: PayloadCtx): Payload {
   const name = short(ctx.title);
-  const fc = ctx.forecast && ctx.forecast > 0 ? `lectr forecast ${formatPrice(ctx.forecast)}` : null;
-  const bid = ctx.bid && ctx.bid > 0 ? `bid ${formatPrice(ctx.bid)}` : null;
-  const tail = [bid, fc].filter(Boolean).join(' · ');
+  const fc = ctx.forecast && ctx.forecast > 0 ? `lectr forecast ${fmtFace(ctx.forecast)} all-in` : null;
+  const bid = ctx.bid && ctx.bid > 0 ? `bid ${fmtFace(ctx.bid)}${ctx.bids && ctx.bids > 0 ? ` · ${ctx.bids} ${ctx.bids === 1 ? 'bid' : 'bids'}` : ''}` : null;
+  const mine = myMaxText({ currentBid: ctx.currentBid ?? ctx.bid ?? null, currency: ctx.currency ?? 'USD', fxRate: ctx.fxRate ?? null, priceUsd: null } as Parameters<typeof myMaxText>[0], ctx.max ?? null);
+  const when = ctx.when ? `closes ${ctx.when}` : null;
+  const tail = [when, bid, mine, fc].filter(Boolean).join(' · ');
   const at = ctx.house ? ` at ${ctx.house}` : '';
   if (kind === 'hammer') {
     // priceUsd is the REALIZED price (premium-inclusive where the house
     // publishes it) — "sold for", never a bare "hammer" figure it isn't
+    const vs = vsMaxText(ctx.price || 0, ctx.max ?? null);
     return {
       title: `Sold: ${name}`,
-      body: `Sold for ${formatPrice(ctx.price || 0)}${at}${fc ? ` (${fc})` : ''}.`,
+      body: `Sold for ${fmtFace(ctx.price || 0)}${at}${vs ? ` · ${vs}` : ''}${fc ? ` (${fc})` : ''}.`,
       url: lotUrl(ctx.id), tag: `hammer:${baseId(ctx.id)}`,
     };
   }
@@ -157,22 +206,31 @@ export function planSends(input: {
     if (lv) {
       kind = closeKindFor(lv, now);
       if (kind) {
-        const timed = Number.isFinite(lv.saleDateTime ? Date.parse(lv.saleDateTime) : NaN);
+        const closeMs = lv.saleDateTime ? Date.parse(lv.saleDateTime) : NaN;
+        const timed = Number.isFinite(closeMs);
+        const day = (lv.saleDate || '').slice(0, 10);
         item = {
           lotId: id,
-          sortKey: timed ? Date.parse(lv.saleDateTime!) : now,
+          sortKey: timed ? closeMs : now,
           payload: payloadFor(kind, {
-            id, title: lv.title || w.saved_title, house: lv.auctionHouse, bid: lv.currentBid ?? null,
+            id, title: lv.title || w.saved_title, house: lv.auctionHouse,
+            bid: liveBidUsd(lv), bids: lv.bidCount ?? null, currentBid: lv.currentBid ?? null, currency: lv.currency ?? null, fxRate: lv.fxRate ?? null,
+            max: w.max_usd ?? null,
             forecast: lv.value?.compValueUsd ?? forecasts.get(id) ?? null,
-            dateOnly: !timed, sameDay: !timed && (lv.saleDate || '').slice(0, 10) === utcDay(now),
+            // the close in the reader's words: the paper's whenText on the reader's clock; a date-only sale on its day
+            when: timed ? whenText(closeMs, now, READER_TZ, true) : null,
+            dateOnly: !timed, sameDay: !timed && day === readerDay(now),
           }),
         };
       }
     } else if (st && isFreshHammer(st, now)) {
+      // a result the reader already booked ("I won it") or cleared ("none of
+      // these were me") is not news to them — the desk does not count it either
+      if (w.owned || w.result_dismissed) continue;
       kind = 'hammer';
       item = {
         lotId: id, sortKey: -Date.parse(String(st.sale_date)),
-        payload: payloadFor('hammer', { id, title: st.title || w.saved_title, house: st.house, price: Number(st.price_usd), forecast: forecasts.get(id) ?? null }),
+        payload: payloadFor('hammer', { id, title: st.title || w.saved_title, house: st.house, price: Number(st.price_usd), max: w.max_usd ?? null, forecast: forecasts.get(id) ?? null }),
       };
     }
     if (!kind || !item) continue;

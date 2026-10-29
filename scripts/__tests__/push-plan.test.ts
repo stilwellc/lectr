@@ -78,7 +78,7 @@ test('hammer: fresh sold lot with forecast snapshot; stale or unsold never', () 
   });
   assert.equal(plan.length, 1);
   assert.equal(plan[0].kind, 'hammer');
-  assert.equal(plan[0].payload.body, 'Sold for $13K at Heritage (lectr forecast $11K).');
+  assert.equal(plan[0].payload.body, 'Sold for $13K at Heritage (lectr forecast $11K all-in).');   // fmtFace money (whole K from $10K — the paper's and the desk's), the all-in said
   assert.equal(plan[0].payload.url, '/lot?id=s1');
   assert.equal(isFreshHammer(settled.get('s2')!, NOW), false);
 });
@@ -91,7 +91,7 @@ test('hammer without a captured forecast says nothing about one', () => {
 test('payloads: close copy carries bid + forecast, date-only says the day, no advice words', () => {
   const p = payloadFor('close24', { id: 'x', title: 'Rolex 1675', house: 'Phillips', bid: 9000, forecast: 14000 });
   assert.equal(p.title, 'Closes within 24 hours: Rolex 1675');
-  assert.equal(p.body, 'On the block at Phillips · bid $9K · lectr forecast $14K.');
+  assert.equal(p.body, 'On the block at Phillips · bid $9K · lectr forecast $14K all-in.');
   const d = payloadFor('close24', { id: 'x', title: 'A', dateOnly: true, sameDay: true });
   assert.match(d.title, /^Sells today/);
   for (const t of [p.title, p.body, d.title]) assert.doesNotMatch(t, /\b(buy|bid now|don't miss|hurry)\b/i);
