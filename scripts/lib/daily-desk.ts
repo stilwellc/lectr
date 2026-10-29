@@ -9,8 +9,14 @@
  *   overMax     a live bid already past the reader's own max
  *   closing     watches that hammer within the next 36h, soonest first
  *   results     watches that sold since the last email (hammer vs est, vs your max)
+ *   week        watches that hammer after the 36h window but within 7 days
  *   below       watches the engine reads below market (not already listed)
  *   picks       up to 3 lots from the recommender (follows + watches), unsaved
+ *
+ * THE GLANCE (Oct 28) — the desk's cockpit, as four figures under the
+ * headline: watching (live lots · $ at estimate midpoint), the next hammer
+ * (when · the lot), closes this week, picks. The same reads /profile's cells
+ * print; an email that only said "3 new picks" read bare.
  */
 import type { AuctionLot } from '../../app/types';
 import { closeMsOf } from '../../app/lib/priority';
@@ -21,8 +27,11 @@ import { craftTitle, httpsImg, sizedImg } from '../../app/utils';
 import { closeIsTimed } from '../../app/lib/house-tz';
 import { makerLineOf } from '../../app/lib/lot-labels';
 import { baseId } from './push-plan';
+import { imageOf, rrPreviewImage } from '../../app/lib/house-images';
 
 export const CLOSING_WINDOW_MS = 36 * 3_600_000;
+export const WEEK_MS = 7 * 86_400_000;
+export const WEEK_ROWS = 4;
 export const MAX_ROWS = 6;
 export const PICKS_N = 3;
 
@@ -38,9 +47,21 @@ export interface DeskItem {
 }
 export interface ResultItem { id: string; title: string; house: string; img: string | null; hammer: string; vsMax: string | null; inReach: boolean | null; vsEst: string | null }
 export interface PickItem extends DeskItem { note: string }
+export interface Glance {
+  /** live watched lots */
+  watching: number;
+  /** their estimate midpoints summed in USD (two-sided estimates only), formatted; null when none */
+  est: string | null;
+  /** the soonest watched close: the day word (today / tomorrow / Wed, Nov 11), its clock when the house gave one, the lot */
+  next: { id: string; title: string; when: string; time: string | null } | null;
+  /** watched closes inside 7 days (the 36h window included) */
+  week: number;
+  picks: number;
+}
 export interface DeskEmail {
   subject: string; preheader: string; headline: string;
-  overMax: DeskItem[]; closing: DeskItem[]; results: ResultItem[]; below: DeskItem[]; picks: PickItem[];
+  glance: Glance;
+  overMax: DeskItem[]; closing: DeskItem[]; week: DeskItem[]; results: ResultItem[]; below: DeskItem[]; picks: PickItem[];
 }
 
 const bidUsdOf = (l: AuctionLot) => { const b = l.currentBid || 0; return !b ? 0 : !l.currency || l.currency === 'USD' ? b : b * (l.fxRate || 0); };
@@ -64,7 +85,7 @@ function itemOf(l: AuctionLot, w: WatchRow | undefined, now: number, tz: string)
   const bid = bidUsdOf(l);
   return {
     id: l.id, title: craftTitle(l.title, l.auctionHouse), maker: makerLineOf(l).name || null, house: l.auctionHouse,
-    img: l.imageUrl ? sizedImg(httpsImg(l.imageUrl), 240) ?? null : null, est: formatEstimate(l), when: whenText(closeMsOf(l), now, tz, closeIsTimed(l)),
+    img: sizedImg(httpsImg(imageOf(l)), 240) ?? null, est: formatEstimate(l), when: whenText(closeMsOf(l), now, tz, closeIsTimed(l)),
     sig: sig ? { dir: sig.label === 'Below Market' ? 'up' : 'down', text: sig.label === 'Below Market' ? `${signalMagnitude(sig.label, sig.pct)} below market` : `${Math.min(Math.abs(sig.pct), 99)}% above market` } : null,
     max: max != null ? fmtFace(max) : null, bid: bid > 0 ? fmtFace(bid) : null, over: max != null && bid > max,
   };
@@ -91,6 +112,17 @@ export function planDesk(input: {
     .map(x => itemOf(x.l, byId.get(baseId(x.l.id)), now, tz));
   closing.forEach(i => used.add(baseId(i.id)));
 
+  // the week: the next watched hammers past the 36h window (never a row twice)
+  const weekAll = liveWatched
+    .map(l => ({ l, ms: closeMsOf(l) }))
+    .filter(x => x.ms != null && x.ms >= now && x.ms - now <= WEEK_MS)
+    .sort((a, b) => a.ms! - b.ms!);
+  const week = weekAll
+    .filter(x => x.ms! - now > CLOSING_WINDOW_MS && !used.has(baseId(x.l.id)))
+    .slice(0, WEEK_ROWS)
+    .map(x => itemOf(x.l, byId.get(baseId(x.l.id)), now, tz));
+  week.forEach(i => used.add(baseId(i.id)));
+
   const since = input.lastSentOn || new Date(now - 2 * 86_400_000).toISOString().slice(0, 10);
   const results: ResultItem[] = sold
     .filter(s => (s.price_usd ?? 0) > 0 && (s.sale_date || '') >= since)
@@ -101,7 +133,7 @@ export function planDesk(input: {
       const max = w?.max_usd && w.max_usd > 0 ? w.max_usd : null;
       const est = w?.est_mid && w.est_mid > 0 ? w.est_mid : null;
       return {
-        id: s.id, title: craftTitle(s.title || w?.saved_title || 'Lot', s.house || undefined), house: s.house || '', img: s.image_url ? sizedImg(httpsImg(s.image_url), 240) ?? null : null,
+        id: s.id, title: craftTitle(s.title || w?.saved_title || 'Lot', s.house || undefined), house: s.house || '', img: sizedImg(httpsImg(s.image_url || rrPreviewImage(s.id)), 240) ?? null,
         hammer: fmtFace(price),
         vsMax: max != null ? `${pct((price / max - 1) * 100)} vs your max ${fmtFace(max)}` : null,
         inReach: max != null ? price <= max : null,
@@ -122,6 +154,28 @@ export function planDesk(input: {
 
   if (!overMax.length && !closing.length && !results.length && !pickItems.length) return null;
 
+  // THE GLANCE — the cockpit's figures
+  let estUsd = 0;
+  for (const l of liveWatched) {
+    const lo = l.estimateLow ?? 0, hi = l.estimateHigh ?? 0;
+    if (!(lo > 0) || !(hi > 0)) continue;
+    const mid = (lo + hi) / 2;
+    estUsd += !l.currency || l.currency === 'USD' ? mid : mid * (l.fxRate || 0);
+  }
+  const soonest = liveWatched.map(l => ({ l, ms: closeMsOf(l) })).filter(x => x.ms != null && x.ms >= now).sort((a, b) => a.ms! - b.ms!)[0] ?? null;
+  const glance: Glance = {
+    watching: liveWatched.length,
+    est: estUsd > 0 ? fmtFace(estUsd) : null,
+    next: soonest ? (() => {
+      const w = whenText(soonest.ms, now, tz, closeIsTimed(soonest.l)) || 'scheduled';
+      const m = /^(today|tomorrow)\s+(.+)$/.exec(w);
+      const title = craftTitle(soonest.l.title, soonest.l.auctionHouse);
+      return { id: soonest.l.id, title: title.length > 44 ? `${title.slice(0, 43).trimEnd()}…` : title, when: m ? m[1] : w, time: m && m[2] !== '(time TBC)' ? m[2] : null };
+    })() : null,
+    week: weekAll.length,
+    picks: pickItems.length,
+  };
+
   const closesToday = closing.filter(i => i.when?.startsWith('today')).length;
   const lead = overMax.length
     ? `${overMax.length} ${overMax.length === 1 ? 'bid has' : 'bids have'} passed your max`
@@ -133,7 +187,9 @@ export function planDesk(input: {
           ? `${results.length} of your watches sold`
           : `${pickItems.length} new ${pickItems.length === 1 ? 'pick' : 'picks'} for you`;
   const facts = [
+    glance.watching ? `${glance.watching} watching${glance.est ? ` · ${glance.est} to the hammer` : ''}` : null,
     closing.length && !lead.includes('close') ? `${closing.length} closing` : null,
+    week.length ? `${glance.week} close this week` : null,
     results.length && !lead.includes('sold') ? `${results.length} sold` : null,
     below.length ? `${below.length} below market` : null,
     pickItems.length && !lead.includes('pick') ? `${pickItems.length} ${pickItems.length === 1 ? 'pick' : 'picks'}` : null,
@@ -142,6 +198,6 @@ export function planDesk(input: {
     subject: `Your desk: ${lead}`,
     preheader: facts || 'Your watches, your results and today’s picks.',
     headline: `${lead[0].toUpperCase()}${lead.slice(1)}.`,
-    overMax, closing, results, below, picks: pickItems,
+    glance, overMax, closing, week, results, below, picks: pickItems,
   };
 }

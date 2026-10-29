@@ -18,7 +18,8 @@ function pill(text: string, dir: 'up' | 'down' | 'ink') {
   return `<span style="display:inline-block;padding:3px 9px;border-radius:999px;background:${bg};color:#fff;font:500 12px/1.2 ${FONT};white-space:nowrap">${esc(text)}</span>`;
 }
 function photo(img: string | null, alt: string, size = 72) {
-  if (!img) return `<div style="width:${size}px;height:${size}px;border-radius:12px;background:${LINE}"></div>`;
+  // no photo: the lot's initial on a tile (the desk's Thumb fallback), never a blank box
+  if (!img) return `<div style="width:${size}px;height:${size}px;border-radius:12px;background:${LINE};color:${FAINT};font:300 ${Math.round(size * 0.42)}px/${size}px ${FONT};text-align:center">${esc((alt.trim()[0] || '·').toUpperCase())}</div>`;
   return `<img src="${esc(img)}" width="${size}" height="${size}" alt="${esc(alt)}" style="display:block;width:${size}px;height:${size}px;border-radius:12px;object-fit:cover;background:${LINE};border:0">`;
 }
 function section(title: string, body: string) {
@@ -54,11 +55,29 @@ ${r.vsMax ? `<div style="padding-top:7px">${pill(r.inReach ? `in reach · ${r.vs
 </td></tr></table></td></tr>`;
 }
 
+/** THE GLANCE — four figures in one hairline-parted row (the desk's cockpit) */
+function glance(origin: string, g: DeskEmail['glance']) {
+  const cell = (k: string, v: string, b: string, href: string, first = false) =>
+    `<td valign="top" width="25%" style="padding:10px ${first ? '0' : '12px'} 10px ${first ? '0' : '12px'};${first ? '' : `border-left:1px solid ${LINE}`}">
+<div style="font:400 12px/1.3 ${FONT};color:${MUTED};white-space:nowrap">${esc(k)}</div>
+<a href="${href}" style="display:block;padding-top:4px;font:500 21px/1.1 ${FONT};color:${INK};letter-spacing:-0.02em;text-decoration:none">${esc(v)}</a>
+<div style="padding-top:4px;font:400 12px/1.4 ${FONT};color:${MUTED}">${b}</div></td>`;
+  const desk = `${origin}/profile?utm_source=daily-desk&utm_medium=email`;
+  const nextHref = g.next ? lotUrl(origin, g.next.id) : `${desk}#tab-watching`;
+  return `<tr><td style="padding:18px 0 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid ${LINE};border-bottom:1px solid ${LINE}"><tr>
+${cell('Watching', g.watching.toLocaleString(), g.est ? `${esc(g.est)} at estimate` : g.watching ? 'live lots' : 'nothing live', `${desk}#tab-watching`, true)}
+${cell('Next hammer', g.next ? g.next.when : '—', g.next ? `${g.next.time ? `<b style="color:${INK};font-weight:500">${esc(g.next.time)}</b> · ` : ''}${esc(g.next.title)}` : 'no watch on a clock', nextHref)}
+${cell('This week', g.week.toLocaleString(), g.week === 1 ? 'close in 7 days' : 'close in 7 days', `${desk}#tab-week`)}
+${cell('Picks', g.picks.toLocaleString(), g.picks ? 'for you' : 'none today', `${desk}#tab-for-you`)}
+</tr></table></td></tr>`;
+}
+
 export function renderDesk(e: DeskEmail, o: { origin: string; unsubUrl: string; dateLabel: string }): { html: string; text: string } {
   const { origin } = o;
   const body = [
     e.overMax.length ? section('Bids past your max', e.overMax.map(i => row(origin, i)).join('')) : '',
     e.closing.length ? section('Closing soon', e.closing.map(i => row(origin, i)).join('')) : '',
+    e.week.length ? section('Closing this week', e.week.map(i => row(origin, i)).join('')) : '',
     e.results.length ? section('Your results', e.results.map(r => resultRow(origin, r)).join('')) : '',
     e.below.length ? section('Below market on your watchlist', e.below.map(i => row(origin, i)).join('')) : '',
     e.picks.length ? section('For you', e.picks.map(i => row(origin, i, `<div style="font:400 12.5px/1.45 ${FONT};color:${MUTED};padding-top:6px">${esc(i.note)}</div>`)).join('')) : '',
@@ -73,6 +92,7 @@ export function renderDesk(e: DeskEmail, o: { origin: string; unsubUrl: string; 
 <tr><td style="font:400 13px/1.3 ${FONT};color:${MUTED}">lectr · your desk · ${esc(o.dateLabel)}</td></tr>
 <tr><td style="padding-top:10px;font:300 30px/1.15 ${FONT};color:${INK};letter-spacing:-0.02em">${esc(e.headline)}</td></tr>
 ${e.preheader ? `<tr><td style="padding-top:8px;font:400 14px/1.5 ${FONT};color:${MUTED}">${esc(e.preheader)}</td></tr>` : ''}
+${glance(origin, e.glance)}
 ${body}
 <tr><td style="padding:28px 0 6px" align="left"><a href="${origin}/profile?utm_source=daily-desk&utm_medium=email" style="display:inline-block;padding:12px 20px;border-radius:999px;background:${INK};color:#fff;font:500 14px/1 ${FONT};text-decoration:none">Open your desk</a></td></tr>
 </table></td></tr>
@@ -81,7 +101,9 @@ You get this because you turned on the Daily Desk email on lectr. Figures are le
 <a href="${esc(o.unsubUrl)}" style="color:${MUTED}">Unsubscribe</a> · <a href="${origin}/profile#account" style="color:${MUTED}">Email settings</a>
 </td></tr></table></td></tr></table></body></html>`;
 
-  const t: string[] = [`lectr · your desk · ${o.dateLabel}`, '', e.headline, e.preheader, ''];
+  const g = e.glance;
+  const t: string[] = [`lectr · your desk · ${o.dateLabel}`, '', e.headline, e.preheader, '',
+    `Watching ${g.watching}${g.est ? ` (${g.est} at estimate midpoint)` : ''} · Next hammer ${g.next ? `${g.next.when} — ${g.next.title}` : '—'} · ${g.week} close this week · ${g.picks} picks`, ''];
   const lines = (title: string, items: (DeskItem | PickItem)[]) => {
     if (!items.length) return;
     t.push(title.toUpperCase());
@@ -90,6 +112,7 @@ You get this because you turned on the Daily Desk email on lectr. Figures are le
   };
   lines('Bids past your max', e.overMax);
   lines('Closing soon', e.closing);
+  lines('Closing this week', e.week);
   if (e.results.length) {
     t.push('YOUR RESULTS');
     for (const r of e.results) t.push(`- ${r.title} · hammered ${r.hammer}${r.vsMax ? ` · ${r.vsMax}` : ''}\n  ${lotUrl(origin, r.id)}`);

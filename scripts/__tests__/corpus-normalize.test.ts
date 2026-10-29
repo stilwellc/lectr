@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   clampImpossibleYears, rerouteScienceMisroutes, rerouteRelicCards, reconcileSaleDates,
-  dedupeWrightFamilyMirrors, deriveRRAuctionUrls, normalizeArtCategory, recoverPlayerSlug,
+  dedupeWrightFamilyMirrors, deriveRRAuctionUrls, deriveRRAuctionImages, normalizeArtCategory, recoverPlayerSlug,
   guTeamOf, guUseClass, guGameKey, stampCultureAxes, nullDeadChristiesSsoUrls,
 } from '../lib/corpus-normalize';
 
@@ -103,6 +103,22 @@ test('dedupeWrightFamilyMirrors: one lot on Wright/Rago/LAMA mirrors → one row
   assert.equal(dedupeWrightFamilyMirrors(lots), 3);
   assert.deepEqual(ids(lots), ['bonhams-301456', 'lama-299487', 'wright-301456', 'wright-500001', 'wright-500002']);
   assert.equal(dedupeWrightFamilyMirrors(lots), 0, 'idempotent');
+});
+
+test('deriveRRAuctionImages: the CDN preview from the id, only where the crawl carried no photo', () => {
+  const lots = [
+    L({ id: 'rrauction-753-351893607530536', imageUrl: null }),
+    L({ id: 'rrauction-746-351547607463093~', imageUrl: '' }),
+    L({ id: 'rrauction-753-351935207530001', imageUrl: 'https://cdn.rrauction.com/auction/753/preview/3519352_1.jpg' }),
+    L({ id: 'rrauction-271-0', imageUrl: null }),
+    L({ id: 'goldin-1', imageUrl: null }),
+  ];
+  assert.equal(deriveRRAuctionImages(lots), 2);
+  assert.equal(lots[0].imageUrl, 'https://cdn.rrauction.com/auction/753/preview/3518936_1.jpg');
+  assert.equal(lots[1].imageUrl, 'https://cdn.rrauction.com/auction/746/preview/3515476_1.jpg');
+  assert.equal(lots[3].imageUrl, null);
+  assert.equal(lots[4].imageUrl, null);
+  assert.equal(deriveRRAuctionImages(lots), 0);
 });
 
 test('deriveRRAuctionUrls: fills only an empty url on an RR-shaped id', () => {

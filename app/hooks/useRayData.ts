@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { AuctionLot, MarketStats, RealizedPoint, BidCompetitionPoint } from '../types';
 import { setCloseK, resetCloseK } from '../lib/close-k';
 import { prepareEagerLots, type CloseBoardJson } from '../lib/eager-book';
+import { fillHouseImages } from '../lib/house-images';
 import { completeQuarters } from '../lib/maker-hero';
 import { mergeCorpusOverEager, settleCorpusRow } from '../lib/live-pool';
 import { fetchFirstScreen, fsVersion, type FirstScreenPayload } from '../lib/first-screen';
@@ -439,6 +440,7 @@ async function fetchCorpus(ver: string, cache: RequestCache): Promise<AuctionLot
 /** phase 2 for one book: the corpus with that book's eager rows laid over it */
 async function loadCorpusFor(up: Pick<UpcomingJson, 'lots'>, ver: string): Promise<AuctionLot[]> {
   const full = await threeTries(ver, cache => fetchCorpus(ver, cache));
+  fillHouseImages(full);   // the shards' RR rows without a photo (app/lib/house-images)
   // THE LIVE POOL IS THE EAGER BOOK (r9, QA4 B1 — app/lib/live-pool).
   // Each eager lot is laid OVER its shard row: the eager copy wins on
   // every field it carries (signal incl. explicit null, soldComp,

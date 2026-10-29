@@ -10,6 +10,7 @@ import { classifyForm, objectClassOf, cleanGoldinTitle, watchKey, isPersonNameRu
 import { vetReference, readDescriptionReference, readHouseReference, splitWatchRef, isWatchModelLine } from '../../app/lib/watch-ref';
 import { titleTokens as titleTokensOf, extractEdition, extractSerials, toUsdDated, fxRateFor } from '../../app/lib/normalize';
 import { isCurrency } from '../../app/types';
+import { fillHouseImages } from '../../app/lib/house-images';
 import { christiesLocationCurrency, MEDIUM_PATTERNS } from './houses/common';
 import { ARTIST_MARKET } from '../../app/constants';
 import { isMisattributed } from '../../app/lib/attribution';
@@ -764,6 +765,16 @@ export function deriveRRAuctionUrls(lots: Lot[]): number {
   return n;
 }
 
+/* ── RR AUCTION PHOTO BACKFILL (Oct 28 2026) — the listing crawl lazy-loads
+   photos, so most live RR rows ship with no imageUrl (236 of 871 on Oct 28)
+   and every surface — the desk, the picks, the Daily Desk email — printed a
+   blank tile for them. The CDN's preview photo is derivable from the id
+   (app/lib/house-images, verified on live and archive sales); fill ONLY a
+   missing url. */
+export function deriveRRAuctionImages(lots: Lot[]): number {
+  return fillHouseImages(lots as Pick<AuctionLot, 'id' | 'imageUrl'>[]);
+}
+
 /* ── CHRISTIE'S DEAD SSO LINKS (Oct 5 2026) — Christie's lot links come in two
    `sso` shapes, and only one of them works:
      · https://onlineonly.christies.com/sso?ObjectID=<sale>.<lot>&LotNumber=<lot>
@@ -1511,6 +1522,8 @@ export function normalizeCorpus(lots: AuctionLot[], opts: { now?: Date; staleHou
   console.log(`[normalize] gallery stub dates → cited close: ${galleryDates.total} (${Object.entries(galleryDates.byHouse).map(([k, v]) => `${k}=${v}`).join(' ') || 'none'}) · exact 15th closes un-'month'ed=${galleryDates.exact}`);
   const rrUrls = deriveRRAuctionUrls(ls);
   if (rrUrls) console.log(`[normalize] rrauction url backfill: ${rrUrls} lots derived from id (lot-detail/<lotId>)`);
+  const rrImages = deriveRRAuctionImages(ls);
+  if (rrImages) console.log(`[normalize] rrauction photo backfill: ${rrImages} lots derived from id (cdn preview/<item>_1.jpg)`);
   const deadSso = nullDeadChristiesSsoUrls(ls);
   if (deadSso) console.log(`[normalize] christie's dead www /sso urls nulled: ${deadSso}`);
   // (Oct 11 2026) rows the suffix-stripped sale URLs stored under the wrong

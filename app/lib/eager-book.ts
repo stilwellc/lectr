@@ -10,6 +10,7 @@
  */
 import type { AuctionLot } from '../types';
 import { normalizeCloseStamp } from './house-tz';
+import { fillHouseImages } from './house-images';
 import { floorAtBid } from './value';
 
 export interface CloseBoardJson {
@@ -28,6 +29,10 @@ export function prepareEagerLots(lots: AuctionLot[] | undefined, cb: CloseBoardJ
   // Christie's local-midnight DAY stamp is dropped (no "12:00 AM" countdown),
   // an RR lot carries its published 7:00 PM ET close. Idempotent.
   if (lots) for (const l of lots) normalizeCloseStamp(l);
+  // HOUSE PHOTOS (Oct 28, app/lib/house-images) — an RR lot the crawl shipped
+  // without a photo reads its CDN preview; a payload built before the nightly
+  // backfill shows photos too. Idempotent.
+  fillHouseImages(lots);
 
   // ── CLOSE-BOARD OVERLAY — intraday bid refresh for lots closing <24h.
   // Overrides currentBid/bidCount so every surface reads close-fresh — the

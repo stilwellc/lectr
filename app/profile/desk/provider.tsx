@@ -162,6 +162,8 @@ export interface DeskInternals {
   todayShows: boolean;
   isDesktop: boolean | null; upcomingCounts: Record<string, number>; badgeCount: number;
   onCardToggle: (id: string) => void; onSettledOwn: (savedId: string) => void; onSettledRemove: (savedId: string) => void;
+  /** clears every result still waiting in the Did-you-win inbox ("none of these were me") */
+  onDismissResults: () => void;
   /** the page-level comps modal (DeskActions.openLot) */
   modalLot: AuctionLot | null; closeModal: () => void;
 }
@@ -182,7 +184,7 @@ function useDeskClock(): number {
 export function useDeskState(): DeskState {
   // ORDER MATTERS: the saves answer whether this desk needs the corpus at all,
   // so they are read BEFORE the data layer.
-  const { savedIds, savedMeta, toggle, isSaved, ownedIds, toggleOwned, setSavedFields } = useSavedLots();
+  const { savedIds, savedMeta, toggle, isSaved, ownedIds, toggleOwned, setSavedFields, dismissResults } = useSavedLots();
   const { authEnabled, user, authReady, savedReady, signInWithGoogle, signOut } = useAuth();
   // LAZY CORPUS (Sep 2026 perf pass). Everything corpus-fed on this desk is
   // ABOUT THE SAVES — resolving each saved id to its live row, appraising the
@@ -713,10 +715,11 @@ export function useDeskState(): DeskState {
   }, [savedIds, savedMeta]);
 
   // the away strip's own-it prompts: settled wins not yet in the collection
+  // (Oct 28) a result the reader cleared ("none of these were me") is not a win to claim
   const unclaimedWins = useMemo(
-    () => sold.filter(l => l.status === 'sold' && !ownedLotIds.has(l.id)).length
-      + soldOrphans.filter(o => !o.provisional && !ownedIdSet.has(o.id)).length,
-    [sold, ownedLotIds, soldOrphans, ownedIdSet],
+    () => sold.filter(l => l.status === 'sold' && !ownedLotIds.has(l.id) && !metaFor(l.id)?.dismissed).length
+      + soldOrphans.filter(o => !o.provisional && !ownedIdSet.has(o.id) && !savedMeta[o.id]?.dismissed).length,
+    [sold, ownedLotIds, soldOrphans, ownedIdSet, metaFor, savedMeta],
   );
 
   // cards view (desktop opt-in) needs the lot back from its id
@@ -728,6 +731,12 @@ export function useDeskState(): DeskState {
   // closures per row would defeat it on every keystroke-level re-render
   const onSettledOwn = useCallback((savedId: string) => toggleOwned(savedId), [toggleOwned]);
   const onSettledRemove = useCallback((savedId: string) => toggle(savedId), [toggle]);
+  /** every result still waiting (lots + archive orphans), by SAVED id — the one-tap clear */
+  const onDismissResults = useCallback(() => {
+    const ids = sold.filter(l => l.status === 'sold' && !ownedLotIds.has(l.id) && !metaFor(l.id)?.dismissed).map(l => savedIdOf(l.id))
+      .concat(soldOrphans.filter(o => !o.provisional && !ownedIdSet.has(o.id) && !savedMeta[o.id]?.dismissed).map(o => o.id));
+    dismissResults(Array.from(new Set(ids)));
+  }, [sold, ownedLotIds, metaFor, savedIdOf, soldOrphans, ownedIdSet, savedMeta, dismissResults]);
 
   // phase-2 failed but SOME saves resolved eagerly — never silently thin the desk
   const partialLoadFailed = fullError && !fullLoaded && savedIds.length > 0;
@@ -943,7 +952,7 @@ export function useDeskState(): DeskState {
     collection, exposure, collectionChart, summary, changes, reads, room, ledgerCols,
     closingWatches, awayLine, unseenAlerts, myFollows, marketOwned, hasMarket, tunedLine,
     historyCount, hasRecordRoom, unclaimedWins, sinceLastN: sinceLast?.n ?? 0, givenName, deskKicker, tasteLabels, tenure, hasDeskDetails,
-    todayShows, isDesktop, upcomingCounts, badgeCount, onCardToggle, onSettledOwn, onSettledRemove,
+    todayShows, isDesktop, upcomingCounts, badgeCount, onCardToggle, onSettledOwn, onSettledRemove, onDismissResults,
     modalLot, closeModal,
   };
   return { desk, act, narrow: isDesktop === false, i };

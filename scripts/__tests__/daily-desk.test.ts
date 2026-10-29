@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AuctionLot } from '../../app/types';
-import { planDesk, whenText, PICKS_N } from '../lib/daily-desk';
+import { planDesk, whenText, PICKS_N, WEEK_ROWS } from '../lib/daily-desk';
 import { renderDesk } from '../lib/daily-desk-html';
 
 const NOW = Date.parse('2026-10-21T12:20:00Z');
@@ -62,4 +62,33 @@ test('the email carries an unsubscribe link and escapes titles', () => {
   assert.ok(html.includes('https://lectr.bid/api/email/unsubscribe?t=x'));
   assert.ok(!html.includes('<b>bold</b>'));
   assert.ok(text.includes('Unsubscribe: https://lectr.bid/api/email/unsubscribe?t=x'));
+});
+
+test('the glance counts the desk; the week lists hammers past 36h within 7 days, never a row twice', () => {
+  const soon = lot('s', 5 * H), d3 = lot('d3', 3 * 24 * H), d5 = lot('d5', 5 * 24 * H), d9 = lot('d9', 9 * 24 * H);
+  const d = planDesk({ now: NOW, tz: 'America/New_York', watches: ['s', 'd3', 'd5', 'd9'].map(lot_id => ({ lot_id })), live: liveMap([soon, d3, d5, d9]), sold: [], picks: [] })!;
+  assert.deepEqual(d.closing.map(i => i.id), ['s']);
+  assert.deepEqual(d.week.map(i => i.id), ['d3', 'd5']);
+  assert.equal(d.glance.watching, 4);
+  assert.equal(d.glance.est, '$6K');
+  assert.equal(d.glance.next?.id, 's');
+  assert.equal(d.glance.next?.when, 'today');
+  assert.match(d.glance.next?.time ?? '', /\d:\d\d [AP]M/);
+  assert.equal(d.glance.week, 3);
+  assert.ok(d.week.length <= WEEK_ROWS);
+  const { html, text } = renderDesk(d, { origin: 'https://lectr.bid', unsubUrl: 'https://lectr.bid/u', dateLabel: 'Wednesday, Oct 21' });
+  assert.ok(html.includes('Closing this week'));
+  assert.ok(html.includes('Next hammer'));
+  assert.ok(text.includes('Watching 4 ($6K at estimate midpoint)'));
+});
+
+test('an RR lot without a crawled photo prints its CDN preview; a lot with none prints its initial', () => {
+  const rr = lot('rrauction-753-351893607530536', 5 * H, { auctionHouse: 'RR Auction', title: 'Charles Schulz Signed Sketch of Snoopy' } as Partial<AuctionLot>);
+  const none = lot('goldin-1', 6 * H, { title: 'Zion Williamson rookie' } as Partial<AuctionLot>);
+  const d = planDesk({ now: NOW, watches: [{ lot_id: rr.id }, { lot_id: 'goldin-1' }], live: liveMap([rr, none]), sold: [], picks: [] })!;
+  assert.equal(d.closing[0].img, 'https://cdn.rrauction.com/auction/753/preview/3518936_1.jpg');
+  assert.equal(d.closing[1].img, null);
+  const { html } = renderDesk(d, { origin: 'https://lectr.bid', unsubUrl: 'https://lectr.bid/u', dateLabel: 'Wednesday, Oct 21' });
+  assert.ok(html.includes('preview/3518936_1.jpg'));
+  assert.ok(html.includes('>Z</div>'));
 });

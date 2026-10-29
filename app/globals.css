@@ -5654,6 +5654,12 @@ html:has(.dt-wrap) { scroll-padding-top: calc(64px + var(--dt-h, 56px) + 12px); 
 @media (max-width: 639.98px) { .dt-tab .dt-news { position: absolute; top: 6px; right: 10%; min-width: 16px; height: 16px; font-size: 10px; } }
 /* Did you win? — results to confirm on Today */
 .ck-page .ck-results { margin: 4px 0 18px; }
+.ck-page .ck-results-clear {
+  flex: none; background: none; border: none; padding: 0; cursor: pointer; font: 500 12.5px/1 var(--font-sans), sans-serif;
+  color: var(--color-text-muted); text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px; white-space: nowrap;
+}
+.ck-page .ck-results-clear:hover { color: var(--color-fg); }
+.ck-page .ck-results-clear:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; border-radius: 4px; }
 .ck-page .ck-result { padding: 10px 0; border-bottom: 1px solid var(--hairline); }
 .ck-page .ck-result:last-of-type { border-bottom: none; }
 .ck-page .ck-result-t { font-size: 14px; font-weight: 500; color: var(--color-fg); text-decoration: none; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }

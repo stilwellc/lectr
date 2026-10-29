@@ -24,11 +24,18 @@ import { craftTitle } from '../../../utils';
 function ResultsInbox() {
   const i = useDeskInternals();
   const { desk } = useDesk();
-  const rows = i.sold.filter(l => l.status === 'sold' && !desk.ownedIds.has(i.savedIdOf(l.id)) && !desk.ownedIds.has(l.id)).slice(0, 4);
+  const rows = i.sold.filter(l => l.status === 'sold' && !desk.ownedIds.has(i.savedIdOf(l.id)) && !desk.ownedIds.has(l.id) && !i.metaFor(l.id)?.dismissed).slice(0, 4);
   if (!rows.length) return null;
   return (
     <div id="results" className="ck-results" role="group" aria-label="Results to confirm">
-      <div className="ck-reads-head"><span className="kicker">Did you win? · {i.unclaimedWins}</span><i className="ck-reads-rule" /></div>
+      <div className="ck-reads-head">
+        <span className="kicker">Did you win? · {i.unclaimedWins}</span><i className="ck-reads-rule" />
+        {/* (Oct 28) the pile never clears one tap at a time: one tap says none were yours */}
+        <button type="button" className="ck-results-clear" onClick={i.onDismissResults}
+          title="Every result waiting here leaves the inbox; they stay under History and Record">
+          None were me{i.unclaimedWins > 1 ? ` · clear all ${i.unclaimedWins}` : ''}
+        </button>
+      </div>
       {rows.map(l => (
         <div key={l.id} className="ck-result ck-ph" style={{ '--ph': '48px' } as React.CSSProperties}>
           <Thumb src={l.imageUrl} label={l.title} size={48} />

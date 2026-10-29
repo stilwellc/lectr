@@ -79,6 +79,9 @@ export interface SavedMeta {
   note?: string | null;
   /** MY MAX — the collector's own ceiling on the lot (USD hammer) */
   maxUsd?: number | null;
+  /** a settled result the reader said was not theirs — out of the Did-you-win
+   *  inbox and the Needs-you count; still a settled watch (migration 0012) */
+  dismissed?: boolean;
 }
 interface SavedEntry extends SavedMeta { id: string; }
 
@@ -128,6 +131,7 @@ function readStored(): SavedEntry[] {
         paidUsd: typeof e.paidUsd === 'number' ? e.paidUsd : null,
         note: typeof e.note === 'string' ? e.note : null,
         maxUsd: typeof e.maxUsd === 'number' ? e.maxUsd : null,
+        dismissed: e.dismissed === true,
       });
     }
     return entries;
@@ -172,6 +176,8 @@ function rowToEntry(r: Record<string, unknown>): SavedEntry {
     note: typeof r.note === 'string' ? r.note : null,
     // max_usd arrives with migration 0010; absent before it
     maxUsd: typeof r.max_usd === 'number' ? r.max_usd : null,
+    // result_dismissed arrives with migration 0012
+    dismissed: r.result_dismissed === true,
   };
 }
 function entryToRow(userId: string, e: SavedEntry) {
@@ -180,7 +186,7 @@ function entryToRow(userId: string, e: SavedEntry) {
 // The saved_title/saved_artist columns are ADDITIVE — until the migration runs,
 // PostgREST rejects a write that names them. Detect that one failure mode and
 // retry the write without the new columns so saving never breaks pre-migration.
-const NEW_COLS = /saved_title|saved_artist|paid_usd|note|max_usd/i;
+const NEW_COLS = /saved_title|saved_artist|paid_usd|note|max_usd|result_dismissed/i;
 function stripNewCols(row: ReturnType<typeof entryToRow>) {
   const { saved_title: _t, saved_artist: _a, paid_usd: _p, note: _n, ...rest } = row;
   return rest;
@@ -213,6 +219,8 @@ interface AccountValue {
   ownedIds: string[];
   setSavedFields: (lotId: string, patch: { paidUsd?: number | null; note?: string | null; maxUsd?: number | null }) => void;
   toggleOwned: (id: string) => void;
+  /** "none of these were me": the settled results leave the Did-you-win inbox for good */
+  dismissResults: (ids: string[]) => void;
   // login UI
   loginOpen: boolean;
   /** (r9) 'follow' = the sheet opened from a maker / player Follow (the sheet
@@ -443,7 +451,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   const savedIds = useMemo(() => entries.map(e => e.id), [entries]);
   const savedMeta = useMemo<Record<string, SavedMeta>>(() => {
     const out: Record<string, SavedMeta> = {};
-    for (const e of entries) out[e.id] = { savedAt: e.savedAt, estMid: e.estMid, signalPct: e.signalPct, bidCount: e.bidCount, owned: e.owned, title: e.title, artist: e.artist, paidUsd: e.paidUsd, note: e.note, maxUsd: e.maxUsd };
+    for (const e of entries) out[e.id] = { savedAt: e.savedAt, estMid: e.estMid, signalPct: e.signalPct, bidCount: e.bidCount, owned: e.owned, title: e.title, artist: e.artist, paidUsd: e.paidUsd, note: e.note, maxUsd: e.maxUsd, dismissed: e.dismissed };
     return out;
   }, [entries]);
   const isSaved = useCallback((id: string) => entries.some(e => e.id === id), [entries]);
@@ -472,6 +480,31 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
           setEntries(prev => prev.map(e => (e.id === lotId ? { ...e, owned: !next } : e)));
           flash("Couldn't update your collection — try again.");
         }
+      });
+  }, [user, flash]);
+
+  /** RESULTS TO CONFIRM → "none of these were me" (Oct 28): one write for every
+   *  result still waiting; optimistic, rolled back on error. Pre-migration
+   *  (0012) the write degrades to session-local state with a toast. */
+  const dismissResults = useCallback((ids: string[]) => {
+    const set = new Set(ids);
+    if (!set.size) return;
+    const before = new Map(entriesRef.current.map(e => [e.id, e.dismissed === true]));
+    setEntries(prev => prev.map(e => (set.has(e.id) ? { ...e, dismissed: true } : e)));
+    if (!supabase || !user) {
+      writeStored(entriesRef.current.map(e => (set.has(e.id) ? { ...e, dismissed: true } : e)));
+      return;
+    }
+    supabase.from('saved_lots').update({ result_dismissed: true }).eq('user_id', user.id).in('lot_id', ids)
+      .then(({ error }) => {
+        if (!error) return;
+        if (NEW_COLS.test(error.message)) {
+          flash('Cleared for this session — keeping it needs a database update.');
+          return;
+        }
+        console.error('[account] dismissResults failed:', error.message);
+        setEntries(prev => prev.map(e => (set.has(e.id) ? { ...e, dismissed: before.get(e.id) ?? false } : e)));
+        flash("Couldn't clear those results — try again.");
       });
   }, [user, flash]);
 
@@ -533,10 +566,10 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AccountValue>(() => ({
     authEnabled, user, authReady, savedReady,
     signInWithEmail, signInWithGoogle, signOut,
-    savedIds, savedMeta, isSaved, toggle, ownedIds, toggleOwned, setSavedFields,
+    savedIds, savedMeta, isSaved, toggle, ownedIds, toggleOwned, setSavedFields, dismissResults,
     loginOpen, openLogin, closeLogin, loginPurpose,
   }), [user, authReady, savedReady, signInWithEmail, signInWithGoogle, signOut,
-    savedIds, savedMeta, isSaved, toggle, ownedIds, toggleOwned, setSavedFields, loginOpen, openLogin, closeLogin, loginPurpose]);
+    savedIds, savedMeta, isSaved, toggle, ownedIds, toggleOwned, setSavedFields, dismissResults, loginOpen, openLogin, closeLogin, loginPurpose]);
 
   return (
     <Ctx.Provider value={value}>
