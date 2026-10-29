@@ -292,10 +292,18 @@ function DeskBody() {
   // the ids a jump may name inside a room (the room, its anchors)
   const idsOf = (ids: string[]) => ids.concat(Object.entries(SUB_ANCHORS).filter(([, room]) => ids.includes(room)).map(([a]) => a));
   const always = sections.filter(s => EVERY_TAB.has(s.id));
+  // THE COLD DESK (nothing watched, no picks, no names): the rooms that mount
+  // are the invitation — the quick start, the index — and read whole, never
+  // folded to a first screen (a clamped quick start looked broken)
+  const cold = !i.deskView && desk.recs.length === 0 && desk.closingPicks.length === 0 && desk.follows.length === 0;
   // pass 1: one column per group (its fold, its bar item), in the order the desk reads
   const barItems: BarItem[] = [];
   const cols: { g: DeskTab; room: string; node: React.ReactNode }[] = [];
   for (const g of GROUP_ORDER) {
+    // Today with nothing to say mounts nothing: no band (the tones alternate
+    // from the first band that shows), no bar item (the bar drops a hidden
+    // band's item on its own too — this keeps the two in step from the data)
+    if (g === 'today' && !i.todayShows) continue;
     const order = TAB_ORDER[g];
     const rooms = sections.filter(s => s.tab === g && !EVERY_TAB.has(s.id) && !MORE.has(s.id))
       .sort((a, b) => (order ? order.indexOf(a.id) - order.indexOf(b.id) : 0));
@@ -304,7 +312,7 @@ function DeskBody() {
     const ids = idsOf(rooms.map(r => r.id));
     const inner = rooms.map(s => { const C = s.Component!; return <C key={s.id} desk={desk} act={act} narrow={narrow} />; });
     barItems.push({ id: g, label: item?.label ?? rooms[0].label, count: item?.count, tone: item?.tone, target: rooms[0].id });
-    cols.push({ g, room: rooms[0].id, node: g === 'today' ? inner : <Clamp ids={ids} label={item?.label ?? rooms[0].label} count={item?.count}>{inner}</Clamp> });
+    cols.push({ g, room: rooms[0].id, node: g === 'today' ? inner : <Clamp ids={ids} label={item?.label ?? rooms[0].label} count={item?.count} whole={cold}>{inner}</Clamp> });
   }
   // pass 2: the bands. Record + Collection read side by side at ≥ 900px (one
   // band, two columns — "how am I doing" in one glance), stacked on a phone;

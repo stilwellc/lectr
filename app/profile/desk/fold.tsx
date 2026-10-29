@@ -91,19 +91,31 @@ function cutAt(inner: HTMLElement, max: number): number {
  *  (+44%, $12K, a node) reads after it ("Show all · Record +44%") */
 const plain = (c: React.ReactNode): boolean => typeof c === 'number' || (typeof c === 'string' && /^\d[\d,]*$/.test(c));
 
+/** the fold's motion: max-height from the cut to the room's height and back,
+ *  on the house easing; reduced motion = no transition (CSS) */
+const FOLD_MS = 360;
+
 /** a room folded to its first screen */
-export function Clamp({ ids, label, count, children }: {
+export function Clamp({ ids, label, count, whole = false, children }: {
   /** the ids a jump may name that live inside (the room, its anchors) */
   ids: readonly string[];
   /** the room's name, for the Show-all line ("Show all 8 · Watching") */
   label: string;
   count?: React.ReactNode;
+  /** the room reads whole — never a fold (a cold desk's quick start) */
+  whole?: boolean;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [tall, setTall] = useState(false);
   const [empty, setEmpty] = useState(false);
+  // not before the first measure: a tall room mounts clamped at --fold-max
+  // (never whole, then snapped shut once measured — the page jumped)
+  const [measured, setMeasured] = useState(false);
   const [cut, setCut] = useState<number | null>(null);
+  // 'open' / 'close' while the height travels; the inline --fold-h is the
+  // room's measured height, the far end of the travel
+  const [anim, setAnim] = useState<'open' | 'close' | null>(null);
   const inner = useRef<HTMLDivElement | null>(null);
   const outer = useRef<HTMLDivElement | null>(null);
   useOpensOnJump(ids, setOpen);
@@ -116,21 +128,39 @@ export function Clamp({ ids, label, count, children }: {
       const max = parseFloat(getComputedStyle(box).getPropertyValue('--fold-max')) || 560;
       const h = el.scrollHeight;
       setEmpty(el.childElementCount === 0 || h === 0);
-      const over = h > max + 40;
+      const over = !whole && h > max + 40;
       setTall(over);
       setCut(over ? Math.round(cutAt(el, max)) : null);
+      setMeasured(true);
     };
     read();
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(read) : null;
     ro?.observe(el);
     return () => ro?.disconnect();
-  }, []);
+  }, [whole]);
+  // the travel: set the far end, let the transition run, then release the height
+  const timer = useRef(0);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const setHeight = (px: number | null) => { outer.current?.style.setProperty('--fold-h', px == null ? '' : `${px}px`); };
   const toggle = () => {
+    const el = inner.current;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (open) backToTop(outer.current);
-    setOpen(v => !v);
+    if (!el || reduce) { setOpen(v => !v); return; }
+    window.clearTimeout(timer.current);
+    setHeight(el.scrollHeight);
+    if (open) {
+      // close: from the room's height (set, one frame) down to the cut
+      setAnim('close');
+      requestAnimationFrame(() => requestAnimationFrame(() => { setOpen(false); timer.current = window.setTimeout(() => { setAnim(null); setHeight(null); }, FOLD_MS + 40); }));
+    } else {
+      // open: from the cut up to the room's height, then no cap at all
+      setAnim('open'); setOpen(true);
+      timer.current = window.setTimeout(() => { setAnim(null); setHeight(null); }, FOLD_MS + 40);
+    }
   };
   return (
-    <div ref={outer} className="dk-fold" data-open={open || !tall || undefined} data-empty={empty || undefined}
+    <div ref={outer} className="dk-fold" data-open={open || (measured && !tall) || undefined} data-empty={empty || undefined} data-anim={anim ?? undefined}
       style={cut != null ? ({ '--fold-cut': `${cut}px` } as React.CSSProperties) : undefined}>
       <div className="dk-fold-in" ref={inner}>{children}</div>
       {tall && (
