@@ -9,17 +9,18 @@
  *   phone    one day per scroll-snap card at 92% so the next day peeks, a
  *            14-day chip strip (edge-masked, the day in view kept in sight)
  *
- * Each row: the close on the reader's clock (a sale the house dated without
- * an hour says "time TBC"), the title (a link — the row's Tab stop), who /
- * house / estimate / bids and the engine's bid velocity where it measured
- * one (↑, mono, ink — descriptive, never a lamp), the decision line
- * (DecisionLine — one lot, one number), a live countdown inside 24h, and a
- * visible two-button action strip — Bid (the house's page) and Calendar (an
- * .ics made on the device, ./ics) — both reachable by Tab. Two of your
- * watches inside 30 minutes from different sales say "overlaps" on both rows
- * (ink, a dotted rule — not a lamp). j/k walks the rows (the page's
- * [data-nav-row] walk, the row itself at tabIndex −1 so Tab never lands on
- * it twice); Enter / Space on a walked row opens the lot.
+ * Each row is the desk's one row (../desk/row DeskRow, THE DESK v4): the
+ * photo, the title (the link — the whole row opens the lot), who / house /
+ * estimate / bids and the engine's bid velocity where it measured one (↑,
+ * ink — descriptive, never a lamp) on the sub-line, the kind as the tag, the
+ * decision line (DecisionLine — one lot, one number), and the FIGURE is the
+ * close on the reader's clock (a sale the house dated without an hour says
+ * "time TBC"), a live countdown under it inside 24h. The action slot holds
+ * Bid (the house's page) and Calendar (an .ics made on the device, ./ics) —
+ * both reachable by Tab. Two of your watches inside 30 minutes from
+ * different sales say "overlaps" on both rows (ink, not a lamp). j/k walks
+ * the rows (the page's [data-nav-row] walk, the title is the focus target);
+ * Enter on a walked row opens the lot.
  *
  * THE VIEW (R1#15): watches + names show by default; picks sit behind
  * "Show picks (N)" (remembered on this device; a week with no watch shows
@@ -29,16 +30,15 @@
  * Every read is ./week.ts (plain .ts, unit-tested); this file only prints.
  * One clock: desk.now.
  */
-import { Thumb } from '../desk/thumb';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import type { AuctionLot } from '../../types';
 import type { SectionProps, SectionMeta, DeskData } from '../desk/types';
 import { RoomHead } from '../head';
 import { HorizonMark } from '../../components/marks';
 import DecisionLine from '../../components/DecisionLine';
 import Flick from '../../components/Flick';
+import { DeskRow } from '../desk/row';
 import { formatEstimate } from '../../lib/estimate-text';
 import { displayMakerOf } from '../../lib/maker-subjects';
 import { safeHref } from '../../lib/safe-href';
@@ -127,7 +127,7 @@ function CalIcon() {
 
 const TBC_TITLE = 'The house published the sale day, not a close time';
 
-function Row({ r, now, titleById, onOpen }: { r: WeekRow; now: number; titleById: ReadonlyMap<string, WeekRow>; onOpen: (lot: AuctionLot) => void }) {
+function Row({ r, now, titleById }: { r: WeekRow; now: number; titleById: ReadonlyMap<string, WeekRow> }) {
   const { lot } = r;
   const title = craftTitle(lot.title, lot.auctionHouse);
   const who = r.kind === 'name' ? r.name : whoOf(lot);
@@ -140,56 +140,46 @@ function Row({ r, now, titleById, onOpen }: { r: WeekRow; now: number; titleById
   const house = houseClock(lot, r.closeMs);
   const href = safeHref(lot.url);
   const conflict = r.conflictWith.map(id => titleById.get(id)).filter((x): x is WeekRow => !!x);
-  const onKey = (e: React.KeyboardEvent<HTMLLIElement>) => {
-    if (e.target !== e.currentTarget) return;
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(lot); }
-  };
   return (
-    <li className="ck-week-row" data-nav-row tabIndex={-1} data-kind={r.kind}
-      data-conflict={conflict.length ? '' : undefined} data-soon={soon ? '' : undefined}
-      onKeyDown={onKey} aria-label={`${KIND_TAG[r.kind]}: ${title}`}>
-      <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} className="ck-week-ph" tabIndex={-1} aria-hidden="true">
-        <Thumb src={lot.imageUrl} label={who || lot.title} wide />
-      </Link>
-      <div className="ck-week-when">
-        <span className="ck-tag" data-tone={r.kind === 'watch' ? 'hot' : undefined}>{KIND_TAG[r.kind]}</span>
-        {r.timed
-          ? <time className="ck-week-time" dateTime={new Date(r.closeMs).toISOString()} title={house ? `${localClock(r.closeMs)} on your clock · ${house} at the house` : 'the house’s published close, on your clock'}>{localClock(r.closeMs)}</time>
-          : <span className="ck-week-time" data-dayonly title={TBC_TITLE}>time TBC</span>}
-      </div>
-      <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} className="ck-week-title">{title}</Link>
-      <div className="ck-week-fact">
-        {who && <span className="ck-week-who">{who}</span>}
-        {own && <> · <span className="ck-week-own" title="pieces in your collection by this name">{own}</span></>}
+    <DeskRow lot={lot} as="li" title={title}
+      attrs={{ 'data-kind': r.kind, 'data-conflict': conflict.length ? '' : undefined, 'data-soon': soon ? '' : undefined, 'aria-label': `${KIND_TAG[r.kind]}: ${title}` }}
+      // the rule above a names group names it, so a name row carries no tag of its own
+      tag={r.kind === 'name' ? null : { text: KIND_TAG[r.kind], tone: r.kind === 'watch' ? 'hot' : undefined }}
+      sub={<>
+        {who && <b>{who}</b>}
+        {own && <> · <span title="pieces in your collection by this name">{own}</span></>}
         {who && ' · '}{lot.auctionHouse}
         {est ? <> · {est}</> : null}
         {bids ? <> · {bids}</> : null}
         {vel ? <> · <span className="ck-week-vel" title="bids added in the trailing window — the engine's bid velocity (descriptive, not a price)"><i aria-hidden>↑</i>{vel.replace(/^\+/, '')}</span></> : null}
-      </div>
-      <DecisionLine lot={lot} estimate={false} when={false} abstain="quiet" nowMs={now} className="ck-week-decision" />
-      {soon && !(r.timed && lot.saleDateTime) && (
-        <div className="ck-week-clock" title={`${TBC_TITLE} — the day ends in ${cityOf(houseTzOf(lot))}`}>
-          day ends {countdownText(r.closeMs, now)} · {cityOf(houseTzOf(lot))}
-        </div>
-      )}
-      {conflict.length > 0 && (
-        <div className="ck-week-conflict" title="Two of your watches close within 30 minutes of each other, in different sales">
+      </>}
+      // the figure: the close on the reader's clock; inside 24h the countdown rides under it
+      figure={r.timed
+        ? <time className="dk-clock" data-soon={soon || undefined} dateTime={new Date(r.closeMs).toISOString()} title={house ? `${localClock(r.closeMs)} on your clock · ${house} at the house` : 'the house’s published close, on your clock'}>{localClock(r.closeMs)}</time>
+        : <span className="dk-clock" data-quiet title={TBC_TITLE}>time TBC</span>}
+      figureSub={soon
+        ? (r.timed && lot.saleDateTime
+          ? countdownText(r.closeMs, now)
+          : <span title={`${TBC_TITLE} — the day ends in ${cityOf(houseTzOf(lot))}`}>day ends {countdownText(r.closeMs, now)} · {cityOf(houseTzOf(lot))}</span>)
+        : null}
+      meta={conflict.length > 0 ? (
+        <span className="dk-meta-fact ck-week-conflict" title="Two of your watches close within 30 minutes of each other, in different sales">
           <span className="ck-week-conflict-word">overlaps</span> {conflict.map((c, i) => <React.Fragment key={c.lot.id}>{i > 0 && ', '}<b>{shortTitle(craftTitle(c.lot.title, c.lot.auctionHouse))}</b> ({c.lot.auctionHouse}) · {localClock(c.closeMs)}</React.Fragment>)}
-        </div>
-      )}
-      {/* the action strip: visible, two controls, both Tab stops (R5#3); the
-          fact line already names the house, so the link says "Bid" and
-          carries the house in its name (R5#4) */}
-      <div className="ck-week-acts">
+        </span>
+      ) : undefined}
+      // a name's sale is theirs, not yours: no decision line (as before)
+      decision={r.kind === 'name' ? undefined : <DecisionLine lot={lot} estimate={false} when={false} abstain="quiet" nowMs={now} />}
+      // the action slot: Bid (the house's page) and Calendar, both Tab stops (R5#3); the
+      // sub-line already names the house, so the link says "Bid" and carries the house in its name (R5#4)
+      action={<>
         {href && <a className="ck-week-act" href={href} target="_blank" rel="noopener noreferrer" aria-label={`Bid at ${lot.auctionHouse} (opens the house’s page)`} title={`Bid at ${lot.auctionHouse}`}>Bid <Flick size={10} /></a>}
         <button type="button" className="ck-week-act ck-week-act-cal" onClick={() => downloadIcs([r], now, `${r.day} ${title.slice(0, 40)}`)}
           aria-label={`Add ${title} to your calendar (.ics, made on this device)`} title="Add this close to your calendar (.ics, made on this device)"><CalIcon /><span className="ck-week-act-t">Calendar</span></button>
-      </div>
-    </li>
+      </>} />
   );
 }
 
-function DayCol({ d, now, titleById, onOpen, open, onMore }: { d: WeekDay; now: number; titleById: ReadonlyMap<string, WeekRow>; onOpen: (lot: AuctionLot) => void; open: boolean; onMore: () => void }) {
+function DayCol({ d, now, titleById, open, onMore }: { d: WeekDay; now: number; titleById: ReadonlyMap<string, WeekRow>; open: boolean; onMore: () => void }) {
   const w = dayWords(d.day);
   const word = offsetWord(d.offset);
   const watches = d.rows.filter(r => r.kind === 'watch');
@@ -234,17 +224,17 @@ function DayCol({ d, now, titleById, onOpen, open, onMore }: { d: WeekDay; now: 
       {d.rows.length > 0 ? (
         <>
           {(shownWatches.length > 0 || shownPicks.length > 0) && (
-            <ul className="ck-week-rows" aria-label={`Yours on ${w.md}`}>
-              {shownWatches.map(r => <Row key={r.lot.id} r={r} now={now} titleById={titleById} onOpen={onOpen} />)}
-              {shownPicks.map(r => <Row key={r.lot.id} r={r} now={now} titleById={titleById} onOpen={onOpen} />)}
+            <ul className="ck-week-rows dk-list" aria-label={`Yours on ${w.md}`}>
+              {shownWatches.map(r => <Row key={r.lot.id} r={r} now={now} titleById={titleById} />)}
+              {shownPicks.map(r => <Row key={r.lot.id} r={r} now={now} titleById={titleById} />)}
             </ul>
           )}
           {shownNames.length > 0 && (
             <>
               {/* the rule names the group, so a name row needs no "Name" tag of its own */}
               <div className="ck-week-namesrule" data-first={yours.length ? undefined : ''}><span className="kicker">Your names</span><i className="ck-reads-rule" /></div>
-              <ul className="ck-week-rows" aria-label={`Your names on ${w.md}`}>
-                {shownNames.map(r => <Row key={r.lot.id} r={r} now={now} titleById={titleById} onOpen={onOpen} />)}
+              <ul className="ck-week-rows dk-list" aria-label={`Your names on ${w.md}`}>
+                {shownNames.map(r => <Row key={r.lot.id} r={r} now={now} titleById={titleById} />)}
               </ul>
             </>
           )}
@@ -278,12 +268,10 @@ export default function WeekSection({ desk }: SectionProps) {
   // are the index, one day fills the room — seven 140px columns truncated
   // every title on a desk. The day's cards lay out in a grid on wide screens.
   const narrow = true;
-  const router = useRouter();
   const plan = useMemo(() => planOf(desk), [desk]);
   const [showPicks, setShowPicks] = useShowPicks(plan);
   const view = useMemo(() => viewOf(plan, { picks: showPicks }), [plan, showPicks]);
   const titleById = useMemo(() => new Map(plan.rows.map(r => [r.lot.id, r])), [plan]);
-  const onOpen = useCallback((lot: AuctionLot) => router.push(`/lot?id=${encodeURIComponent(lot.id)}`), [router]);
   const [openDays, setOpenDays] = useState<Record<string, boolean>>({});
   const track = useRef<HTMLDivElement>(null);
   const chips = useRef<HTMLDivElement>(null);
@@ -394,8 +382,8 @@ export default function WeekSection({ desk }: SectionProps) {
             close within 30 minutes in different sales. Totals sum the estimate midpoints of your watches and picks that carry both
             bounds (a name&rsquo;s sales are never counted as your money). A day opens on every watch, {PICK_ROWS_OPEN} picks and
             {' '}{NAME_ROWS_OPEN} name rows; <b>+N more</b> opens the rest in place. <b>Calendar</b> writes an .ics on this device — a timed
-            close as a 30-minute event with an alarm 30 minutes before, a day-only sale as an all-day event. Keyboard: <b>Tab</b> reaches
-            each title, Bid and Calendar; <b>j</b>/<b>k</b> walk the rows and <b>Enter</b> opens the lot.
+            close as a 30-minute event with an alarm 30 minutes before, a day-only sale as an all-day event. A row opens its lot;
+            keyboard: <b>Tab</b> reaches each title, Bid and Calendar; <b>j</b>/<b>k</b> walk the rows and <b>Enter</b> opens the lot.
           </> }} />
         {narrow && view.rows.length > 0 && (
           <div className="ck-week-chipwrap">
@@ -427,7 +415,7 @@ export default function WeekSection({ desk }: SectionProps) {
         ) : view.rows.length > 0 ? (
           <div className="ck-week-days" ref={track} data-narrow={narrow ? '' : undefined}>
             {view.days.map(d => (
-              <DayCol key={d.day} d={d} now={desk.now} titleById={titleById} onOpen={onOpen}
+              <DayCol key={d.day} d={d} now={desk.now} titleById={titleById}
                 open={!!openDays[d.day]} onMore={() => setOpenDays(o => ({ ...o, [d.day]: !o[d.day] }))} />
             ))}
           </div>

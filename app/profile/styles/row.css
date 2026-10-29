@@ -1,0 +1,153 @@
+/* ══ THE DESK ROW (THE DESK v4, Oct 29 2026) — desk/row.tsx. One row for
+   Watching, Today and Your week: photo | title / sub-line / meta / decision |
+   figure. NORTHSTAR grammar only: eggshell ground, hairlines between rows,
+   Inter tabular figures at 500 (lightness, not boldness), pills; the
+   market's green / red stay the only saturated voice (the lamp law). Light
+   is the default; dark is html:not([data-lectr-light]) and reads the same
+   tokens — only the hover fill needs its own value. ══ */
+
+.dk-list { display: flex; flex-direction: column; list-style: none; margin: 0; padding: 0; }
+.dk-item { min-width: 0; list-style: none; }
+.dk-item + .dk-item > .dk-row { border-top: 1px solid var(--hairline); }
+
+.dk-row {
+  --dk-th: 56px;
+  position: relative;
+  display: grid; grid-template-columns: var(--dk-th) minmax(0, 1fr) auto; grid-template-rows: auto;
+  column-gap: 14px; row-gap: 3px; align-items: center;
+  padding: 11px 2px; min-height: 64px;
+  color: var(--color-fg);
+  transition: background var(--duration-fast) var(--ease-signature);
+}
+/* the grid: photo | lines | figure; the second line holds the decision
+   (under the lines) and the controls (under the figure) — the photo spans
+   both and stays centred */
+.dk-row > .ck-thumb { grid-column: 1; grid-row: 1 / span 2; }
+.dk-row > .dk-main { grid-column: 2; grid-row: 1; }
+.dk-row > .dk-decision { grid-column: 2; grid-row: 2; }
+.dk-row > .dk-right { grid-column: 3; grid-row: 1; align-self: start; }
+.dk-row > .dk-acts { grid-column: 3; grid-row: 2; justify-self: end; }
+/* a row with controls but no decision line keeps its figure at the top */
+.dk-row:has(> .dk-acts):not(:has(> .dk-decision)) > .dk-main { align-self: start; }
+.dk-row:hover { background: var(--color-hover-item); }
+.dk-row[data-open] { background: var(--color-hover-item); }
+/* the photo: the row's own size, square, the market's ring off its edge (thumb.tsx) */
+.dk-row > .ck-thumb { width: var(--dk-th); height: var(--dk-th); }
+.dk-row > .ck-thumb .ck-thumb-l { font-size: calc(var(--dk-th) * 0.42); }
+
+/* ── the lines ── */
+.dk-main { display: grid; gap: 3px; min-width: 0; align-content: center; }
+.dk-title {
+  font-size: 14px; font-weight: 500; line-height: 1.3; letter-spacing: -0.005em;
+  color: var(--color-fg); text-decoration: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+/* THE STRETCHED LINK: the title's pseudo-element covers the row, so the
+   whole row opens the lot; every control sits above it (z-index) */
+.dk-title::after { content: ''; position: absolute; inset: 0; z-index: 0; }
+.dk-row:hover .dk-title { text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px; }
+.dk-sub {
+  font-size: 12.5px; line-height: 1.4; color: var(--color-text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+.dk-sub[data-wrap] { white-space: normal; overflow-wrap: anywhere; }
+.dk-sub b { color: var(--color-text-secondary); font-weight: 500; }
+.dk-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
+  font-size: 12px; line-height: 1.4; color: var(--color-text-muted); min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.dk-meta > .ck-tag { position: relative; z-index: 1; }
+.dk-meta .ck-sigpill { height: 20px; font-size: 12px; }
+/* a fact in the meta line: ink-secondary, figures tabular */
+.dk-meta-fact { white-space: nowrap; }
+.dk-meta-fact b { font-weight: 500; color: var(--color-text-secondary); }
+/* the decision line keeps DecisionLine's own size, wraps between parts */
+.dk-decision { min-width: 0; }
+.dk-decision .ck-decision { font-size: 11.5px; line-height: 1.5; white-space: normal; margin-top: 1px; }
+.dk-decision .ck-decision > span { white-space: normal; }
+
+/* ── the right column: the figure, its sub, the pill, the action ── */
+.dk-right {
+  display: grid; justify-items: end; align-content: start; gap: 3px;
+  text-align: right; max-width: 40%; padding-top: 1px;
+}
+.dk-fig {
+  font-family: var(--font-sans), sans-serif; font-size: 14px; font-weight: 500; line-height: 1.25;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.01em; color: var(--color-fg); white-space: nowrap;
+}
+.dk-fig[data-quiet], .dk-clock[data-quiet] { color: var(--color-text-muted); font-weight: 400; }
+.dk-figsub { font-size: 11.5px; line-height: 1.3; color: var(--color-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dk-figsub b { font-weight: 500; color: var(--color-text-secondary); }
+.dk-clock { white-space: nowrap; }
+.dk-clock[data-soon] { color: var(--color-fg); }
+.dk-acts { position: relative; z-index: 1; display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
+.dk-pill { display: inline-flex; }
+.dk-pill .ck-mymax { height: 26px; padding: 0 10px; font-size: 11.5px; }
+.dk-pill .ck-mymax-edit input { height: 30px; width: 96px; }
+.dk-act { display: inline-flex; gap: 10px; align-items: center; }
+.dk-act .ck-week-act { min-height: 26px; padding: 2px 0; }
+
+/* the expansion control (a watch's dossier) — a quiet pill, 28px on a desk */
+.dk-expand {
+  display: inline-flex; align-items: center; gap: 2px;
+  min-height: 28px; padding: 0 9px; border-radius: 999px;
+  background: none; border: 1px solid var(--color-border); cursor: pointer;
+  font-family: var(--font-sans), sans-serif; font-size: 11.5px; font-weight: 500; color: var(--color-text-muted);
+  transition: color var(--duration-fast) var(--ease-signature), border-color var(--duration-fast) var(--ease-signature);
+}
+.dk-expand:hover, .dk-expand[aria-expanded='true'] { color: var(--color-fg); border-color: var(--color-border-mid); }
+.dk-expand-chev { display: inline-block; transition: transform 150ms cubic-bezier(.4,0,.2,1); }
+.dk-expand[aria-expanded='true'] .dk-expand-chev { transform: rotate(90deg); }
+
+/* the j/k ring draws on the row, 2px ink like every button; the control's own ring goes quiet */
+.dk-row:has(:focus-visible) { outline: 2px solid var(--color-fg); outline-offset: -2px; background: var(--color-hover-item); }
+.dk-row:has(:focus-visible) .dk-title:focus-visible, .dk-row:has(:focus-visible) .dk-expand:focus-visible { outline: none; }
+/* a control inside the row keeps its own ring (My max's field, an action) */
+.dk-row .ck-mymax-edit input:focus { outline: 2px solid var(--color-fg); outline-offset: 1px; }
+
+/* the dossier under an open row: it hangs off the row, its hairline dashed (the ledger's own grammar) */
+.dk-item > .ck-dossier { margin: 0 2px 6px; border-radius: 12px; border-top: none; }
+
+/* ── the phone: 48px photo, the figure keeps its column, the decision line
+   takes the full width under; every control is a 44px target ── */
+@media (max-width: 639.98px) {
+  .dk-row { --dk-th: 48px; column-gap: 12px; padding: 10px 2px; min-height: 60px; }
+  .dk-title { font-size: 13.5px; }
+  .dk-sub { font-size: 12px; }
+  .dk-right { max-width: 44%; }
+  .dk-fig { font-size: 13.5px; }
+  /* the decision line and the controls move under the row, the full width
+     past the photo; the photo and the lines keep the first row */
+  .dk-row > .ck-thumb { grid-row: 1; align-self: start; }
+  .dk-row > .dk-main { align-self: start; }
+  .dk-row > .dk-right { grid-row: 1; }
+  .dk-row > .dk-decision { grid-column: 2 / span 2; grid-row: 2; margin-top: 1px; }
+  .dk-row > .dk-acts { grid-column: 2 / span 2; grid-row: 3; justify-self: stretch; justify-content: flex-start; flex-wrap: wrap; gap: 6px 8px; margin-top: 2px; }
+  /* the Details control: the chevron alone at the line's right end, a 44px
+     target that hangs past the row's edge */
+  .dk-expand { margin-left: auto; min-width: 44px; min-height: 44px; padding: 0; border: none; justify-content: center; font-size: 18px; color: var(--color-text-faint); }
+  .dk-expand-t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .dk-expand[aria-expanded='true'] { color: var(--color-fg); }
+  .dk-pill .ck-mymax { height: 30px; }
+  .dk-act .ck-week-act { min-height: 36px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: 999px; text-decoration: none; color: var(--color-fg); }
+  .dk-item > .ck-dossier { padding: 12px 12px 14px; }
+}
+/* ── dark: the hover fill is the only value the tokens don't carry ── */
+html:not([data-lectr-light]) .dk-row:hover,
+html:not([data-lectr-light]) .dk-row[data-open],
+html:not([data-lectr-light]) .dk-row:has(:focus-visible) { background: rgba(242, 238, 227, 0.045); }
+
+/* ── the rooms' seats for the grammar ── */
+/* Watching: the list replaces the column ledger; the phone's fold button stays */
+.dk-ledger { margin-top: 4px; border-bottom: 1px solid var(--hairline); }
+/* Today: a group's rows under its kicker rule */
+.ck-reads > .dk-list { margin-top: 2px; }
+.ck-reads .dk-item:first-child > .dk-row { border-top: none; }
+/* Your week: the day's rows are one list, not a grid of cards */
+.ck-week-days[data-narrow] .ck-week-rows.dk-list { display: flex; gap: 0; }
+.ck-week-rows.dk-list .dk-row[data-kind='name'] .dk-title { font-weight: 400; }
+/* the Closing-now strip: rows under its rule */
+.ck-week-cn .dk-list { margin: 0; }
+/* motion: nothing floats */
+@media (prefers-reduced-motion: reduce) { .dk-row, .dk-expand, .dk-expand-chev { transition: none; } }

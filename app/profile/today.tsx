@@ -1,7 +1,8 @@
 'use client';
 /**
  * THE TODAY BAND (Oct 11 2026, /profile redesign) — "what's new for me",
- * in one row grammar (ck-read: tag · work · fact) and one claim set:
+ * in the desk's one row grammar (desk/row DeskRow: photo · title · the
+ * reason · the clock as the figure) and one claim set:
  *
  *   Closing tonight   your watches that hammer today, then picks that close
  *                     before tonight ends (recs.pickStrips)
@@ -21,13 +22,18 @@
  *
  * A row whose engine abstained prints no decision part for it (the band's
  * (?) says what a missing line means) — never "no engine read" on every row.
+ *
+ * (THE DESK v4, Oct 29 2026) every row is a DeskRow: the figure is the
+ * CLOCK — the hour it hammers tonight (the countdown under it), else the day
+ * further out; a closing row's tag used to be that hour and is the figure
+ * now; the group's tag (Below market · For you · New · a read) leads the
+ * meta line; a set My max rides under the clock as the pill.
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../types';
 import type { Rec } from '../lib/recs';
 import { nextCloseText, type ReturnLoop } from '../components/PickStrips';
-import CloseClock from '../components/CloseClock';
 import { closeMsOf } from '../lib/priority';
 import { closeIsTimed } from '../lib/house-tz';
 import { displayMakerOf } from '../lib/maker-subjects';
@@ -38,8 +44,8 @@ import DecisionLine from '../components/DecisionLine';
 import { RoomHead } from './head';
 import { Thumb, SigPill } from './desk/thumb';
 import { StoryViewer } from './desk/story';
-import { useMyMax, overMax } from './desk/mymax';
-import { fmtFace } from '../lib/lot-face';
+import { useMyMax, MyMax } from './desk/mymax';
+import { DeskRow, CloseFigure, CloseFigureSub } from './desk/row';
 
 export interface TodayRead { key: string; tag: string; lot: AuctionLot; fact: React.ReactNode; tone?: 'up' | 'hot' }
 
@@ -117,27 +123,18 @@ function useNarrow(): boolean {
    maker · you…", "Michael Jordan · 8 sales,…"); the title keeps its one line */
 function ReadRow({ r, wrap = true }: { r: Row; wrap?: boolean }) {
   const max = useMyMax(r.lot.id);
-  const over = overMax(r.lot, max);
+  const closing = r.group === 'closing';
   return (
-    <Link href={`/lot?id=${encodeURIComponent(r.lot.id)}`} className="ck-read ck-ph" data-nav-row
-      data-decision={r.decision ? '' : undefined}
+    <DeskRow lot={r.lot} wrap={wrap} sub={r.fact} decision={r.decision}
       // a pick in the strip is a pick (the retention tracker's pick_open)
-      data-pick={r.group === 'top' ? r.lot.id : undefined}>
-      <Thumb src={r.lot.imageUrl} label={r.lot.title} size={64} tone={r.tone === 'up' ? 'up' : undefined} />
-      <span className="ck-tag" data-tone={r.tone}>{r.tag}</span>
-      <span className="ck-read-title">{craftTitle(r.lot.title, r.lot.auctionHouse)}</span>
-      {/* a pick's reason is its honesty payload: in the picks strip it wraps,
-          never cut */}
-      <span className="ck-read-fact" style={wrap ? { whiteSpace: 'normal' } : undefined}>{r.fact}</span>
-      {max != null && (
-        <span className={over ? 'ck-read-max' : 'ck-read-max'} data-over={over || undefined}>
-          {over ? <>The live bid has passed your max of <b>{fmtFace(max)}</b></> : <>Your max <b>{fmtFace(max)}</b></>}
-        </span>
-      )}
-      {/* the decision rides its own line under the row — the fact (the
-          reason) keeps its width and is never cut for it */}
-      {r.decision && <span style={{ flex: '1 1 100%', minWidth: 0 }}>{r.decision}</span>}
-    </Link>
+      pick={r.group === 'top' ? r.lot.id : undefined}
+      tone={r.tone === 'up' ? 'up' : undefined}
+      // a closing row's tag IS its clock — the figure prints it, so the tag line stays clear
+      tag={closing ? null : { text: r.tag, tone: r.tone }}
+      figure={<CloseFigure lot={r.lot} />} figureSub={<CloseFigureSub lot={r.lot} />}
+      // the reader's ceiling, set or passed (MyMax says "bid passed it"), under the clock
+      pill={max != null ? <MyMax lot={r.lot} compact /> : undefined}
+      attrs={{ 'data-decision': r.decision ? '' : undefined }} />
   );
 }
 
@@ -186,14 +183,20 @@ function TopSeat() {
   return (
     <div className="ck-reads" aria-hidden data-loading="">
       <Head label={`Top ${TOP_N} for you`} />
-      {Array.from({ length: TOP_N }, (_, i) => (
-        <div key={i} className="ck-read" style={{ flexWrap: 'wrap', alignItems: 'center', rowGap: 8 }}>
-          <i className="ray-sk" style={{ width: 56, height: 16, flex: 'none' }} />
-          <i className="ray-sk" style={{ width: '32%', height: 12, flex: 'none' }} />
-          <i className="ray-sk" style={{ flex: '1 1 0', minWidth: 40, height: 12 }} />
-          <i className="ray-sk" style={{ flex: '1 1 100%', maxWidth: '62%', height: 11 }} />
-        </div>
-      ))}
+      <div className="dk-list">
+        {Array.from({ length: TOP_N }, (_, i) => (
+          <div key={i} className="dk-item">
+            <div className="dk-row">
+              <i className="ray-sk" style={{ width: 'var(--dk-th)', height: 'var(--dk-th)', borderRadius: 12 }} />
+              <div className="dk-main" style={{ gap: 8 }}>
+                <i className="ray-sk" style={{ width: '48%', height: 13 }} />
+                <i className="ray-sk" style={{ width: '70%', height: 11 }} />
+              </div>
+              <div className="dk-right"><i className="ray-sk" style={{ width: 44, height: 13 }} /></div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -229,9 +232,9 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
       const est = formatEstimate(l);
       closing.push({
         key: `cw-${l.id}`, group: 'closing', tone: 'hot', lot: l, tag: closeTag(l),
-        // the fact prints the estimate and the tag the close: the line adds the rest
+        // the fact prints the estimate; the figure prints the close (the hour, the countdown): the line adds the rest
         decision: <DecisionLine lot={l} estimate={false} when={false} abstain="quiet" style={{ marginTop: 0 }} />,
-        fact: lead(l, <>your watch{est ? <> · {est}</> : null}{l.saleDateTime ? <CloseClock iso={l.saleDateTime} windowHours={24} prefix=" · " /> : null}</>),
+        fact: lead(l, <>your watch{est ? <> · {est}</> : null}</>),
       });
     }
     for (const r of loop?.closing ?? []) {
@@ -297,25 +300,25 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
   const picksList = picks.length > 0 ? (
     <div className="ck-reads" role="group" aria-label={picksLabel}>
       <Head label={picksLabel} />
-      {picks.map(r => <ReadRow key={r.key} r={r} wrap />)}
+      <div className="dk-list">{picks.map(r => <ReadRow key={r.key} r={r} wrap />)}</div>
     </div>
   ) : topLoading ? <TopSeat /> : null;
   const closingList = shown.closing.length > 0 ? (
     <div className="ck-reads" role="group" aria-label="Closing tonight">
       <Head label="Closing tonight" />
-      {shown.closing.map(r => <ReadRow key={r.key} r={r} />)}
+      <div className="dk-list">{shown.closing.map(r => <ReadRow key={r.key} r={r} />)}</div>
     </div>
   ) : null;
   const freshList = shown.fresh.length > 0 ? (
     <div className="ck-reads" role="group" aria-label={newLabel}>
       <Head label={newLabel} />
-      {shown.fresh.map(r => <ReadRow key={r.key} r={r} />)}
+      <div className="dk-list">{shown.fresh.map(r => <ReadRow key={r.key} r={r} />)}</div>
     </div>
   ) : null;
   const readsList = shown.rest.length > 0 ? (
     <div className="ck-reads" role="group" aria-label="Today's reads">
       <Head label="Today’s reads" />
-      {shown.rest.map(r => <ReadRow key={r.key} r={r} />)}
+      <div className="dk-list">{shown.rest.map(r => <ReadRow key={r.key} r={r} />)}</div>
     </div>
   ) : null;
   // the columns: a phone reads one list (closing → top picks → new →
