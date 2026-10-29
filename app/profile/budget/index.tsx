@@ -26,8 +26,14 @@
  * quick start's own floor/ceiling steps, one tap, act.setPrice) and prints
  * the plan with no ceiling line — every figure still labelled by what it is.
  * One clock: desk.now. Money: fmtFace. Every figure is budget.ts's.
+ *
+ * (THE DESK v4, Oct 29 2026) a plan row and a buy row are the desk's one
+ * row (../desk/row DeskRow): the figure is your max / the plan figure with
+ * its all-in ("$1.2K → $1.4K" · "all-in · 25% premium"), the basis as the
+ * tag; a buy row's figure is the lot's price, the engine's flag its tag,
+ * Watch its action.
  */
-import { Thumb } from '../desk/thumb';
+import { DeskRow, priceFigureOf } from '../desk/row';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { SectionProps, SectionMeta, DeskData } from '../desk/types';
@@ -36,7 +42,6 @@ import { VALUE_FLOORS, VALUE_CEILINGS, fmtCeiling } from '../../lib/feed-filters
 import { priceText } from '../../lib/interests';
 import { fmtFace, decisionOf } from '../../lib/lot-face';
 import { shortTitle } from '../../lib/recs';
-import { craftTitle } from '../../utils';
 import { displayMakerOf } from '../../lib/maker-subjects';
 import { DepthMark } from '../../components/marks';
 import { RoomHead } from '../head';
@@ -83,7 +88,7 @@ function useStoredFlag(key: string, initial: boolean): [boolean, (v: boolean) =>
 function BandEditor({ desk, act, onDone }: SectionProps & { onDone?: () => void }) {
   const { minUsd, maxUsd } = desk.price ?? { minUsd: null, maxUsd: null };
   const set = (next: { minUsd?: number | null; maxUsd?: number | null }) => {
-    let lo = next.minUsd !== undefined ? next.minUsd : minUsd;
+    const lo = next.minUsd !== undefined ? next.minUsd : minUsd;
     let hi = next.maxUsd !== undefined ? next.maxUsd : maxUsd;
     if (lo != null && hi != null && hi <= lo) hi = null;
     act.setPrice({ minUsd: lo, maxUsd: hi });
@@ -130,22 +135,16 @@ function PlanRowView({ r, now, estInPlan }: { r: PlanRow; now: number; estInPlan
   const tag = rowTag(r);
   const f = figureOf(r, estInPlan);
   return (
-    <Link href={lotHref(r.lot)} className="ck-read ck-ph" data-nav-row data-summed={f.summed || undefined}
-      title={`${tag}: ${BASIS_TEXT[r.basis]}${r.oneSided ? ' (one published side — never summed)' : ''} · ${fmtFace(r.allIn)} all-in at ${r.premiumPct}% premium`}>
-      <Thumb src={r.lot.imageUrl} label={r.lot.title} size={64} tone={r.belowPct != null ? 'up' : undefined} />
-      <span className="ck-tag" data-tone={r.belowPct != null ? 'up' : r.basis === 'max' ? 'hot' : undefined}>{tag}</span>
-      <span className="ck-read-title">{craftTitle(r.lot.title, r.lot.auctionHouse)}</span>
-      <span className="ck-read-fact">
+    <DeskRow lot={r.lot} tone={r.belowPct != null ? 'up' : undefined}
+      attrs={{ 'data-summed': f.summed ? '' : undefined, title: `${tag}: ${BASIS_TEXT[r.basis]}${r.oneSided ? ' (one published side — never summed)' : ''} · ${fmtFace(r.allIn)} all-in at ${r.premiumPct}% premium` }}
+      tag={{ text: tag, tone: r.belowPct != null ? 'up' : r.basis === 'max' || r.basis === 'mine' ? 'hot' : undefined }}
+      sub={<>
         {who ? <>{who} · </> : null}{r.lot.auctionHouse}
         {r.belowPct != null && <> · {r.face.call!.text} below market</>}
         {f.fact && <> · {f.fact}</>}
         {when && <> · {when.text}</>}
-      </span>
-      <span className="ck-budget-fig" data-muted={f.summed ? undefined : ''}>
-        {f.fig}
-        <span className="sub">{f.sub}</span>
-      </span>
-    </Link>
+      </>}
+      figure={<span data-quiet={f.summed ? undefined : ''}>{f.fig}</span>} figureSub={f.sub} />
   );
 }
 
@@ -199,7 +198,7 @@ function NightView({ n, plan, now, narrow, open }: { n: PlanNight; plan: BidPlan
       </div>
       {open ? (
         <>
-          <div role="group" aria-label={`${label} bid plan`}>
+          <div className="dk-list" role="group" aria-label={`${label} bid plan`}>
             {rows.map(r => <PlanRowView key={r.lot.id} r={r} now={now} estInPlan={plan.estInPlan} />)}
           </div>
           {folded > 0 && (
@@ -239,26 +238,21 @@ function BuyRowView({ r, now, saved, onWatch }: { r: BuyRow; now: number; saved:
   const who = whoOf(r.lot);
   const comps = r.face.comps;
   const short = shortTitle(r.lot.title, r.lot.auctionHouse);
+  const price = priceFigureOf(r.lot);
   return (
-    <div className="ck-budget-buy">
-      <Link href={lotHref(r.lot)} className="ck-read ck-ph" data-nav-row data-decision
-        title={r.call.derivation ? `${r.call.text} below market: ${r.call.derivation}${r.call.net ? ` · ${r.call.net}` : ''}` : `${r.call.text} below market — the engine's flag`}>
-        <Thumb src={r.lot.imageUrl} label={r.lot.title} size={64} tone="up" />
-        <span className="ck-tag" data-tone="up">{r.call.text} below</span>
-        <span className="ck-read-title">{craftTitle(r.lot.title, r.lot.auctionHouse)}</span>
-        <span className="ck-read-fact" style={{ whiteSpace: 'normal' }}>
-          {who ? <>{who} · </> : null}{r.lot.auctionHouse}
-          {comps && <> · comps median {comps.text} · {comps.n.toLocaleString('en-US')} {comps.n === 1 ? 'sale' : 'sales'}</>}
-        </span>
-        <span style={{ flex: '1 1 100%', minWidth: 0 }}>
-          <BuyDecision lot={r.lot} now={now} />
-        </span>
-      </Link>
-      <button type="button" className="ray-toolbar-pill ck-budget-watch" data-active={saved} aria-pressed={saved} onClick={onWatch}
+    <DeskRow lot={r.lot} tone="up" wrap
+      attrs={{ title: r.call.derivation ? `${r.call.text} below market: ${r.call.derivation}${r.call.net ? ` · ${r.call.net}` : ''}` : `${r.call.text} below market — the engine's flag` }}
+      tag={{ text: `${r.call.text} below`, tone: 'up' }}
+      sub={<>
+        {who ? <>{who} · </> : null}{r.lot.auctionHouse}
+        {comps && <> · comps median {comps.text} · {comps.n.toLocaleString('en-US')} {comps.n === 1 ? 'sale' : 'sales'}</>}
+      </>}
+      figure={<span data-quiet={price.quiet || undefined}>{price.fig}</span>} figureSub={price.sub}
+      decision={<BuyDecision lot={r.lot} now={now} />}
+      action={<button type="button" className="ray-toolbar-pill ck-budget-watch" data-active={saved} aria-pressed={saved} onClick={onWatch}
         aria-label={saved ? `Stop watching ${short}` : `Watch ${short}`}>
         {saved ? 'Watching' : 'Watch'}
-      </button>
-    </div>
+      </button>} />
   );
 }
 
@@ -423,7 +417,7 @@ export default function BudgetDesk(props: SectionProps) {
                 <p className="ck-budget-empty">Tell the desk your markets — a follow, or the quick start&rsquo;s taps — and this reads them live, lot by lot.</p>
               </div>
             ) : buys.rows.length ? (
-              <div role="group" aria-label="Below-market lots inside your budget this week">
+              <div className="dk-list" role="group" aria-label="Below-market lots inside your budget this week">
                 {buys.rows.map(r => (
                   <BuyRowView key={r.lot.id} r={r} now={now} saved={desk.savedIds.has(r.lot.id)} onWatch={() => act.toggleSave(r.lot)} />
                 ))}

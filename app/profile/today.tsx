@@ -54,8 +54,10 @@ type Row = { key: string; group: 'closing' | 'top' | 'new' | 'reads'; tag: React
   decision?: React.ReactNode };
 
 const PER_COL = 3;
-/** your own watches closing tonight never fold behind picks — up to this many show (Oct 20) */
-const CLOSING_OPEN = 6;
+/** your own watches closing tonight never fold behind picks — up to this
+ *  many show (Oct 20; THE DESK v4: three, so results + closing + Top 3 fit
+ *  one desktop screen — the rest ride "+N more today") */
+const CLOSING_OPEN = 3;
 /** the picks strip's size */
 export const TOP_N = 3;
 

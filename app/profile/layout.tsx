@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 // the desk's one row grammar (desk/row.tsx) — a global sheet, so every room
 // that prints a lot row reads it from the layout, not from each room
 import './styles/row.css';
+// the rooms' own seats for the grammar (heads, folds, the paper band)
+import './styles/rooms.css';
 
 export const metadata: Metadata = {
   // the page calls itself "My profile" everywhere (nav, masthead, ⌘K) — the

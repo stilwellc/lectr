@@ -50,7 +50,7 @@ export function withUndoSeat<T extends { lot: { id: string } }>(list: T[], undo:
 
 const pill: React.CSSProperties = { fontSize: 12.5, padding: '5px 12px' };
 
-export function PickFeedback({ lot, mark, onMark, at, inset, tight }: {
+export function PickFeedback({ lot, mark, onMark, at, inset, tight, bare }: {
   lot: AuctionLot;
   mark: MarkKind | null | undefined;
   onMark: (kind: MarkKind, lot: AuctionLot, at: number) => void;
@@ -59,10 +59,12 @@ export function PickFeedback({ lot, mark, onMark, at, inset, tight }: {
   inset?: boolean;
   /** a table row: closer to the line above */
   tight?: boolean;
+  /** (THE DESK v4) the two pills alone, no wrapper — a DeskRow's action slot lays them out */
+  bare?: boolean;
 }) {
   const t = craftTitle(lot.title, lot.auctionHouse);
-  return (
-    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: inset ? 0 : tight ? 6 : 10, ...(inset ? { padding: '0 2px 10px calc(56px + var(--space-3) + 2px)' } : null) }}>
+  const pills = (
+    <>
       <button type="button" className="ray-toolbar-pill" style={pill} data-active={mark === 'more'} aria-pressed={mark === 'more'}
         aria-label={`More like this: ${t}`} title="Lean your picks toward lots like this one (kept on this device)"
         onClick={e => { e.stopPropagation(); onMark('more', lot, at); }}>
@@ -73,6 +75,12 @@ export function PickFeedback({ lot, mark, onMark, at, inset, tight }: {
         onClick={e => { e.stopPropagation(); onMark('less', lot, at); }}>
         Not for me
       </button>
+    </>
+  );
+  if (bare) return pills;
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: inset ? 0 : tight ? 6 : 10, ...(inset ? { padding: '0 2px 10px calc(56px + var(--space-3) + 2px)' } : null) }}>
+      {pills}
     </div>
   );
 }

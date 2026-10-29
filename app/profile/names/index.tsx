@@ -29,8 +29,15 @@
  * Phone (R2): one name open per market, the rest folded behind "Show N
  * more" with their live counts visible; the head reads "Names" with the
  * full title in its sub-line; every tap clears a 40px hit area.
+ *
+ * (THE DESK v4, Oct 29 2026) a sale is the desk's one row (../desk/row
+ * DeskRow): the lot's photo and title (a sale of several lots: its first
+ * photo, "N lots · house · sale"), the estimate band / live bids / flags on
+ * the sub-line, the close as the figure; Comps (the one-lot sale's modal)
+ * or See lots in the action slot.
  */
-import { Thumb } from '../desk/thumb';
+import { DeskRow, type RowLot } from '../desk/row';
+import { craftTitle } from '../../utils';
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../../types';
@@ -218,31 +225,21 @@ function PulseLine({ p, label }: { p: Pulse; label: string }) {
 function SaleRow({ s, now, href, onOpen }: { s: Sale; now: number; href: string; onOpen: (l: AuctionLot) => void }) {
   const w = whenText(s, now);
   const one = s.lots.length === 1 ? s.lots[0] : null;
+  // a sale of several lots prints as one row: its first photo, the count, the house and the sale
+  const lead = s.lots.find(l => l.imageUrl) ?? s.lots[0];
+  const lot: RowLot = one ?? { id: s.key, title: `${n2(s.lots.length)} lots · ${s.house}${s.saleName ? ` · ${s.saleName}` : ''}`, auctionHouse: s.house, imageUrl: lead?.imageUrl };
   return (
-    <li className="nm-sale" data-soon={w.soon || undefined}>
-      <span className="nm-sale-when">
-        <b>{w.lead}</b>
-        {w.sub && <span className="nm-n">{w.sub}</span>}
-      </span>
-      <span className="nm-sale-main">
-        {/* the sale's first lots as an overlapping photo stack */}
-        <span className="nm-sale-ph" aria-hidden="true">
-          {s.lots.filter(l => l.imageUrl).slice(0, 4).map(l => <Thumb key={l.id} src={l.imageUrl} label={l.title} size={40} />)}
-          {s.lots.length > 4 && <span className="nm-sale-ph-n">+{n2(s.lots.length - 4)}</span>}
-        </span>
-        <span className="nm-sale-house">{s.house}{s.saleName ? <span className="nm-sale-name"> · {s.saleName}</span> : null}</span>
-        <span className="nm-sale-fact">
-          {one ? <span className="nm-sale-title">{one.title}</span> : <>{n2(s.lots.length)} lots</>}
-          {' · '}{estText(s)}
-          {s.flagged > 0 && <> · <b className="nm-flag">{s.flagged === s.lots.length && s.lots.length > 1 ? 'all' : s.flagged} below market</b></>}
-        </span>
-      </span>
-      <span className="nm-sale-act">
-        {one
-          ? <button type="button" className="nm-link" onClick={() => onOpen(one)} aria-label={`Open ${one.title}`}>Open</button>
-          : <Link href={href} className="nm-link" aria-label={`See ${s.lots.length} lots at ${s.house}`}>See lots</Link>}
-      </span>
-    </li>
+    <DeskRow as="li" lot={lot} href={one ? undefined : href} title={one ? craftTitle(one.title, one.auctionHouse) : lot.title} who={one ? undefined : s.house}
+      attrs={{ 'data-soon': w.soon ? '' : undefined }}
+      sub={<>
+        {one ? <>{s.house}{s.saleName ? ` · ${s.saleName}` : ''} · </> : null}
+        {estText(s)}
+        {s.flagged > 0 && <> · <b className="nm-flag">{s.flagged === s.lots.length && s.lots.length > 1 ? 'all' : s.flagged} below market</b></>}
+      </>}
+      figure={<span className="dk-clock" data-soon={w.soon || undefined}>{w.lead}</span>} figureSub={w.sub}
+      action={one
+        ? <button type="button" className="dk-link" onClick={() => onOpen(one)} aria-label={`Comps for ${one.title}`}>Comps</button>
+        : <Link href={href} className="dk-link" aria-label={`See ${s.lots.length} lots at ${s.house}`}>See lots</Link>} />
   );
 }
 
@@ -267,8 +264,8 @@ function BlindLine({ bs, read, fail, slow, hasEntity }: { bs: BlindSpot | null; 
   return <p className="nm-blind">{bits.map((b, i) => <React.Fragment key={i}>{i > 0 ? <span className="nm-dot" aria-hidden>·</span> : null}{b}</React.Fragment>)}</p>;
 }
 
-function NameRow({ r, sold, capped, now, narrow, onOpen, onFollow }: {
-  r: NameRead; sold: Sold | undefined; capped: boolean; now: number; narrow: boolean;
+function NameRow({ r, sold, capped, now, onOpen, onFollow }: {
+  r: NameRead; sold: Sold | undefined; capped: boolean; now: number;
   onOpen: (l: AuctionLot) => void; onFollow: (n: DeskName) => void;
 }) {
   const { name } = r;
@@ -306,7 +303,7 @@ function NameRow({ r, sold, capped, now, narrow, onOpen, onFollow }: {
       {name.id && capped && <p className="nm-pulse">Calendar only</p>}
       {!name.id && <p className="nm-pulse">{name.follow.kind === 'cat' ? 'Category' : 'Collection'} follow · live lots only — no single name to read a sold history for</p>}
       {live ? (
-        <ul className="nm-sales" aria-label={`${name.label}, upcoming sales`}>
+        <ul className="nm-sales dk-list" aria-label={`${name.label}, upcoming sales`}>
           {(allSales ? r.sales : r.sales.slice(0, SALES_SHOWN)).map(s => <SaleRow key={s.key} s={s} now={now} href={href} onOpen={onOpen} />)}
           {r.sales.length > SALES_SHOWN && (
             <li className="nm-sale nm-sale-more">
@@ -346,7 +343,7 @@ function MarketGroup({ label, reads, now, narrow, sold, readSet, onOpen, onFollo
       </div>
       <div role="list" aria-label={`${label} names`}>
         {open.map(r => (
-          <NameRow key={r.name.key} r={r} now={now} narrow={narrow}
+          <NameRow key={r.name.key} r={r} now={now}
             sold={r.name.id ? sold?.get(r.name.id) : undefined}
             capped={!!r.name.id && !readSet.has(r.name.id)}
             onOpen={onOpen} onFollow={onFollow} />

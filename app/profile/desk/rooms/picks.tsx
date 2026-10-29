@@ -5,31 +5,38 @@
  * you hold (For your collection, ../collection), and how the picks it showed
  * you closed (How your picks did, ../outcomes). One plate, one rail pill;
  * the two followers are sub-rooms.
+ *
+ * (THE DESK v4, Oct 29 2026) every pick is the desk's one row (../row
+ * DeskRow): photo · title · maker / house / the reason (recNote) · the
+ * decision line · the estimate or live bid as the figure · Watch and More
+ * like this / Not for me (a phone: the ⋯ sheet) in the action slot. The
+ * deal's order is kept as the engine ranked it — a "New to you" tag marks
+ * the discover lane, "Below market" the engine's flag — rather than regrouped
+ * under seed heads, so the strongest ties still lead and Show more pages on.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { AuctionLot } from '../../../types';
-import LotCard from '../../../components/LotCard';
 import { RankMark } from '../../../components/marks';
-import { FeedRow, belowSignalOf, feedTone } from '../../../components/LotBrowser';
-import ComparableModal from '../../../components/ComparableModal';
-import { useLotModal } from '../../../lib/use-lot-modal';
+import { belowSignalOf, feedTone } from '../../../components/LotBrowser';
 import { recNote, type Taste, type Rec } from '../../../lib/recs';
+import { DeskRow, priceFigureOf, rowWhoOf } from '../row';
 import { PickFeedback, UndoSeat, usePickFeedback, withUndoSeat } from '../../../components/PickFeedback';
 import QuickStart from '../../../components/QuickStart';
 import { usePricePref, priceText } from '../../../lib/interests';
 import DecisionLine from '../../../components/DecisionLine';
 import { useLogPicks } from '../../../lib/pick-log';
+import { craftTitle } from '../../../utils';
 import { RoomHead } from '../../head';
 import { useGridCols, PickSkeleton } from '../../grid';
 import PickMenu from '../../pickmenu';
 import PickOutcomes from '../../outcomes';
 import ForYourCollection from '../../collection';
 import { useStalled } from '../../stall';
-import { useDeskInternals, type Deal, type DeskInternals } from '../provider';
+import { useDeskInternals, useDesk, type Deal, type DeskInternals } from '../provider';
 import { jump } from '../../rail';
 import type { SectionProps, SectionMeta, DeskData } from '../types';
 
-export function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSaved, onToggleSave, compact = false, top }: {
+export function RecsRoom({ book, deal, compLots, taste, ready, isSaved, onToggleSave, compact = false, top }: {
   book: AuctionLot[]; deal: Deal; compLots: AuctionLot[]; taste: Taste; ready: boolean; lastCrawl?: string;
   isSaved: (id: string) => boolean; onToggleSave: (id: string, lot?: AuctionLot) => void; signedOut?: boolean;
   /** a desk with live watches: the picks open as one row, Show more deals the rest */
@@ -71,15 +78,12 @@ export function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSave
   }, [editing]);
   const below = useMemo(() => belowSignalOf(recs.map(r => r.lot), compLots), [recs, compLots]);
   const cols = useGridCols();
-  // (Oct 20 audit) a phone reads picks as photo cards too — the feed, not 56px rows;
-  // the compact row list stays for a reader who chose it (?picks=rows)
-  const narrow = cols === 1 && typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('picks') === 'rows';
-  // two full rows of the desk's card grid (3 across at the rail's width,
-  // 2 from 600–899) — one row on a desk whose own watches lead the page
-  const page = compact ? (cols === 1 ? 3 : cols) : 6;
+  // a phone keeps the ⋯ sheet for More like this / Not for me (44px targets)
+  const { narrow } = useDesk();
+  // the rows the room opens on: six (a desk whose own watches lead the page: three)
+  const page = compact ? 3 : 6;
   const [shown, setShown] = useState<number | null>(null);
   const visible = shown ?? page;
-  const [openLot, setOpenLot] = useLotModal<AuctionLot>();
   // "More like this / Not for me" — this device only (app/lib/recs-signals)
   const fb = usePickFeedback();
 
@@ -179,35 +183,31 @@ export function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSave
             </p>
             {!editing && <button type="button" className="ray-toolbar-pill" style={{ marginTop: 14 }} onClick={() => setEditing(true)}>Add a follow</button>}
           </div>
-        ) : narrow ? (
-          <div>
-            {seats.map((r, i) => ('undoSeat' in r
-              ? <UndoSeat key={`undo-${r.undoSeat.id}`} undo={r.undoSeat} onUndo={fb.undoIt} row />
-              : (
-                <div key={r.lot.id} className="ck-pickrow" data-pick={r.lot.id} data-nav-row>
-                  {/* the reason is the row's one line that never truncates
-                      (the honesty payload) — it wraps; the price rides under */}
-                  <FeedRow stack lot={r.lot} onOpen={() => setOpenLot(r.lot)}
-                    tone={feedTone(r.lot, below.ids, below.hasSig)} note={recNote(r)}
-                    decision={<DecisionLine lot={r.lot} estimate={false} />} />
-                  <PickMenu lot={r.lot} mark={fb.marks.get(r.lot.id)} onMark={fb.mark} at={i} />
-                </div>
-              )))}
-          </div>
         ) : (
-          <div className="ray-saved-grid ck-picks">
-            {seats.map((r, i) => ('undoSeat' in r
-              // the seat spans the grid's row as one slim strip (the grid packs
-              // densely around it) — a hidden pick never leaves a blank card slot
-              ? <div key={`undo-${r.undoSeat.id}`} className="ck-undoseat"><UndoSeat undo={r.undoSeat} onUndo={fb.undoIt} /></div>
-              : (
-              // the card fills its row; the pick's feedback rides under it
-              <div key={r.lot.id} data-pick={r.lot.id} data-nav-row className="ray-enter-card" style={{ '--enter-delay': `${Math.min(i, 8) * 60}ms`, display: 'grid', gridTemplateRows: 'minmax(0, 1fr) auto' } as React.CSSProperties}>
-                <LotCard lot={r.lot} showArtist subjectMaker allLots={compLots} saved={isSaved(r.lot.id)} onToggleSave={onToggleSave}
-                  lastCrawl={lastCrawl} note={recNote(r)} decision={<DecisionLine lot={r.lot} estimate={false} />} />
-                <PickFeedback lot={r.lot} mark={fb.marks.get(r.lot.id)} onMark={fb.mark} at={i} />
-              </div>
-            )))}
+          <div className="dk-list ck-picks-list">
+            {seats.map((r, i) => {
+              if ('undoSeat' in r) return <UndoSeat key={`undo-${r.undoSeat.id}`} undo={r.undoSeat} onUndo={fb.undoIt} row />;
+              const price = priceFigureOf(r.lot);
+              const saved = isSaved(r.lot.id);
+              const tone = feedTone(r.lot, below.ids, below.hasSig);
+              return (
+                <DeskRow key={r.lot.id} lot={r.lot} pick={r.lot.id} wrap tone={tone}
+                  // the reason is the row's honesty payload — it wraps, never cut
+                  sub={<>{[rowWhoOf(r.lot), r.lot.auctionHouse].filter(Boolean).join(' · ')} · <b>{recNote(r)}</b></>}
+                  tag={r.lane === 'discover' ? { text: 'New to you' } : r.flagged ? { text: 'Below market', tone: 'up' } : null}
+                  figure={<span data-quiet={price.quiet || undefined}>{price.fig}</span>} figureSub={price.sub}
+                  decision={<DecisionLine lot={r.lot} estimate={false} abstain="quiet" />}
+                  action={<>
+                    <button type="button" className="ray-toolbar-pill" data-active={saved} aria-pressed={saved} onClick={() => onToggleSave(r.lot.id, r.lot)}
+                      aria-label={saved ? `Stop watching ${craftTitle(r.lot.title, r.lot.auctionHouse)}` : `Watch ${craftTitle(r.lot.title, r.lot.auctionHouse)}`}>
+                      {saved ? 'Watching' : 'Watch'}
+                    </button>
+                    {narrow
+                      ? <PickMenu lot={r.lot} mark={fb.marks.get(r.lot.id)} onMark={fb.mark} at={i} />
+                      : <PickFeedback lot={r.lot} mark={fb.marks.get(r.lot.id)} onMark={fb.mark} at={i} bare />}
+                  </>} />
+              );
+            })}
           </div>
         )}
 
@@ -219,7 +219,6 @@ export function RecsRoom({ book, deal, compLots, taste, ready, lastCrawl, isSave
           </div>
         )}
       </div>
-      {openLot && <ComparableModal lot={openLot} allLots={compLots} onClose={() => setOpenLot(null)} />}
     </section>
   );
 }

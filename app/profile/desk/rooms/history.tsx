@@ -5,11 +5,11 @@
  * page (LedgerGate) only when there are orphans to resolve; a fetch in
  * flight or failed is never printed as "withdrawn".
  */
-import { Thumb, SigPill } from '../thumb';
+import { SigPill } from '../thumb';
+import { DeskRow } from '../row';
 import React, { useState } from 'react';
-import Link from 'next/link';
 import { retrySoldLedger, useSoldLedger } from '../../../hooks/useRayData';
-import type { SavedMeta } from '../../../lib/account';
+import { signalCallOf, type SavedMeta } from '../../../lib/account';
 import LotCard, { formatEstimate } from '../../../components/LotCard';
 import { TapeMark, ArchiveMark, HorizonMark } from '../../../components/marks';
 import DecisionLine from '../../../components/DecisionLine';
@@ -17,9 +17,9 @@ import { formatDate, craftTitle, fmtSignedPct, overEstimatePct } from '../../../
 import { fmtFace } from '../../../lib/lot-face';
 import { makerLineOf } from '../../../lib/lot-labels';
 import { RoomHead } from '../../head';
-import { useDeskInternals, type DeskInternals, type LedgerState, type SettledRowData } from '../provider';
+import { useDeskInternals, useDesk, type DeskInternals, type LedgerState, type SettledRowData } from '../provider';
 import type { SectionProps, SectionMeta, DeskData } from '../types';
-import { Term, CallCell } from './shared';
+import { GLOSSARY, callText } from './shared';
 import { PHONE_ROWS } from './watching';
 
 /** Mount-triggered sold-ledger fetch — lifts data AND load/error state, so a
@@ -30,8 +30,14 @@ export function LedgerGate({ onState }: { onState: (s: LedgerState) => void }) {
   return null;
 }
 
-/* ── SETTLED — one row implementation for both shells ── */
-const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, savedId, onOwn, onRemove, mobile }: {
+/* ── SETTLED — one row at every width (THE DESK v4: ../row DeskRow): the
+   hammer is the figure, vs estimate under it as the lamp pill; the maker,
+   the house, the estimate (an archived save: as it stood at save) and your
+   call at save ride the lines; I won it and Remove are the actions ── */
+const callInk = (call: ReturnType<typeof signalCallOf>) =>
+  !call ? undefined : call.dir === 'unknown' ? 'var(--color-text-muted)' : call.dir === 'below' ? 'var(--color-up)' : 'var(--color-down-text)';
+
+const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, savedId, onOwn, onRemove }: {
   row: SettledRowData;
   meta: SavedMeta | undefined;
   owned: boolean;
@@ -39,8 +45,22 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
   savedId: string;
   onOwn: (savedId: string) => void;
   onRemove: (savedId: string) => void;
-  mobile: boolean;
 }) {
+  const call = signalCallOf(meta);
+  const callFact = call ? (
+    <span className="dk-meta-fact" style={{ color: callInk(call) }}
+      title={call.dir === 'unknown' ? 'Saved before signals recorded their direction — magnitude only.' : 'The engine’s signal as it stood when you saved the lot'}>
+      called {callText(call)}
+    </span>
+  ) : null;
+  const actions = (name: string, canOwn: boolean, why: string) => (
+    <>
+      {canOwn
+        ? <button className="ray-own-btn" data-on={owned} aria-pressed={owned} onClick={() => onOwn(savedId)}>{owned ? 'Owned' : 'I won it'}</button>
+        : <span style={{ fontSize: 11.5, color: 'var(--color-text-faint)' }}>{why}</span>}
+      <button className="ray-own-x" title="Remove this watch from your desk" aria-label={`Remove watch: ${name}`} onClick={() => onRemove(savedId)}>×</button>
+    </>
+  );
   if (row.kind === 'ledger') {
     const o = row.o;
     // the save's own estimate (frozen at save time) can still judge an
@@ -48,143 +68,36 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
     const vsSaveEst = meta?.estMid && o.priceUsd && !o.provisional
       ? Math.round((o.priceUsd / meta.estMid - 1) * 100) : null;
     const name = meta?.title || 'Archived lot';
-    const price = o.provisional
-      ? <span style={{ color: 'var(--color-text-muted)', fontWeight: 500 }} title="Sold — final price settling; the house posts results shortly after the close.">settling…</span>
-      : fmtFace(o.priceUsd);
-    if (mobile) {
-      return (
-        <div className="ray-settled-mrow ck-ph" style={{ '--ph': '56px' } as React.CSSProperties}>
-          <Thumb label={(meta?.artist ? makerLineOf({ artist: meta.artist, title: meta.title }).name : '') || name} size={56} />
-          <div className="ck-mtitle">{name}</div>
-          <div className="ck-mline">
-            <span className="ck-msub">
-              {(meta?.artist ? makerLineOf({ artist: meta.artist, title: meta.title }).name : '') || 'archive'}
-              {meta?.estMid != null && <> · est. {fmtFace(meta.estMid)} at save</>}
-            </span>
-            <span className="ck-mnum">
-              {price}
-              {vsSaveEst != null && (
-                <b style={{ marginLeft: 6, color: vsSaveEst > 0 ? 'var(--color-up)' : vsSaveEst < 0 ? 'var(--color-down-text)' : 'var(--color-text-muted)' }}>
-                  {fmtSignedPct(vsSaveEst)}
-                </b>
-              )}
-            </span>
-          </div>
-          <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 10 }}>
-            {o.provisional ? (
-              <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>price settling</span>
-            ) : (
-              <button className="ray-own-btn" data-on={owned} aria-pressed={owned} onClick={() => onOwn(savedId)}>
-                {owned ? 'Owned' : 'I won it'}
-              </button>
-            )}
-            <button className="ray-own-x" title="Remove this watch from your desk" aria-label={`Remove watch: ${name}`} onClick={() => onRemove(savedId)}>×</button>
-          </div>
-        </div>
-      );
-    }
+    const maker = (meta?.artist ? makerLineOf({ artist: meta.artist, title: meta.title }).name : '') || '';
     return (
-      <div className="ray-settled-cols ray-savedrow" style={{ display: 'grid' }}>
-        <span className="maker">{(meta?.artist ? makerLineOf({ artist: meta.artist, title: meta.title }).name : '') || '—'}</span>
-        {/* an archived save carries no photo: its maker's initial keeps the column's edge */}
-        <span className="work ck-ph" style={{ '--ph': '40px', alignItems: 'center' } as React.CSSProperties}>
-          <Thumb label={(meta?.artist ? makerLineOf({ artist: meta.artist, title: meta.title }).name : '') || name} size={40} />
-          <span style={{ alignSelf: 'center', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}<span style={{ color: 'var(--color-text-faint)' }}> · archive</span></span>
-        </span>
-        <span className="num" style={{ color: meta?.estMid != null ? undefined : 'var(--color-text-faint)' }}
-          title={meta?.estMid != null ? 'The estimate as it stood when you saved the lot' : 'No estimate published'}>
-          {meta?.estMid != null ? <>{fmtFace(meta.estMid)}<span className="sub">at save</span></> : '—'}
-        </span>
-        <CallCell meta={meta} />
-        <span className="num" style={{ fontWeight: 600 }}>{price}</span>
-        <span className="num" style={vsSaveEst != null ? undefined : { color: 'var(--color-text-faint)' }}
-          title={vsSaveEst != null ? 'vs the estimate at save — all-in price against the estimate midpoint' : 'No estimate on file — outside the vs-est median'}>
-          {vsSaveEst != null ? <><SigPill dir={vsSaveEst > 0 ? 'up' : vsSaveEst < 0 ? 'down' : 'flat'}>{fmtSignedPct(vsSaveEst)}</SigPill><span className="sub">vs est at save</span></> : '—'}
-        </span>
-        <span style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-          {o.provisional ? (
-            <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>—</span>
-          ) : (
-            <button className="ray-own-btn" data-on={owned} aria-pressed={owned} onClick={() => onOwn(savedId)}>
-              {owned ? 'Owned' : 'I won it'}
-            </button>
-          )}
-          <button className="ray-own-x" title="Remove this watch from your desk" aria-label={`Remove watch: ${name}`} onClick={() => onRemove(savedId)}>×</button>
-        </span>
-      </div>
+      // an archived save carries no photo: its maker's initial keeps the row's edge
+      <DeskRow lot={{ id: o.id, title: name }} title={name} who={maker || name}
+        sub={[maker || 'archive', meta?.estMid != null ? `est. ${fmtFace(meta.estMid)} at save` : null].filter(Boolean).join(' · ')}
+        meta={callFact ?? undefined}
+        figure={o.provisional
+          ? <span data-quiet title="Sold — final price settling; the house posts results shortly after the close.">settling…</span>
+          : fmtFace(o.priceUsd)}
+        figureSub={vsSaveEst != null
+          ? <><SigPill dir={vsSaveEst > 0 ? 'up' : vsSaveEst < 0 ? 'down' : 'flat'}>{fmtSignedPct(vsSaveEst)}</SigPill> <span title={GLOSSARY['vs estimate']}>vs est at save</span></>
+          : <span title="No estimate on file — outside the vs-est median">archive</span>}
+        action={actions(name, !o.provisional, 'price settling')} />
     );
   }
-
   const lot = row.lot;
   const pct = overEstimatePct(lot);
   const pending = !lot.priceUsd;
-  if (mobile) {
-    return (
-      <div className="ray-settled-mrow ck-ph" style={{ '--ph': '56px' } as React.CSSProperties}>
-        <Thumb src={lot.imageUrl} label={lot.title} size={56} />
-        <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-          <div className="ck-mtitle">{craftTitle(lot.title, lot.auctionHouse)}</div>
-        </Link>
-        <div className="ck-mline">
-          <span className="ck-msub">{makerLineOf(lot).name}</span>
-          <span className="ck-mnum">
-            {pending ? <span style={{ color: 'var(--color-text-faint)' }}>pending</span> : (
-              <>
-                <b>{fmtFace(lot.priceUsd!)}</b>
-                {pct != null && (
-                  <span style={{ marginLeft: 6 }}><SigPill dir={pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat'} title="the hammer vs the estimate">{fmtSignedPct(Math.round(pct))}</SigPill></span>
-                )}
-              </>
-            )}
-          </span>
-        </div>
-        <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 10 }}>
-          {pending ? (
-            // no price yet — claiming it now would enter a $null piece into
-            // the collection; the button arrives with the result
-            <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>result pending</span>
-          ) : (
-            <button className="ray-own-btn" data-on={owned} aria-pressed={owned} onClick={() => onOwn(savedId)}>
-              {owned ? 'Owned' : 'I won it'}
-            </button>
-          )}
-          <button className="ray-own-x" title="Remove this watch from your desk" aria-label={`Remove watch: ${craftTitle(lot.title, lot.auctionHouse)}`} onClick={() => onRemove(savedId)}>×</button>
-        </div>
-      </div>
-    );
-  }
+  const name = craftTitle(lot.title, lot.auctionHouse);
   return (
-    <div className="ray-settled-cols ray-savedrow" style={{ display: 'grid' }}>
-      <span className="maker">
-        <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-          {makerLineOf(lot).name || '—'}
-        </Link>
-      </span>
-      <span className="work ck-ph" style={{ '--ph': '40px', alignItems: 'center' } as React.CSSProperties}>
-        <Thumb src={lot.imageUrl} label={lot.title} size={40} />
-        <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} style={{ color: 'inherit', textDecoration: 'none', alignSelf: 'center', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {craftTitle(lot.title, lot.auctionHouse)}
-        </Link>
-      </span>
-      <span className="num">{formatEstimate(lot) || '—'}</span>
-      <CallCell meta={meta} />
-      <span className="num" style={{ fontWeight: 600 }}>
-        {pending ? <span style={{ color: 'var(--color-text-faint)', fontWeight: 500 }}>pending</span> : fmtFace(lot.priceUsd!)}
-      </span>
-      <span className="num" style={pct != null ? undefined : { color: 'var(--color-text-faint)' }}>
-        {pct != null ? <SigPill dir={pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat'}>{fmtSignedPct(Math.round(pct))}</SigPill> : '—'}
-      </span>
-      <span style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-        {pending ? (
-          <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>—</span>
-        ) : (
-          <button className="ray-own-btn" data-on={owned} aria-pressed={owned} onClick={() => onOwn(savedId)}>
-            {owned ? 'Owned' : 'I won it'}
-          </button>
-        )}
-        <button className="ray-own-x" title="Remove this watch from your desk" aria-label={`Remove watch: ${craftTitle(lot.title, lot.auctionHouse)}`} onClick={() => onRemove(savedId)}>×</button>
-      </span>
-    </div>
+    <DeskRow lot={lot} who={makerLineOf(lot).name || lot.title}
+      sub={[makerLineOf(lot).name, lot.auctionHouse, formatEstimate(lot)].filter(Boolean).join(' · ')}
+      meta={callFact ?? undefined}
+      figure={pending ? <span data-quiet>pending</span> : fmtFace(lot.priceUsd!)}
+      figureSub={pct != null
+        ? <><SigPill dir={pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat'}>{fmtSignedPct(Math.round(pct))}</SigPill> <span title={GLOSSARY['vs estimate']}>vs est</span></>
+        : pending ? null : <span title="No estimate on file — outside the vs-est median">no estimate</span>}
+      // no price yet — claiming it now would enter a $null piece into the
+      // collection; the button arrives with the result
+      action={actions(name, !pending, 'result pending')} />
   );
 });
 
@@ -198,8 +111,10 @@ export function meta(_desk: DeskData, i: DeskInternals): SectionMeta | null {
 
 export default function HistoryRoom(_p: SectionProps) {
   const i = useDeskInternals();
-  const { sold, soldOrphans, goneOrphans, orphanIds, other, settledRows, settledCount, settledHasCall, record, unclaimedWins,
+  const { narrow } = useDesk();
+  const { sold, soldOrphans, goneOrphans, orphanIds, other, settledRows, settledCount, record, unclaimedWins,
     metaFor, savedMeta, ownedLotIds, ownedIdSet, savedIdOf, onSettledOwn, onSettledRemove, ledgerState, allLots, isSaved, onCardToggle, toggle, isDesktop } = i;
+  // a phone opens on the most recent rows; the rest are one tap
   const [allSettled, setAllSettled] = useState(false);
   return (
     <div id="history" className="ck-history">
@@ -216,18 +131,8 @@ export default function HistoryRoom(_p: SectionProps) {
           </p>
         )}
 
-        {/* "Your call" folds when no settled save recorded one */}
-        <div className="ray-settled-desk" style={{ marginTop: 12 }} data-nocall={settledHasCall ? undefined : ''}>
-          <div className="ray-settled-cols ray-settled-head kicker" style={{ padding: '0 2px 8px' }}>
-            <span>Maker</span>
-            <span>Work</span>
-            <span style={{ textAlign: 'right' }}>Est</span>
-            <span style={{ textAlign: 'right' }}>Your call</span>
-            <span style={{ textAlign: 'right' }}>Realized</span>
-            <span style={{ textAlign: 'right' }}><Term k="vs estimate">vs est</Term></span>
-            <span style={{ textAlign: 'right' }}>Own it</span>
-          </div>
-          {settledRows.map(row => {
+        <div className="dk-list" style={{ marginTop: 10 }}>
+          {(narrow && !allSettled ? settledRows.slice(0, PHONE_ROWS) : settledRows).map(row => {
             const key = row.kind === 'lot' ? row.lot.id : row.o.id;
             const meta = row.kind === 'lot' ? metaFor(row.lot.id) : savedMeta[row.o.id];
             return (
@@ -239,34 +144,15 @@ export default function HistoryRoom(_p: SectionProps) {
                 savedId={row.kind === 'lot' ? savedIdOf(row.lot.id) : row.o.id}
                 onOwn={onSettledOwn}
                 onRemove={onSettledRemove}
-                mobile={false}
               />
             );
           })}
         </div>
-        <div className="ray-settled-mobile">
-          {(allSettled ? settledRows : settledRows.slice(0, PHONE_ROWS)).map(row => {
-            const key = row.kind === 'lot' ? row.lot.id : row.o.id;
-            const meta = row.kind === 'lot' ? metaFor(row.lot.id) : savedMeta[row.o.id];
-            return (
-              <SettledRowView
-                key={key}
-                row={row}
-                meta={meta}
-                owned={row.kind === 'lot' ? ownedLotIds.has(row.lot.id) : ownedIdSet.has(row.o.id)}
-                savedId={row.kind === 'lot' ? savedIdOf(row.lot.id) : row.o.id}
-                onOwn={onSettledOwn}
-                onRemove={onSettledRemove}
-                mobile
-              />
-            );
-          })}
-          {settledRows.length > PHONE_ROWS && (
-            <button type="button" className="ck-today-more" aria-expanded={allSettled} onClick={() => setAllSettled(v => !v)}>
-              {allSettled ? 'Show fewer' : `Show all ${settledRows.length} settled`}
-            </button>
-          )}
-        </div>
+        {narrow && settledRows.length > PHONE_ROWS && (
+          <button type="button" className="ck-today-more" aria-expanded={allSettled} onClick={() => setAllSettled(v => !v)}>
+            {allSettled ? 'Show fewer' : `Show all ${settledRows.length} settled`}
+          </button>
+        )}
         </div>
       </section>
     )}

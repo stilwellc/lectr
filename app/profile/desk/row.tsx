@@ -15,8 +15,15 @@
  *
  *   figure   the ONE number that answers the room: Watching = the live bid
  *            or the estimate (My max under it); Your week = the close
- *            clock; Today = the clock.
- *   action   one inline slot (I won it · Remove · Bid ↗ · Details ›).
+ *            clock; Today = the clock; For you / Budget = the estimate or
+ *            the plan figure; Collection / Portfolio = the mark with its
+ *            measured delta; History / Your calls = the hammer.
+ *   action   one inline slot (I won it · Remove · Bid ↗ · Watch · Details ›).
+ *
+ * (pass 2) a row needs only a RowLot — id, title, house, photo — so an
+ * archived save, a graded call or a pick's snapshot prints in the same
+ * grammar as a live AuctionLot; `href` points a row somewhere other than
+ * its lot (a name's page), `below` hangs an editor under the row.
  *
  * THE WHOLE ROW IS THE LINK to /lot?id= — the title is the <a>, stretched
  * over the row with a pseudo-element, so the DOM never nests a button in a
@@ -44,8 +51,20 @@ import { closeDays, hammerWord } from './derive';
 
 export type RowTone = 'up' | 'down' | 'hot';
 
+/** the least a row needs — a live AuctionLot, an archived save, a graded call's snapshot */
+export type RowLot = { id: string; title: string; auctionHouse?: string | null; imageUrl?: string | null };
+
+/** the maker / subject a RowLot files under (null for a snapshot that names none) */
+export const rowWhoOf = (lot: RowLot): string | null => {
+  try { return displayMakerOf(lot as unknown as AuctionLot)?.name ?? null; } catch { return null; }
+};
+
 export interface DeskRowProps {
-  lot: AuctionLot;
+  lot: RowLot;
+  /** where the row goes (default: the lot's page) */
+  href?: string;
+  /** the photo's fallback letter comes from this (default: the maker, else the title) */
+  who?: string | null;
   /** the title (default: craftTitle — the house's noise trimmed) */
   title?: string;
   /** the sub-line (default: maker · house · estimate — rowSubOf) */
@@ -79,6 +98,8 @@ export interface DeskRowProps {
   className?: string;
   /** the expansion (a dossier) — rendered under the row while expand.open */
   children?: React.ReactNode;
+  /** always under the row, inside the item (an editor, a note) */
+  below?: React.ReactNode;
 }
 
 /** the default sub-line: maker · house · estimate (ONE "priced" rule — a
@@ -87,20 +108,34 @@ export function rowSubOf(lot: AuctionLot): string {
   return [displayMakerOf(lot)?.name, lot.auctionHouse, fromText(lot) ?? formatEstimate(lot)].filter(Boolean).join(' · ');
 }
 
-/** the lot's own URL on the desk */
-export const lotHref = (lot: AuctionLot) => `/lot?id=${encodeURIComponent(lot.id)}`;
+/** the price as a figure + sub pair: a two-sided estimate ("$2K–$3K" ·
+ *  "estimate"), a live bid ("$8K" · "bid · 12 bids"), a one-sided estimate
+ *  ("from $2K" · "estimate"), else the house's words, quiet (ONE "priced"
+ *  rule, ../priced; the printed-bid gate, estimate-text) */
+export function priceFigureOf(lot: AuctionLot): { fig: string; sub: string | null; quiet: boolean } {
+  const from = fromText(lot);
+  if (from) return { fig: from, sub: 'estimate', quiet: false };
+  const t = formatEstimate(lot);
+  if (/ est\.$/.test(t)) return { fig: t.replace(/ est\.$/, ''), sub: 'estimate', quiet: false };
+  if (t.includes(' bid')) { const [lead, ...rest] = t.split(' · '); return { fig: lead.replace(/ bid$/, ''), sub: ['bid', ...rest].join(' · '), quiet: false }; }
+  return { fig: t, sub: null, quiet: true };
+}
 
-export function DeskRow({ lot, title, sub, wrap = false, tag, meta, figure, figureSub, pill, decision, action, tone, expand, pick, as = 'div', attrs, className, children }: DeskRowProps) {
+/** the lot's own URL on the desk */
+export const lotHref = (lot: Pick<RowLot, 'id'>) => `/lot?id=${encodeURIComponent(lot.id)}`;
+
+export function DeskRow({ lot, href, who, title, sub, wrap = false, tag, meta, figure, figureSub, pill, decision, action, tone, expand, pick, as = 'div', attrs, className, children, below }: DeskRowProps) {
   const Outer = as;
   const t = title ?? craftTitle(lot.title, lot.auctionHouse);
+  const letterOf = who === undefined ? rowWhoOf(lot) : who;
   const showMeta = !!tag || meta != null;
   const hasRight = figure != null || figureSub != null;
   return (
     <Outer className={`dk-item${className ? ` ${className}` : ''}`} {...attrs}>
       <div className="dk-row" data-nav-row data-pick={pick} data-open={expand?.open || undefined} data-expand={expand ? '' : undefined}>
-        <Thumb src={lot.imageUrl} label={displayMakerOf(lot)?.name || lot.title} size={56} tone={tone} />
+        <Thumb src={lot.imageUrl} label={letterOf || lot.title} size={56} tone={tone} />
         <div className="dk-main">
-          <Link href={lotHref(lot)} className="dk-title" data-nav-focus={expand ? undefined : ''} title={t}>{t}</Link>
+          <Link href={href ?? lotHref(lot)} className="dk-title" data-nav-focus={expand ? undefined : ''} title={t}>{t}</Link>
           {sub != null && sub !== '' && <span className="dk-sub" data-wrap={wrap || undefined}>{sub}</span>}
           {showMeta && (
             <span className="dk-meta">
@@ -134,6 +169,7 @@ export function DeskRow({ lot, title, sub, wrap = false, tag, meta, figure, figu
         )}
       </div>
       {expand?.open && children}
+      {below}
     </Outer>
   );
 }
