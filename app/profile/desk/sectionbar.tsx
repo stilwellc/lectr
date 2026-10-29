@@ -43,6 +43,10 @@ export function SectionBar({ items }: { items: BarItem[] }) {
   const ref = useRef<HTMLElement | null>(null);
   const [show, setShow] = useState(false);
   const [cur, setCur] = useState<string | null>(null);
+  // the groups whose band has a height (a band that rendered nothing is hidden — no item for it)
+  const [live, setLive] = useState<ReadonlySet<string> | null>(null);
+  // the ink under the current item: left / width, so it slides between items
+  const [ink, setInk] = useState<{ left: number; width: number } | null>(null);
   const key = items.map(t => t.id).join('|');
 
   // shown once the cockpit has scrolled off under the nav; hidden while any of it is on screen
@@ -76,6 +80,9 @@ export function SectionBar({ items }: { items: BarItem[] }) {
     return () => { ro?.disconnect(); root.style.removeProperty('--dt-h'); page.style.removeProperty('--dt-h'); };
   }, [show]);
 
+  // a jump names the current group at once; the scroll read stands down while
+  // the smooth scroll travels (else it drags the ink back through every band on the way)
+  const hold = useRef(0);
   // the group under the reading line (the last band whose top has passed the chrome), or the one just jumped to
   useEffect(() => {
     let raf = 0;
@@ -84,12 +91,17 @@ export function SectionBar({ items }: { items: BarItem[] }) {
       const bar = ref.current;
       const line = navHeight() + (show && bar ? bar.offsetHeight : 0) + 24;
       let c: string | null = null, last = -Infinity;
+      const seen = new Set<string>();
       // bands and the pair's columns alike; two columns sharing a top keep the first
       for (const band of Array.from(document.querySelectorAll<HTMLElement>('#dt-panel [data-group]'))) {
-        const top = band.getBoundingClientRect().top;
-        if (top <= line && top > last) { c = band.dataset.group ?? null; last = top; }
+        const r = band.getBoundingClientRect();
+        if (r.height <= 0) continue;
+        seen.add(band.dataset.group ?? '');
+        if (r.top <= line && r.top > last) { c = band.dataset.group ?? null; last = r.top; }
       }
-      setCur(c ?? items[0]?.id ?? null);
+      setLive(prev => (prev && prev.size === seen.size && Array.from(seen).every(g => prev.has(g)) ? prev : seen));
+      if (Date.now() < hold.current) return;
+      setCur(c ?? items.find(t => seen.has(t.id))?.id ?? null);
     };
     const on = () => { if (!raf) raf = requestAnimationFrame(read); };
     const onJump = (e: Event) => {
@@ -98,7 +110,7 @@ export function SectionBar({ items }: { items: BarItem[] }) {
       // the band that holds the landing (a room, an anchor in one, the More band itself)
       const band = document.getElementById(id)?.closest<HTMLElement>('[data-group]');
       const g = band?.dataset.group ?? tabOf(id);
-      if (g && items.some(t => t.id === g)) setCur(g);
+      if (g && items.some(t => t.id === g)) { setCur(g); hold.current = Date.now() + 900; }
     };
     read();
     window.addEventListener('scroll', on, { passive: true });
@@ -109,6 +121,18 @@ export function SectionBar({ items }: { items: BarItem[] }) {
       if (raf) cancelAnimationFrame(raf);
     };
   }, [key, show]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // the ink slides to the current item (left / width measured from its pill)
+  useEffect(() => {
+    const bar = ref.current;
+    const pill = cur ? bar?.querySelector<HTMLElement>(`.dk-sbar-item[data-id="${cur}"]`) : null;
+    if (!pill) { setInk(null); return; }
+    const set = () => setInk({ left: pill.offsetLeft + 12, width: Math.max(0, pill.offsetWidth - 24) });
+    set();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(set) : null;
+    ro?.observe(pill);
+    return () => ro?.disconnect();
+  }, [cur, live, show]);
 
   // phone: the current group centres in the scrolling row whenever it changes
   useEffect(() => {
@@ -140,17 +164,32 @@ export function SectionBar({ items }: { items: BarItem[] }) {
     return () => document.removeEventListener('click', onClick);
   }, []);
 
+  // ← / → / Home / End walk the items when the bar has focus (the tablist
+  // pattern the old tab bar kept): the focus moves and the desk lands there
+  const shown = live ? items.filter(t => live.has(t.id)) : items;
+  const onKey = (e: React.KeyboardEvent) => {
+    const k = e.key;
+    if (k !== 'ArrowRight' && k !== 'ArrowLeft' && k !== 'Home' && k !== 'End') return;
+    if (!shown.length) return;
+    e.preventDefault();
+    const at = Math.max(0, shown.findIndex(t => t.id === ((document.activeElement as HTMLElement | null)?.dataset.id ?? cur)));
+    const n = k === 'Home' ? shown[0] : k === 'End' ? shown[shown.length - 1] : shown[(at + (k === 'ArrowRight' ? 1 : shown.length - 1)) % shown.length];
+    ref.current?.querySelector<HTMLElement>(`.dk-sbar-item[data-id="${n.id}"]`)?.focus();
+    // the focus stays on the bar (the next arrow must land here too); Enter / a tap still focus the room
+    jump(n.target, { focus: false });
+  };
   if (!items.length) return null;
   return (
     <nav ref={ref} className="dk-sbar" data-show={show || undefined} inert={!show} aria-label="Sections of your desk">
-      <div className="dk-sbar-in rail">
-        {items.map(t => (
-          <button key={t.id} type="button" className="dk-sbar-item" data-id={t.id}
+      <div className="dk-sbar-in rail" onKeyDown={onKey}>
+        {shown.map(t => (
+          <button key={t.id} type="button" className="dk-sbar-item" data-id={t.id} tabIndex={cur === t.id ? 0 : -1}
             aria-current={cur === t.id ? 'location' : undefined} onClick={() => jump(t.target)}>
             {t.label}
             {t.count != null && <><span className="sr-only">, </span><b style={{ color: cur === t.id ? undefined : toneInk(t.tone) }}>{t.count}</b></>}
           </button>
         ))}
+        {ink && <i className="dk-sbar-ink" aria-hidden style={{ left: ink.left, width: ink.width }} />}
       </div>
     </nav>
   );

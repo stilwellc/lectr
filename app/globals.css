@@ -5729,9 +5729,14 @@ html:has(.dk-sbar) { scroll-padding-top: calc(64px + var(--dt-h, 0px) + 12px); }
 .dk-sbar-item:hover { color: var(--color-fg); }
 .dk-sbar-item[aria-current] { color: var(--color-fg); font-weight: 600; }
 .dk-sbar-item[aria-current] b { color: var(--color-fg); }
-.dk-sbar-item[aria-current]::after {
-  content: ''; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--color-fg);
+/* the ink under the current item is ONE element that slides (sectionbar.tsx
+   measures the pill); the per-item rule is the fallback before it measures */
+.dk-sbar-in { position: relative; }
+.dk-sbar-ink { position: absolute; bottom: 0; height: 2px; border-radius: 2px; background: var(--color-fg); transition: left 260ms var(--ease-house, ease), width 260ms var(--ease-house, ease); pointer-events: none; }
+.dk-sbar-in:not(:has(.dk-sbar-ink)) .dk-sbar-item[aria-current]::after {
+  content: ''; position: absolute; left: 12px; right: 12px; bottom: 0; height: 2px; border-radius: 2px; background: var(--color-fg);
 }
+@media (prefers-reduced-motion: reduce) { .dk-sbar-ink { transition: none; } }
 .dk-sbar-item:focus-visible { outline: 2px solid var(--color-fg); outline-offset: -4px; border-radius: 8px; }
 
 /* THE RHYTHM — one scale: 56 from a band's seam to its room head, 40 between
@@ -5757,7 +5762,13 @@ html:has(.dk-sbar) { scroll-padding-top: calc(64px + var(--dt-h, 0px) + 12px); }
 /* THE FOLD */
 .dk-fold { --fold-max: 560px; position: relative; scroll-margin-top: calc(var(--dt-stick) + 12px); }
 /* clamped: the cut sits on the last whole row (--fold-cut, measured), the
-   fade covers only the hair under it — never a row's text */
+   fade covers only the hair under it — never a row's text. The travel
+   (data-anim): max-height runs between the cut and the room's measured
+   height (--fold-h) on the house easing; reduced motion cuts straight. */
+.dk-fold[data-anim] .dk-fold-in { overflow: hidden; transition: max-height 360ms var(--ease-signature, cubic-bezier(.4, 0, .2, 1)); }
+.dk-fold[data-anim='open'][data-open] .dk-fold-in { max-height: var(--fold-h, 4000px); }
+.dk-fold[data-anim='close'][data-open] .dk-fold-in { max-height: var(--fold-h, 4000px); }
+@media (prefers-reduced-motion: reduce) { .dk-fold[data-anim] .dk-fold-in { transition: none; } }
 .dk-fold:not([data-open]) .dk-fold-in {
   max-height: var(--fold-cut, var(--fold-max)); overflow: hidden;
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), rgba(0, 0, 0, 0.4) calc(100% - 4px), transparent);
