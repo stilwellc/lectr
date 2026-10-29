@@ -83,7 +83,8 @@ function linkTargets(): { id: string; where: string }[] {
 }
 
 test('every #link and jump() target on the desk resolves to the tab that holds it', () => {
-  const ok = new Set(['desk', 'desk-details', 'desk-tabs', 'dt-panel']);
+  // the page's own anchors: the masthead, its details fold, the panel, the More band (v4 — the section bar's last stop)
+  const ok = new Set(['desk', 'desk-details', 'desk-tabs', 'dt-panel', 'more']);
   const bad = linkTargets().filter(({ id }) => !ok.has(id) && !tabOf(id) && !EVERY_TAB.has(id));
   assert.deepEqual(bad, [], `unresolved: ${bad.map(b => `#${b.id} (${b.where})`).join(', ')}`);
 });
