@@ -41,6 +41,13 @@ const NOT_A_WATCH = /\b(?:menu|collier|necklace|pendant|brooch|earrings?|cufflin
  *  is a card; the upstream itemClass is too loose in TCG to trust alone —
  *  Professor Program promos read as tickets, Guinness-slabbed cards as records) */
 const NOT_A_CARD = /\b(?:vinyl (?:in sleeve|record|album|lp)|record album|lp record|soundtrack|sales award|riaa|les paul|stratocaster|telecaster|hardshell case|autobiography|picture sleeve|jumpsuit|t-shirt|lunch ?box|plush)\b/i;
+/** (Oct 29) memorabilia a card house files with its singles: a Type I / news
+ *  service / wire PHOTOGRAPH (the image a card was made from is not the card —
+ *  "1948 Topps Magic Photo" and "Photo Tattoo" are cards and stay), a replica
+ *  or signed JERSEY / ball / bat (never a "Jersey Number Card", a "Game-Used
+ *  Patch" or a "Rookie Ticket" parallel), a painted shikishi art board, a
+ *  poster. Sold as "baseball cards" to a vintage-baseball desk. */
+const NOT_A_CARD_MEM = /\b(?:type\s*[i1]\b[^,]{0,30}?\bphoto(?:graph)?s?|original\s+(?:type\s*[i1]\s+)?(?:news service\s+)?photo(?:graph)?s?|news service photo|wire photo|press photo|photo(?:graph)? by\b|replica (?:jersey|helmet)|(?:signed|game[- ]worn|game[- ]used|match[- ]worn|autographed) (?:jersey|ball|bat|helmet|glove|puck|cleats?|basketball|football|baseball|stick)\b(?!\s*(?:card|patch|swatch|relic|number|cut))|shikishi|art board|\bposter\b)/i;
 /** a lot whose subject is a person or film of ANOTHER market (Michael Jackson's
  *  "Moonwalk" autobiography filed under Apollo) is not a space piece */
 const OFF_MARKET_SUBJECT = /^sj:(?!science\|)/;
@@ -62,7 +69,7 @@ export function kindFits(l: KindLot): boolean {
   }
   const cards = CARD_SUBS[t.cat];
   if (cards && cards.has(t.sub)) {
-    return !NOT_A_CARD.test(title);
+    return !NOT_A_CARD.test(title) && !NOT_A_CARD_MEM.test(title);
   }
   // the science sub's people (Einstein, Vint Cerf) carry culture-person ids: only the space subs ask
   if (t.cat === 'space-science' && t.sub !== 'science') return !OFF_MARKET_SUBJECT.test(String(l.ek || ''));
