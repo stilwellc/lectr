@@ -11,6 +11,8 @@ import { track } from './analytics';
 /** the push half is built in (app/lib/push reads the same key) */
 const VAPID_IN_BUILD = !!(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '').trim();
 import { STORAGE_FAILED_EVENT, storageSet } from './safe-storage';
+import { readInterests, writeInterests, INTERESTS_KEY, type Interests } from './interests';
+import { mergeOnSignIn, rowToInterests, interestsToRow, sameInterests, NO_TABLE, type InterestsRow } from './interests-sync';
 
 /**
  * The account layer. ONE responsibility beyond auth: saved lots are scoped to a
@@ -390,6 +392,51 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
     // depend on the stable user id, not the User object — token refresh emits a
     // fresh User instance each time and would otherwise re-fetch on a timer.
+  }, [user?.id]);
+
+  // ── the quick-start interests follow the user (migration 0013) ──
+  // On sign-in: the account's row wins when it has anything, else the device's
+  // interests go up once (app/lib/interests-sync.mergeOnSignIn); then the
+  // account is the source, the device mirrors it, and every writeInterests on
+  // this device writes through. Pre-migration the table is missing: the
+  // interests stay on the device for the session, said once with a toast.
+  const interestsSynced = useRef<Interests | null>(null);
+  const toldInterests = useRef(false);
+  useEffect(() => {
+    if (!supabase || !user) { interestsSynced.current = null; return; }
+    const sb = supabase, uid = user.id;
+    let cancelled = false;
+    const noTable = (msg: string) => {
+      if (!NO_TABLE.test(msg)) return false;
+      if (!toldInterests.current) { toldInterests.current = true; flash('Your markets and price range are kept on this device — syncing them needs a database update.'); }
+      return true;
+    };
+    const upsert = async (i: Interests) => {
+      const { error } = await sb.from('user_interests').upsert({ user_id: uid, ...interestsToRow(i) }, { onConflict: 'user_id' });
+      if (error && !noTable(error.message)) console.error('[account] interests sync failed:', error.message);
+      if (!error) interestsSynced.current = i;
+    };
+    (async () => {
+      const { data, error } = await sb.from('user_interests').select('markets,min_usd,max_usd,updated_at').eq('user_id', uid).maybeSingle();
+      if (cancelled) return;
+      if (error) { if (!noTable(error.message)) console.error('[account] load interests failed:', error.message); return; }
+      const { use, upload } = mergeOnSignIn(readInterests(), data ? rowToInterests(data as InterestsRow) : null);
+      interestsSynced.current = use;
+      // the device mirrors the account (a write that changes nothing still refreshes the stamp)
+      if (!sameInterests(use, readInterests())) writeInterests(use);
+      if (upload) await upsert(use);
+    })();
+    // write-through: a change on this device (the quick start, Tune) goes up
+    const onChange = () => {
+      const now = readInterests();
+      if (interestsSynced.current && sameInterests(now, interestsSynced.current)) return; // our own mirror write
+      interestsSynced.current = now;
+      void upsert(now);
+    };
+    window.addEventListener(INTERESTS_KEY, onChange);
+    return () => { cancelled = true; window.removeEventListener(INTERESTS_KEY, onChange); };
+    // the stable user id, as the saves effect does
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
   // the one-time "kept on this device" note (per page-session)
