@@ -154,3 +154,20 @@
 /* the picks' Tune editor and the cold start sit on the room's spacing: the row's 2px edge, a hairline above */
 .dk-tune { margin: 4px 0 14px; padding: 12px 2px 4px; border-top: 1px solid var(--hairline); }
 .dk-tune > div { margin-top: 0 !important; }
+
+/* TODAY'S EDITION (Oct 29 2026) — the Daily Desk paper in a full-screen sheet: a close bar over a
+   sandboxed iframe on the page ground; the paper inside is light-only by design (it is the email) */
+.ck-edition { position: fixed; inset: 0; z-index: 1000; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--color-bg); }
+.ck-edition-bar { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; padding: 12px 20px; border-bottom: 1px solid var(--hairline); background: var(--color-bg-elevated); }
+.ck-edition-title { font-size: 14px; color: var(--color-fg); }
+.ck-edition-title b { font-weight: 600; }
+.ck-edition-sub { font-size: 12.5px; color: var(--color-text-secondary); flex: 1 1 auto; }
+.ck-edition-close { margin-left: auto; min-height: 36px; }
+.ck-edition-body { min-height: 0; }
+.ck-edition-frame { display: block; width: 100%; height: 100%; border: 0; background: #F5F3F1; }
+.ck-edition-note { margin: 0; padding: 28px 20px; font-size: 15px; line-height: 1.5; color: var(--color-text-secondary); }
+@media (max-width: 639.98px) {
+  .ck-edition-bar { padding: 10px 14px; gap: 6px 10px; }
+  .ck-edition-sub { display: none; }
+  .ck-edition-close { min-height: 40px; }
+}
