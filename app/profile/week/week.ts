@@ -105,6 +105,10 @@ export interface WeekDay {
   priced: number;
   /** conflict pairs on the day */
   conflicts: number;
+  /** rows the VIEW cut from this day (picks behind the toggle) — the day
+   *  card says "3 picks · hidden" instead of "Nothing of yours" (Oct 29: a
+   *  day with only hidden picks read as empty while the strip drew its bar) */
+  hidden: number;
 }
 
 export interface WeekPlan {
@@ -284,7 +288,7 @@ export function planWeek(input: WeekInput): WeekPlan {
   const conflicts = markConflicts(rows);
   rows.sort(byClose);
 
-  const days: WeekDay[] = keys.map((day, offset) => ({ day, offset, rows: [], yours: 0, names: 0, estTotal: 0, priced: 0, conflicts: 0 }));
+  const days: WeekDay[] = keys.map((day, offset) => ({ day, offset, rows: [], yours: 0, names: 0, estTotal: 0, priced: 0, conflicts: 0, hidden: 0 }));
   const byDay = new Map(days.map(d => [d.day, d]));
   for (const r of rows) {
     const d = byDay.get(r.day);
@@ -362,7 +366,7 @@ export function viewOf(plan: WeekPlan, view: WeekView): WeekPlan {
     const kept = d.rows.filter(keep);
     let estTotal = 0, priced = 0, yours = 0;
     for (const r of kept) if (r.kind !== 'name') { yours++; if (r.estMid != null) { estTotal += r.estMid; priced++; } }
-    return { ...d, rows: kept, yours, estTotal, priced };
+    return { ...d, rows: kept, yours, estTotal, priced, hidden: d.rows.length - kept.length };
   });
   const yoursRows = rows.filter(r => r.kind !== 'name');
   return {

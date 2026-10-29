@@ -83,9 +83,11 @@ export function SectionBar({ items }: { items: BarItem[] }) {
       raf = 0;
       const bar = ref.current;
       const line = navHeight() + (show && bar ? bar.offsetHeight : 0) + 24;
-      let c: string | null = null;
-      for (const band of Array.from(document.querySelectorAll<HTMLElement>('.dt-band[data-group]'))) {
-        if (band.getBoundingClientRect().top <= line) c = band.dataset.group ?? null;
+      let c: string | null = null, last = -Infinity;
+      // bands and the pair's columns alike; two columns sharing a top keep the first
+      for (const band of Array.from(document.querySelectorAll<HTMLElement>('#dt-panel [data-group]'))) {
+        const top = band.getBoundingClientRect().top;
+        if (top <= line && top > last) { c = band.dataset.group ?? null; last = top; }
       }
       setCur(c ?? items[0]?.id ?? null);
     };
@@ -94,7 +96,7 @@ export function SectionBar({ items }: { items: BarItem[] }) {
       const id = (e as CustomEvent<{ id: string }>).detail?.id;
       if (!id) return;
       // the band that holds the landing (a room, an anchor in one, the More band itself)
-      const band = document.getElementById(id)?.closest<HTMLElement>('.dt-band[data-group]');
+      const band = document.getElementById(id)?.closest<HTMLElement>('[data-group]');
       const g = band?.dataset.group ?? tabOf(id);
       if (g && items.some(t => t.id === g)) setCur(g);
     };
@@ -108,15 +110,16 @@ export function SectionBar({ items }: { items: BarItem[] }) {
     };
   }, [key, show]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // phone: the current group stays in view in the scrolling row
+  // phone: the current group centres in the scrolling row whenever it changes
   useEffect(() => {
     const bar = ref.current;
     if (!bar || !show || !cur) return;
     const pill = bar.querySelector<HTMLElement>(`.dk-sbar-item[data-id="${cur}"]`);
     const row = pill?.parentElement;
     if (!pill || !row || row.scrollWidth <= row.clientWidth) return;
-    const left = pill.offsetLeft - 16;
-    if (left < row.scrollLeft || pill.offsetLeft + pill.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const left = pill.offsetLeft - (row.clientWidth - pill.offsetWidth) / 2;
+    row.scrollTo({ left: Math.max(0, Math.min(left, row.scrollWidth - row.clientWidth)), behavior: reduce ? 'auto' : 'smooth' });
   }, [cur, show]);
 
   // every in-page #room link on the desk: through jump(), so a folded or

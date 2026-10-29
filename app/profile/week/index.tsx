@@ -179,7 +179,7 @@ function Row({ r, now, titleById }: { r: WeekRow; now: number; titleById: Readon
   );
 }
 
-function DayCol({ d, now, titleById, open, onMore }: { d: WeekDay; now: number; titleById: ReadonlyMap<string, WeekRow>; open: boolean; onMore: () => void }) {
+function DayCol({ d, now, titleById, open, onMore, onShowPicks }: { d: WeekDay; now: number; titleById: ReadonlyMap<string, WeekRow>; open: boolean; onMore: () => void; onShowPicks: () => void }) {
   const w = dayWords(d.day);
   const word = offsetWord(d.offset);
   const watches = d.rows.filter(r => r.kind === 'watch');
@@ -214,7 +214,9 @@ function DayCol({ d, now, titleById, open, onMore }: { d: WeekDay; now: number; 
             {d.yours > 0 && d.names > 0 && <span> · +{d.names} names</span>}
             {d.conflicts > 0 && <span className="ck-week-dayconf"> · {d.conflicts} {d.conflicts === 1 ? 'overlap' : 'overlaps'}</span>}
           </div>
-        ) : <div className="ck-week-daysum" data-quiet>—</div>}
+        ) : d.hidden > 0
+          ? <div className="ck-week-daysum" data-quiet>{d.hidden} {d.hidden === 1 ? 'pick' : 'picks'} · hidden</div>
+          : <div className="ck-week-daysum" data-quiet>—</div>}
         {yours.length > 0 && (
           <button type="button" className="ck-week-act ck-week-daycal" onClick={() => downloadIcs(yours, now, `week ${d.day}`)}
             aria-label={`Add your ${yours.length === 1 ? 'close' : `${yours.length} closes`} on ${w.wd} ${w.md} to your calendar (.ics)`}
@@ -244,6 +246,13 @@ function DayCol({ d, now, titleById, open, onMore }: { d: WeekDay; now: number; 
             </button>
           )}
         </>
+      ) : d.hidden > 0 ? (
+        // (Oct 29) a day whose only rows are picks behind the toggle is not
+        // empty — the cockpit's strip draws their bar; say so and offer the toggle
+        <p className="ck-week-quiet ck-week-quiet-hidden">
+          {d.hidden} {d.hidden === 1 ? 'pick closes' : 'picks close'} {word ?? `on ${w.md}`} · hidden ·{' '}
+          <button type="button" className="ck-week-act" onClick={onShowPicks}>Show picks</button>
+        </p>
       ) : (
         <p className="ck-week-quiet">Nothing of yours</p>
       )}
@@ -391,11 +400,12 @@ export default function WeekSection({ desk }: SectionProps) {
               {view.days.map(d => {
                 const w = dayWords(d.day);
                 const n = d.rows.length;
+                // a chip over hidden picks only: their count, faint (the day card explains)
                 return (
                   <button key={d.day} type="button" className="ck-week-chip" aria-pressed={page === d.offset}
-                    aria-label={`${w.wd} ${w.md}${n ? `, ${n} ${n === 1 ? 'row' : 'rows'}` : ', nothing of yours'}`}
+                    aria-label={`${w.wd} ${w.md}${n ? `, ${n} ${n === 1 ? 'row' : 'rows'}` : d.hidden ? `, ${d.hidden} ${d.hidden === 1 ? 'pick' : 'picks'} hidden` : ', nothing of yours'}`}
                     data-today={d.offset === 0 ? '' : undefined} data-empty={n ? undefined : ''} onClick={() => scrollToDay(d.day)}>
-                    <span className="kicker">{w.wd.slice(0, 2)}</span><b>{w.dayNum}</b>{n > 0 && <i>{n}</i>}
+                    <span className="kicker">{w.wd.slice(0, 2)}</span><b>{w.dayNum}</b>{n > 0 ? <i>{n}</i> : d.hidden > 0 ? <i data-hidden>{d.hidden}</i> : null}
                   </button>
                 );
               })}
@@ -416,7 +426,7 @@ export default function WeekSection({ desk }: SectionProps) {
           <div className="ck-week-days" ref={track} data-narrow={narrow ? '' : undefined}>
             {view.days.map(d => (
               <DayCol key={d.day} d={d} now={desk.now} titleById={titleById}
-                open={!!openDays[d.day]} onMore={() => setOpenDays(o => ({ ...o, [d.day]: !o[d.day] }))} />
+                open={!!openDays[d.day]} onMore={() => setOpenDays(o => ({ ...o, [d.day]: !o[d.day] }))} onShowPicks={() => setShowPicks(true)} />
             ))}
           </div>
         ) : plan.rows.length > 0 ? (

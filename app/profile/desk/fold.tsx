@@ -61,11 +61,11 @@ function backToTop(el: HTMLElement | null) {
  *  The rows first (the j/k rows, the call cards); then the blocks a room
  *  without rows is made of (its head, a paragraph, a figure grid, a table),
  *  never one nested inside a row (a row's own paragraph is not a boundary) */
-const ROWS = '[data-nav-row], .pe-call, .pe-trow, .ray-lot-card, .pf-shelf > *';
+const ROWS = '[data-nav-row], .pe-call, .pe-trow, .pe-card, .ray-lot-card, .pf-shelf > *, .pf-chart, .ck-call-well';
 const BLOCKS = '.ck-head, .ray-saved-ledger-head, .ck-reads-head, p, ul, ol, table, .ck-cells, .ck-record, .ck-rec-tl';
 /** a fold that would show less than this much of its clamp stretches to the
  *  first whole row instead (a card grid whose first row is taller than half the clamp) */
-const SHORT = 0.5;
+const SHORT = 0.65;
 /** …but never past this much of it */
 const STRETCH = 1.6;
 
