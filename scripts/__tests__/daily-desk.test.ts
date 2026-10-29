@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AuctionLot } from '../../app/types';
-import { planDesk, whenText, laneOf, lastSaleOf, leadingNameOf, PICKS_N, DESK_ROWS, FRESH_PER_GROUP, FRESH_GROUPS, NAME_ROWS, WEEK_DAYS_N } from '../lib/daily-desk';
-import { renderDesk } from '../lib/daily-desk-html';
+import { planDesk, whenText, laneOf, lastSaleOf, leadingNameOf, SUBJECT_MAX, PICKS_N, DESK_ROWS, FRESH_PER_GROUP, FRESH_GROUPS, NAME_ROWS, WEEK_DAYS_N } from '../lib/daily-desk';
+import { renderDesk, SIZE_CAP } from '../lib/daily-desk-html';
 
 const NOW = Date.parse('2026-10-21T12:20:00Z');
 const TODAY = '2026-10-21', YESTERDAY = '2026-10-20';
@@ -38,7 +38,8 @@ test('closing within 36h, soonest first; a bid past your max leads its own secti
   const d = planDesk({ now: NOW, watches: [{ lot_id: 'a' }, { lot_id: 'b' }, { lot_id: 'c', max_usd: 4000 }], live: liveMap([a, b, c]), sold: [], picks: [] })!;
   assert.deepEqual(d.overMax.map(i => i.id), ['c']);
   assert.deepEqual(d.closing.map(i => i.id), ['b', 'a']);   // c is not repeated
-  assert.match(d.subject, /passed your max/);
+  assert.match(d.subject, /^Your desk: 1 bid past your max$/);
+  assert.match(d.headline, /passed your max/);
 });
 
 test('results since the last email grade the hammer against your max', () => {
@@ -460,7 +461,7 @@ test('your collection: each owned piece with what you paid and its maker’s lat
     nameSold: new Map([['mk:andy-warhol', { id: 'sold-1', p: 243_200, d: '2026-10-21', h: "Christie's", t: 'African Elephant' }]]),
   })!;
   assert.equal(d.collection.length, 4);
-  assert.deepEqual(d.collection[0], { id: 'own-1', title: 'Cow, 1976', maker: 'Andy Warhol', img: null, paid: '$12K', latest: { id: 'sold-1', hammer: '$243K', day: 'Oct 21', house: "Christie's" } });
+  assert.deepEqual(d.collection[0], { id: 'own-1', title: 'Cow, 1976', maker: 'Andy Warhol', house: null, img: null, paid: '$12K', latest: { id: 'sold-1', hammer: '$243K', day: 'Oct 21', house: "Christie's" } });
   assert.equal(d.collection[1].maker, 'George Nakashima');
   assert.equal(d.collection[1].latest, null);     // nothing on file for Nakashima here: no line
   assert.equal(d.collection[1].paid, null);
@@ -476,6 +477,64 @@ test('your collection: each owned piece with what you paid and its maker’s lat
   assert.ok(html.includes('bought $12K'));
   assert.ok(text.includes('- Cow, 1976 · Andy Warhol · bought $12K · Andy Warhol’s latest hammer $243K, Oct 21, Christie\'s'));
   assert.ok(!render(planDesk({ now: NOW, watches: [{ lot_id: 'w' }], live: liveMap([lot('w', 50 * H)]), sold: [], picks: [] })!).html.includes('Your collection'));
+  // a piece the save kept no title or maker for reads its sold row (the real edition printed "Piece")
+  const ds = planDesk({
+    now: NOW, watches: [{ lot_id: 'wright-400282', owned: true }], live: new Map(),
+    sold: [{ id: 'wright-400282', title: 'Coral Table Lamp', house: 'Wright', artist: 'george-nakashima', price_usd: 4_000, sale_date: '2026-06-01', image_url: 'https://img/x.jpg' }], picks: [],
+    nameSold: new Map([['mk:george-nakashima', { id: 'nk-1', p: 46_000, d: '2026-10-15', h: 'Bonhams', t: 'Conoid Desk' }]]),
+  })!;
+  assert.deepEqual(ds.collection[0], { id: 'wright-400282', title: 'Coral Table Lamp', maker: 'George Nakashima', house: 'Wright', img: 'https://img/x.jpg', paid: null, latest: { id: 'nk-1', hammer: '$46K', day: 'Oct 15', house: 'Bonhams' } });
+  assert.equal(ds.results.length, 0);   // an owned piece's own sale is not a result to confirm… (it is older than the window anyway)
+  assert.ok(render(ds).html.includes('George Nakashima · Wright'));
+  const dn = planDesk({ now: NOW, watches: [{ lot_id: 'nothing-known', owned: true }], live: new Map(), sold: [], picks: [] })!;
+  assert.equal(dn.collection[0].title, 'Untitled piece');
+});
+
+test('the subject: needs-you in count + noun form, never a period, capped at SUBJECT_MAX', () => {
+  const c = lot('c', 8 * H, { currentBid: 5000 });
+  const d = planDesk({ now: NOW, watches: [{ lot_id: 'c', max_usd: 4000 }], live: liveMap([c]), sold: [], picks: [] })!;
+  assert.equal(d.subject, 'Your desk: 1 bid past your max');
+  assert.equal(d.headline, '1 bid has passed your max.');
+  const many = Array.from({ length: 12 }, (_, k) => warhol(`m${k}`, (k + 30) * H, { firstSeen: TODAY } as Partial<AuctionLot>));
+  const dr = planDesk({ now: NOW, watches: [], live: liveMap(many), sold: [], picks: [], follows: [FOLLOW_WARHOL], book: many })!;
+  assert.equal(dr.subject, 'Your desk: 12 new lots for the names you follow');
+  const flagged = lot('flag', 400 * H, { signal: { label: 'Below Market', pct: 40, basis: 6, kind: 'form', confidence: 'low' } } as unknown as Partial<AuctionLot>);
+  const dm = planDesk({ now: NOW, watches: [], live: liveMap([flagged]), sold: [], picks: [], follows: [{ kind: 'house', key: 'Goldin', label: 'Goldin' }], book: [flagged] })!;
+  assert.equal(dm.subject, 'Your desk: 1 below-market flag on the block');   // the market's fact, as the fact
+  for (const s of [d.subject, dr.subject, dm.subject]) { assert.ok(s.length <= SUBJECT_MAX); assert.ok(!/\.$/.test(s)); }
+  // a long lead closes at a whole word under the cap
+  const dw = planDesk({ now: NOW, watches: [{ lot_id: 'far' }, { lot_id: 'p1' }], live: liveMap([lot('far', 4 * 24 * H), lot('p1', 2 * 24 * H), lot('p2', 3 * 24 * H)]), sold: [], picks: [{ lot: lot('p2', 3 * 24 * H), note: 'x', lane: { kind: 'new', label: 'New to you' } }] })!;
+  assert.ok(dw.subject.length <= SUBJECT_MAX, dw.subject);
+});
+
+test('the size guard: a fat edition trims picks, New for you, the desk, then the names until it fits, and says so', () => {
+  const longTitle = 'A very long catalogue title that runs on and on about the piece, its provenance and its condition, as they do';
+  // (a house whose every lot is first seen today is an onboarding flood to isNewLot — only a third are "new")
+  const many = Array.from({ length: 60 }, (_, k) => warhol(`m${k}`, (k + 60) * H, { title: `${longTitle} ${k}`, firstSeen: k % 3 ? '2026-10-01' : TODAY, imageUrl: `https://img.example/${k}.jpg`.repeat(8) } as unknown as Partial<AuctionLot>));
+  const watches = many.slice(0, 12).map(l => ({ lot_id: l.id, max_usd: 1000, bid_count: 1 }));
+  const picks = many.slice(12, 20).map((l, k) => ({ lot: l, note: longTitle, lane: { kind: 'saved' as const, label: `Because you saved ${k}`, who: null } }));
+  const follows = Array.from({ length: 12 }, (_, k) => ({ kind: 'maker' as const, key: `maker-${k}`, label: `Maker ${k}` }));
+  const fat = planDesk({ now: NOW, watches, live: liveMap(many), sold: [], picks, follows: [FOLLOW_WARHOL, ...follows], book: many })!;
+  assert.ok(fat.desk.length === 12 && fat.picks.length === 8 && fat.fresh!.groups.length >= 1);
+  const o = { origin: 'https://lectr.bid', unsubUrl: 'https://lectr.bid/u', dateLabel: 'Wednesday, Oct 21' };
+  const full = renderDesk(fat, o);
+  assert.ok(full.html.length <= SIZE_CAP && !full.trimmed);      // this edition fits as it is
+  assert.ok(!full.html.includes('Trimmed for your inbox'));
+  // under a cap it cannot meet, every trim fires in order and the foot says so
+  const tiny = renderDesk(fat, { ...o, sizeCap: 10_000 });
+  assert.ok(tiny.trimmed);
+  assert.ok(tiny.html.includes('Trimmed for your inbox'));
+  assert.equal((tiny.html.match(/Because you saved \d/g) || []).length, 6);   // picks → 6
+  assert.ok(tiny.html.includes('and 4 more on your desk'));                   // desk 12 → 8
+  // a cap the first trim alone meets stops there
+  const first = renderDesk(fat, { ...o, sizeCap: full.html.length - 1 });
+  assert.ok(first.trimmed);
+  assert.equal((first.html.match(/Because you saved \d/g) || []).length, 6);
+  assert.ok(!first.html.includes('more on your desk'));
+  assert.ok(first.html.length < full.html.length);
+  // a thin edition is never trimmed
+  const thin = planDesk({ now: NOW, watches: [{ lot_id: 'm0' }], live: liveMap(many.slice(0, 1)), sold: [], picks: [] })!;
+  assert.ok(!renderDesk(thin, o).trimmed);
 });
 
 test('two saved-lot lanes of one maker merge; a baseline of zero says all the bids came since the save; an empty New for you is one line', () => {

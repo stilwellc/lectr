@@ -36,6 +36,7 @@ signed autographed autograph autographs signature signatures inscribed cut dual 
 game used worn issued match race fight bout screen stage production made personally owned
 type original photo photograph photos photographs snapshot print wire press
 framed display rare earliest known vintage complete official authentic unique important historic iconic famous
+third-person war-dated civil wartime pre-presidential presidential lengthy superb scarce exceptional extraordinary partial
 letter letters typed handwritten document documents check checks contract manuscript book books program programs ticket tickets stub pass
 poster posters lobby card cards sheet script lyrics lyric
 jersey jerseys bat bats ball baseball football basketball hockey soccer golf boxing glove gloves helmet shoe shoes cleats sneakers trunks robe
@@ -75,7 +76,9 @@ const PERSON_VERB = /^(?:Signed|Game (?:Worn|Used|Issued)|Team Issued|Match (?:W
 /** what follows a DUO ("Mickey Mantle and Roger Maris Dual-Signed…") */
 const DUO_VERB = /^(?:Dual-Signed|Dual Signed|Multi-Signed|Co-Signed|Signed|Autographed)\b/;
 /** words between a name and its verb that never change whose piece it is ("Charlie Duke Oversized Signed Photograph") */
-const QUALIFIER = /^(?:\([^)]{1,40}\)\s+)?(?:["“][^"”]{1,50}["”]\s+)?(?:(?:Oversized|Vintage|Rare|Large|Early|Framed)\s+){0,2}/;
+/** the catalogue's words between a name and its verb — "Rare Signed", "War-Dated Typed Letter",
+ *  "Third-Person Autograph Letter", "Lengthy Handwritten…" — read past, never as part of the name */
+const QUALIFIER = /^(?:\([^)]{1,40}\)\s+)?(?:["“][^"”]{1,50}["”]\s+)?(?:(?:Oversized|Vintage|Rare|Large|Early|Framed|Third-Person|Civil War-Dated|War-Dated|Wartime|Pre-Presidential|Presidential|Lengthy|Superb|Scarce|Important|Historic|Exceptional|Extraordinary|Partial|Choice|Bold)\s+){0,3}/;
 const verbAfter = (rest: string, re: RegExp = PERSON_VERB) => re.test(rest.replace(QUALIFIER, ''));
 
 
