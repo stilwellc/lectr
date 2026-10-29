@@ -9,7 +9,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTaste, recommend, discoverLots, scoreLots, featOf, rotationOf, topOf, ENGINE_NOTE, DISCOVER_DAYS, type RecLot } from '../recs';
+import { buildTaste, recommend, discoverLots, scoreLots, featOf, formOf, rotationOf, topOf, ENGINE_NOTE, DISCOVER_DAYS, type RecLot } from '../recs';
 import { readSignals, recordSignal, signalsToTaste, VIEWED_DAYS, type KV } from '../recs-signals';
 import { reasonKindOf } from '../pick-log';
 import { kindFits } from '../object-kind';
@@ -411,4 +411,31 @@ test('reason truth (eval §4): a perpetual calendar is a watch; a strategy guide
   const by = new Map(rs.map(r => [r.lot.id, r.reason]));
   assert.match(by.get(cardLot.id)!, /^Like your Michael Jordan cards/);
   assert.match(by.get(photo.id)!, /^Like your Michael Jordan pieces/, by.get(photo.id));
+});
+
+/* ── pass 6: three seats the sweep read as wrong ───────────────────────── */
+
+test('pass 6: a print of a photograph is a print (no "signed photograph" rung for it); a memorabilia player rung keeps the sub; a weak tie says "near your saves’ prices" outside the printed band', () => {
+  assert.equal(formOf('Elon Musk Original Photographic SpaceX Print by Susan Smith'), 'print');
+  assert.equal(formOf('Joe Kittinger Signed Photograph'), 'photograph');
+  // a ticket desk is not handed a bobblehead; a jersey desk still gets jerseys
+  const mem = (title: string, subCat: string, est: number, o: Partial<RecLot> = {}): RecLot => ({ id: `sm-${++seq}`, artist: 'sports-memorabilia', title, subCat, drill: 'baseball', auctionHouse: 'Goldin', saleName: 'Weekly', saleDate: at(4).slice(0, 10), saleDateTime: at(4), currentBid: est, bidCount: 4, currency: 'USD', status: 'upcoming', imageUrl: PHOTO, ...o });
+  const ticket = mem('Shohei Ohtani 1st Career MLB Home Run Full Ticket', 'tickets', 170, { playerSlug: 'shohei-ohtani' });
+  const bobble = mem('Andruw Jones Signed Bobblehead - Beckett', 'equipment', 127, { playerSlug: 'andruw-jones' });
+  // the build stamps the player (the pure reader files a name it does not know as a collection bucket)
+  const otherTicket = mem('Aaron Judge 62nd Home Run Full Ticket', 'tickets', 190, { playerSlug: 'aaron-judge', ek: 'pl:aaron-judge' });
+  const t = buildTaste({ saved: [{ id: ticket.id, lot: ticket, savedAt: at(-3) }], follows: [], nowMs: NOW });
+  const got = ids(recommend([bobble, otherTicket], t, { nowMs: NOW }));
+  assert.ok(!got.includes(bobble.id), 'another player, another kind of object: not the rung’s');
+  assert.ok(got.includes(otherTicket.id), 'another player’s ticket is');
+  // the weak-tie wording: inside or near the band it prints the band; outside it is near one save, not "in your range"
+  const pr = (artist: string, title: string, lo: number) => ({ id: `pw-${++seq}`, artist, title, subCat: 'prints', auctionHouse: 'Phillips', saleName: 'Editions', saleDate: at(5).slice(0, 10), estimateLow: lo, estimateHigh: lo * 1.4, currency: 'USD', status: 'upcoming', imageUrl: PHOTO } as RecLot);
+  const desk = [pr('andy-warhol', 'Flowers', 40000), pr('andy-warhol', 'Flash', 7000), pr('andy-warhol', 'Mao', 17250)];
+  const low = pr('vivienne-westwood', 'Witches Collection', 4000);
+  const mid = pr('ed-ruscha', 'Motor', 12500);
+  const tw = buildTaste({ saved: desk.map(l => ({ id: l.id, lot: l, savedAt: at(-3) })), follows: [], nowMs: NOW });
+  const rw = recommend([low, mid], tw, { nowMs: NOW, tune: { discover: 0 } });
+  const by = new Map(rw.map(r => [r.lot.id, r.reason]));
+  assert.match(by.get(mid.id)!, /^More prints in your range · \$[\d.]+K–[\d.]+K/, by.get(mid.id));
+  assert.match(by.get(low.id)!, /^More prints near your saves’ prices/, by.get(low.id));
 });
