@@ -8,7 +8,7 @@
  * chrome is the north star's — eggshell ground, hairlines, dotted ledgers,
  * pills, sentence case, lightness over boldness (docs/NORTHSTAR_UI.md).
  */
-import type { DeskEmail, DeskItem, DeskRow, PickItem, ResultItem, WeekCalendar, NameLine, MarketLine } from './daily-desk';
+import type { DeskEmail, DeskItem, DeskRow, PickItem, ResultItem, CollectionItem, WeekCalendar, NameLine, MarketLine } from './daily-desk';
 
 const INK = '#1C1917', MUTED = '#777169', FAINT = '#A59F97', LINE = '#EBE8E4', BG = '#F5F3F1', CARD = '#FDFCFC', WELL = '#F5F3F1';
 const UP = '#0F7C43', DOWN = '#C13E2C';
@@ -56,7 +56,7 @@ function row(origin: string, i: DeskItem | PickItem | DeskRow, o: { facts?: stri
   const facts = (o.facts || []).filter(Boolean).join(' · ');
   return `<tr><td style="padding:14px 0;border-bottom:1px solid ${LINE}">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-<td width="64" valign="top"><a href="${lotUrl(origin, i.id)}">${photo(i.img, i.title)}</a></td>
+<td width="64" valign="top"><a href="${lotUrl(origin, i.id)}" style="text-decoration:none">${photo(i.img, i.title)}</a></td>
 <td valign="top" style="padding-left:14px">
 <a href="${lotUrl(origin, i.id)}" style="font:500 15px/1.35 ${FONT};color:${INK};text-decoration:none">${esc(i.title)}</a>
 <div style="font:400 13px/1.45 ${FONT};color:${MUTED};padding-top:3px">${esc(meta)}</div>
@@ -78,12 +78,28 @@ function resultRow(origin: string, r: ResultItem) {
   const tone = r.inReach == null ? 'ink' : r.inReach ? 'up' : 'down';
   return `<tr><td style="padding:14px 0;border-bottom:1px solid ${LINE}">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-<td width="64" valign="top"><a href="${lotUrl(origin, r.id)}">${photo(r.img, r.title)}</a></td>
+<td width="64" valign="top"><a href="${lotUrl(origin, r.id)}" style="text-decoration:none">${photo(r.img, r.title)}</a></td>
 <td valign="top" style="padding-left:14px">
 <a href="${lotUrl(origin, r.id)}" style="font:500 15px/1.35 ${FONT};color:${INK};text-decoration:none">${esc(r.title)}</a>
 <div style="font:400 13px/1.45 ${FONT};color:${MUTED};padding-top:3px">${esc(r.house)} · hammered <b style="color:${INK};font-weight:600">${esc(r.hammer)}</b>${r.vsEst ? ` · ${esc(r.vsEst)}` : ''}</div>
 ${r.vsMax ? `<div style="padding-top:7px">${pill(r.inReach ? `in reach · ${r.vsMax}` : `past you · ${r.vsMax}`, tone)}</div>` : ''}
 <div style="padding-top:8px"><a href="${pageUrl(origin, '/profile')}#results" style="font:500 13px/1.3 ${FONT};color:${INK}">Did you win it? Mark it on your desk →</a></div>
+</td></tr></table></td></tr>`;
+}
+
+/** an owned piece: photo · title · maker · bought $X · the maker's latest hammer (linked) */
+function collectionRow(origin: string, c: CollectionItem) {
+  const meta = [c.maker, c.paid ? `bought ${c.paid}` : null].filter(Boolean).join(' · ');
+  const latest = c.latest
+    ? `<div style="font:400 13px/1.45 ${FONT};color:${INK};padding-top:4px">${esc(c.maker ? `${c.maker}’s` : 'The maker’s')} latest hammer <b style="font-weight:600">${esc(c.latest.hammer)}</b> · <a href="${lotUrl(origin, c.latest.id)}" style="color:${MUTED};text-decoration:none">${esc(c.latest.day)} at ${esc(c.latest.house)}</a></div>`
+    : '';
+  return `<tr><td style="padding:14px 0;border-bottom:1px solid ${LINE}">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+<td width="64" valign="top"><a href="${lotUrl(origin, c.id)}" style="text-decoration:none">${photo(c.img, c.title)}</a></td>
+<td valign="top" style="padding-left:14px">
+<a href="${lotUrl(origin, c.id)}" style="font:500 15px/1.35 ${FONT};color:${INK};text-decoration:none">${esc(c.title)}</a>
+${meta ? `<div style="font:400 13px/1.45 ${FONT};color:${MUTED};padding-top:3px">${esc(meta)}</div>` : ''}
+${latest}
 </td></tr></table></td></tr>`;
 }
 
@@ -105,7 +121,7 @@ function glance(origin: string, g: DeskEmail['glance']) {
   return `<tr><td style="padding:18px 0 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid ${LINE};border-bottom:1px solid ${LINE}">
 <tr>${cell('Watching', n2(g.watching), g.est ? `${esc(g.est)} at estimate` : g.watching ? 'live lots' : 'nothing live', `${desk}#tab-watching`, true)}${cell('Next hammer', g.next ? g.next.when : '—', nextLine, nextHref, false)}</tr>
 <tr><td colspan="2" style="border-top:1px solid ${LINE};font-size:0;line-height:0">&nbsp;</td></tr>
-<tr>${cell('This week', n2(g.week), 'watches + picks closing', `${desk}#tab-week`, true)}${cell('Picks', n2(g.picks), g.picks ? 'for you' : 'none today', `${desk}#tab-for-you`, false)}</tr>
+<tr>${cell('This week', n2(g.week), g.week ? `${n2(g.weekWatches)} ${g.weekWatches === 1 ? 'watch' : 'watches'} + ${n2(g.weekPicks)} ${g.weekPicks === 1 ? 'pick' : 'picks'} closing` : 'nothing of yours closing', `${desk}#tab-week`, true)}${cell('Picks', n2(g.picks), g.picks ? 'for you' : 'none today', `${desk}#tab-for-you`, false)}</tr>
 </table></td></tr>`;
 }
 
@@ -157,10 +173,14 @@ export function renderDesk(e: DeskEmail, o: { origin: string; unsubUrl: string; 
   const { origin } = o;
 
   // NEEDS YOU
+  // results spanning days group by their sale day; RESULT_ROWS then "and N more"
+  const days = new Set(e.results.map(r => r.day));
+  let day = '\u0000';
+  const resultRows = e.results.map(r => { const h = days.size > 1 && r.day !== day ? `<tr><td style="padding:12px 0 0;font:500 12.5px/1.3 ${FONT};color:${INK}">${esc(r.day)}</td></tr>` : ''; day = r.day; return h + resultRow(origin, r); }).join('');
   const needs = [
     e.overMax.length ? group('Bids past your max') + e.overMax.map(i => row(origin, i)).join('') : '',
     e.closing.length ? group('Closing before tomorrow night') + e.closing.map(i => row(origin, i)).join('') : '',
-    e.results.length ? group('Results to confirm') + e.results.map(r => resultRow(origin, r)).join('') : '',
+    e.results.length ? group(`Results to confirm${e.resultsMore ? ` · ${n2(e.results.length + e.resultsMore)}` : ''}`) + resultRows + (e.resultsMore ? more(origin, `and ${n2(e.resultsMore)} more ${e.resultsMore === 1 ? 'result' : 'results'}`, '/profile#results') : '') : '',
   ].join('');
   // results older than the last Desk are not reprinted, but the desk still holds them: say how many wait
   const pending = e.pendingResults ? more(origin, `${n2(e.pendingResults)} ${e.pendingResults === 1 ? 'result' : 'results'} still waiting on your desk`, '/profile#results') : '';
@@ -179,13 +199,19 @@ export function renderDesk(e: DeskEmail, o: { origin: string; unsubUrl: string; 
   const deskSection = section('Your desk today', deskBody, e.desk.length ? `${n2(e.glance.watching)} live ${e.glance.watching === 1 ? 'watch' : 'watches'}, soonest close first · bid, bids added since you saved it, the engine’s read, the room to your max` : null);
 
   // NEW FOR YOU
+  // YOUR COLLECTION — the owned pieces, each with its maker's latest settled hammer (never an appraisal)
+  const collectionSection = e.collection.length
+    ? section('Your collection', e.collection.map(c => collectionRow(origin, c)).join('') + (e.collectionMore ? more(origin, `and ${n2(e.collectionMore)} more ${e.collectionMore === 1 ? 'piece' : 'pieces'} you own`, '/profile#owned') : ''),
+      `${n2(e.collection.length + e.collectionMore)} ${e.collection.length + e.collectionMore === 1 ? 'piece' : 'pieces'} you own · what you paid, and the maker’s latest settled hammer on file — a read of the market, not an appraisal`)
+    : '';
+
   // NEW FOR YOU — grouped by the follow that reaches each lot, three rows a group, "+N more →" to the name's page or the feed's new tab
   const freshGroups = e.fresh?.groups.map(g =>
     group(`${g.label} · ${n2(g.total)}`) + g.items.map(i => row(origin, i)).join('') + (g.more ? more(origin, `+${n2(g.more)} more ${g.label.replace(/^By /, 'by ')}`, g.href) : '')).join('') ?? '';
   const freshSection = e.fresh
     ? section('New for you', e.fresh.groups.length
       ? freshGroups + (e.fresh.moreGroups ? more(origin, `and ${n2(e.fresh.moreGroups)} more of your follows with new lots`, '/?tab=new') : '')
-      : empty('Nothing new for the names you follow since the last Desk.'), `${n2(e.fresh.total)} new · ${esc(e.fresh.since)}`)
+      : empty(`Nothing first seen ${e.fresh.window} by a name or category you follow.`), e.fresh.total ? `${n2(e.fresh.total)} new · ${esc(e.fresh.since)}` : null)
     : '';
 
   // THE PICKS, laned
@@ -203,6 +229,7 @@ export function renderDesk(e: DeskEmail, o: { origin: string; unsubUrl: string; 
   const body = [
     needsSection,
     deskSection,
+    collectionSection,
     calendar(origin, e.week),
     freshSection,
     picksSection,
@@ -221,6 +248,7 @@ export function renderDesk(e: DeskEmail, o: { origin: string; unsubUrl: string; 
 <tr><td style="padding-top:12px;font:300 32px/1.12 ${FONT};color:${INK};letter-spacing:-0.025em">${esc(e.headline)}</td></tr>
 ${e.preheader ? `<tr><td style="padding-top:8px;font:400 14px/1.5 ${FONT};color:${MUTED}">${esc(e.preheader)}</td></tr>` : ''}
 ${glance(origin, e.glance)}
+${e.edition.length ? `<tr><td style="padding:10px 0 0;font:400 12.5px/1.5 ${FONT};color:${MUTED}">In this edition: ${e.edition.map(esc).join(' · ')}</td></tr>` : ''}
 ${body}
 <tr><td style="padding:30px 0 6px" align="left"><a href="${pageUrl(origin, '/profile')}" style="display:inline-block;padding:12px 20px;border-radius:999px;background:${INK};color:#fff;font:500 14px/1 ${FONT};text-decoration:none">Open your desk</a></td></tr>
 </table></td></tr>
@@ -233,7 +261,8 @@ You get this because you turned on the Daily Desk email on lectr. Figures are le
   // THE PLAIN-TEXT EDITION — every section the HTML prints, in the same order
   const g = e.glance;
   const t: string[] = [`lectr · The Daily Desk · ${o.dateLabel}`, '', e.headline, e.preheader, '',
-    `Watching ${g.watching}${g.est ? ` (${g.est} at estimate midpoint)` : ''} · Next hammer ${g.next ? `${g.next.when}${g.next.time ? ` ${g.next.time}` : ''} — ${g.next.above ? 'first under needs you' : g.next.title}` : '—'} · ${g.week} close this week · ${g.picks} picks`, ''];
+    `Watching ${g.watching}${g.est ? ` (${g.est} at estimate midpoint)` : ''} · Next hammer ${g.next ? `${g.next.when}${g.next.time ? ` ${g.next.time}` : ''} — ${g.next.above ? 'first under needs you' : g.next.title}` : '—'} · This week ${g.week} (${g.weekWatches} watches + ${g.weekPicks} picks) · ${g.picks} picks`,
+    ...(e.edition.length ? [`In this edition: ${e.edition.join(' · ')}`] : []), ''];
   const metaOf = (i: DeskItem) => [i.maker, i.house, i.est].filter(Boolean).join(' · ');
   const line = (i: DeskItem | PickItem) => `- ${i.title}${i.when ? ` (${i.when})` : ''}${metaOf(i) ? ` · ${metaOf(i)}` : ''}${i.sig ? ` · ${i.sig.text}` : ''}${i.over ? ` · bid ${i.bid} passed your max` : i.max ? ` · your max ${i.max}` : ''}${'note' in i && i.note ? `\n  ${i.note}` : ''}\n  ${lotUrl(origin, i.id)}`;
   const head = (title: string, sub?: string | null) => { t.push(title.toUpperCase()); if (sub) t.push(sub); };
@@ -245,14 +274,20 @@ You get this because you turned on the Daily Desk email on lectr. Figures are le
   };
   if (e.overMax.length || e.closing.length || e.results.length) head('Needs you');
   else if (e.watched) head('Needs you', `Nothing ${e.pendingResults ? 'new ' : ''}today — no bid past your max, nothing of yours closing before tomorrow night${e.pendingResults ? '' : ', no result to confirm'}.`);
-  if (e.pendingResults && e.watched) t.push(`${e.pendingResults} ${e.pendingResults === 1 ? 'result' : 'results'} still waiting on your desk: ${origin}/profile#results`, '');
   lines('Bids past your max', e.overMax);
   lines('Closing before tomorrow night', e.closing);
   if (e.results.length) {
-    t.push('Results to confirm');
-    for (const r of e.results) t.push(`- ${r.title} · ${r.house} · hammered ${r.hammer}${r.vsEst ? ` · ${r.vsEst}` : ''}${r.vsMax ? ` · ${r.inReach ? 'in reach' : 'past you'} · ${r.vsMax}` : ''}\n  Did you win it? ${origin}/profile#results\n  ${lotUrl(origin, r.id)}`);
+    t.push(`Results to confirm${e.resultsMore ? ` · ${e.results.length + e.resultsMore}` : ''}`);
+    const days = new Set(e.results.map(r => r.day));
+    let day = '\u0000';
+    for (const r of e.results) {
+      if (days.size > 1 && r.day !== day) { t.push(r.day); day = r.day; }
+      t.push(`- ${r.title} · ${r.house} · hammered ${r.hammer}${r.vsEst ? ` · ${r.vsEst}` : ''}${r.vsMax ? ` · ${r.inReach ? 'in reach' : 'past you'} · ${r.vsMax}` : ''}\n  Did you win it? ${origin}/profile#results\n  ${lotUrl(origin, r.id)}`);
+    }
+    if (e.resultsMore) t.push(`  and ${e.resultsMore} more: ${origin}/profile#results`);
     t.push('');
   }
+  if (e.pendingResults && e.watched) t.push(`${e.pendingResults} ${e.pendingResults === 1 ? 'result' : 'results'} still waiting on your desk: ${origin}/profile#results`, '');
   head('Your desk today');
   if (e.desk.length) {
     for (const r of e.desk) t.push(`- ${r.title}${r.when ? ` (${r.when})` : ''}${metaOf(r) ? ` · ${metaOf(r)}` : ''}${[/\bbid\b/.test(r.est) ? '' : [r.bid ? `bid ${r.bid}` : '', r.bids].filter(Boolean).join(' · '), r.moved, r.room, r.sig?.text].filter(Boolean).map(x => ` · ${x}`).join('')}\n  ${lotUrl(origin, r.id)}`);
@@ -262,11 +297,17 @@ You get this because you turned on the Daily Desk email on lectr. Figures are le
   else t.push(e.watched ? 'Nothing of yours is live right now.' : 'You’re not watching anything yet. Save a lot on lectr and it reports here every morning.');
   if (e.deskSettled) t.push(`${e.deskSettled} ${e.desk.length || e.deskAbove ? 'more ' : ''}of your watches ${e.deskSettled === 1 ? 'has' : 'have'} settled — under Record: ${origin}/profile#record`);
   t.push('');
+  if (e.collection.length) {
+    head('Your collection', `${e.collection.length + e.collectionMore} pieces you own · what you paid, and the maker’s latest settled hammer on file — not an appraisal`);
+    for (const c of e.collection) t.push(`- ${c.title}${c.maker ? ` · ${c.maker}` : ''}${c.paid ? ` · bought ${c.paid}` : ''}${c.latest ? ` · ${c.maker ? `${c.maker}’s` : 'the maker’s'} latest hammer ${c.latest.hammer}, ${c.latest.day}, ${c.latest.house}` : ''}\n  ${lotUrl(origin, c.id)}`);
+    if (e.collectionMore) t.push(`  and ${e.collectionMore} more: ${origin}/profile#owned`);
+    t.push('');
+  }
   head('Closing this week', `${e.week.watches} watches · ${e.week.picks} picks · ${e.week.names} by your names`);
   t.push(e.week.days.map(d => `${d.today ? 'Today' : d.dow} ${d.date}: ${d.watches + d.picks}${d.names ? ` (+${d.names} names)` : ''}`).join(' · '), `${origin}/profile#tab-week`, '');
   if (e.fresh) {
-    head('New for you', `${e.fresh.total} new · ${e.fresh.since}`);
-    if (!e.fresh.groups.length) t.push('Nothing new for the names you follow since the last Desk.');
+    head('New for you', e.fresh.total ? `${e.fresh.total} new · ${e.fresh.since}` : null);
+    if (!e.fresh.groups.length) t.push(`Nothing first seen ${e.fresh.window} by a name or category you follow.`);
     for (const gr of e.fresh.groups) {
       t.push(`${gr.label} · ${gr.total}`);
       for (const i of gr.items) t.push(line(i));
