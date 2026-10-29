@@ -298,9 +298,12 @@ function DeskBody() {
   // are the invitation — the quick start, the index — and read whole, never
   // folded to a first screen (a clamped quick start looked broken)
   const cold = !i.deskView && desk.recs.length === 0 && desk.closingPicks.length === 0 && desk.follows.length === 0;
-  // pass 1: one column per group (its fold, its bar item), in the order the desk reads
+  // pass 1: one column per group (its fold, its bar item), in the order the desk reads.
+  // (pass 5) Today and the FIRST folded room mount at once; every fold after
+  // them is a seat until the reader is a screen away (desk/fold Clamp `lazy`)
   const barItems: BarItem[] = [];
   const cols: { g: DeskTab; room: string; node: React.ReactNode }[] = [];
+  let folds = 0;
   for (const g of GROUP_ORDER) {
     // Today with nothing to say mounts nothing: no band (the tones alternate
     // from the first band that shows), no bar item (the bar drops a hidden
@@ -315,7 +318,7 @@ function DeskBody() {
     const inner = rooms.map(s => { const C = s.Component!; return <C key={s.id} desk={desk} act={act} narrow={narrow} />; });
     barItems.push({ id: g, label: item?.label ?? rooms[0].label, count: item?.count, tone: item?.tone, target: rooms[0].id });
     // Today's foot carries the Daily Desk nudge (a signed-in reader without the paper)
-    cols.push({ g, room: rooms[0].id, node: g === 'today' ? <>{inner}<DailyNudge /></> : <Clamp ids={ids} label={item?.label ?? rooms[0].label} count={item?.count} whole={cold}>{inner}</Clamp> });
+    cols.push({ g, room: rooms[0].id, node: g === 'today' ? <>{inner}<DailyNudge /></> : <Clamp ids={ids} label={item?.label ?? rooms[0].label} count={item?.count} whole={cold} lazy={folds++ > 0}>{inner}</Clamp> });
   }
   // pass 2: the bands. Record + Collection read side by side at ≥ 900px (one
   // band, two columns — "how am I doing" in one glance), stacked on a phone;

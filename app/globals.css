@@ -3460,14 +3460,7 @@ html .lectr-recplate-k {
   padding: 14px 16px 16px;
   display: grid; gap: 12px;
 }
-.ck-dossier-grid { display: flex; flex-wrap: wrap; gap: 10px 36px; }
-.ck-dossier-cell { display: grid; gap: 3px; min-width: 0; }
-.ck-dossier-v {
-  font-family: var(--font-mono), monospace; font-size: 13px;
-  font-variant-numeric: tabular-nums; color: var(--color-fg);
-}
-.ck-dossier-v .sub { font-family: var(--font-sans), sans-serif; font-size: 11px; color: var(--color-text-muted); }
-.ck-dossier-note { font-size: 12.5px; color: var(--color-text-secondary); line-height: 1.5; }
+/* (Oct 29, rows pass 4) the dossier's content wears dk-dossier-* (styles/row.css); the grid / cell / value / note rules it wore here are gone */
 .ck-dossier-actions { display: flex; align-items: baseline; gap: 18px; }
 .ck-dossier-actions a, .ck-dossier-actions button {
   font-size: 12px; font-weight: 600; color: var(--color-fg);
@@ -5750,3 +5743,10 @@ html:not([data-lectr-light]) .ck-page .dk-item > .ck-dossier { background: #1618
   .ck-page .ck-hbar { min-height: 40px; align-content: end; }
   .ck-page .ck-hstrip-cap { margin: 0; padding: 2px 0; width: 100%; }
 }
+
+/* ── pass 5 (Oct 29): THE SEAT — a lazy fold's place, the clamp's height, a quiet skeleton ── */
+.dk-seat { min-height: calc(var(--fold-max) + 72px); }
+.dk-seat-in { padding-top: 56px; display: grid; }
+.dk-seat-in > .ray-sk { display: block; }
+.dk-seat-row { width: 100%; height: 56px; margin-top: 14px; border-radius: 10px; opacity: 0.7; }
+@media (max-width: 639.98px) { .dk-seat-in { padding-top: 40px; } .dk-seat-row { height: 48px; } }

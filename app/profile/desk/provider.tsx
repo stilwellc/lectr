@@ -25,6 +25,7 @@ import type { AuctionLot } from '../../types';
 import { useFullLotsOnDemand, type LedgerEntry } from '../../hooks/useRayData';
 import { useSavedLots, type SavedMeta } from '../../hooks/useSavedLots';
 import { signalCallOf, useAuth } from '../../lib/account';
+import { useDailyEmail } from '../../lib/email-prefs';
 import { useAlerts } from '../../lib/alerts';
 import { useCollectionSnapshots } from '../../lib/snapshots';
 import { lotSignal, formatEstimate } from '../../components/LotCard';
@@ -123,6 +124,8 @@ export type LedgerState = { ledger: Map<string, LedgerEntry>; loaded: boolean; e
 /** the page's own reads — what the rooms written before the contract use */
 export interface DeskInternals {
   auth: { authEnabled: boolean; user: ReturnType<typeof useAuth>['user']; authReady: boolean; savedReady: boolean; signInWithGoogle: () => void; signOut: () => void };
+  /** THE DAILY DESK preference (lib/email-prefs), read ONCE here for the nudge (desk/nudge) and the Account toggle */
+  daily: ReturnType<typeof useDailyEmail>;
   /** raw saved ids (the badge's truth) and the meta keyed by them */
   savedIds: string[]; savedMeta: Record<string, SavedMeta>;
   isSaved: (id: string) => boolean;
@@ -187,6 +190,7 @@ export function useDeskState(): DeskState {
   // so they are read BEFORE the data layer.
   const { savedIds, savedMeta, toggle, isSaved, ownedIds, toggleOwned, setSavedFields, dismissResults } = useSavedLots();
   const { authEnabled, user, authReady, savedReady, signInWithGoogle, signOut } = useAuth();
+  const daily = useDailyEmail(authEnabled ? user : null);
   // LAZY CORPUS (Sep 2026 perf pass). Everything corpus-fed on this desk is
   // ABOUT THE SAVES — resolving each saved id to its live row, appraising the
   // collection, the reference bands, the settled record. An empty desk (signed
@@ -945,6 +949,7 @@ export function useDeskState(): DeskState {
 
   const i: DeskInternals = {
     auth: { authEnabled, user, authReady, savedReady, signInWithGoogle, signOut },
+    daily,
     savedIds, savedMeta, isSaved, toggle, toggleOwned, setSavedFields, metaFor, savedIdOf, ownedLotIds, ownedIdSet,
     savedLots, allLots, tasteBook, lastCrawl: lastCrawl || null, loading, fullLoaded, fullError, fromCache, marketData,
     fullSlow, partialLoadFailed, pageLoading, landReady,
