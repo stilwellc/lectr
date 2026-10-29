@@ -49,7 +49,8 @@ test('results since the last email grade the hammer against your max', () => {
   assert.equal(d.results.length, 1);
   assert.equal(d.results[0].inReach, false);
   assert.match(d.results[0].vsMax!, /\+20% vs your max/);
-  assert.match(d.subject, /1 of your watches sold/);
+  assert.match(d.subject, /1 watch of yours sold/);
+  assert.equal(d.results[0].day, 'Tue, Oct 20');
   // a result older than the last email is not repeated
   const d2 = planDesk({ now: NOW, watches: [{ lot_id: 'x' }], live: new Map(), sold: [{ id: 'x', price_usd: 1, sale_date: '2026-10-19' }], picks: [], lastSentOn: '2026-10-20' })!;
   assert.equal(d2.results.length, 0);
@@ -157,7 +158,7 @@ test('new for you reads firstSeen since the last Desk, by a followed name, and s
     now: NOW, watches: [], live: liveMap(book3), sold: [], picks: [], book: book3,
     follows: [FOLLOW_WARHOL, { kind: 'entity' as const, key: 'sj:tcg|k:charizard', label: 'Charizard' }, { kind: 'cat' as const, key: 'fine-art:prints', label: 'Fine art · Prints & multiples' }],
   })!;
-  assert.deepEqual(d3.fresh!.groups.map(g => [g.label, g.total, g.items.length, g.more]), [['By Andy Warhol', 5, FRESH_PER_GROUP, 2], ['Fine art · Prints & multiples', 3, 3, 0], ['Charizard', 2, 2, 0]]);
+  assert.deepEqual(d3.fresh!.groups.map(g => [g.label, g.total, g.items.length, g.more]), [['By Andy Warhol', 5, FRESH_PER_GROUP, 2], ['Fine Art · Prints & Multiples', 3, 3, 0], ['Charizard', 2, 2, 0]]);   // a category's label comes from the taxonomy
   assert.equal(d3.fresh!.groups[1].href, '/?cat=fine-art&sub=prints&tab=new');
   assert.equal(d3.fresh!.total, 10);
   assert.equal(d3.fresh!.moreGroups, 0);
@@ -194,11 +195,13 @@ test('picks skip lots you already watch, cap at PICKS_N and sit in lanes: follow
 
 test('laneOf reads the recommender seed; lastSaleOf takes the newest settled row', () => {
   assert.deepEqual(laneOf({ seed: { kind: 'follow', label: 'Andy Warhol', follow: {} } }), { kind: 'follow', label: 'Because you follow Andy Warhol' });
-  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Companion (Flayed)' } }), { kind: 'saved', label: 'Because you saved Companion (Flayed)' });
+  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Companion (Flayed)' } }), { kind: 'saved', label: 'Because you saved Companion (Flayed)', who: null });
+  // the recommender's discover lane is new to you whatever seed priced it
+  assert.equal(laneOf({ seed: { kind: 'follow', label: 'Jalen Hurts', follow: {} }, lane: 'discover' }).kind, 'new');
   // a saved lot's handle: maker · short title, closed at a whole word inside 48 chars; the maker is not repeated when the title already says it
-  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Deux buveurs catalans (Two Catalan Drinkers), pl. 12, from La Suite Vollard', who: 'Pablo Picasso' } }), { kind: 'saved', label: 'Because you saved Pablo Picasso · Deux buveurs catalans…' });
-  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Shohei Ohtani bat', who: 'Shohei Ohtani' } }), { kind: 'saved', label: 'Because you saved Shohei Ohtani · bat' });   // a title that opens on the name splits there
-  assert.deepEqual(laneOf({ seed: { kind: 'owned', label: 'Chair' } }), { kind: 'saved', label: 'Because you own Chair' });
+  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Deux buveurs catalans (Two Catalan Drinkers), pl. 12, from La Suite Vollard', who: 'Pablo Picasso' } }), { kind: 'saved', label: 'Because you saved Pablo Picasso · Deux buveurs catalans…', who: 'Pablo Picasso' });
+  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Shohei Ohtani bat', who: 'Shohei Ohtani' } }), { kind: 'saved', label: 'Because you saved Shohei Ohtani · bat', who: 'Shohei Ohtani' });   // a title that opens on the name splits there
+  assert.deepEqual(laneOf({ seed: { kind: 'owned', label: 'Chair' } }), { kind: 'saved', label: 'Because you own Chair', who: null });
   assert.equal(laneOf({ seed: { kind: 'follow', label: 'TCG', market: 'tcg' } }).kind, 'new');
   assert.equal(laneOf({ seed: { kind: 'follow', label: 'KAWS', follow: {} }, tier: 2 }).kind, 'new');
   const row = (id: string, d: string, p = 100) => ({ id, p, d, h: 'Phillips', t: `T ${id}` });
@@ -223,7 +226,7 @@ test('your names: one ledger line per followed name — live count, soonest sale
   assert.deepEqual(d.names[0].last, { id: 'sold-1', hammer: '$48K', day: 'Oct 14', house: "Christie's", title: 'Flowers' });
   assert.equal(d.names[0].href, '/makers/andy-warhol');
   assert.deepEqual(d.quietNames, ['KAWS']);                // nothing live: collapsed into the quiet line, no hammer claim
-  const cat = d.names.find(n => n.label.startsWith('Fine art'))!;
+  const cat = d.names.find(n => n.label.startsWith('Fine Art'))!;
   assert.equal(cat.live, 1);
   assert.match(cat.note ?? '', /category follow/);
   assert.match(d.subject, /2 of your names are on the block/);
@@ -261,11 +264,11 @@ test('a settled-seed lane head reads the title’s leading name; leadingNameOf k
   assert.equal(leadingNameOf('Flowers'), null);                             // one word is a title, not a name
   assert.equal(leadingNameOf('Deux buveurs catalans (Two Catalan Drinkers)'), null);
   // the seed of a settled watch carries no `who`: the runner's read (or the title) leads the lane head
-  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Thomas Edison Autograph Letter Signed on the Phonograph, 1888' } }), { kind: 'saved', label: 'Because you saved Thomas Edison · Autograph Letter Signed on the…' });
-  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Autograph Letter Signed, 1888' } }, 'Thomas Edison'), { kind: 'saved', label: 'Because you saved Thomas Edison · Autograph Letter Signed, 1888' });
-  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Flowers' } }), { kind: 'saved', label: 'Because you saved Flowers' });
+  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Thomas Edison Autograph Letter Signed on the Phonograph, 1888' } }), { kind: 'saved', label: 'Because you saved Thomas Edison · Autograph Letter Signed on the…', who: 'Thomas Edison' });
+  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Autograph Letter Signed, 1888' } }, 'Thomas Edison'), { kind: 'saved', label: 'Because you saved Thomas Edison · Autograph Letter Signed, 1888', who: 'Thomas Edison' });
+  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Flowers' } }), { kind: 'saved', label: 'Because you saved Flowers', who: null });
   // the name runs straight into a slash: no split ("Tom Brady · /Patrick Mahomes" read wrong)
-  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Tom Brady/Patrick Mahomes II Dual-Signed Ticket', who: 'Tom Brady' } }), { kind: 'saved', label: 'Because you saved Tom Brady/Patrick Mahomes II Dual-Signed Ticket' });
+  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Tom Brady/Patrick Mahomes II Dual-Signed Ticket', who: 'Tom Brady' } }), { kind: 'saved', label: 'Because you saved Tom Brady/Patrick Mahomes II Dual-Signed Ticket', who: 'Tom Brady' });
 });
 
 test('the desk says how many watches have settled, and how many results still wait, regardless of date', () => {
@@ -381,12 +384,114 @@ test('the lead picks the richest fact: needs you, closing, results, new, the wee
   const far = lot('far', 4 * 24 * H);
   const d1 = planDesk({ now: NOW, watches: [{ lot_id: 'far' }], live: liveMap([far]), sold: [], picks: [] })!;
   assert.equal(d1.subject, 'Your desk: 1 of yours closes this week');
+  // picks are not "yours": the week's lead and the glance split watches from picks
+  const p1 = lot('p1', 2 * 24 * H), p2 = lot('p2', 3 * 24 * H), p3 = lot('p3', 5 * 24 * H);
+  const picks3 = [p1, p2, p3].map(l => ({ lot: l, note: 'x', lane: { kind: 'new' as const, label: 'New to you' } }));
+  const dp = planDesk({ now: NOW, watches: [{ lot_id: 'gone' }], live: liveMap([p1, p2, p3]), sold: [], picks: picks3 })!;
+  assert.equal(dp.glance.week, 3);
+  assert.deepEqual([dp.glance.weekWatches, dp.glance.weekPicks], [0, 3]);
+  // with picks on the paper, the lead is the richest of new / picks / names — "3 picks for you today"; the week fact follows
+  assert.equal(dp.subject, 'Your desk: 3 picks for you today');
+  assert.match(dp.preheader, /3 picks for you close this week/);
+  assert.ok(render(dp).html.includes('0 watches + 3 picks closing'));
+  const dm = planDesk({ now: NOW, watches: [{ lot_id: 'far' }, { lot_id: 'p1' }], live: liveMap([far, p1, p2, p3]), sold: [], picks: picks3.slice(1) })!;
+  assert.match(dm.preheader, /2 of your watches and 2 picks close this week/);
+  assert.ok(render(dm).html.includes('2 watches + 2 picks closing'));
+  // nothing new, no picks, one name live: the names lead; else the week's words alone
+  const n1 = warhol('n1', 30 * H);
+  const dn = planDesk({ now: NOW, watches: [], live: liveMap([n1]), sold: [], picks: [], follows: [FOLLOW_WARHOL], book: [n1] })!;
+  assert.equal(dn.subject, 'Your desk: 1 of your names is on the block');
+  const dw = planDesk({ now: NOW, watches: [{ lot_id: 'far' }, { lot_id: 'gone' }], live: liveMap([far, p1]), sold: [], picks: picks3.slice(0, 1), follows: [], book: [] })!;
+  assert.equal(dw.subject, 'Your desk: 1 pick for you today');
+  assert.match(dw.preheader, /1 of your watches and 1 pick close this week/);
+  // the richest wins: 52 new beats 8 picks
+  const many = Array.from({ length: 12 }, (_, k) => warhol(`m${k}`, (k + 30) * H, { firstSeen: TODAY } as Partial<AuctionLot>));
+  const dr = planDesk({ now: NOW, watches: [], live: liveMap(many), sold: [], picks: picks3, follows: [FOLLOW_WARHOL], book: many })!;
+  assert.equal(dr.subject, 'Your desk: 12 new lots for the names you follow');
+  assert.match(dr.preheader, /^3 picks · 1 name on the block/);
   const soon = lot('soon', 3 * H);
   const d2 = planDesk({ now: NOW, watches: [{ lot_id: 'soon' }, { lot_id: 'far' }], live: liveMap([soon, far]), sold: [], picks: [] })!;
   assert.equal(d2.subject, 'Your desk: 1 of yours closes today');
   const flagged = lot('flag', 400 * H, { signal: { label: 'Below Market', pct: 40, basis: 6, kind: 'form', confidence: 'low' } } as unknown as Partial<AuctionLot>);
   const d3 = planDesk({ now: NOW, watches: [], live: liveMap([flagged]), sold: [], picks: [], follows: [{ kind: 'house', key: 'Goldin', label: 'Goldin' }], book: [flagged] })!;
   assert.equal(d3.subject, 'Your desk: 1 below-market flag on the block');
+});
+
+test('"In this edition" lists the sections present with their counts, in html and text', () => {
+  const a = lot('a', 5 * H), b = lot('b', 50 * H);
+  const d = planDesk({ now: NOW, watches: [{ lot_id: 'a' }, { lot_id: 'b' }], live: liveMap([a, b]), sold: [], picks: [{ lot: lot('p', 72 * H), note: 'x', lane: { kind: 'new', label: 'New to you' } }] })!;
+  assert.deepEqual(d.edition, ['Needs you (1)', 'Your desk today (2)', 'Closing this week (3)', 'The picks (1)']);
+  const { html, text } = render(d);
+  assert.ok(html.includes('In this edition: Needs you (1) · Your desk today (2) · Closing this week (3) · The picks (1)'));
+  assert.ok(text.includes('In this edition: Needs you (1) · Your desk today (2) · Closing this week (3) · The picks (1)'));
+  assert.deepEqual(planDesk({ now: NOW, watches: [{ lot_id: 'gone' }], live: new Map(), sold: [], picks: [] })!.edition, []);
+});
+
+test('results to confirm: RESULT_ROWS newest first, grouped by day when they span days, "and N more"', () => {
+  const rows = Array.from({ length: 8 }, (_, k) => ({ id: `r${k}`, title: `Card ${k}`, house: 'REA', price_usd: 1000 + k, sale_date: k < 5 ? '2026-10-20' : '2026-10-21' }));
+  const d = planDesk({ now: NOW, watches: rows.map(r => ({ lot_id: r.id })), live: new Map(), sold: rows, picks: [], lastSentOn: '2026-10-19' })!;
+  assert.equal(d.results.length, 5);
+  assert.equal(d.resultsMore, 3);
+  assert.deepEqual(d.results.map(r => r.day), ['Wed, Oct 21', 'Wed, Oct 21', 'Wed, Oct 21', 'Tue, Oct 20', 'Tue, Oct 20']);   // newest day first, biggest hammer first within it
+  assert.equal(d.results[0].id, 'r7');
+  assert.match(d.subject, /8 watches of yours sold/);
+  const { html, text } = render(d);
+  assert.ok(html.includes('Results to confirm · 8'));
+  assert.ok(html.includes('>Wed, Oct 21<') && html.includes('>Tue, Oct 20<'));
+  assert.ok(html.includes('and 3 more results'));
+  assert.ok(text.includes('Wed, Oct 21\n- Card 7'));
+  assert.ok(text.includes('and 3 more: https://lectr.bid/profile#results'));
+  // one day: no day heads
+  const one = planDesk({ now: NOW, watches: rows.slice(0, 2).map(r => ({ lot_id: r.id })), live: new Map(), sold: rows.slice(0, 2), picks: [], lastSentOn: '2026-10-19' })!;
+  assert.ok(!render(one).html.includes('>Tue, Oct 20<'));
+});
+
+test('your collection: each owned piece with what you paid and its maker’s latest hammer; no hammer on file, no claim', () => {
+  const liveOwned = warhol('lw', 60 * H, { title: 'Flowers, 1970' } as Partial<AuctionLot>);
+  const d = planDesk({
+    now: NOW, watches: [
+      { lot_id: 'own-1', saved_title: 'Cow, 1976', saved_artist: 'andy-warhol', owned: true, paid_usd: 12_000 },
+      { lot_id: 'own-2', saved_title: 'Conoid bench', saved_artist: 'george-nakashima', owned: true, paid_usd: null },
+      { lot_id: 'own-3', saved_title: 'A letter', saved_artist: 'science-tech', owned: true, paid_usd: 300 },
+      { lot_id: 'lw', owned: true, paid_usd: 5_000 },
+      { lot_id: 'w', max_usd: 100 },
+    ],
+    live: liveMap([liveOwned, lot('w', 50 * H)]), sold: [], picks: [],
+    nameSold: new Map([['mk:andy-warhol', { id: 'sold-1', p: 243_200, d: '2026-10-21', h: "Christie's", t: 'African Elephant' }]]),
+  })!;
+  assert.equal(d.collection.length, 4);
+  assert.deepEqual(d.collection[0], { id: 'own-1', title: 'Cow, 1976', maker: 'Andy Warhol', img: null, paid: '$12K', latest: { id: 'sold-1', hammer: '$243K', day: 'Oct 21', house: "Christie's" } });
+  assert.equal(d.collection[1].maker, 'George Nakashima');
+  assert.equal(d.collection[1].latest, null);     // nothing on file for Nakashima here: no line
+  assert.equal(d.collection[1].paid, null);
+  assert.equal(d.collection[2].maker, null);      // a category slug is not a maker
+  assert.equal(d.collection[3].maker, 'Andy Warhol');   // a live owned lot reads its entity
+  assert.equal(d.collection[3].latest?.hammer, '$243K');
+  assert.equal(d.watched, 1);                     // owned pieces are not watches
+  assert.equal(d.deskSettled, 0);
+  assert.ok(d.edition.includes('Your collection (4)'));
+  const { html, text } = render(d);
+  assert.ok(html.includes('Your collection'));
+  assert.ok(html.includes('Andy Warhol’s latest hammer <b style="font-weight:600">$243K</b>'));
+  assert.ok(html.includes('bought $12K'));
+  assert.ok(text.includes('- Cow, 1976 · Andy Warhol · bought $12K · Andy Warhol’s latest hammer $243K, Oct 21, Christie\'s'));
+  assert.ok(!render(planDesk({ now: NOW, watches: [{ lot_id: 'w' }], live: liveMap([lot('w', 50 * H)]), sold: [], picks: [] })!).html.includes('Your collection'));
+});
+
+test('two saved-lot lanes of one maker merge; a baseline of zero says all the bids came since the save; an empty New for you is one line', () => {
+  const mk = (id: string, label: string, who: string) => ({ lot: lot(id, 72 * H), note: 'x', lane: { kind: 'saved' as const, label, who } });
+  const d = planDesk({ now: NOW, watches: [], live: new Map(), sold: [], picks: [mk('a', 'Because you saved Thomas Edison · Letter', 'Thomas Edison'), mk('b', 'Because you saved Thomas Edison · Book', 'Thomas Edison'), mk('c', 'Because you saved Charles Schulz · Snoopy', 'Charles Schulz')] })!;
+  assert.deepEqual(d.picks.map(p => p.lane?.label), ['Because you saved 2 Thomas Edison lots', 'Because you saved 2 Thomas Edison lots', 'Because you saved Charles Schulz · Snoopy']);
+  const z = lot('z', 50 * H, { currentBid: 900, bidCount: 13 });
+  const dz = planDesk({ now: NOW, watches: [{ lot_id: 'z', bid_count: 0 }], live: liveMap([z]), sold: [], picks: [] })!;
+  assert.equal(dz.desk[0].moved, 'all 13 bids since you saved it');
+  const quietBook = [warhol('q', 48 * H, { firstSeen: '2026-10-01' } as Partial<AuctionLot>)];
+  const dq = planDesk({ now: NOW, watches: [], live: liveMap(quietBook), sold: [], picks: [], follows: [FOLLOW_WARHOL, { kind: 'cat', key: 'space-science:science-tech', label: 'Space & Science · science-tech' }], book: quietBook })!;
+  assert.equal(dq.fresh?.total, 0);
+  const h = render(dq).html;
+  assert.ok(h.includes('Nothing first seen since yesterday by a name or category you follow.'));
+  assert.ok(!h.includes('0 new ·'));
+  assert.deepEqual(dq.quietNames, ['Science & Technology']);   // the taxonomy's label, not the stored "Space & Science · science-tech"
 });
 
 test('whenText reads the reader clock', () => {

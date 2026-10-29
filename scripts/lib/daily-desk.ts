@@ -48,7 +48,11 @@ import { makerLineOf } from '../../app/lib/lot-labels';
 import { baseId } from './push-plan';
 import { imageOf, rrPreviewImage } from '../../app/lib/house-images';
 import { affinityOf, type Follow } from '../../app/lib/follows';
-import { marketNamesOf, type MarketName } from '../../app/lib/your-market';
+import { marketNamesOf, makerEntityId, entityIdOfFollow, type MarketName } from '../../app/lib/your-market';
+import { lotFollowOf } from '../../app/lib/lot-follow';
+import { subEntityLabel } from '../../app/lib/entity/key';
+import { ARTIST_LABEL } from '../../app/constants';
+import { CAT_LABEL } from '../../app/lib/taxonomy';
 import { entityIdOf } from '../../app/lib/entity/live';
 import { parseEntityId, CAT_MARKET } from '../../app/lib/entity/key';
 import { pageHrefOf } from '../../app/lib/entity/kinds';
@@ -60,6 +64,10 @@ import type { CatKey } from '../../app/lib/taxonomy';
 export const CLOSING_WINDOW_MS = 36 * 3_600_000;
 export const WEEK_MS = 7 * 86_400_000;
 export const MAX_ROWS = 6;
+/** results to confirm printed before "and N more" */
+export const RESULT_ROWS = 5;
+/** owned pieces printed before "and N more" */
+export const COLLECTION_ROWS = 8;
 /** live watches printed in full before "and N more" */
 export const DESK_ROWS = 12;
 /** new-for-you rows per follow group, and groups per paper */
@@ -76,9 +84,11 @@ export interface WatchRow {
   lot_id: string; saved_title?: string | null; max_usd?: number | null; owned?: boolean | null; est_mid?: number | null;
   /** the bid count the save took (saved_lots.bid_count) — movement reads against it */
   bid_count?: number | null;
+  /** an owned piece: what the collector paid (cost basis), the maker slug snapshot */
+  paid_usd?: number | null; saved_artist?: string | null;
 }
 export interface SoldRow { id: string; title?: string | null; house?: string | null; price_usd?: number | null; sale_date?: string | null; image_url?: string | null }
-export interface PickLane { kind: 'follow' | 'saved' | 'new'; label: string }
+export interface PickLane { kind: 'follow' | 'saved' | 'new'; label: string; /** the saved seed's maker (lanes of one maker merge) */ who?: string | null }
 export interface PickIn { lot: AuctionLot; note: string; lane?: PickLane | null }
 /** a name's last settled sale (the entity detail bucket's newest row) */
 export interface LastSale { id: string; p: number; d: string; h: string; t: string }
@@ -100,12 +110,14 @@ export interface DeskRow extends DeskItem {
   /** the bid's distance from your max ("$1.2K under your max" / "past your max by $300") */
   room: string | null;
 }
-export interface ResultItem { id: string; title: string; house: string; img: string | null; hammer: string; vsMax: string | null; inReach: boolean | null; vsEst: string | null }
+export interface ResultItem { id: string; title: string; house: string; img: string | null; hammer: string; vsMax: string | null; inReach: boolean | null; vsEst: string | null; /** the sale day ("Oct 21") — results spanning days group by it */ day: string }
+/** an owned piece with its maker's latest settled hammer (never an appraisal) */
+export interface CollectionItem { id: string; title: string; maker: string | null; img: string | null; paid: string | null; latest: { id: string; hammer: string; day: string; house: string } | null }
 export interface PickItem extends DeskItem { note: string; lane: PickLane | null }
 export interface WeekCell { day: string; dow: string; date: string; today: boolean; watches: number; picks: number; names: number }
 export interface WeekCalendar { days: WeekCell[]; watches: number; picks: number; names: number }
 export interface FreshGroup { label: string; href: string; items: DeskItem[]; more: number; total: number }
-export interface FreshSection { since: string; groups: FreshGroup[]; /** groups past FRESH_GROUPS */ moreGroups: number; total: number }
+export interface FreshSection { since: string; /** "since your last Desk (Wed, Oct 28)" / "since yesterday" */ window: string; groups: FreshGroup[]; /** groups past FRESH_GROUPS */ moreGroups: number; total: number }
 export interface NameLine {
   label: string; href: string; live: number;
   soonest: { when: string; house: string } | null;
@@ -121,14 +133,18 @@ export interface Glance {
   est: string | null;
   /** the soonest watched close: the day word (today / tomorrow / Wed, Nov 11), its clock when the house gave one, the lot */
   next: { id: string; title: string; when: string; time: string | null; /** the lot already prints under needs-you */ above: boolean } | null;
-  /** watched closes inside 7 days (the 36h window included) */
+  /** what Closing this week counts: your watches + picks on the calendar */
   week: number;
+  weekWatches: number; weekPicks: number;
   picks: number;
 }
 export interface DeskEmail {
   subject: string; preheader: string; headline: string;
   glance: Glance;
-  overMax: DeskItem[]; closing: DeskItem[]; results: ResultItem[];
+  overMax: DeskItem[]; closing: DeskItem[]; results: ResultItem[]; resultsMore: number;
+  /** "In this edition" — the sections present, with their counts */
+  edition: string[];
+  collection: CollectionItem[]; collectionMore: number;
   /** the reader has watches at all (settled ones included) — the empty states read it */
   watched: number;
   desk: DeskRow[]; deskMore: number;
@@ -164,7 +180,7 @@ function cut(s: string, n: number): string {
   if (paren > n * 0.5 && !out.includes(')', paren)) out = out.slice(0, paren);
   return `${out.replace(/[\s,;:.—–-]+$/, '')}…`;
 }
-const plural = (n: number, one: string, many = `${one}s`) => `${n2(n)} ${n === 1 ? one : many}`;
+const plural = (n: number, one: string, many = one.endsWith('h') ? `${one}es` : `${one}s`) => `${n2(n)} ${n === 1 ? one : many}`;
 
 /** "today 7:00 PM" / "tomorrow" / "Thu" — the reader's clock (tz from the runner) */
 export function whenText(ms: number | null, now: number, tz: string, timed = true): string | null {
@@ -202,7 +218,7 @@ function deskRowOf(l: AuctionLot, w: WatchRow | undefined, now: number, tz: stri
   let moved: string | null = null;
   if (base != null && cur != null) {
     const d = cur - base;
-    moved = d > 0 ? `+${plural(d, 'bid')} since you saved it` : 'no new bids since you saved it';
+    moved = d > 0 && d === cur ? `all ${plural(d, 'bid')} since you saved it` : d > 0 ? `+${plural(d, 'bid')} since you saved it` : 'no new bids since you saved it';
   }
   const max = w?.max_usd && w.max_usd > 0 ? w.max_usd : null;
   const bid = bidUsdOf(l);
@@ -265,7 +281,8 @@ export interface PlanInput {
 export function planDesk(input: PlanInput): DeskEmail | null {
   const { now, watches, live, sold, picks } = input;
   const tz = input.tz || 'America/New_York';
-  const follows = input.follows || [];
+  // a category follow's label from the taxonomy (a stored "Space & Science · science-tech" reads "Science & Tech")
+  const follows = (input.follows || []).map(f => (f.kind === 'cat' ? { ...f, label: catLabelOf(f.key) } : f));
   const book = input.book || Array.from(live.values());
   const today = dayKeyIn(now, tz);
   const yesterday = dayKeyIn(now - DAY_MS, tz);
@@ -286,9 +303,11 @@ export function planDesk(input: PlanInput): DeskEmail | null {
   closing.forEach(i => used.add(baseId(i.id)));
 
   const since = input.lastSentOn || dayKeyIn(now - 2 * DAY_MS, tz);
-  const results: ResultItem[] = sold
+  const resultsAll = sold
     .filter(s => (s.price_usd ?? 0) > 0 && (s.sale_date || '') >= since)
-    .slice(0, MAX_ROWS)
+    .sort((a, b) => (b.sale_date || '').localeCompare(a.sale_date || '') || (b.price_usd as number) - (a.price_usd as number));
+  const results: ResultItem[] = resultsAll
+    .slice(0, RESULT_ROWS)
     .map(s => {
       const w = byId.get(baseId(s.id));
       const price = s.price_usd as number;
@@ -300,8 +319,25 @@ export function planDesk(input: PlanInput): DeskEmail | null {
         vsMax: max != null ? `${pct((price / max - 1) * 100)} vs your max ${fmtFace(max)}` : null,
         inReach: max != null ? price <= max : null,
         vsEst: est != null ? `${pct((price / est - 1) * 100)} vs the estimate` : null,
+        day: s.sale_date ? dayLabel(s.sale_date.slice(0, 10), { weekday: 'short', month: 'short', day: 'numeric' }) : 'date to come',
       };
     });
+  const resultsMore = resultsAll.length - results.length;
+
+  // YOUR COLLECTION — the owned pieces with their maker's latest settled hammer (the entity bucket's newest row; never an appraisal)
+  const ownedRows = watches.filter(w => w.owned);
+  const collection: CollectionItem[] = ownedRows.slice(0, COLLECTION_ROWS).map(w => {
+    const l = live.get(baseId(w.lot_id)) ?? null;
+    const m = ownedMakerOf(w, l);
+    const latest = m.id ? input.nameSold?.get(m.id) ?? null : null;
+    return {
+      id: w.lot_id, title: cut(craftTitle(l?.title || w.saved_title || 'Piece', l?.auctionHouse || undefined), TITLE_CAP), maker: m.label,
+      img: l ? sizedImg(httpsImg(imageOf(l)), 240) ?? null : sizedImg(httpsImg(rrPreviewImage(w.lot_id)), 240) ?? null,
+      paid: w.paid_usd && w.paid_usd > 0 ? fmtFace(w.paid_usd) : null,
+      latest: latest ? { id: latest.id, hammer: fmtFace(latest.p), day: dayLabel(latest.d, { month: 'short', day: 'numeric' }), house: latest.h } : null,
+    };
+  });
+  const collectionMore = ownedRows.length - collection.length;
 
   // YOUR DESK TODAY — every live watch, soonest close first (undated last); a lot under needs-you prints there only
   const deskAll = liveWatched
@@ -320,6 +356,13 @@ export function planDesk(input: PlanInput): DeskEmail | null {
     .filter(p => !watchedIds.has(baseId(p.lot.id)))
     .slice(0, PICKS_N)
     .map(p => ({ ...itemOf(p.lot, undefined, now, tz), note: p.note, lane: p.lane ?? null }));
+  // two saved-lot lanes of one maker read as one ("Because you saved 2 Thomas Edison lots")
+  const byWho = new Map<string, Set<string>>();
+  for (const p of pickItems) if (p.lane?.kind === 'saved' && p.lane.who) byWho.set(p.lane.who, (byWho.get(p.lane.who) || new Set()).add(p.lane.label));
+  for (const p of pickItems) {
+    const w = p.lane?.kind === 'saved' ? p.lane.who : null;
+    if (w && (byWho.get(w)?.size ?? 0) > 1) p.lane = { ...p.lane!, label: `Because you saved ${byWho.get(w)!.size} ${w} lots` };
+  }
   for (const p of pickItems) { const k = p.lane?.label ?? ''; if (!laneOrder.has(k)) laneOrder.set(k, laneOrder.size); }
   pickItems.sort((a, b) => (laneRank[a.lane?.kind ?? 'new'] - laneRank[b.lane?.kind ?? 'new']) || (laneOrder.get(a.lane?.label ?? '')! - laneOrder.get(b.lane?.label ?? '')!));
   const pickIds = new Set(pickItems.map(p => baseId(p.id)));
@@ -378,8 +421,9 @@ export function planDesk(input: PlanInput): DeskEmail | null {
         items: lots.slice(0, FRESH_PER_GROUP).map(l => itemOf(l, undefined, now, tz)), more: Math.max(0, lots.length - FRESH_PER_GROUP), total: lots.length,
       };
     });
+    const window = `since ${lastDesk ? `your last Desk (${dayLabel(lastDesk, { weekday: 'short', month: 'short', day: 'numeric' })})` : 'yesterday'}`;
     fresh = {
-      since: `first seen on lectr since ${lastDesk ? `your last Desk (${dayLabel(lastDesk, { weekday: 'short', month: 'short', day: 'numeric' })})` : 'yesterday'}, on the block and by a name or category you follow — house onboarding floods left out`,
+      since: `first seen on lectr ${window}, on the block and by a name or category you follow — house onboarding floods left out`, window,
       groups, moreGroups: groupsAll.length - groups.length, total: groupsAll.reduce((s, g) => s + g.lots.length, 0),
     };
   }
@@ -473,6 +517,11 @@ export function planDesk(input: PlanInput): DeskEmail | null {
   const soonest = deskAll.find(x => x.ms != null) ?? null;
   // what Closing this week counts: your watches + picks on the calendar (the picks closing today used to be missing here)
   const weekAll = week.watches + week.picks;
+  // the week in words: picks are not "yours" — "3 picks for you close this week", "2 of your watches and 3 picks close this week"
+  const weekLead = !weekAll ? null
+    : week.watches && week.picks ? `${week.watches} of your watches and ${plural(week.picks, 'pick')} close this week`
+      : week.watches ? `${week.watches} of yours ${week.watches === 1 ? 'closes' : 'close'} this week`
+        : `${plural(week.picks, 'pick')} for you ${week.picks === 1 ? 'closes' : 'close'} this week`;
   const glance: Glance = {
     watching: liveWatched.length,
     est: estUsd > 0 ? fmtFace(estUsd) : null,
@@ -481,46 +530,67 @@ export function planDesk(input: PlanInput): DeskEmail | null {
       const m = /^(today|tomorrow)\s+(.+)$/.exec(w);
       return { id: soonest.l.id, title: cut(craftTitle(soonest.l.title, soonest.l.auctionHouse), 40), when: m ? m[1] : w, time: m && m[2] !== '(time TBC)' ? m[2] : null, above: used.has(baseId(soonest.l.id)) };
     })() : null,
-    week: weekAll,
+    week: weekAll, weekWatches: week.watches, weekPicks: week.picks,
     picks: pickItems.length,
   };
 
-  // THE LEAD — the richest fact: needs you, then closing, results, new, the week, the names, the market
+  // THE LEAD — needs you first (past max, closing, results); then the richest of new for you / the picks / your names;
+  // then the week, the market, a quiet day. The sub-line says what else the paper holds.
   const closesToday = closing.filter(i => i.when?.startsWith('today')).length;
-  const namesLive = names.filter(n => n.live > 0).length;
+  const namesLive = names.length;
+  const richest = [
+    { n: fresh?.total ?? 0, say: `${plural(fresh?.total ?? 0, 'new lot')} for the names you follow` },
+    { n: pickItems.length, say: `${plural(pickItems.length, 'pick')} for you today` },
+    { n: namesLive, say: `${namesLive} of your names ${namesLive === 1 ? 'is' : 'are'} on the block` },
+  ].sort((a, b) => b.n - a.n)[0];
   const lead = overMax.length ? `${overMax.length} ${overMax.length === 1 ? 'bid has' : 'bids have'} passed your max`
     : closesToday ? `${closesToday} of yours ${closesToday === 1 ? 'closes' : 'close'} today`
       : closing.length ? `${closing.length} of yours ${closing.length === 1 ? 'closes' : 'close'} in the next 36 hours`
-        : results.length ? `${results.length} of your watches sold`
-          : fresh?.total ? `${plural(fresh.total, 'new lot')} for the names you follow`
-            : weekAll ? `${weekAll} of yours ${weekAll === 1 ? 'closes' : 'close'} this week`
-              : namesLive ? `${namesLive} of your names ${namesLive === 1 ? 'is' : 'are'} on the block`
-                : pickItems.length ? `${plural(pickItems.length, 'pick')} for you`
-                  : flagged ? `${plural(flagged, 'below-market flag')} on the block`
-                    : 'a quiet day on your desk';
+        : results.length ? `${plural(results.length + resultsMore, 'watch', 'watches')} of yours sold`
+          : richest.n ? richest.say
+            : weekLead ? weekLead
+              : flagged ? `${plural(flagged, 'below-market flag')} on the block`
+                : 'a quiet day on your desk';
   const facts = [
-    glance.watching ? `${glance.watching} watching${glance.est ? ` · ${glance.est} to the hammer` : ''}` : null,
+    fresh?.total && !lead.includes('new lot') ? `${fresh.total} new for you` : null,
+    pickItems.length && !lead.includes('pick') ? plural(pickItems.length, 'pick') : null,
+    namesLive && !lead.includes('your names') ? `${namesLive} ${namesLive === 1 ? 'name' : 'names'} on the block` : null,
+    weekLead && lead !== weekLead && !lead.includes('this week') ? weekLead : null,
     closing.length && !lead.includes('close') ? `${closing.length} closing` : null,
-    weekAll && !lead.includes('this week') ? `${weekAll} close this week` : null,
-    results.length && !lead.includes('sold') ? `${results.length} sold` : null,
-    fresh?.total && !lead.includes('new') ? `${fresh.total} new for you` : null,
-    pickItems.length && !lead.includes('pick') ? `${plural(pickItems.length, 'pick')}` : null,
-    namesLive && !lead.includes('names') ? `${namesLive} of your names live` : null,
-  ].filter(Boolean).join(' · ');
+    results.length && !lead.includes('sold') ? `${results.length + resultsMore} sold` : null,
+    collection.length ? `${plural(collection.length + collectionMore, 'piece')} you own` : null,
+    glance.watching ? `${glance.watching} watching${glance.est ? ` · ${glance.est} to the hammer` : ''}` : null,
+    input.pendingResults ? `${n2(input.pendingResults)} ${input.pendingResults === 1 ? 'result' : 'results'} waiting` : null,
+  ].filter(Boolean).slice(0, 5).join(' · ');
+  // IN THIS EDITION — the sections present, with their counts
+  const needsN = overMax.length + closing.length + results.length;
+  const edition = [
+    needsN ? `Needs you (${needsN})` : null,
+    desk.length ? `Your desk today (${desk.length + deskAbove})` : null,
+    collection.length ? `Your collection (${collection.length + collectionMore})` : null,
+    weekAll ? `Closing this week (${weekAll})` : null,
+    fresh?.total ? `New for you (${fresh.total})` : null,
+    pickItems.length ? `The picks (${pickItems.length})` : null,
+    names.length ? `Your names (${names.length} live)` : null,
+    market.length ? `The market (${market.length})` : null,
+  ].filter((x): x is string => !!x);
   return {
     subject: `Your desk: ${lead}`,
     preheader: facts || 'Your watches, your names, what’s new and the market — every morning.',
     headline: `${lead[0].toUpperCase()}${lead.slice(1)}.`,
-    glance, overMax, closing, results,
-    watched: watches.length, desk, deskMore, deskAbove, deskSettled: watches.filter(w => !live.has(baseId(w.lot_id))).length,
+    glance, overMax, closing, results, resultsMore, edition, collection, collectionMore,
+    // owned pieces are the collection, not watches: neither "watched" nor "settled" counts them
+    watched: watches.filter(w => !w.owned).length, desk, deskMore, deskAbove, deskSettled: watches.filter(w => !w.owned && !live.has(baseId(w.lot_id))).length,
     pendingResults: Math.max(0, input.pendingResults ?? 0), week, fresh, picks: pickItems, names, quietNames, market,
   };
 }
 
 /** the pick's lane from the recommender's seed — the runner's one read of a Rec */
-export function laneOf(r: { seed: { kind: string; label: string; follow?: unknown; broad?: boolean; market?: string; who?: string } ; tier?: number }, who?: string | null): PickLane {
+export function laneOf(r: { seed: { kind: string; label: string; follow?: unknown; broad?: boolean; market?: string; who?: string }; tier?: number; lane?: string }, who?: string | null): PickLane {
   const s = r.seed;
-  if (s.market || (r.tier ?? 1) > 1) return { kind: 'new', label: 'New to you' };
+  // the recommender's discover lane ("New to you · modern football cards near Jalen Hurts's prices") is new to you,
+  // whatever seed priced it — it used to sit under "Because you follow Jalen Hurts"
+  if (s.market || (r.tier ?? 1) > 1 || r.lane === 'discover') return { kind: 'new', label: 'New to you' };
   if (s.kind === 'follow' && s.follow) return { kind: 'follow', label: `Because you follow ${cut(s.label, 48)}` };
   // a saved lot's handle: its maker line + the short title ("Pablo Picasso · Deux buveurs catalans"), capped at a whole
   // word. A settled watch has no lot behind its seed (the snapshot only), so the runner hands in the name it read
@@ -532,9 +602,32 @@ export function laneOf(r: { seed: { kind: string; label: string; follow?: unknow
     const label = !w ? s.label
       : rest == null ? `${w} · ${s.label}`
         : /^[\s:,–—-]/.test(rest) && rest.replace(/^[\s:,–—-]+/, '') ? `${w} · ${rest.replace(/^[\s:,–—-]+/, '')}` : s.label;
-    return { kind: 'saved', label: `Because you ${s.kind === 'owned' ? 'own' : 'saved'} ${cut(label, 48)}` };
+    return { kind: 'saved', label: `Because you ${s.kind === 'owned' ? 'own' : 'saved'} ${cut(label, 48)}`, who: s.kind === 'saved' ? w : null };
   }
   return { kind: 'new', label: 'New to you' };
+}
+
+/** a category follow's printed label from the taxonomy ("Fine Art · Prints & Multiples", "Science & Tech") */
+export function catLabelOf(key: string): string {
+  const [cat, sub] = key.split(':');
+  return sub ? subEntityLabel(cat as CatKey, sub) : CAT_LABEL[cat as CatKey] || cat;
+}
+
+/** an owned piece's maker: the live lot's entity (lot-follow), else the saved_artist snapshot — the id the
+ *  entity bucket is read by, and the printed name. The runner reads buckets for these ids too. */
+export function ownedMakerOf(w: Pick<WatchRow, 'saved_artist'>, lot: AuctionLot | null): { id: string | null; label: string | null } {
+  if (lot) {
+    const f = lotFollowOf(lot);
+    if (f) return { id: entityIdOfFollow(f), label: f.label };
+    const name = makerLineOf(lot).name;
+    return { id: null, label: name || null };
+  }
+  const slug = w.saved_artist || '';
+  if (!slug) return { id: null, label: null };
+  const id = makerEntityId(slug);
+  // a collection slug (science-tech, meteorites, game-used) is a category, not a maker: no name, no hammer line
+  if (!id || id.startsWith('cs:')) return { id: null, label: null };
+  return { id, label: ARTIST_LABEL[slug] || slug.split('-').map(x => x[0]?.toUpperCase() + x.slice(1)).join(' ') };
 }
 
 /** words a catalogue title puts right after the name — the name stops there */

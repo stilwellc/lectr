@@ -38,7 +38,7 @@ import type { EntityDetail } from '../app/lib/entity/model';
 import { baseId } from './lib/push-plan';
 import { makerLineOf } from '../app/lib/lot-labels';
 import { lotFollowOf } from '../app/lib/lot-follow';
-import { planDesk, laneOf, lastSaleOf, recentOf, leadingNameOf, type WatchRow, type SoldRow, type LastSale, type ReceiptsIn, type BacktestIn } from './lib/daily-desk';
+import { planDesk, laneOf, lastSaleOf, recentOf, leadingNameOf, ownedMakerOf, type WatchRow, type SoldRow, type LastSale, type ReceiptsIn, type BacktestIn } from './lib/daily-desk';
 import { renderDesk } from './lib/daily-desk-html';
 
 const SB = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '');
@@ -157,7 +157,7 @@ async function main() {
   // 2 · their watches (max_usd arrives with migration 0010, result_dismissed with 0012 — fall back without them; bid_count is the save's baseline)
   type Watch = WatchRow & { user_id: string; result_dismissed?: boolean | null };
   const watches: Watch[] = [];
-  const SELECTS = ['user_id,lot_id,saved_title,max_usd,owned,est_mid,bid_count,result_dismissed', 'user_id,lot_id,saved_title,max_usd,owned,est_mid,bid_count', 'user_id,lot_id,saved_title,owned,est_mid,bid_count'];
+  const SELECTS = ['user_id,lot_id,saved_title,saved_artist,paid_usd,max_usd,owned,est_mid,bid_count,result_dismissed', 'user_id,lot_id,saved_title,saved_artist,paid_usd,max_usd,owned,est_mid,bid_count', 'user_id,lot_id,saved_title,owned,est_mid,bid_count'];
   let sel = 0;
   for (const c of chunks(users, 100)) {
     for (;;) {
@@ -183,6 +183,8 @@ async function main() {
   const backtest = await loadServed<BacktestIn>('backtest.json');
   const nameIds = new Set<string>();
   for (const fs_ of Array.from(follows.values())) for (const n of marketNamesOf(fs_, [])) if (n.id) nameIds.add(n.id);
+  // the owned pieces' makers too: Your collection prints each maker's latest settled hammer
+  for (const w of watches) if (w.owned) { const id = ownedMakerOf(w, live.get(baseId(w.lot_id)) ?? null).id; if (id) nameIds.add(id); }
   const { sold: nameSold, recent: nameRecent } = await loadNameSold(nameIds);
   // 5 · settled results for watched lots off the block — every sold one (planDesk prints the ones since the last
   //     Desk; the rest count as results still waiting on the desk: sold, not owned, not dismissed)
