@@ -52,6 +52,7 @@
  *                   n ≥ TEASE_MIN_N so a market is never teased on thin pools.
  */
 import type { AuctionLot } from '../../types';
+import { onBlockOf } from '../../lib/live-pool';
 import type { PricePref } from '../../lib/interests';
 import type { Taste } from '../../lib/recs';
 import type { Follow } from '../../lib/follows';
@@ -449,15 +450,14 @@ function buyCandidates(book: readonly AuctionLot[], now: number, price: PricePre
   const end = now + BUYS_WINDOW_DAYS * 864e5;
   const banded = !!price && (price.minUsd != null || price.maxUsd != null);
   const out: BuyRow[] = [];
-  for (const l of book) {
-    if (l.status !== 'upcoming') continue;
+  // (pass 6) the shared on-block index (lib/live-pool): the lots on the block, read once per book
+  for (const l of onBlockOf(book, today, now)) {
     // the build's flag first (cheap): the same stamp lotFace prints
     const sig = l.signal !== undefined ? l.signal : engineFlagOf(l);
     if (!sig || sig.label !== 'Below Market') continue;
     if (exclude.has(l.id)) continue;
     const closeMs = closeMsOf(l);
     if (closeMs == null || closeMs <= now || closeMs > end) continue;
-    if (!isOnBlock(l, today, now)) continue;
     const market = marketOfLot(l);
     if (markets.size && !markets.has(market)) continue;
     if (banded && !inPriceRange(l, price, now)) continue;

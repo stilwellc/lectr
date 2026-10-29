@@ -44,6 +44,7 @@ import { formatEstimate } from '../../components/LotCard';
 import { displayMakerOf } from '../../lib/maker-subjects';
 import { fmtFace } from '../../lib/lot-face';
 import { craftTitle, fmtSignedPct, localToday } from '../../utils';
+import { onBlockOf } from '../../lib/live-pool';
 import { closeDays, hammerWord } from './derive';
 import { useDesk, useDeskInternals } from './provider';
 import { jump } from '../rail';
@@ -109,6 +110,15 @@ function LotLine({ lot, phone = false, tip }: { lot: AuctionLot; phone?: boolean
 
 const KIND_WORD: Record<WeekRow['kind'], string> = { watch: 'your watch', pick: 'a pick', name: 'your name' };
 
+/** the strip's caption at phone width: "8 watches · 24 picks · next today" (the full words ride in the title) */
+function shortCaption(strip: readonly { n: number; watches: number; picks: number; names: number; today: boolean; day: string }[]): string {
+  const w = strip.reduce((s, d) => s + d.watches, 0), p = strip.reduce((s, d) => s + d.picks, 0), n = strip.reduce((s, d) => s + d.names, 0);
+  const first = strip.find(d => d.n > 0);
+  const when = !first ? '' : first.today ? 'today' : strip.indexOf(first) === 1 ? 'tomorrow' : dayLabel(first.day).split(',')[0];
+  const parts = [w ? `${w} ${w === 1 ? 'watch' : 'watches'}` : null, p ? `${p} ${p === 1 ? 'pick' : 'picks'}` : null, n ? `${n} of your names` : null].filter(Boolean);
+  return `${parts.join(' · ')}${when ? ` · next ${when}` : ''}`;
+}
+
 export default function Cockpit() {
   const { desk } = useDesk();
   const i = useDeskInternals();
@@ -119,7 +129,11 @@ export default function Cockpit() {
   const plan = useMemo(() => {
     const seen = new Set(desk.recs.map(r => r.lot.id));
     const recs = desk.closingPicks.length ? desk.recs.concat(desk.closingPicks.filter(r => !seen.has(r.lot.id))) : desk.recs;
-    return planWeek({ now: desk.now, saved: desk.saved, savedIds: desk.savedIds, recs, book: desk.book, follows: desk.follows, collection: desk.collection });
+    // (pass 6) the week walks the on-block index, not the whole book: planWeek
+    // keeps only lots on the block (rowOf → isOnBlock at now), and the index
+    // holds every lot on the block at its 10-minute floor — a superset — so
+    // the rows are the same and 6k lots are read instead of 355k
+    return planWeek({ now: desk.now, saved: desk.saved, savedIds: desk.savedIds, recs, book: onBlockOf(desk.book, localToday(), desk.now), follows: desk.follows, collection: desk.collection });
   }, [desk]);
   const picksLive = useMemo(() => {
     const ids = new Set(desk.recs.map(r => r.lot.id));
@@ -211,14 +225,23 @@ export default function Cockpit() {
             body="Bookmark any lot on lectr — the picks under For you have the button — and its estimate counts here to the hammer, with the engine’s read beside it." />
         ) : picksOnly ? (
           <Cell k="Watching" v="0" note="watched" href="#for-you"
-            body={<span>{picksLive} {picksLive === 1 ? 'pick' : 'picks'} live <span aria-hidden>→</span> For you{plan.nameRows > 0 && <> · {plan.nameRows} {plan.nameRows === 1 ? 'sale' : 'sales'} of your names this fortnight</>}</span>} />
+            body={<>
+              <span>{picksLive} {picksLive === 1 ? 'pick' : 'picks'} live <span aria-hidden>→</span> For you</span>
+              {plan.nameRows > 0 && <span>{plan.nameRows} {plan.nameRows === 1 ? 'sale' : 'sales'} of your names this fortnight</span>}
+            </>} />
         ) : summary.totalEst > 0 ? (
           // the headline prints the total; the cell leads with the count and
           // carries the total's basis (never the same figure twice at cell scale)
           <Cell k="Watching"
             v={upcoming.length.toLocaleString()}
             note={upcoming.length === 1 ? 'live lot' : 'live lots'}
-            body={<span>{fmtFace(summary.totalEst)} at estimate midpoint · {summary.priced} of {upcoming.length} priced{summary.oneSided > 0 && <> · {summary.oneSided} from one bound, not summed</>}{summary.flagged > 0 && <> · <b>{summary.flagged} below market</b></>}</span>}
+            // (pass 6) one fact a line (the body is a grid of lines): a line never
+            // opens on a "·" and never ends on one — the basis, the coverage, the flags
+            body={<>
+              <span>{fmtFace(summary.totalEst)} at estimate midpoint</span>
+              <span>{summary.priced} of {upcoming.length} priced{summary.oneSided > 0 && <> · {summary.oneSided} from one bound, not summed</>}</span>
+              {summary.flagged > 0 && <span><b>{summary.flagged} below market</b></span>}
+            </>}
             href="#watching" />
         ) : (
           <Cell k="Watching"
@@ -226,7 +249,7 @@ export default function Cockpit() {
             note={upcoming.length > 0 ? (upcoming.length === 1 ? 'live lot' : 'live lots') : null}
             body={upcoming.length === 0
               ? 'Nothing live on the block — your settled watches are judged under Your record.'
-              : <span>{upcoming.length === 1 ? 'no two-sided estimate' : 'no two-sided estimates to sum'}{summary.flagged > 0 && <> · <b>{summary.flagged} below market</b></>}</span>}
+              : <><span>{upcoming.length === 1 ? 'no two-sided estimate' : 'no two-sided estimates to sum'}</span>{summary.flagged > 0 && <span><b>{summary.flagged} below market</b></span>}</>}
             href={upcoming.length > 0 ? '#watching' : undefined} />
         )}
 
@@ -236,10 +259,13 @@ export default function Cockpit() {
             body="Your soonest closing watch counts down here, with the engine’s max bid and the gap to its projected close. Until you watch one: what closes on the block tonight." />
         ) : (
           <Cell k="Next hammer"
+            // (pass 6) a phone's cell prints the time alone — "10:00 PM · in 4h 0m"
+            // overflowed the 90px cell into Needs you; the countdown rides the
+            // next-lot line under the cells (ck-cockpit-next). A day word wraps.
             v={next
               ? (nextDays === 0 && next.saleDateTime
-                  ? <CloseClock iso={next.saleDateTime} windowHours={24} />
-                  : hammerWord(nextDays))
+                  ? <><span className="ck-ccell-vwide"><CloseClock iso={next.saleDateTime} windowHours={24} /></span><span className="ck-ccell-vphone"><CloseClock iso={next.saleDateTime} windowHours={24} tail={false} /></span></>
+                  : <span className="ck-ccell-vword">{hammerWord(nextDays)}</span>)
               : '—'}
             note={next
               ? <>{nextKind && nextKind !== 'watch' ? KIND_WORD[nextKind] : 'your watch'}{!(nextDays === 0 && next.saleDateTime) && next.saleDateTime ? <span className="ck-ccell-clock"><CloseClock iso={next.saleDateTime} windowHours={48} /></span> : null}</>
@@ -265,8 +291,8 @@ export default function Cockpit() {
         {!cold && showNeeds && (
           <Cell k="Needs you"
             v={needs > 0 ? needs.toLocaleString() : '0'}
-            note={needs === 0 ? 'all clear' : needs === 1 ? 'thing' : 'things'}
-            body={needs > 0 ? needsFacts.join(' · ') : 'No bid past your max, nothing of yours closing today, no result waiting on you.'}
+            note={needs === 0 ? 'all clear' : 'waiting on you'}
+            body={needs > 0 ? needsFacts.map(f => <span key={f}>{f}</span>) : 'No bid past your max, nothing of yours closing today, no result waiting on you.'}
             href={needs > 0 ? needsHref : undefined} />
         )}
 
@@ -283,14 +309,20 @@ export default function Cockpit() {
               ? (Math.round(edge.all.medianMiss) === 0 ? 'typical miss — hammers landed on your calls'
                 : `typical miss — hammers ran ${edge.all.medianMiss > 0 ? 'above' : 'below'} your calls`)
               : (edge.n === 1 ? 'call graded' : 'calls graded')}
-            body={<span>{edge.n} {edge.n === 1 ? 'call' : 'calls'} graded against the hammer · {hits} of {edge.n} within ±{EDGE_HIT_PCT}%{edge.streak.current >= 2 && <> · <b>{edge.streak.current} hits in a row</b></>}</span>}
+            body={<>
+              <span>{edge.n} {edge.n === 1 ? 'call' : 'calls'} graded against the hammer</span>
+              <span>{hits} of {edge.n} within ±{EDGE_HIT_PCT}%{edge.streak.current >= 2 && <> · <b>{edge.streak.current} hits in a row</b></>}</span>
+            </>}
             href="#edge" />
         ) : record && record.med != null ? (
           <Cell k="Record"
             v={fmtSignedPct(Math.round(record.med))}
             tone={lamp(Math.round(record.med))}
             note="vs estimate, median"
-            body={<span>{record.n} {record.n === 1 ? 'watch' : 'watches'} judged, all-in{streak && <> · <b>{streak.n} {streak.dir === 'beat' ? 'beat' : 'missed'} in a row</b></>} · no call of yours graded yet</span>}
+            body={<>
+              <span>{record.n} {record.n === 1 ? 'watch' : 'watches'} judged, all-in{streak && <> · <b>{streak.n} {streak.dir === 'beat' ? 'beat' : 'missed'} in a row</b></>}</span>
+              <span>no call of yours graded yet</span>
+            </>}
             href="#record" />
         ) : (
           <Cell k="Your calls" v="—"
@@ -307,7 +339,14 @@ export default function Cockpit() {
       {next && (
         <Link className="ck-cockpit-next" href={`/lot?id=${encodeURIComponent(next.id)}`}>
           <LotLine lot={next} phone />
-          {(scopeLine || nextKind !== 'watch') && <span className="ck-ccell-scope">{nextKind === 'watch' ? 'next watched hammer' : nextKind === 'pick' ? 'a pick — nothing watched' : 'one of your names — nothing watched'}{scopeLine}</span>}
+          {(scopeLine || nextKind !== 'watch' || (nextDays === 0 && next.saleDateTime)) && (
+            <span className="ck-ccell-scope">
+              {nextKind === 'watch' ? 'next watched hammer' : nextKind === 'pick' ? 'a pick — nothing watched' : 'one of your names — nothing watched'}
+              {/* the countdown the phone's cell dropped */}
+              {nextDays === 0 && next.saleDateTime && <> · <CloseClock iso={next.saleDateTime} windowHours={24} clock={false} /></>}
+              {scopeLine}
+            </span>
+          )}
           <DecisionLine lot={next} estimate={false} when={false} abstain="quiet" className="ck-ccell-decision" />
         </Link>
       )}
@@ -333,7 +372,9 @@ export default function Cockpit() {
         <button type="button" className="ck-hstrip-cap" onClick={stripTarget} disabled={total === 0}
           aria-label={`${stripCaption(strip)} — ${total ? 'open your week' : 'nothing to open yet'}`}>
           <span className="kicker">Next 14 days</span>
-          <span title={total ? stripCaption(strip) : undefined}>{total === 0 ? (cold ? 'your watched lots land here, day by day' : 'nothing of yours closes in the next 14 days') : stripCaption(strip)}</span>
+          <span className="ck-hstrip-long" title={total ? stripCaption(strip) : undefined}>{total === 0 ? (cold ? 'your watched lots land here, day by day' : 'nothing of yours closes in the next 14 days') : stripCaption(strip)}</span>
+          {/* the phone's one line: the counts and the next day, nothing cut mid-word */}
+          {total > 0 && <span className="ck-hstrip-short" aria-hidden>{shortCaption(strip)}</span>}
         </button>
       </div>
     </div>

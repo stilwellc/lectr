@@ -22,6 +22,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AuctionLot } from '../types';
+import { bookIndex } from './live-pool';
 import { useAccount } from './account';
 import { useFollows } from './follows';
 import { buildTaste, idAliases, type Taste, type SavedInput, type RecLot } from './recs';
@@ -81,11 +82,9 @@ export function useTaste(book: readonly AuctionLot[]): TasteState {
     return () => { on = false; };
   }, [eras, hasPlayer]);
   const anySignal = !!signals && signals.ev.length + signals.marks.length > 0;
-  const byId = useMemo(() => {
-    const m = new Map<string, AuctionLot>();
-    if (savedIds.length || anySignal) for (const l of book) m.set(l.id, l);
-    return m;
-  }, [book, savedIds.length, anySignal]);
+  // (desk pass 6) the shared book index (lib/live-pool bookIndex) — the desk
+  // and the collection read the same map; nothing built when nothing resolves
+  const byId = useMemo<ReadonlyMap<string, AuctionLot>>(() => (savedIds.length || anySignal ? bookIndex(book) : new Map()), [book, savedIds.length, anySignal]);
   // stable per day: recency weights move daily, not per render
   const day = new Date().toISOString().slice(0, 10);
   const taste = useMemo(() => {

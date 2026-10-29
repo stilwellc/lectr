@@ -17,6 +17,7 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import type { AuctionLot } from '../types';
+import { bookIndex } from '../lib/live-pool';
 import { useAccount } from '../lib/account';
 import { idAliases } from '../lib/recs';
 import { useAfterPaint } from './stall';
@@ -37,11 +38,8 @@ const KINDS: PickKind[] = ['upgrade', 'set', 'series', 'maker'];
 /** the held lots, as the desk knows them (resolved row, else the snapshot) */
 export function useHeld(book: readonly AuctionLot[]): { held: HeldInput[]; ready: boolean } {
   const { savedIds, savedMeta, savedReady } = useAccount();
-  const byId = useMemo(() => {
-    const m = new Map<string, AuctionLot>();
-    if (savedIds.length) for (const l of book) m.set(l.id, l);
-    return m;
-  }, [book, savedIds.length]);
+  // (desk pass 6) the shared book index (lib/live-pool bookIndex)
+  const byId = useMemo<ReadonlyMap<string, AuctionLot>>(() => (savedIds.length ? bookIndex(book) : new Map()), [book, savedIds.length]);
   const held = useMemo(() => savedIds.map(id => {
     const meta = savedMeta[id];
     let lot: AuctionLot | undefined;

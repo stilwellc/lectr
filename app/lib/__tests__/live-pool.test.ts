@@ -121,7 +121,7 @@ test('off-tape rows (per-lot shard, maker shard, Supabase) settle against the ea
 
 test('the phase-2 merge and the off-tape resolvers go through live-pool', () => {
   const src = (p: string) => readFileSync(path.join(ROOT, p), 'utf8');
-  assert.match(src('app/hooks/useRayData.ts'), /mergeCorpusOverEager\(up\.lots/);
+  assert.match(src('app/hooks/useRayData.ts'), /mergeCorpusOverEager(?:Sliced)?\(up\.lots/);
   assert.match(src('app/components/LotPage.tsx'), /settleLiveRow\(offTape\)/);
   assert.match(src('app/hooks/useMakerRows.ts'), /settleLiveRow\(r\)/);
 });

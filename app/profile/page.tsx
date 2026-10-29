@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { retryFullLoad } from '../hooks/useRayData';
 import ArtistNav from '../components/ArtistNav';
 import { Colophon } from '../components/Terminal';
@@ -11,13 +11,14 @@ import ComparableModal from '../components/ComparableModal';
 import { formatDate } from '../utils';
 import { fmtFace } from '../lib/lot-face';
 import { useHashLanding, jump, JUMP_EVENT, OPEN_TAB_EVENT, MISSING_EVENT } from './rail';
-import { HelpChip } from './help';
 import { Clamp, Closed } from './desk/fold';
 import { SectionBar, type BarItem } from './desk/sectionbar';
 import { DailyNudge } from './desk/nudge';
+import { noteScroll, snapFor } from './desk/restore';
+import { KeysChip } from './desk/keyshelp';
 import { useStalled } from './stall';
 import { DeskProvider, useDeskState, useDeskInternals, useDesk, type DeskState } from './desk/provider';
-import { SECTIONS, SUB_ANCHORS, TAB_ORDER, mountedSections, keysLegend, missingSection, tabItemsOf, tabOf, EVERY_TAB, type DeskSection, type DeskTab } from './desk/sections';
+import { SUB_ANCHORS, TAB_ORDER, mountedSections, missingSection, tabItemsOf, tabOf, EVERY_TAB, type DeskSection, type DeskTab } from './desk/sections';
 
 import { LedgerGate } from './desk/rooms/history';
 import Cockpit from './desk/cockpit';
@@ -69,23 +70,7 @@ import { useDeskKeys } from './desk/keys';
    Market = −pct coral.
    ============================================================ */
 
-/** the keys legend behind the rail's (?) — kept in step with desk/sections */
-function KeysHelp({ mountedIds }: { mountedIds: ReadonlySet<string> }) {
-  const legend = keysLegend(SECTIONS.filter(s => mountedIds.has(s.id)));
-  return (
-    <>
-      <b>j</b>/<b>k</b> walk the rows; <b>Enter</b> opens the row&rsquo;s lot; <b>Shift+Enter</b> (or <b>o</b>) opens its Details where a row has them &mdash; the dossier takes focus, and Close hands it back.
-      Press <b>g</b> then a letter to open that room and land on it:{' '}
-      {legend.map((k, idx) => (
-        <React.Fragment key={k.key}>
-          {idx > 0 && ' · '}
-          <b>{k.key}</b> {k.label}{!k.live && <span style={{ color: 'var(--color-text-faint)' }}> (not on this desk yet)</span>}
-        </React.Fragment>
-      ))}
-      . A folded room opens when you land in it; every landing writes the address bar, so a reload or a shared link opens the same place. <b>?</b> opens this legend.
-    </>
-  );
-}
+/* (pass 6) the keys legend moved to desk/keyshelp.tsx — it rides the Account head */
 
 /** a deep link to a room this desk doesn't have yet (#record on a cold desk)
  *  used to land silently — one line under the rail says what the room is,
@@ -264,7 +249,6 @@ function DeskBody() {
   // (perf) the registry runs every room's meta()/when(): once per desk change, not per render
   const sections = React.useMemo(() => mountedSections(desk, i), [desk, i]);
   const groups = React.useMemo(() => tabItemsOf(desk, i), [desk, i]);
-  const mountedIds = React.useMemo(() => new Set(sections.map(s => s.id)), [sections]);
   // a tab hash — the email's "#tab-watching", an old link, the hash the old
   // tab bar left in a reader's address bar — lands on the group's first room
   // (a room hash is useHashLanding's); the browser's back/forward (hashchange)
@@ -355,7 +339,7 @@ function DeskBody() {
         {bands}
         {more.length > 0 && (
           <div id={MORE_ID} className="dt-band dk-more" data-tone={band % 2 ? 'b' : 'a'} data-group={MORE_ID} aria-label="More rooms">
-            <div className="rail dk-more-head"><span className="kicker">More</span><span className="dk-more-sub">{more.length} rooms, each one tap</span></div>
+            <div className="rail dk-more-head"><h3 className="ck-h3 dk-more-h">More</h3><span className="dk-more-sub">{more.length} rooms, each one tap</span></div>
             {more.map(s => {
               const C = s.Component!;
               const m = s.meta(desk, i);
@@ -375,7 +359,8 @@ function DeskBody() {
           const C = s.Component!;
           return <C key={s.id} desk={desk} act={act} narrow={narrow} />;
         })}
-        <div className="rail dk-keys"><HelpChip name="Keys"><KeysHelp mountedIds={mountedIds} /></HelpChip></div>
+        {/* the keys legend's (?) — it mounts onto the Account head's row (desk/keyshelp) */}
+        <KeysChip />
       </div>
       {/* on-demand: only fetch the ledger when there are orphans to resolve */}
       {i.orphanIds.length > 0 && <LedgerGate onState={i.setLedgerState} />}
@@ -385,12 +370,71 @@ function DeskBody() {
   );
 }
 
+/** THE RETURN (desk/restore): the page reports its scroll and the element
+ *  under the chrome; a desk mounting from a fresh snapshot lands back on
+ *  that element at the same offset — after the desk can land, re-anchored for
+ *  a moment while the restored rooms settle, and never against a reader who
+ *  has already taken the wheel. The anchor, not y: the rooms above re-render
+ *  at other heights on the way back (a settled cache now warm, a "since your
+ *  last visit" line), and y alone landed a screen off. */
+/** the chrome's height: the nav and the section bar's own height (its element,
+ *  not --dt-h: that is 0 for a frame after a remount, before the bar's observer
+ *  fires, and the snapshot and the landing must measure against one line) */
+const chromeHeight = () => (document.querySelector<HTMLElement>('.ray-artist-nav')?.offsetHeight ?? 64) + (document.querySelector<HTMLElement>('.dk-sbar')?.offsetHeight ?? 0);
+/** the element with an id under the chrome's bottom edge, and how far its top sits under it */
+function anchorUnderChrome(): { id: string; dy: number } | null {
+  const line = chromeHeight() + 8;
+  const hit = document.elementFromPoint(Math.round(window.innerWidth / 2), line)?.closest<HTMLElement>('[id]');
+  if (!hit || hit === document.documentElement || hit === document.body || !hit.id) return null;
+  return { id: hit.id, dy: Math.round(hit.getBoundingClientRect().top - line) };
+}
+function useReturn(ready: boolean): void {
+  useEffect(() => {
+    let raf = 0;
+    const on = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; noteScroll(window.scrollY, anchorUnderChrome()); }); };
+    window.addEventListener('scroll', on, { passive: true });
+    // the browser's own restoration would fight the desk's (the rooms mount late)
+    const prev = window.history.scrollRestoration;
+    try { window.history.scrollRestoration = 'manual'; } catch { /* ignore */ }
+    return () => { window.removeEventListener('scroll', on); if (raf) cancelAnimationFrame(raf); try { window.history.scrollRestoration = prev; } catch { /* ignore */ } };
+  }, []);
+  const done = useRef(false);
+  useEffect(() => {
+    if (!ready || done.current) return;
+    done.current = true;
+    const snap = snapFor(window.location.pathname);
+    if (!snap || snap.y <= 0) return;
+    const { y, anchor } = snap;
+    let stop = false;
+    const intents: (keyof WindowEventMap)[] = ['wheel', 'touchstart', 'keydown', 'pointerdown'];
+    const end = () => { stop = true; for (const ev of intents) window.removeEventListener(ev, end); };
+    for (const ev of intents) window.addEventListener(ev, end, { passive: true });
+    const until = Date.now() + 2500;
+    const tick = () => {
+      if (stop) return;
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      // the anchor's own place (its top `dy` under the chrome), else the y
+      const el = anchor ? document.getElementById(anchor.id) : null;
+      const want = el ? window.scrollY + el.getBoundingClientRect().top - chromeHeight() - 8 - anchor!.dy : y;
+      const target = Math.min(Math.round(want), Math.max(0, max));
+      // instant: 'auto' defers to the page's smooth scroll-behavior and glided for a second
+      if (Math.abs(window.scrollY - target) > 2) window.scrollTo({ top: target, behavior: 'instant' as ScrollBehavior });
+      if (Date.now() < until) window.setTimeout(tick, 120); else end();
+    };
+    tick();
+  }, [ready]);
+}
+
 function Shell({ state }: { state: DeskState }) {
   const { i } = state;
   const { auth, loading, fullLoaded, fullError, fromCache, savedIds, orphanIds, signedOutView, landReady, pageLoading, lastCrawl, upcomingCounts, badgeCount } = i;
   const savedLotsN = i.savedLots.length;
   useDeskKeys();
-  useHashLanding(landReady);
+  // a return (desk/restore) lands where the reader left; the hash landing
+  // stands down for it (a deep link / reload has no fresh snapshot and lands by hash)
+  const [returning] = useState(() => typeof window !== 'undefined' && !!snapFor(window.location.pathname)?.y);
+  useHashLanding(landReady && !returning);
+  useReturn(landReady);
   // the whole-page loader's own deadline: past it the loader says the book is
   // slow and offers a reload — never a skeleton forever
   const pageSlow = useStalled(pageLoading, 15_000);

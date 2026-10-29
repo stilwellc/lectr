@@ -6,7 +6,7 @@ import { setCloseK, resetCloseK } from '../lib/close-k';
 import { prepareEagerLots, type CloseBoardJson } from '../lib/eager-book';
 import { fillHouseImages } from '../lib/house-images';
 import { completeQuarters } from '../lib/maker-hero';
-import { mergeCorpusOverEager, settleCorpusRow } from '../lib/live-pool';
+import { mergeCorpusOverEagerSliced, settleCorpusRow } from '../lib/live-pool';
 import { fetchFirstScreen, fsVersion, type FirstScreenPayload } from '../lib/first-screen';
 import { swGenCache } from '../lib/sw-register';
 import { replaceBookTotals } from '../lib/book';
@@ -450,7 +450,8 @@ async function loadCorpusFor(up: Pick<UpcomingJson, 'lots'>, ver: string): Promi
   // 'upcoming' for a lot the eager book closed out settles to
   // 'unknown-result' — it used to keep its status, and opening any
   // comps modal grew the live book 9,662 → 10,842 (Oct 10).
-  return mergeCorpusOverEager(up.lots || [], full);
+  // (desk pass 6) sliced: the same array, never one ~100 ms task on the main thread
+  return mergeCorpusOverEagerSliced(up.lots || [], full);
 }
 
 /** the phase-2 loader for one book (the retry hook triggerFullLoad calls) */

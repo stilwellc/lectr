@@ -206,8 +206,19 @@ export const LIVE_SLACK_MS = 8 * 3_600_000;
 
 type KindLot = TzLot & { closeKind?: 'online' | 'session' | null };
 
-/** When an un-resulted upcoming lot stops being live (epoch ms), or null. */
+/** When an un-resulted upcoming lot stops being live (epoch ms), or null.
+ *  (pass 6) read once per lot object — the zone math (Intl) ran on every
+ *  book scan for every lot; the memo is guarded on the fields it reads, so
+ *  a lot the live overlay mutates re-reads */
+const untilCache = new WeakMap<object, { dt: string | null | undefined; sd: string | null | undefined; h: string | null | undefined; k: string | null | undefined; v: number | null }>();
 export function liveUntilMs(l: KindLot): number | null {
+  const hit = untilCache.get(l);
+  if (hit && hit.dt === l.saleDateTime && hit.sd === l.saleDate && hit.h === l.auctionHouse && hit.k === l.closeKind) return hit.v;
+  const v = liveUntilMsRead(l);
+  untilCache.set(l, { dt: l.saleDateTime, sd: l.saleDate, h: l.auctionHouse, k: l.closeKind, v });
+  return v;
+}
+function liveUntilMsRead(l: KindLot): number | null {
   if (closeIsTimed(l)) {
     const t = Date.parse(l.saleDateTime as string);
     if (l.closeKind === 'online') return t + ONLINE_SLACK_MS;
