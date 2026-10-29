@@ -198,7 +198,7 @@ function DeskMasthead() {
               <ul className="ck-deskdetails-list">
                 {changes.moved > 0 && <li><b>{changes.moved}</b> {changes.moved === 1 ? 'signal' : 'signals'} moved since you saved — the rows say which way</li>}
                 {changes.newBids > 0 && <li><b>{changes.newBids}</b> new {changes.newBids === 1 ? 'bid' : 'bids'} on your watches since you saved</li>}
-                {summary.totalEst > 0 && <li>{fmtFace(summary.totalEst)} at estimate midpoint · {summary.priced} of {upcoming.length} lots priced</li>}
+                {summary.totalEst > 0 && <li>{fmtFace(summary.totalEst)} at estimate midpoint · {summary.priced} of {upcoming.length} lots priced{summary.oneSided > 0 && <> · {summary.oneSided} from one bound, not summed</>}</li>}
                 {tasteLabels.length > 0 && <li>you watch {tasteLabels.join(' · ')}</li>}
                 {tenure && <li>on the desk since {tenure}</li>}
                 {auth.authEnabled && auth.user && <li>signed in as {auth.user.email || 'you'} · <a href="#account" className="ck-away-link">Account</a></li>}

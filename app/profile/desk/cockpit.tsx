@@ -44,7 +44,7 @@ import { formatEstimate } from '../../components/LotCard';
 import { displayMakerOf } from '../../lib/maker-subjects';
 import { fmtFace } from '../../lib/lot-face';
 import { craftTitle, fmtSignedPct, localToday } from '../../utils';
-import { closeDays, hammerWord } from './derive';
+import { closeDays, hammerWord, needsYouOf } from './derive';
 import { useDesk, useDeskInternals } from './provider';
 import { jump } from '../rail';
 import { mountedSections, overMaxN } from './sections';
@@ -192,7 +192,8 @@ export default function Cockpit() {
   // the tab bar or a room already prints; the cell adds them and links the
   // first one's home.
   const overMax = overMaxN(desk, i);
-  const needs = overMax + summary.closesToday + i.unclaimedWins;
+  // counted once: a watch past your max that also closes today is one thing (derive.needsYouOf)
+  const needs = needsYouOf(upcoming, id => desk.metaFor(id)?.maxUsd, i.unclaimedWins).n;
   const needsHref = overMax > 0 ? '#watching' : summary.closesToday > 0 ? '#today' : i.todayShows ? '#results' : '#settled';
   const needsFacts = [
     overMax > 0 ? `${overMax} ${overMax === 1 ? 'bid' : 'bids'} past your max` : null,

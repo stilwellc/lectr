@@ -89,7 +89,7 @@ export default function RecordRoom(_p: SectionProps) {
               dir={collection.deltaPct > 0 ? 'up' : collection.deltaPct < 0 ? 'down' : 'ink'}
               stat={fmtSignedPct(collection.deltaPct)}
               label="Marked vs bought"
-              body={`${fmtFace(collection.totalAppraised)} marked vs ${fmtFace(collection.appraisedPaid)} bought · ${collection.appraisedPaidN} of ${collection.rows.length} ${collection.rows.length === 1 ? 'piece' : 'pieces'}`}
+              body={`${fmtFace(collection.appraisedOfPaid)} marked vs ${fmtFace(collection.appraisedPaid)} bought · ${collection.appraisedPaidN} of ${collection.rows.length} ${collection.rows.length === 1 ? 'piece' : 'pieces'}`}
               href="#collection"
             />
           ) : record && record.med != null ? (

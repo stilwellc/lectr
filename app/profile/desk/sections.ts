@@ -24,6 +24,7 @@
 import type React from 'react';
 import type { DeskData, SectionMeta, SectionProps } from './types';
 import type { DeskInternals } from './provider';
+import { overMaxOf } from './derive';
 import type { RailItem } from '../rail';
 import { WatchMark, RankMark, MoversMark, SignalMark, RecordMark, CollectionMark, TapeMark, AwayMark, HorizonMark, GapMark, IndexLabMark, SalesMark, CalibrationMark } from '../../components/marks';
 import { Today, todayMeta, Market, marketMeta, Signals, signalsMeta, SignIn, signinWhen } from './rooms/adapters';
@@ -265,14 +266,7 @@ export interface TabItem extends DeskTabDef {
 
 /** your watches whose live bid has passed your own max — Watching's news (an action) and the cockpit's Needs-you count */
 export function overMaxN(desk: DeskData, i: DeskInternals): number {
-  let n = 0;
-  for (const l of i.upcoming ?? []) {
-    const max = desk.metaFor(l.id)?.maxUsd;
-    const bid = l.currentBid || 0;
-    const usd = !l.currency || l.currency === 'USD' ? bid : bid * (l.fxRate || 0);
-    if (typeof max === 'number' && max > 0 && l.priceUsd == null && usd > max) n++;
-  }
-  return n;
+  return overMaxOf(i.upcoming ?? [], id => desk.metaFor(id)?.maxUsd);
 }
 
 /** the tab bar for this desk: every tab (an empty one stays — it explains how it fills) */

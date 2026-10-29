@@ -279,7 +279,7 @@ export default function WatchingRoom(_p: SectionProps) {
           {upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}
           {summary.closesToday > 0 && <> · {summary.closesToday} {summary.closesToday === 1 ? 'closes' : 'close'} today</>}
           {summary.flagged > 0 && <> · {summary.flagged} below market</>}
-          {summary.totalEst > 0 && <><span className="ck-wide"> · {fmtFace(summary.totalEst)} at estimate midpoint</span></>}
+          {summary.totalEst > 0 && <><span className="ck-wide"> · {fmtFace(summary.totalEst)} at estimate midpoint{summary.priced < upcoming.length && <> · {summary.priced} of {upcoming.length} priced</>}</span></>}
           {closingNow.live > 0 && closingNow.rows.length === 0 && (
             <> · none close in the next 24h{cnNext ? <> · next: <Link href={`/lot?id=${encodeURIComponent(cnNext.lot.id)}`} className="ck-away-link">{craftTitle(cnNext.lot.title, cnNext.lot.auctionHouse)}</Link>, {offsetWord(dayOffsetOf(cnNext.day, desk.now)) ?? `${dayWords(cnNext.day).wd}, ${dayWords(cnNext.day).md}`}{cnNext.timed ? ` at ${localClock(cnNext.closeMs)}` : ''}</> : null}</>
           )}
