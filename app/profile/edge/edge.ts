@@ -56,6 +56,11 @@ export interface GradedCall {
   callPct: number;
   /** the estimate midpoint the call was made against */
   estMid: number;
+  /** what `estMid` is: both bounds' midpoint, or the ONE bound the house
+   *  published (a one-sided estimate is graded against that bound and says
+   *  so — "vs est. low $2K", never "vs est."); 'saved' = the midpoint
+   *  recorded at save time (the row lost its estimate) */
+  estSide: 'mid' | 'low' | 'high' | 'saved';
   /** where the call put the hammer (estMid × (1 + callPct/100)) */
   called: number;
   /** the recorded sold price (the Record's basis) */
@@ -91,6 +96,8 @@ export interface MarketRow {
   market: Market | 'all';
   label: string;
   n: number;
+  /** of n, the calls graded against a ONE-BOUND estimate (the row says so) */
+  oneSided: number;
   /** median miss %, null under EDGE_MIN_N */
   medianMiss: number | null;
   hits: number;
@@ -117,6 +124,8 @@ export interface Excluded {
   legacy: number;
   /** a call, but no estimate anywhere to grade it against */
   noEstimate: number;
+  /** saved AFTER the hammer — a bookmark on a result is not a call */
+  afterHammer: number;
 }
 
 export interface EdgeReport {
@@ -129,7 +138,9 @@ export interface EdgeReport {
   provisional: number;
   all: MarketRow;
   markets: MarketRow[];
-  streak: { current: number; best: number };
+  /** hits in a row; `provisional` = how many of the CURRENT run rest on a
+   *  ledger result the house has not finalised (the line says so) */
+  streak: { current: number; best: number; provisional: number };
   best: GradedCall | null;
   worst: GradedCall | null;
   /** engine agreement: of the graded calls the engine still reads, how many
@@ -182,6 +193,20 @@ export function estMidFor(lot: AuctionLot, meta: SavedMeta | null): number | nul
   return meta?.estMid && meta.estMid > 0 ? meta.estMid : null;
 }
 
+/** what estMidFor's figure IS (see GradedCall.estSide); null when nothing grades */
+export function estSideFor(lot: AuctionLot, meta: SavedMeta | null): GradedCall['estSide'] | null {
+  const lo = (lot.estimateLow || 0) > 0, hi = (lot.estimateHigh || 0) > 0;
+  if (lo && hi) return 'mid';
+  if (lo) return 'low';
+  if (hi) return 'high';
+  return meta?.estMid && meta.estMid > 0 ? 'saved' : null;
+}
+
+/** "vs est. $10K" / "vs est. low $2K" / "vs est. high $5K" / "vs est. at save $8K" */
+export function estSideWord(side: GradedCall['estSide']): string {
+  return side === 'mid' ? 'est.' : side === 'low' ? 'est. low' : side === 'high' ? 'est. high' : 'est. at save';
+}
+
 const engineDirOf = (lot: AuctionLot): CallDir | null => {
   const label = lotFace(lot).call?.label;
   return label === 'Below Market' ? 'below' : label === 'Above Market' ? 'above' : null;
@@ -195,6 +220,7 @@ function rowOf(market: Market | 'all', label: string, calls: readonly GradedCall
   const med = n >= EDGE_MIN_N ? median(calls.map(c => c.missPct)) : null;
   return {
     market, label, n, hits,
+    oneSided: calls.filter(c => c.estSide === 'low' || c.estSide === 'high').length,
     medianMiss: med,
     hitRate: n ? hits / n : null,
     bias: med == null ? null : Math.round(med) > 0 ? 'above' : Math.round(med) < 0 ? 'below' : 'even',
@@ -217,7 +243,7 @@ export function monthKeys(now: number, months = EDGE_MONTHS): { key: string; lab
 export function gradeDesk(input: EdgeInputs): EdgeReport {
   const today = dayOf(input.now);
   const graded: GradedCall[] = [];
-  const excluded: Excluded = { noCall: 0, legacy: 0, noEstimate: 0 };
+  const excluded: Excluded = { noCall: 0, legacy: 0, noEstimate: 0, afterHammer: 0 };
   let settled = 0;
   const judged: number[] = [];
   const mine: MaxCall[] = [];
@@ -232,6 +258,10 @@ export function gradeDesk(input: EdgeInputs): EdgeReport {
     const over = overEstimatePct({ ...lot, priceUsd: s.price });
     if (over != null) judged.push(over);
     const mid = estMidFor(lot, meta);
+    // a save made AFTER the hammer knew the result: neither its signal nor its
+    // max is a call (the Record still judges the lot itself)
+    const savedDay = (meta?.savedAt || '').slice(0, 10);
+    if (savedDay && s.date && savedDay > s.date) { excluded.afterHammer++; continue; }
     const max = meta?.maxUsd;
     if (typeof max === 'number' && max > 0) {
       const miss = (s.price / max - 1) * 100;
@@ -260,6 +290,7 @@ export function gradeDesk(input: EdgeInputs): EdgeReport {
       dir: call.dir,
       callPct,
       estMid: mid,
+      estSide: estSideFor(lot, meta) ?? 'saved',
       called,
       price: s.price,
       date: s.date,
@@ -277,8 +308,8 @@ export function gradeDesk(input: EdgeInputs): EdgeReport {
   // streaks: hits in a row, hammer order; current = the trailing run
   let best = 0, run = 0;
   for (const c of graded) { run = c.hit ? run + 1 : 0; if (run > best) best = run; }
-  let current = 0;
-  for (let i = graded.length - 1; i >= 0 && graded[i].hit; i--) current++;
+  let current = 0, currentProvisional = 0;
+  for (let i = graded.length - 1; i >= 0 && graded[i].hit; i--) { current++; if (graded[i].provisional) currentProvisional++; }
 
   const byMarket = new Map<Market, GradedCall[]>();
   for (const c of graded) { const l = byMarket.get(c.market) ?? []; l.push(c); byMarket.set(c.market, l); }
@@ -306,7 +337,7 @@ export function gradeDesk(input: EdgeInputs): EdgeReport {
     provisional: graded.filter(c => c.provisional).length,
     all: rowOf('all', 'All markets', graded),
     markets,
-    streak: { current, best },
+    streak: { current, best, provisional: currentProvisional },
     best: byAbs[0] ?? null,
     worst: byAbs.length > 1 ? byAbs[byAbs.length - 1] : null,
     agreement: { agree: read.filter(c => c.agree).length, n: read.length },

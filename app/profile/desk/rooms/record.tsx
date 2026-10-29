@@ -97,7 +97,7 @@ export default function RecordRoom(_p: SectionProps) {
               dir={record.med > 0 ? 'up' : record.med < 0 ? 'down' : 'ink'}
               stat={fmtSignedPct(Math.round(record.med))}
               label="Your record"
-              body={`${record.n} judged · median vs estimate`}
+              body={`${record.n} judged · median vs estimate${record.oneSidedN ? ` · ${record.oneSidedN} vs a one-bound estimate` : ''}`}
               href="#settled"
             />
           ) : (
@@ -127,7 +127,7 @@ export default function RecordRoom(_p: SectionProps) {
                 </span>
               )}
               <span className="ck-record-s">
-                {record.n} {record.n === 1 ? 'watch' : 'watches'} <Term k="judged">judged</Term> <Term k="vs estimate">vs estimate</Term> · median, all-in · {fmtFace(record.realized)} realized ·{' '}
+                {record.n} {record.n === 1 ? 'watch' : 'watches'} <Term k="judged">judged</Term> <Term k="vs estimate">vs estimate</Term> · median, all-in{record.oneSidedN > 0 && <> · {record.oneSidedN} vs a one-bound estimate</>} · {fmtFace(record.realized)} realized ·{' '}
                 <a href="#settled" className="ck-away-link">receipts below</a>
               </span>
             </div>

@@ -12,7 +12,7 @@ import { lotMaxBid } from '../../../lib/verdict';
 import { lotAllInFactor } from '../../../lib/premiums';
 import {
   bidPlan, planRowOf, dropOrder, smallestDropSet, budgetBuys, marketTease, readerMarkets, followMarket, marketOfLot, winTotals, basisMix,
-  nightLabel, isoDayOf, allInText, rowTag, BASIS_TAG, TEASE_MIN_N,
+  nightLabel, isoDayOf, allInText, rowTag, BASIS_TAG, TEASE_MIN_N, premiumSourceOf, premiumText,
 } from '../budget';
 import { estBandOf, isPriced, oneSidedText } from '../priced';
 import { fmtFace } from '../../../lib/lot-face';
@@ -299,4 +299,18 @@ test('budgetBuys: no band → every price; no markets → every market; the cut 
   assert.equal(r.candidates, 5);
   assert.equal(r.rows.length, 2);
   assert.deepEqual(r.markets, []);
+});
+
+test('premiumSourceOf / premiumText: a stamped rate, a house schedule on the sale date, or the 1.25 ASSUMPTION — which the row says', () => {
+  assert.equal(premiumSourceOf(mk('x', { auctionHouse: 'Goldin', buyerPremiumPct: 20 })), 'stamped');
+  assert.equal(premiumSourceOf(A), 'schedule');                                           // Phillips, tiered
+  assert.equal(premiumSourceOf(mk('rea', { auctionHouse: 'REA' })), 'schedule');          // era-dated
+  assert.equal(premiumSourceOf(mk('u', { auctionHouse: 'Some Unknown House' })), 'assumed');
+  const a = planRowOf(A, NOW)!;
+  assert.equal(a.premiumSource, 'schedule');
+  assert.equal(premiumText(a), '27% premium');
+  const u = planRowOf(mk('u', { auctionHouse: 'Some Unknown House', estLowUsd: 1000, estHighUsd: 2000, estimateLow: 1000, estimateHigh: 2000, saleDate: '2026-10-14' }), NOW)!;
+  assert.equal(u.premiumPct, 25);
+  assert.equal(u.premiumSource, 'assumed');
+  assert.equal(premiumText(u), '25% premium, assumed (no schedule on file for this house)');
 });

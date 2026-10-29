@@ -10,7 +10,7 @@ import type { AuctionLot } from '../../../types';
 import type { SavedMeta } from '../../../lib/account';
 import type { LedgerEntry } from '../../../hooks/useRayData';
 import { marketOf } from '../../../constants';
-import { gradeDesk, monthKeys, dayOf, biasText, settledOf, estMidFor, EDGE_MIN_N, EDGE_HIT_PCT } from '../edge';
+import { gradeDesk, monthKeys, dayOf, biasText, settledOf, estMidFor, estSideWord, EDGE_MIN_N, EDGE_HIT_PCT } from '../edge';
 
 const NOW = Date.now();
 
@@ -79,7 +79,7 @@ test('the signed-signal law: a legacy save, a save without a signal and a lot wi
   });
   assert.equal(r.n, 0);
   assert.equal(r.settled, 3);
-  assert.deepEqual(r.excluded, { noCall: 1, legacy: 1, noEstimate: 1 });
+  assert.deepEqual(r.excluded, { noCall: 1, legacy: 1, noEstimate: 1, afterHammer: 0 });
   // the Record's own judgment still counts the two with an estimate
   assert.equal(r.record.n, 2);
 });
@@ -118,7 +118,8 @@ test('a result dated after the desk clock is not settled yet', () => {
 function desk(calls: { id: string; call: number; price: number; date: string; artist?: string; signal?: AuctionLot['signal'] }[]) {
   const m: Record<string, SavedMeta> = {};
   const saved = calls.map(c => {
-    m[c.id] = meta({ signalPct: c.call });
+    // the call is made the morning of the hammer (a save dated after the result is not a call — pass 12)
+    m[c.id] = meta({ signalPct: c.call, savedAt: `${c.date}T10:00:00.000Z` });
     return lot({ id: c.id, priceUsd: c.price, saleDate: c.date, artist: c.artist ?? 'andy-warhol', estimateLow: 10000, estimateHigh: 10000, ...(c.signal !== undefined ? { signal: c.signal } : {}) });
   });
   return gradeDesk({ now: NOW, ledger: noLedger, saved, metaFor: metas(m) });
@@ -149,20 +150,21 @@ test('medians, hit rate and bias print only at EDGE_MIN_N; under it the row says
 });
 
 test('streaks count hits in a row in hammer order; current is the trailing run', () => {
+  // (pass 12) signed calls exist only since Aug 27 2026 — the fixtures hammer after it
   const r = desk([
-    { id: 'a', call: 10, price: 11000, date: '2026-04-01' },  // hit
-    { id: 'b', call: 10, price: 11000, date: '2026-05-01' },  // hit
-    { id: 'c', call: 10, price: 20000, date: '2026-06-01' },  // miss
-    { id: 'd', call: 10, price: 11000, date: '2026-07-01' },  // hit
-    { id: 'e', call: 10, price: 11000, date: '2026-08-01' },  // hit
-    { id: 'f', call: 10, price: 11000, date: '2026-09-01' },  // hit
+    { id: 'a', call: 10, price: 11000, date: '2026-09-01' },  // hit
+    { id: 'b', call: 10, price: 11000, date: '2026-09-05' },  // hit
+    { id: 'c', call: 10, price: 20000, date: '2026-09-10' },  // miss
+    { id: 'd', call: 10, price: 11000, date: '2026-09-15' },  // hit
+    { id: 'e', call: 10, price: 11000, date: '2026-09-20' },  // hit
+    { id: 'f', call: 10, price: 11000, date: '2026-10-01' },  // hit
   ]);
-  assert.deepEqual(r.streak, { current: 3, best: 3 });
+  assert.deepEqual(r.streak, { current: 3, best: 3, provisional: 0 });
   const broken = desk([
-    { id: 'a', call: 10, price: 11000, date: '2026-08-01' },
-    { id: 'b', call: 10, price: 20000, date: '2026-09-01' },
+    { id: 'a', call: 10, price: 11000, date: '2026-09-01' },
+    { id: 'b', call: 10, price: 20000, date: '2026-09-08' },
   ]);
-  assert.deepEqual(broken.streak, { current: 0, best: 1 });
+  assert.deepEqual(broken.streak, { current: 0, best: 1, provisional: 0 });
 });
 
 test('best and worst are the smallest and largest |miss|; a lone call has no worst', () => {
@@ -182,21 +184,21 @@ test('the monthly series is the last six calendar months of the desk clock, gaps
   assert.deepEqual(monthKeys(NOW).map(m => m.key), ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10']);
   assert.equal(monthKeys(NOW)[5].label, 'Oct');
   assert.equal(dayOf(NOW), '2026-10-11');
+  // (pass 12) signed calls exist only since Aug 27 2026: the months before are
+  // gaps by construction; October holds one call (n-gated: a gap, not a zero)
   const r = desk([
     { id: 'a', call: 10, price: 11000, date: '2026-09-01' },
     { id: 'b', call: 10, price: 12100, date: '2026-09-12' },
     { id: 'c', call: 10, price: 9900, date: '2026-09-20' },
-    { id: 'd', call: 10, price: 11000, date: '2026-07-04' },
-    { id: 'e', call: 10, price: 11000, date: '2025-12-04' },   // outside the window
+    { id: 'd', call: 10, price: 11000, date: '2026-10-04' },
   ]);
   const by = Object.fromEntries(r.months.map(m => [m.key, m]));
   assert.equal(by['2026-09'].n, 3);
   assert.equal(Math.round(by['2026-09'].medianMiss!), 0);
-  assert.equal(by['2026-07'].n, 1);
-  assert.equal(by['2026-07'].medianMiss, null);       // a gap, not a zero
-  assert.equal(by['2026-08'].n, 0);
-  assert.equal(by['2026-10'].n, 0);
-  assert.equal(r.n, 5);                                // the window gates the chart, not the record
+  assert.equal(by['2026-10'].n, 1);
+  assert.equal(by['2026-10'].medianMiss, null);       // a gap, not a zero
+  for (const k of ['2026-05', '2026-06', '2026-07', '2026-08']) assert.equal(by[k].n, 0);
+  assert.equal(r.n, 4);
 });
 
 test('calls group by market, most calls first, with an all-markets row', () => {
@@ -232,4 +234,70 @@ test('a hit is within ±EDGE_HIT_PCT of the called price, inclusive', () => {
   assert.equal(r.n, 1);
   assert.equal(Math.round(r.graded[0].missPct), EDGE_HIT_PCT);
   assert.equal(r.graded[0].hit, true);
+});
+
+/* ── pass 12 (Oct 29 2026): the figures a collector trusts, on fixtures ── */
+
+test('the all-markets median miss on an EVEN count is the mean of the two middle misses', () => {
+  // calls at +0% (called = mid): misses are realized ÷ mid − 1 → +10, +30, −10, +50 → sorted −10, 10, 30, 50 → 20
+  const sold = [1100, 1300, 900, 1500].map((p, k) => lot({ id: `e${k}`, priceUsd: p, estimateLow: 800, estimateHigh: 1200, saleDate: `2026-09-1${k}` }));
+  const r = gradeDesk({ now: NOW, saved: sold, metaFor: metas(Object.fromEntries(sold.map(l => [l.id, meta({ signalPct: 0.0001 })]))), ledger: noLedger });
+  assert.equal(r.n, 4);
+  assert.equal(Math.round(r.all.medianMiss! * 1000) / 1000, 20);
+});
+
+test('a call on a ONE-SIDED estimate is graded against the published bound and says so (estSide low / high); the market row counts them', () => {
+  const low = lot({ id: 'low', auctionHouse: 'RR Auction', estimateLow: 2000, estimateHigh: null, priceUsd: 2400 });
+  const high = lot({ id: 'high', estimateLow: null, estimateHigh: 5000, priceUsd: 4000 });
+  const both = lot({ id: 'both', priceUsd: 10000 });
+  const r = gradeDesk({ now: NOW, saved: [low, high, both], metaFor: metas({ low: meta({ signalPct: 20 }), high: meta({ signalPct: 20 }), both: meta({ signalPct: 20 }) }), ledger: noLedger });
+  const by = Object.fromEntries(r.graded.map(c => [c.id, c]));
+  assert.equal(by.low.estSide, 'low'); assert.equal(by.low.estMid, 2000);
+  assert.equal(by.high.estSide, 'high'); assert.equal(by.high.estMid, 5000);
+  assert.equal(by.both.estSide, 'mid'); assert.equal(by.both.estMid, 10000);
+  assert.equal(r.all.oneSided, 2);
+  assert.equal(estSideWord('low'), 'est. low'); assert.equal(estSideWord('mid'), 'est.'); assert.equal(estSideWord('saved'), 'est. at save');
+  // the row that lost its estimate grades on the save-time midpoint and says that too
+  const lost = lot({ id: 'lost', estimateLow: null, estimateHigh: null, priceUsd: 9000 });
+  const r2 = gradeDesk({ now: NOW, saved: [lost], metaFor: metas({ lost: meta({ signalPct: 10, estMid: 8000 }) }), ledger: noLedger });
+  assert.equal(r2.graded[0].estSide, 'saved');
+});
+
+test('a dismissed result ("none of these were me") and an owned one (you won it) are still graded — the hammer is the hammer', () => {
+  const a = lot({ id: 'a' }), b = lot({ id: 'b' });
+  const r = gradeDesk({ now: NOW, saved: [a, b], metaFor: metas({ a: meta({ signalPct: 10, dismissed: true }), b: meta({ signalPct: 10, owned: true }) }), ledger: noLedger });
+  assert.equal(r.n, 2);
+});
+
+test('a save made AFTER the hammer is not a call: excluded (afterHammer), its max not graded, the Record still judges the lot', () => {
+  const l = lot({ id: 'late', saleDate: '2026-09-20' });
+  const r = gradeDesk({ now: NOW, saved: [l], metaFor: metas({ late: meta({ savedAt: '2026-09-21T10:00:00.000Z', signalPct: 15, maxUsd: 11000 }) }), ledger: noLedger });
+  assert.equal(r.n, 0);
+  assert.equal(r.excluded.afterHammer, 1);
+  assert.equal(r.mine.n, 0);
+  assert.equal(r.settled, 1);
+  assert.equal(r.record.n, 1);
+  // saved ON the sale day (before the evening hammer) still counts
+  const r2 = gradeDesk({ now: NOW, saved: [l], metaFor: metas({ late: meta({ savedAt: '2026-09-20T10:00:00.000Z', signalPct: 15 }) }), ledger: noLedger });
+  assert.equal(r2.n, 1);
+});
+
+test('currency: a EUR lot grades in USD on both sides — the realized priceUsd against the USD estimate alias (never the native bounds)', () => {
+  const eur = lot({ id: 'eur', currency: 'EUR', fxRate: 1.08, estLowNative: 8000, estHighNative: 12000, estLowUsd: 8640, estHighUsd: 12960, estimateLow: 8640, estimateHigh: 12960, realizedNative: 12000, priceUsd: 12960 });
+  const r = gradeDesk({ now: NOW, saved: [eur], metaFor: metas({ eur: meta({ signalPct: 20 }) }), ledger: noLedger });
+  const c = r.graded[0];
+  assert.equal(c.estMid, 10800);
+  assert.equal(c.price, 12960);
+  assert.equal(Math.round(c.called), 12960);
+  assert.equal(Math.round(c.missPct), 0);
+});
+
+test('the streak says how many of its hits rest on a PROVISIONAL ledger result', () => {
+  const a = lot({ id: 'a', saleDate: '2026-09-01' });
+  const b = lot({ id: 'b', status: 'upcoming', priceUsd: null, saleDate: '2026-09-02' });
+  const c = lot({ id: 'c', status: 'upcoming', priceUsd: null, saleDate: '2026-09-03' });
+  const ledger = new Map<string, LedgerEntry>([['b', [10000, '2026-09-02', 1]], ['c', [10000, '2026-09-03', 1]]]);
+  const r = gradeDesk({ now: NOW, saved: [a, b, c], metaFor: metas({ a: meta({ signalPct: 0.0001 }), b: meta({ signalPct: 0.0001 }), c: meta({ signalPct: 0.0001 }) }), ledger });
+  assert.deepEqual(r.streak, { current: 3, best: 3, provisional: 2 });
+  assert.equal(r.provisional, 2);
 });

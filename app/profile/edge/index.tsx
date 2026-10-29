@@ -26,8 +26,7 @@ import { craftTitle, fmtSignedPct, formatDate } from '../../utils';
 import { SIGNED_SIGNAL_SINCE } from '../../lib/account';
 import {
   gradeDesk, biasText, dayOf, EDGE_MIN_N, EDGE_HIT_PCT, EDGE_MONTHS,
-  type EdgeReport, type GradedCall, type MarketRow,
-} from './edge';
+  type EdgeReport, type GradedCall, type MarketRow, estSideWord } from './edge';
 import { cardNumbersOf, cardLines, cardHasNumber, drawDeskCard, CARD_W, CARD_H, type CardLines } from './card';
 import './edge.css';
 
@@ -71,7 +70,7 @@ function CallCard({ label, c }: { label: string; c: GradedCall }) {
         <Link href={href} className="pe-call-title">{craftTitle(c.title, c.house)}</Link>
         <div className="pe-call-sub pe-muted">{[c.maker, c.house, formatDate(c.date)].filter(Boolean).join(' · ')}{c.provisional ? ' · result provisional' : ''}</div>
         <div className="pe-call-line">
-          called <b>{fmtFace(c.called)}</b> <span className="pe-muted">({pct(c.callPct)} vs est. {fmtFace(c.estMid)})</span> · hammer <b>{fmtFace(c.price)}</b> ·{' '}
+          called <b>{fmtFace(c.called)}</b> <span className="pe-muted">({pct(c.callPct)} vs {estSideWord(c.estSide)} {fmtFace(c.estMid)})</span> · hammer <b>{fmtFace(c.price)}</b> ·{' '}
           <b style={missInk(c.missPct)}>{pct(c.missPct)}</b> <span className="pe-muted">off your call</span>
         </div>
       </div>
@@ -275,6 +274,7 @@ export default function EdgeSection({ desk }: SectionProps) {
     ex.noCall ? `${ex.noCall} settled ${ex.noCall === 1 ? 'watch' : 'watches'} carried no signal when saved` : null,
     ex.legacy ? `${ex.legacy} ${ex.legacy === 1 ? 'was' : 'were'} saved before ${formatDate(SIGNED_SIGNAL_SINCE)} (direction not recorded then)` : null,
     ex.noEstimate ? `${ex.noEstimate} ${ex.noEstimate === 1 ? 'has' : 'have'} no estimate to grade against` : null,
+    ex.afterHammer ? `${ex.afterHammer} ${ex.afterHammer === 1 ? 'was' : 'were'} saved after the hammer (a bookmark on a result is not a call)` : null,
   ].filter(Boolean).join(' · ');
 
   return (
@@ -320,11 +320,11 @@ export default function EdgeSection({ desk }: SectionProps) {
           <>
             <CellGrid min={200} className="ck-cells ck-figs">
               <ColorCell dir="ink" stat={pct(r.all.medianMiss ?? 0)} label="Median miss"
-                body={`${r.n} calls · realized vs called · ${biasText(r.all) ?? ''}`} href="#settled" />
+                body={`${r.n} calls · realized vs called · ${biasText(r.all) ?? ''}${r.all.oneSided ? ` · ${r.all.oneSided} graded against a one-bound estimate` : ''}`} href="#settled" />
               <Cell stat={`${Math.round((r.all.hitRate ?? 0) * 100)}%`} statNote={`${r.all.hits} of ${r.n} within ±${EDGE_HIT_PCT}%`} label="Hit rate"
                 body={`a hit: the hammer landed within ±${EDGE_HIT_PCT}% of the price your call put it at`} />
-              <Cell stat={String(r.streak.current)} statNote={r.streak.current === 1 ? 'hit in a row' : 'hits in a row'} label="Streak"
-                body={`best ${r.streak.best} · hammer order, newest last`} />
+              <Cell stat={String(r.streak.current)} statNote={`${r.streak.current === 1 ? 'hit in a row' : 'hits in a row'}${r.streak.provisional ? ` · ${r.streak.provisional} provisional` : ''}`} label="Streak"
+                body={`best ${r.streak.best} · hammer order, newest last${r.streak.provisional ? ` · ${r.streak.provisional} of the run ${r.streak.provisional === 1 ? 'rests' : 'rest'} on a result the house has not finalised` : ''}`} />
               <Cell stat={r.agreement.n ? `${r.agreement.agree} of ${r.agreement.n}` : '—'} label="Engine agreement"
                 body={r.agreement.n
                   ? `the engine still reads ${r.agreement.n} of these lots; ${r.agreement.agree} on the side you saved`

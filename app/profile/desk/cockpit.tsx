@@ -287,7 +287,7 @@ export default function Cockpit() {
               ? (Math.round(edge.all.medianMiss) === 0 ? 'typical miss — hammers landed on your calls'
                 : `typical miss — hammers ran ${edge.all.medianMiss > 0 ? 'above' : 'below'} your calls`)
               : (edge.n === 1 ? 'call graded' : 'calls graded')}
-            body={<span>{edge.n} {edge.n === 1 ? 'call' : 'calls'} graded against the hammer · {hits} of {edge.n} within ±{EDGE_HIT_PCT}%{edge.streak.current >= 2 && <> · <b>{edge.streak.current} hits in a row</b></>}</span>}
+            body={<span>{edge.n} {edge.n === 1 ? 'call' : 'calls'} graded against the hammer · {hits} of {edge.n} within ±{EDGE_HIT_PCT}%{edge.streak.current >= 2 && <> · <b>{edge.streak.current} hits in a row</b>{edge.streak.provisional > 0 && <> ({edge.streak.provisional} provisional)</>}</>}</span>}
             href="#edge" />
         ) : record && record.med != null ? (
           <Cell k="Record"

@@ -58,7 +58,7 @@ import type { Follow } from '../../lib/follows';
 import { inPriceRange } from '../../lib/interests';
 import { lotFace, fmtFace, type LotFace, type FaceCall } from '../../lib/lot-face';
 import { prioStatic, closeMsOf, type AnchorSrc, type PrioStatic } from '../../lib/priority';
-import { lotAllInFactor } from '../../lib/premiums';
+import { lotAllInFactor, premiumScheduleKnown } from '../../lib/premiums';
 import { dealScore, engineFlagOf } from '../../lib/comps';
 import { taxonOf, MARKET_CATS, type CatKey } from '../../lib/taxonomy';
 import { MARKETS, marketOf, type Market } from '../../constants';
@@ -130,6 +130,10 @@ export interface PlanRow {
   allIn: number;
   /** the premium that all-in carries, whole % */
   premiumPct: number;
+  /** where that premium comes from: the lot's own stamped rate, the house's
+   *  schedule on the sale date, or the 1.25 ASSUMPTION for a house with no
+   *  schedule on file (the row says "assumed") */
+  premiumSource: 'stamped' | 'schedule' | 'assumed';
   /** priority.prioStatic.edge: -0.25 (Above Market) … 1 (deep Below Market) */
   edge: number;
   /** the engine's flag % when the lot is Below Market (lotFace().call) */
@@ -225,11 +229,23 @@ export function planRowOf(lot: AuctionLot, now: number, myMax: number | null = n
     lot, day: closeDayOf(lot), closeMs: closeMsOf(lot), hammer, basis,
     oneSided, side: oneSided ? est!.side : null,
     counted: basis !== 'est',
-    allIn, premiumPct: Math.round((factor - 1) * 100),
+    allIn, premiumPct: Math.round((factor - 1) * 100), premiumSource: premiumSourceOf(lot),
     edge: anchor?.edge ?? 0,
     belowPct: call && call.label === 'Below Market' ? call.pct : null,
     face, anchor,
   };
+}
+
+/** where a lot's premium factor comes from (see PlanRow.premiumSource) */
+export function premiumSourceOf(lot: Pick<AuctionLot, 'auctionHouse' | 'buyerPremiumPct'>): PlanRow['premiumSource'] {
+  const bp = lot.buyerPremiumPct;
+  if (typeof bp === 'number' && bp > 0 && bp < 60) return 'stamped';
+  return premiumScheduleKnown(lot.auctionHouse) ? 'schedule' : 'assumed';
+}
+
+/** "27% premium" / "25% premium, assumed" — the all-in's qualifier */
+export function premiumText(r: Pick<PlanRow, 'premiumPct' | 'premiumSource'>): string {
+  return `${r.premiumPct}% premium${r.premiumSource === 'assumed' ? ', assumed (no schedule on file for this house)' : ''}`;
 }
 
 /** the rows a night's sum carries under the plan's option */

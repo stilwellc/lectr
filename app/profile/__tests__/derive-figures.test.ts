@@ -316,3 +316,14 @@ test('parity: the Daily Desk\'s glance total is the desk\'s own total (pricedTot
   assert.equal(D.liveBidUsd, liveBidUsd);
   assert.deepEqual(paper.overMax.map(i => i.id), D.overMaxIdsOf(rows, () => 1050));
 });
+
+test('recordOf: the watches judged against a ONE-BOUND estimate are counted (the line says "N vs a one-bound estimate")', () => {
+  const sold = [
+    lot({ id: 'both', status: 'sold', priceUsd: 1200, saleDate: '2026-10-01', estimateLow: 800, estimateHigh: 1200 }),
+    lot({ id: 'low', status: 'sold', priceUsd: 2400, saleDate: '2026-10-02', estimateLow: 2000 }),
+    lot({ id: 'high', status: 'sold', priceUsd: 4000, saleDate: '2026-10-03', estimateHigh: 5000 }),
+  ];
+  const r = D.recordOf(sold, () => undefined)!;
+  assert.equal(r.n, 3);
+  assert.equal(r.oneSidedN, 2);
+});

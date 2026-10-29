@@ -235,6 +235,9 @@ export function watchChangesOf(upcoming: readonly AuctionLot[], metaFor: MetaOf,
 
 export interface RecordRead {
   n: number; realized: number; med: number | null;
+  /** of n, the watches judged against a ONE-BOUND estimate (utils.overEstimatePct
+   *  reads the published bound as the midpoint) — the line says so */
+  oneSidedN: number;
   split: { flagged: number | null; flaggedN: number; rest: number | null; restN: number } | null;
   series: { id: string; d: string; pct: number; title: string }[];
 }
@@ -268,7 +271,8 @@ export function recordOf(sold: readonly AuctionLot[], metaFor: MetaOf): RecordRe
     .sort((a, b) => ((a.l.saleDate || '') < (b.l.saleDate || '') ? -1 : 1))
     .slice(-60)
     .map(x => ({ id: x.l.id, d: (x.l.saleDate || '').slice(0, 10), pct: x.pct, title: x.l.title }));
-  return { n: judged.length, realized, med, split, series };
+  const oneSidedN = judged.filter(x => !((x.l.estimateLow || 0) > 0 && (x.l.estimateHigh || 0) > 0)).length;
+  return { n: judged.length, realized, med, oneSidedN, split, series };
 }
 
 /* ── since your last visit — the watches that SETTLED after the previous
