@@ -75,6 +75,22 @@
  * seeds gets NO picks (cold start is said, not faked). Pure: no React, no
  * storage — the eval script and the tests run it over the real book.
  *
+ * (Oct 29) THE DISCOVER LANE: about a quarter of the deal (every fourth seat,
+ * from the third; ≥ 3 seats at n ≥ 12) is kept for lots the taste reaches
+ * only SOFTLY — the same category · sub (· sport · era) as what the reader
+ * saves, owns or follows by name, inside the band they learned or stated
+ * (else near the cut's own prices), with a photo, closing inside 14 days —
+ * that NO real tie reaches. Ranked by what matters most and the engine's
+ * read, dealt one per name, spread across the reader's cuts. Each says only
+ * what is true: "New to you · modern basketball cards in your $200–900 range
+ * · engine reads below market". The lane is a Rec's `lane: 'discover'`.
+ * ROTATION: rows within ~8% of each other swap seats by the day — a shuffle
+ * seeded by the local date and the taste, so the list moves between visits
+ * without turning random (one day, one list; home stays the profile's
+ * prefix). VIEWED: a lot this device saw the reader open in the last 7 days
+ * (recs-signals) is never dealt back — unless the engine now reads it below
+ * market.
+ *
  * (W28, Oct 11) A REASON MUST BE TRUE, checked by recs-eval §4 over 22
  * personas: "Like your X prints" groups the desk's X's of the same MEDIUM (a
  * Polaroid set filed under Prints is a photograph) under the name the desk's
@@ -184,6 +200,10 @@ export interface NegativeInput {
    *  that explained each one is quieted (×0.75 per pass, floored), and a lot
    *  with no named entity quiets its cut (category · sub · sport · era) */
   lots?: Iterable<RecLot>;
+  /** (Oct 29) lots this device saw the reader OPEN lately (recs-signals'
+   *  VIEWED_DAYS): never dealt back — they have been seen — unless the
+   *  engine now reads them below market */
+  viewed?: Iterable<string>;
 }
 
 export interface TasteInput {
@@ -278,6 +298,8 @@ export interface Taste {
   /** entity ids the reader follows (maker / player / subject) — "Not for me"
    *  quiets them only so far */
   followedEks?: Set<string>;
+  /** ids (with aliases) the device saw opened lately — dealt back only below market */
+  viewed?: Set<string>;
 }
 
 /** a learned price band, in log10 dollars */
@@ -462,6 +484,8 @@ export function buildTaste(input: TasteInput): Taste {
   const down = new Map<string, number>();
   for (const k of Array.from(neg?.keys ?? [])) down.set(k, (down.get(k) ?? 0) + 1);
   for (const id of Array.from(neg?.ids ?? [])) for (const a of idAliases(id)) exclude.add(a);
+  const viewed = new Set<string>();
+  for (const id of Array.from(neg?.viewed ?? [])) for (const a of idAliases(id)) viewed.add(a);
   let signals = 0;
   const followed = new Set(input.follows.map(fo => `${fo.kind}:${fo.key}`));
   for (const x of input.extra || []) {
@@ -523,7 +547,7 @@ export function buildTaste(input: TasteInput): Taste {
     if (best) passed.set(best, (passed.get(best) ?? 0) + 1);
   }
   passed.forEach((k, s) => { s.w *= Math.max(s.f ? 0.3 : 0.5, Math.pow(0.75, k)); });
-  return { seeds, exclude, excludeKeys, down, counts: { owned, saved, follows: input.follows.length, searches, signals }, bands: learnBands(seeds), stated: statedBandOf(input.price), followedEks };
+  return { seeds, exclude, excludeKeys, down, counts: { owned, saved, follows: input.follows.length, searches, signals }, bands: learnBands(seeds), stated: statedBandOf(input.price), followedEks, viewed };
 }
 
 /** a quick-start market's seed weight — below a follow, above a page view */
@@ -808,6 +832,10 @@ export interface Rec<L extends RecLot = RecLot> {
   /** a real tie far outside the range the reader stated (dealt after every
    *  lot inside it; the reason says "below your $50K floor") */
   outOfRange?: 'below' | 'above';
+  /** (Oct 29) the lane that dealt it: a real tie (the default) or the
+   *  DISCOVER lane — a lot the taste reaches only softly (its cut, your
+   *  price, no tie; the reason never claims one) */
+  lane?: 'tie' | 'discover';
 }
 
 /** the suffix a below-market pick carries — the engine's read, said as one */
@@ -854,6 +882,11 @@ export interface RecTune {
   /** seats in every 24 kept for what the device learned, once the reader has
    *  said anything out loud (a deep desk otherwise never shows a view) */
   sigSeats: number;
+  /** (Oct 29) the DISCOVER lane's share of the deal (every fourth seat; 0 shuts it) */
+  discover: number;
+  /** (Oct 29) ROTATION: rows this close in score (as a share) may swap seats
+   *  by the day — 0 deals the same list every day */
+  rotate: number;
 }
 export const REC_TUNE: Readonly<RecTune> = {
   entityTie: 0.5, qBase: 0.8,
@@ -864,6 +897,7 @@ export const REC_TUNE: Readonly<RecTune> = {
   house: 0.9,
   saleShare: 1 / 6, broadShare: 0.2, saleYield: 0.7, entBase: 0.4, entShare: 0.5,
   sigSeats: 3,
+  discover: 0.25, rotate: 0.08,
 };
 
 /** the deal size the per-entity cap reads (the profile's list) */
@@ -994,7 +1028,7 @@ export interface LadderHit { tier: LadderTier; /** the anchor's facts the rung r
 /** one scored lot before the diversity pass (the eval reads the full ranking) */
 export interface ScoredRow<L extends RecLot = RecLot> {
   l: L; score: number; taste: number;
-  best: { seed: Seed; c: number; parts?: SimParts; ladder?: LadderHit };
+  best: { seed: Seed; c: number; parts?: SimParts; ladder?: LadderHit; discover?: DiscoverHit };
   f: Feat;
   /** the engine prices it below its comparables (flags.isFlagged) */
   flagged?: boolean;
@@ -1159,9 +1193,18 @@ export function scoreLots<L extends RecLot>(pool: readonly L[], taste: Taste, op
   return [...core.inRange, ...core.ladder(), ...core.outside];
 }
 
+/** (Oct 29) the DISCOVER lane's rows for one taste over the pool, best first
+ *  — lots no real tie reaches that still stand in one of the reader's cuts at
+ *  their price (see buildDiscover). Shares scoreLots' memo. */
+export function discoverLots<L extends RecLot>(pool: readonly L[], taste: Taste, opts: RecOpts = {}): ScoredRow<L>[] {
+  if (!taste.seeds.length) return [];
+  return scoreCoreMemo(pool, taste, opts).discover();
+}
+
 /** one scoring of a pool for a taste: the real ties (in range / far outside a
- *  stated range) and, built only when a deal asks for it, the fallback ladder */
-interface ScoreCore<L extends RecLot> { inRange: ScoredRow<L>[]; outside: ScoredRow<L>[]; anchored: boolean; ladder: () => ScoredRow<L>[] }
+ *  stated range) and, built only when a deal asks for it, the fallback ladder
+ *  and the discover lane */
+interface ScoreCore<L extends RecLot> { inRange: ScoredRow<L>[]; outside: ScoredRow<L>[]; anchored: boolean; ladder: () => ScoredRow<L>[]; discover: () => ScoredRow<L>[] }
 
 /* (W28) THE SCORING IS MEMOIZED per (pool, taste) — the profile scores the
  * same taste twice per page (the deal, n=24, and the return loop's strips,
@@ -1231,6 +1274,10 @@ function scoreCore<L extends RecLot>(pool: readonly L[], taste: Taste, opts: Rec
       if (deskTwin(l, o.f)) continue;
       let m = members.get(s); if (!m) members.set(s, (m = [])); m.push(o.f);
     }
+    // (Oct 29) a lot the reader opened lately has been seen: it comes back
+    // only when the engine now reads it below market (it still counts toward
+    // a followed name's price level above)
+    if (taste.viewed?.has(l.id) && !isFlagged(l as Parameters<typeof isFlagged>[0])) continue;
     open.push(o);
   }
   const anchors = ladderAnchors(taste, members);
@@ -1344,7 +1391,66 @@ function scoreCore<L extends RecLot>(pool: readonly L[], taste: Taste, opts: Rec
   const inRange = rows.filter(r => !r.out);
   const outside = rows.filter(r => r.out);
   let built: Row[] | null = null;
-  return { inRange, outside, anchored: anchors.length > 0, ladder: () => (built ??= buildLadder()) };
+  let found: Row[] | null = null;
+  return { inRange, outside, anchored: anchors.length > 0, ladder: () => (built ??= buildLadder()), discover: () => (found ??= buildDiscover()) };
+
+  // THE DISCOVER LANE (Oct 29) — what no real tie reaches but the reader's
+  // cuts do: the same category · sub (· sport · era · medium) as a save, an
+  // owned lot, a "More like this" or a followed name's live lots, at their
+  // price (the band they learned or stated; else near the cut's own level),
+  // the kind of object the cut names, with a photo, closing inside
+  // DISCOVER_DAYS. In the markets about WHO or WHAT (memorabilia,
+  // entertainment, historical) the cut must also share a domain or a
+  // franchise — Houdini is no Star Wars pick. Ranked by what matters most
+  // and the engine's read (a lift only where priority's edge term does not
+  // already carry it); the cut's weight orders the cuts. "Not for me" on the
+  // card, the name or the cut shuts the lane for it.
+  function buildDiscover(): Row[] {
+    const cuts = tasteCuts(taste, members);
+    if (!cuts.length) return [];
+    const have = new Set(rows.map(r => r.l));
+    const byCat = new Map<CatKey, TasteCut[]>();
+    for (const c of cuts) { let xs = byCat.get(c.cat); if (!xs) byCat.set(c.cat, (xs = [])); xs.push(c); }
+    const found: Row[] = [];
+    for (const o of open) {
+      const { l, close } = o;
+      if (have.has(l)) continue;
+      const cs = byCat.get(o.cat);
+      if (!cs || close == null || close - nowMs > DISCOVER_DAYS * 864e5) continue;
+      if (!imageOf(l as Pick<AuctionLot, 'id' | 'imageUrl'>)) continue;
+      const f = o.f ?? featOf(l, nowMs);
+      if (f.logA == null || f.byOther) continue;
+      if (!o.f && deskTwin(l, f)) continue;
+      if (!kindFits({ ...l, ek: f.ek }) || (f.cat === 'fine-art' && f.sub === 'prints' && f.medium)) continue;
+      if (taste.down?.size && ((f.card && taste.down.has(`card:${f.card}`)) || (f.ek && taste.down.has(f.ek)) || (!f.named && taste.down.has(cutKeyOf(f))))) continue;
+      let best: TasteCut | null = null;
+      for (const c of cs) {
+        if (!(c.sub === f.sub || subMatches(c.cat, c.sub, f.sub))) continue;
+        if ((c.medium ?? null) !== (f.medium ?? null)) continue;
+        if (c.sport && f.sport && c.sport !== f.sport) continue;
+        const era = c.fx.find(k => k.startsWith('era-')), ec = eraOf(f.fx);
+        if (era && ec && era !== ec) continue;
+        // a lot about WHO or WHAT: the franchise the cut keeps (a Star Wars desk
+        // asks for Star Wars — already a real tie), else its domain (film & TV, music)
+        if (!CUT_CATS.has(c.cat)) { const fr = c.fx.filter(k => k.startsWith('fr-')); const need = fr.length ? fr : c.fx.filter(k => k === 'film-tv' || k === 'music'); if (!need.some(k => f.fx.has(k))) continue; }
+        if (!best || c.w > best.w) best = c;
+      }
+      if (!best) continue;
+      const band = bandFit(f, taste.bands);
+      const said = statedFit(f.logA, taste.stated);
+      const priced = band.band ? band.inside : taste.stated ? said.inside : best.logA != null && Math.abs(f.logA - best.logA) <= CUT_PRICE_SPAN;
+      if (!priced) continue;
+      const pr = priorityOf(l, nowMs);
+      const q = pr ? pr.score / 100 : 0.1;
+      const flagged = isFlagged(l as Parameters<typeof isFlagged>[0]);
+      const lift = flagged && !EDGE_CATS.has(f.cat) ? 1.2 : 1;
+      const tasteV = Math.min(1, best.w) * DISCOVER_SIM;
+      const score = tasteV * (0.3 + 0.7 * q) * lift * windowFactor(close, nowMs);
+      if (score <= 0) continue;
+      found.push({ l, score, taste: tasteV, best: { seed: best.seed, c: tasteV, discover: { cut: best } }, f, flagged, inBand: band.inside, inStated: said.inside });
+    }
+    return found.sort(order);
+  }
 
   // THE LADDER — only when the real ties run short; rung by rung, each
   // rung's rows after every row above it (a family stranger never outranks
@@ -1393,12 +1499,106 @@ function scoreCore<L extends RecLot>(pool: readonly L[], taste: Taste, opts: Rec
   }
 }
 
+/* ── the discover lane's cuts ───────────────────────────────────────────── */
+
+/** one CUT the taste stands in — a category · sub (· sport · medium) the
+ *  reader saves, owns, asked more of, or follows by name — read from the
+ *  seeds that put them there (a category follow or a market already reaches
+ *  its whole kind as a real tie, so it lends no cut) */
+export interface TasteCut {
+  key: string;
+  cat: CatKey;
+  sub: string;
+  sport: string | null;
+  medium: Feat['medium'];
+  /** the facets at least half the cut's lots share (an era, a language, a domain, a franchise) */
+  fx: string[];
+  /** log10 median price of the cut's lots (null when none is priced) */
+  logA: number | null;
+  /** the seeds' weight, summed — orders the cuts */
+  w: number;
+  /** how many seeds stand in it */
+  n: number;
+  /** the strongest seed in it: the pick's `seed` field, never its reason */
+  seed: Seed;
+}
+export interface DiscoverHit { cut: TasteCut }
+
+/** facets a cut carries into the lane */
+const CUT_FX = /^(?:era-.+|lang-(?:ja|zh)|film-tv|music|fr-.+)$/;
+/** where a shared cut is a neighborhood of its own (lotSim's facet and price
+ *  ties live there too); elsewhere the lane also needs a shared domain or
+ *  franchise (a lot about WHO or WHAT) */
+const CUT_CATS: ReadonlySet<CatKey> = new Set<CatKey>([...Array.from(FACET_TIE_CATS), ...Array.from(PRICE_LINK_CATS)]);
+/** decades from the cut's own price level, when no band is learned or stated */
+const CUT_PRICE_SPAN = 0.4;
+/** the lane deals only lots closing inside this many days */
+export const DISCOVER_DAYS = 14;
+/** a soft reach's "similarity" — under every real tie (LOT_SIM_MIN) */
+const DISCOVER_SIM = 0.2;
+
+function tasteCuts(taste: Taste, members: Map<Seed, Feat[]>): TasteCut[] {
+  type Acc = { cat: CatKey; sub: string; sport: string | null; medium: Feat['medium']; fs: Feat[]; w: number; n: number; seed: Seed };
+  const acc = new Map<string, Acc>();
+  const add = (s: Seed, cat: CatKey, sub: string, sport: string | null, medium: Feat['medium'], fs: Feat[]) => {
+    const key = `${cat}|${sub}|${sport ?? ''}|${medium ?? ''}`;
+    let a = acc.get(key);
+    if (!a) acc.set(key, (a = { cat, sub, sport, medium, fs: [], w: 0, n: 0, seed: s }));
+    a.fs.push(...fs); a.w += s.w; a.n++;
+    if (s.w > a.seed.w) a.seed = s;
+  };
+  for (const s of taste.seeds) {
+    if (s.f) {
+      // a lot merely looked at lends no cut (a glance is not a taste)
+      if (s.kind === 'signal' && s.verb !== 'asked for more like') continue;
+      add(s, s.f.cat, s.f.sub, s.f.sport, s.f.medium ?? null, [s.f]);
+      continue;
+    }
+    const fo = s.follow;
+    if (!fo || (fo.kind !== 'maker' && fo.kind !== 'entity') || s.kind === 'signal') continue;
+    const fs = members.get(s) ?? [];
+    if (!fs.length) continue;
+    const cat = modeOf(fs.map(f => f.cat))!;
+    const inCat = fs.filter(f => f.cat === cat);
+    add(s, cat, modeOf(inCat.map(f => f.sub))!, modeOf(inCat.map(f => f.sport)) ?? null, null, inCat);
+  }
+  const out: TasteCut[] = [];
+  acc.forEach((a, key) => {
+    const cnt = new Map<string, number>();
+    for (const f of a.fs) for (const k of Array.from(f.fx)) if (CUT_FX.test(k)) cnt.set(k, (cnt.get(k) ?? 0) + 1);
+    const fx: string[] = [];
+    cnt.forEach((n, k) => { if (n * 2 >= a.fs.length) fx.push(k); });
+    const ps = a.fs.map(f => f.logA).filter((x): x is number => x != null);
+    out.push({ key, cat: a.cat, sub: a.sub, sport: a.sport, medium: a.medium, fx, logA: ps.length ? medianOf(ps) : null, w: a.w, n: a.n, seed: a.seed });
+  });
+  return out;
+}
+
+/* ── rotation ───────────────────────────────────────────────────────────── */
+
+/** FNV-1a, 32-bit */
+function fnv(str: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h >>> 0;
+}
+/** the day's shuffle: one number in [0, 1) per lot id, fixed for the reader's
+ *  LOCAL date and the taste (what is seeded, not the object) — the same all
+ *  day on every surface, new tomorrow */
+export function rotationOf(nowMs: number, taste: Pick<Taste, 'seeds'>): (id: string) => number {
+  const d = new Date(nowMs);
+  const day = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  const key = taste.seeds.map(s => `${s.kind}:${s.lotId ?? (s.follow ? `${s.follow.kind}/${s.follow.key}` : s.label)}`).sort().join('|');
+  const salt = fnv(`${day}|${key}`);
+  return id => fnv(`${salt}|${id}`) / 4294967296;
+}
+
 /** a tie to a NAME — the same maker / player / subject / card as a seed, or
  *  a followed name — barely discounts its own repeats; everything else
  *  (a cut, a broad follow, a rung, a search) is spread hard */
 function namedTie(r: Pick<ScoredRow, 'best'>): boolean {
   const b = r.best;
-  if (b.ladder) return false;
+  if (b.ladder || b.discover) return false;
   if (b.parts) return b.parts.entity || b.parts.card;
   return !!b.seed.follow && !b.seed.broad && (b.seed.follow.kind === 'maker' || b.seed.follow.kind === 'entity');
 }
@@ -1419,9 +1619,19 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
   const n = opts.n ?? 12;
   const T = tuneOf(opts);
   const rows = scoreLots(pool, taste, opts);
-  if (!rows.length) return [];
+  // (Oct 29) the discover lane's rows (no real tie, the reader's cut at their
+  // price) — the quota is a quarter of the seats, every fourth from the third
+  const disc = T.discover > 0 ? discoverLots(pool, taste, opts) : [];
+  if (!rows.length && !disc.length) return [];
+  const discQuota = n >= 12 ? Math.max(3, Math.floor(n * T.discover)) : Math.floor(n * T.discover);
+  const discSeat = (seat: number) => seat % 4 === 2;
   const lotSeeds = taste.seeds.filter(s => s.f);
   type Row = ScoredRow<L>;
+  // (Oct 29) ROTATION: rows within T.rotate of each other may swap seats by
+  // the day — a shuffle seeded by the local date and the taste, never the
+  // clock (the deal is the same all day; home's 20 stays the profile's prefix)
+  const spin = T.rotate > 0 ? rotationOf(opts.nowMs ?? Date.now(), taste) : null;
+  const jit = (r: Row) => (spin ? 1 + T.rotate * (spin(r.l.id) - 0.5) : 1);
 
   const out: Row[] = [];
   // a taste that IS one entity (a Star Wars desk, a Patek desk) is not
@@ -1461,13 +1671,14 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
     thing: r.f.card ? `card:${r.f.card}` : `t:${r.l.auctionHouse}|${normTitle(r.l.title)}`,
   });
   const keys = new Map(cand.map(r => [r, keysOf(r)]));
+  for (const r of disc) keys.set(r, keysOf(r));
   const used = new Set<Row>();
   const bump = <K,>(m: Map<K, number>, key: K) => m.set(key, (m.get(key) ?? 0) + 1);
   // PHASES: every real tie in range (0) before any fallback rung (1), every
   // rung before a real tie far outside a stated range (2) — a penalty never
   // lets a later phase jump an earlier one
   const phaseOf = (r: Row) => (r.out ? 2 : r.best.ladder ? 1 : 0);
-  let phase = Math.min(...cand.map(phaseOf));
+  let phase = cand.length ? Math.min(...cand.map(phaseOf)) : 0;
   // ONE SEED'S SHARE: no single seed — one "More like this" at .7, one save,
   // one category follow (a fifth) — takes more than ~40% of the seats while
   // another seed still has something to deal; ONE SALE never more than a
@@ -1514,15 +1725,40 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
   // (Oct 29) one house holds 40% of the deal at most when others are in reach
   const houseCapOn = new Set(cand.map(r => keys.get(r)!.house)).size > 1;
   const houseCap = () => Math.ceil(capN * 0.4) + lift;
+  let discDealt = 0;
+  const perCut = new Map<string, number>(), discEnts = new Set<string>();
+  /** the lane's next pick, under the deal's house and sale caps — false when none is left */
+  const dealDiscover = (): boolean => {
+    let best: Row | null = null, bestV = 0;
+    for (const r of disc) {
+      if (used.has(r)) continue;
+      const k = keys.get(r)!;
+      if (seen.has(k.thing) || seen.has(`id:${r.l.id}`)) { used.add(r); continue; }
+      if (r.f.named && discEnts.has(k.ent)) continue;
+      if (houseCapOn && (perHouse.get(k.house) ?? 0) >= houseCap()) continue;
+      // the lane is not a generic tie: the sale cap does not shut it — a repeat
+      // of the sale, the house or the cut only costs it
+      const v = r.score * Math.pow(0.7, perCut.get(r.best.discover!.cut.key) ?? 0) * Math.pow(T.genSale, perSale.get(k.sale) ?? 0) * Math.pow(T.house, perHouse.get(k.house) ?? 0) * jit(r);
+      if (v > bestV) { bestV = v; best = r; }
+    }
+    if (!best) return false;
+    used.add(best);
+    take(best, keys.get(best)!);
+    return true;
+  };
   const take = (r: Row, k: ReturnType<typeof keysOf>) => {
     out.push(r);
-    bump(perEnt, k.ent); bump(perSale, k.sale); bump(perHouse, k.house); bump(perSeed, seedKey(r.best.seed));
-    if (!namedTie(r)) bump(perSaleGen, k.sale);
+    bump(perEnt, k.ent); bump(perSale, k.sale); bump(perHouse, k.house);
+    // a discover pick is nobody's tie: it charges no seed, one per name, and
+    // spreads across the reader's cuts
+    if (r.best.discover) { discDealt++; bump(perCut, r.best.discover.cut.key); if (r.f.named) discEnts.add(k.ent); } else { bump(perSeed, seedKey(r.best.seed)); if (!namedTie(r)) bump(perSaleGen, k.sale); }
     seen.add(k.thing); seen.add(`id:${r.l.id}`);
     for (const x of r.l.crossLive || []) if (x?.id) seen.add(`id:${x.id}`);
     if (r.best.seed.kind === 'signal') sigDealt++;
   };
   while (out.length < n) {
+    // the discover lane's seat (every fourth, from the third), while it has lots
+    if (discDealt < discQuota && discSeat(out.length) && dealDiscover()) continue;
     // the device's guaranteed seat, when one is owed here
     if (sigOn && sigDealt < sigOwed(out.length)) {
       let best: Row | null = null, bestV = 0;
@@ -1534,7 +1770,7 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
         if (!sigC) continue;
         if (r.f.named && (perEnt.get(k.ent) ?? 0) >= entCapOf(r)) continue;
         if (houseCapOn && (perHouse.get(k.house) ?? 0) >= houseCap()) continue;
-        const v = r.score * (sigC / Math.max(1e-9, r.taste)) * penalty(r, k);
+        const v = r.score * (sigC / Math.max(1e-9, r.taste)) * penalty(r, k) * jit(r);
         if (v > bestV) { bestV = v; best = r; }
       }
       if (best) {
@@ -1563,13 +1799,13 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
       if (saleCapOn && !namedTie(r) && (perSaleGen.get(k.sale) ?? 0) >= saleCap()) {
         // at its cap the sale's own repeat discount is spent: weigh it without
         capped = true;
-        const v = r.score * penalty(r, k, false);
+        const v = r.score * penalty(r, k, false) * jit(r);
         if (v > overV) { overV = v; overSale = r; }
         continue;
       }
-      const v = r.score * penalty(r, k);
+      const v = r.score * penalty(r, k) * jit(r);
       if (v > bestV) { bestV = v; best = r; }
-      bestBare = Math.max(bestBare, r.score * penalty(r, k, false));
+      bestBare = Math.max(bestBare, r.score * penalty(r, k, false) * jit(r));
     }
     // the sale cap yields when nothing elsewhere comes close (weighed alike:
     // neither side's sale discount counts)
@@ -1581,6 +1817,8 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
       if (phase < 1 && cand.some(r => !used.has(r) && phaseOf(r) === 1)) { phase = 1; continue; }
       if (capped && lift < n) { lift++; continue; }
       if (phase < 2 && cand.some(r => !used.has(r) && phaseOf(r) === 2)) { phase = 2; continue; }
+      // the ties ran dry: the lane's unspent quota closes the list (never past it)
+      if (discDealt < discQuota && dealDiscover()) continue;
       break;
     }
     used.add(best);
@@ -1598,7 +1836,7 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
   }
 
   return out.map(r => {
-    const { reason: base, why, short: baseShort } = explain(r.l, r.f, r.best, lotSeeds, taste.bands, !!r.inBand);
+    const { reason: base, why, short: baseShort } = explain(r.l, r.f, r.best, lotSeeds, taste.bands, !!r.inBand, !!r.inStated, taste.stated);
     const tw = r.f.card ? twinOf.get(`card:${r.f.card}`) : undefined;
     const twinNote = tw ? twinNoteOf(r.l, tw.l) : null;
     // the suffixes, each only when TRUE: the engine's below-market flag
@@ -1611,7 +1849,8 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
     const off = r.out && taste.stated ? outsideWords(r.out, taste.stated) : null;
     const extra = [
       r.flagged ? ENGINE_NOTE : null,
-      off ?? (!r.flagged && !/\$/.test(base) ? (band ? `in your ${band} range` : said) : null),
+      // a discover reason already says its price
+      off ?? (!r.flagged && !r.best.discover && !/\$/.test(base) ? (band ? `in your ${band} range` : said) : null),
       twinNote,
     ].filter(Boolean).join(' · ');
     const reason = extra ? `${base} · ${extra}` : base;
@@ -1621,6 +1860,7 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
       flagged: !!r.flagged, inBand: !!r.inBand, tier: r.best.ladder?.tier ?? 1,
     };
     if (r.out) rec.outOfRange = r.out;
+    if (r.best.discover) rec.lane = 'discover';
     return rec;
   });
 }
@@ -1641,9 +1881,11 @@ function twinNoteOf(kept: RecLot, twin: RecLot): string | null {
   return `also live ${g === 'raw' ? 'raw' : `as ${g}`}`;
 }
 
-function explain(l: RecLot, f: Feat, best: { seed: Seed; parts?: SimParts; ladder?: LadderHit }, lotSeeds: Seed[], bands?: ReadonlyMap<CatKey, PriceBand>, inBand = false): { reason: string; why: string[]; short?: string } {
+function explain(l: RecLot, f: Feat, best: { seed: Seed; parts?: SimParts; ladder?: LadderHit; discover?: DiscoverHit }, lotSeeds: Seed[], bands?: ReadonlyMap<CatKey, PriceBand>, inBand = false, inStated = false, stated?: StatedBand | null): { reason: string; why: string[]; short?: string } {
   const s = best.seed;
   const why: string[] = [];
+  // a discover pick ties to nothing: it says the cut it stands in and the price, no more
+  if (best.discover) return discoverReason(f, best.discover.cut, bands, inBand, inStated, stated);
   // an on-device signal speaks as what the reader did ("Because you looked
   // at Andy Warhol", "Because you searched “kaws”") — never as "your" desk
   if (s.kind === 'signal' && !s.f) return { reason: `Because you ${s.verb} ${s.query ? `“${s.label}”` : s.label}`, why: [] };
@@ -1716,6 +1958,33 @@ function explain(l: RecLot, f: Feat, best: { seed: Seed; parts?: SimParts; ladde
   const what = `${named ? `${s.who} · ` : ''}${s.label}`;
   const lead = why[0] ? why[0].charAt(0).toUpperCase() + why[0].slice(1) : null;
   return { reason: `Because you ${verb} ${what}`, why, short: lead ? `${lead} · you ${verb} ${what}` : undefined };
+}
+
+/** a domain, in a reason's voice */
+const DOMAIN_WORD: Record<string, string> = { 'film-tv': 'film & TV', music: 'music' };
+/** the discover lane's reason — TRUE by construction, never a tie:
+ *  "New to you · modern basketball cards in your $200–900 range",
+ *  "New to you · prints near Andy Warhol’s prices" (no band learned or
+ *  stated: the cut's own level, said as whose it is; the engine's note and
+ *  a live twin ride after it, as on every pick) */
+function discoverReason(f: Feat, cut: TasteCut, bands: ReadonlyMap<CatKey, PriceBand> | undefined, inBand: boolean, inStated: boolean, stated?: StatedBand | null): { reason: string; why: string[]; short: string } {
+  const era = cut.fx.find(k => k.startsWith('era-'));
+  const eraW = era && f.fx.has(era) ? FX_WORD[era] : null;
+  const sport = f.sport ? SPORT_WORD[f.sport] : null;
+  const sportW = sport && sport !== 'other sports' ? `${sport} ` : '';
+  const dom = CUT_CATS.has(f.cat) ? null : cut.fx.find(k => k.startsWith('fr-') && f.fx.has(k) && FACET_LABEL[k]) ?? cut.fx.find(k => DOMAIN_WORD[k] && f.fx.has(k));
+  const noun = f.cat === 'sports-cards' ? `${sportW}cards`
+    : f.cat === 'tcg' ? 'Pokémon cards'
+    : f.cat === 'fine-art' ? nounOf(f.cat, f.sub, f.medium)
+    : f.cat === 'sports-memorabilia' ? `${sportW}${subLabel(f.cat, f.sub).toLowerCase()}`
+    : dom ? `${DOMAIN_WORD[dom] ?? FACET_LABEL[dom]} ${nounOf(f.cat, f.sub)}`
+    : subLabel(f.cat, f.sub).toLowerCase();
+  const what = `${eraW ? `${eraW} ` : ''}${noun}`;
+  const band = inBand ? bandOfCat(bands, f.cat) : null;
+  const whose = cut.seed.follow ? `${cut.seed.label}’s` : cut.n === 1 ? 'your save’s' : 'your saves’';
+  const price = band ? `in your ${band} range` : inStated && stated ? stated.say : `near ${whose} prices`;
+  const reason = `New to you · ${what} ${price}`;
+  return { reason, why: ['new to you', what, price], short: reason };
 }
 
 /** what a family is called, for "Another …" */

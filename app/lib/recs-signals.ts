@@ -12,6 +12,10 @@
  *   less     "Not for me" on a pick — that lot never comes back, its
  *            entity and card identity are quieted
  *
+ * (Oct 29) a lot opened in the last VIEWED_DAYS is also handed over as SEEN:
+ * the recommender never deals it back (the reader has had their look) unless
+ * the engine now reads it below market.
+ *
  * × decay (halves every 21 days; anything older than 90 days is dropped)
  * × repeat (a lot opened again reads a little louder, capped) × dwell (a
  * page read for 20s+ reads a little louder). A save (.75) always outweighs
@@ -39,6 +43,8 @@ export const MAX_EVENTS = 200;
 export const MAX_MARKS = 100;
 export const HALF_LIFE_DAYS = 21;
 export const MAX_AGE_DAYS = 90;
+/** a lot opened inside this window is not dealt back as a pick */
+export const VIEWED_DAYS = 7;
 /** the same lot / page / term inside this window is one visit, not two */
 const REPEAT_GAP_MS = 30 * 60_000;
 
@@ -365,6 +371,10 @@ export function signalsToTaste(
   store: SignalStore, nowMs = Date.now(), resolve?: (id: string) => RecLot | null | undefined,
 ): { extra: ExtraInput[]; negative: NegativeInput } {
   const lessIds = new Set(store.marks.filter(m => m.k === 'less').map(m => m.id));
+  // what the reader opened lately: seen, not to be dealt back
+  const since = nowMs - VIEWED_DAYS * 864e5;
+  const viewed = new Set<string>();
+  for (const e of store.ev) if ((e.k === 'lot' || e.k === 'comps') && e.t >= since) viewed.add(e.id);
   // one entry per mark: two passes on one maker quiet it twice
   const keys: string[] = [];
   for (const m of store.marks) if (m.k === 'less') for (const k of m.keys ?? []) keys.push(k);
@@ -396,7 +406,7 @@ export function signalsToTaste(
     }
   }
   for (const v of Array.from(lotW.values())) extra.push({ lot: v.lot, weight: v.w, reason: v.reason });
-  return { extra, negative: { ids: lessIds, keys } };
+  return { extra, negative: { ids: lessIds, keys, viewed } };
 }
 
 /**
