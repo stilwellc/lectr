@@ -3,10 +3,14 @@
  *
  * Who: every reader who turned the Daily Desk ON in Account (public.email_prefs,
  * migration 0011 — opt-in, off by default) with a confirmed address.
- * What: their own desk — bids past their max, watches closing in 36h, results
- * since the last email, below-market watches, and three picks from the
- * recommender over their watches + follows (scripts/lib/daily-desk.ts, pure).
- * Never an empty email: a reader with nothing to say is skipped.
+ * What: THE NEWSPAPER (Oct 29) — their own desk, every morning: what needs
+ * them (bids past their max, closes in 36h, results), every live watch with
+ * its movement since the save, the week's calendar, what's new for their
+ * follows, the recommender's laned picks, a ledger line per followed name
+ * (live lots + the last settled hammer from the entity detail buckets), and
+ * the market read off receipts.json / backtest.json / the live book
+ * (scripts/lib/daily-desk.ts, pure). A paper publishes daily: only a reader
+ * with nothing on the desk at all (no watch, no follow) is skipped.
  * Once a day per reader (email_prefs.last_sent_on, the New York day) and a
  * Resend Idempotency-Key, so a retried run never double-sends.
  *
@@ -24,8 +28,11 @@ import type { AuctionLot } from '../app/types';
 import { isOnBlock } from '../app/utils';
 import { buildTaste, recommend, recNote, type SavedInput, type RecLot } from '../app/lib/recs';
 import { followOf, type Follow } from '../app/lib/follows';
+import { marketNamesOf } from '../app/lib/your-market';
+import { bucketOf } from '../app/lib/page-data';
+import type { EntityDetail } from '../app/lib/entity/model';
 import { baseId } from './lib/push-plan';
-import { planDesk, type WatchRow, type SoldRow } from './lib/daily-desk';
+import { planDesk, laneOf, lastSaleOf, type WatchRow, type SoldRow, type LastSale, type ReceiptsIn, type BacktestIn } from './lib/daily-desk';
 import { renderDesk } from './lib/daily-desk-html';
 
 const SB = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '');
@@ -76,12 +83,34 @@ async function restAll<T>(p: string): Promise<T[]> {
 const inList = (ids: string[]) => encodeURIComponent(`(${ids.map(i => `"${i.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`).join(',')})`);
 const chunks = <T,>(a: T[], n: number) => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n));
 
+/** a served data file: the local payload when the checkout carries one, else prod */
+async function loadServed<T>(rel: string, required = false): Promise<T | null> {
+  const local = path.join(path.dirname(arg('upcoming', path.join(process.cwd(), 'public', 'data', 'ray', 'upcoming.json'))), rel);
+  if (fs.existsSync(local)) return JSON.parse(fs.readFileSync(local, 'utf8')) as T;
+  try {
+    const r = await fetch(`${ORIGIN}/data/ray/${rel}?cb=${Date.now()}`, { signal: AbortSignal.timeout(60_000) });
+    if (!r.ok) throw new Error(`${rel} → ${r.status}`);
+    return (await r.json()) as T;
+  } catch (e) {
+    if (required) throw e;
+    warn(`${rel}: ${(e as Error).message} — section skipped`);
+    return null;
+  }
+}
 async function loadLive(): Promise<AuctionLot[]> {
-  const local = arg('upcoming', path.join(process.cwd(), 'public', 'data', 'ray', 'upcoming.json'));
-  if (fs.existsSync(local)) return (JSON.parse(fs.readFileSync(local, 'utf8')).lots || []) as AuctionLot[];
-  const r = await fetch(`${ORIGIN}/data/ray/upcoming.json?cb=${Date.now()}`, { signal: AbortSignal.timeout(60_000) });
-  if (!r.ok) throw new Error(`upcoming.json → ${r.status}`);
-  return ((await r.json()).lots || []) as AuctionLot[];
+  const j = await loadServed<{ lots?: AuctionLot[] }>('upcoming.json', true);
+  return j?.lots || [];
+}
+/** the followed names' last settled hammers: one detail bucket per name, each bucket read once */
+async function loadNameSold(ids: ReadonlySet<string>): Promise<Map<string, LastSale | null>> {
+  const out = new Map<string, LastSale | null>();
+  const buckets = new Map<string, string[]>();
+  for (const id of Array.from(ids)) { const b = bucketOf(id); buckets.set(b, [...(buckets.get(b) || []), id]); }
+  for (const [b, list] of Array.from(buckets)) {
+    const file = await loadServed<Record<string, EntityDetail>>(`pages/entity-${b}.json`);
+    for (const id of list) out.set(id, lastSaleOf(file?.[id]));
+  }
+  return out;
 }
 
 interface Recipient { user_id: string; email: string; unsub_token: string; last_sent_on: string | null }
@@ -114,14 +143,14 @@ async function main() {
   if (!rcpt.length) { console.log('[daily-desk] 0 recipients due today'); return; }
   const users = rcpt.map(r => r.user_id);
 
-  // 2 · their watches (max_usd arrives with migration 0010 — fall back without it)
+  // 2 · their watches (max_usd arrives with migration 0010 — fall back without it; bid_count is the save's baseline)
   const watches: (WatchRow & { user_id: string })[] = [];
   for (const c of chunks(users, 100)) {
     try {
-      watches.push(...await restAll<WatchRow & { user_id: string }>(`saved_lots?select=user_id,lot_id,saved_title,max_usd,owned,est_mid&user_id=in.${inList(c)}`));
+      watches.push(...await restAll<WatchRow & { user_id: string }>(`saved_lots?select=user_id,lot_id,saved_title,max_usd,owned,est_mid,bid_count&user_id=in.${inList(c)}`));
     } catch (e) {
       if ((e as { status?: number }).status !== 400) throw e;
-      watches.push(...await restAll<WatchRow & { user_id: string }>(`saved_lots?select=user_id,lot_id,saved_title,owned,est_mid&user_id=in.${inList(c)}`));
+      watches.push(...await restAll<WatchRow & { user_id: string }>(`saved_lots?select=user_id,lot_id,saved_title,owned,est_mid,bid_count&user_id=in.${inList(c)}`));
     }
   }
   // 3 · their follows (saved_searches → Follow)
@@ -132,10 +161,15 @@ async function main() {
       if (f) follows.set(r.user_id, [...(follows.get(r.user_id) || []), f]);
     }
   }
-  // 4 · the live book + the block's pool for picks
+  // 4 · the live book + the block's pool for picks; the market's files; the names' last hammers
   const book = await loadLive();
   const live = new Map(book.map(l => [baseId(l.id), l]));
   const pool = book.filter(l => isOnBlock(l, today, now)) as (AuctionLot & RecLot)[];
+  const receipts = await loadServed<ReceiptsIn>('receipts.json');
+  const backtest = await loadServed<BacktestIn>('backtest.json');
+  const nameIds = new Set<string>();
+  for (const fs_ of Array.from(follows.values())) for (const n of marketNamesOf(fs_, [])) if (n.id) nameIds.add(n.id);
+  const nameSold = await loadNameSold(nameIds);
   // 5 · settled results for watched lots off the block
   const offBlock = Array.from(new Set(watches.map(w => baseId(w.lot_id)).filter(id => !live.has(id))));
   const sold = new Map<string, SoldRow>();
@@ -144,7 +178,7 @@ async function main() {
     const ids = c.flatMap(id => [id, `${id}~`]);
     for (const r of await restAll<SoldRow>(`lots?select=id,title,house,price_usd,sale_date,image_url&status=eq.sold&sale_date=gte.${since}&id=in.${inList(ids)}`)) sold.set(baseId(r.id), r);
   }
-  console.log(`[daily-desk] ${rcpt.length} recipient(s) · ${watches.length} watch(es) · ${pool.length} live lots · ${sold.size} recent result(s)${DRY ? ' · DRY (no send)' : ''}`);
+  console.log(`[daily-desk] ${rcpt.length} recipient(s) · ${watches.length} watch(es) · ${pool.length} live lots · ${sold.size} recent result(s) · ${nameIds.size} name(s)${DRY ? ' · DRY (no send)' : ''}`);
   if (PREVIEW) fs.mkdirSync(PREVIEW, { recursive: true });
 
   let sent = 0, skipped = 0, failed = 0;
@@ -152,10 +186,11 @@ async function main() {
     try {
       const mine = watches.filter(w => w.user_id === r.user_id);
       const saved: SavedInput[] = mine.map(w => ({ id: w.lot_id, lot: (live.get(baseId(w.lot_id)) as RecLot | undefined) ?? null, owned: !!w.owned, title: w.saved_title ?? null, estMid: w.est_mid ?? null }));
-      const taste = buildTaste({ saved, follows: follows.get(r.user_id) || [], nowMs: now });
-      const picks = recommend(pool, taste, { nowMs: now, n: 8 }).map(p => ({ lot: p.lot as AuctionLot, note: recNote(p) }));
+      const myFollows = follows.get(r.user_id) || [];
+      const taste = buildTaste({ saved, follows: myFollows, nowMs: now });
+      const picks = recommend(pool, taste, { nowMs: now, n: 12 }).map(p => ({ lot: p.lot as AuctionLot, note: recNote(p), lane: laneOf(p) }));
       const mySold = mine.map(w => sold.get(baseId(w.lot_id))).filter((s): s is SoldRow => !!s);
-      const desk = planDesk({ now, tz: TZ, watches: mine, live, sold: mySold, picks, lastSentOn: r.last_sent_on });
+      const desk = planDesk({ now, tz: TZ, watches: mine, live, sold: mySold, picks, lastSentOn: r.last_sent_on, follows: myFollows, book, nameSold, receipts, backtest });
       if (!desk) { skipped++; continue; }
       const unsubUrl = `${ORIGIN}/api/email/unsubscribe?t=${encodeURIComponent(r.unsub_token)}`;
       const { html, text } = renderDesk(desk, { origin: ORIGIN, unsubUrl, dateLabel });
@@ -172,7 +207,7 @@ async function main() {
       warn(`user ${r.user_id.slice(0, 8)}: ${(e as Error).message}`);
     }
   }
-  console.log(`[daily-desk] sent ${sent} · skipped ${skipped} (nothing to say) · failed ${failed}`);
+  console.log(`[daily-desk] sent ${sent} · skipped ${skipped} (nothing on the desk) · failed ${failed}`);
   // a send that Resend refused (unverified domain, bad key) turns the job red instead of passing quietly
   if (failed && !sent) process.exitCode = 1;
 }
