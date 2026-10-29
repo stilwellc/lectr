@@ -1,125 +1,253 @@
 /**
  * daily-desk-html — render THE DAILY DESK model as an email (HTML + text).
- * Email-client law: tables, inline styles, no web fonts required (Inter
- * first, system sans after), images with fixed width/height and alt, no JS,
- * no CSS the clients strip. Color stays the market's (green under, red over).
+ * Email-client law: tables, inline styles (Gmail strips <style>), no web
+ * fonts required (Inter first, system sans after), images with fixed
+ * width/height and alt, no JS. A 600px card that reads on a 390px phone:
+ * every row is one table, every strip wraps or shrinks, nothing is fixed
+ * wider than 72px. Color stays the market's (green under, red over); the
+ * chrome is the north star's — eggshell ground, hairlines, dotted ledgers,
+ * pills, sentence case, lightness over boldness (docs/NORTHSTAR_UI.md).
  */
-import type { DeskEmail, DeskItem, PickItem, ResultItem } from './daily-desk';
+import type { DeskEmail, DeskItem, DeskRow, PickItem, ResultItem, WeekCalendar, NameLine, MarketLine } from './daily-desk';
 
-const INK = '#1A1714', MUTED = '#6F6A63', FAINT = '#A39E96', LINE = '#EBE8E4', BG = '#F5F3F1', CARD = '#FDFCFC';
+const INK = '#1C1917', MUTED = '#777169', FAINT = '#A59F97', LINE = '#EBE8E4', BG = '#F5F3F1', CARD = '#FDFCFC', WELL = '#F5F3F1';
 const UP = '#0F7C43', DOWN = '#C13E2C';
 const FONT = `Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif`;
+const UTM = 'utm_source=daily-desk&utm_medium=email';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const lotUrl = (origin: string, id: string) => `${origin}/lot?id=${encodeURIComponent(id)}&utm_source=daily-desk&utm_medium=email`;
+const lotUrl = (origin: string, id: string) => `${origin}/lot?id=${encodeURIComponent(id)}&${UTM}`;
+const pageUrl = (origin: string, path: string) => `${origin}${path}${path.includes('?') ? '&' : '?'}${UTM}`;
+const n2 = (n: number) => n.toLocaleString('en-US');
 
 function pill(text: string, dir: 'up' | 'down' | 'ink') {
   const bg = dir === 'up' ? UP : dir === 'down' ? DOWN : INK;
   return `<span style="display:inline-block;padding:3px 9px;border-radius:999px;background:${bg};color:#fff;font:500 12px/1.2 ${FONT};white-space:nowrap">${esc(text)}</span>`;
 }
-function photo(img: string | null, alt: string, size = 72) {
+const quiet = (text: string) => `<span style="font:400 12.5px/1.3 ${FONT};color:${MUTED}">${esc(text)}</span>`;
+const strong = (text: string) => `<span style="font:600 12.5px/1.3 ${FONT};color:${INK}">${esc(text)}</span>`;
+function photo(img: string | null, alt: string, size = 64) {
   // no photo: the lot's initial on a tile (the desk's Thumb fallback), never a blank box
   if (!img) return `<div style="width:${size}px;height:${size}px;border-radius:12px;background:${LINE};color:${FAINT};font:300 ${Math.round(size * 0.42)}px/${size}px ${FONT};text-align:center">${esc((alt.trim()[0] || '·').toUpperCase())}</div>`;
   return `<img src="${esc(img)}" width="${size}" height="${size}" alt="${esc(alt)}" style="display:block;width:${size}px;height:${size}px;border-radius:12px;object-fit:cover;background:${LINE};border:0">`;
 }
-function section(title: string, body: string) {
-  return `<tr><td style="padding:26px 0 6px;font:500 13px/1.3 ${FONT};color:${MUTED}">${esc(title)}</td></tr>
-<tr><td style="border-top:1px solid ${LINE}"></td></tr>${body}`;
+/** a section: a quiet sentence-case title over a hairline, an optional sub-line, then its body */
+function section(title: string, body: string, sub?: string | null) {
+  return `<tr><td style="padding:30px 0 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+<tr><td style="padding:0 0 8px;font:500 15px/1.3 ${FONT};color:${INK};letter-spacing:-0.01em">${esc(title)}</td></tr>
+<tr><td style="border-top:1px solid ${INK}"></td></tr>
+${sub ? `<tr><td style="padding:8px 0 0;font:400 12.5px/1.5 ${FONT};color:${MUTED}">${sub}</td></tr>` : ''}
+${body}</table></td></tr>`;
 }
-function row(origin: string, i: DeskItem | PickItem, extra = '') {
+/** a quiet group label inside a section (needs-you's three kinds, the picks' lanes) */
+const group = (label: string) => `<tr><td style="padding:16px 0 2px;font:400 13px/1.3 ${FONT};color:${MUTED}">${esc(label)}</td></tr>`;
+const empty = (text: string) => `<tr><td style="padding:14px 0 4px;font:400 14px/1.5 ${FONT};color:${MUTED}">${esc(text)}</td></tr>`;
+const more = (origin: string, text: string, path: string) => `<tr><td style="padding:12px 0 0"><a href="${pageUrl(origin, path)}" style="font:500 13px/1.3 ${FONT};color:${INK};text-decoration:none">${esc(text)} →</a></td></tr>`;
+
+/** a lot row: photo · title · meta · a line of facts · chips */
+function row(origin: string, i: DeskItem | PickItem | DeskRow, o: { facts?: string[]; note?: string | null; chips?: string[] } = {}) {
   const meta = [i.maker, i.house, i.est].filter(Boolean).join(' · ');
-  const chips = [
-    i.when ? `<span style="font:600 12.5px/1.3 ${FONT};color:${INK}">${esc(i.when)}</span>` : '',
+  const chips = (o.chips ?? [
+    i.when ? strong(i.when) : '',
     i.sig ? pill(i.sig.text, i.sig.dir) : '',
-    i.over ? pill(`bid ${i.bid} passed your max`, 'down') : i.max ? `<span style="font:500 12.5px/1.3 ${FONT};color:${MUTED}">your max ${esc(i.max)}</span>` : '',
-  ].filter(Boolean).join('&nbsp;&nbsp;');
+    i.over ? pill(`bid ${i.bid} passed your max`, 'down') : i.max ? quiet(`your max ${i.max}`) : '',
+  ]).filter(Boolean).join('&nbsp;&nbsp;');
+  const facts = (o.facts || []).filter(Boolean).join(' · ');
   return `<tr><td style="padding:14px 0;border-bottom:1px solid ${LINE}">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-<td width="72" valign="top"><a href="${lotUrl(origin, i.id)}">${photo(i.img, i.title)}</a></td>
+<td width="64" valign="top"><a href="${lotUrl(origin, i.id)}">${photo(i.img, i.title)}</a></td>
 <td valign="top" style="padding-left:14px">
 <a href="${lotUrl(origin, i.id)}" style="font:500 15px/1.35 ${FONT};color:${INK};text-decoration:none">${esc(i.title)}</a>
 <div style="font:400 13px/1.45 ${FONT};color:${MUTED};padding-top:3px">${esc(meta)}</div>
-${chips ? `<div style="padding-top:7px">${chips}</div>` : ''}${extra}
+${facts ? `<div style="font:400 13px/1.45 ${FONT};color:${INK};padding-top:4px">${esc(facts)}</div>` : ''}
+${chips ? `<div style="padding-top:7px">${chips}</div>` : ''}
+${o.note ? `<div style="font:400 12.5px/1.45 ${FONT};color:${MUTED};padding-top:6px">${esc(o.note)}</div>` : ''}
 </td></tr></table></td></tr>`;
+}
+function deskRow(origin: string, r: DeskRow) {
+  const roomTone = r.room == null ? '' : r.over ? pill(r.room, 'down') : quiet(r.room);
+  // a bid-auction lot's meta line already says "$1.6K bid · 43 bids" (formatEstimate); say it once
+  const bidSaid = /\bbid\b/.test(r.est);
+  return row(origin, r, {
+    facts: [bidSaid ? '' : [r.bid ? `bid ${r.bid}` : '', r.bids || ''].filter(Boolean).join(' · '), r.moved || ''],
+    chips: [r.when ? strong(r.when) : '', r.sig ? pill(r.sig.text, r.sig.dir) : '', roomTone],
+  });
 }
 function resultRow(origin: string, r: ResultItem) {
   const tone = r.inReach == null ? 'ink' : r.inReach ? 'up' : 'down';
   return `<tr><td style="padding:14px 0;border-bottom:1px solid ${LINE}">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-<td width="72" valign="top"><a href="${lotUrl(origin, r.id)}">${photo(r.img, r.title)}</a></td>
+<td width="64" valign="top"><a href="${lotUrl(origin, r.id)}">${photo(r.img, r.title)}</a></td>
 <td valign="top" style="padding-left:14px">
 <a href="${lotUrl(origin, r.id)}" style="font:500 15px/1.35 ${FONT};color:${INK};text-decoration:none">${esc(r.title)}</a>
-<div style="font:400 13px/1.45 ${FONT};color:${MUTED};padding-top:3px">${esc(r.house)} · hammered <b style="color:${INK}">${esc(r.hammer)}</b>${r.vsEst ? ` · ${esc(r.vsEst)}` : ''}</div>
+<div style="font:400 13px/1.45 ${FONT};color:${MUTED};padding-top:3px">${esc(r.house)} · hammered <b style="color:${INK};font-weight:600">${esc(r.hammer)}</b>${r.vsEst ? ` · ${esc(r.vsEst)}` : ''}</div>
 ${r.vsMax ? `<div style="padding-top:7px">${pill(r.inReach ? `in reach · ${r.vsMax}` : `past you · ${r.vsMax}`, tone)}</div>` : ''}
-<div style="padding-top:8px"><a href="${origin}/profile#settled" style="font:500 13px/1.3 ${FONT};color:${INK}">Did you win it? Mark it on your desk →</a></div>
+<div style="padding-top:8px"><a href="${pageUrl(origin, '/profile')}#results" style="font:500 13px/1.3 ${FONT};color:${INK}">Did you win it? Mark it on your desk →</a></div>
 </td></tr></table></td></tr>`;
 }
 
 /** THE GLANCE — four figures in one hairline-parted row (the desk's cockpit) */
 function glance(origin: string, g: DeskEmail['glance']) {
   const cell = (k: string, v: string, b: string, href: string, first = false) =>
-    `<td valign="top" width="25%" style="padding:10px ${first ? '0' : '12px'} 10px ${first ? '0' : '12px'};${first ? '' : `border-left:1px solid ${LINE}`}">
+    `<td valign="top" width="25%" style="padding:10px ${first ? '0' : '10px'} 10px ${first ? '0' : '10px'};${first ? '' : `border-left:1px solid ${LINE}`}">
 <div style="font:400 12px/1.3 ${FONT};color:${MUTED};white-space:nowrap">${esc(k)}</div>
-<a href="${href}" style="display:block;padding-top:4px;font:500 21px/1.1 ${FONT};color:${INK};letter-spacing:-0.02em;text-decoration:none">${esc(v)}</a>
+<a href="${href}" style="display:block;padding-top:4px;font:300 24px/1.1 ${FONT};color:${INK};letter-spacing:-0.02em;text-decoration:none">${esc(v)}</a>
 <div style="padding-top:4px;font:400 12px/1.4 ${FONT};color:${MUTED}">${b}</div></td>`;
-  const desk = `${origin}/profile?utm_source=daily-desk&utm_medium=email`;
+  const desk = pageUrl(origin, '/profile');
   const nextHref = g.next ? lotUrl(origin, g.next.id) : `${desk}#tab-watching`;
   return `<tr><td style="padding:18px 0 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid ${LINE};border-bottom:1px solid ${LINE}"><tr>
-${cell('Watching', g.watching.toLocaleString(), g.est ? `${esc(g.est)} at estimate` : g.watching ? 'live lots' : 'nothing live', `${desk}#tab-watching`, true)}
+${cell('Watching', n2(g.watching), g.est ? `${esc(g.est)} at estimate` : g.watching ? 'live lots' : 'nothing live', `${desk}#tab-watching`, true)}
 ${cell('Next hammer', g.next ? g.next.when : '—', g.next ? `${g.next.time ? `<b style="color:${INK};font-weight:500">${esc(g.next.time)}</b> · ` : ''}${esc(g.next.title)}` : 'no watch on a clock', nextHref)}
-${cell('This week', g.week.toLocaleString(), g.week === 1 ? 'close in 7 days' : 'close in 7 days', `${desk}#tab-week`)}
-${cell('Picks', g.picks.toLocaleString(), g.picks ? 'for you' : 'none today', `${desk}#tab-for-you`)}
+${cell('This week', n2(g.week), 'close in 7 days', `${desk}#tab-week`)}
+${cell('Picks', n2(g.picks), g.picks ? 'for you' : 'none today', `${desk}#tab-for-you`)}
 </tr></table></td></tr>`;
+}
+
+/** THE WEEK — seven day columns: yours (watches + picks) large, your names' lots small; today on a cream well */
+function calendar(origin: string, w: WeekCalendar) {
+  const cells = w.days.map(d => {
+    const yours = d.watches + d.picks;
+    return `<td valign="top" width="14%" style="padding:10px 2px 10px;text-align:center;${d.today ? `background:${WELL};border-radius:10px;` : ''}">
+<div style="font:500 12px/1.3 ${FONT};color:${d.today ? INK : MUTED}">${esc(d.today ? 'Today' : d.dow)}</div>
+<div style="font:400 11px/1.3 ${FONT};color:${FAINT}">${esc(d.date)}</div>
+<div style="padding-top:6px;font:300 24px/1.1 ${FONT};color:${yours ? INK : LINE};letter-spacing:-0.02em">${yours || '·'}</div>
+<div style="padding-top:3px;font:400 11px/1.3 ${FONT};color:${d.names ? MUTED : 'transparent'}">${d.names ? `${n2(d.names)} ${d.names === 1 ? 'name' : 'names'}` : '–'}</div>
+</td>`;
+  }).join('');
+  const sub = w.watches + w.picks + w.names
+    ? `${n2(w.watches)} ${w.watches === 1 ? 'watch' : 'watches'} · ${n2(w.picks)} ${w.picks === 1 ? 'pick' : 'picks'} · ${n2(w.names)} by your names — the large figure is yours (watches + picks), the small one your names’ lots`
+    : 'nothing of yours or your names’ closes in the next seven days';
+  return section('Closing this week', `<tr><td style="padding:12px 0 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${cells}</tr></table></td></tr>${more(origin, 'Your week on the desk', '/profile#tab-week')}`, sub);
+}
+
+/** YOUR NAMES — a dotted ledger: name · live · soonest, then the last hammer */
+function namesLedger(origin: string, names: NameLine[]) {
+  const rows = names.map(n => {
+    const live = n.live
+      ? `<b style="color:${INK};font-weight:500">${n2(n.live)} live</b>${n.soonest ? ` · soonest ${esc(n.soonest.when)} at ${esc(n.soonest.house)}` : ''}`
+      : 'nothing live';
+    const last = n.last
+      ? `Last hammer <b style="color:${INK};font-weight:500">${esc(n.last.hammer)}</b> · ${esc(n.last.day)} at ${esc(n.last.house)} · <a href="${lotUrl(origin, n.last.id)}" style="color:${MUTED}">${esc(n.last.title)}</a>`
+      : n.note ? esc(n.note) : 'no settled sale on file';
+    return `<tr><td style="padding:11px 0;border-bottom:1px dotted #D7D2CC">
+<div style="font:400 14px/1.4 ${FONT};color:${MUTED}"><a href="${pageUrl(origin, n.href)}" style="font-weight:500;color:${INK};text-decoration:none">${esc(n.label)}</a>&nbsp; ${live}</div>
+<div style="font:400 12.5px/1.5 ${FONT};color:${MUTED};padding-top:2px">${last}</div></td></tr>`;
+  }).join('');
+  const live = names.filter(n => n.live > 0).length;
+  return section('Your names', rows + more(origin, 'Every name you follow', '/profile#names'), `${n2(names.length)} followed · ${n2(live)} with lots on the block · the last hammer is the newest settled sale on file`);
+}
+
+/** THE MARKET — one dotted ledger line per fact, each linked into lectr */
+function marketLedger(origin: string, lines: MarketLine[]) {
+  const rows = lines.map(m => `<tr><td style="padding:11px 0;border-bottom:1px dotted #D7D2CC">
+<a href="${pageUrl(origin, m.href)}" style="text-decoration:none"><div style="font:400 14px/1.4 ${FONT};color:${INK}">${m.strong ? `<span style="font-weight:500">${esc(m.strong)}</span>` : ''}${m.strong && m.text ? ' — ' : ''}<span style="color:${MUTED}">${esc(m.text)}</span></div></a></td></tr>`).join('');
+  return section('The market', rows, 'read off today’s build: the engine’s record, the block tonight, what’s new');
 }
 
 export function renderDesk(e: DeskEmail, o: { origin: string; unsubUrl: string; dateLabel: string }): { html: string; text: string } {
   const { origin } = o;
-  const body = [
-    e.overMax.length ? section('Bids past your max', e.overMax.map(i => row(origin, i)).join('')) : '',
-    e.closing.length ? section('Closing soon', e.closing.map(i => row(origin, i)).join('')) : '',
-    e.week.length ? section('Closing this week', e.week.map(i => row(origin, i)).join('')) : '',
-    e.results.length ? section('Your results', e.results.map(r => resultRow(origin, r)).join('')) : '',
-    e.below.length ? section('Below market on your watchlist', e.below.map(i => row(origin, i)).join('')) : '',
-    e.picks.length ? section('For you', e.picks.map(i => row(origin, i, `<div style="font:400 12.5px/1.45 ${FONT};color:${MUTED};padding-top:6px">${esc(i.note)}</div>`)).join('')) : '',
+
+  // NEEDS YOU
+  const needs = [
+    e.overMax.length ? group('Bids past your max') + e.overMax.map(i => row(origin, i)).join('') : '',
+    e.closing.length ? group('Closing before tomorrow night') + e.closing.map(i => row(origin, i)).join('') : '',
+    e.results.length ? group('Results to confirm') + e.results.map(r => resultRow(origin, r)).join('') : '',
   ].join('');
+  const needsSection = needs
+    ? section('Needs you', needs, 'bids past your max · your watches closing in the next 36 hours · results to confirm')
+    : e.watched ? section('Needs you', empty('Nothing today — no bid has passed your max, nothing of yours closes before tomorrow night, no result waits on you.')) : '';
+
+  // YOUR DESK TODAY
+  const deskBody = e.desk.length
+    ? e.desk.map(r => deskRow(origin, r)).join('') + (e.deskMore ? more(origin, `and ${n2(e.deskMore)} more on your desk`, '/profile#tab-watching') : '')
+    : empty(e.watched ? `Nothing of yours is live right now — your ${n2(e.watched)} watched ${e.watched === 1 ? 'lot has' : 'lots have'} settled or rolled off the block.` : 'You’re not watching anything yet. Save a lot on lectr and it reports here every morning.');
+  const deskSection = section('Your desk today', deskBody, e.desk.length ? `${n2(e.glance.watching)} live ${e.glance.watching === 1 ? 'watch' : 'watches'}, soonest close first · bid, bids added since you saved it, the engine’s read, the room to your max` : null);
+
+  // NEW FOR YOU
+  const freshSection = e.fresh
+    ? section('New for you', e.fresh.items.length
+      ? e.fresh.items.map(i => row(origin, i)).join('') + (e.fresh.more ? more(origin, `and ${n2(e.fresh.more)} more new for you`, '/?tab=new') : '')
+      : empty('Nothing new for the names you follow since the last Desk.'), esc(e.fresh.since))
+    : '';
+
+  // THE PICKS, laned
+  let lane = '\u0000';
+  const pickRows = e.picks.map(p => {
+    const l = p.lane?.label ?? 'For you';
+    const head = l !== lane ? group(l) : '';
+    lane = l;
+    return head + row(origin, p, { note: p.note });
+  }).join('');
+  const picksSection = e.picks.length
+    ? section('The picks', pickRows + more(origin, 'All your picks', '/profile#tab-for-you'), `${n2(e.picks.length)} from the recommender, by what you follow and save — none already on your desk`)
+    : '';
+
+  const body = [
+    needsSection,
+    deskSection,
+    calendar(origin, e.week),
+    freshSection,
+    picksSection,
+    e.names.length ? namesLedger(origin, e.names) : '',
+    e.market.length ? marketLedger(origin, e.market) : '',
+  ].join('');
+
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><title>${esc(e.subject)}</title></head>
 <body style="margin:0;padding:0;background:${BG}">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(e.preheader)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${BG}"><tr><td align="center" style="padding:24px 12px">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:${CARD};border-radius:16px">
-<tr><td style="padding:28px 28px 8px">
+<tr><td style="padding:28px 24px 8px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-<tr><td style="font:400 13px/1.3 ${FONT};color:${MUTED}">lectr · your desk · ${esc(o.dateLabel)}</td></tr>
-<tr><td style="padding-top:10px;font:300 30px/1.15 ${FONT};color:${INK};letter-spacing:-0.02em">${esc(e.headline)}</td></tr>
+<tr><td style="font:400 13px/1.3 ${FONT};color:${MUTED}"><b style="color:${INK};font-weight:600">lectr</b> · The Daily Desk · ${esc(o.dateLabel)}</td></tr>
+<tr><td style="padding-top:12px;font:300 32px/1.12 ${FONT};color:${INK};letter-spacing:-0.025em">${esc(e.headline)}</td></tr>
 ${e.preheader ? `<tr><td style="padding-top:8px;font:400 14px/1.5 ${FONT};color:${MUTED}">${esc(e.preheader)}</td></tr>` : ''}
 ${glance(origin, e.glance)}
 ${body}
-<tr><td style="padding:28px 0 6px" align="left"><a href="${origin}/profile?utm_source=daily-desk&utm_medium=email" style="display:inline-block;padding:12px 20px;border-radius:999px;background:${INK};color:#fff;font:500 14px/1 ${FONT};text-decoration:none">Open your desk</a></td></tr>
+<tr><td style="padding:30px 0 6px" align="left"><a href="${pageUrl(origin, '/profile')}" style="display:inline-block;padding:12px 20px;border-radius:999px;background:${INK};color:#fff;font:500 14px/1 ${FONT};text-decoration:none">Open your desk</a></td></tr>
 </table></td></tr>
-<tr><td style="padding:18px 28px 26px;font:400 12px/1.6 ${FONT};color:${FAINT};border-top:1px solid ${LINE}">
+<tr><td style="padding:18px 24px 26px;font:400 12px/1.6 ${FONT};color:${FAINT};border-top:1px solid ${LINE}">
 You get this because you turned on the Daily Desk email on lectr. Figures are lectr&rsquo;s reads from public auction data, not appraisals.<br>
 <a href="${esc(o.unsubUrl)}" style="color:${MUTED}">Unsubscribe</a> · <a href="${origin}/profile#account" style="color:${MUTED}">Email settings</a>
 </td></tr></table></td></tr></table></body></html>`;
 
+  // the plain-text edition
   const g = e.glance;
-  const t: string[] = [`lectr · your desk · ${o.dateLabel}`, '', e.headline, e.preheader, '',
+  const t: string[] = [`lectr · The Daily Desk · ${o.dateLabel}`, '', e.headline, e.preheader, '',
     `Watching ${g.watching}${g.est ? ` (${g.est} at estimate midpoint)` : ''} · Next hammer ${g.next ? `${g.next.when} — ${g.next.title}` : '—'} · ${g.week} close this week · ${g.picks} picks`, ''];
-  const lines = (title: string, items: (DeskItem | PickItem)[]) => {
+  const lines = (title: string, items: (DeskItem | PickItem)[], sub?: string) => {
     if (!items.length) return;
     t.push(title.toUpperCase());
-    for (const i of items) t.push(`- ${i.title}${i.when ? ` (${i.when})` : ''}${i.sig ? ` · ${i.sig.text}` : ''}${i.over ? ` · bid ${i.bid} passed your max` : i.max ? ` · your max ${i.max}` : ''}\n  ${lotUrl(origin, i.id)}`);
+    if (sub) t.push(sub);
+    for (const i of items) t.push(`- ${i.title}${i.when ? ` (${i.when})` : ''}${i.sig ? ` · ${i.sig.text}` : ''}${i.over ? ` · bid ${i.bid} passed your max` : i.max ? ` · your max ${i.max}` : ''}${'note' in i && i.note ? `\n  ${i.note}` : ''}\n  ${lotUrl(origin, i.id)}`);
     t.push('');
   };
   lines('Bids past your max', e.overMax);
-  lines('Closing soon', e.closing);
-  lines('Closing this week', e.week);
+  lines('Closing before tomorrow night', e.closing);
   if (e.results.length) {
-    t.push('YOUR RESULTS');
+    t.push('RESULTS TO CONFIRM');
     for (const r of e.results) t.push(`- ${r.title} · hammered ${r.hammer}${r.vsMax ? ` · ${r.vsMax}` : ''}\n  ${lotUrl(origin, r.id)}`);
     t.push('');
   }
-  lines('Below market on your watchlist', e.below);
-  lines('For you', e.picks);
+  if (e.desk.length) {
+    t.push('YOUR DESK TODAY');
+    for (const r of e.desk) t.push(`- ${r.title}${r.when ? ` (${r.when})` : ''}${[r.bid ? `bid ${r.bid}` : '', r.bids, r.moved, r.room, r.sig?.text].filter(Boolean).map(x => ` · ${x}`).join('')}\n  ${lotUrl(origin, r.id)}`);
+    if (e.deskMore) t.push(`  and ${e.deskMore} more: ${origin}/profile#tab-watching`);
+    t.push('');
+  }
+  t.push('CLOSING THIS WEEK', e.week.days.map(d => `${d.today ? 'Today' : d.dow} ${d.watches + d.picks}${d.names ? ` (+${d.names} names)` : ''}`).join(' · '), '');
+  if (e.fresh) lines('New for you', e.fresh.items, e.fresh.since);
+  lines('The picks', e.picks);
+  if (e.names.length) {
+    t.push('YOUR NAMES');
+    for (const n of e.names) t.push(`- ${n.label}: ${n.live ? `${n.live} live${n.soonest ? ` · soonest ${n.soonest.when} at ${n.soonest.house}` : ''}` : 'nothing live'}${n.last ? ` · last hammer ${n.last.hammer} ${n.last.day} at ${n.last.house}` : n.note ? ` · ${n.note}` : ''}`);
+    t.push('');
+  }
+  if (e.market.length) {
+    t.push('THE MARKET');
+    for (const m of e.market) t.push(`- ${m.strong ? `${m.strong} — ` : ''}${m.text}\n  ${origin}${m.href}`);
+    t.push('');
+  }
   t.push(`Open your desk: ${origin}/profile`, '', `Unsubscribe: ${o.unsubUrl}`);
   return { html, text: t.join('\n') };
 }
