@@ -6,7 +6,6 @@ import ArtistNav from '../components/ArtistNav';
 import { Colophon } from '../components/Terminal';
 import CountUp from '../components/CountUp';
 import Masthead, { Accent } from '../components/Masthead';
-import CloseClock from '../components/CloseClock';
 import RayEntrance, { RayLoading } from '../components/RayEntrance';
 import ComparableModal from '../components/ComparableModal';
 import { formatDate } from '../utils';
@@ -15,7 +14,6 @@ import { useHashLanding, jump, JUMP_EVENT, OPEN_TAB_EVENT, MISSING_EVENT } from 
 import { HelpChip } from './help';
 import { DeskTabs, useDeskTab } from './tabs';
 import { useStalled } from './stall';
-import { closeDays, hammerWord } from './desk/derive';
 import { DeskProvider, useDeskState, useDeskInternals, useDesk, type DeskState } from './desk/provider';
 import { SECTIONS, SUB_ANCHORS, TAB_ORDER, mountedSections, keysLegend, missingSection, tabItemsOf, tabOf, EVERY_TAB, type DeskSection, type DeskTab, type TabItem } from './desk/sections';
 import type { DeskData } from './desk/types';
@@ -34,7 +32,9 @@ import { useDeskKeys } from './desk/keys';
         over it to mount each section and build the rail from each
         section's meta(desk). Adding a section = adding one entry.
      3. The masthead stays (title + CountUp sub-line) and gains the
-        cockpit: three registration cells and the 14-day hammer strip.
+        cockpit: four registration cells on every tab and every width
+        (Watching · Next hammer · Needs you · Your calls) and, on Today,
+        the 14-day hammer strip.
 
    The collector's three questions still order the desk: what needs
    me now (Today, Watching), what lectr sees for me (the picks, my
@@ -116,23 +116,6 @@ function MissingLanding({ sections, tab, tabEmpty }: { sections: readonly DeskSe
 }
 
 
-/** a dotted fact line that never starts a line with its separator: each fact
- *  is one unbreakable run carrying its own trailing "·" (glued by a no-break
- *  space); the only break opportunities sit AFTER a dot */
-function Facts({ children }: { children: [string, React.ReactNode][] }) {
-  const facts = children.filter(([, c]) => c != null && c !== false);
-  return (
-    <>
-      {facts.map(([key, f], n) => (
-        <React.Fragment key={key}>
-          <span className="ck-nb" data-k={key}>{f}{n < facts.length - 1 && '\u00a0·'}</span>
-          {n < facts.length - 1 && ' '}
-        </React.Fragment>
-      ))}
-    </>
-  );
-}
-
 /** the masthead — the statement, the sub-line, the desk details, the
  *  archive warnings, then the cockpit */
 /** (Oct 20 audit) THE TAB'S OWN HEADLINE — one big figure per tab, the way a
@@ -158,12 +141,18 @@ function tabHeadline(tab: DeskTab, tabs: readonly TabItem[], i: ReturnType<typeo
     case 'owned': return i.collection.rows.length > 0
       ? <><Accent>{i.collection.rows.length}</Accent> {i.collection.rows.length === 1 ? 'piece' : 'pieces'}{i.collection.totalPaid > 0 ? <>, {fmtFace(i.collection.totalPaid)} paid</> : null}.</>
       : null;
-    case 'record': return count != null ? <><Accent>{count}</Accent> {count === 1 ? 'call' : 'calls'} graded against the hammer.</> : null;
+    case 'record': {
+      // the tab's figure is the settled median ("+44%"), never a count of calls
+      const n = i.record?.n ?? 0;
+      return n > 0
+        ? <><Accent>{n}</Accent> settled {n === 1 ? 'watch' : 'watches'} judged{typeof count === 'string' ? <>, <Accent>{count}</Accent> vs estimate</> : null}.</>
+        : null;
+    }
     default: return null;
   }
 }
 
-function DeskMasthead({ tab, tabs, cockpit = true }: { tab: DeskTab; tabs: readonly TabItem[]; cockpit?: boolean }) {
+function DeskMasthead({ tab, tabs }: { tab: DeskTab; tabs: readonly TabItem[] }) {
   const i = useDeskInternals();
   const { desk } = useDesk();
   const own = tabHeadline(tab, tabs, i, desk);
@@ -214,30 +203,13 @@ function DeskMasthead({ tab, tabs, cockpit = true }: { tab: DeskTab; tabs: reado
                 // back to savedLots.length claimed "Watching 3 lots to the
                 // hammer" over a sub-line that said "0 live lots"
                 : <>Your desk: <Accent>{savedLotsN} settled {savedLotsN === 1 ? 'watch' : 'watches'}</Accent>, judged under Record.</>)}
-            sub={
-              // each fact carries its own trailing dot (no-break space), so a
-              // separator can never start a line on a phone
-              <Facts>{[
-                // the next hammer is the cockpit's own cell — said once. With a
-                // priced total in the headline, the sub-line carries its basis
-                // (the Watching cell it replaced said it).
-                ['next', summary.totalEst <= 0 && summary.next
-                  ? <>Next hammer {hammerWord(closeDays(summary.next))}{summary.next.saleDateTime && <CloseClock iso={summary.next.saleDateTime} windowHours={24} prefix=" · " />}</>
-                  : null],
-                ['live', <>{upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}</>],
-                ['wins', i.unclaimedWins > 0 ? <a href="#settled" className="ck-away-link">{i.unclaimedWins} {i.unclaimedWins === 1 ? 'result' : 'results'} to confirm</a> : null],
-                ['priced', summary.totalEst > 0 ? <>{summary.priced} of {upcoming.length} priced at estimate midpoint</> : null],
-                ['onesided', summary.totalEst > 0 && summary.oneSided > 0 ? <>{summary.oneSided} from one bound, not summed</> : null],
-                // a count of flags, not a market direction — ink (lamp law)
-                ['flagged', summary.flagged > 0
-                  ? <a href="#watching" className="ck-mast-flag">{summary.flagged} below market</a>
-                  : null],
-                ['details', hasDeskDetails
-                  ? <button type="button" className="ck-deskdetails-btn" aria-expanded={deskDetails} aria-controls="desk-details"
-                      onClick={() => setDeskDetails(v => !v)}>What changed</button>
-                  : null],
-              ]}</Facts>
-            }
+            // (Oct 28) the next hammer, the live count, the results to confirm, the
+            // flags and the total's basis are the cockpit's cells now — on every
+            // tab and every width — so the sub-line keeps only the What-changed fold
+            sub={hasDeskDetails
+              ? <button type="button" className="ck-deskdetails-btn" aria-expanded={deskDetails} aria-controls="desk-details"
+                  onClick={() => setDeskDetails(v => !v)}>What changed</button>
+              : undefined}
           />
           {/* the rest of the old sub-line — coverage, moves, taste, tenure */}
           {hasDeskDetails && deskDetails && (
@@ -278,9 +250,8 @@ function DeskMasthead({ tab, tabs, cockpit = true }: { tab: DeskTab; tabs: reado
           )}
         </>
       )}
-      {/* ══ 0b · THE COCKPIT — three registration cells + the 14-day strip ══ */}
-      {/* (perf) a compact header hides the cockpit — so it doesn't mount (it scans the week) */}
-      {cockpit && <Cockpit />}
+      {/* ══ 0b · THE COCKPIT — the registration cells (every tab, every width) + the 14-day strip (Today) ══ */}
+      <Cockpit />
     </section>
   );
 }
@@ -305,7 +276,7 @@ function DeskBody() {
   const empty = !!tabs.find(t => t.id === tab)?.empty;
   return (
     <>
-      <div className="dt-head" data-tab={tab} data-compact={(tab !== 'today' && i.todayShows) || undefined}><DeskMasthead tab={tab} tabs={tabs} cockpit={!(tab !== 'today' && i.todayShows)} /></div>
+      <div className="dt-head" data-tab={tab} data-compact={(tab !== 'today' && i.todayShows) || undefined}><DeskMasthead tab={tab} tabs={tabs} /></div>
       <DeskTabs tabs={tabs} active={tab} onPick={setTab}
         help={<HelpChip name="Keys and tabs"><KeysHelp mountedIds={mountedIds} /></HelpChip>} />
       {/* not before the desk can land: the archive that resolves #settled & co. lands late */}

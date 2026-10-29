@@ -1,15 +1,18 @@
 'use client';
 /**
- * THE COCKPIT MASTHEAD (THE DESK v3 §0, Oct 11 2026) — under the Masthead's
- * statement, three registration cells and the 14-day hammer strip:
+ * THE COCKPIT MASTHEAD (THE DESK v3 §0, Oct 11 2026; four cells on every
+ * tab and every width since Oct 28) — under the Masthead's statement, the
+ * registration cells and, on Today, the 14-day hammer strip:
  *
- *   Watching      $ at estimate midpoint to the hammer · lots · below market
+ *   Watching      the lots on the block · $ at estimate midpoint · below market
  *   Next hammer   the soonest closing watch: live CloseClock inside 24h,
  *                 else the day word; the lot; its decision line
+ *   Needs you     bids past your max + your closes today + results to
+ *                 confirm, counted once, linking the first one's home
  *   Your edge     YOUR CALLS graded against the hammer (edge/edge.ts
  *                 gradeDesk — imported, never re-derived) once any call has
- *                 graded; until then the cell is what it is: "Settled
- *                 watches", the Record's median vs estimate (R4#2, R1#1)
+ *                 graded; until then the cell is what it is: "Record", the
+ *                 settled watches' median vs estimate (R4#2, R1#1)
  *
  * Every number is the provider's or the week's (summary / record /
  * planWeek / gradeDesk — the same figures the sub-line, Watching, Your week
@@ -44,7 +47,7 @@ import { craftTitle, fmtSignedPct, localToday } from '../../utils';
 import { closeDays, hammerWord } from './derive';
 import { useDesk, useDeskInternals } from './provider';
 import { jump } from '../rail';
-import { mountedSections } from './sections';
+import { mountedSections, overMaxN } from './sections';
 import { dayLabel, hammerStrip, streakOf, stripCaption } from './cockpit-logic';
 import { closingNowOf, planWeek, localDayOf, type WeekRow } from '../week/week';
 import { gradeDesk, EDGE_HIT_PCT } from '../edge/edge';
@@ -172,27 +175,47 @@ export default function Cockpit() {
     ? ` · ${[tonight.picks ? `${tonight.picks} ${tonight.picks === 1 ? 'pick' : 'picks'}` : null, tonight.names ? `${tonight.names} of your names` : null].filter(Boolean).join(' and ')} ${tonight.picks + tonight.names === 1 ? 'closes' : 'close'} tonight`
     : '';
 
+  // NEEDS YOU (Oct 28) — the one count of what waits on the reader: live bids
+  // past their max (Watching's news), their watches closing today, and settled
+  // results not yet confirmed (the Today inbox / History). Each is a figure
+  // the tab bar or a room already prints; the cell adds them and links the
+  // first one's home.
+  const overMax = overMaxN(desk, i);
+  const needs = overMax + summary.closesToday + i.unclaimedWins;
+  const needsHref = overMax > 0 ? '#watching' : summary.closesToday > 0 ? '#today' : i.todayShows ? '#results' : '#settled';
+  const needsFacts = [
+    overMax > 0 ? `${overMax} ${overMax === 1 ? 'bid' : 'bids'} past your max` : null,
+    summary.closesToday > 0 ? `${summary.closesToday} ${summary.closesToday === 1 ? 'closes' : 'close'} today` : null,
+    i.unclaimedWins > 0 ? `${i.unclaimedWins} ${i.unclaimedWins === 1 ? 'result' : 'results'} to confirm` : null,
+  ].filter(Boolean) as string[];
+  const showNeeds = live || needs > 0;
+  const nCells = cold ? 3 : showNeeds ? 4 : 3;
+
   return (
     <div className="ck-cockpit" data-cold={cold || undefined} data-live={picksOnly ? 'picks' : undefined} aria-label="Your desk at a glance">
-      <div className="ck-ccells" data-n={!cold && !picksOnly && summary.totalEst > 0 && deskView ? 2 : 3}>
-        {/* 1 · WATCHING — the sub-line's figures, as a cell */}
+      <div className="ck-ccells" data-n={nCells}>
+        {/* 1 · WATCHING — the lots on the block and what they add to */}
         {cold ? (
           <Cell k="Watching" tap v={<>Watch a lot <span aria-hidden>›</span></>} href="#for-you"
             body="Bookmark any lot on lectr — the picks under For you have the button — and its estimate counts here to the hammer, with the engine’s read beside it." />
         ) : picksOnly ? (
           <Cell k="Watching" v="0" note="watched" href="#for-you"
             body={<span>{picksLive} {picksLive === 1 ? 'pick' : 'picks'} live <span aria-hidden>→</span> For you{plan.nameRows > 0 && <> · {plan.nameRows} {plan.nameRows === 1 ? 'sale' : 'sales'} of your names this fortnight</>}</span>} />
-        ) : summary.totalEst > 0 && deskView ? (
-          // the headline prints this total and the sub-line its basis — the cell
-          // would only say it a third time (Oct 20 review)
-          null
+        ) : summary.totalEst > 0 ? (
+          // the headline prints the total; the cell leads with the count and
+          // carries the total's basis (never the same figure twice at cell scale)
+          <Cell k="Watching"
+            v={upcoming.length.toLocaleString()}
+            note={upcoming.length === 1 ? 'live lot' : 'live lots'}
+            body={<span>{fmtFace(summary.totalEst)} at estimate midpoint · {summary.priced} of {upcoming.length} priced{summary.oneSided > 0 && <> · {summary.oneSided} from one bound, not summed</>}{summary.flagged > 0 && <> · <b>{summary.flagged} below market</b></>}</span>}
+            href="#watching" />
         ) : (
           <Cell k="Watching"
-            v={summary.totalEst > 0 ? fmtFace(summary.totalEst) : upcoming.length > 0 ? upcoming.length.toLocaleString() : '—'}
-            note={summary.totalEst > 0 ? 'to the hammer' : upcoming.length > 0 ? (upcoming.length === 1 ? 'lot, no estimate' : 'lots, no two-sided estimate') : null}
+            v={upcoming.length > 0 ? upcoming.length.toLocaleString() : '—'}
+            note={upcoming.length > 0 ? (upcoming.length === 1 ? 'live lot' : 'live lots') : null}
             body={upcoming.length === 0
               ? 'Nothing live on the block — your settled watches are judged under Your record.'
-              : <span>{upcoming.length} live {upcoming.length === 1 ? 'lot' : 'lots'}{summary.totalEst > 0 && <> · {summary.priced} of {upcoming.length} priced, at estimate midpoint</>}{summary.oneSided > 0 && <> · {summary.oneSided} from one bound, not summed</>}{summary.flagged > 0 && <> · <b>{summary.flagged} below market</b></>}</span>}
+              : <span>{upcoming.length === 1 ? 'no two-sided estimate' : 'no two-sided estimates to sum'}{summary.flagged > 0 && <> · <b>{summary.flagged} below market</b></>}</span>}
             href={upcoming.length > 0 ? '#watching' : undefined} />
         )}
 
@@ -223,7 +246,16 @@ export default function Cockpit() {
           </Cell>
         )}
 
-        {/* 3 · YOUR EDGE — your calls graded (edge.ts); else the settled record, named as such */}
+        {/* 3 · NEEDS YOU — what waits on the reader, counted once, with its home */}
+        {!cold && showNeeds && (
+          <Cell k="Needs you"
+            v={needs > 0 ? needs.toLocaleString() : '0'}
+            note={needs === 0 ? 'all clear' : needs === 1 ? 'thing' : 'things'}
+            body={needs > 0 ? needsFacts.join(' · ') : 'No bid past your max, nothing of yours closing today, no result waiting on you.'}
+            href={needs > 0 ? needsHref : undefined} />
+        )}
+
+        {/* 4 · YOUR EDGE — your calls graded (edge.ts); else the settled record, named as such */}
         {cold ? (
           <Cell k="Your calls" tap v={<>The engine&rsquo;s record <span aria-hidden>›</span></>} href="/receipts"
             body="Every watch that settles is judged against its estimate — your eye, measured, call by call. Until then: how the engine’s own calls have done." />
@@ -239,7 +271,7 @@ export default function Cockpit() {
             body={<span>{edge.n} {edge.n === 1 ? 'call' : 'calls'} graded against the hammer · {hits} of {edge.n} within ±{EDGE_HIT_PCT}%{edge.streak.current >= 2 && <> · <b>{edge.streak.current} hits in a row</b></>}</span>}
             href="#edge" />
         ) : record && record.med != null ? (
-          <Cell k="Settled watches"
+          <Cell k="Record"
             v={fmtSignedPct(Math.round(record.med))}
             tone={lamp(Math.round(record.med))}
             note="vs estimate, median"
@@ -254,9 +286,9 @@ export default function Cockpit() {
         )}
       </div>
 
-      {/* phone (≤639): the cells fold to one ledger row each — the Next-hammer
-          lot and its decision line ride as one line under them, so the Today
-          band and the picks keep the first screen (CSS hides this ≥640) */}
+      {/* phone (≤639): the cells fold to one row of label · figure; the
+          Next-hammer lot and its decision line ride as one line under them
+          on Today (CSS hides this ≥640 and past Today) */}
       {next && (
         <Link className="ck-cockpit-next" href={`/lot?id=${encodeURIComponent(next.id)}`}>
           <LotLine lot={next} phone />

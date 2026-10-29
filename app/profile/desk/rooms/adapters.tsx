@@ -27,7 +27,7 @@ function ResultsInbox() {
   const rows = i.sold.filter(l => l.status === 'sold' && !desk.ownedIds.has(i.savedIdOf(l.id)) && !desk.ownedIds.has(l.id)).slice(0, 4);
   if (!rows.length) return null;
   return (
-    <div className="ck-results" role="group" aria-label="Results to confirm">
+    <div id="results" className="ck-results" role="group" aria-label="Results to confirm">
       <div className="ck-reads-head"><span className="kicker">Did you win? · {i.unclaimedWins}</span><i className="ck-reads-rule" /></div>
       {rows.map(l => (
         <div key={l.id} className="ck-result ck-ph" style={{ '--ph': '48px' } as React.CSSProperties}>

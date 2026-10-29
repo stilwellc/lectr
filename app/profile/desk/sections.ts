@@ -227,7 +227,7 @@ export function keysLegend(mounted: readonly DeskSection[]): { key: string; labe
 
 /** anchors INSIDE a room (links and deep links point at them) → the room that holds them */
 export const SUB_ANCHORS: Readonly<Record<string, string>> = {
-  settled: 'history', inbox: 'signals', 'on-device': 'signals', 'for-collection': 'for-you', 'pick-outcomes': 'for-you',
+  settled: 'history', results: 'today', inbox: 'signals', 'on-device': 'signals', 'for-collection': 'for-you', 'pick-outcomes': 'for-you',
 };
 /** a tab's own hash ('#tab-watching') — never a room id, so a tab click can't
  *  land on (or report missing) the room that happens to share its name */
@@ -263,8 +263,8 @@ export interface TabItem extends DeskTabDef {
   empty: boolean;
 }
 
-/** your watches whose live bid has passed your own max — Watching's news (an action) */
-function overMaxN(desk: DeskData, i: DeskInternals): number {
+/** your watches whose live bid has passed your own max — Watching's news (an action) and the cockpit's Needs-you count */
+export function overMaxN(desk: DeskData, i: DeskInternals): number {
   let n = 0;
   for (const l of i.upcoming ?? []) {
     const max = desk.metaFor(l.id)?.maxUsd;

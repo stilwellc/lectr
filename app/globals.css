@@ -4573,7 +4573,7 @@ button.ns-stat { cursor: pointer; }
 .ck-deskdetails > p { margin: 4px 0 6px; max-width: 760px; line-height: 1.6; color: var(--color-text-secondary); }
 
 /* every section lands under the nav + the pill rail (one rail, every width) */
-.ck-page :is(#desk, #today, #week, #for-you, #for-collection, #pick-outcomes, #watching, #budget, #portfolio, #market, #names, #signals, #inbox, #on-device, #record, #edge, #collection, #history, #settled, #account, #becomes, #signin) { scroll-margin-top: calc(var(--dt-stick, 116px) + 12px); }
+.ck-page :is(#desk, #today, #results, #week, #for-you, #for-collection, #pick-outcomes, #watching, #budget, #portfolio, #market, #names, #signals, #inbox, #on-device, #record, #edge, #collection, #history, #settled, #account, #becomes, #signin) { scroll-margin-top: calc(var(--dt-stick, 116px) + 12px); }
 /* a jump focuses the section (tabindex −1) — the room, not a ring around a whole room */
 .ck-page :is(section, div)[tabindex='-1']:focus { outline: none; }
 
@@ -4586,6 +4586,9 @@ button.ns-stat { cursor: pointer; }
   position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
   border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline);
 }
+/* the cells say how many they are (3 cold / picks-only, 4 on a live desk) */
+.ck-ccells[data-n='4'] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ck-ccells[data-n='2'] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .ck-ccells::before, .ck-ccells::after {
   content: ''; position: absolute; top: -2px; width: 3px; height: 3px; border-radius: 50%; background: var(--color-border-mid);
 }
@@ -4593,8 +4596,8 @@ button.ns-stat { cursor: pointer; }
 .ck-ccells::after { right: -1.5px; }
 .ck-ccell {
   display: flex; flex-direction: column; gap: 5px; min-width: 0;
-  padding: 12px 18px 12px 0; color: inherit; text-decoration: none;
-  border-left: 1px solid var(--hairline); padding-left: 18px;
+  padding: 12px 16px 12px 0; color: inherit; text-decoration: none;
+  border-left: 1px solid var(--hairline); padding-left: 16px;
   transition: background 150ms var(--ease-house, ease);
 }
 .ck-ccell:first-child { border-left: none; padding-left: 2px; }
@@ -4655,22 +4658,31 @@ a.ck-ccell:focus-visible { outline: 2px solid var(--color-fg); outline-offset: -
 .ck-hstrip-cap { display: grid; gap: 2px; min-width: 0; font-size: 12.5px; color: var(--color-text-secondary); align-self: center; }
 .ck-hstrip-cap .kicker { color: var(--color-text-muted); }
 
+/* tablet (640–899): four cells read 2×2, the second row parted by a hairline */
+@media (min-width: 640px) and (max-width: 899.98px) {
+  .ck-ccells[data-n='4'] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ck-ccells[data-n='4'] .ck-ccell:nth-child(3) { border-left: none; padding-left: 2px; }
+  .ck-ccells[data-n='4'] .ck-ccell:nth-child(n + 3) { border-top: 1px solid var(--hairline); }
+}
 /* the phone-only lines (the Next-hammer lot, the cold "What fills these") */
 .ck-cockpit-next, .ck-cockpit-what { display: none; }
 @media (max-width: 639.98px) {
-  /* PHONE: the cells stack 1-col as a ledger — label · value · note on one
-     30px row each (the bodies fold, as the figures row's do); the whole
-     instrument stays under ~220px so Today's Top 3 keeps the first screen */
-  .ck-cockpit { margin-top: 8px; }
-  .ck-ccells { grid-template-columns: 1fr; }
+  /* PHONE (Oct 28): the cells read as ONE ROW of label · figure — four
+     instruments across 390px, the bodies folded (each figure's home is a tap
+     away); the Next-hammer lot and its decision line ride under them on Today */
+  .ck-cockpit { margin-top: 10px; }
+  .ck-ccells, .ck-ccells[data-n='4'], .ck-ccells[data-n='2'] { grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr)); }
+  .ck-ccells[data-n='4'] { --n: 4; }
+  .ck-ccells[data-n='2'] { --n: 2; }
   .ck-ccell {
-    display: grid; grid-template-columns: 100px minmax(0, 1fr); align-items: baseline; column-gap: 10px; row-gap: 0;
-    border-left: none; padding: 5px 2px; border-top: 1px solid var(--hairline); min-height: 30px;
+    display: flex; flex-direction: column; justify-content: center; gap: 3px;
+    padding: 8px 8px 9px; border-left: 1px solid var(--hairline); min-height: 56px;
   }
-  .ck-ccell:first-child { border-top: none; }
-  .ck-ccell-k { font-size: 12px; }
-  .ck-ccell-v { font-size: 16px; gap: 2px 7px; }
-  .ck-ccell-v small { font-size: 11px; }
+  .ck-ccell:first-child { border-left: none; padding-left: 2px; }
+  .ck-ccell:last-child { padding-right: 2px; }
+  .ck-ccell-k { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ck-ccell-v { font-size: 16px; gap: 2px 5px; line-height: 1.1; }
+  .ck-ccell-v small { display: none; }
   .ck-ccell-b { display: none; }
   .ck-cockpit-next {
     display: grid; gap: 2px; padding: 6px 2px 7px; border-bottom: 1px solid var(--hairline);
@@ -4689,6 +4701,7 @@ a.ck-ccell:focus-visible { outline: 2px solid var(--color-fg); outline-offset: -
   .ck-cockpit .ck-hstrip { flex-direction: column; align-items: stretch; margin-top: 6px; gap: 3px; padding: 0 2px 2px; }
   .ck-cockpit .ck-hstrip-bars { width: 100%; }
   .ck-cockpit .ck-hstrip-cap { align-self: stretch; font-size: 11.5px; gap: 0; }
+  .ck-cockpit .ck-hstrip-cap > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ck-cockpit .ck-hstrip-cap .kicker { display: none; }
   /* a cold phone: three dashes on one row, the bodies + the strip's note
      behind one disclosure line, the bars folded (nothing is on them yet) */
@@ -5315,10 +5328,10 @@ html:not([data-lectr-light]) .ck-page .ck-h3 .ray-sect-mark svg { width: 13px; h
 /* one pill family on the desk: toolbar pills and the owned toggle get an edge, sentence case */
 .ck-page .ray-toolbar-pill { box-shadow: inset 0 0 0 1px var(--color-border-mid, var(--hairline)); background: none; font-size: 13px; letter-spacing: 0; text-transform: none; }
 .ck-page .ray-own-btn { font-size: 13px; letter-spacing: 0; text-transform: none; padding: 0 14px; min-height: 36px; }
-/* phone: past Today the header plate is just the headline — the cockpit lives on Today
-   (where it reads with its rooms), so other tabs open on their own content */
+/* phone: past Today the header plate is the headline + the cockpit's one-row strip
+   (Oct 28 — the cells ride every tab); the 14-day bars and the next-lot line stay on Today */
 @media (max-width: 639.98px) {
-  .dt-head[data-compact] :is(.ck-cockpit, .ray-masthead > p, #desk-details) { display: none; }
+  .dt-head[data-compact] :is(.ray-masthead > p, #desk-details, .ck-hstrip, .ck-cockpit-next) { display: none; }
   .dt-head[data-compact] .ray-masthead-h1 { font-size: 26px !important; line-height: 1.15 !important; }
   .dt-head[data-compact] { padding-bottom: 2px; }
   /* Budget nights: the figures wrap under the night, never a leader rule on some nights only */
@@ -5422,10 +5435,11 @@ html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] > .ray-band { bo
 .dt-rooms { padding-inline-end: 16px; scroll-padding-inline: 16px; }
 /* a missing-room note lands under the sticky chrome, not behind it */
 .ck-page .ck-landnote { scroll-margin-top: calc(var(--dt-stick, 120px) + 12px); }
-/* (round 5) past Today the header plate is just the headline at every width —
-   the cockpit reads with Today's rooms; other tabs open on their own content */
+/* (round 5, Oct 28) past Today the header plate is the tab's headline + the
+   cockpit's cells at every width — the 14-day bars read with Today's rooms */
 @media (min-width: 640px) {
-  .dt-head[data-compact] :is(.ck-cockpit, .ray-masthead > p, #desk-details) { display: none; }
+  .dt-head[data-compact] :is(.ray-masthead > p, #desk-details, .ck-hstrip) { display: none; }
+  .dt-head[data-compact] .ck-cockpit { margin-top: 14px; }
   .dt-head[data-compact] .ray-masthead-h1 { font-size: 40px !important; line-height: 1.1 !important; }
 }
 /* the last figures still in mono: Inter, tabular */
@@ -5580,15 +5594,10 @@ html:not([data-lectr-light]) .ck-page .dt-band[data-tone='ink'] > .ray-band { bo
 /* focus never lands under the sticky nav + tab bar (keyboard Tab, j/k) */
 html:has(.dt-wrap) { scroll-padding-top: calc(64px + var(--dt-h, 56px) + 12px); }
 .ck-page .ck-ph > .ck-thumb { --th: var(--ph, 64px) !important; } /* the row's track wins over a Thumb's own size prop */
-/* (Oct 20 audit) the phone's first screen: Today's header is its headline and
-   one line of tappable facts — the cockpit (Next hammer, Your calls, the 14-day
-   strip) reads on desktop; on a phone those live in the Tonight strip, Record
-   and Week. The basis caveats ride the desktop line only. */
+/* (Oct 28) the phone's first screen: the headline, the cockpit's one-row strip
+   (four figures), the next lot's line and the 14-day bars — then Today's rooms */
 @media (max-width: 639.98px) {
-  .dt-head[data-tab='today'] .ck-cockpit { display: none; }
-  .dt-head .ray-masthead > p .ck-nb:is([data-k='priced'], [data-k='onesided']) { display: none; }
   .dt-head .ray-masthead > p { font-size: 14.5px !important; line-height: 1.6; }
-  .dt-head .ray-masthead > p .ck-nb { white-space: nowrap; }
 }
 /* THE SHELF — Portfolio's photo grid */
 .ck-page .pf-viewpick { display: inline-flex; gap: 6px; margin-right: 6px; }
