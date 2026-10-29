@@ -58,31 +58,41 @@ test('results since the last email grade the hammer against your max', () => {
   assert.ok(html.includes('/profile?utm_source=daily-desk&amp;utm_medium=email#results') || html.includes('/profile?utm_source=daily-desk&utm_medium=email#results'));
 });
 
-test('your desk today: every live watch, soonest first, with movement since the save and the room to your max', () => {
-  const a = lot('a', 50 * H, { currentBid: 1200, bidCount: 9 }), b = lot('b', 5 * H, { currentBid: 300, bidCount: 4 }), c = lot('c', null);
+test('your desk today: every live watch not already under needs-you, soonest first, with movement since the save and the room to your max', () => {
+  const a = lot('a', 50 * H, { currentBid: 1200, bidCount: 9 }), b = lot('b', 60 * H, { currentBid: 300, bidCount: 4 }), c = lot('c', null, { bidCount: 7 });
+  const over = lot('over', 70 * H, { currentBid: 500, bidCount: 3 });
   const d = planDesk({
-    now: NOW, watches: [{ lot_id: 'a', max_usd: 2000, bid_count: 5 }, { lot_id: 'b', max_usd: 250, bid_count: 4 }, { lot_id: 'c' }],
-    live: liveMap([a, b, c]), sold: [], picks: [],
+    now: NOW, watches: [{ lot_id: 'a', max_usd: 2000, bid_count: 5 }, { lot_id: 'b', max_usd: 350, bid_count: 4 }, { lot_id: 'c' }, { lot_id: 'over', max_usd: 400, bid_count: 1 }],
+    live: liveMap([a, b, c, over]), sold: [], picks: [],
   })!;
-  assert.deepEqual(d.desk.map(r => r.id), ['b', 'a', 'c']);   // an undated lot last
-  const ra = d.desk[1], rb = d.desk[0], rc = d.desk[2];
+  assert.deepEqual(d.overMax.map(i => i.id), ['over']);
+  assert.deepEqual(d.desk.map(r => r.id), ['a', 'b', 'c']);   // the over-max lot prints once, above; an undated lot last
+  assert.equal(d.deskAbove, 1);
+  const [ra, rb, rc] = d.desk;
   assert.equal(ra.moved, '+4 bids since you saved it');
   assert.equal(ra.room, '$800 under your max $2K');
   assert.equal(ra.bids, '9 bids');
-  assert.equal(rb.moved, 'no new bids since you saved it');
-  assert.equal(rb.room, 'past your max $250 by $50');
-  assert.equal(rb.over, true);
-  assert.equal(rc.moved, null);   // no baseline, no claim
+  assert.equal(rb.moved, 'no new bids since you saved it');   // a baseline that equals today's count is a fact
+  assert.equal(rb.room, '$50 under your max $350');
+  assert.equal(rc.moved, null);   // no baseline → no claim, the count alone
+  assert.equal(rc.bids, '7 bids');
   assert.equal(rc.room, null);
   assert.equal(d.deskMore, 0);
   const { html, text } = render(d);
   assert.ok(html.includes('Your desk today'));
   assert.ok(html.includes('+4 bids since you saved it'));
+  assert.ok(html.includes('+ the 1 above under Needs you'));
+  assert.equal(html.split('Lot over').length - 1, 1);   // the title prints once in the whole paper
   assert.ok(text.includes('YOUR DESK TODAY'));
+  // every live watch under needs-you: the desk says so instead of repeating them
+  const d2 = planDesk({ now: NOW, watches: [{ lot_id: 'over', max_usd: 400 }], live: liveMap([over]), sold: [], picks: [] })!;
+  assert.equal(d2.desk.length, 0);
+  assert.equal(d2.deskAbove, 1);
+  assert.ok(render(d2).html.includes('All 1 of your live watch is under Needs you.'));
 });
 
 test('the desk caps at DESK_ROWS and says how many more', () => {
-  const ls = Array.from({ length: DESK_ROWS + 3 }, (_, k) => lot(`l${k}`, (k + 2) * H));
+  const ls = Array.from({ length: DESK_ROWS + 3 }, (_, k) => lot(`l${k}`, (k + 2) * 24 * H));
   const d = planDesk({ now: NOW, watches: ls.map(l => ({ lot_id: l.id })), live: liveMap(ls), sold: [], picks: [] })!;
   assert.equal(d.desk.length, DESK_ROWS);
   assert.equal(d.deskMore, 3);
@@ -109,6 +119,7 @@ test('the week is a 7-day calendar of watches, picks and your names’ lots, a l
   const { html, text } = render(d);
   assert.ok(html.includes('Closing this week'));
   assert.ok(html.includes('>Today<'));
+  assert.ok(html.includes('1 n.'));   // the names count abbreviated so seven cells fit a phone
   assert.ok(text.includes('CLOSING THIS WEEK'));
 });
 
@@ -229,8 +240,9 @@ test('the market: every line is derived from the served files, each linked into 
     receipts: { rows }, backtest: { flagged: { n: 2903, medianPerfPct: 44 }, unflagged: { n: 14906, medianPerfPct: 20 } },
   })!;
   const texts = d.market.map(m => `${m.strong} — ${m.text}`);
-  assert.equal(d.market.length, 5);
-  assert.match(texts[0], /^8 calls graded this week — the median hammer landed at 110% of what the engine said/);   // 6 + 2 yesterday; the stale row is out
+  assert.equal(d.market.length, 6);
+  // r / p: 3 × 0.9, 3 × 1.1, 1.41, 1.8 → median 1.1 → hammers ran 10% over; the stale row is out
+  assert.match(texts[0], /^Hammers ran 10% over the engine’s calls this week — median of 8 calls graded against the hammer, realized vs the call, both all-in/);
   assert.equal(d.market[0].href, '/receipts');
   assert.match(texts[1], /^Below-market flags hammered \+44% vs estimate — all-in, median of 2,903 settled flags, against \+20% unflagged/);
   assert.equal(d.market[1].href, '/analytics');
@@ -240,6 +252,7 @@ test('the market: every line is derived from the served files, each linked into 
   assert.match(texts[3], /^76 bids on the most-bid lot closing tonight — 2004 Upper Deck patch auto at Goldin, \$6.5K bid/);
   assert.match(texts[4], /^1 lot on the block the engine reads below market — of 3 live/);
   assert.equal(d.market[4].href, '/value');
+  assert.match(texts[5], /^1 lot first seen since yesterday/);
   const { html, text } = render(d);
   assert.ok(html.includes('The market'));
   assert.ok(html.includes('https://lectr.bid/receipts?utm_source=daily-desk'));
@@ -248,6 +261,35 @@ test('the market: every line is derived from the served files, each linked into 
   const d2 = planDesk({ now: NOW, watches: [{ lot_id: 'hot' }], live: liveMap([tonight]), sold: [], picks: [], book: [tonight], receipts: { rows: rows.slice(0, 2) } })!;
   assert.ok(!d2.market.some(m => m.href === '/receipts'));
   assert.ok(!d2.market.some(m => m.href === '/analytics'));
+  // under, and on the nose
+  const under = Array.from({ length: 5 }, (_, k) => ({ id: `u${k}`, k: 'card', d: '2026-10-10', sd: '2026-10-18', p: 1000, r: 750 }));
+  assert.match(planDesk({ now: NOW, watches: [{ lot_id: 'hot' }], live: liveMap([tonight]), sold: [], picks: [], book: [tonight], receipts: { rows: under } })!.market[0].strong!, /^Hammers ran 25% under the engine’s calls this week/);
+  const on = under.map(r => ({ ...r, r: 1000 }));
+  assert.match(planDesk({ now: NOW, watches: [{ lot_id: 'hot' }], live: liveMap([tonight]), sold: [], picks: [], book: [tonight], receipts: { rows: on } })!.market[0].strong!, /^Hammers landed on the engine’s calls this week/);
+});
+
+test('yesterday on lectr: your names’ sales settled yesterday, from the detail buckets’ recent rows', () => {
+  const row = (id: string, d: string, p: number, h = 'REA') => ({ id, p, d, h, t: `Card ${id}` });
+  const book = [lot('z', 400 * H)];
+  const base = {
+    now: NOW, tz: 'America/New_York', watches: [], live: liveMap(book), sold: [], picks: [], book,
+    follows: [{ kind: 'maker' as const, key: 'mickey-mantle', label: 'Mickey Mantle' }, FOLLOW_WARHOL],
+  };
+  const d = planDesk({
+    ...base,
+    nameRecent: new Map([
+      ['pl:mickey-mantle', [row('m1', YESTERDAY, 28_290), row('m2', YESTERDAY, 900), row('m0', '2026-10-10', 99_000)]],
+      ['mk:andy-warhol', [row('w1', YESTERDAY, 243_200, "Christie's")]],
+    ]),
+  })!;
+  const y = d.market.find(m => m.strong?.startsWith('Yesterday on lectr'))!;
+  assert.equal(y.strong, 'Yesterday on lectr: 3 sales by your names settled');
+  assert.match(y.text, /^\$243K for Card w1 \(Andy Warhol\) at Christie's, 2 more across Andy Warhol, Mickey Mantle/);
+  assert.equal(y.href, '/lot?id=w1');
+  // nothing settled yesterday → no line, no claim
+  assert.ok(!planDesk({ ...base, nameRecent: new Map([['pl:mickey-mantle', [row('m0', '2026-10-10', 99_000)]]]) })!.market.some(m => m.strong?.startsWith('Yesterday')));
+  assert.ok(!planDesk(base)!.market.some(m => m.strong?.startsWith('Yesterday')));
+  assert.ok(render(d).html.includes('Yesterday on lectr'));
 });
 
 test('the lead picks the richest fact: needs you, closing, results, new, the week, the names, the market', () => {
@@ -297,6 +339,9 @@ test('the glance counts the desk: watching, the next hammer, the week, the picks
   assert.equal(d.glance.est, '$6K');
   assert.equal(d.glance.next?.id, 's');
   assert.equal(d.glance.next?.when, 'today');
+  assert.equal(d.glance.next?.above, true);   // it prints under needs-you; the glance keeps its clock, not a third title
+  assert.ok(render(d).html.includes('first under Needs you'));
+  assert.equal(planDesk({ now: NOW, watches: [{ lot_id: 'd3' }], live: liveMap([d3]), sold: [], picks: [] })!.glance.next?.above, false);
   assert.match(d.glance.next?.time ?? '', /\d:\d\d [AP]M/);
   assert.equal(d.glance.week, 3);
   const { html, text } = render(d);
