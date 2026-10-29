@@ -87,10 +87,12 @@
  * return loop's strips share one pass.
  */
 import { taxonOf, subMatches, subLabel, SPORTS, MARKET_CATS, type CatKey } from './taxonomy';
+import type { AuctionLot } from '../types';
+import { imageOf } from './house-images';
 import { lotFacets, FACET_LABEL } from './facets';
 import { entityKeyOf } from './entity/key';
 import { parseCard, cardLadderKey, cardSetKey, cardYearKey, type CardId } from './cards';
-import { prioStatic, priorityOf, closeMsOf, saleKeyOf } from './priority';
+import { prioStatic, priorityOf, closeMsOf, saleKeyOf, EDGE_CATS } from './priority';
 import { tonightEndMs } from './close-time';
 import { matchesSavedQuery, unmatchableReason } from './saved-query';
 import { makerLineOf } from './lot-labels';
@@ -131,6 +133,8 @@ export type RecLot = {
   /** the upstream object class / item class (object-kind reads them) */
   objectClass?: string | null;
   itemClass?: string | null;
+  /** the photo (a lot without one is half a pick — the row shows a letter) */
+  imageUrl?: string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value?: any; signal?: any;
 };
@@ -853,9 +857,11 @@ export interface RecTune {
 }
 export const REC_TUNE: Readonly<RecTune> = {
   entityTie: 0.5, qBase: 0.8,
-  namedEnt: 0.98, namedSale: 0.98, namedSeed: 0.98, namedLift: 1,
+  namedEnt: 0.92, namedSale: 0.98, namedSeed: 0.98, namedLift: 1,
   genEnt: 0.7, genSale: 0.93, genSeed: 0.95,
-  house: 0.97,
+  // (Oct 29) a repeat of the same house costs more — one house carrying your
+  // names filled the whole deal
+  house: 0.9,
   saleShare: 1 / 6, broadShare: 0.2, saleYield: 0.7, entBase: 0.4, entShare: 0.5,
   sigSeats: 3,
 };
@@ -886,11 +892,14 @@ export interface RecOpts {
   tune?: Partial<RecTune>;
 }
 
+/** (Oct 29 tuning) a lot closing this week is a pick; one a month out is a
+ *  note — the old curve (0.55 past 30 days, 0.6 with no clock) let far-off
+ *  and undated lots crowd the deal */
 function windowFactor(closeMs: number | null, nowMs: number): number {
-  if (closeMs == null) return 0.6;
+  if (closeMs == null) return 0.45;
   const h = (closeMs - nowMs) / 3_600_000;
   if (h <= 0) return 0;
-  return h <= 168 ? 1 : h <= 336 ? 0.85 : h <= 720 ? 0.7 : 0.55;
+  return h <= 168 ? 1 : h <= 336 ? 0.8 : h <= 720 ? 0.55 : 0.35;
 }
 
 const fmtK = (n: number) => {
@@ -1259,7 +1268,12 @@ function scoreCore<L extends RecLot>(pool: readonly L[], taste: Taste, opts: Rec
       if (!f.named) { const c = taste.down.get(cutKeyOf(f)) ?? 0; if (c) quiet *= Math.max(0.4, Math.pow(0.75, c)); }
     }
     const said = statedFit(f.logA, taste.stated);
-    const score = tasteV * (T.qBase + (1 - T.qBase) * q) * windowFactor(close, nowMs) * band.fit * said.fit * quiet;
+    // (Oct 29) the engine's own read lifts a pick in the markets where
+    // priority's edge term does NOT already carry it (cards, TCG, watches,
+    // sports memorabilia — never a second lift where it does), and a lot with
+    // no photo is half a pick — the owner's list led with letter tiles
+    const lift = (flagged && !EDGE_CATS.has(f.cat) ? 1.2 : 1) * (imageOf(l as Pick<AuctionLot, 'id' | 'imageUrl'>) ? 1 : 0.5);
+    const score = tasteV * (T.qBase + (1 - T.qBase) * q) * windowFactor(close, nowMs) * band.fit * said.fit * quiet * lift;
     return { score, flagged, inBand: band.inside, inStated: said.inside, out: statedSide(f.logA, taste.stated) ?? undefined };
   };
 
@@ -1485,7 +1499,21 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
       * (r.best.parts && !named && r.best.seed.kind !== 'signal' ? 1 : Math.pow(named ? T.namedSeed : T.genSeed, perSeed.get(seedKey(r.best.seed)) ?? 0))
       * Math.pow(T.house, perHouse.get(k.house) ?? 0);
   };
-  const entCapOf = (r: Row) => Math.max(4, Math.ceil(capN * (T.entBase + T.entShare * (r.f.named ? shareOf(r.f.ek) : 0))));
+  // (Oct 29) a name the reader FOLLOWS is the taste — it keeps its share of the
+  // deal (entBase + entShare × share). A name they merely SAVED holds a few
+  // seats in proportion to its weight (a passed-on seed speaks less); a name
+  // the device only saw them look at holds a flat fifth. It used to be 10–22
+  // of 24 for any name: "more of what I already saved". Every cap lifts one
+  // seat at a time when the deal is stuck.
+  const entCapOf = (r: Row) => {
+    const share = r.f.named ? shareOf(r.f.ek) : 0;
+    const followed = r.f.named && !!r.f.ek && !!taste.followedEks?.has(r.f.ek);
+    const base = followed ? T.entBase + T.entShare * share : r.best.seed.kind === 'signal' ? 0.2 : 0.08 + 0.24 * share;
+    return Math.max(3, Math.ceil(capN * base)) + lift;
+  };
+  // (Oct 29) one house holds 40% of the deal at most when others are in reach
+  const houseCapOn = new Set(cand.map(r => keys.get(r)!.house)).size > 1;
+  const houseCap = () => Math.ceil(capN * 0.4) + lift;
   const take = (r: Row, k: ReturnType<typeof keysOf>) => {
     out.push(r);
     bump(perEnt, k.ent); bump(perSale, k.sale); bump(perHouse, k.house); bump(perSeed, seedKey(r.best.seed));
@@ -1505,6 +1533,7 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
         const sigC = r.best.seed.kind === 'signal' ? r.best.c : r.sig?.c;
         if (!sigC) continue;
         if (r.f.named && (perEnt.get(k.ent) ?? 0) >= entCapOf(r)) continue;
+        if (houseCapOn && (perHouse.get(k.house) ?? 0) >= houseCap()) continue;
         const v = r.score * (sigC / Math.max(1e-9, r.taste)) * penalty(r, k);
         if (v > bestV) { bestV = v; best = r; }
       }
@@ -1523,7 +1552,8 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
       if (phaseOf(r) > phase) continue;
       const k = keys.get(r)!;
       if (seen.has(k.thing) || seen.has(`id:${r.l.id}`)) { used.add(r); continue; }
-      if (r.f.named && (perEnt.get(k.ent) ?? 0) >= entCapOf(r)) continue;
+      if (r.f.named && (perEnt.get(k.ent) ?? 0) >= entCapOf(r)) { capped = true; continue; }
+      if (houseCapOn && (perHouse.get(k.house) ?? 0) >= houseCap()) { capped = true; continue; }
       // the seed cap is about one SEED's voice: a save's tie (to its name — the
       // entity cap bounds that — or a desk-wide cut, "More vintage PSA baseball
       // cards like yours", which names whichever save is strongest) is the

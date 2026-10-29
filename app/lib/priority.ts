@@ -71,7 +71,7 @@ const SEAT_FLOOR: Record<CatKey, number> = {
 /** a seat must earn at least this score — fewer seats beat filler */
 const SEAT_MIN = 22;
 /** categories where Below-Market flags carried a measured edge in the backtest */
-const EDGE_CATS: ReadonlySet<CatKey> = new Set<CatKey>(['fine-art', 'design', 'entertainment', 'historical', 'space-science']);
+export const EDGE_CATS: ReadonlySet<CatKey> = new Set<CatKey>(['fine-art', 'design', 'entertainment', 'historical', 'space-science']);
 /** categories where a house estimate is a sound evidence anchor */
 const EST_CATS: ReadonlySet<CatKey> = new Set<CatKey>(['fine-art', 'design', 'watches', 'entertainment', 'historical', 'space-science']);
 

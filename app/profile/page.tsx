@@ -12,11 +12,11 @@ import { formatDate } from '../utils';
 import { fmtFace } from '../lib/lot-face';
 import { useHashLanding, jump, JUMP_EVENT, OPEN_TAB_EVENT, MISSING_EVENT } from './rail';
 import { HelpChip } from './help';
-import { DeskTabs, useDeskTab } from './tabs';
+import { Clamp, Closed } from './desk/fold';
 import { useStalled } from './stall';
 import { DeskProvider, useDeskState, useDeskInternals, useDesk, type DeskState } from './desk/provider';
-import { SECTIONS, SUB_ANCHORS, TAB_ORDER, mountedSections, keysLegend, missingSection, tabItemsOf, tabOf, EVERY_TAB, type DeskSection, type DeskTab, type TabItem } from './desk/sections';
-import type { DeskData } from './desk/types';
+import { SECTIONS, SUB_ANCHORS, TAB_ORDER, mountedSections, keysLegend, missingSection, tabItemsOf, tabOf, EVERY_TAB, type DeskSection, type DeskTab } from './desk/sections';
+
 import { LedgerGate } from './desk/rooms/history';
 import Cockpit from './desk/cockpit';
 import { useDeskKeys } from './desk/keys';
@@ -32,9 +32,19 @@ import { useDeskKeys } from './desk/keys';
         over it to mount each section and build the rail from each
         section's meta(desk). Adding a section = adding one entry.
      3. The masthead stays (title + CountUp sub-line) and gains the
-        cockpit: four registration cells on every tab and every width
-        (Watching · Next hammer · Needs you · Your calls) and, on Today,
-        the 14-day hammer strip.
+        cockpit: four registration cells (Watching · Next hammer · Needs
+        you · Your calls) and the 14-day hammer strip.
+
+   ONE PAGE, LAYERED (THE DESK v4, Oct 29 2026 — "6 pages is way too much;
+   think Robinhood: all right there, tons of data, simple"): the eight tabs
+   are gone. The desk is one column — the cockpit, then Today, then every
+   room folded to its first screen (desk/fold Clamp: one "Show all" opens it
+   in place), the secondary rooms (Budget, Signals, Market, History) closed
+   to one row each (Closed: the tap mounts them), Account at the foot. The
+   tab model (sections.ts TABS) survives as the GROUPING — Record = your
+   calls + the record, Collection = portfolio + collection — and as what
+   every #anchor, g-chord, push link and email link (#tab-watching) resolves
+   through. Nothing is removed; everything is one scroll and one tap away.
 
    The collector's three questions still order the desk: what needs
    me now (Today, Watching), what lectr sees for me (the picks, my
@@ -59,16 +69,15 @@ function KeysHelp({ mountedIds }: { mountedIds: ReadonlySet<string> }) {
   const legend = keysLegend(SECTIONS.filter(s => mountedIds.has(s.id)));
   return (
     <>
-      <b>←</b>/<b>→</b> (<b>Home</b>/<b>End</b>) move between tabs when the tab bar has focus.{' '}
-      <b>j</b>/<b>k</b> walk the rows in this tab; <b>Enter</b> opens the row under the cursor (a watch&rsquo;s dossier, a lot).
-      Press <b>g</b> then a letter to open that room&rsquo;s tab and land on it:{' '}
+      <b>j</b>/<b>k</b> walk the rows; <b>Enter</b> opens the row under the cursor (a watch&rsquo;s dossier, a lot).
+      Press <b>g</b> then a letter to open that room and land on it:{' '}
       {legend.map((k, idx) => (
         <React.Fragment key={k.key}>
           {idx > 0 && ' · '}
           <b>{k.key}</b> {k.label}{!k.live && <span style={{ color: 'var(--color-text-faint)' }}> (not on this desk yet)</span>}
         </React.Fragment>
       ))}
-      . Every tab and room pill writes the address bar, so a reload or a shared link opens the same place. <b>?</b> opens this legend.
+      . A folded room opens when you land in it; every landing writes the address bar, so a reload or a shared link opens the same place. <b>?</b> opens this legend.
     </>
   );
 }
@@ -76,7 +85,7 @@ function KeysHelp({ mountedIds }: { mountedIds: ReadonlySet<string> }) {
 /** a deep link to a room this desk doesn't have yet (#record on a cold desk)
  *  used to land silently — one line under the rail says what the room is,
  *  how it fills, and the tap that starts it (R3#5) */
-function MissingLanding({ sections, tab, tabEmpty }: { sections: readonly DeskSection[]; tab: DeskTab; tabEmpty: boolean }) {
+function MissingLanding({ sections }: { sections: readonly DeskSection[] }) {
   const [id, setId] = useState<string | null>(null);
   React.useEffect(() => {
     const read = () => { try { setId(decodeURIComponent(window.location.hash.slice(1)) || null); } catch { setId(null); } };
@@ -92,11 +101,8 @@ function MissingLanding({ sections, tab, tabEmpty }: { sections: readonly DeskSe
       window.removeEventListener(JUMP_EVENT, clear); window.removeEventListener(OPEN_TAB_EVENT, clear);
     };
   }, []);
-  // a tab click writes its hash with replaceState (no hashchange): drop a note that belongs elsewhere
-  React.useEffect(() => { setId(cur => (cur && tabOf(cur) !== tab ? null : cur)); }, [tab]);
-  // only on the tab that would hold the room — never a stale line on another tab
-  if (id && tabOf(id) !== tab) return null;
-  if (tabEmpty) return null;   // the empty tab's own index already says how it fills
+  // only an id the desk knows (a room, an anchor inside one)
+  if (id && !tabOf(id)) return null;
   // an anchor inside a room (#settled, #inbox, #week-…) is explained by its room
   const owner = id ? (SUB_ANCHORS[id] ?? (id.startsWith('week-') ? 'week' : id)) : null;
   const s = owner ? missingSection(owner, sections) : null;
@@ -118,44 +124,8 @@ function MissingLanding({ sections, tab, tabEmpty }: { sections: readonly DeskSe
 
 /** the masthead — the statement, the sub-line, the desk details, the
  *  archive warnings, then the cockpit */
-/** (Oct 20 audit) THE TAB'S OWN HEADLINE — one big figure per tab, the way a
- *  trading app leads every screen with its number; Today and Watching keep
- *  the desk's own line. Every figure is one the tab already prints below. */
-function tabHeadline(tab: DeskTab, tabs: readonly TabItem[], i: ReturnType<typeof useDeskInternals>, desk: DeskData): React.ReactNode | null {
-  const count = tabs.find(t => t.id === tab)?.count;
-  switch (tab) {
-    case 'today': {
-      const n = i.summary.closesToday;
-      return n > 0 ? <><Accent>{n}</Accent> of yours {n === 1 ? 'closes' : 'close'} today.</> : null;
-    }
-    case 'week': return count != null ? <><Accent>{count}</Accent> of yours hammer in 14 days.</> : null;
-    case 'budget': {
-      let sum = 0, n = 0;
-      for (const l of i.upcoming) { const m = desk.metaFor(l.id)?.maxUsd; if (typeof m === 'number' && m > 0) { sum += m; n++; } }
-      return n > 0
-        ? <>Your maxes: <Accent>{fmtFace(sum)}</Accent> on {n} {n === 1 ? 'lot' : 'lots'}.</>
-        : <>Your plan <Accent>to the hammer</Accent>.</>;
-    }
-    case 'for-you': return count != null ? <><Accent>{count}</Accent> picks for you.</> : null;
-    case 'names': return count != null ? <><Accent>{count}</Accent> names on your desk.</> : null;
-    case 'owned': return i.collection.rows.length > 0
-      ? <><Accent>{i.collection.rows.length}</Accent> {i.collection.rows.length === 1 ? 'piece' : 'pieces'}{i.collection.totalPaid > 0 ? <>, {fmtFace(i.collection.totalPaid)} paid</> : null}.</>
-      : null;
-    case 'record': {
-      // the tab's figure is the settled median ("+44%"), never a count of calls
-      const n = i.record?.n ?? 0;
-      return n > 0
-        ? <><Accent>{n}</Accent> settled {n === 1 ? 'watch' : 'watches'} judged{typeof count === 'string' ? <>, <Accent>{count}</Accent> vs estimate</> : null}.</>
-        : null;
-    }
-    default: return null;
-  }
-}
-
-function DeskMasthead({ tab, tabs }: { tab: DeskTab; tabs: readonly TabItem[] }) {
+function DeskMasthead() {
   const i = useDeskInternals();
-  const { desk } = useDesk();
-  const own = tabHeadline(tab, tabs, i, desk);
   const { deskView, signedOutView, summary, collection, sold, soldOrphans, upcoming, orphanIds, savedIds, fromCache, lastCrawl, deskKicker, tunedLine, hasDeskDetails, changes, tasteLabels, tenure, auth, partialLoadFailed, fullSlow } = i;
   const [deskDetails, setDeskDetails] = useState(false);
   const savedLotsN = i.savedLots.length;
@@ -181,7 +151,7 @@ function DeskMasthead({ tab, tabs }: { tab: DeskTab; tabs: readonly TabItem[] })
           <Masthead
             kicker={deskKicker}
             serial={lastCrawl || undefined}
-            title={own ?? (summary.totalEst > 0
+            title={(summary.totalEst > 0
               ? <>
                   Watching{' '}
                   <Accent>
@@ -256,80 +226,109 @@ function DeskMasthead({ tab, tabs }: { tab: DeskTab; tabs: readonly TabItem[] })
   );
 }
 
-/** the desk: masthead → the tab bar → the active tab's rooms, each on its own
- *  band (alternating grounds: the color break between rooms) → Account */
+/** the More rooms: closed to one row each, mounted on the tap */
+const MORE: ReadonlySet<string> = new Set(['budget', 'signals', 'market', 'history']);
+/** one line on what each More room holds (the row says it before it opens) */
+const MORE_HINT: Record<string, string> = {
+  budget: 'your watches by close night against your band',
+  signals: 'what tunes your picks — follows, searches, this device',
+  market: 'the 12-month pulse of the names you follow or own',
+  history: 'the line-item receipt of every settled watch',
+};
+/** the order the groups read, top to bottom (Today first, the rest folded) */
+const GROUP_ORDER: readonly DeskTab[] = ['today', 'watching', 'for-you', 'week', 'record', 'owned', 'names', 'budget'];
+/** a tab hash (#tab-watching, from an email or an old link) lands on the group's first room */
+function firstRoomOf(group: DeskTab, sections: readonly DeskSection[]): string | null {
+  const order = TAB_ORDER[group];
+  const rooms = sections.filter(s => s.tab === group && !EVERY_TAB.has(s.id) && !MORE.has(s.id))
+    .sort((a, b) => (order ? order.indexOf(a.id) - order.indexOf(b.id) : 0));
+  return rooms[0]?.id ?? sections.find(s => s.tab === group && !EVERY_TAB.has(s.id))?.id ?? null;
+}
+
+/** the desk: masthead + cockpit → Today → every room folded to its first
+ *  screen, each on its own band (alternating grounds: the color break
+ *  between rooms) → the More rooms closed to a row → Account */
 function DeskBody() {
   const { desk, act, narrow } = useDesk();
   const i = useDeskInternals();
-  // a desk with nothing closing today opens on the picks (the quick start)
-  const [tab, setTab] = useDeskTab(i.todayShows ? 'today' : 'for-you', i.landReady);
   // (perf) the registry runs every room's meta()/when(): once per desk change, not per render
   const sections = React.useMemo(() => mountedSections(desk, i), [desk, i]);
-  const tabs = React.useMemo(() => tabItemsOf(desk, i), [desk, i]);
+  const groups = React.useMemo(() => tabItemsOf(desk, i), [desk, i]);
   const mountedIds = React.useMemo(() => new Set(sections.map(s => s.id)), [sections]);
-  const order = TAB_ORDER[tab];
-  const inTab = sections.filter(s => s.tab === tab && !EVERY_TAB.has(s.id))
-    .sort((a, b) => (order ? order.indexOf(a.id) - order.indexOf(b.id) : 0));
+  // a tab hash — the email's "#tab-watching", an old link — lands on the group's first room
+  React.useEffect(() => {
+    if (!i.landReady) return;
+    const land = () => {
+      let id = '';
+      try { id = decodeURIComponent(window.location.hash.slice(1)); } catch { return; }
+      if (!id) return;
+      const g = tabOf(id);
+      if (id.startsWith('tab-') && g) { const room = firstRoomOf(g, sections); if (room) jump(room); return; }
+      if (g) jump(id);
+    };
+    land();
+    window.addEventListener('hashchange', land);
+    return () => window.removeEventListener('hashchange', land);
+  }, [i.landReady, sections]);
+  // the ids a jump may name inside a room (the room, its anchors)
+  const idsOf = (ids: string[]) => ids.concat(Object.entries(SUB_ANCHORS).filter(([, room]) => ids.includes(room)).map(([a]) => a));
   const always = sections.filter(s => EVERY_TAB.has(s.id));
-  // empty = no room under the tab has a pill (a room may mount and render
-  // nothing); its rooms still mount — the sign-in line, a late room
-  const empty = !!tabs.find(t => t.id === tab)?.empty;
+  let band = 0;
+  const bands: React.ReactNode[] = [];
+  for (const g of GROUP_ORDER) {
+    const order = TAB_ORDER[g];
+    const rooms = sections.filter(s => s.tab === g && !EVERY_TAB.has(s.id) && !MORE.has(s.id))
+      .sort((a, b) => (order ? order.indexOf(a.id) - order.indexOf(b.id) : 0));
+    if (!rooms.length) continue;
+    const item = groups.find(t => t.id === g);
+    const ids = idsOf(rooms.map(r => r.id));
+    const inner = rooms.map(s => { const C = s.Component!; return <C key={s.id} desk={desk} act={act} narrow={narrow} />; });
+    const tone = rooms.some(s => s.id === 'collection') ? 'ink' : band++ % 2 ? 'b' : 'a';
+    bands.push(
+      <div key={g} className="dt-band" data-tone={tone} data-room={rooms[0].id} data-group={g}>
+        {g === 'today'
+          ? inner
+          : <Clamp ids={ids} label={item?.label ?? rooms[0].label} count={item?.count}>{inner}</Clamp>}
+      </div>,
+    );
+  }
+  const more = sections.filter(s => MORE.has(s.id));
   return (
     <>
-      <div className="dt-head" data-tab={tab} data-compact={(tab !== 'today' && i.todayShows) || undefined}><DeskMasthead tab={tab} tabs={tabs} /></div>
-      <DeskTabs tabs={tabs} active={tab} onPick={setTab}
-        help={<HelpChip name="Keys and tabs"><KeysHelp mountedIds={mountedIds} /></HelpChip>} />
+      <div className="dt-head"><DeskMasthead /></div>
       {/* not before the desk can land: the archive that resolves #settled & co. lands late */}
-      {i.landReady && <MissingLanding sections={sections} tab={tab} tabEmpty={empty} />}
-      <div id="dt-panel" className="dt-panel" role="tabpanel" aria-labelledby={`dt-tab-${tab}`} tabIndex={empty ? 0 : -1} data-tab={tab}>
-        {empty && <EmptyTab tab={tab} />}
-        {inTab.map((s, n) => {
-          const C = s.Component!;
-          return (
-            <div key={s.id} className="dt-band" data-tone={s.id === 'collection' ? 'ink' : n % 2 ? 'b' : 'a'} data-room={s.id}>
-              <C desk={desk} act={act} narrow={narrow} />
-            </div>
-          );
-        })}
+      {i.landReady && <MissingLanding sections={sections} />}
+      <div id="dt-panel" className="dt-panel">
+        {bands}
+        {more.length > 0 && (
+          <div className="dt-band dk-more" data-tone={band % 2 ? 'b' : 'a'} aria-label="More rooms">
+            <div className="rail dk-more-head"><span className="kicker">More</span></div>
+            {more.map(s => {
+              const C = s.Component!;
+              const m = s.meta(desk, i);
+              const Mark = s.mark;
+              return (
+                <Closed key={s.id} ids={idsOf([s.id])} label={m?.label ?? s.label} count={m?.count ?? undefined} hint={MORE_HINT[s.id]}
+                  mark={Mark ? <Mark size={15} /> : undefined}>
+                  <C desk={desk} act={act} narrow={narrow} />
+                </Closed>
+              );
+            })}
+          </div>
+        )}
       </div>
       <div className="dt-band dt-band-foot" data-tone="foot">
         {always.map(s => {
           const C = s.Component!;
           return <C key={s.id} desk={desk} act={act} narrow={narrow} />;
         })}
+        <div className="rail dk-keys"><HelpChip name="Keys"><KeysHelp mountedIds={mountedIds} /></HelpChip></div>
       </div>
       {/* on-demand: only fetch the ledger when there are orphans to resolve */}
       {i.orphanIds.length > 0 && <LedgerGate onState={i.setLedgerState} />}
       {/* the page-level comps modal — DeskActions.openLot */}
       {i.modalLot && <ComparableModal lot={i.modalLot} allLots={i.allLots} onClose={i.closeModal} />}
     </>
-  );
-}
-
-/** a tab with no room on this desk yet: what each of its rooms holds and the one tap that fills it */
-function EmptyTab({ tab }: { tab: string }) {
-  const rooms = SECTIONS.filter(s => s.tab === tab && s.fill && !EVERY_TAB.has(s.id));
-  return (
-    <div className="dt-band" data-tone="a">
-      <section className="rail dt-empty">
-        <p className="dt-empty-lead">
-          {tab === 'today'
-            ? <>Nothing of yours closes today. <a className="ck-index-tap" href="#for-you">Today&rsquo;s picks for you →</a></>
-            : 'Nothing here on your desk yet.'}
-        </p>
-        {rooms.length > 0 && <ul className="ck-index">
-          {rooms.map(s => (
-            <li key={s.id} className="ck-index-row">
-              <span className="ck-index-k">{s.label}</span>
-              <span>{s.fill!.text} <span className="ck-index-how">— {s.fill!.how}.</span></span>
-              {s.fill!.tap.href.startsWith('#')
-                ? <a className="ck-index-tap" href={s.fill!.tap.href} onClick={e => { e.preventDefault(); jump(s.fill!.tap.href.slice(1)); }}>{s.fill!.tap.label} →</a>
-                : <a className="ck-index-tap" href={s.fill!.tap.href}>{s.fill!.tap.label} →</a>}
-            </li>
-          ))}
-        </ul>}
-      </section>
-    </div>
   );
 }
 
