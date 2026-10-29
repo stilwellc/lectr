@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AuctionLot } from '../../app/types';
-import { planDesk, whenText, laneOf, lastSaleOf, leadingNameOf, SUBJECT_MAX, PICKS_N, DESK_ROWS, FRESH_PER_GROUP, FRESH_GROUPS, NAME_ROWS, WEEK_DAYS_N } from '../lib/daily-desk';
+import { planDesk, whenText, laneOf, lastSaleOf, leadingNameOf, isSendHour, SUBJECT_MAX, PICKS_N, DESK_ROWS, FRESH_PER_GROUP, FRESH_GROUPS, NAME_ROWS, WEEK_DAYS_N } from '../lib/daily-desk';
 import { renderDesk, SIZE_CAP } from '../lib/daily-desk-html';
 
 const NOW = Date.parse('2026-10-21T12:20:00Z');
@@ -551,6 +551,32 @@ test('two saved-lot lanes of one maker merge; a baseline of zero says all the bi
   assert.ok(h.includes('Nothing first seen since yesterday by a name or category you follow.'));
   assert.ok(!h.includes('0 new ·'));
   assert.deepEqual(dq.quietNames, ['Science & Technology']);   // the taxonomy's label, not the stored "Space & Science · science-tech"
+});
+
+test('the first edition carries a two-line welcome; the second never does', () => {
+  const a = lot('a', 50 * H);
+  const first = planDesk({ now: NOW, watches: [{ lot_id: 'a' }], live: liveMap([a]), sold: [], picks: [], lastSentOn: null })!;
+  assert.equal(first.welcome, true);
+  const r1 = render(first);
+  assert.ok(r1.html.includes('Welcome to the Daily Desk — your first edition.'));
+  assert.ok(r1.html.includes('Turn it off any time in <a href="https://lectr.bid/profile#account"'));
+  assert.ok(r1.text.includes('Welcome to the Daily Desk — your first edition.'));
+  assert.ok(r1.text.includes('Turn it off any time: https://lectr.bid/profile#account'));
+  const second = planDesk({ now: NOW, watches: [{ lot_id: 'a' }], live: liveMap([a]), sold: [], picks: [], lastSentOn: '2026-10-20' })!;
+  assert.equal(second.welcome, false);
+  assert.ok(!render(second).html.includes('Welcome to the Daily Desk'));
+  assert.ok(!render(second).text.includes('Welcome to the Daily Desk'));
+});
+
+test('the schedule: of the 11:00 and 12:00 UTC lines, the runner takes the one that is 7 AM in New York', () => {
+  // EDT (Oct 21): 11:00 UTC is 7 AM
+  assert.equal(isSendHour(Date.parse('2026-10-21T11:00:00Z'), 'America/New_York'), true);
+  assert.equal(isSendHour(Date.parse('2026-10-21T12:00:00Z'), 'America/New_York'), false);
+  // EST (Dec 10): 12:00 UTC is 7 AM
+  assert.equal(isSendHour(Date.parse('2026-12-10T12:00:00Z'), 'America/New_York'), true);
+  assert.equal(isSendHour(Date.parse('2026-12-10T11:00:00Z'), 'America/New_York'), false);
+  // a few minutes of runner start-up lag stay inside the hour
+  assert.equal(isSendHour(Date.parse('2026-12-10T12:09:00Z'), 'America/New_York'), true);
 });
 
 test('whenText reads the reader clock', () => {

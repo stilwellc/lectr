@@ -15,8 +15,10 @@
 name: Daily Desk email
 on:
   schedule:
-    # 12:20 UTC = 8:20 New York (EDT) / 7:20 (EST)
-    - cron: '20 12 * * *'
+    # 7:00 AM New York year-round: 11:00 UTC is 7 AM EDT, 12:00 UTC is 7 AM EST — the
+    # runner takes the line that is 7 AM in America/New_York and skips the other
+    - cron: '0 11 * * *'
+    - cron: '0 12 * * *'
   workflow_dispatch:
     inputs:
       dry_run:

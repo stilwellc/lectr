@@ -38,7 +38,7 @@ import type { EntityDetail } from '../app/lib/entity/model';
 import { baseId } from './lib/push-plan';
 import { makerLineOf } from '../app/lib/lot-labels';
 import { lotFollowOf } from '../app/lib/lot-follow';
-import { planDesk, laneOf, lastSaleOf, recentOf, leadingNameOf, ownedMakerOf, type WatchRow, type SoldRow, type LastSale, type ReceiptsIn, type BacktestIn } from './lib/daily-desk';
+import { planDesk, laneOf, lastSaleOf, recentOf, leadingNameOf, ownedMakerOf, isSendHour, SEND_HOUR, type WatchRow, type SoldRow, type LastSale, type ReceiptsIn, type BacktestIn } from './lib/daily-desk';
 import { renderDesk } from './lib/daily-desk-html';
 
 const SB = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '');
@@ -140,6 +140,9 @@ async function send(to: string, subject: string, html: string, text: string, uns
 async function main() {
   if (!SB || !KEY) { console.log('[daily-desk] no SUPABASE_URL/SUPABASE_SERVICE_KEY — skipping (inert)'); return; }
   const now = Date.now();
+  // the schedule fires at 11:00 and 12:00 UTC so one lands at 7 AM New York through DST; the other is skipped
+  // (a manual run is never)
+  if (process.env.GITHUB_EVENT_NAME === 'schedule' && !isSendHour(now, TZ)) { console.log(`[daily-desk] not ${SEND_HOUR} AM in ${TZ} — the other cron line sends today`); return; }
   const today = new Date(now).toLocaleDateString('en-CA', { timeZone: TZ });
   const dateLabel = new Date(now).toLocaleDateString('en-US', { timeZone: TZ, weekday: 'long', month: 'short', day: 'numeric' });
 

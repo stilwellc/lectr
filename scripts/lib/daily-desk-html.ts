@@ -8,7 +8,7 @@
  * chrome is the north star's — eggshell ground, hairlines, dotted ledgers,
  * pills, sentence case, lightness over boldness (docs/NORTHSTAR_UI.md).
  */
-import type { DeskEmail, DeskItem, DeskRow, PickItem, ResultItem, CollectionItem, WeekCalendar, NameLine, MarketLine } from './daily-desk';
+import { SEND_HOUR, type DeskEmail, type DeskItem, type DeskRow, type PickItem, type ResultItem, type CollectionItem, type WeekCalendar, type NameLine, type MarketLine } from './daily-desk';
 
 const INK = '#1C1917', MUTED = '#777169', FAINT = '#A59F97', LINE = '#EBE8E4', BG = '#F5F3F1', CARD = '#FDFCFC', WELL = '#F5F3F1';
 const UP = '#0F7C43', DOWN = '#C13E2C';
@@ -21,16 +21,18 @@ const lotUrl = (origin: string, id: string) => `${origin}/lot?id=${encodeURIComp
 const pageUrl = (origin: string, path: string) => { const i = path.indexOf('#'); const p = i < 0 ? path : path.slice(0, i), h = i < 0 ? '' : path.slice(i); return `${origin}${p}${p.includes('?') ? '&' : '?'}${UTM}${h}`; };
 const n2 = (n: number) => n.toLocaleString('en-US');
 
+/** a lamp pill: a solid background (never a gradient or a variable, so a dark-mode client has nothing to
+ *  invert past the ink), white text, a radius Outlook drops to a square — fine */
 function pill(text: string, dir: 'up' | 'down' | 'ink') {
   const bg = dir === 'up' ? UP : dir === 'down' ? DOWN : INK;
-  return `<span style="display:inline-block;padding:3px 9px;border-radius:999px;background:${bg};color:#fff;font:500 12px/1.2 ${FONT};white-space:nowrap">${esc(text)}</span>`;
+  return `<span style="display:inline-block;padding:3px 9px;border-radius:999px;background:${bg};background-color:${bg};color:#ffffff;font:500 12px/1.2 ${FONT};mso-line-height-rule:exactly;white-space:nowrap">${esc(text)}</span>`;
 }
 const quiet = (text: string) => `<span style="font:400 12.5px/1.3 ${FONT};color:${MUTED}">${esc(text)}</span>`;
 const strong = (text: string) => `<span style="font:600 12.5px/1.3 ${FONT};color:${INK}">${esc(text)}</span>`;
 function photo(img: string | null, alt: string, size = 64) {
   // no photo: the lot's initial on a tile (the desk's Thumb fallback), never a blank box
   if (!img) return `<div style="width:${size}px;height:${size}px;border-radius:12px;background:${LINE};color:${FAINT};font:300 ${Math.round(size * 0.42)}px/${size}px ${FONT};text-align:center">${esc((alt.trim()[0] || '·').toUpperCase())}</div>`;
-  return `<img src="${esc(img)}" width="${size}" height="${size}" alt="${esc(alt)}" style="display:block;width:${size}px;height:${size}px;border-radius:12px;object-fit:cover;background:${LINE};border:0">`;
+  return `<img src="${esc(img)}" width="${size}" height="${size}" alt="${esc(alt)}" border="0" style="display:block;width:${size}px;height:${size}px;border-radius:12px;object-fit:cover;background:${LINE};border:0">`;
 }
 /** a section: a quiet sentence-case title over a hairline, an optional sub-line, then its body */
 function section(title: string, body: string, sub?: string | null) {
@@ -260,14 +262,22 @@ function renderHtml(e: DeskEmail, o: { origin: string; unsubUrl: string; dateLab
     e.market.length ? marketLedger(origin, e.market) : '',
   ].join('');
 
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><title>${esc(e.subject)}</title></head>
-<body style="margin:0;padding:0;background:${BG}">
+  // the first edition: two lines under the masthead on what arrives and how to stop it, never again after
+  const welcome = e.welcome
+    ? `<tr><td style="padding-top:12px;font:400 13.5px/1.5 ${FONT};color:${MUTED};border-top:1px dotted #D7D2CC;border-bottom:1px dotted #D7D2CC;padding-bottom:12px;margin-top:12px">Welcome to the Daily Desk — your first edition. Every morning at ${SEND_HOUR} AM it brings what needs you, your watches and collection, the week, what&rsquo;s new for the names you follow, the picks and the market.<br>Turn it off any time in <a href="${origin}/profile#account" style="color:${INK}">Email settings</a> or with the unsubscribe link at the foot.</td></tr>`
+    : '';
+  // the head: light only, said every way a client reads it (Apple Mail reads the meta, Gmail the style);
+  // the <style> carries nothing a layout depends on
+  const html = `<!doctype html><html lang="en" xmlns:o="urn:schemas-microsoft-com:office:office"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only"><title>${esc(e.subject)}</title><style>:root{color-scheme:light only;supported-color-schemes:light only}</style><!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]--></head>
+<body style="margin:0;padding:0;background:${BG};background-color:${BG};mso-line-height-rule:exactly">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(e.preheader)}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${BG}"><tr><td align="center" style="padding:24px 12px">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:${CARD};border-radius:16px">
-<tr><td style="padding:28px 24px 8px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${BG};background-color:${BG}"><tr><td align="center" style="padding:24px 12px">
+<!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" align="center"><tr><td width="600"><![endif]-->
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:${CARD};background-color:${CARD};border-radius:16px">
+<tr><td style="padding:28px 24px 8px;mso-line-height-rule:exactly">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
 <tr><td style="font:400 13px/1.3 ${FONT};color:${MUTED}"><b style="color:${INK};font-weight:600">lectr</b> · The Daily Desk · ${esc(o.dateLabel)}</td></tr>
+${welcome}
 <tr><td style="padding-top:12px;font:300 32px/1.12 ${FONT};color:${INK};letter-spacing:-0.025em">${esc(e.headline)}</td></tr>
 ${e.preheader ? `<tr><td style="padding-top:8px;font:400 14px/1.5 ${FONT};color:${MUTED}">${esc(e.preheader)}</td></tr>` : ''}
 ${glance(origin, e.glance)}
@@ -278,7 +288,9 @@ ${body}
 <tr><td style="padding:18px 24px 26px;font:400 12px/1.6 ${FONT};color:${FAINT};border-top:1px solid ${LINE}">
 You get this because you turned on the Daily Desk email on lectr. Figures are lectr&rsquo;s reads from public auction data, not appraisals.${trimmed ? ' Trimmed for your inbox &mdash; the whole desk is on lectr.' : ''}<br>
 <a href="${esc(o.unsubUrl)}" style="color:${MUTED}">Unsubscribe</a> · <a href="${origin}/profile#account" style="color:${MUTED}">Email settings</a>
-</td></tr></table></td></tr></table></body></html>`;
+</td></tr></table>
+<!--[if mso]></td></tr></table><![endif]-->
+</td></tr></table></body></html>`;
 
   return html;
 }
@@ -287,7 +299,9 @@ You get this because you turned on the Daily Desk email on lectr. Figures are le
 function renderText(e: DeskEmail, o: { origin: string; unsubUrl: string; dateLabel: string }): string {
   const { origin } = o;
   const g = e.glance;
-  const t: string[] = [`lectr · The Daily Desk · ${o.dateLabel}`, '', e.headline, e.preheader, '',
+  const t: string[] = [`lectr · The Daily Desk · ${o.dateLabel}`,
+    ...(e.welcome ? ['', `Welcome to the Daily Desk — your first edition. Every morning at ${SEND_HOUR} AM it brings what needs you, your watches and collection, the week, what’s new for the names you follow, the picks and the market.`, `Turn it off any time: ${origin}/profile#account`] : []),
+    '', e.headline, e.preheader, '',
     `Watching ${g.watching}${g.est ? ` (${g.est} at estimate midpoint)` : ''} · Next hammer ${g.next ? `${g.next.when}${g.next.time ? ` ${g.next.time}` : ''} — ${g.next.above ? 'first under needs you' : g.next.title}` : '—'} · This week ${g.week} (${g.weekWatches} watches + ${g.weekPicks} picks) · ${g.picks} picks`,
     ...(e.edition.length ? [`In this edition: ${e.edition.join(' · ')}`] : []), ''];
   const metaOf = (i: DeskItem) => [i.maker, i.house, i.est].filter(Boolean).join(' · ');
