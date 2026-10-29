@@ -10,7 +10,9 @@ import type { AuctionLot } from '../../app/types';
 import type { Rec } from '../../app/lib/recs';
 import { planDesk, type DeskEmail } from '../lib/daily-desk';
 import { renderDesk } from '../lib/daily-desk-html';
-import { watchRowsOf, soldRowsOf, picksOf, entityIdsOf, editionInputOf, renderEdition, dayBefore, dateLabelOf, type EditionSource } from '../../app/profile/desk/edition-model';
+import fs from 'node:fs';
+import path from 'node:path';
+import { watchRowsOf, soldRowsOf, picksOf, entityIdsOf, editionInputOf, renderEdition, buildEdition, nameSidesOf, dayBefore, dateLabelOf, type EditionSource } from '../../app/profile/desk/edition-model';
 
 const NOW = Date.parse('2026-10-21T12:20:00Z');
 const H = 3600_000;
@@ -82,4 +84,28 @@ test('edition: the same model renders the same HTML on the desk as in the mornin
   assert.match(later.fresh?.since ?? '', /since your last Desk \(Mon, Oct 19\)/);
   // and the runner's own path over the same model stays byte-identical for a second render
   assert.equal(renderDesk(model as DeskEmail, { origin, unsubUrl: `${origin}/profile#account`, dateLabel }).html, runner);
+  // the on-desk frame adds only the frame's own sizing (html + body fill it, the body scrolls) — nothing else moves
+  const framed = renderEdition(model, origin, dateLabel, true);
+  assert.equal(framed.replace(' style="height:100%"><head>', '><head>').replace(';height:100%;overflow:auto;-webkit-overflow-scrolling:touch"', '"'), desk);
+  assert.ok(framed.includes('<html lang="en" xmlns:o="urn:schemas-microsoft-com:office:office" style="height:100%">'));
+  assert.ok(framed.includes('mso-line-height-rule:exactly;height:100%;overflow:auto;-webkit-overflow-scrolling:touch">'));
+});
+
+test('edition: buildEdition is the sheet’s one call — the fetched buckets become the names’ sides; an empty desk is null', () => {
+  const detail = { recent: [{ id: 'sold-9', p: 243_200, d: '2026-10-20', h: "Christie's", t: 'African Elephant' }], top: [] };
+  const sides = nameSidesOf(['mk:andy-warhol', 'mk:kaws'], [detail, null]);
+  assert.equal(sides.nameSold.get('mk:andy-warhol')?.p, 243_200);
+  assert.equal(sides.nameSold.get('mk:kaws'), null);
+  assert.deepEqual(sides.nameRecent.get('mk:kaws'), []);
+  const page = buildEdition(src, { ids: ['mk:andy-warhol'], details: [detail], receipts: got.receipts, backtest: got.backtest }, 'https://lectr.bid')!;
+  assert.ok(page.includes('<base target="_top">') && page.includes('style="height:100%"') && page.includes('Your collection'));
+  assert.equal(buildEdition({ ...src, savedIds: [], savedMeta: {}, sold: [], soldOrphans: [], recs: [], closingPicks: [], follows: [] }, { ids: [], details: [], receipts: null, backtest: null }, 'https://lectr.bid'), null);
+});
+
+test('edition: the sheet imports the paper’s module on the first click, never statically', () => {
+  const sheet = fs.readFileSync(path.resolve(process.cwd(), 'app/profile/desk/edition.tsx'), 'utf8');
+  const staticImports = sheet.match(/^import .*$/gm) || [];
+  assert.ok(!staticImports.some(l => /edition-model|scripts\/lib\/daily-desk/.test(l) && !/^import type /.test(l)), staticImports.join('\n'));
+  assert.ok(sheet.includes("import('./edition-model')"));
+  assert.ok(sheet.includes('Setting the type…'));
 });

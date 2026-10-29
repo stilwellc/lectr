@@ -166,14 +166,17 @@
 .ck-edition-title { font-size: 14px; color: var(--color-fg); }
 .ck-edition-title b { font-weight: 600; }
 .ck-edition-sub { font-size: 12.5px; color: var(--color-text-secondary); flex: 1 1 auto; }
+.ck-edition-tab { margin-left: auto; min-height: 36px; }
+.ck-edition-tab + .ck-edition-close { margin-left: 0; }
 .ck-edition-close { margin-left: auto; min-height: 36px; }
-.ck-edition-body { min-height: 0; }
-.ck-edition-frame { display: block; width: 100%; height: 100%; border: 0; background: #F5F3F1; }
+/* the frame fills a definite box (iOS Safari sizes a percent-height iframe only inside one); the paper scrolls within it */
+.ck-edition-body { position: relative; min-height: 0; overflow: hidden; }
+.ck-edition-frame { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; background: #F5F3F1; }
 .ck-edition-note { margin: 0; padding: 28px 20px; font-size: 15px; line-height: 1.5; color: var(--color-text-secondary); }
 @media (max-width: 639.98px) {
   .ck-edition-bar { padding: 10px 14px; gap: 6px 10px; }
   .ck-edition-sub { display: none; }
-  .ck-edition-close { min-height: 40px; }
+  .ck-edition-tab, .ck-edition-close { min-height: 40px; }
 }
 
 /* motion: nothing in a row's slot, a pill or the dossier moves for a reader who asked for none */
