@@ -114,6 +114,13 @@
  * single of the same sport and sub near one save's price is a tie of its
  * own, so a one-card hockey desk gets hockey.
  *
+ * (Oct 29, pass 4) THIS WEEK FIRST: of the first 12 seats, no more than a
+ * third go to lots closing past 14 days (or undated) while a nearer lot
+ * weighs within 80% of the far one — the far lot waits, it is never dropped
+ * (windowFactor's curve is untouched). TOP OF THE DEAL (topOf): the Today
+ * band's strip takes the deal's first n, any lane, never all n from one
+ * house while another house's pick weighs within 80%.
+ *
  * (W28, Oct 11) A REASON MUST BE TRUE, checked by recs-eval §4 over 22
  * personas: "Like your X prints" groups the desk's X's of the same MEDIUM (a
  * Polaroid set filed under Prints is a photograph) under the name the desk's
@@ -976,6 +983,10 @@ export interface RecTune {
   /** (Oct 29) ROTATION: rows this close in score (as a share) may swap seats
    *  by the day — 0 deals the same list every day */
   rotate: number;
+  /** (pass 4) the most of the first WEEK_SEATS seats that may close past
+   *  FAR_DAYS while a nearer lot weighs within farYield of the far one (1 = off) */
+  farShare: number;
+  farYield: number;
 }
 export const REC_TUNE: Readonly<RecTune> = {
   entityTie: 0.5, qBase: 0.8,
@@ -987,7 +998,12 @@ export const REC_TUNE: Readonly<RecTune> = {
   saleShare: 1 / 6, broadShare: 0.2, saleYield: 0.7, entBase: 0.4, entShare: 0.5,
   sigSeats: 3,
   discover: 0.25, rotate: 0.08,
+  farShare: 1 / 3, farYield: 0.8,
 };
+/** the seats "this week first" reads (the first screen of the deal) */
+export const WEEK_SEATS = 12;
+/** a close past this many days is "far" (undated counts as far) */
+export const FAR_DAYS = 14;
 
 /** the deal size the per-entity cap reads (the profile's list) */
 export const REC_DEAL = 24;
@@ -1912,6 +1928,11 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
   const houseCap = () => Math.ceil(capN * 0.4) + lift;
   let discDealt = 0;
   const perCut = new Map<string, number>(), discEnts = new Set<string>();
+  // (pass 4) THIS WEEK FIRST — how many of the seats so far close past FAR_DAYS
+  const nowMs = opts.nowMs ?? Date.now();
+  const isFar = (r: Row) => { const c = closeMsOf(r.l); return c == null || c - nowMs > FAR_DAYS * 864e5; };
+  let farDealt = 0;
+  const farCap = Math.floor(WEEK_SEATS * T.farShare);
   /** the lane's next pick, under the deal's house and sale caps — false when none is left */
   const dealDiscover = (): boolean => {
     let best: Row | null = null, bestV = 0;
@@ -1933,6 +1954,7 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
   };
   const take = (r: Row, k: ReturnType<typeof keysOf>) => {
     out.push(r);
+    if (out.length <= WEEK_SEATS && isFar(r)) farDealt++;
     bump(perEnt, k.ent); bump(perSale, k.sale); bump(perHouse, k.house);
     // a discover pick is nobody's tie: it charges no seed, one per name, and
     // spreads across the reader's cuts
@@ -1968,6 +1990,7 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
     }
     let best: Row | null = null, bestV = 0, capped = false;
     let overSale: Row | null = null, overV = 0, bestBare = 0;
+    let near: Row | null = null, nearV = 0;
     for (const r of cand) {
       if (used.has(r)) continue;
       if (phaseOf(r) > phase) continue;
@@ -1990,11 +2013,17 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
       }
       const v = r.score * penalty(r, k) * jit(r);
       if (v > bestV) { bestV = v; best = r; }
+      if (v > nearV && !isFar(r)) { nearV = v; near = r; }
       bestBare = Math.max(bestBare, r.score * penalty(r, k, false) * jit(r));
     }
     // the sale cap yields when nothing elsewhere comes close (weighed alike:
     // neither side's sale discount counts)
     if (overSale && overV * T.saleYield > bestBare) best = overSale;
+    // (pass 4) this week first: the first screen keeps at most a third of its
+    // seats for lots closing past two weeks while something nearer weighs
+    // within farYield of them — the far lot waits its turn, never dropped
+    // (weighed without the day's jitter: the rule reads scores, not the shuffle)
+    else if (best && out.length < WEEK_SEATS && T.farShare < 1 && isFar(best) && farDealt >= farCap && near && nearV / jit(near) >= T.farYield * (bestV / jit(best))) best = near;
     if (!best) {
       // stuck: open the fallback ladder before lifting a cap; lift the caps
       // (one seat at a time — the strongest seed takes the next, the others
@@ -2275,6 +2304,43 @@ export function recNote(r: Pick<Rec, 'reason' | 'why'> & { short?: string }, opt
   if (opts.short && r.short) return r.short;
   const extra = r.why.find(w => !/^(?:followed|saved search|picked market)/.test(w) && !r.reason.toLowerCase().includes(w.toLowerCase()));
   return extra && !/^(?:Like your|More )/.test(r.reason) ? `${r.reason} · ${extra}` : r.reason;
+}
+
+/* ── the top of the deal ────────────────────────────────────────────────── */
+
+/**
+ * (pass 4) THE TOP n OF A DEAL — the Today band's strip. The deal's order
+ * stands (any lane: a discover pick that ranks is in), skipping lots the
+ * band already shows (`claimed`); and the strip never comes all from one
+ * house while another house's pick weighs within `houseYield` of the one
+ * it would displace — three Goldin cards in a row is one sale, not a desk.
+ * Pure; the same n is the deal's prefix when the houses allow.
+ */
+export function topOf<R extends { lot: { id: string; auctionHouse?: string | null }; score: number }>(recs: readonly R[], n = 3, opts: { claimed?: ReadonlySet<string>; houseYield?: number } = {}): R[] {
+  const yieldAt = opts.houseYield ?? 0.8;
+  const out: R[] = [];
+  const used = new Set<R>();
+  const perHouse = new Map<string, number>();
+  const houseOf = (r: R) => r.lot.auctionHouse ?? '';
+  for (let i = 0; i < recs.length && out.length < n; i++) {
+    const r = recs[i];
+    if (used.has(r) || opts.claimed?.has(r.lot.id)) continue;
+    let take = r;
+    // the last seat would make the strip one house: the next other-house
+    // pick within reach takes it instead
+    if (n > 1 && out.length === n - 1 && (perHouse.get(houseOf(r)) ?? 0) === n - 1) {
+      for (let j = i + 1; j < recs.length; j++) {
+        const o = recs[j];
+        if (used.has(o) || opts.claimed?.has(o.lot.id) || houseOf(o) === houseOf(r)) continue;
+        if (o.score >= yieldAt * r.score) take = o;
+        break;
+      }
+    }
+    used.add(take);
+    out.push(take);
+    perHouse.set(houseOf(take), (perHouse.get(houseOf(take)) ?? 0) + 1);
+  }
+  return out;
 }
 
 /* ── the return loop ────────────────────────────────────────────────────── */
