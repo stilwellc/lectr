@@ -24,6 +24,7 @@
 import { SigPill } from '../desk/thumb';
 import PlateImg from '../../components/PlateImg';
 import { DeskRow } from '../desk/row';
+import { imageOf } from '../../lib/house-images';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { DeskData, SectionMeta, SectionProps } from '../desk/types';
@@ -223,7 +224,8 @@ export default function Portfolio({ desk, narrow }: SectionProps) {
             {rows.map(r => {
               const g = growthOf(r);
               const lot = r.piece.lot;
-              const src = lot.imageUrl ? sizedImg(httpsImg(lot.imageUrl), 480) : undefined;
+              const img = imageOf(lot);
+              const src = img ? sizedImg(httpsImg(img), 480) : undefined;
               const who = makerLineOf(lot).name || lot.title;
               return (
                 <Link key={r.piece.id} href={`/lot?id=${encodeURIComponent(lot.id)}`} className="pf-tile" aria-label={`${craftTitle(lot.title, lot.auctionHouse)}${g && g.pct !== 0 ? `, ${g.text} ${g.basis}` : ''}`}>
@@ -289,7 +291,7 @@ function Row({ r, nowYear }: { r: PieceRow; nowYear: number }) {
   return (
     <DeskRow lot={lot} who={maker || lot.title}
       sub={[maker, (lot.auctionHouse as string) === 'archive' ? 'archive record' : lot.auctionHouse, day ? formatDate(day) : ''].filter(Boolean).join(' · ')}
-      figure={figure} figureSub={figureSub}
+      figure={figure} figureKind="mark" figureSub={figureSub}
       meta={<>
         {/* bought · the engine read (its if-sold-now) · the maker's reads */}
         <span className="dk-meta-fact" title={piece.bought ? (piece.bought.basis === 'paid' ? 'Your recorded cost basis' : 'Realized price — set what you paid in the Collection room to override') : 'No price on file'}>

@@ -45,6 +45,7 @@ import { closeMsOf } from '../../lib/priority';
 import { closeIsTimed } from '../../lib/house-tz';
 import { displayMakerOf } from '../../lib/maker-subjects';
 import { formatEstimate } from '../../lib/estimate-text';
+import { imageOf } from '../../lib/house-images';
 import { fromText } from './priced';
 import { Thumb } from './thumb';
 import { closeDays, hammerWord } from './derive';
@@ -77,6 +78,10 @@ export interface DeskRowProps {
   meta?: React.ReactNode;
   /** the one figure, top right */
   figure?: React.ReactNode;
+  /** what the figure is — the three money variants share one baseline and
+   *  one sub style: an estimate range, a live bid ("N bids" under), a hammer
+   *  (the lamp pill under); a clock or a mark keep the same seat */
+  figureKind?: 'est' | 'bid' | 'hammer' | 'clock' | 'mark' | 'plan';
   /** the small line under the figure (bids, a countdown) */
   figureSub?: React.ReactNode;
   /** the pill under the figure (My max) */
@@ -113,22 +118,26 @@ export function rowSubOf(lot: AuctionLot): string {
 }
 
 /** the price as a figure + sub pair: a two-sided estimate ("$2K–$3K" ·
- *  "estimate"), a live bid ("$8K" · "bid · 12 bids"), a one-sided estimate
+ *  "estimate"), a live bid ("$8K" · "12 bids"), a one-sided estimate
  *  ("from $2K" · "estimate"), else the house's words, quiet (ONE "priced"
  *  rule, ../priced; the printed-bid gate, estimate-text) */
-export function priceFigureOf(lot: AuctionLot): { fig: string; sub: string | null; quiet: boolean } {
+export function priceFigureOf(lot: AuctionLot): { fig: string; sub: string | null; quiet: boolean; kind: 'est' | 'bid' } {
   const from = fromText(lot);
-  if (from) return { fig: from, sub: 'estimate', quiet: false };
+  if (from) return { fig: from, sub: 'estimate', quiet: false, kind: 'est' };
   const t = formatEstimate(lot);
-  if (/ est\.$/.test(t)) return { fig: t.replace(/ est\.$/, ''), sub: 'estimate', quiet: false };
-  if (t.includes(' bid')) { const [lead, ...rest] = t.split(' · '); return { fig: lead.replace(/ bid$/, ''), sub: ['bid', ...rest].join(' · '), quiet: false }; }
-  return { fig: t, sub: null, quiet: true };
+  if (/ est\.$/.test(t)) return { fig: t.replace(/ est\.$/, ''), sub: 'estimate', quiet: false, kind: 'est' };
+  if (t.includes(' bid')) { const [lead, ...rest] = t.split(' · '); return { fig: lead.replace(/ bid$/, ''), sub: rest[0] ?? 'live bid', quiet: false, kind: 'bid' }; }
+  return { fig: t, sub: null, quiet: true, kind: 'est' };
 }
+
+/** the live bid's sub: "12 bids", or "live bid" when the house gives no count */
+export const bidsSubOf = (lot: Pick<AuctionLot, 'bidCount'>): string =>
+  typeof lot.bidCount === 'number' && lot.bidCount > 0 ? `${lot.bidCount} ${lot.bidCount === 1 ? 'bid' : 'bids'}` : 'live bid';
 
 /** the lot's own URL on the desk */
 export const lotHref = (lot: Pick<RowLot, 'id'>) => `/lot?id=${encodeURIComponent(lot.id)}`;
 
-export function DeskRow({ lot, href, who, title, sub, wrap = false, tag, meta, figure, figureSub, pill, decision, action, tone, expand, pick, as = 'div', attrs, className, children, below, compact, photo }: DeskRowProps) {
+export function DeskRow({ lot, href, who, title, sub, wrap = false, tag, meta, figure, figureKind, figureSub, pill, decision, action, tone, expand, pick, as = 'div', attrs, className, children, below, compact, photo }: DeskRowProps) {
   const Outer = as;
   const t = title ?? craftTitle(lot.title, lot.auctionHouse);
   const letterOf = who === undefined ? rowWhoOf(lot) : who;
@@ -137,7 +146,8 @@ export function DeskRow({ lot, href, who, title, sub, wrap = false, tag, meta, f
   return (
     <Outer className={`dk-item${className ? ` ${className}` : ''}`} {...attrs}>
       <div className="dk-row" data-nav-row data-pick={pick} data-open={expand?.open || undefined} data-expand={expand ? '' : undefined} data-compact={compact || undefined}>
-        {photo ? <span className="dk-photo" aria-hidden="true">{photo}</span> : <Thumb src={lot.imageUrl} label={letterOf || lot.title} size={compact ? 32 : 56} tone={tone} />}
+        {/* the photo through imageOf: an RR Auction lot gets its preview from its id */}
+        {photo ? <span className="dk-photo" aria-hidden="true">{photo}</span> : <Thumb src={imageOf({ id: lot.id, imageUrl: lot.imageUrl ?? null })} label={letterOf || lot.title} size={compact ? 32 : 56} tone={tone} />}
         <div className="dk-main">
           <Link href={href ?? lotHref(lot)} className="dk-title" data-nav-focus={expand ? undefined : ''} title={t}>{t}</Link>
           {sub != null && sub !== '' && <span className="dk-sub" data-wrap={wrap || undefined}>{sub}</span>}
@@ -153,7 +163,7 @@ export function DeskRow({ lot, href, who, title, sub, wrap = false, tag, meta, f
         {decision && <div className="dk-decision">{decision}</div>}
         {hasRight && (
           <div className="dk-right">
-            {figure != null && <span className="dk-fig">{figure}</span>}
+            {figure != null && <span className="dk-fig" data-fig={figureKind}>{figure}</span>}
             {figureSub != null && <span className="dk-figsub">{figureSub}</span>}
           </div>
         )}

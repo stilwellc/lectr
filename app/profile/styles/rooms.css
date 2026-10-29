@@ -31,8 +31,10 @@
 /* the Remove ×'s hit area grows left and down, never past the row's edge */
 .dk-act .ray-own-x::before { inset: -8px 0 -8px -8px; }
 @media (max-width: 639.98px) {
-  .dk-act .ray-toolbar-pill, .dk-act .ray-own-btn { min-height: 36px; padding: 0 14px; font-size: 12.5px; }
+  .dk-act .ray-toolbar-pill, .dk-act .ray-own-btn { min-height: 40px; padding: 0 12px; font-size: 12.5px; }
   .dk-act .ck-pick-more, .dk-act .ray-own-x { min-width: 44px; min-height: 44px; }
+  .dk-act .ck-week-act, .dk-act .dk-link { min-height: 40px; }
+  .dk-pill .ck-mymax { height: 40px; }
 }
 
 /* a "Not for me" undo seat inside a list: one slim strip between rows */
@@ -85,3 +87,46 @@
 .dk-figsub .pe-hit { color: var(--color-text-secondary); }
 .dk-figsub .pe-faint { color: var(--color-text-faint); }
 .dk-figsub .ck-sigpill { height: 18px; font-size: 11.5px; padding: 0 7px; vertical-align: 0; }
+
+/* ══ THE DOSSIER (pass 4) — a watch's details on the row grammar. The
+   wrapper keeps .ck-dossier (the page's own dossier styling); this is its
+   content: the facts as one line of pills, the comps as compact rows, My
+   max inline, the foot with its close. Never wider than its row: every
+   line wraps or ellipsizes, nothing scrolls sideways. ══ */
+.dk-dossier { min-width: 0; max-width: 100%; overflow-x: clip; }
+.dk-dossier-pills { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.dk-fact {
+  display: inline-flex; align-items: center; gap: 5px; min-height: 26px; padding: 0 10px; border-radius: 999px;
+  border: 1px solid var(--color-border); font-size: 12px; line-height: 1.2; color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+}
+.dk-fact b { font-weight: 500; color: var(--color-fg); }
+.dk-fact .ck-sigpill { height: 18px; font-size: 11.5px; padding: 0 7px; margin-left: -5px; }
+.dk-dossier-comps { min-width: 0; }
+.dk-dossier-comps .ck-reads-head { padding-bottom: 0; }
+.dk-dossier-comps .dk-list .dk-row[data-compact] { padding-inline: 0; }
+.dk-dossier-max { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; }
+.dk-dossier-max .kicker { flex: none; }
+.dk-dossier-max .ck-mymax { height: 30px; }
+.dk-dossier-max-note { flex: 1 1 220px; font-size: 11.5px; color: var(--color-text-muted); line-height: 1.4; }
+.dk-dossier-foot { flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.dk-dossier-close {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 4px;
+  min-height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--color-border);
+  background: none; cursor: pointer; font: 500 12px/1 var(--font-sans), sans-serif; color: var(--color-text-secondary);
+  text-decoration: none !important;
+}
+.dk-dossier-close:hover { color: var(--color-fg); border-color: var(--color-border-mid); }
+.dk-dossier-close span { display: inline-block; transform: rotate(90deg); }
+@media (max-width: 639.98px) {
+  /* every control in the dossier clears 44px on a phone */
+  .dk-fact { min-height: 30px; font-size: 12.5px; }
+  .dk-dossier-max .ck-mymax, .dk-dossier-max .ck-mymax-btn, .dk-dossier-max .ck-mymax-edit input { height: 44px; }
+  .dk-dossier-max .ck-mymax-edit { display: flex; width: 100%; }
+  .dk-dossier-max .ck-mymax-edit input { flex: 1 1 0; min-width: 0; width: auto; }
+  /* the foot (not a row's slot): two equal pills a line, so no label clips */
+  .dk-dossier-foot { gap: 8px; }
+  .dk-dossier-foot > a, .dk-dossier-foot > button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: 999px; text-decoration: none !important; flex: 1 1 calc(50% - 8px); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dk-dossier-close { margin-left: 0; }
+  .dk-dossier-comps .dk-link { min-height: 44px; }
+}
