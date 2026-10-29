@@ -16,7 +16,7 @@ import type { SavedMeta } from '../../lib/account';
 import { makerLineOf } from '../../lib/lot-labels';
 import { lotFollowOf } from '../../lib/lot-follow';
 import { marketNamesOf } from '../../lib/your-market';
-import { planDesk, laneOf, leadingNameOf, ownedMakerOf, type PlanInput, type WatchRow, type SoldRow, type PickIn, type DeskEmail, type LastSale, type ReceiptsIn, type BacktestIn } from '../../../scripts/lib/daily-desk';
+import { planDesk, laneOf, leadingNameOf, ownedMakerOf, lastSaleOf, recentOf, type PlanInput, type WatchRow, type SoldRow, type PickIn, type DeskEmail, type LastSale, type ReceiptsIn, type BacktestIn } from '../../../scripts/lib/daily-desk';
 import { renderDesk } from '../../../scripts/lib/daily-desk-html';
 import { baseId } from '../../../scripts/lib/push-plan';
 
@@ -122,8 +122,24 @@ export function dateLabelOf(now: number, tz = TZ): string {
 
 /** the paper's HTML as the morning send renders it, for a sandboxed iframe: the same renderer, every link to the top page,
  *  the unsubscribe link standing in for the one-click token the runner alone holds */
-export function renderEdition(model: DeskEmail, origin: string, dateLabel: string): string {
-  return renderDesk(model, { origin, unsubUrl: `${origin}/profile#account`, dateLabel, linkTarget: '_top' }).html;
+export function renderEdition(model: DeskEmail, origin: string, dateLabel: string, frame = false): string {
+  return renderDesk(model, { origin, unsubUrl: `${origin}/profile#account`, dateLabel, linkTarget: '_top', frame }).html;
+}
+
+/** the names' settled side from the fetched detail buckets (null entries: none on file) */
+export function nameSidesOf(ids: readonly string[], details: readonly (Parameters<typeof lastSaleOf>[0])[]): { nameSold: Map<string, LastSale | null>; nameRecent: Map<string, readonly LastSale[]> } {
+  const nameSold = new Map<string, LastSale | null>();
+  const nameRecent = new Map<string, readonly LastSale[]>();
+  ids.forEach((id, k) => { nameSold.set(id, lastSaleOf(details[k])); nameRecent.set(id, recentOf(details[k])); });
+  return { nameSold, nameRecent };
+}
+
+/** THE EDITION, end to end: the desk's data + what the sheet fetched → the paper's HTML (null: nothing on the desk).
+ *  The sheet imports this module on the button's first click, so the paper's model + renderer stay out of
+ *  /profile's first load. */
+export function buildEdition(src: EditionSource, got: { details: readonly (Parameters<typeof lastSaleOf>[0])[]; ids: readonly string[]; receipts: ReceiptsIn | null; backtest: BacktestIn | null }, origin: string): string | null {
+  const model = planDesk(editionInputOf(src, { ...nameSidesOf(got.ids, got.details), receipts: got.receipts, backtest: got.backtest }));
+  return model ? renderEdition(model, origin, dateLabelOf(src.now), true) : null;
 }
 
 export { planDesk };

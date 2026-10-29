@@ -187,6 +187,8 @@ export interface RenderOpts {
   sizeCap?: number;
   /** the on-desk edition sits in a sandboxed iframe: every link opens the page itself (<base target="_top">) */
   linkTarget?: '_top';
+  /** the on-desk frame: html and body fill it and the body scrolls (iOS Safari sizes a srcdoc frame to its content otherwise) */
+  frame?: boolean;
 }
 export function renderDesk(e: DeskEmail, o: RenderOpts): { html: string; text: string; trimmed: boolean } {
   const cap = o.sizeCap ?? SIZE_CAP;
@@ -275,8 +277,8 @@ function renderHtml(e: DeskEmail, o: RenderOpts, trimmed: boolean): string {
     : '';
   // the head: light only, said every way a client reads it (Apple Mail reads the meta, Gmail the style);
   // the <style> carries nothing a layout depends on
-  const html = `<!doctype html><html lang="en" xmlns:o="urn:schemas-microsoft-com:office:office"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only">${o.linkTarget ? `<base target="${o.linkTarget}">` : ''}<title>${esc(e.subject)}</title><style>:root{color-scheme:light only;supported-color-schemes:light only}</style><!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]--></head>
-<body style="margin:0;padding:0;background:${BG};background-color:${BG};mso-line-height-rule:exactly">
+  const html = `<!doctype html><html lang="en" xmlns:o="urn:schemas-microsoft-com:office:office"${o.frame ? ' style="height:100%"' : ''}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only">${o.linkTarget ? `<base target="${o.linkTarget}">` : ''}<title>${esc(e.subject)}</title><style>:root{color-scheme:light only;supported-color-schemes:light only}</style><!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]--></head>
+<body style="margin:0;padding:0;background:${BG};background-color:${BG};mso-line-height-rule:exactly${o.frame ? ';height:100%;overflow:auto;-webkit-overflow-scrolling:touch' : ''}">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(e.preheader)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${BG};background-color:${BG}"><tr><td align="center" style="padding:24px 12px">
 <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" align="center"><tr><td width="600"><![endif]-->
