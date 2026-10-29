@@ -78,6 +78,12 @@ export const NAME_ROWS = 8;
 export const WEEK_DAYS_N = 7;
 /** the subject line's cap (Gmail shows ~70 on a desktop list, ~40 on a phone) */
 export const SUBJECT_MAX = 60;
+/** the hour the paper lands, on the reader's clock (America/New_York): the workflow fires at 11:00 and 12:00 UTC
+ *  so one of them is 7 AM through DST; the runner takes the one that is */
+export const SEND_HOUR = 7;
+export function isSendHour(nowMs: number, tz: string): boolean {
+  return Number(new Date(nowMs).toLocaleString('en-US', { timeZone: tz, hour: 'numeric', hour12: false })) % 24 === SEND_HOUR;
+}
 /** the engine's weekly record prints only on this many graded calls */
 export const RECORD_MIN_N = 5;
 const DAY_MS = 86_400_000;
@@ -142,6 +148,8 @@ export interface Glance {
 }
 export interface DeskEmail {
   subject: string; preheader: string; headline: string;
+  /** the reader's first edition (no last_sent_on): a two-line welcome under the masthead, never again after */
+  welcome: boolean;
   glance: Glance;
   overMax: DeskItem[]; closing: DeskItem[]; results: ResultItem[]; resultsMore: number;
   /** "In this edition" — the sections present, with their counts */
@@ -584,6 +592,7 @@ export function planDesk(input: PlanInput): DeskEmail | null {
   const subjectLead = overMax.length ? `${overMax.length} ${overMax.length === 1 ? 'bid' : 'bids'} past your max` : lead;
   return {
     subject: cut(`Your desk: ${subjectLead}`, SUBJECT_MAX).replace(/[.\s]+$/, ''),
+    welcome: input.lastSentOn == null,
     preheader: facts || 'Your watches, your names, what’s new and the market — every morning.',
     headline: `${lead[0].toUpperCase()}${lead.slice(1)}.`,
     glance, overMax, closing, results, resultsMore, edition, collection, collectionMore,
