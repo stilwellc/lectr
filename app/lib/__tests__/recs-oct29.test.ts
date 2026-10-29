@@ -105,8 +105,9 @@ test('discover: never a lot a real tie already reaches, never one "Not for me" q
   const t = buildTaste({ saved: [{ id: zion.id, lot: zion }], follows: [], nowMs: NOW });
   const disc = discoverLots([zion, ja, rawNoYear, football], t, { nowMs: NOW });
   assert.ok(!rids(disc).includes(ja.id), 'a same-era PSA rookie is a real tie (the cut tie), not a discovery');
-  // (pass 3) a raw, undated single of the same sport at the price is the SPORT CUT's — a real tie now, not the lane's
-  assert.deepEqual(rids(disc), [], 'the sport cut reaches the raw single; nothing is left for the lane');
+  // (pass 3) a raw, undated single of the same sport at the price is the SPORT CUT's — a weak real tie;
+  // (pass 5) and so the lane's too — whichever deals it first, it is dealt once
+  assert.deepEqual(rids(disc), [rawNoYear.id], 'a lot only a weak tie reaches is the lane’s as well');
   const raw = recommend([zion, ja, rawNoYear, football], t, { nowMs: NOW }).find(r => r.lot.id === rawNoYear.id)!;
   assert.match(raw.reason, /^More basketball cards near your save’s price/);
   assert.ok(!ids(recommend([zion, ja, rawNoYear, football], t, { nowMs: NOW })).includes(football.id), 'sports never cross');
@@ -322,21 +323,26 @@ test('price holds without a band: a grail far above two saves sinks below their 
 
 test('this week first: the first 12 seats keep at most a third for lots closing past 14 days while nearer lots weigh within 80%; the far lots still come after', () => {
   const owned = card('1952 Topps #311 Mickey Mantle - PSA 3', 'baseball', 5000);
-  // twelve Mantle cards (the name you own) closing in 16 days…
+  // sixteen Mantle cards (the name you own) closing in 16 days…
   const far: RecLot[] = [];
-  for (let i = 0; i < 12; i++) far.push(card(`19${53 + i} Topps #${i + 1} Mickey Mantle - PSA 5`, 'baseball', 5000, { saleDateTime: at(16), saleDate: at(16).slice(0, 10), auctionHouse: ['Goldin', 'REA', 'Heritage'][i % 3], saleName: `F${i % 3}` }));
-  // …and twelve vintage PSA 5 singles of other players (a cut tie) closing in 10
+  for (let i = 0; i < 16; i++) far.push(card(`19${53 + i} Topps #${i + 1} Mickey Mantle - PSA 5`, 'baseball', 5000, { saleDateTime: at(16), saleDate: at(16).slice(0, 10), auctionHouse: ['Goldin', 'REA', 'Heritage'][i % 3], saleName: `F${i % 3}` }));
+  // …and sixteen vintage PSA 5 singles of other players (a cut tie) closing in 10
   const near: RecLot[] = [];
   const houses = ['Goldin', 'REA', 'Heritage', 'PWCC', 'Love of the Game', 'Mile High'];
-  for (let i = 0; i < 12; i++) near.push(card(`19${53 + i} Topps #${i + 40} Ty Player${i} - PSA 5`, 'baseball', 5000, { saleDateTime: at(10), saleDate: at(10).slice(0, 10), auctionHouse: houses[i % 6], saleName: `N${i % 6}` }));
+  for (let i = 0; i < 16; i++) near.push(card(`19${53 + i} Topps #${i + 40} Ty Player${i} - PSA 5`, 'baseball', 5000, { saleDateTime: at(10), saleDate: at(10).slice(0, 10), auctionHouse: houses[i % 6], saleName: `N${i % 6}` }));
   const t = buildTaste({ saved: [{ id: owned.id, lot: owned, owned: true, savedAt: at(-3) }], follows: [], nowMs: NOW });
   const isFar = (r: { lot: RecLot }) => far.some(l => l.id === r.lot.id);
   const off = recommend([...far, ...near], t, { nowMs: NOW, n: 24, tune: { farShare: 1 } });
   assert.ok(off.slice(0, 12).filter(isFar).length > 4, `without the rule the name's far-off lots take the first screen: ${off.slice(0, 12).filter(isFar).length} of 12`);
   const on = recommend([...far, ...near], t, { nowMs: NOW, n: 24 });
   assert.ok(on.slice(0, 12).filter(isFar).length <= 4, `with it, at most a third: ${on.slice(0, 12).filter(isFar).length} of 12`);
+  // (pass 5) and the second screen too
+  assert.ok(on.slice(12, 24).filter(isFar).length <= 4, `the second screen keeps the rule: ${on.slice(12, 24).filter(isFar).length} of 12`);
   assert.equal(on.length, 24, 'nothing is dropped');
-  assert.equal(on.filter(isFar).length, 12, 'the far lots all come, later');
+  assert.ok(on.filter(isFar).length >= 8, 'the far lots keep coming, a third of each screen');
+  // past the near lots, the far ones fill (never a short list)
+  const tail = recommend([...far, ...near.slice(0, 6)], t, { nowMs: NOW, n: 22 });
+  assert.equal(tail.length, 22);
   // when nothing nearer weighs within 80%, the far lots keep their seats
   const weak: RecLot[] = near.map(l => ({ ...l, id: `${l.id}w`, currentBid: 1500 })); // under the owned price: the kernel and the span sink them
   const keep = recommend([...far, ...weak], t, { nowMs: NOW, n: 24 });
@@ -352,4 +358,57 @@ test('topOf: the deal’s first n, any lane, never all from one house while anot
   assert.deepEqual(topOf([d, a, b], 3).map(r => r.lot.id), ['d', 'a', 'b'], 'a discover pick that ranks is in');
   assert.deepEqual(topOf([a, b], 3).map(r => r.lot.id), ['a', 'b'], 'fewer than n: all of them');
   assert.deepEqual(topOf([a, b, c], 3).map(r => r.lot.id), ['a', 'b', 'c'], 'one house only: the deal stands');
+});
+
+/* ── pass 5: the lane on a wide desk; evidence ────────────────────────── */
+
+test('discover: a desk whose learned band is too wide to print still gets its seats — other makers’ prints inside the saves’ interquartile span, never the $100K one', () => {
+  const pr = (artist: string, title: string, lo: number, o: Partial<RecLot> = {}): RecLot => ({ id: `wp-${++seq}`, artist, title, subCat: 'prints', auctionHouse: 'Phillips', saleName: 'Editions', saleDate: at(5).slice(0, 10), estimateLow: lo, estimateHigh: lo * 1.4, currency: 'USD', status: 'upcoming', imageUrl: PHOTO, ...o });
+  const desk = [pr('andy-warhol', 'Flowers (F. & S. 67)', 40000), pr('andy-warhol', 'Plate 4, from Flash', 7000), pr('andy-warhol', 'Mao, 1972', 17250)];
+  const warhols = Array.from({ length: 6 }, (_, i) => pr('andy-warhol', `Warhol Print ${i}`, 12000 + i * 2000, { auctionHouse: ['Phillips', 'Bonhams', 'Christie’s'][i % 3] }));
+  const others = Array.from({ length: 6 }, (_, i) => pr(['ed-ruscha', 'keith-haring', 'roy-lichtenstein', 'david-hockney', 'damien-hirst', 'banksy'][i], `Other Print ${i}`, 9000 + i * 3000, { auctionHouse: ['Christie’s', 'Bonhams', 'Phillips'][i % 3] }));
+  const grail = pr('pablo-picasso', 'La Nouvelle Chute de l’Amérique', 100000);
+  const t = buildTaste({ saved: desk.map(l => ({ id: l.id, lot: l, savedAt: at(-3) })), follows: [], nowMs: NOW });
+  const b = t.bands.get('fine-art')!;
+  assert.ok(b && Math.pow(10, b.hi - b.lo) > 20, 'the band exists and is too wide to print');
+  const disc = discoverLots([...desk, ...warhols, ...others, grail], t, { nowMs: NOW });
+  assert.ok(disc.length >= 3 && disc.every(r => others.some(o => o.id === r.l.id)), `the other makers’ prints in the span are the lane’s: ${rids(disc).join(',')}`);
+  assert.ok(!rids(disc).includes(grail.id), 'the $100K print sits outside the saves’ interquartile span');
+  const rs = recommend([...desk, ...warhols, ...others, grail], t, { nowMs: NOW, n: 12 });
+  const lanes = rs.map(r => r.lane ?? 'tie');
+  assert.deepEqual([lanes[2], lanes[6], lanes[10]], ['discover', 'discover', 'discover'], lanes.join(' '));
+  for (const r of rs.filter(r => r.lane === 'discover')) assert.equal(r.reason, 'New to you · prints near your saves’ prices');
+  assert.ok(!ids(rs).includes(grail.id) || rs.findIndex(r => r.lot.id === grail.id) > 8, 'the grail, if dealt, is dealt late');
+});
+
+test('evidence: a priced, dated lot with a bid on it edges an equal tie that has none — and nothing more', () => {
+  const owned = card('1952 Topps #311 Mickey Mantle - PSA 3', 'baseball', 5000);
+  const bidOn = card('1956 Topps #135 Mickey Mantle - PSA 5', 'baseball', 3000, { bidCount: 3 });
+  const noBid = card('1957 Topps #95 Mickey Mantle - PSA 5', 'baseball', 3000, { bidCount: 0 });
+  const t = buildTaste({ saved: [{ id: owned.id, lot: owned, owned: true, savedAt: at(-3) }], follows: [], nowMs: NOW });
+  const rs = recommend([noBid, bidOn], t, { nowMs: NOW, tune: { rotate: 0 } });
+  assert.deepEqual(ids(rs), [bidOn.id, noBid.id]);
+  assert.ok(rs[0].score / rs[1].score < 1.08, 'a tie-breaker, under the rotation band');
+  // a clearly better tie is never overturned by a bid
+  const cut = card('1956 Topps #79 Sandy Koufax - PSA 5', 'baseball', 3000, { bidCount: 9 });
+  assert.equal(recommend([noBid, cut], t, { nowMs: NOW, tune: { rotate: 0 } })[0].lot.id, noBid.id, 'the name you own, unbid, still leads a cut tie with nine bids');
+});
+
+test('reason truth (eval §4): a perpetual calendar is a watch; a strategy guide or a trailer reel is not a Pokémon card; a group noun never claims a kind the lot is not', () => {
+  assert.equal(kindFits({ artist: 'patek-philippe', title: 'Patek Philippe, Perpetual Calendar, ca 2004.', subCat: 'wristwatches' }), true);
+  assert.equal(kindFits({ artist: 'rolex', title: 'Rolex, Oyster Perpetual Datejust, ca 1990.', subCat: 'wristwatches' }), true);
+  assert.equal(kindFits({ artist: 'pokemon', title: '1998 Pokemon: Official Strategy Guide Charizard Cover', subCat: 'pokemon-cards', drill: 'vintage' }), false);
+  assert.equal(kindFits({ artist: 'pokemon', title: 'Pokemon 3: The Movie (2000) Film, Trailer Reel Pair', subCat: 'pokemon-cards', drill: 'vintage' }), false);
+  assert.equal(kindFits({ artist: 'pokemon', title: '1997 Pokemon Japanese CoroCoro Unpeeled Promo Insert #001 Bulbasaur', subCat: 'pokemon-cards', drill: 'vintage' }), true);
+  // "Like your Michael Jordan cards" over a Type I photograph said a kind it is not
+  const mj = (title: string, bid: number) => card(title, 'basketball', bid, { playerSlug: 'michael-jordan' });
+  const desk = [mj('1986 Fleer #57 Michael Jordan Rookie - PSA 8', 5000), mj('1987 Fleer #59 Michael Jordan - PSA 9', 4000)];
+  // the build stamps the photo's entity (the pure reader files it as a collection bucket)
+  const photo = { ...mj('96 Michael Jordan Signed Type I Original Photo - Silver Signature', 4500), ek: 'pl:michael-jordan' };
+  const cardLot = mj('1988 Fleer #17 Michael Jordan - PSA 9', 4500);
+  const t = buildTaste({ saved: desk.map(l => ({ id: l.id, lot: l, savedAt: at(-3) })), follows: [], nowMs: NOW });
+  const rs = recommend([photo, cardLot], t, { nowMs: NOW });
+  const by = new Map(rs.map(r => [r.lot.id, r.reason]));
+  assert.match(by.get(cardLot.id)!, /^Like your Michael Jordan cards/);
+  assert.match(by.get(photo.id)!, /^Like your Michael Jordan pieces/, by.get(photo.id));
 });
