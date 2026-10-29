@@ -31,6 +31,7 @@ import path from 'path';
 import type { AuctionLot } from '../app/types';
 import { isOnBlock } from '../app/utils';
 import { buildTaste, recommend, recNote, type SavedInput, type RecLot } from '../app/lib/recs';
+import { playerErasOf } from '../app/lib/player-era';
 import { followOf, type Follow } from '../app/lib/follows';
 import { marketNamesOf } from '../app/lib/your-market';
 import { bucketOf } from '../app/lib/page-data';
@@ -184,6 +185,7 @@ async function main() {
   const pool = book.filter(l => isOnBlock(l, today, now)) as (AuctionLot & RecLot)[];
   const receipts = await loadServed<ReceiptsIn>('receipts.json');
   const backtest = await loadServed<BacktestIn>('backtest.json');
+  const playerEras = playerErasOf((await loadServed<{ players?: Parameters<typeof playerErasOf>[0] extends Iterable<infer P> | null | undefined ? P[] : never }>('players.json'))?.players);
   const nameIds = new Set<string>();
   for (const fs_ of Array.from(follows.values())) for (const n of marketNamesOf(fs_, [])) if (n.id) nameIds.add(n.id);
   // the owned pieces' makers too: Your collection prints each maker's latest settled hammer
@@ -213,7 +215,7 @@ async function main() {
       const mine = watches.filter(w => w.user_id === r.user_id);
       const saved: SavedInput[] = mine.map(w => ({ id: w.lot_id, lot: (live.get(baseId(w.lot_id)) as RecLot | undefined) ?? null, owned: !!w.owned, title: w.saved_title ?? null, estMid: w.est_mid ?? null }));
       const myFollows = follows.get(r.user_id) || [];
-      const taste = buildTaste({ saved, follows: myFollows, nowMs: now });
+      const taste = buildTaste({ saved, follows: myFollows, playerEras, nowMs: now });
       const picks = recommend(pool, taste, { nowMs: now, n: 12 }).map(p => ({ lot: p.lot as AuctionLot, note: recNote(p), lane: laneOf(p, whoFor(p.seed)) }));
       const mySold = mine.map(w => sold.get(baseId(w.lot_id))).filter((s): s is SoldRow => !!s);
       const pendingResults = mine.filter(w => !w.owned && !w.result_dismissed && sold.has(baseId(w.lot_id))).length;

@@ -43,6 +43,7 @@ import { sportLabelOfDrill } from '../app/lib/submarkets';
 import type { MarketAnalytics } from '../app/types';
 import { CARD_WINDOW_Y, CARD_SINGLE_Y, CARD_HL_Y, cardRecordStamp } from '../app/lib/card-record';
 import { settledScopeOf, settledCut, settledTargets, settledValueOf, gradeSettled, cohortRatios, type SettledScope } from './lib/settled-appraisal';
+import { eraFromYears, cardYear } from '../app/lib/player-era';
 
 // Build-time distribution aggregates over the FULL corpus for a market's lots,
 // so the analytics charts (Top sales, Price distribution, Sport/Category
@@ -1105,6 +1106,11 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
       for (const l of cardLots) { const y = +l.saleDate!.slice(0, 4); (byYear.get(y) || byYear.set(y, []).get(y)!).push(l.realizedUsd!); }
       const yearly = Array.from(byYear.entries()).filter(([, v]) => v.length >= 5).sort((a, b) => a[0] - b[0])
         .map(([y, v]) => ({ y, med: Math.round(median(v)), n: v.length }));
+      // (pass 8) the player's CAREER ERA: the 10th–90th percentile of the card
+      // years of their sold cards, every lot one sample (a lone 1952 reprint
+      // never stretches a modern player), from ≥5 dated lots — the recommender
+      // gates the player rung on it when a save carries no year (app/lib/player-era)
+      const era = eraFromYears(cardLots.map(l => cardYear(l._card?.year)).filter((y): y is number => y != null));
       // the marquee object results (top game-used/trophy/ticket hammers — the
       // wider market). Oct 10: never a card — by TITLE (app/lib/player-rows:
       // card-shaped "autographs"/graded rows) or by clean category — and every
@@ -1126,7 +1132,7 @@ async function runMarketEngine(opts: MarketBuildOpts): Promise<AuctionLot[]> {
       // the record across EVERY category (a card included), with its scope
       const recLot = ls.reduce<PLot | null>((b, l) => (!b || l.realizedUsd! > b.realizedUsd! ? l : b), null);
       const record = recLot ? { id: recLot.id, d: recLot.saleDate, p: Math.round(recLot.realizedUsd!), t: (recLot.title || '').slice(0, 80), cat: recLot.artist, img: recLot.imageUrl || null } : null;
-      playersOut.push({ slug, name, sport, n: ls.length, cats, yearly, objects, record, recent });
+      playersOut.push({ slug, name, sport, n: ls.length, cats, yearly, objects, record, recent, ...(era ? { era } : {}) });
     }
     playersOut.sort((a, b) => (b.n as number) - (a.n as number));
     if (!opts.evalOnly) {
