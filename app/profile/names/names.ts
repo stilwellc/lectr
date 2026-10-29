@@ -265,7 +265,8 @@ export function pulseOf(s: EntitySummary | null, sparkQ?: string[] | null): Puls
     sparkBasis: s.sparkBasis ?? null,
     sparkYoyOff: s.sparkYoyOff ?? null,
     sparkQ: sparkQ ?? null,
-    yoy: s.yoy ?? null,
+    // a year-over-year read needs two sales to compare — a name with one has none, whatever the build stamped
+    yoy: s.yoy && s.yoy.n >= 2 ? s.yoy : null,
     record: s.record ? { p: s.record.p, d: s.record.d } : null,
     sold: s.sold,
   };

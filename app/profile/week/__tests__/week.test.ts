@@ -28,7 +28,7 @@ import type { AuctionLot } from '../../../types';
 import type { Follow } from '../../../lib/follows';
 import {
   planWeek, closingNowOf, watchRows, markConflicts, localDayOf, addDays, dayKeysOf, dayOffsetOf, dayWords, offsetWord,
-  countdownText, velocityText, bidsText, estMidOf, weekNamesOf, byClose, viewOf, pickDefault, ownedWords,
+  countdownText, velocityText, bidsText, estMidOf, weekNamesOf, byClose, viewOf, pickDefault, weekLeadOf, ownedWords,
   WEEK_DAYS, CONFLICT_MS, CLOSING_NOW_MS, type WeekRow,
 } from '../week';
 
@@ -274,4 +274,12 @@ test('pickDefault: the device’s memory wins; with no memory, picks show only w
   assert.equal(pickDefault({ watches: 0 }, null), true, 'nothing else of yours: the picks are the week');
   assert.equal(pickDefault({ watches: 3 }, true), true);
   assert.equal(pickDefault({ watches: 0 }, false), false, 'a remembered hide holds even then (the toggle stays to undo it)');
+});
+
+test('weekLeadOf (pass 13): the tab counts what the room lists — yours while picks show, watches alone while hidden', () => {
+  const p = plan({ saved: [lot({ id: 'w', closeMs: NOW + 5 * H })], recs: [{ lot: lot({ id: 'p', closeMs: NOW + 6 * H }) }] });
+  assert.equal(p.yours, 2); assert.equal(p.watches, 1);
+  assert.equal(weekLeadOf(p, true), 2);
+  assert.equal(weekLeadOf(p, false), 1);
+  assert.equal(weekLeadOf(viewOf(p, { picks: false }), false), 1);
 });
