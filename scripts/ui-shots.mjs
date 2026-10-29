@@ -41,6 +41,19 @@
  * A MISSING BASELINE IS A FAILURE (it used to silently seed itself, so six
  * new routes were never compared). Only --approve writes baselines.
  *
+ * THE DESK FRAME (Oct 29 2026, pass 8): /profile on a POPULATED desk —
+ * profile-desk-{desktop,mobile}-{light,dark}. The plain /profile frame is
+ * the signed-out desk; the rooms on DeskRow (Watching, Today, the week,
+ * History, Names, Budget…) only exist with saves. Before navigation the
+ * rig seeds localStorage (`ray-saved-lots`, `lectr-follows`, `lectr-picks`)
+ * with ids DERIVED AT RUNTIME from the served payload (resolveDeskSeed:
+ * eight upcoming lots with photos across three or more houses, closing
+ * after SHOT_NOW, soonest first; six sold ids from the served sold ledger;
+ * follows from the picked lots' makers) — so the frame is deterministic
+ * for the pinned fixture and survives a re-pin without a hand-kept id
+ * list. SHOT_NOW (the workflow sets it an hour after the fixture's crawl)
+ * is the desk's clock: closes read live, "saved 10 days ago" is fixed.
+ *
  * Re-baselining (CI renders with Linux fonts — never approve from a Mac):
  *   gh workflow run ui-shots.yml -f approve=true
  *   gh run download <run-id> -n ui-baseline -D tests/ui-baseline
@@ -84,19 +97,78 @@ async function resolveLotId() {
   }
 }
 
+/** THE DESK SEED — what a populated /profile needs in localStorage, read from
+    the payload the rig is pointed at (never a hand-kept list of ids) */
+const DESK_ROUTE = '/profile?desk=1';   // the query is the rig's marker only; the page ignores it
+const DAY = 864e5;
+async function resolveDeskSeed() {
+  const now = SHOT_NOW ? SHOT_NOW.getTime() : Date.now();
+  const json = async (p) => { const r = await fetch(`${BASE}${p}`); if (!r.ok) throw new Error(`${p} ${r.status}`); return r.json(); };
+  try {
+    const up = await json('/data/ray/upcoming.json');
+    const lots = (up?.lots || []).filter(l => l && typeof l.id === 'string' && l.imageUrl && l.saleDate && Date.parse(`${l.saleDate}T23:59:59Z`) > now && l.status === 'upcoming');
+    // soonest first; then round-robin across houses so three or more houses are on the desk
+    lots.sort((a, b) => Date.parse(a.saleDateTime || `${a.saleDate}T23:59:59Z`) - Date.parse(b.saleDateTime || `${b.saleDate}T23:59:59Z`));
+    const byHouse = new Map();
+    for (const l of lots) { if (!byHouse.has(l.auctionHouse)) byHouse.set(l.auctionHouse, []); byHouse.get(l.auctionHouse).push(l); }
+    const houses = [...byHouse.keys()];
+    const live = [];
+    for (let i = 0; live.length < 8 && houses.length; i++) {
+      const q = byHouse.get(houses[i % houses.length]);
+      const l = q?.shift();
+      if (l) live.push(l);
+      if (houses.every(h => !byHouse.get(h).length)) break;
+    }
+    // six settled ids: the payload's own recentSold (titled, priced, per market — the
+    // most recent sales first); else the served sold ledger's first shard (id → [price, day])
+    let sold = [];
+    const rs = up?.recentSold;
+    const recent = rs && typeof rs === 'object' ? Object.values(rs).flat().filter(l => l && typeof l.id === 'string' && l.priceUsd > 0 && l.saleDate) : [];
+    if (recent.length) {
+      sold = recent.sort((a, b) => String(b.saleDate).localeCompare(String(a.saleDate))).slice(0, 6)
+        .map(l => ({ id: l.id, price: l.priceUsd, day: l.saleDate, title: l.title || null, artist: l.artist || null }));
+    } else {
+      try {
+        const led = await json('/data/ray/sold-ledger-0.json');
+        sold = Object.entries(led).filter(([id, v]) => typeof id === 'string' && Array.isArray(v) && v[0] > 0 && typeof v[1] === 'string')
+          .sort((a, b) => b[1][1].localeCompare(a[1][1])).slice(0, 6).map(([id, v]) => ({ id, price: v[0], day: v[1], title: null, artist: null }));
+      } catch (err) { console.log(`[shots] desk seed: no sold ledger (${String(err).slice(0, 80)}) — settled rooms stay empty`); }
+    }
+    const makers = [...new Set(live.map(l => l.playerSlug || l.artist).filter(Boolean))].slice(0, 2);
+    const savedAt = new Date(now - 10 * DAY).toISOString();
+    const seed = {
+      saves: [
+        ...live.map((l, n) => ({ id: l.id, savedAt, estMid: null, signalPct: null, bidCount: null, maxUsd: n === 1 ? 900 : null })),
+        ...sold.map((s, n) => ({ id: s.id, savedAt: new Date(now - 30 * DAY).toISOString(), estMid: null, signalPct: null, bidCount: null, title: s.title, artist: s.artist, owned: n === 0 })),
+      ],
+      follows: [...makers.map(k => ({ kind: 'maker', key: k, label: k.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) })), { kind: 'cat', key: 'art', label: 'Art' }],
+      // the pick log: two of the sold lots as picks shown a week ago — How your picks did renders
+      picks: { v: 1, picks: sold.slice(0, 2).map((s, n) => ({ id: s.id, t0: now - 9 * DAY, t: now - 7 * DAY, d: 2, r: n + 1, s: 'p', k: 'follow', lot: { title: s.title || `Settled lot ${n + 1}`, artist: s.artist || '', saleDate: s.day }, v: null, est: [Math.round(s.price * 0.7), Math.round(s.price * 1.1)] })) },
+    };
+    console.log(`[shots] desk seed: ${live.length} live (${[...new Set(live.map(l => l.auctionHouse))].join(', ')}) · ${sold.length} settled · follows ${seed.follows.map(f => f.label).join(', ')}`);
+    return live.length ? seed : null;
+  } catch (err) {
+    console.log(`[shots] desk seed failed (${String(err).slice(0, 120)}) — the desk frame is skipped`);
+    return null;
+  }
+}
+
 const lotId = await resolveLotId();
+const deskSeed = await resolveDeskSeed();
 // SHOT_ROUTES=/,/value — capture only these (a quick local check); default = all
 const ONLY = (process.env.SHOT_ROUTES || '').split(',').map(s => s.trim()).filter(Boolean);
 const ALL_ROUTES = [
   '/', '/value', '/analytics', '/makers', '/blog', '/about', '/styleguide',
   '/receipts', '/profile',
+  ...(deskSeed ? [DESK_ROUTE] : []),
   '/player?id=michael-jordan',
   '/ref/rolex/1002',
   '/sub/tcg/pokemon-cards',
   ...(lotId ? [`/lot/${lotId}`] : []),
 ];
-const ROUTES = ONLY.length ? ALL_ROUTES.filter(r => ONLY.includes(r) || (r.startsWith('/lot/') && ONLY.includes('/lot'))) : ALL_ROUTES;
+const ROUTES = ONLY.length ? ALL_ROUTES.filter(r => ONLY.includes(r) || (r.startsWith('/lot/') && ONLY.includes('/lot')) || (r === DESK_ROUTE && ONLY.includes('/profile-desk'))) : ALL_ROUTES;
 if (!lotId) console.log('[shots] no flagged lot resolved — /lot frame skipped (set LOT_ID to pin one)');
+if (!deskSeed) console.log('[shots] no desk seed resolved — the profile-desk frame is skipped (a missing baseline fails the run)');
 const VIEWPORTS = [
   { name: 'desktop', width: 1440, height: 900 },
   { name: 'mobile', width: 390, height: 844 },
@@ -119,6 +191,7 @@ fs.mkdirSync(BASELINE, { recursive: true });
 // routes keep their id ('player-michael-jordan'), nested paths join with '-'
 const slug = r => {
   if (r === '/') return 'home';
+  if (r === DESK_ROUTE) return 'profile-desk';
   if (r.startsWith('/lot/')) return 'lot';
   return r.replace(/^\//, '').replace(/\?id=/, '-').replace(/\//g, '-').replace(/[^a-z0-9-]/gi, '');
 };
@@ -177,6 +250,16 @@ for (const vp of VIEWPORTS) {
     for (const route of ROUTES) {
       const name = `${slug(route)}-${vp.name}-${mode.name}.png`;
       const ctx = await freshContext(vp);
+      // the populated desk: its saves, follows and pick log land in localStorage before the page runs
+      if (route === DESK_ROUTE && deskSeed) {
+        await ctx.addInitScript((seed) => {
+          try {
+            localStorage.setItem('ray-saved-lots', JSON.stringify(seed.saves));
+            localStorage.setItem('lectr-follows', JSON.stringify(seed.follows));
+            localStorage.setItem('lectr-picks', JSON.stringify(seed.picks));
+          } catch { /* storage blocked: the frame renders signed-out and the diff says so */ }
+        }, deskSeed);
+      }
       const page = await ctx.newPage();
       try {
         const sep = route.includes('?') ? '&' : '?';
