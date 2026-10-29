@@ -292,9 +292,9 @@ function DeskBody() {
   // the ids a jump may name inside a room (the room, its anchors)
   const idsOf = (ids: string[]) => ids.concat(Object.entries(SUB_ANCHORS).filter(([, room]) => ids.includes(room)).map(([a]) => a));
   const always = sections.filter(s => EVERY_TAB.has(s.id));
-  let band = 0;
-  const bands: React.ReactNode[] = [];
+  // pass 1: one column per group (its fold, its bar item), in the order the desk reads
   const barItems: BarItem[] = [];
+  const cols: { g: DeskTab; room: string; node: React.ReactNode }[] = [];
   for (const g of GROUP_ORDER) {
     const order = TAB_ORDER[g];
     const rooms = sections.filter(s => s.tab === g && !EVERY_TAB.has(s.id) && !MORE.has(s.id))
@@ -303,15 +303,31 @@ function DeskBody() {
     const item = groups.find(t => t.id === g);
     const ids = idsOf(rooms.map(r => r.id));
     const inner = rooms.map(s => { const C = s.Component!; return <C key={s.id} desk={desk} act={act} narrow={narrow} />; });
-    const tone = rooms.some(s => s.id === 'collection') ? 'ink' : band++ % 2 ? 'b' : 'a';
     barItems.push({ id: g, label: item?.label ?? rooms[0].label, count: item?.count, tone: item?.tone, target: rooms[0].id });
-    bands.push(
-      <div key={g} className="dt-band" data-tone={tone} data-room={rooms[0].id} data-group={g}>
-        {g === 'today'
-          ? inner
-          : <Clamp ids={ids} label={item?.label ?? rooms[0].label} count={item?.count}>{inner}</Clamp>}
-      </div>,
-    );
+    cols.push({ g, room: rooms[0].id, node: g === 'today' ? inner : <Clamp ids={ids} label={item?.label ?? rooms[0].label} count={item?.count}>{inner}</Clamp> });
+  }
+  // pass 2: the bands. Record + Collection read side by side at ≥ 900px (one
+  // band, two columns — "how am I doing" in one glance), stacked on a phone;
+  // each keeps its own fold and its own bar item. Alone, either is a band.
+  let band = 0;
+  const bands: React.ReactNode[] = [];
+  const PAIR: readonly DeskTab[] = ['record', 'owned'];
+  const paired = cols.filter(c => PAIR.includes(c.g));
+  for (const c of cols) {
+    if (paired.length === 2 && PAIR.includes(c.g)) {
+      if (c.g !== paired[0].g) continue;   // the second joins the first's band
+      const tone = band++ % 2 ? 'b' : 'a';
+      bands.push(
+        <div key="pair" className="dt-band dt-pair" data-tone={tone} data-pair>
+          {paired.map(p => (
+            <div key={p.g} className="dt-pair-col" data-tone={p.g === 'owned' ? 'ink' : undefined} data-room={p.room} data-group={p.g}>{p.node}</div>
+          ))}
+        </div>,
+      );
+      continue;
+    }
+    const tone = c.g === 'owned' ? 'ink' : band++ % 2 ? 'b' : 'a';
+    bands.push(<div key={c.g} className="dt-band" data-tone={tone} data-room={c.room} data-group={c.g}>{c.node}</div>);
   }
   const more = sections.filter(s => MORE.has(s.id));
   if (more.length > 0) barItems.push({ id: MORE_ID, label: 'More', count: more.length, target: MORE_ID });

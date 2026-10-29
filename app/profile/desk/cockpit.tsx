@@ -78,25 +78,30 @@ function Cell({ k, v, note, body, href, tone, tap, children }: {
     : <div className="ck-ccell">{inner}</div>;
 }
 
-/** the lot line a Next-hammer cell prints: who · title, the estimate / house under it */
-function LotLine({ lot, phone = false }: { lot: AuctionLot; phone?: boolean }) {
+/** the lot line a Next-hammer cell prints: who · title, the estimate / house under it.
+ *  (Oct 29) on a desk the line is the cell's one block — a 40px photo, the
+ *  title on one line, the estimate · house on one line — so the cell stands
+ *  as tall as its neighbours; `tip` (the scope words) rides in the title's
+ *  tooltip, never dropped */
+function LotLine({ lot, phone = false, tip }: { lot: AuctionLot; phone?: boolean; tip?: string }) {
   const who = displayMakerOf(lot)?.name ?? null;
   const est = formatEstimate(lot);
   const sub = [est, lot.auctionHouse].filter(Boolean).join(' · ');
+  const title = `${who ? `${who} · ` : ''}${craftTitle(lot.title, lot.auctionHouse)}`;
   // a phone prints the FIGURE first and lets the title take two lines — a
   // single ellipsized line cut the estimate, not the noise (R2 f)
   // the lot's photo leads its lines (the command center shows what it counts down to)
-  const ph = <Thumb src={lot.imageUrl} label={lot.title} size={phone ? 48 : 52} />;
+  const ph = <Thumb src={lot.imageUrl} label={lot.title} size={phone ? 48 : 40} />;
   return phone ? (
     <span className="ck-lotline ck-ph" style={{ '--ph': '48px' } as React.CSSProperties}>
       {ph}
       {sub && <span className="ck-ccell-sub">{sub}</span>}
-      <span className="ck-ccell-lot">{who && <>{who} · </>}{craftTitle(lot.title, lot.auctionHouse)}</span>
+      <span className="ck-ccell-lot">{title}</span>
     </span>
   ) : (
-    <span className="ck-lotline ck-ph" style={{ '--ph': '52px' } as React.CSSProperties}>
+    <span className="ck-lotline ck-ph" style={{ '--ph': '40px' } as React.CSSProperties} title={[title, sub, tip].filter(Boolean).join(' — ')}>
       {ph}
-      <span className="ck-ccell-lot">{who && <>{who} · </>}{craftTitle(lot.title, lot.auctionHouse)}</span>
+      <span className="ck-ccell-lot">{title}</span>
       {sub && <span className="ck-ccell-sub">{sub}</span>}
     </span>
   );
@@ -233,11 +238,15 @@ export default function Cockpit() {
             note={next
               ? <>{nextKind && nextKind !== 'watch' ? KIND_WORD[nextKind] : 'your watch'}{!(nextDays === 0 && next.saleDateTime) && next.saleDateTime ? <span className="ck-ccell-clock"><CloseClock iso={next.saleDateTime} windowHours={48} /></span> : null}</>
               : null}
+            // (Oct 29) the scope line prints only when the lot is NOT the reader's
+            // own next watched hammer (a pick, a name's sale); for a watch it rides
+            // in the lot line's tooltip with what else closes tonight — the cell
+            // keeps the others' height and no fact is dropped (Today prints tonight)
             body={next
               ? <>
-                  <LotLine lot={next} />
-                  {(scopeLine || nextKind !== 'watch') && (
-                    <span className="ck-ccell-scope">{nextKind === 'watch' ? 'your next watched hammer' : nextKind === 'pick' ? 'nothing watched — your soonest pick' : 'nothing watched — the soonest sale of one of your names'}{scopeLine}</span>
+                  <LotLine lot={next} tip={nextKind === 'watch' ? `your next watched hammer${scopeLine}` : undefined} />
+                  {nextKind !== 'watch' && (
+                    <span className="ck-ccell-scope">{nextKind === 'pick' ? 'nothing watched — your soonest pick' : 'nothing watched — the soonest sale of one of your names'}{scopeLine}</span>
                   )}
                 </>
               : 'No watch is on a hammer clock right now.'}

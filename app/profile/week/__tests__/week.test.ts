@@ -258,6 +258,11 @@ test('the view: picks hidden cuts the pick rows and re-reads each day; the plan 
   assert.equal(d1.rows.length, 2); assert.equal(d1.yours, 1); assert.equal(d1.estTotal, 15_000); assert.equal(d1.priced, 1); assert.equal(d1.names, 1);
   const d3 = v.days.find(d => d.day === localDayOf(NOW + 3 * 24 * H))!;
   assert.equal(d3.rows.length, 0, 'a day that held only a pick is empty in the view'); assert.equal(d3.yours, 0); assert.equal(d3.estTotal, 0);
+  // (Oct 29) the day keeps the count of what the view cut, so the card can say
+  // "1 pick · hidden" instead of "Nothing of yours" under a strip bar that drew it
+  assert.equal(d3.hidden, 1, 'the day knows its hidden pick'); assert.equal(d1.hidden, 1);
+  assert.ok(full.days.every(d => d.hidden === 0), 'the plan itself hides nothing');
+  assert.ok(viewOf(full, { picks: true }).days.every(d => d.hidden === 0));
   assert.equal(v.first?.lot.id, 'w1');
   assert.equal(v.days.length, WEEK_DAYS);
   // the day caps are the day column's (PICK_ROWS_OPEN / NAME_ROWS_OPEN) — the view never changes them
