@@ -103,6 +103,17 @@
  * and space asks the same (an era or a shared facet); art, design and
  * watches keep theirs, where same sub at your price is the tie law.
  *
+ * (Oct 29, pass 3) PRICE HOLDS WITHOUT A BAND: a desk too small for a
+ * learned band (< BAND_MIN saves in a category), or whose band is too wide
+ * to mean anything, still has a SPAN — the prices it owns and saves — and a
+ * lot far outside it sinks on the band's own kernel (a $178K Venusaur was
+ * seat 5 of a $2.8K Pokémon desk; a $300K Babe Ruth bat sat on a $500–3K
+ * desk). A bare category follow leans to the category's own live price
+ * level (a Prints follower led with $150K grails). A lot with no price yet
+ * cannot lead on price it does not have (×0.8). The sport cut (lotSim): a
+ * single of the same sport and sub near one save's price is a tie of its
+ * own, so a one-card hockey desk gets hockey.
+ *
  * (W28, Oct 11) A REASON MUST BE TRUE, checked by recs-eval §4 over 22
  * personas: "Like your X prints" groups the desk's X's of the same MEDIUM (a
  * Polaroid set filed under Prints is a photograph) under the name the desk's
@@ -636,6 +647,8 @@ const BAND_S_MIN = 0.2;      // decades — no band narrower than ×1.6 each way
 const BAND_S_MAX = 0.8;
 const BAND_SIGMA = 0.35;     // decades past the band edge → fit falls off on this kernel
 const BAND_FLOOR = 0.45;     // a lot far outside the band keeps this much (soft, not a filter)
+const SPAN_GRACE = 0.3;      // decades past the desk's span before the kernel bites (×2 each way)
+const UNPRICED = 0.8;        // a lot with no price yet, against one that has
 
 const medianOf = (xs: number[]) => { const a = xs.slice().sort((x, y) => x - y); const m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
 
@@ -772,14 +785,21 @@ export function lotSim(c: Feat, s: Feat, entityTie = REC_TUNE.entityTie): SimPar
   // "rookie" does not tie a 1962 Fleer to a 2026 SuperFractor
   const eraA = eraOf(c.fx), eraB = eraOf(s.fx);
   const eraClash = !!eraA && !!eraB && eraA !== eraB;
-  if (eraClash) v *= 0.75;
   // a facet tie needs the same sport when either side names one (an
   // unlabeled 1973 Panini sticker pack is no answer to a Topps baseball save)
   const sameSport = c.sport === s.sport;
   const facetTie = out.sub && FACET_TIE_CATS.has(c.cat) && !eraClash && sameSport && priceOk(0.3)
     && (out.shared.length > 0 || (CARD_CATS.has(c.cat) && c.fx.has('graded') && s.fx.has('graded') && out.price != null && out.price >= 0.5));
   const strong = out.entity || out.card || out.franchise || (out.drill && out.sub) || facetTie;
-  out.weak = !strong && out.sub && PRICE_LINK_CATS.has(c.cat) && out.price != null && out.price >= 0.6;
+  // (Oct 29, pass 3) THE SPORT CUT: a single of the same SPORT and sub near
+  // the seed's price (within ~×2.5) is a tie of its own in cards — a Pokémon
+  // single of the same sub (its era) likewise. A one-card hockey desk dealt
+  // one pick: every other hockey single on the block was another era or
+  // another grader. It spans eras (no era clash), it is weak (its reason
+  // says only the cut), and the kind gate still asks for a card.
+  const sportTie = !strong && out.sub && CARD_CATS.has(c.cat) && (c.cat === 'tcg' || (!!c.sport && c.sport === s.sport)) && out.price != null && out.price >= 0.5;
+  if (sportTie) v += 0.1; else if (eraClash) v *= 0.75;
+  out.weak = !strong && ((out.sub && PRICE_LINK_CATS.has(c.cat) && out.price != null && out.price >= 0.6) || sportTie);
   out.sim = strong ? Math.min(1, v) : out.weak ? Math.min(1, v) * 0.75 : 0;
   return out;
 }
@@ -1421,7 +1441,36 @@ function scoreCore<L extends RecLot>(pool: readonly L[], taste: Taste, opts: Rec
   for (const s of followOn) if (s.follow!.kind === 'cat') seedCats.add(s.follow!.key.split(':')[0]);
   const houses = new Set(followOn.filter(s => s.follow!.kind === 'house').map(s => s.follow!.key));
 
-  /** quality × window × the reader's band (learned, else stated) × "Not for me" */
+  // (pass 3) THE DESK'S SPAN per category — what the reader owns and saves,
+  // for the categories with no band to learn (or one too wide to mean
+  // anything); a lot far outside it sinks on the band's own kernel
+  const span = new Map<CatKey, { lo: number; hi: number }>();
+  for (const s of lotSeeds) {
+    if ((s.kind !== 'owned' && s.kind !== 'saved') || s.f!.logA == null) continue;
+    const x = span.get(s.f!.cat);
+    if (!x) span.set(s.f!.cat, { lo: s.f!.logA, hi: s.f!.logA }); else { x.lo = Math.min(x.lo, s.f!.logA); x.hi = Math.max(x.hi, s.f!.logA); }
+  }
+  const spanFit = (f: Feat, band: PriceBand | null): number => {
+    if (taste.stated || f.logA == null) return 1;
+    if (band && Math.pow(10, band.hi - band.lo) <= BAND_SAY_MAX) return 1;
+    const x = span.get(f.cat);
+    if (!x) return 1;
+    const d = f.logA < x.lo - SPAN_GRACE ? x.lo - SPAN_GRACE - f.logA : f.logA > x.hi + SPAN_GRACE ? f.logA - x.hi - SPAN_GRACE : 0;
+    return d ? Math.max(BAND_FLOOR, Math.exp(-(d * d) / (2 * BAND_SIGMA * BAND_SIGMA))) : 1;
+  };
+  // (pass 3) a category's live price level, for a bare category follow with
+  // nothing else to read (median log price of its open lots; lazily)
+  const catLevel = new Map<CatKey, number | null>();
+  const catLevelOf = (cat: CatKey): number | null => {
+    if (catLevel.has(cat)) return catLevel.get(cat)!;
+    const xs: number[] = [];
+    for (const o of open) if (o.cat === cat) { const a = (o.f ?? featOf(o.l, nowMs)).logA; if (a != null) xs.push(a); }
+    const m = xs.length >= 10 ? medianOf(xs) : null;
+    catLevel.set(cat, m);
+    return m;
+  };
+
+  /** quality × window × the reader's band (learned, else stated; else the desk's span) × "Not for me" */
   const finish = (l: L, f: Feat, tasteV: number, close: number | null) => {
     const pr = priorityOf(l, nowMs);
     const q = pr ? pr.score / 100 : 0.1;
@@ -1442,7 +1491,9 @@ function scoreCore<L extends RecLot>(pool: readonly L[], taste: Taste, opts: Rec
     // sports memorabilia — never a second lift where it does), and a lot with
     // no photo is half a pick — the owner's list led with letter tiles
     const lift = (flagged && !EDGE_CATS.has(f.cat) ? 1.2 : 1) * (imageOf(l as Pick<AuctionLot, 'id' | 'imageUrl'>) ? 1 : 0.5);
-    const score = tasteV * (T.qBase + (1 - T.qBase) * q) * windowFactor(close, nowMs) * band.fit * said.fit * quiet * lift;
+    // (pass 3) no price yet: it cannot lead on a price it does not have
+    const placed = f.logA == null ? UNPRICED : 1;
+    const score = tasteV * (T.qBase + (1 - T.qBase) * q) * windowFactor(close, nowMs) * band.fit * said.fit * spanFit(f, band.band) * placed * quiet * lift;
     return { score, flagged, inBand: band.inside, inStated: said.inside, out: statedSide(f.logA, taste.stated) ?? undefined };
   };
 
@@ -1482,6 +1533,12 @@ function scoreCore<L extends RecLot>(pool: readonly L[], taste: Taste, opts: Rec
         // a broad follow reads through the names the reader keeps there
         const as = anchorsByCat.get(f.cat);
         if (as?.length) { let b = 0; for (const a of as) b = Math.max(b, anchorFit(f, a)); v *= 0.45 + 0.55 * b; }
+        else if (fo.kind === 'cat' && !taste.stated && !taste.bands.has(f.cat)) {
+          // (pass 3) nothing to read it through: lean to the category's own
+          // live level, so a bare Prints follow is not led by its grails
+          const m = catLevelOf(f.cat);
+          if (m != null) v *= f.logA == null ? 0.85 : 0.6 + 0.4 * Math.exp(-((f.logA - m) ** 2) / (2 * 0.6 * 0.6));
+        }
       } else if (!taste.stated && !taste.bands.has(f.cat)) {
         // a followed name with no band to read leans to its own price level
         const m = anchorLogA.get(s);
@@ -1562,7 +1619,10 @@ function scoreCore<L extends RecLot>(pool: readonly L[], taste: Taste, opts: Rec
       if (!best) continue;
       const band = bandFit(f, taste.bands);
       const said = statedFit(f.logA, taste.stated);
-      const priced = band.band ? band.inside : taste.stated ? said.inside : best.logA != null && Math.abs(f.logA - best.logA) <= CUT_PRICE_SPAN;
+      // a band too wide to print holds nothing: the cut's own level gates then
+      // (a $100K print was "near your saves' prices" on a $7K–40K desk)
+      const bandSays = !!band.band && Math.pow(10, band.band.hi - band.band.lo) <= BAND_SAY_MAX;
+      const priced = bandSays ? band.inside : taste.stated ? said.inside : best.logA != null && Math.abs(f.logA - best.logA) <= CUT_PRICE_SPAN;
       if (!priced) continue;
       const pr = priorityOf(l, nowMs);
       const q = pr ? pr.score / 100 : 0.1;
@@ -2187,7 +2247,8 @@ function cutReason(f: Feat, p: SimParts, lotSeeds: Seed[]): string | null {
     const lo = Math.min(...prices), hi = Math.max(...prices), a = Math.pow(10, f.logA);
     if (hi / lo <= BAND_SAY_MAX) band = bandSuffix(a, lo, hi);
   }
-  if (p.weak) return `More ${noun} in your range${band}`;
+  // one priced save is a price, not a range
+  if (p.weak) return prices.length >= 2 ? `More ${noun} in your range${band}` : `More ${noun} near your save’s price`;
   if (!words.length) return null;
   return `More ${words.join(' ')} ${noun} like yours${band}`;
 }

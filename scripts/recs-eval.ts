@@ -602,7 +602,7 @@ async function main() {
       const cats = new Set([...desk.map(d => T(d).cat), ...follows.map(f => f.key.split(':')[0])]);
       return kindFits(l) && (cats.has(T(l).cat) || desk.length === 0) ? '' : 'rung outside the anchor’s category';
     }
-    if ((m = r.match(/^More (.+?) (cards|prints|works|watches|pieces|ceramics|sculpture|Pokémon cards)(?: like yours| in your range)/))) {
+    if ((m = r.match(/^More (.+?) (cards|prints|works|watches|pieces|ceramics|sculpture|Pokémon cards)(?: like yours| in your range| near your save’s price)/))) {
       if (!kindFits(l)) return `not the kind of object (${mediumOf(l)})`;
       if (m[2] === 'prints' && mediumOf(l) !== 'fine-art:prints') return `not a print (${mediumOf(l)})`;
       for (const w of m[1].toLowerCase().split(' ')) {

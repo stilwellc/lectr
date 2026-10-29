@@ -12,6 +12,8 @@ import assert from 'node:assert/strict';
 import { buildTaste, recommend, discoverLots, scoreLots, featOf, rotationOf, ENGINE_NOTE, DISCOVER_DAYS, type RecLot } from '../recs';
 import { readSignals, recordSignal, signalsToTaste, VIEWED_DAYS, type KV } from '../recs-signals';
 import { reasonKindOf } from '../pick-log';
+import { kindFits } from '../object-kind';
+import { catFollow } from '../follows';
 
 // local noon: a day's rotation reads the reader's calendar
 const NOW = new Date(2026, 9, 12, 12, 0, 0).getTime();
@@ -103,8 +105,11 @@ test('discover: never a lot a real tie already reaches, never one "Not for me" q
   const t = buildTaste({ saved: [{ id: zion.id, lot: zion }], follows: [], nowMs: NOW });
   const disc = discoverLots([zion, ja, rawNoYear, football], t, { nowMs: NOW });
   assert.ok(!rids(disc).includes(ja.id), 'a same-era PSA rookie is a real tie (the cut tie), not a discovery');
-  assert.deepEqual(rids(disc), [rawNoYear.id], 'a raw, undated single of the same sport at the price is the lane’s');
-  assert.ok(!rids(disc).includes(football.id), 'sports never cross');
+  // (pass 3) a raw, undated single of the same sport at the price is the SPORT CUT's — a real tie now, not the lane's
+  assert.deepEqual(rids(disc), [], 'the sport cut reaches the raw single; nothing is left for the lane');
+  const raw = recommend([zion, ja, rawNoYear, football], t, { nowMs: NOW }).find(r => r.lot.id === rawNoYear.id)!;
+  assert.match(raw.reason, /^More basketball cards near your save’s price/);
+  assert.ok(!ids(recommend([zion, ja, rawNoYear, football], t, { nowMs: NOW })).includes(football.id), 'sports never cross');
   const quiet = buildTaste({ saved: [{ id: zion.id, lot: zion }], follows: [], negative: { lots: [rawNoYear], ids: [] }, nowMs: NOW });
   const key = Array.from(quiet.down!.keys()).find(k => k.startsWith('cut:'));
   assert.ok(key, 'a nameless pass quiets its cut');
@@ -220,10 +225,13 @@ test('ladder: the price-only rung in cards needs an era too — a 2021 raw card 
   const vintage = card('1958 Topps #47 Hank Aaron', 'baseball', 4500, { imageUrl: null });
   const t = buildTaste({ saved: [{ id: seed.id, lot: seed, savedAt: at(-3) }], follows: [], nowMs: NOW });
   const rows = scoreLots([seed, modern, vintage], t, { nowMs: NOW });
-  assert.ok(!rows.some(r => r.l.id === modern.id), 'no rung reaches it');
+  assert.ok(!rows.some(r => r.l.id === modern.id && r.best.ladder), 'no rung reaches it');
+  // (pass 3) the SPORT CUT reaches it as a weak real tie — last, and saying only the cut
   const rs = recommend([seed, modern, vintage], t, { nowMs: NOW, n: 12 });
-  assert.deepEqual(ids(rs), [vintage.id]);
+  assert.deepEqual(ids(rs), [vintage.id, modern.id]);
   assert.match(rs[0].reason, /^More vintage baseball cards like yours/);
+  assert.equal(rs[1].reason, 'More baseball cards near your save’s price');
+  assert.ok(!/at your save/.test(rs[1].reason), 'never the ladder’s price-level claim');
 });
 
 test('discover: a cut with a sport asks for that sport — a card the taxonomy cannot place is not "baseball cards"', () => {
@@ -233,4 +241,79 @@ test('discover: a cut with a sport asks for that sport — a card the taxonomy c
   const f = featOf(nowhere, NOW);
   if (f.sport == null) assert.ok(!rids(discoverLots([seed, nowhere], t, { nowMs: NOW })).includes(nowhere.id), 'no sport read: not the baseball cut’s');
   else assert.ok(f.sport !== 'baseball');
+});
+
+/* ── pass 3: the kind gate, the sport cut ─────────────────────────────── */
+
+test('object kind: a Type I photo, a replica jersey or a painted shikishi under a card sub is not a card; the parallels named after them are', () => {
+  const c = (title: string, drill = 'baseball', artist = 'sports-cards', subCat = 'cards') => ({ artist, title, subCat, drill });
+  assert.equal(kindFits(c('Roy Campanella Original Type I News Service Photo by I.N.P. - As Seen on His 1952 Topps Card')), false);
+  assert.equal(kindFits(c('1957 Jim Brown Rookie Card-Used Type I Original Photo by Noted Photographer Henry Barr', 'football')), false);
+  assert.equal(kindFits(c('96 Michael Jordan Signed Type I Original Photo - Stunning Silver Signature', 'basketball')), false);
+  assert.equal(kindFits(c('2024 Caitlin Clark Signed & Inscribed Iowa Hawkeyes Final Four Replica Jersey (#17/122) - Panini', 'basketball')), false);
+  assert.equal(kindFits(c('Mitsuhiro Arita Painted, Signed Charizard Shikishi - Ink, Marker on Washi Paper Art Board', 'modern', 'pokemon', 'pokemon-cards')), false);
+  assert.equal(kindFits(c('1989 Topps Secondary Offering Poster')), false);
+  // cards named after the things they are not
+  assert.equal(kindFits(c('1948 Topps Magic Photo #6K Babe Ruth (HOF) - PSA VG-EX 4')), true);
+  assert.equal(kindFits(c('2020 Panini Contenders Rookie Ticket Autographs Gold #RRT-TTA Tua Tagovailoa - PSA 10', 'football')), true);
+  assert.equal(kindFits(c('2018 Panini Flawless #1 Tom Brady (#12/15) Jersey Number Card - BGS GEM MINT 9.5', 'football')), true);
+  assert.equal(kindFits(c('00 Upper Deck Game Jersey #GJ37 Grant Hill Game-Used Patch Card - PSA NM-MT 8', 'basketball')), true);
+  assert.equal(kindFits(c('1968 Topps #492 Jeff Torborg (No Ink at Upper Left of Photo) - PSA MINT 9')), true);
+  // and the lane / the cut never sell a photo as "baseball cards"
+  const seed = card('1960 Topps #350 Mickey Mantle - PSA 4', 'baseball', 300);
+  const photo = card('Roy Campanella Original Type I News Service Photo by I.N.P. - As Seen on His 1952 Topps Card', 'baseball', 320);
+  const t = buildTaste({ saved: [{ id: seed.id, lot: seed, savedAt: at(-3) }], follows: [], nowMs: NOW });
+  assert.deepEqual(ids(recommend([seed, photo], t, { nowMs: NOW })), []);
+});
+
+test('the sport cut: a one-card desk in any sport gets its sport’s singles near its price, honestly worded — hockey, football, a Pokémon single', () => {
+  const hockey = card('1980 O-Pee-Chee #18 Wayne Gretzky Rookie Card - PSA VG 3', 'hockey', 560);
+  const celebrini = card('2024 Upper Deck #451 Macklin Celebrini - PSA MINT 9', 'hockey', 813);
+  const mcdavid = card('2021 Upper Deck Allure Red Rainbow Autographs #50 Connor McDavid - PSA 10', 'hockey', 347);
+  const howe = card('1955 Topps #8 Gordie Howe - PSA VG-EX 4', 'hockey', 126);
+  const bird = card('1981 Topps Scoring Leader Bird/Erving/Johnson - PSA 8', 'basketball', 600);
+  const th = buildTaste({ saved: [{ id: hockey.id, lot: hockey, savedAt: at(-3) }], follows: [], nowMs: NOW });
+  const rh = recommend([hockey, celebrini, mcdavid, howe, bird], th, { nowMs: NOW });
+  assert.deepEqual(ids(rh).sort(), [celebrini.id, mcdavid.id].sort(), `the two hockey singles near $560; a $126 Howe is not near, basketball never: ${rh.map(r => r.reason).join(' | ')}`);
+  for (const r of rh) { assert.equal(r.reason, 'More hockey cards near your save’s price'); assert.equal(r.tier, 1); }
+  const brady = card('2000 Playoff Contenders #144 Tom Brady Rookie Ticket - PSA 6', 'football', 9000);
+  // another era, no shared facet (the save is PSA, this is raw): only the sport cut reaches it
+  const mahomes = card('1998 Playoff Contenders #87 Peyton Manning Rookie Ticket - raw', 'football', 7000);
+  const tf = buildTaste({ saved: [{ id: brady.id, lot: brady, savedAt: at(-3) }], follows: [], nowMs: NOW });
+  const rf = recommend([brady, mahomes, bird], tf, { nowMs: NOW });
+  assert.deepEqual(ids(rf), [mahomes.id]);
+  assert.match(rf[0].reason, /^More football cards near your save’s price/);
+  const zard = { id: 'pz1', artist: 'pokemon', title: '1999 Pokemon Base Set Holo #4 Charizard - PSA 8', subCat: 'pokemon-cards', drill: 'vintage', auctionHouse: 'Goldin', saleDate: at(2).slice(0, 10), saleDateTime: at(2), currentBid: 3000, bidCount: 12, currency: 'USD', status: 'upcoming', imageUrl: PHOTO } as RecLot;
+  const pika = { ...zard, id: 'pz2', title: '1999 Pokemon Base Set Holo #58 Pikachu', currentBid: 2200 } as RecLot;
+  const modern = { ...zard, id: 'pz3', title: '2023 Pokemon Obsidian Flames #223 Charizard ex - PSA 10', drill: 'modern', currentBid: 2500 } as RecLot;
+  const tp = buildTaste({ saved: [{ id: zard.id, lot: zard, savedAt: at(-3) }], follows: [], nowMs: NOW });
+  const rp = recommend([zard, pika, modern], tp, { nowMs: NOW });
+  const pk = rp.find(r => r.lot.id === pika.id)!;
+  assert.ok(pk, 'a raw Base Set single of the same sub at the price ties');
+  assert.match(pk.reason, /^More Pokémon cards near your save’s price/);
+  assert.ok(rp.find(r => r.lot.id === modern.id)?.why.includes('same Pokémon'), 'the modern Charizard ties by name, not by the cut');
+});
+
+test('price holds without a band: a grail far above two saves sinks below their peers; an unpriced lot does not lead; a bare category follow leans to the category’s level', () => {
+  const tcg = (title: string, bid: number | null, o: Partial<RecLot> = {}): RecLot => ({
+    id: `pk-${++seq}`, artist: 'pokemon', title, subCat: 'pokemon-cards', drill: 'vintage', auctionHouse: 'Goldin', saleName: 'Weekly', saleDate: at(3).slice(0, 10),
+    saleDateTime: at(3), currentBid: bid, bidCount: bid ? 8 : 0, currency: 'USD', status: 'upcoming', imageUrl: PHOTO, ek: 'sj:tcg|k:venusaur', ...o,
+  });
+  // two saves: too few for a learned band — the span still holds price
+  const desk = [tcg('1999 Pokemon Base Set Shadowless Holo #15 Venusaur - PSA 8', 2800), tcg('1999 Pokemon Base Set Holo #15 Venusaur - PSA 7', 2800)];
+  const peer = tcg('2000 Pokemon Gym Challenge 1st Edition Holo #4 Erika\'s Venusaur - PSA 8', 2600);
+  const grail = tcg('2000 Pokemon Black Star Promo Holo #13 Venusaur - PSA 10', 178000);
+  const unpriced = tcg('1999 Pokemon Jungle Holo #15 Venusaur - PSA 8', null);
+  const t = buildTaste({ saved: desk.map(l => ({ id: l.id, lot: l, savedAt: at(-3) })), follows: [], nowMs: NOW });
+  assert.equal(t.bands.size, 0, 'no learned band');
+  const rs = recommend([...desk, peer, grail, unpriced], t, { nowMs: NOW });
+  assert.equal(rs[0].lot.id, peer.id, `the peer at the desk’s price leads: ${rs.map(r => `${r.lot.title.slice(0, 30)} ${r.score}`).join(' | ')}`);
+  assert.ok(rs.findIndex(r => r.lot.id === grail.id) > 0, 'a 60× grail of the same name is still dealt, below');
+  assert.ok(rs.findIndex(r => r.lot.id === unpriced.id) > 0, 'no price yet: not first');
+  // a bare Prints follow: the category's live level, not its grails
+  const pr = (title: string, lo: number) => ({ id: `pr-${++seq}`, artist: 'misc-artist', title, subCat: 'prints', auctionHouse: 'Phillips', saleName: 'Editions', saleDate: at(5).slice(0, 10), estimateLow: lo, estimateHigh: lo * 1.4, currency: 'USD', status: 'upcoming', imageUrl: PHOTO } as RecLot);
+  const prints = [150000, 69000, ...Array.from({ length: 14 }, (_, i) => 2000 + i * 500)].map((p, i) => pr(`Print ${i}`, p));
+  const tf = buildTaste({ saved: [], follows: [catFollow('fine-art', 'prints')], nowMs: NOW });
+  const rf = recommend(prints, tf, { nowMs: NOW, n: 6 });
+  assert.ok(rf.every(r => Number(r.lot.estimateLow) < 50000), `the first six are at the category’s level: ${rf.map(r => r.lot.estimateLow).join(',')}`);
 });
