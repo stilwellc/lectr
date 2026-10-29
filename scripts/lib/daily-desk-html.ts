@@ -181,7 +181,14 @@ const TRIMS: ((e: DeskEmail) => DeskEmail)[] = [
   e => ({ ...e, quietNames: [...e.names.slice(6).map(n => n.label), ...e.quietNames], names: e.names.slice(0, 6) }),
 ];
 
-export function renderDesk(e: DeskEmail, o: { origin: string; unsubUrl: string; dateLabel: string; /** the size guard's cap in bytes (tests lower it) */ sizeCap?: number }): { html: string; text: string; trimmed: boolean } {
+export interface RenderOpts {
+  origin: string; unsubUrl: string; dateLabel: string;
+  /** the size guard's cap in bytes (tests lower it) */
+  sizeCap?: number;
+  /** the on-desk edition sits in a sandboxed iframe: every link opens the page itself (<base target="_top">) */
+  linkTarget?: '_top';
+}
+export function renderDesk(e: DeskEmail, o: RenderOpts): { html: string; text: string; trimmed: boolean } {
   const cap = o.sizeCap ?? SIZE_CAP;
   let html = renderHtml(e, o, false);
   // the size guard: trim, in order, until the page fits the inbox
@@ -194,7 +201,7 @@ export function renderDesk(e: DeskEmail, o: { origin: string; unsubUrl: string; 
   return { html, text: renderText(e, o), trimmed };
 }
 
-function renderHtml(e: DeskEmail, o: { origin: string; unsubUrl: string; dateLabel: string }, trimmed: boolean): string {
+function renderHtml(e: DeskEmail, o: RenderOpts, trimmed: boolean): string {
   const { origin } = o;
 
   // NEEDS YOU
@@ -268,7 +275,7 @@ function renderHtml(e: DeskEmail, o: { origin: string; unsubUrl: string; dateLab
     : '';
   // the head: light only, said every way a client reads it (Apple Mail reads the meta, Gmail the style);
   // the <style> carries nothing a layout depends on
-  const html = `<!doctype html><html lang="en" xmlns:o="urn:schemas-microsoft-com:office:office"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only"><title>${esc(e.subject)}</title><style>:root{color-scheme:light only;supported-color-schemes:light only}</style><!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]--></head>
+  const html = `<!doctype html><html lang="en" xmlns:o="urn:schemas-microsoft-com:office:office"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only">${o.linkTarget ? `<base target="${o.linkTarget}">` : ''}<title>${esc(e.subject)}</title><style>:root{color-scheme:light only;supported-color-schemes:light only}</style><!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]--></head>
 <body style="margin:0;padding:0;background:${BG};background-color:${BG};mso-line-height-rule:exactly">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(e.preheader)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${BG};background-color:${BG}"><tr><td align="center" style="padding:24px 12px">
@@ -296,7 +303,7 @@ You get this because you turned on the Daily Desk email on lectr. Figures are le
 }
 
 /** THE PLAIN-TEXT EDITION — every section the HTML prints, in the same order */
-function renderText(e: DeskEmail, o: { origin: string; unsubUrl: string; dateLabel: string }): string {
+function renderText(e: DeskEmail, o: RenderOpts): string {
   const { origin } = o;
   const g = e.glance;
   const t: string[] = [`lectr · The Daily Desk · ${o.dateLabel}`,

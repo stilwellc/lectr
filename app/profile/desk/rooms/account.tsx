@@ -6,6 +6,7 @@ import PushOptIn from '../../../components/retention/PushOptIn';
 import { TrackOnMount } from '../../../components/retention/trackers';
 import { useDeskInternals } from '../provider';
 import { useDailyPreview } from '../nudge';
+import { EditionButton } from '../edition';
 import { RoomHead } from '../../head';
 import type { SectionProps, SectionMeta } from '../types';
 
@@ -68,6 +69,8 @@ function DailyEmailOptIn() {
       <button type="button" className="ray-toolbar-pill" data-active={on} aria-pressed={on} disabled={busy || !user} onClick={() => set(!on)}>
         {on ? 'Turn off' : 'Email me the Daily Desk'}
       </button>
+      {/* (Oct 29) today's paper, built on the desk — read it any time without waiting for 7 AM */}
+      <EditionButton />
     </div>
   );
 }

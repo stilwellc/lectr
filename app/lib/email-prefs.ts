@@ -11,18 +11,20 @@ import { supabase } from './supabase';
 
 export type DailyState = 'loading' | 'on' | 'off' | 'unavailable';
 
-export function useDailyEmail(user: User | null): { state: DailyState; busy: boolean; set: (on: boolean) => void } {
+export function useDailyEmail(user: User | null): { state: DailyState; busy: boolean; set: (on: boolean) => void; /** the day the last edition went out (YYYY-MM-DD), null before the first — Today's edition reads it */ lastSentOn: string | null } {
   const [state, setState] = useState<DailyState>('loading');
   const [busy, setBusy] = useState(false);
+  const [lastSentOn, setLastSentOn] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
     if (!supabase || !user) { setState('unavailable'); return; }
     setState('loading');
-    supabase.from('email_prefs').select('daily').eq('user_id', user.id).maybeSingle()
+    supabase.from('email_prefs').select('daily,last_sent_on').eq('user_id', user.id).maybeSingle()
       .then(({ data, error }) => {
         if (!live) return;
         if (error) { setState('unavailable'); return; }
         setState(data?.daily ? 'on' : 'off');
+        setLastSentOn(typeof data?.last_sent_on === 'string' ? data.last_sent_on.slice(0, 10) : null);
       });
     return () => { live = false; };
   }, [user]);
@@ -37,5 +39,5 @@ export function useDailyEmail(user: User | null): { state: DailyState; busy: boo
         if (error) { console.error('[email-prefs]', error.message); setState(prev); }
       });
   }, [user, state]);
-  return { state, busy, set };
+  return { state, busy, set, lastSentOn };
 }
