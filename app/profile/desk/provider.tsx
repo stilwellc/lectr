@@ -42,7 +42,8 @@ import { useTaste } from '../../lib/use-recs';
 import { usePricePref, priceText, readInterests, writeInterests, type PricePref } from '../../lib/interests';
 import { useLotModal } from '../../lib/use-lot-modal';
 import type { Follow } from '../../lib/follows';
-import { topPicksOf, type TodayRead } from '../today';
+import { TOP_N, type TodayRead } from '../today';
+import { topOf } from '../../lib/recs';
 import { closeDayOf, getUpcomingCounts, fmtSignedPct, localToday, median, overEstimatePct, isOnBlock } from '../../utils';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../../constants';
 import { drillLabelOf } from '../../lib/lot-labels';
@@ -848,7 +849,8 @@ export function useDeskState(): DeskState {
     if (!watchFirst || !recsReady) return [];
     const claimed = new Set<string>(closingWatches.map(l => l.id));
     for (const r of deal.loop?.closing ?? []) claimed.add(r.lot.id);
-    return topPicksOf(deal.recs, claimed);
+    // (Oct 29) the strip never reads as one house when another ranks within 80% (recs.topOf)
+    return topOf(deal.recs, TOP_N, { claimed });
   }, [watchFirst, recsReady, closingWatches, deal.recs, deal.loop]);
   // "Today" leads the rail wherever the band renders — TodayBand's own gate:
   // the return loop answered, or there is an away fact, a closing watch or a read
