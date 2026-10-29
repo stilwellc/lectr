@@ -154,6 +154,7 @@ function Row({ r, now, titleById }: { r: WeekRow; now: number; titleById: Readon
         {vel ? <> · <span className="ck-week-vel" title="bids added in the trailing window — the engine's bid velocity (descriptive, not a price)"><i aria-hidden>↑</i>{vel.replace(/^\+/, '')}</span></> : null}
       </>}
       // the figure: the close on the reader's clock; inside 24h the countdown rides under it
+      figureKind="clock"
       figure={r.timed
         ? <time className="dk-clock" data-soon={soon || undefined} dateTime={new Date(r.closeMs).toISOString()} title={house ? `${localClock(r.closeMs)} on your clock · ${house} at the house` : 'the house’s published close, on your clock'}>{localClock(r.closeMs)}</time>
         : <span className="dk-clock" data-quiet title={TBC_TITLE}>time TBC</span>}

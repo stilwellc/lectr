@@ -127,7 +127,7 @@ function Receipts({ r }: { r: EdgeReport }) {
           <DeskRow key={c.id} lot={{ id: c.id, title: c.title, auctionHouse: c.house, imageUrl: c.img }} who={c.maker || c.title} attrs={{ role: 'listitem' }}
             sub={`${[c.maker, c.marketLabel, formatDate(c.date)].filter(Boolean).join(' · ')}${c.provisional ? ' · provisional' : ''}`}
             meta={<span className="dk-meta-fact">called <b>{fmtFace(c.called)}</b> <span className="pe-muted">({pct(c.callPct)} vs est. {fmtFace(c.estMid)})</span></span>}
-            figure={fmtFace(c.price)}
+            figureKind="hammer" figure={fmtFace(c.price)}
             figureSub={<><b style={missInk(c.missPct)}>{pct(c.missPct)}</b> off your call · <span className={c.hit ? 'pe-hit' : 'pe-faint'}>{c.hit ? 'hit' : 'miss'}</span></>} />
         ))}
       </div>
@@ -251,7 +251,7 @@ function MyMaxBlock({ r }: { r: EdgeReport }) {
           <DeskRow key={c.id} lot={{ id: c.id, title: c.title, auctionHouse: c.house, imageUrl: c.img }} who={c.maker || c.title} attrs={{ role: 'listitem' }}
             sub={[c.maker, c.house, formatDate(c.date)].filter(Boolean).join(' · ')}
             meta={<span className="dk-meta-fact">your max <b>{fmtFace(c.max)}</b></span>}
-            figure={fmtFace(c.price)}
+            figureKind="hammer" figure={fmtFace(c.price)}
             figureSub={<><b style={missInk(c.missPct)}>{pct(c.missPct)}</b> · <span className={c.inReach ? 'pe-hit' : 'pe-faint'}>{c.inReach ? 'in reach' : 'past you'}</span></>} />
         ))}
       </div>

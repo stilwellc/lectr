@@ -195,7 +195,7 @@ export function RecsRoom({ book, deal, compLots, taste, ready, isSaved, onToggle
                   // the reason is the row's honesty payload — it wraps, never cut
                   sub={<>{[rowWhoOf(r.lot), r.lot.auctionHouse].filter(Boolean).join(' · ')} · <b>{recNote(r)}</b></>}
                   tag={r.lane === 'discover' ? { text: 'New to you' } : r.flagged ? { text: 'Below market', tone: 'up' } : null}
-                  figure={<span data-quiet={price.quiet || undefined}>{price.fig}</span>} figureSub={price.sub}
+                  figure={<span data-quiet={price.quiet || undefined}>{price.fig}</span>} figureKind={price.kind} figureSub={price.sub}
                   decision={<DecisionLine lot={r.lot} estimate={false} abstain="quiet" />}
                   action={<>
                     <button type="button" className="ray-toolbar-pill" data-active={saved} aria-pressed={saved} onClick={() => onToggleSave(r.lot.id, r.lot)}

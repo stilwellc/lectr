@@ -60,6 +60,7 @@ export function ClosingNow({ desk }: SectionProps) {
           return (
             <DeskRow key={lot.id} lot={lot} as="li" attrs={{ 'aria-label': `Closing: ${craftTitle(lot.title, lot.auctionHouse)}` }}
               sub={<>{displayMakerOf(lot)?.name ? <>{displayMakerOf(lot)!.name} · </> : null}{lot.auctionHouse}{est ? <> · {est}</> : null}{bids ? <> · <b>{bids}</b></> : null}{vel ? <> · <span className="ck-week-vel"><i aria-hidden>↑</i>{vel.replace(/^\+/, '')}</span></> : null}</>}
+              figureKind="clock"
               figure={timed
                 ? <span className="dk-clock" data-soon>{localClock(r.closeMs)}</span>
                 : <span className="dk-clock" data-quiet title={tbc}>time TBC</span>}

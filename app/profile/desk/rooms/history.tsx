@@ -74,6 +74,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
       <DeskRow lot={{ id: o.id, title: name }} title={name} who={maker || name}
         sub={[maker || 'archive', meta?.estMid != null ? `est. ${fmtFace(meta.estMid)} at save` : null].filter(Boolean).join(' · ')}
         meta={callFact ?? undefined}
+        figureKind="hammer"
         figure={o.provisional
           ? <span data-quiet title="Sold — final price settling; the house posts results shortly after the close.">settling…</span>
           : fmtFace(o.priceUsd)}
@@ -91,7 +92,7 @@ const SettledRowView = React.memo(function SettledRowView({ row, meta, owned, sa
     <DeskRow lot={lot} who={makerLineOf(lot).name || lot.title}
       sub={[makerLineOf(lot).name, lot.auctionHouse, formatEstimate(lot)].filter(Boolean).join(' · ')}
       meta={callFact ?? undefined}
-      figure={pending ? <span data-quiet>pending</span> : fmtFace(lot.priceUsd!)}
+      figureKind="hammer" figure={pending ? <span data-quiet>pending</span> : fmtFace(lot.priceUsd!)}
       figureSub={pct != null
         ? <><SigPill dir={pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat'}>{fmtSignedPct(Math.round(pct))}</SigPill> <span title={GLOSSARY['vs estimate']}>vs est</span></>
         : pending ? null : <span title="No estimate on file — outside the vs-est median">no estimate</span>}

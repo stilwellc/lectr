@@ -144,7 +144,7 @@ function PlanRowView({ r, now, estInPlan }: { r: PlanRow; now: number; estInPlan
         {f.fact && <> · {f.fact}</>}
         {when && <> · {when.text}</>}
       </>}
-      figure={<span data-quiet={f.summed ? undefined : ''}>{f.fig}</span>} figureSub={f.sub} />
+      figure={<span data-quiet={f.summed ? undefined : ''}>{f.fig}</span>} figureKind="plan" figureSub={f.sub} />
   );
 }
 
@@ -247,7 +247,7 @@ function BuyRowView({ r, now, saved, onWatch }: { r: BuyRow; now: number; saved:
         {who ? <>{who} · </> : null}{r.lot.auctionHouse}
         {comps && <> · comps median {comps.text} · {comps.n.toLocaleString('en-US')} {comps.n === 1 ? 'sale' : 'sales'}</>}
       </>}
-      figure={<span data-quiet={price.quiet || undefined}>{price.fig}</span>} figureSub={price.sub}
+      figure={<span data-quiet={price.quiet || undefined}>{price.fig}</span>} figureKind={price.kind} figureSub={price.sub}
       decision={<BuyDecision lot={r.lot} now={now} />}
       action={<button type="button" className="ray-toolbar-pill ck-budget-watch" data-active={saved} aria-pressed={saved} onClick={onWatch}
         aria-label={saved ? `Stop watching ${short}` : `Watch ${short}`}>

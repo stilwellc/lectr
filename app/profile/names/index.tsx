@@ -39,6 +39,7 @@
  */
 import { DeskRow, type RowLot } from '../desk/row';
 import { Thumb } from '../desk/thumb';
+import { imageOf } from '../../lib/house-images';
 import { craftTitle } from '../../utils';
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -229,11 +230,11 @@ function SaleRow({ s, now, href, onOpen }: { s: Sale; now: number; href: string;
   const one = s.lots.length === 1 ? s.lots[0] : null;
   // a sale of several lots prints as one row: its first lots as an overlapping
   // photo stack (up to four, the count past them), "N lots · house · sale"
-  const stack = one ? [] : s.lots.filter(l => l.imageUrl).slice(0, 4);
-  const lot: RowLot = one ?? { id: s.key, title: `${n2(s.lots.length)} lots · ${s.house}${s.saleName ? ` · ${s.saleName}` : ''}`, auctionHouse: s.house, imageUrl: stack[0]?.imageUrl };
+  const stack = one ? [] : s.lots.filter(l => imageOf(l)).slice(0, 4);
+  const lot: RowLot = one ?? { id: s.key, title: `${n2(s.lots.length)} lots · ${s.house}${s.saleName ? ` · ${s.saleName}` : ''}`, auctionHouse: s.house, imageUrl: stack[0] ? imageOf(stack[0]) : null };
   const photo = one ? undefined : (
     <span className="dk-stack" data-n={stack.length}>
-      {stack.map(l => <Thumb key={l.id} src={l.imageUrl} label={l.title} size={32} round />)}
+      {stack.map(l => <Thumb key={l.id} src={imageOf(l)} label={l.title} size={32} round />)}
       {stack.length === 0 && <Thumb label={s.house} size={32} round />}
       {s.lots.length > stack.length && <span className="dk-stack-n">+{n2(s.lots.length - stack.length)}</span>}
     </span>

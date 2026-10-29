@@ -197,6 +197,7 @@ export default function CollectionRoom(_p: SectionProps) {
                 </button>
                 {note && <span className="ck-piece-note dk-note">{note}</span>}
               </>}
+              figureKind="mark"
               figure={appraised != null
                 ? <>{fmtFace(appraised)}{deltaPct != null && deltaPct !== 0 && <span className="dk-delta" data-dir={deltaPct > 0 ? 'up' : 'down'}>{deltaPct > 0 ? '+' : '−'}{Math.abs(deltaPct)}%</span>}</>
                 : <span data-quiet>—</span>}

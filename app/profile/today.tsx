@@ -38,7 +38,8 @@ import { closeMsOf } from '../lib/priority';
 import { closeIsTimed } from '../lib/house-tz';
 import { displayMakerOf } from '../lib/maker-subjects';
 import { craftTitle, localToday } from '../utils';
-import { formatEstimate } from '../components/LotCard';
+import { formatEstimate, lotSignal } from '../components/LotCard';
+import { imageOf } from '../lib/house-images';
 import { AwayMark } from '../components/marks';
 import DecisionLine from '../components/DecisionLine';
 import { RoomHead } from './head';
@@ -131,9 +132,10 @@ function ReadRow({ r, wrap = true }: { r: Row; wrap?: boolean }) {
       // a pick in the strip is a pick (the retention tracker's pick_open)
       pick={r.group === 'top' ? r.lot.id : undefined}
       tone={r.tone === 'up' ? 'up' : undefined}
-      // a closing row's tag IS its clock — the figure prints it, so the tag line stays clear
-      tag={closing ? null : { text: r.tag, tone: r.tone }}
-      figure={<CloseFigure lot={r.lot} />} figureSub={<CloseFigureSub lot={r.lot} />}
+      // a closing row's tag IS its clock — the figure prints it; the engine's
+      // read (the same one the story ring wears) is the only tag it carries
+      tag={closing ? (r.tone === 'up' ? { text: 'Below market', tone: 'up' } : null) : { text: r.tag, tone: r.tone }}
+      figure={<CloseFigure lot={r.lot} />} figureKind="clock" figureSub={<CloseFigureSub lot={r.lot} />}
       // the reader's ceiling, set or passed (MyMax says "bid passed it"), under the clock
       pill={max != null ? <MyMax lot={r.lot} compact /> : undefined}
       attrs={{ 'data-decision': r.decision ? '' : undefined }} />
@@ -141,8 +143,10 @@ function ReadRow({ r, wrap = true }: { r: Row; wrap?: boolean }) {
 }
 
 /** TONIGHT — the story strip: every lot of yours that hammers tonight as a
- *  round photo, its clock under it; a green ring is a lot reading under the
- *  market. One glance before the rows (Oct 20 photo pass). */
+ *  round photo, its clock under it; a green ring is a lot the ENGINE reads
+ *  under the market (lotSignal / a flagged pick — the same read the row's
+ *  "Below market" tag wears), ink otherwise. One glance before the rows
+ *  (Oct 20 photo pass). */
 function Tonight({ rows }: { rows: Row[] }) {
   const [open, setOpen] = useState<number | null>(null);
   if (rows.length < 2) return null;
@@ -158,7 +162,7 @@ function Tonight({ rows }: { rows: Row[] }) {
             // a plain tap opens the story; ⌘/ctrl-click keeps the link
             onClick={e => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; e.preventDefault(); setOpen(n); }}
             aria-label={`${craftTitle(r.lot.title, r.lot.auctionHouse)}${maker ? `, ${maker}` : ''}`}>
-            <Thumb src={r.lot.imageUrl} label={maker || r.lot.title} size={68} round tone={r.tone === 'up' ? 'up' : 'ink'} />
+            <Thumb src={imageOf(r.lot)} label={maker || r.lot.title} size={68} round tone={r.tone === 'up' ? 'up' : 'ink'} />
             <span className="ck-story-t">{r.tag}</span>
             {maker && <span className="ck-story-m">{maker}</span>}
           </Link>
@@ -232,8 +236,10 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
     for (const l of closingWatches) {
       if (!take(l.id)) continue;
       const est = formatEstimate(l);
+      // (pass 4) the ring and the tag read the engine: green only under the market
+      const below = lotSignal(l)?.label === 'Below Market';
       closing.push({
-        key: `cw-${l.id}`, group: 'closing', tone: 'hot', lot: l, tag: closeTag(l),
+        key: `cw-${l.id}`, group: 'closing', tone: below ? 'up' : 'hot', lot: l, tag: closeTag(l),
         // the fact prints the estimate; the figure prints the close (the hour, the countdown): the line adds the rest
         decision: <DecisionLine lot={l} estimate={false} when={false} abstain="quiet" style={{ marginTop: 0 }} />,
         fact: lead(l, <>your watch{est ? <> · {est}</> : null}</>),
@@ -241,7 +247,7 @@ export default function TodayBand({ loop, closingWatches, reads, away, top = [],
     }
     for (const r of loop?.closing ?? []) {
       if (!take(r.lot.id)) continue;
-      closing.push({ key: `cp-${r.lot.id}`, group: 'closing', tone: 'hot', lot: r.lot, tag: closeTag(r.lot), fact: pickFact(r),
+      closing.push({ key: `cp-${r.lot.id}`, group: 'closing', tone: r.flagged ? 'up' : 'hot', lot: r.lot, tag: closeTag(r.lot), fact: pickFact(r),
         decision: <DecisionLine lot={r.lot} when={false} abstain="quiet" style={{ marginTop: 0 }} /> });
     }
     const picks: Row[] = [];

@@ -19,7 +19,8 @@
 import { MyMax } from '../mymax';
 import { safeHref } from '../../../lib/safe-href';
 import { SigPill } from '../thumb';
-import { DeskRow, rowSubOf } from '../row';
+import { DeskRow, rowSubOf, rowWhoOf, bidsSubOf } from '../row';
+import { contextComps } from '../../../lib/comps';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../../../types';
@@ -29,14 +30,14 @@ import { lotVerdict } from '../../../lib/verdict';
 import CloseClock from '../../../components/CloseClock';
 import { WatchMark } from '../../../components/marks';
 import DecisionLine from '../../../components/DecisionLine';
-import { formatDate, craftTitle } from '../../../utils';
+import { formatDate, craftTitle, closeDayOf } from '../../../utils';
 import { fmtFace } from '../../../lib/lot-face';
 import { fromText } from '../priced';
 import { displayMakerOf } from '../../../lib/maker-subjects';
 import { RoomHead } from '../../head';
-import { closeDays, hammerWord, sigInk, sigText, type LiveSignal } from '../derive';
+import { closeDays, hammerWord, sigText, type LiveSignal } from '../derive';
 import { useDeskInternals } from '../provider';
-import type { SectionProps, SectionMeta, DeskData } from '../types';
+import type { SectionProps, SectionMeta, DeskData, DeskActions } from '../types';
 import type { DeskInternals } from '../provider';
 import { GLOSSARY, SavedDelta, callText } from './shared';
 import { ClosingNow } from '../../week';
@@ -51,85 +52,100 @@ const SAVEDVIEW_KEY = 'lectr-savedview';
 /** The in-place dossier — a watching row opens on its own row. Everything
     the cards view buried (the saved-delta narrative, the engine read with
     its basis, the live bid state) without leaving the ledger. Mounted only
-    while open, so collapsed rows keep zero of its links in the tab order. */
-function RowDossier({ lot, meta, sig, onRemove, id }: {
+    while open, so collapsed rows keep zero of its links in the tab order.
+
+    (pass 4) on the row grammar: the facts as one line of pills (the signal,
+    the estimate, the block, velocity, your call at save, the appraisal or
+    the direct comps, the hammer), the comparable sales as compact DeskRows
+    (contextComps — the same pool the comps modal reads), My max as an
+    inline editor, and the foot: Bid at the house · Open the lot · Remove
+    watch · Close. The wrapper keeps .ck-dossier / .ck-dossier-actions (the
+    page's own dossier styling); the content wears dk-dossier-*. */
+const DOSSIER_COMPS = 3;
+function RowDossier({ lot, meta, sig, allLots, act, onRemove, onClose, id }: {
   lot: AuctionLot; meta: SavedMeta | undefined; sig: LiveSignal | null;
+  act: Pick<DeskActions, 'openLot'>;
+  /** the loaded book — the comparable sales are read from it */
+  allLots: AuctionLot[];
   onRemove: () => void;
+  onClose: () => void;
   /** the dossier's DOM id — its expand control's aria-controls */
   id?: string;
 }) {
   // (Oct 6 2026, wave 4) the ENGINE's appraisal (lot.value, ×5-sane) — never
   // a client appraisal over the loaded slice
   const appr = useMemo(() => { const vd = lotVerdict(lot); return vd ? { value: vd.expectedAllIn, n: vd.compN } : null; }, [lot]);
+  const comps = useMemo(() => contextComps(lot, allLots), [lot, allLots]);
   const call = signalCallOf(meta);
   const days = closeDays(lot);
   const hasEst = (lot.estimateLow || 0) > 0 || (lot.estimateHigh || 0) > 0;
+  const vel = lot.bidVelocity && lot.bidVelocity.delta > 0 ? lot.bidVelocity : null;
+  const title = craftTitle(lot.title, lot.auctionHouse);
   return (
-    <div className="ck-dossier" id={id} role="region" aria-label={`Details for ${lot.title}`}>
+    <div className="ck-dossier dk-dossier" id={id} role="region" aria-label={`Details for ${lot.title}`}>
       <SavedDelta lot={lot} meta={meta} sig={sig} />
-      <div className="ck-dossier-grid">
+      {/* the facts, one line of pills (they wrap on a phone, never clip) */}
+      <div className="dk-dossier-pills" role="list" aria-label="The lot's facts">
+        {sig && (
+          <span className="dk-fact" role="listitem" title={`${GLOSSARY['signal now']}${sig.basis != null && sig.basis > 0 ? ` · ${sig.basis} comps` : ''}`}>
+            <SigPill dir={sig.label === 'Below Market' ? 'up' : 'down'}>{sigText(sig)}</SigPill> vs comps{sig.basis != null && sig.basis > 0 ? ` · ${sig.basis}` : ''}
+          </span>
+        )}
         {hasEst && (
-          <div className="ck-dossier-cell">
-            <span className="kicker">Estimate</span>
-            {/* ONE "priced" rule (../priced): a one-sided estimate prints "from $X" and never enters a total */}
-            <span className="ck-dossier-v">{fromText(lot) ?? formatEstimate(lot)}{fromText(lot) && <span className="sub"> · one bound published — not in the desk’s total</span>}</span>
-          </div>
+          // ONE "priced" rule (../priced): a one-sided estimate prints "from $X" and never enters a total
+          <span className="dk-fact" role="listitem" title={fromText(lot) ? 'one bound published — not in the desk’s total' : 'the house estimate'}>
+            est <b>{fromText(lot) ?? formatEstimate(lot).replace(/ est\.$/, '')}</b>{fromText(lot) ? ' · one bound' : ''}
+          </span>
         )}
         {(lot.currentBid || 0) > 0 && (
-          <div className="ck-dossier-cell">
-            <span className="kicker">On the block</span>
-            <span className="ck-dossier-v">
-              {fmtFace(lot.currentBid!)} bid
-              {typeof lot.bidCount === 'number' && lot.bidCount > 0 && <span className="sub"> · {lot.bidCount} {lot.bidCount === 1 ? 'bid' : 'bids'}</span>}
-              {lot.overlayAt && <span className="sub"> · <LiveStamp iso={lot.overlayAt} /></span>}
-            </span>
-          </div>
+          <span className="dk-fact" role="listitem">
+            <b>{fmtFace(lot.currentBid!)}</b> bid · {bidsSubOf(lot)}{lot.overlayAt && <> · <LiveStamp iso={lot.overlayAt} /></>}
+          </span>
         )}
-        {sig && (
-          <div className="ck-dossier-cell">
-            <span className="kicker">Engine read</span>
-            <span className="ck-dossier-v" style={{ color: sigInk(sig.label) }}>
-              {sigText(sig)}
-              {sig.basis != null && sig.basis > 0 && <span className="sub"> · {sig.basis} comps</span>}
-            </span>
-          </div>
-        )}
+        {vel && <span className="dk-fact" role="listitem" title="bids added in the trailing window — the engine's bid velocity">+{vel.delta} {vel.delta === 1 ? 'bid' : 'bids'}/{Math.round(vel.hours)}h</span>}
         {lot.cardComps && lot.cardComps.n > 0 && lot.cardComps.med != null ? (
-          <div className="ck-dossier-cell">
-            <span className="kicker">Direct comps</span>
-            <span className="ck-dossier-v">{fmtFace(lot.cardComps.med)}<span className="sub"> · {lot.cardComps.n} same card &amp; grade</span></span>
-          </div>
+          <span className="dk-fact" role="listitem" title="the median of the same card and grade's sales">direct comps <b>{fmtFace(lot.cardComps.med)}</b> · {lot.cardComps.n} same card &amp; grade</span>
         ) : appr ? (
-          <div className="ck-dossier-cell">
-            <span className="kicker">Appraisal</span>
-            <span className="ck-dossier-v">{fmtFace(appr.value)}<span className="sub"> · {appr.n} comps</span></span>
-          </div>
+          <span className="dk-fact" role="listitem" title={GLOSSARY['appraisal']}>appraisal <b>{fmtFace(appr.value)}</b> · {appr.n} comps</span>
         ) : null}
         {meta && (
-          <div className="ck-dossier-cell">
-            <span className="kicker">Your save</span>
-            <span className="ck-dossier-v">
-              {formatDate(meta.savedAt)}
-              {meta.estMid != null && <span className="sub"> · est. {fmtFace(meta.estMid)} then</span>}
-              {call && call.dir !== 'unknown' && (
-                <span className="sub"> · called {callText(call)}</span>
-              )}
-            </span>
-          </div>
-        )}
-        <div className="ck-dossier-cell">
-          <span className="kicker">Hammers</span>
-          <span className="ck-dossier-v">
-            {days === 0 && lot.saleDateTime ? <CloseClock iso={lot.saleDateTime} windowHours={24} /> : hammerWord(days)}
+          <span className="dk-fact" role="listitem" title="your save: the day, the estimate then, the engine's call then">
+            saved {formatDate(meta.savedAt)}{meta.estMid != null && <> · est {fmtFace(meta.estMid)} then</>}{call && call.dir !== 'unknown' && <> · called <b style={{ color: call.dir === 'below' ? 'var(--color-up)' : 'var(--color-down-text)' }}>{callText(call)}</b></>}
           </span>
-        </div>
+        )}
+        <span className="dk-fact" role="listitem">
+          {days === 0 && lot.saleDateTime ? <CloseClock iso={lot.saleDateTime} windowHours={24} prefix="hammers " /> : /^(today|tomorrow|in )/.test(hammerWord(days)) ? `hammers ${hammerWord(days)}` : hammerWord(days)}
+        </span>
       </div>
-      <div className="ck-dossier-actions">
-        {/* one action set on every live row: your max · bid at the house · open (Oct 20 audit) */}
+      {/* the comparable sales as compact rows — the comps modal's own pool, its first three */}
+      {comps.rows.length > 0 && (
+        <div className="dk-dossier-comps">
+          <div className="ck-reads-head">
+            <span className="kicker">Comps · {comps.rows.length}{comps.median != null ? <> · median {fmtFace(comps.median)}</> : null}</span>
+            <i className="ck-reads-rule" />
+            <button type="button" className="dk-link" onClick={() => act.openLot(lot)}>All comps</button>
+          </div>
+          <div className="dk-list">
+            {comps.rows.slice(0, DOSSIER_COMPS).map(c => (
+              <DeskRow key={c.id} lot={c} compact
+                sub={[rowWhoOf(c), c.auctionHouse, closeDayOf(c) ? formatDate(closeDayOf(c)) : null].filter(Boolean).join(' · ')}
+                figure={c.priceUsd ? fmtFace(c.priceUsd) : <span data-quiet>—</span>} figureKind="hammer" />
+            ))}
+          </div>
+        </div>
+      )}
+      {/* your max, inline — set or change it here */}
+      <div className="dk-dossier-max">
+        <span className="kicker">Your max</span>
         <MyMax lot={lot} />
+        <span className="dk-dossier-max-note">the most you would pay at hammer — Record grades it against the hammer</span>
+      </div>
+      <div className="ck-dossier-actions dk-dossier-foot">
+        {/* one action set on every live row: bid at the house · open · remove · close (Oct 20 audit; pass 4 adds the close) */}
         {safeHref(lot.url) && <a href={safeHref(lot.url)!} target="_blank" rel="noopener noreferrer">Bid at {lot.auctionHouse} ↗</a>}
         <Link href={`/lot?id=${encodeURIComponent(lot.id)}`}>Open the lot</Link>
         <button type="button" className="quiet" onClick={onRemove}>Remove watch</button>
+        <button type="button" className="dk-dossier-close" onClick={onClose} aria-label={`Close details for ${title}`}>Close <span aria-hidden>‹</span></button>
       </div>
     </div>
   );
@@ -348,15 +364,13 @@ export default function WatchingRoom(_p: SectionProps) {
                     {vel ? <span className="dk-meta-fact">+{vel.delta} {vel.delta === 1 ? 'bid' : 'bids'}/{Math.round(vel.hours)}h</span>
                       : newBids > 0 ? <span className="dk-meta-fact">+{newBids} {newBids === 1 ? 'bid' : 'bids'} since saved</span> : null}
                   </>}
-                  figure={bid ? fmtFace(bid) : <span data-quiet={twoSided ? undefined : ''}>{est}</span>}
-                  figureSub={bid
-                    ? <>bid{typeof lot.bidCount === 'number' && lot.bidCount > 0 ? <> · {lot.bidCount} {lot.bidCount === 1 ? 'bid' : 'bids'}</> : null}</>
-                    : twoSided ? 'estimate' : null}
+                  figure={bid ? fmtFace(bid) : <span data-quiet={twoSided ? undefined : ''}>{est}</span>} figureKind={bid ? 'bid' : 'est'}
+                  figureSub={bid ? bidsSubOf(lot) : twoSided ? 'estimate' : null}
                   pill={<MyMax lot={lot} compact />}
                   decision={<DecisionLine lot={lot} estimate={false} when={false} abstain="quiet" style={{ marginTop: 0 }} />}
                   expand={{ open, id: dossierId, onToggle: () => toggleRow(lot.id) }}>
-                  <RowDossier lot={lot} meta={m} sig={sig} id={dossierId}
-                    onRemove={() => { setOpenRow(null); toggle(savedIdOf(lot.id)); }} />
+                  <RowDossier lot={lot} meta={m} sig={sig} id={dossierId} allLots={allLots} act={act}
+                    onRemove={() => { setOpenRow(null); toggle(savedIdOf(lot.id)); }} onClose={() => setOpenRow(null)} />
                 </DeskRow>
               );
             })}
