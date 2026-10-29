@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AuctionLot } from '../../app/types';
-import { planDesk, whenText, laneOf, lastSaleOf, PICKS_N, DESK_ROWS, FRESH_PER_GROUP, FRESH_GROUPS, NAME_ROWS, WEEK_DAYS_N } from '../lib/daily-desk';
+import { planDesk, whenText, laneOf, lastSaleOf, leadingNameOf, PICKS_N, DESK_ROWS, FRESH_PER_GROUP, FRESH_GROUPS, NAME_ROWS, WEEK_DAYS_N } from '../lib/daily-desk';
 import { renderDesk } from '../lib/daily-desk-html';
 
 const NOW = Date.parse('2026-10-21T12:20:00Z');
@@ -115,7 +115,7 @@ test('the week is a 7-day calendar of watches, picks and your names’ lots, a l
   assert.equal(d.week.picks, 1);
   assert.equal(d.week.names, 1);     // n2 only
   assert.equal(d.week.days.reduce((s, x) => s + x.watches + x.picks + x.names, 0), 5);   // far is beyond the week
-  assert.equal(d.glance.week, 3);    // the glance counts watched closes inside 7 days (n1 is watched)
+  assert.equal(d.glance.week, 4);    // the glance counts what the calendar counts: watches (w1, w2, n1) + picks (p1)
   const { html, text } = render(d);
   assert.ok(html.includes('Closing this week'));
   assert.ok(html.includes('>Today<'));
@@ -197,7 +197,7 @@ test('laneOf reads the recommender seed; lastSaleOf takes the newest settled row
   assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Companion (Flayed)' } }), { kind: 'saved', label: 'Because you saved Companion (Flayed)' });
   // a saved lot's handle: maker · short title, closed at a whole word inside 48 chars; the maker is not repeated when the title already says it
   assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Deux buveurs catalans (Two Catalan Drinkers), pl. 12, from La Suite Vollard', who: 'Pablo Picasso' } }), { kind: 'saved', label: 'Because you saved Pablo Picasso · Deux buveurs catalans…' });
-  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Shohei Ohtani bat', who: 'Shohei Ohtani' } }), { kind: 'saved', label: 'Because you saved Shohei Ohtani bat' });
+  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Shohei Ohtani bat', who: 'Shohei Ohtani' } }), { kind: 'saved', label: 'Because you saved Shohei Ohtani · bat' });   // a title that opens on the name splits there
   assert.deepEqual(laneOf({ seed: { kind: 'owned', label: 'Chair' } }), { kind: 'saved', label: 'Because you own Chair' });
   assert.equal(laneOf({ seed: { kind: 'follow', label: 'TCG', market: 'tcg' } }).kind, 'new');
   assert.equal(laneOf({ seed: { kind: 'follow', label: 'KAWS', follow: {} }, tier: 2 }).kind, 'new');
@@ -209,27 +209,28 @@ test('laneOf reads the recommender seed; lastSaleOf takes the newest settled row
 
 test('your names: one ledger line per followed name — live count, soonest sale, last hammer; houses are not names', () => {
   const n1 = warhol('n1', 30 * H), n2 = warhol('n2', 60 * H, { auctionHouse: 'Phillips' } as Partial<AuctionLot>);
-  const book = [n1, n2, lot('o', 20 * H, { artist: 'tom-sachs' } as Partial<AuctionLot>)];
+  const book = [n1, n2, lot('o', 20 * H, { artist: 'tom-sachs', subCat: 'prints', category: 'print' } as unknown as Partial<AuctionLot>)];
   const d = planDesk({
     now: NOW, tz: 'America/New_York', watches: [], live: liveMap(book), sold: [], picks: [],
     follows: [FOLLOW_WARHOL, { kind: 'maker', key: 'kaws', label: 'KAWS' }, { kind: 'house', key: 'Goldin', label: 'Goldin' }, { kind: 'cat', key: 'fine-art:prints', label: 'Fine art · Prints' }],
     book, nameSold: new Map([['mk:andy-warhol', { id: 'sold-1', p: 48_000, d: '2026-10-14', h: "Christie's", t: 'Flowers' }]]),
   })!;
-  assert.equal(d.names.length, 3);                         // the house follow is not a name
+  assert.equal(d.names.length + d.quietNames.length, 3);   // the house follow is not a name
   assert.equal(d.names[0].label, 'Andy Warhol');
   assert.equal(d.names[0].live, 2);
   assert.equal(d.names[0].soonest?.house, "Christie's");
   assert.match(d.names[0].soonest?.when ?? '', /^tomorrow /);
   assert.deepEqual(d.names[0].last, { id: 'sold-1', hammer: '$48K', day: 'Oct 14', house: "Christie's", title: 'Flowers' });
   assert.equal(d.names[0].href, '/makers/andy-warhol');
-  const kaws = d.names.find(n => n.label === 'KAWS')!;
-  assert.equal(kaws.live, 0);
-  assert.equal(kaws.last, null);                           // nothing on file: no claim
+  assert.deepEqual(d.quietNames, ['KAWS']);                // nothing live: collapsed into the quiet line, no hammer claim
   const cat = d.names.find(n => n.label.startsWith('Fine art'))!;
+  assert.equal(cat.live, 1);
   assert.match(cat.note ?? '', /category follow/);
-  assert.match(d.subject, /1 of your names is on the block/);
+  assert.match(d.subject, /2 of your names are on the block/);
   const { html, text } = render(d);
   assert.ok(html.includes('Your names'));
+  assert.ok(html.includes('1 more name with nothing live: KAWS'));
+  assert.ok(text.includes('1 more name with nothing live: KAWS'));
   assert.ok(html.includes('Last hammer'));
   assert.ok(text.includes('YOUR NAMES'));
   assert.ok(text.includes('- Andy Warhol: 2 live · soonest tomorrow'));
@@ -242,9 +243,52 @@ test('names cap at NAME_ROWS, live names first', () => {
   const follows = Array.from({ length: NAME_ROWS + 2 }, (_, k) => ({ kind: 'maker' as const, key: `maker-${k}`, label: `Maker ${k}` }));
   const live = lot('z', 20 * H, { artist: 'maker-9', ek: 'pl:maker-9' } as unknown as Partial<AuctionLot>);
   const d = planDesk({ now: NOW, watches: [], live: liveMap([live]), sold: [], picks: [], follows, book: [live] })!;
-  assert.equal(d.names.length, NAME_ROWS);
-  assert.equal(d.names[0].label, 'Maker 9');
+  assert.deepEqual(d.names.map(n => n.label), ['Maker 9']);
   assert.equal(d.names[0].live, 1);
+  assert.equal(d.quietNames.length, NAME_ROWS + 1);
+  assert.ok(render(d).html.includes(`${NAME_ROWS + 1} more names with nothing live: Maker 0, Maker 1`));
+  // every name quiet: one line, no ledger rows
+  const d2 = planDesk({ now: NOW, watches: [], live: new Map(), sold: [], picks: [], follows: follows.slice(0, 2), book: [] })!;
+  assert.equal(d2.names.length, 0);
+  assert.ok(render(d2).html.includes('Nothing live for your 2 names: Maker 0, Maker 1'));
+});
+
+test('a settled-seed lane head reads the title’s leading name; leadingNameOf knows where a name stops', () => {
+  assert.equal(leadingNameOf('Thomas Edison Autograph Letter Signed on the Phonograph, 1888'), 'Thomas Edison');
+  assert.equal(leadingNameOf('Charles Lindbergh: Donald Albert Hall\'s Spirit of St. Louis Time Sheet'), 'Charles Lindbergh');
+  assert.equal(leadingNameOf('Neil A. Armstrong Signed Photograph'), 'Neil A. Armstrong');
+  assert.equal(leadingNameOf('1961 Topps #415 Hank Aaron PSA 9'), null);   // opens on a year
+  assert.equal(leadingNameOf('Flowers'), null);                             // one word is a title, not a name
+  assert.equal(leadingNameOf('Deux buveurs catalans (Two Catalan Drinkers)'), null);
+  // the seed of a settled watch carries no `who`: the runner's read (or the title) leads the lane head
+  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Thomas Edison Autograph Letter Signed on the Phonograph, 1888' } }), { kind: 'saved', label: 'Because you saved Thomas Edison · Autograph Letter Signed on the…' });
+  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Autograph Letter Signed, 1888' } }, 'Thomas Edison'), { kind: 'saved', label: 'Because you saved Thomas Edison · Autograph Letter Signed, 1888' });
+  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Flowers' } }), { kind: 'saved', label: 'Because you saved Flowers' });
+  // the name runs straight into a slash: no split ("Tom Brady · /Patrick Mahomes" read wrong)
+  assert.deepEqual(laneOf({ seed: { kind: 'saved', label: 'Tom Brady/Patrick Mahomes II Dual-Signed Ticket', who: 'Tom Brady' } }), { kind: 'saved', label: 'Because you saved Tom Brady/Patrick Mahomes II Dual-Signed Ticket' });
+});
+
+test('the desk says how many watches have settled, and how many results still wait, regardless of date', () => {
+  const a = lot('a', 50 * H);
+  const d = planDesk({ now: NOW, watches: [{ lot_id: 'a' }, { lot_id: 'old1' }, { lot_id: 'old2' }, { lot_id: 'old3' }], live: liveMap([a]), sold: [], picks: [], pendingResults: 83 })!;
+  assert.equal(d.deskSettled, 3);
+  assert.equal(d.pendingResults, 83);
+  const { html, text } = render(d);
+  assert.ok(html.includes('3 more of your watches have settled — <a href="https://lectr.bid/profile?utm_source=daily-desk&utm_medium=email#record"'));
+  assert.ok(html.includes('83 results still waiting on your desk →'));
+  assert.ok(!html.includes('#results?utm'));   // the utm sits ahead of the anchor on every page link
+  assert.ok(!/#[\w-]+\?utm_source/.test(html));
+  assert.ok(html.includes('/profile?utm_source=daily-desk&utm_medium=email#results'));
+  assert.ok(html.includes('Nothing new today — no bid has passed your max'));
+  assert.ok(text.includes('3 more of your watches have settled — under Record: https://lectr.bid/profile#record'));
+  assert.ok(text.includes('83 results still waiting on your desk: https://lectr.bid/profile#results'));
+  // nothing live, nothing pending: the plain lines
+  const d2 = planDesk({ now: NOW, watches: [{ lot_id: 'old1' }], live: new Map(), sold: [], picks: [] })!;
+  const h2 = render(d2).html;
+  assert.ok(h2.includes('Nothing of yours is live right now.'));
+  assert.ok(h2.includes('1 of your watches has settled — '));
+  assert.ok(!h2.includes('still waiting'));
+  assert.ok(h2.includes('no result waits on you'));
 });
 
 test('the market: every line is derived from the served files, each linked into lectr', () => {
@@ -362,7 +406,8 @@ test('the email carries an unsubscribe link, the masthead, honest empty states, 
   // a reader with watches but nothing live: the desk says so instead of printing nothing
   const d2 = planDesk({ now: NOW, watches: [{ lot_id: 'gone' }, { lot_id: 'gone2' }], live: new Map(), sold: [], picks: [] })!;
   const h2 = render(d2).html;
-  assert.ok(h2.includes('Nothing of yours is live right now — your 2 watched lots have settled'));
+  assert.ok(h2.includes('Nothing of yours is live right now.'));
+  assert.ok(h2.includes('2 of your watches have settled — '));
   assert.ok(h2.includes('Nothing today — no bid has passed your max'));
   assert.ok(h2.includes('nothing of yours or your names’ closes in the next seven days'));
   // no watches at all, a follow only: the invitation, no "needs you" block

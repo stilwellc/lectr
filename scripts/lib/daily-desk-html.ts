@@ -17,7 +17,8 @@ const UTM = 'utm_source=daily-desk&utm_medium=email';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const lotUrl = (origin: string, id: string) => `${origin}/lot?id=${encodeURIComponent(id)}&${UTM}`;
-const pageUrl = (origin: string, path: string) => `${origin}${path}${path.includes('?') ? '&' : '?'}${UTM}`;
+/** a lectr page with the email's utm, the query ahead of any #anchor (a "/profile#results?utm=…" link lost its anchor) */
+const pageUrl = (origin: string, path: string) => { const i = path.indexOf('#'); const p = i < 0 ? path : path.slice(0, i), h = i < 0 ? '' : path.slice(i); return `${origin}${p}${p.includes('?') ? '&' : '?'}${UTM}${h}`; };
 const n2 = (n: number) => n.toLocaleString('en-US');
 
 function pill(text: string, dir: 'up' | 'down' | 'ink') {
@@ -104,7 +105,7 @@ function glance(origin: string, g: DeskEmail['glance']) {
   return `<tr><td style="padding:18px 0 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid ${LINE};border-bottom:1px solid ${LINE}">
 <tr>${cell('Watching', n2(g.watching), g.est ? `${esc(g.est)} at estimate` : g.watching ? 'live lots' : 'nothing live', `${desk}#tab-watching`, true)}${cell('Next hammer', g.next ? g.next.when : '—', nextLine, nextHref, false)}</tr>
 <tr><td colspan="2" style="border-top:1px solid ${LINE};font-size:0;line-height:0">&nbsp;</td></tr>
-<tr>${cell('This week', n2(g.week), 'close in 7 days', `${desk}#tab-week`, true)}${cell('Picks', n2(g.picks), g.picks ? 'for you' : 'none today', `${desk}#tab-for-you`, false)}</tr>
+<tr>${cell('This week', n2(g.week), 'watches + picks closing', `${desk}#tab-week`, true)}${cell('Picks', n2(g.picks), g.picks ? 'for you' : 'none today', `${desk}#tab-for-you`, false)}</tr>
 </table></td></tr>`;
 }
 
@@ -127,7 +128,7 @@ function calendar(origin: string, w: WeekCalendar) {
 }
 
 /** YOUR NAMES — a dotted ledger: name · live · soonest, then the last hammer */
-function namesLedger(origin: string, names: NameLine[]) {
+function namesLedger(origin: string, names: NameLine[], quiet: string[]) {
   const rows = names.map(n => {
     const live = n.live
       ? `<b style="color:${INK};font-weight:500">${n2(n.live)} live</b>${n.soonest ? ` · soonest ${esc(n.soonest.when)} at ${esc(n.soonest.house)}` : ''}`
@@ -139,8 +140,10 @@ function namesLedger(origin: string, names: NameLine[]) {
 <div style="font:400 14px/1.4 ${FONT};color:${MUTED}"><a href="${pageUrl(origin, n.href)}" style="font-weight:500;color:${INK};text-decoration:none">${esc(n.label)}</a>&nbsp; ${live}</div>
 <div style="font:400 12.5px/1.5 ${FONT};color:${MUTED};padding-top:2px">${last}</div></td></tr>`;
   }).join('');
-  const live = names.filter(n => n.live > 0).length;
-  return section('Your names', rows + more(origin, 'Every name you follow', '/profile#names'), `${n2(names.length)} followed · ${n2(live)} with lots on the block · the last hammer is the newest settled sale on file`);
+  const quietLine = quiet.length
+    ? `<tr><td style="padding:11px 0;border-bottom:1px dotted #D7D2CC;font:400 13px/1.5 ${FONT};color:${MUTED}">${names.length ? `${n2(quiet.length)} more ${quiet.length === 1 ? 'name' : 'names'} with nothing live` : `Nothing live for your ${n2(quiet.length)} ${quiet.length === 1 ? 'name' : 'names'}`}: ${esc(quiet.join(', '))}</td></tr>`
+    : '';
+  return section('Your names', rows + quietLine + more(origin, 'Every name you follow', '/profile#names'), `${n2(names.length + quiet.length)} followed · ${n2(names.length)} with lots on the block · the last hammer is the newest settled sale on file`);
 }
 
 /** THE MARKET — one dotted ledger line per fact, each linked into lectr */
@@ -159,16 +162,20 @@ export function renderDesk(e: DeskEmail, o: { origin: string; unsubUrl: string; 
     e.closing.length ? group('Closing before tomorrow night') + e.closing.map(i => row(origin, i)).join('') : '',
     e.results.length ? group('Results to confirm') + e.results.map(r => resultRow(origin, r)).join('') : '',
   ].join('');
+  // results older than the last Desk are not reprinted, but the desk still holds them: say how many wait
+  const pending = e.pendingResults ? more(origin, `${n2(e.pendingResults)} ${e.pendingResults === 1 ? 'result' : 'results'} still waiting on your desk`, '/profile#results') : '';
   const needsSection = needs
-    ? section('Needs you', needs, 'bids past your max · your watches closing in the next 36 hours · results to confirm')
-    : e.watched ? section('Needs you', empty('Nothing today — no bid has passed your max, nothing of yours closes before tomorrow night, no result waits on you.')) : '';
+    ? section('Needs you', needs + pending, 'bids past your max · your watches closing in the next 36 hours · results to confirm')
+    : e.watched ? section('Needs you', empty(e.pendingResults ? 'Nothing new today — no bid has passed your max, nothing of yours closes before tomorrow night.' : 'Nothing today — no bid has passed your max, nothing of yours closes before tomorrow night, no result waits on you.') + pending) : '';
 
   // YOUR DESK TODAY
   const above = e.deskAbove ? `<tr><td style="padding:12px 0 0;font:400 13px/1.4 ${FONT};color:${MUTED}">+ the ${n2(e.deskAbove)} above under Needs you</td></tr>` : '';
-  const deskBody = e.desk.length
+  // the watches that are no longer on the block — the count the runner saw, said once, under Record
+  const settled = e.deskSettled ? `<tr><td style="padding:${e.desk.length || e.deskAbove ? 8 : 12}px 0 0;font:400 13px/1.4 ${FONT};color:${MUTED}">${n2(e.deskSettled)} ${e.desk.length || e.deskAbove ? 'more ' : ''}of your watches ${e.deskSettled === 1 ? 'has' : 'have'} settled — <a href="${pageUrl(origin, '/profile')}#record" style="color:${INK};text-decoration:none">under Record →</a></td></tr>` : '';
+  const deskBody = (e.desk.length
     ? e.desk.map(r => deskRow(origin, r)).join('') + (e.deskMore ? more(origin, `and ${n2(e.deskMore)} more on your desk`, '/profile#tab-watching') : '') + above
     : e.deskAbove ? empty(`All ${n2(e.deskAbove)} of your live ${e.deskAbove === 1 ? 'watch is' : 'watches are'} under Needs you.`)
-      : empty(e.watched ? `Nothing of yours is live right now — your ${n2(e.watched)} watched ${e.watched === 1 ? 'lot has' : 'lots have'} settled or rolled off the block.` : 'You’re not watching anything yet. Save a lot on lectr and it reports here every morning.');
+      : empty(e.watched ? 'Nothing of yours is live right now.' : 'You’re not watching anything yet. Save a lot on lectr and it reports here every morning.')) + settled;
   const deskSection = section('Your desk today', deskBody, e.desk.length ? `${n2(e.glance.watching)} live ${e.glance.watching === 1 ? 'watch' : 'watches'}, soonest close first · bid, bids added since you saved it, the engine’s read, the room to your max` : null);
 
   // NEW FOR YOU
@@ -199,7 +206,7 @@ export function renderDesk(e: DeskEmail, o: { origin: string; unsubUrl: string; 
     calendar(origin, e.week),
     freshSection,
     picksSection,
-    e.names.length ? namesLedger(origin, e.names) : '',
+    e.names.length || e.quietNames.length ? namesLedger(origin, e.names, e.quietNames) : '',
     e.market.length ? marketLedger(origin, e.market) : '',
   ].join('');
 
@@ -237,7 +244,8 @@ You get this because you turned on the Daily Desk email on lectr. Figures are le
     t.push('');
   };
   if (e.overMax.length || e.closing.length || e.results.length) head('Needs you');
-  else if (e.watched) head('Needs you', 'Nothing today — no bid past your max, nothing of yours closing before tomorrow night, no result to confirm.\n');
+  else if (e.watched) head('Needs you', `Nothing ${e.pendingResults ? 'new ' : ''}today — no bid past your max, nothing of yours closing before tomorrow night${e.pendingResults ? '' : ', no result to confirm'}.`);
+  if (e.pendingResults && e.watched) t.push(`${e.pendingResults} ${e.pendingResults === 1 ? 'result' : 'results'} still waiting on your desk: ${origin}/profile#results`, '');
   lines('Bids past your max', e.overMax);
   lines('Closing before tomorrow night', e.closing);
   if (e.results.length) {
@@ -251,7 +259,8 @@ You get this because you turned on the Daily Desk email on lectr. Figures are le
     if (e.deskMore) t.push(`  and ${e.deskMore} more: ${origin}/profile#tab-watching`);
     if (e.deskAbove) t.push(`  + the ${e.deskAbove} above under needs you`);
   } else if (e.deskAbove) t.push(`All ${e.deskAbove} of your live ${e.deskAbove === 1 ? 'watch is' : 'watches are'} under needs you.`);
-  else t.push(e.watched ? `Nothing of yours is live right now — your ${e.watched} watched ${e.watched === 1 ? 'lot has' : 'lots have'} settled or rolled off the block.` : 'You’re not watching anything yet. Save a lot on lectr and it reports here every morning.');
+  else t.push(e.watched ? 'Nothing of yours is live right now.' : 'You’re not watching anything yet. Save a lot on lectr and it reports here every morning.');
+  if (e.deskSettled) t.push(`${e.deskSettled} ${e.desk.length || e.deskAbove ? 'more ' : ''}of your watches ${e.deskSettled === 1 ? 'has' : 'have'} settled — under Record: ${origin}/profile#record`);
   t.push('');
   head('Closing this week', `${e.week.watches} watches · ${e.week.picks} picks · ${e.week.names} by your names`);
   t.push(e.week.days.map(d => `${d.today ? 'Today' : d.dow} ${d.date}: ${d.watches + d.picks}${d.names ? ` (+${d.names} names)` : ''}`).join(' · '), `${origin}/profile#tab-week`, '');
@@ -276,9 +285,10 @@ You get this because you turned on the Daily Desk email on lectr. Figures are le
     }
     t.push('');
   }
-  if (e.names.length) {
-    head('Your names', `${e.names.length} followed · the last hammer is the newest settled sale on file`);
-    for (const n of e.names) t.push(`- ${n.label}: ${n.live ? `${n.live} live${n.soonest ? ` · soonest ${n.soonest.when} at ${n.soonest.house}` : ''}` : 'nothing live'}${n.last ? ` · last hammer ${n.last.hammer} ${n.last.day} at ${n.last.house} — ${n.last.title}` : n.note ? ` · ${n.note}` : ' · no settled sale on file'}\n  ${pageUrl(origin, n.href)}`);
+  if (e.names.length || e.quietNames.length) {
+    head('Your names', `${e.names.length + e.quietNames.length} followed · ${e.names.length} with lots on the block · the last hammer is the newest settled sale on file`);
+    for (const n of e.names) t.push(`- ${n.label}: ${n.live} live${n.soonest ? ` · soonest ${n.soonest.when} at ${n.soonest.house}` : ''}${n.last ? ` · last hammer ${n.last.hammer} ${n.last.day} at ${n.last.house} — ${n.last.title}` : n.note ? ` · ${n.note}` : ' · no settled sale on file'}\n  ${pageUrl(origin, n.href)}`);
+    if (e.quietNames.length) t.push(`${e.names.length ? `${e.quietNames.length} more ${e.quietNames.length === 1 ? 'name' : 'names'} with nothing live` : `Nothing live for your ${e.quietNames.length} ${e.quietNames.length === 1 ? 'name' : 'names'}`}: ${e.quietNames.join(', ')}`);
     t.push('');
   }
   if (e.market.length) {

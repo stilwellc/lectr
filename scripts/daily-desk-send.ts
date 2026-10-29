@@ -36,7 +36,9 @@ import { marketNamesOf } from '../app/lib/your-market';
 import { bucketOf } from '../app/lib/page-data';
 import type { EntityDetail } from '../app/lib/entity/model';
 import { baseId } from './lib/push-plan';
-import { planDesk, laneOf, lastSaleOf, recentOf, type WatchRow, type SoldRow, type LastSale, type ReceiptsIn, type BacktestIn } from './lib/daily-desk';
+import { makerLineOf } from '../app/lib/lot-labels';
+import { lotFollowOf } from '../app/lib/lot-follow';
+import { planDesk, laneOf, lastSaleOf, recentOf, leadingNameOf, type WatchRow, type SoldRow, type LastSale, type ReceiptsIn, type BacktestIn } from './lib/daily-desk';
 import { renderDesk } from './lib/daily-desk-html';
 
 const SB = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '');
@@ -152,14 +154,17 @@ async function main() {
   if (!rcpt.length) { console.log('[daily-desk] 0 recipients due today'); return; }
   const users = rcpt.map(r => r.user_id);
 
-  // 2 · their watches (max_usd arrives with migration 0010 — fall back without it; bid_count is the save's baseline)
-  const watches: (WatchRow & { user_id: string })[] = [];
+  // 2 · their watches (max_usd arrives with migration 0010, result_dismissed with 0012 — fall back without them; bid_count is the save's baseline)
+  type Watch = WatchRow & { user_id: string; result_dismissed?: boolean | null };
+  const watches: Watch[] = [];
+  const SELECTS = ['user_id,lot_id,saved_title,max_usd,owned,est_mid,bid_count,result_dismissed', 'user_id,lot_id,saved_title,max_usd,owned,est_mid,bid_count', 'user_id,lot_id,saved_title,owned,est_mid,bid_count'];
+  let sel = 0;
   for (const c of chunks(users, 100)) {
-    try {
-      watches.push(...await restAll<WatchRow & { user_id: string }>(`saved_lots?select=user_id,lot_id,saved_title,max_usd,owned,est_mid,bid_count&user_id=in.${inList(c)}`));
-    } catch (e) {
-      if ((e as { status?: number }).status !== 400) throw e;
-      watches.push(...await restAll<WatchRow & { user_id: string }>(`saved_lots?select=user_id,lot_id,saved_title,owned,est_mid,bid_count&user_id=in.${inList(c)}`));
+    for (;;) {
+      try { watches.push(...await restAll<Watch>(`saved_lots?select=${SELECTS[sel]}&user_id=in.${inList(c)}`)); break; } catch (e) {
+        if ((e as { status?: number }).status !== 400 || sel === SELECTS.length - 1) throw e;
+        sel++;
+      }
     }
   }
   // 3 · their follows (saved_searches → Follow)
@@ -179,14 +184,21 @@ async function main() {
   const nameIds = new Set<string>();
   for (const fs_ of Array.from(follows.values())) for (const n of marketNamesOf(fs_, [])) if (n.id) nameIds.add(n.id);
   const { sold: nameSold, recent: nameRecent } = await loadNameSold(nameIds);
-  // 5 · settled results for watched lots off the block
+  // 5 · settled results for watched lots off the block — every sold one (planDesk prints the ones since the last
+  //     Desk; the rest count as results still waiting on the desk: sold, not owned, not dismissed)
   const offBlock = Array.from(new Set(watches.map(w => baseId(w.lot_id)).filter(id => !live.has(id))));
   const sold = new Map<string, SoldRow>();
-  const since = new Date(now - 4 * 86_400_000).toISOString().slice(0, 10);
   for (const c of chunks(offBlock, 100)) {
     const ids = c.flatMap(id => [id, `${id}~`]);
-    for (const r of await restAll<SoldRow>(`lots?select=id,title,house,price_usd,sale_date,image_url&status=eq.sold&sale_date=gte.${since}&id=in.${inList(ids)}`)) sold.set(baseId(r.id), r);
+    for (const r of await restAll<SoldRow>(`lots?select=id,title,house,price_usd,sale_date,image_url&status=eq.sold&id=in.${inList(ids)}`)) sold.set(baseId(r.id), r);
   }
+  // the name behind a pick's saved-lot seed, for its lane head: the live lot's entity, else the snapshot title's leading name
+  const titleById = new Map(watches.map(w => [baseId(w.lot_id), w.saved_title || '']));
+  const whoFor = (seed: { lotId?: string }): string | null => {
+    if (!seed.lotId) return null;
+    const l = live.get(baseId(seed.lotId));
+    return l ? makerLineOf(l).name || lotFollowOf(l)?.label || leadingNameOf(l.title) : leadingNameOf(titleById.get(baseId(seed.lotId)));
+  };
   console.log(`[daily-desk] ${rcpt.length} recipient(s) · ${watches.length} watch(es) · ${pool.length} live lots · ${sold.size} recent result(s) · ${nameIds.size} name(s)${DRY ? ' · DRY (no send)' : ''}`);
   if (PREVIEW) fs.mkdirSync(PREVIEW, { recursive: true });
 
@@ -197,9 +209,10 @@ async function main() {
       const saved: SavedInput[] = mine.map(w => ({ id: w.lot_id, lot: (live.get(baseId(w.lot_id)) as RecLot | undefined) ?? null, owned: !!w.owned, title: w.saved_title ?? null, estMid: w.est_mid ?? null }));
       const myFollows = follows.get(r.user_id) || [];
       const taste = buildTaste({ saved, follows: myFollows, nowMs: now });
-      const picks = recommend(pool, taste, { nowMs: now, n: 12 }).map(p => ({ lot: p.lot as AuctionLot, note: recNote(p), lane: laneOf(p) }));
+      const picks = recommend(pool, taste, { nowMs: now, n: 12 }).map(p => ({ lot: p.lot as AuctionLot, note: recNote(p), lane: laneOf(p, whoFor(p.seed)) }));
       const mySold = mine.map(w => sold.get(baseId(w.lot_id))).filter((s): s is SoldRow => !!s);
-      const desk = planDesk({ now, tz: TZ, watches: mine, live, sold: mySold, picks, lastSentOn: r.last_sent_on, follows: myFollows, book, nameSold, nameRecent, receipts, backtest });
+      const pendingResults = mine.filter(w => !w.owned && !w.result_dismissed && sold.has(baseId(w.lot_id))).length;
+      const desk = planDesk({ now, tz: TZ, watches: mine, live, sold: mySold, picks, lastSentOn: r.last_sent_on, follows: myFollows, book, nameSold, nameRecent, receipts, backtest, pendingResults });
       if (!desk) { skipped++; continue; }
       const unsubUrl = `${ORIGIN}/api/email/unsubscribe?t=${encodeURIComponent(r.unsub_token)}`;
       const { html, text } = renderDesk(desk, { origin: ORIGIN, unsubUrl, dateLabel });
