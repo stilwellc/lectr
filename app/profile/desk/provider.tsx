@@ -45,13 +45,16 @@ import { useLotModal } from '../../lib/use-lot-modal';
 import type { Follow } from '../../lib/follows';
 import { TOP_N, type TodayRead } from '../today';
 import { topOf } from '../../lib/recs';
-import { closeDayOf, getUpcomingCounts, fmtSignedPct, localToday, median, overEstimatePct, isOnBlock } from '../../utils';
+import { closeDayOf, getUpcomingCounts, fmtSignedPct, localToday, isOnBlock } from '../../utils';
 import { ARTIST_LABEL, ARTIST_MARKET } from '../../constants';
 import { drillLabelOf } from '../../lib/lot-labels';
 import { useStalled, useAfterPaint } from '../stall';
 import { readSettledRows, writeSettledRows, type SettledRows } from '../settled-cache';
-import { closeDays, isPastPending, saleTime, sigText, watchTagOf, TAG_SOON_DAYS, type LiveSignal } from './derive';
-import { pricedTotal } from './priced';
+import {
+  closeDays, isPastPending, sigText, watchTagOf, TAG_SOON_DAYS, type LiveSignal,
+  resolveSaved, splitOrphans, partitionSaved, watchSummaryOf, watchChangesOf, recordOf, sinceLastOf, unclaimedOf,
+  collectionTotalsOf, exposureOf, tenureOf, type WatchSummary, type RecordRead, type CollectionTotals,
+} from './derive';
 import { fmtFace } from '../../lib/lot-face';
 import type { DeskData, DeskActions } from './types';
 
@@ -87,38 +90,17 @@ export interface CollectionRow {
   appraised: number | null; basis: string | null; refOnly: boolean; deltaPct: number | null;
   drill: DrillRow | null; drillSlug: string | null;
 }
-export interface CollectionRead {
+/** the rows + the totals (./derive collectionTotalsOf: totalPaid, totalAppraised,
+ *  appraisedPaid, appraisedOfPaid, deltaPct, appraisedN, appraisedPaidN) */
+export interface CollectionRead extends CollectionTotals {
   rows: CollectionRow[];
-  /** Σ bought over every piece with a price (your basis, else the realized price) */
-  totalPaid: number;
-  /** Σ the ENGINE's appraisal over the pieces it appraised — only those
-   *  (R4#4: a piece without a comp pool never carries at cost into a
-   *  figure called an appraisal) */
-  totalAppraised: number;
-  /** Σ bought over the appraised pieces that also carry a bought price —
-   *  the denominator of `deltaPct` */
-  appraisedPaid: number;
-  /** appraised vs bought over the `appraisedPaidN` pieces that have both; null = no measurement */
-  deltaPct: number | null;
-  appraisedN: number; appraisedPaidN: number;
   /** saves marked owned while still on the block — a live lot can't be
    *  owned yet: it stays in Watching and joins the collection when it
    *  hammers (the mark is kept, never deleted) */
   pendingOwned: AuctionLot[];
 }
-export interface RecordRead {
-  n: number; realized: number; med: number | null;
-  split: { flagged: number | null; flaggedN: number; rest: number | null; restN: number } | null;
-  series: { id: string; d: string; pct: number; title: string }[];
-}
-export interface WatchSummary {
-  /** Σ estimate midpoints over the PRICED live watches (./priced: both bounds) */
-  totalEst: number;
-  priced: number;
-  /** live watches with a one-sided estimate ("from $X") — counted, never summed */
-  oneSided: number;
-  flagged: number; next: AuctionLot | null; closesToday: number;
-}
+/** the record and the Watching summary — shapes owned by ./derive (recordOf, watchSummaryOf) */
+export type { RecordRead, WatchSummary };
 export type LedgerState = { ledger: Map<string, LedgerEntry>; loaded: boolean; error: boolean };
 
 /** the page's own reads — what the rooms written before the contract use */
@@ -249,32 +231,7 @@ export function useDeskState(): DeskState {
   /* ── resolve saved ids through the alias map (id~ flips, Wright-family
      mirrors) BEFORE declaring an orphan — a settled watch must never
      silently drop out of the record (selection bias). ── */
-  const { savedLots, savedIdByLotId, orphanIds } = useMemo(() => {
-    const byId = new Map(allLots.map(l => [l.id, l]));
-    const resolve = (id: string): AuctionLot | undefined => {
-      for (const a of idAliases(id)) {
-        const hit = byId.get(a);
-        if (hit) return hit;
-      }
-      return undefined;
-    };
-    const lots: AuctionLot[] = [];
-    const idMap = new Map<string, string>(); // resolved row id → original saved id
-    const seen = new Set<string>();
-    const orphans: string[] = [];
-    for (const id of savedIds) {
-      const l = resolve(id);
-      if (l) {
-        if (seen.has(l.id)) continue;
-        seen.add(l.id);
-        lots.push(l);
-        if (l.id !== id) idMap.set(l.id, id);
-      } else if (fullLoaded) {
-        orphans.push(id);
-      }
-    }
-    return { savedLots: lots, savedIdByLotId: idMap, orphanIds: orphans };
-  }, [savedIds, allLots, fullLoaded]);
+  const { savedLots, savedIdByLotId, orphanIds } = useMemo(() => resolveSaved(savedIds, allLots, fullLoaded), [savedIds, allLots, fullLoaded]);
 
   /** savedMeta is keyed by the id AT SAVE TIME — reach it through the alias. */
   const metaFor = useCallback(
@@ -298,22 +255,7 @@ export function useDeskState(): DeskState {
   // sold-outcomes ledger — data + state lifted together (a fetch failure must
   // never be printed as "withdrawn by the house")
   const [ledgerState, setLedgerState] = useState<LedgerState>({ ledger: new Map(), loaded: false, error: false });
-  const { soldOrphans, goneOrphans } = useMemo(() => {
-    const soldO: { id: string; priceUsd: number; saleDate: string; provisional: boolean }[] = [];
-    const goneO: string[] = [];
-    if (!ledgerState.loaded) return { soldOrphans: soldO, goneOrphans: goneO };
-    for (const id of orphanIds) {
-      // walk the SAME aliases corpus resolution walks — the ledger keys
-      // canonical ids, and a raw-id miss here dressed a real sale as
-      // "withdrawn by the house"
-      let hit: LedgerEntry | undefined;
-      for (const a of idAliases(id)) { hit = ledgerState.ledger.get(a); if (hit) break; }
-      if (hit) soldO.push({ id, priceUsd: hit[0], saleDate: hit[1], provisional: hit.length > 2 });
-      else goneO.push(id);
-    }
-    soldO.sort((a, b) => (a.saleDate < b.saleDate ? 1 : -1));
-    return { soldOrphans: soldO, goneOrphans: goneO };
-  }, [orphanIds, ledgerState]);
+  const { soldOrphans, goneOrphans } = useMemo(() => splitOrphans(orphanIds, ledgerState.ledger, ledgerState.loaded), [orphanIds, ledgerState]);
 
   // the badge is the count of SAVES — a truth localStorage/cloud own outright.
   // (Counting resolved rows made the badge silently shrink by the orphan
@@ -331,27 +273,9 @@ export function useDeskState(): DeskState {
     return () => window.clearInterval(t);
   }, []);
 
-  const upcoming = useMemo(() =>
-    savedLots
-      .filter(l => l.status === 'upcoming' && !isPastPending(l))
-      .sort((a, b) => saleTime(a) - saleTime(b)),
-    // todayKey: isPastPending reads the calendar — re-cut at midnight
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [savedLots, todayKey]
-  );
-  const sold = useMemo(() =>
-    savedLots
-      .filter(l => l.status === 'sold' || isPastPending(l))
-      .sort((a, b) => saleTime(b, 0) - saleTime(a, 0)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [savedLots, todayKey]
-  );
-  const other = useMemo(() =>
-    savedLots
-      .filter(l => l.status !== 'upcoming' && l.status !== 'sold')
-      .sort((a, b) => saleTime(b, 0) - saleTime(a, 0)),
-    [savedLots]
-  );
+  // todayKey: isPastPending reads the calendar — re-cut at midnight
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const { upcoming, sold, other } = useMemo(() => partitionSaved(savedLots), [savedLots, todayKey]);
 
   /** live signals computed ONCE per data change — never in a render body
       (a corpus-resolved row without a stamped signal is an O(corpus) scan) */
@@ -426,33 +350,12 @@ export function useDeskState(): DeskState {
         deltaPct: null, drill: null, drillSlug: null,
       });
     }
-    const totalPaid = rows.reduce((s, r) => s + (r.paid || 0), 0);
-    // (R4#4, R1#4) the appraisal total is the ENGINE's over the pieces it
-    // appraised — never cost carried forward under the word "appraisal";
-    // the ±% compares those same pieces with their bought price, n said
-    const appraisedRows = rows.filter(r => r.appraised != null);
-    const bothRows = appraisedRows.filter(r => r.paid != null && r.paid > 0);
-    const totalAppraised = appraisedRows.reduce((s, r) => s + (r.appraised ?? 0), 0);
-    const appraisedPaid = bothRows.reduce((s, r) => s + (r.paid ?? 0), 0);
-    const appraisedOfPaid = bothRows.reduce((s, r) => s + (r.appraised ?? 0), 0);
-    const deltaPct = appraisedPaid > 0 ? Math.round((appraisedOfPaid / appraisedPaid - 1) * 100) : null;
-    const appraisedN = appraisedRows.length;
-    const appraisedPaidN = bothRows.length;
-    return { rows, totalPaid, totalAppraised, appraisedPaid, deltaPct, appraisedN, appraisedPaidN, pendingOwned };
+    // (R4#4, R1#4) the totals — ./derive collectionTotalsOf
+    return { rows, ...collectionTotalsOf(rows), pendingOwned };
   }, [savedLots, ownedLotIds, allLots, fullLoaded, marketData, soldOrphans, ownedIdSet, savedMeta, metaFor, savedIdOf]);
 
   /* ── sub-market exposure — the MARKET's read, labeled as such ── */
-  const exposure = useMemo(() => {
-    const by = new Map<string, { row: DrillRow; n: number; held: number }>();
-    for (const r of collection.rows) {
-      if (!r.drill) continue;
-      const cur = by.get(r.drill.slug) || { row: r.drill, n: 0, held: 0 };
-      cur.n += 1;
-      cur.held += r.appraised ?? r.paid ?? 0;
-      by.set(r.drill.slug, cur);
-    }
-    return Array.from(by.values()).sort((a, b) => b.held - a.held);
-  }, [collection]);
+  const exposure = useMemo(() => exposureOf(collection.rows), [collection]);
 
   /* ── collection history — one snapshot per LOCAL day; read the trail back
      (lib/snapshots owns the DB round-trip; this page only renders it) ── */
@@ -472,38 +375,9 @@ export function useDeskState(): DeskState {
   }, [snaps]);
 
   /* ── WATCHING summary ── */
-  const summary = useMemo<WatchSummary>(() => {
-    // ONE "priced" rule (./priced, R4#3): a sum of estimate MIDPOINTS over the
-    // lots with BOTH bounds — every surface that prints it labels it so ("at
-    // estimate midpoint · N of M priced"); a one-sided estimate is "from $X"
-    // on its row and never enters the total; a bid-only lot adds nothing
-    const { total: totalEst, priced, oneSided } = pricedTotal(upcoming);
-    const flagged = upcoming.filter(l => signalById.get(l.id)?.label === 'Below Market').length;
-    const todayIso = localToday();
-    const next = upcoming.find(l => { const d = closeDayOf(l).slice(0, 10); return !!d && d >= todayIso; }) || null;
-    const closesToday = upcoming.filter(l => closeDays(l) === 0).length;
-    return { totalEst, priced, oneSided, flagged, next, closesToday };
-  }, [upcoming, signalById]);
+  const summary = useMemo<WatchSummary>(() => watchSummaryOf(upcoming, signalById), [upcoming, signalById]);
 
-  const changes = useMemo(() => {
-    let moved = 0;
-    let newBids = 0;
-    for (const lot of upcoming) {
-      const m = metaFor(lot.id);
-      if (!m) continue;
-      const cur = signalById.get(lot.id);
-      const call = signalCallOf(m);
-      if (call && cur && call.dir !== 'unknown') {
-        // legacy saves have no recorded direction — SavedDelta and the Δ
-        // column render them neutral, so the masthead must not count them
-        // as "moved" on magnitude alone (the two surfaces would disagree)
-        const flipped = (call.dir === 'below' && cur.label !== 'Below Market') || (call.dir === 'above' && cur.label !== 'Above Market');
-        if (flipped || Math.round(cur.pct) !== Math.round(call.pct)) moved++;
-      }
-      if (m.bidCount != null && (lot.bidCount || 0) > m.bidCount) newBids += (lot.bidCount || 0) - m.bidCount;
-    }
-    return { moved, newBids };
-  }, [upcoming, metaFor, signalById]);
+  const changes = useMemo(() => watchChangesOf(upcoming, metaFor, signalById), [upcoming, metaFor, signalById]);
 
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
@@ -645,47 +519,13 @@ export function useDeskState(): DeskState {
   }, [room, signalById, metaFor]);
 
   /* ── THE RECORD — measured, receipts attached ── */
-  const record = useMemo<RecordRead | null>(() => {
-    const judged = sold
-      .map(l => ({ l, pct: overEstimatePct(l) }))
-      .filter((x): x is { l: AuctionLot; pct: number } => x.pct != null);
-    if (!judged.length) return null;
-    const realized = judged.reduce((s, x) => s + (x.l.priceUsd || 0), 0);
-    const med = median(judged.map(x => x.pct));
-    // the flagged-vs-rest split reads DIRECTIONS, which only post-convention
-    // saves carry; legacy direction-unknown saves stay in the blended median
-    // but never claim a side of the split.
-    const flaggedAtSave = judged.filter(x => signalCallOf(metaFor(x.l.id))?.dir === 'below');
-    const restAtSave = judged.filter(x => {
-      const c = signalCallOf(metaFor(x.l.id));
-      return c != null && c.dir !== 'below' && c.dir !== 'unknown';
-    });
-    const split = flaggedAtSave.length >= 3 && restAtSave.length >= 3
-      ? { flagged: median(flaggedAtSave.map(x => x.pct)), flaggedN: flaggedAtSave.length, rest: median(restAtSave.map(x => x.pct)), restN: restAtSave.length }
-      : null;
-    // the TIMELINE — every judged call in hammer order, most recent 60. The
-    // median is the headline; the sequence is the receipt trail (and shows
-    // whether the eye is improving).
-    const series = judged
-      .slice()
-      .sort((a, b) => ((a.l.saleDate || '') < (b.l.saleDate || '') ? -1 : 1))
-      .slice(-60)
-      .map(x => ({ id: x.l.id, d: (x.l.saleDate || '').slice(0, 10), pct: x.pct, title: x.l.title }));
-    return { n: judged.length, realized, med, split, series };
-  }, [sold, metaFor]);
+  const record = useMemo<RecordRead | null>(() => recordOf(sold, metaFor), [sold, metaFor]);
 
   /* ── since your last visit — the site's ONE last-visit clock (feed-filters
      useLastVisit: the previous visit DAY, any page, stable for the session),
      so this line and the Today band's "New since" can never disagree ── */
   const prevVisit = useLastVisit();
-  const sinceLast = useMemo(() => {
-    if (!fullLoaded || !prevVisit) return null;
-    const prevDay = prevVisit;
-    const fresh = sold.filter(l => (l.saleDate || '').slice(0, 10) > prevDay);
-    if (!fresh.length) return null;
-    const pcts = fresh.map(l => overEstimatePct(l)).filter((x): x is number => x != null);
-    return { n: fresh.length, med: pcts.length ? median(pcts) : null };
-  }, [fullLoaded, prevVisit, sold]);
+  const sinceLast = useMemo(() => sinceLastOf(sold, prevVisit, fullLoaded), [fullLoaded, prevVisit, sold]);
 
   /* ── personalization — whose desk this is, what they watch, since when ── */
   const givenName = useMemo(() => {
@@ -707,25 +547,16 @@ export function useDeskState(): DeskState {
     }
     return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([label]) => label);
   }, [upcoming, marketData]);
-  const tenure = useMemo(() => {
-    let min: string | null = null;
-    for (const id of savedIds) {
-      const at = savedMeta[id]?.savedAt;
-      if (at && (!min || at < min)) min = at;
-    }
-    if (!min) return null;
-    const days = (Date.now() - Date.parse(min)) / 86_400_000;
-    if (!(days > 30)) return null;
-    return new Date(min).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  }, [savedIds, savedMeta]);
+  const tenure = useMemo(() => tenureOf(savedIds, savedMeta), [savedIds, savedMeta]);
 
   // the away strip's own-it prompts: settled wins not yet in the collection
   // (Oct 28) a result the reader cleared ("none of these were me") is not a win to claim
-  const unclaimedWins = useMemo(
-    () => sold.filter(l => l.status === 'sold' && !ownedLotIds.has(l.id) && !metaFor(l.id)?.dismissed).length
-      + soldOrphans.filter(o => !o.provisional && !ownedIdSet.has(o.id) && !savedMeta[o.id]?.dismissed).length,
-    [sold, ownedLotIds, soldOrphans, ownedIdSet, metaFor, savedMeta],
+  // ONE filter for the count and the one-tap clear (./derive unclaimedOf)
+  const unclaimed = useMemo(
+    () => unclaimedOf({ sold, soldOrphans, ownedLotIds, ownedIdSet, metaFor, savedMeta, savedIdOf }),
+    [sold, ownedLotIds, soldOrphans, ownedIdSet, metaFor, savedMeta, savedIdOf],
   );
+  const unclaimedWins = unclaimed.n;
 
   // cards view (desktop opt-in) needs the lot back from its id
   const lotById = useMemo(() => new Map(upcoming.concat(other).map(l => [l.id, l])), [upcoming, other]);
@@ -737,11 +568,7 @@ export function useDeskState(): DeskState {
   const onSettledOwn = useCallback((savedId: string) => toggleOwned(savedId), [toggleOwned]);
   const onSettledRemove = useCallback((savedId: string) => toggle(savedId), [toggle]);
   /** every result still waiting (lots + archive orphans), by SAVED id — the one-tap clear */
-  const onDismissResults = useCallback(() => {
-    const ids = sold.filter(l => l.status === 'sold' && !ownedLotIds.has(l.id) && !metaFor(l.id)?.dismissed).map(l => savedIdOf(l.id))
-      .concat(soldOrphans.filter(o => !o.provisional && !ownedIdSet.has(o.id) && !savedMeta[o.id]?.dismissed).map(o => o.id));
-    dismissResults(Array.from(new Set(ids)));
-  }, [sold, ownedLotIds, metaFor, savedIdOf, soldOrphans, ownedIdSet, savedMeta, dismissResults]);
+  const onDismissResults = useCallback(() => { dismissResults(unclaimed.ids); }, [unclaimed, dismissResults]);
 
   // phase-2 failed but SOME saves resolved eagerly — never silently thin the desk
   const partialLoadFailed = fullError && !fullLoaded && savedIds.length > 0;
