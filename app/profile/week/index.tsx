@@ -46,7 +46,7 @@ import { houseTzOf } from '../../lib/house-tz';
 import { storageGet, storageSet } from '../../lib/safe-storage';
 import { craftTitle, formatPrice } from '../../utils';
 import {
-  planWeek, viewOf, pickDefault, ownedWords, dayWords, offsetWord, localClock, houseClock, countdownText, velocityText, bidsText,
+  planWeek, viewOf, pickDefault, weekLeadOf, ownedWords, dayWords, offsetWord, localClock, houseClock, countdownText, velocityText, bidsText,
   CLOSING_NOW_MS, NAME_ROWS_OPEN, WATCH_ROWS_OPEN, PICK_ROWS_OPEN, WEEK_DAYS, cityOf, type WeekPlan, type WeekRow, type WeekDay,
 } from './week';
 import { icsCalendar, eventOfRow, icsFileName } from './ics';
@@ -62,7 +62,11 @@ export const PICKS_KEY = 'lectr-week-picks';
       week), never the names' sales (R1#8, R3) — the sub-line keeps those ── */
 export function meta(desk: DeskData): SectionMeta {
   const plan = planOf(desk);
-  return { id: 'week', label: 'Your week', count: plan.yours || undefined, quiet: plan.rows.length === 0 };
+  // (pass 13) the pill counts what the room lists: the device's picks toggle
+  // (useShowPicks reads the same key) decides whether the picks are in it
+  const v = storageGet(PICKS_KEY);
+  const show = pickDefault(plan, v === '1' ? true : v === '0' ? false : null);
+  return { id: 'week', label: 'Your week', count: weekLeadOf(plan, show) || undefined, quiet: plan.rows.length === 0 };
 }
 
 /** the picks the week reads: the ranked room plus the return loop's

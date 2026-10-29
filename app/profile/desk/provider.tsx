@@ -57,6 +57,7 @@ import {
 } from './derive';
 import { fmtFace } from '../../lib/lot-face';
 import { markBasisText } from './rooms/collection-logic';
+import { todayReadsOf, hammersIn } from './rooms/today-logic';
 import type { DeskData, DeskActions } from './types';
 
 /* ══ LOTS YOU MAY LIKE — the desk's recommender (app/lib/recs). The deal is
@@ -389,98 +390,19 @@ export function useDeskState(): DeskState {
   const upcomingCounts = useMemo(() => getUpcomingCounts(allLots), [allLots]);
 
   /* ── THE READS — the desk's insight layer: hot vs quiet vs landing vs
-     underpriced, each with its measured evidence. Facts only. ── */
-  const reads = useMemo<TodayRead[]>(() => {
-    const rows: TodayRead[] = [];
-    // ONE read per lot — the same LeBron card led "Most bids" AND "Lands
-    // soon" in adjacent rows; each read type claims from the not-yet-used
-    // pool, in evidence order (velocity > quiet > landing > comps > flags)
-    const used = new Set<string>();
-    const claim = (l: AuctionLot) => { used.add(l.id); return l; };
-    const hot = upcoming
-      .filter(l => l.bidVelocity && l.bidVelocity.delta > 0)
-      .sort((a, b) => (b.bidVelocity!.delta) - (a.bidVelocity!.delta))
-      .slice(0, 2);
-    for (const l of hot) {
-      const v = l.bidVelocity!;
-      rows.push({
-        key: `hot-${claim(l).id}`, tag: 'Most bids', lot: l, tone: 'hot',
-        // pctile is a BRAG — printing "faster than 19% of live lots" reads
-        // as praise for a bottom-quintile pace; cite it only above median
-        fact: <>+{v.delta} {v.delta === 1 ? 'bid' : 'bids'} in {Math.round(v.hours)}h{v.pctile != null && v.pctile >= 50 && <> · faster than {v.pctile}% of live lots</>}</>,
-      });
-    }
-    // the sleeper read: bid-platform lots landing THIS WEEK with a published
-    // near-zero count — absent bidCount is absent data, never "no interest"
-    // the sleeper lane's own read (lanes.ts) — verified-fair, dead room
-    const nowMs = Date.now();
-    const quiet = upcoming
-      .filter(l => !used.has(l.id))
-      .map(l => ({ l, read: sleeperRead(l, nowMs) }))
-      .filter((x): x is { l: AuctionLot; read: NonNullable<ReturnType<typeof sleeperRead>> } => !!x.read)
-      .sort((a, b) => closeDays(a.l) - closeDays(b.l))
-      .slice(0, 2);
-    for (const { l, read } of quiet) {
-      const d = closeDays(l);
-      rows.push({
-        key: `q-${claim(l).id}`, tag: 'Quietest', lot: l,
-        fact: <>no bids yet · hammers {d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}{read.entry != null ? <> · opens at {fmtFace(read.entry)}</> : null} · appraised {fmtFace(read.cvu)}{read.anchor === 'fair-est' ? ', at estimate' : ''}</>,
-      });
-    }
-    const soon = upcoming
-      .filter(l => !used.has(l.id))
-      .filter(l => { const d = closeDays(l); return d >= 0 && d <= TAG_SOON_DAYS; })
-      .slice(0, 3);
-    for (const l of soon) {
-      const d = closeDays(l);
-      // when formatEstimate prints the live-bid form ("$402 bid · 10 bids" —
-      // it does this for ANY lot with a live bid and no two-sided estimate),
-      // appending bid state again printed "· 10 bids · 10 bids". Gate on what
-      // it PRINTED, not on which fields exist (one-sided estimates still take
-      // the bid branch).
-      const estText = formatEstimate(l);
-      const printedBid = estText.includes('bid');
-      rows.push({
-        key: `soon-${claim(l).id}`, tag: 'Lands soon', lot: l, tone: 'hot',
-        fact: <>hammers {d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}{estText ? <> · {estText}</> : null}{!printedBid && typeof l.bidCount === 'number' && l.bidCount > 0 ? <> · {l.bidCount} {l.bidCount === 1 ? 'bid' : 'bids'}</> : null}</>,
-      });
-    }
-    if (fullLoaded) {
-      let found = 0;
-      for (const l of upcoming) {
-        if (used.has(l.id)) continue;
-        if (l.cardComps && l.cardComps.n > 0 && l.cardComps.med != null) {
-          rows.push({
-            key: `dc-${claim(l).id}`, tag: 'Direct comps', lot: l,
-            fact: <>{l.cardComps.n} {l.cardComps.n === 1 ? 'sale' : 'sales'}, same card &amp; grade · {fmtFace(l.cardComps.med)} median</>,
-          });
-          found++;
-        }
-        // (Oct 6 2026, wave 4) the client same-edition appraisal row is gone:
-        // only the build's same-card comps seat a 'Direct comps' row
-        if (found >= 2) break;
-      }
-    }
-    // deepest below-market — dealScore, THE one flagged ranking
-    const under = upcoming
-      .filter(l => !used.has(l.id))
-      .map(l => ({ l, sig: signalById.get(l.id) }))
-      .filter((x): x is { l: AuctionLot; sig: LiveSignal } => !!x.sig && x.sig.label === 'Below Market')
-      .sort((a, b) => dealScore(b.l, b.sig.pct) - dealScore(a.l, a.sig.pct))
-      .slice(0, 2);
-    for (const { l, sig } of under) {
-      // same printed-bid gate as the lands-soon read: formatEstimate takes
-      // the live-bid branch for any lot without a two-sided estimate, and
-      // appending currentBid on top printed "· $220 bid · 2 bids · $220 bid"
-      const estText = formatEstimate(l);
-      const printedBid = estText.includes('bid');
-      rows.push({
-        key: `bm-${claim(l).id}`, tag: 'Below market', lot: l, tone: 'up',
-        fact: <><SigPill dir="up">{sigText(sig)}</SigPill> vs comps{estText ? <> · {estText}</> : null}{!printedBid && (l.currentBid || 0) > 0 ? <> · {fmtFace(l.currentBid!)} bid</> : null}</>,
-      });
-    }
-    return rows.slice(0, 8);
-  }, [upcoming, fullLoaded, signalById]);
+     underpriced, each with its measured evidence. Facts only. The selection
+     and its gates are rooms/today-logic (todayReadsOf — one read per lot,
+     the velocity freshness gate on "Most bids"); the words are printed here. ── */
+  const reads = useMemo<TodayRead[]>(() => todayReadsOf({ upcoming, signalById, fullLoaded, nowMs: now, lastCrawl }).map(r => {
+    const f = r.fact;
+    const fact: React.ReactNode =
+      f.kind === 'hot' ? <>+{f.delta} {f.delta === 1 ? 'bid' : 'bids'} in {f.hours}h{f.pctile != null && <> · faster than {f.pctile}% of live lots</>}</>
+      : f.kind === 'quiet' ? <>no bids yet · hammers {hammersIn(f.days)}{f.entry != null ? <> · opens at {fmtFace(f.entry)}</> : null} · appraised {fmtFace(f.cvu)}{f.atEstimate ? ', at estimate' : ''}</>
+      : f.kind === 'soon' ? <>hammers {hammersIn(f.days)}{f.estText ? <> · {f.estText}</> : null}{f.bids != null ? <> · {f.bids} {f.bids === 1 ? 'bid' : 'bids'}</> : null}</>
+      : f.kind === 'comps' ? <>{f.n} {f.n === 1 ? 'sale' : 'sales'}, same card &amp; grade · {fmtFace(f.med)} median</>
+      : <><SigPill dir="up">{sigText(f.sig as LiveSignal)}</SigPill> vs comps{f.estText ? <> · {f.estText}</> : null}{f.bid != null ? <> · {fmtFace(f.bid)} bid</> : null}</>;
+    return { key: r.key, tag: r.tag, lot: r.lot, tone: r.tone, fact };
+  }), [upcoming, fullLoaded, signalById, now, lastCrawl]);
 
   /* ── THE ROOM — the watching ledger with the brief fused in: every row
      carries its reason tag and the ledger sorts action-first. ── */

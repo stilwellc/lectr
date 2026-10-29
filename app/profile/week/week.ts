@@ -354,6 +354,13 @@ export function pickDefault(plan: Pick<WeekPlan, 'watches'>, remembered: boolean
   return plan.watches === 0;
 }
 
+/** THE TAB'S LEAD — the count of yours the room LISTS: watches + picks while
+ *  the picks show; watches alone while the device hides them (the room then
+ *  says "N picks · hidden" and the tab must not count rows it does not list) */
+export function weekLeadOf(plan: Pick<WeekPlan, 'yours' | 'watches'>, showPicks: boolean): number {
+  return showPicks ? plan.yours : plan.watches;
+}
+
 /** the plan as the columns show it: with `picks` off, the pick rows are cut
  *  and every day's count / total is re-read over what is left (a day head
  *  never counts a row it does not show); the plan's own totals (watches,

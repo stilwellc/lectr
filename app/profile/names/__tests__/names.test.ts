@@ -221,3 +221,38 @@ test('namesTotals + orderNames: live names first by soonest sale, then blind spo
   assert.deepEqual(orderNames(reads, k => seen[k] ?? null).map(r => r.name.key), ['soon', 'late', 'quietNew', 'quietOld']);
   assert.deepEqual(namesTotals(reads), { names: 4, live: 2, blind: 2, sales: 1, lots: 3 });
 });
+
+/* ── pass 13 (Oct 29 2026): the figures a collector trusts ── */
+
+test('pulseOf: a name with ONE sale has no YoY (whatever the build stamped); the median never prints without its n; sold-since says its span', () => {
+  const one = pulseOf({ med12m: 5000, med12mN: 1, yoy: { pct: 40, n: 1, basis: 'median' }, sold12m: 1, sold12mSince: '2024', sold: 1 } as unknown as EntitySummary)!;
+  assert.equal(one.yoy, null);
+  assert.equal(one.med12m, 5000); assert.equal(one.med12mN, 1);
+  assert.equal(one.sold12mSince, '2024');
+  const two = pulseOf({ med12m: 5000, med12mN: 2, yoy: { pct: 40, n: 2, basis: 'median' }, sold12m: 2, sold: 2 } as unknown as EntitySummary)!;
+  assert.deepEqual(two.yoy, { pct: 40, n: 2, basis: 'median' });
+  assert.equal(pulseOf({ med12m: 5000, med12mN: 0, sold12m: 0, sold: 0 } as unknown as EntitySummary)!.med12m, null);
+  assert.equal(pulseOf(null), null);
+});
+
+test('a category follow is a name with no entity: live lots only, no sold history to read', () => {
+  const cat: Follow = { kind: 'cat', key: 'science-tech', label: 'Science & Tech' };
+  const names = deskNamesOf([cat], [], []);
+  assert.equal(names.length, 1);
+  assert.equal(names[0].id, null);
+  assert.equal(pulseOf(null), null);
+});
+
+test('the calendar sums USD aliases across currencies (a GBP and a EUR lot) and never converts again; a withdrawn lot is not live', () => {
+  const follow: Follow = { kind: 'maker', key: 'andy-warhol', label: 'Andy Warhol' };
+  const n = deskNamesOf([follow], [], [])[0];
+  const usd = lot({ id: 'u', artist: 'andy-warhol', ek: n.id ?? undefined, estimateLow: 1000, estimateHigh: 2000, saleDate: '2026-11-05', saleDateTime: '2026-11-05T23:00:00Z' } as Partial<AuctionLot> & { id: string; artist: string });
+  const gbp = lot({ id: 'g', artist: 'andy-warhol', ek: n.id ?? undefined, currency: 'GBP', estimateLow: 931, estimateHigh: 1197, saleDate: '2026-11-05', saleDateTime: '2026-11-05T23:00:00Z', auctionHouse: 'Bonhams' } as Partial<AuctionLot> & { id: string; artist: string });
+  const eur = lot({ id: 'e', artist: 'andy-warhol', ek: n.id ?? undefined, currency: 'EUR', fxRate: 1.08, estLowUsd: 1080, estHighUsd: 2160, estimateLow: 1080, estimateHigh: 2160, saleDate: '2026-11-06', saleDateTime: '2026-11-06T23:00:00Z' } as Partial<AuctionLot> & { id: string; artist: string });
+  const gone = lot({ id: 'x', artist: 'andy-warhol', ek: n.id ?? undefined, status: 'withdrawn', estimateLow: 99_999, estimateHigh: 99_999, saleDate: '2026-11-05', saleDateTime: '2026-11-05T23:00:00Z' } as Partial<AuctionLot> & { id: string; artist: string });
+  const live = liveLotsOf(n, [usd, gbp, eur, gone], NOW);
+  assert.deepEqual(live.map(l => l.id).sort(), ['e', 'g', 'u']);
+  const cal = calendarTotals(salesOf(live));
+  assert.equal(cal.lots, 3); assert.equal(cal.k, 3);
+  assert.equal(cal.lo, 1000 + 931 + 1080); assert.equal(cal.hi, 2000 + 1197 + 2160);
+});
