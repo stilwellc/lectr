@@ -148,7 +148,10 @@ const failed = [];
 const report = [];
 const log = (line) => { report.push(line); console.log(line); };
 
-for (const vp of VIEWPORTS) {
+// One fresh browser context per FRAME (Oct 28 2026): a context shared across routes and modes carried
+// localStorage / sessionStorage between frames (the remembered /value lens, the remembered /profile tab), so the
+// light and dark frames of one page showed different states and the rig failed every night after Oct 6.
+async function freshContext(vp) {
   const ctx = await browser.newContext({
     viewport: { width: vp.width, height: vp.height },
     reducedMotion: 'reduce',
@@ -166,9 +169,14 @@ for (const vp of VIEWPORTS) {
       return route.abort();
     });
   }
+  return ctx;
+}
+
+for (const vp of VIEWPORTS) {
   for (const mode of MODES) {
     for (const route of ROUTES) {
       const name = `${slug(route)}-${vp.name}-${mode.name}.png`;
+      const ctx = await freshContext(vp);
       const page = await ctx.newPage();
       try {
         const sep = route.includes('?') ? '&' : '?';
@@ -186,6 +194,8 @@ for (const vp of VIEWPORTS) {
           }
           window.scrollTo({ top: 0, behavior: 'instant' });
         });
+        // the walk mounts lazy rooms that fetch their own data: let those requests settle too
+        await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
         await page.waitForTimeout(900);
         await page.screenshot({
           path: path.join(CUR, name),
@@ -218,10 +228,10 @@ for (const vp of VIEWPORTS) {
         log(`✗ ${name} — capture failed: ${String(err).slice(0, 160)}`);
       } finally {
         await page.close();
+        await ctx.close();
       }
     }
   }
-  await ctx.close();
 }
 await browser.close();
 
