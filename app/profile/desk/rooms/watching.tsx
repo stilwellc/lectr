@@ -2,22 +2,24 @@
 /**
  * WATCHING — the room, action-first, the brief fused in (lifted from
  * page.tsx unchanged): the ledger + cards views, why-now tags, Δ saved,
- * signal now, in-place dossiers, sticky head, FLIP re-ranking, the phone's
- * glance rows with Show all.
+ * signal now, in-place dossiers, FLIP re-ranking, the phone's glance rows
+ * with Show all.
  *
- * (Oct 11 review) ROW ANATOMY (R5#2): a ledger row is a plain row whose
- * title is a link and whose "Details" control is a BUTTON (aria-expanded,
- * aria-controls) — never a role=button wrapper around a link (nested
- * interactive ×13, target size ×49). The whole row still opens on a mouse
- * click; the keyboard path is the button, which j/k focuses
- * ([data-nav-focus]). A PHONE row (R2 c) is that button: tap → the same
- * dossier in-row (estimate, signal, comps, appraisal, Open the lot, Remove
- * watch) — a phone collector can un-watch from the desk; the Ledger / Cards
- * toggle stays reachable at every width.
+ * (THE DESK v4, Oct 29 2026) ONE ROW GRAMMAR: the seven-column ledger and
+ * the phone's separate glance rows are one list of DeskRows (../row) at
+ * every width — photo · title · maker / house / estimate · the why-now tag,
+ * the signal pill, Δ saved, bid velocity and the hammer on the meta line ·
+ * the decision line · the live bid (or the estimate) as the figure with My
+ * max under it. The whole row opens the lot; "Details ›" (a BUTTON —
+ * aria-expanded, aria-controls; the j/k focus target) opens the same dossier
+ * in place: estimate, the block, the engine read, comps / appraisal, your
+ * save, the hammer, My max, Bid at the house, Open the lot, Remove watch.
+ * The Ledger / Cards toggle stays the reader's at every width.
  */
 import { MyMax } from '../mymax';
 import { safeHref } from '../../../lib/safe-href';
-import { Thumb, SigPill } from '../thumb';
+import { SigPill } from '../thumb';
+import { DeskRow, rowSubOf } from '../row';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { AuctionLot } from '../../../types';
@@ -36,7 +38,7 @@ import { closeDays, hammerWord, sigInk, sigText, type LiveSignal } from '../deri
 import { useDeskInternals } from '../provider';
 import type { SectionProps, SectionMeta, DeskData } from '../types';
 import type { DeskInternals } from '../provider';
-import { Term, SavedDelta, callText } from './shared';
+import { GLOSSARY, SavedDelta, callText } from './shared';
 import { ClosingNow } from '../../week';
 import { closingNowOf, offsetWord, dayOffsetOf, dayWords, localClock } from '../../week/week';
 import { useDesk } from '../provider';
@@ -145,7 +147,7 @@ export default function WatchingRoom(_p: SectionProps) {
   // none inside 24h the strip's one-liner folds into the head's sub-line
   const closingNow = useMemo(() => closingNowOf(desk.saved, desk.now), [desk.saved, desk.now]);
   const cnNext = closingNow.next;
-  const { upcoming, summary, room, ledgerCols, signalById, metaFor, allLots, isSaved, savedIdOf, toggle, onCardToggle } = i;
+  const { upcoming, summary, room, signalById, metaFor, allLots, isSaved, savedIdOf, toggle, onCardToggle } = i;
 
   // read in the initializer (the desk renders client-side only): a tab switch
   // remounts this room, and an effect-based read flashed ledger → cards
@@ -174,8 +176,8 @@ export default function WatchingRoom(_p: SectionProps) {
     } catch { /* older browsers: state just isn't shareable */ }
   };
 
-  /* ── INPUT CRAFT — Enter/Space toggles the row's dossier (j/k is the
-     page's, ../keys) ── */
+  /* ── INPUT CRAFT — Enter on the Details button toggles the row's dossier
+     (j/k is the page's, ../keys) ── */
   const [openRow, setOpenRow] = useState<string | null>(null);
   // phone folds: the long rooms open on their first rows (desktop shows all)
   const [allWatch, setAllWatch] = useState(false);
@@ -247,8 +249,8 @@ export default function WatchingRoom(_p: SectionProps) {
         help={{ name: 'Watching', body: <>
           Every bookmarked lot still on the block, soonest hammer first (the same day: flagged below
           market, then bid momentum, then quiet). <b>vs comps</b> is the engine&rsquo;s read now; <b>since saved</b> is how far that read
-          moved since you saved the lot, in points. Open a row to set <b>My max</b> — the most you would pay. Click a row (or press Enter on it) to open its dossier
-          in place — <b>j</b>/<b>k</b> walks the rows. The tag on each row says why it needs you now.
+          moved since you saved the lot, in points. <b>My max</b> on each row is the most you would pay — tap it to set or change it.
+          The row opens the lot; <b>Details ›</b> (or Enter on a row <b>j</b>/<b>k</b> landed on) opens its dossier in place. The tag on each row says why it needs you now.
           Under a title, <b>worth up to</b> is the engine&rsquo;s max bid and the gap to the projected close
           beside it. A row with no such line is one the engine abstained on (too little like it has sold) or
           could not price — no value is implied, high or low.
@@ -289,140 +291,84 @@ export default function WatchingRoom(_p: SectionProps) {
             <button type="button" className="ck-deskdetails-btn" aria-expanded={false} onClick={() => setClosersOpen(true)}>Show the bid cards</button>
           </p>
         ))}
-      {/* desktop ledger */}
-      {/* a column with nothing in it on any row folds away (legacy saves
-          carry no direction, so Δ saved can be all dashes) */}
-      <div className="ray-saved-ledger ray-enter" ref={boardRef}
-        data-nosig={ledgerCols.sig ? undefined : ''} data-nodelta={ledgerCols.delta ? undefined : ''}>
-        <div className="ray-saved-cols ray-saved-ledger-head">
-          <span className="kicker">Why now</span>
-          <span className="kicker">Work</span>
-          <span className="kicker r">Est</span>
-          <span className="kicker r"><Term k="signal now">vs comps</Term></span>
-          <span className="kicker r"><Term k="delta saved">since saved</Term></span>
-          <span className="kicker r">Hammers</span>
+      {/* THE LIST — one DeskRow per watch (../row): the figure is the live bid
+          (the estimate when nothing is bid yet), My max under it; the why-now
+          tag, the signal pill, Δ saved, bid velocity and the hammer ride the
+          meta line; Details › opens the same dossier in place. One list at
+          every width — a phone opens on its most urgent rows, the rest one tap */}
+      {savedView === 'ledger' && (
+        <div className="dk-ledger ray-enter" ref={boardRef}>
+          <div className="dk-list" role="list">
+            {(narrow && !allWatch ? room.slice(0, PHONE_ROWS) : room).map(({ l: lot, reason }) => {
+              const sig = signalById.get(lot.id) ?? null;
+              const m = metaFor(lot.id);
+              const call = signalCallOf(m);
+              const sameAxis = call && sig && call.dir !== 'unknown' &&
+                ((call.dir === 'below') === (sig.label === 'Below Market'));
+              const dPP = sameAxis && sig ? Math.round(sig.pct) - Math.round(call!.pct) : null;
+              const flipped = call && sig && call.dir !== 'unknown' && !sameAxis;
+              const newBids = m?.bidCount != null && (lot.bidCount || 0) > m.bidCount
+                ? (lot.bidCount || 0) - m.bidCount : 0;
+              const days = closeDays(lot);
+              const vel = lot.bidVelocity && lot.bidVelocity.delta > 0 ? lot.bidVelocity : null;
+              // Δ ink: on the below axis deeper (+) is the deal deepening;
+              // on the above axis deeper (+) is it worsening
+              const dInk = dPP == null || dPP === 0 ? 'var(--color-text-faint)'
+                : (call!.dir === 'below' ? dPP > 0 : dPP < 0) ? 'var(--color-up)' : 'var(--color-down-text)';
+              const open = openRow === lot.id;
+              const dossierId = `ck-dossier-${lot.id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+              const bid = (lot.currentBid || 0) > 0 ? lot.currentBid! : 0;
+              // the estimate as the figure: the range alone, "estimate" under it (a
+              // one-sided "from $X" and the no-estimate words print as they are)
+              const estText = fromText(lot) ?? formatEstimate(lot);
+              const twoSided = /est\.$/.test(estText) && !fromText(lot);
+              const est = twoSided ? estText.replace(/ est\.$/, '') : estText;
+              // the hammer, in words — the Hammers column's fact, on the meta line
+              const hammer = days === 0 && lot.saleDateTime
+                ? <CloseClock iso={lot.saleDateTime} windowHours={24} prefix="hammers " />
+                : /^(today|tomorrow|in )/.test(hammerWord(days)) ? `hammers ${hammerWord(days)}` : hammerWord(days);
+              return (
+                <DeskRow key={lot.id} lot={lot} as="div" attrs={{ 'data-flip-id': lot.id, role: 'listitem' }}
+                  tone={sig?.label === 'Below Market' ? 'up' : undefined}
+                  // with a live bid as the figure the sub-line keeps the estimate; without one the estimate IS the figure
+                  sub={bid ? rowSubOf(lot) : [displayMakerOf(lot)?.name, lot.auctionHouse].filter(Boolean).join(' · ')}
+                  tag={reason ? { text: reason.tag, tone: reason.tag === 'Below market' ? 'up' : reason.tag === 'Lands soon' ? 'hot' : undefined } : null}
+                  meta={<>
+                    <span className="dk-meta-fact" style={days >= 0 && days <= 1 ? { color: 'var(--color-fg)' } : undefined}>{hammer}</span>
+                    {sig && (
+                      <span title={GLOSSARY['signal now']} aria-label={`${sig.label}, ${sigText(sig)} vs comps`}>
+                        <SigPill dir={sig.label === 'Below Market' ? 'up' : 'down'}>{sigText(sig)}</SigPill>
+                      </span>
+                    )}
+                    {(flipped || (dPP != null && dPP !== 0)) && (
+                      <span className="dk-meta-fact" title={GLOSSARY['delta saved']} style={{ color: flipped ? 'var(--color-text-muted)' : dInk }}>
+                        {flipped ? 'flipped since saved' : `${dPP! > 0 ? '+' : '−'}${Math.abs(dPP!)}pp since saved`}
+                      </span>
+                    )}
+                    {vel ? <span className="dk-meta-fact">+{vel.delta} {vel.delta === 1 ? 'bid' : 'bids'}/{Math.round(vel.hours)}h</span>
+                      : newBids > 0 ? <span className="dk-meta-fact">+{newBids} {newBids === 1 ? 'bid' : 'bids'} since saved</span> : null}
+                  </>}
+                  figure={bid ? fmtFace(bid) : <span data-quiet={twoSided ? undefined : ''}>{est}</span>}
+                  figureSub={bid
+                    ? <>bid{typeof lot.bidCount === 'number' && lot.bidCount > 0 ? <> · {lot.bidCount} {lot.bidCount === 1 ? 'bid' : 'bids'}</> : null}</>
+                    : twoSided ? 'estimate' : null}
+                  pill={<MyMax lot={lot} compact />}
+                  decision={<DecisionLine lot={lot} estimate={false} when={false} abstain="quiet" style={{ marginTop: 0 }} />}
+                  expand={{ open, id: dossierId, onToggle: () => toggleRow(lot.id) }}>
+                  <RowDossier lot={lot} meta={m} sig={sig} id={dossierId}
+                    onRemove={() => { setOpenRow(null); toggle(savedIdOf(lot.id)); }} />
+                </DeskRow>
+              );
+            })}
+          </div>
+          {/* a phone opens on the most urgent rows; the rest are one tap */}
+          {narrow && room.length > PHONE_ROWS && (
+            <button type="button" className="ck-today-more" aria-expanded={allWatch} onClick={() => setAllWatch(v => !v)}>
+              {allWatch ? 'Show fewer' : `Show all ${room.length} watching`}
+            </button>
+          )}
         </div>
-        {room.map(({ l: lot, reason }) => {
-          const sig = signalById.get(lot.id) ?? null;
-          const m = metaFor(lot.id);
-          const call = signalCallOf(m);
-          const sameAxis = call && sig && call.dir !== 'unknown' &&
-            ((call.dir === 'below') === (sig.label === 'Below Market'));
-          const dPP = sameAxis && sig ? Math.round(sig.pct) - Math.round(call!.pct) : null;
-          const flipped = call && sig && call.dir !== 'unknown' && !sameAxis;
-          const newBids = m?.bidCount != null && (lot.bidCount || 0) > m.bidCount
-            ? (lot.bidCount || 0) - m.bidCount : 0;
-          const days = closeDays(lot);
-          const vel = lot.bidVelocity && lot.bidVelocity.delta > 0 ? lot.bidVelocity : null;
-          // Δ ink: on the below axis deeper (+) is the deal deepening;
-          // on the above axis deeper (+) is it worsening
-          const dInk = dPP == null || dPP === 0 ? 'var(--color-text-faint)'
-            : (call!.dir === 'below' ? dPP > 0 : dPP < 0) ? 'var(--color-up)' : 'var(--color-down-text)';
-          const open = openRow === lot.id;
-          const title = craftTitle(lot.title, lot.auctionHouse);
-          const dossierId = `ck-dossier-${lot.id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
-          return (
-            <div key={lot.id} data-flip-id={lot.id}>
-              {/* the row is the dossier's handle on a mouse (a click anywhere
-                  but a link / button opens it); the keyboard path is the
-                  Details button — the work title still deep-links */}
-              <div
-                data-nav-row data-open={open || undefined}
-                className="ray-saved-cols ray-savedrow ck-expandrow"
-                onClick={e => { if ((e.target as HTMLElement).closest('a, button')) return; toggleRow(lot.id); }}
-              >
-                <span className="ck-why">
-                  {reason && <span className="ck-tag" data-tone={reason.tag === 'Below market' ? 'up' : reason.tag === 'Lands soon' ? 'hot' : undefined}>{reason.tag}</span>}
-                </span>
-                <span className="work ck-ph" style={{ '--ph': '52px' } as React.CSSProperties}>
-                  <Thumb src={lot.imageUrl} label={lot.title} size={52} tone={sig?.label === 'Below Market' ? 'up' : undefined} />
-                  {displayMakerOf(lot) && <span className="ck-workmaker">{displayMakerOf(lot)!.name}</span>}
-                  <span className="ck-work-line">
-                    <Link href={`/lot?id=${encodeURIComponent(lot.id)}`} className="ck-work-title">{title}</Link>
-                    <button type="button" className="ck-expand-btn" data-nav-focus aria-expanded={open} aria-controls={dossierId}
-                      aria-label={`${open ? 'Close' : 'Open'} details for ${title}`} onClick={() => toggleRow(lot.id)}>
-                      {open ? 'Close' : 'Details'}<span aria-hidden className="ck-expand-chev">›</span>
-                    </button>
-                  </span>
-                  {/* (N2) the decision: the Est and Hammers columns print the rest */}
-                  <DecisionLine lot={lot} estimate={false} when={false} abstain="quiet" style={{ marginTop: 3 }} />
-                  {/* a set max rides the row; setting one lives in Details */}
-                  {metaFor(lot.id)?.maxUsd ? <span className="ck-row-max"><MyMax lot={lot} compact /></span> : null}
-                </span>
-                <span className="num">{fromText(lot) ?? formatEstimate(lot) ?? '—'}</span>
-                <span className="num" style={sig ? undefined : { color: 'var(--color-text-faint)' }}
-                  aria-label={sig ? `${sig.label}, ${sigText(sig)}` : 'no signal'}>
-                  {sig ? <SigPill dir={sig.label === 'Below Market' ? 'up' : 'down'}>{sigText(sig)}</SigPill> : '—'}
-                </span>
-                <span className="num" style={{ color: flipped ? 'var(--color-text-muted)' : dInk }}>
-                  {flipped ? 'flipped' : dPP != null && dPP !== 0 ? `${dPP > 0 ? '+' : '−'}${Math.abs(dPP)}pp` : '—'}
-                  {vel ? (
-                    <span className="sub">+{vel.delta} {vel.delta === 1 ? 'bid' : 'bids'}/{Math.round(vel.hours)}h</span>
-                  ) : newBids > 0 ? (
-                    <span className="sub">+{newBids} {newBids === 1 ? 'bid' : 'bids'}</span>
-                  ) : null}
-                </span>
-                <span style={{ textAlign: 'right', fontSize: 13, color: days === 0 ? 'var(--color-fg)' : 'var(--color-text-secondary)', fontWeight: days >= 0 && days <= 1 ? 600 : 500, whiteSpace: 'nowrap' }}>
-                  {days === 0 && lot.saleDateTime
-                    ? <CloseClock iso={lot.saleDateTime} windowHours={24} />
-                    : hammerWord(days)}
-                </span>
-              </div>
-              {open && (
-                <RowDossier lot={lot} meta={m} sig={sig} id={dossierId}
-                  onRemove={() => { setOpenRow(null); toggle(savedIdOf(lot.id)); }} />
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* mobile: the glance rows — same facts, thumb scale; a tap opens the
-          SAME dossier in-row (Open the lot · Remove watch inside it) */}
-      <div className="ck-mledger ray-enter">
-        {(allWatch ? room : room.slice(0, PHONE_ROWS)).map(({ l: lot, reason }) => {
-          const sig = signalById.get(lot.id) ?? null;
-          const days = closeDays(lot);
-          const open = openRow === lot.id;
-          const title = craftTitle(lot.title, lot.auctionHouse);
-          const dossierId = `ck-mdossier-${lot.id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
-          return (
-            <div key={lot.id} className="ck-mrow-wrap">
-              <button type="button" className="ck-mrow" data-nav-row data-open={open || undefined} aria-expanded={open} aria-controls={dossierId}
-                onClick={() => toggleRow(lot.id)}>
-                <Thumb src={lot.imageUrl} label={lot.title} size={56} tone={sig?.label === 'Below Market' ? 'up' : undefined} />
-                <span className="ck-mrow-main">
-                  <span className="ck-mtitle">{title}</span>
-                  <span className="ck-msub">
-                    {reason && <span className="ck-tag" data-tone={reason.tag === 'Below market' ? 'up' : reason.tag === 'Lands soon' ? 'hot' : undefined}>{reason.tag}</span>}
-                    {[displayMakerOf(lot)?.name, fromText(lot) ?? formatEstimate(lot), metaFor(lot.id)?.maxUsd ? `my max ${fmtFace(metaFor(lot.id)!.maxUsd!)}` : null].filter(Boolean).join(' · ')}
-                  </span>
-                  <DecisionLine lot={lot} estimate={false} when={false} abstain="quiet" style={{ marginTop: 2 }} />
-                </span>
-                <span className="ck-mrow-right">
-                  {sig && <span className="ck-mrow-sig" aria-label={`${sig.label}, ${sigText(sig)} vs comps`}><SigPill dir={sig.label === 'Below Market' ? 'up' : 'down'}>{sigText(sig)}</SigPill></span>}
-                  <span className="ck-mham" style={days >= 0 && days <= 1 ? { color: 'var(--color-fg)', fontWeight: 600 } : undefined}>
-                    {days === 0 && lot.saleDateTime
-                      ? <CloseClock iso={lot.saleDateTime} windowHours={24} />
-                      : hammerWord(days)}
-                  </span>
-                  <span className="ck-mrow-chev" aria-hidden>›</span>
-                </span>
-              </button>
-              {open && (
-                <RowDossier lot={lot} meta={metaFor(lot.id)} sig={sig} id={dossierId}
-                  onRemove={() => { setOpenRow(null); toggle(savedIdOf(lot.id)); }} />
-              )}
-            </div>
-          );
-        })}
-        {/* a phone opens on the most urgent rows; the rest are one tap */}
-        {room.length > PHONE_ROWS && (
-          <button type="button" className="ck-today-more" aria-expanded={allWatch} onClick={() => setAllWatch(v => !v)}>
-            {allWatch ? 'Show fewer' : `Show all ${room.length} watching`}
-          </button>
-        )}
-      </div>
+      )}
 
       {/* cards — an opt-in at every width (R2 c: the toggle stays reachable on a phone); mounted only when shown */}
       {savedView === 'cards' && (
