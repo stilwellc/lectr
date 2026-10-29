@@ -4,6 +4,14 @@
 # the morning close board has refreshed bids. Inert until RESEND_API_KEY is set
 # (renders and logs only); once a day per reader (email_prefs.last_sent_on +
 # a Resend idempotency key), so a manual re-run never double-sends.
+#
+# Manual runs (Oct 29): `only` = one recipient's address (or user id) and
+# `force` = send even if that reader was already sent today — the owner can
+# mail himself a real edition to review. `dry_run` sends nothing and uploads
+# the rendered editions (<user_id>.html + .txt) as the daily-desk-preview
+# artifact for three days, so a real-data edition can be read without
+# Supabase access locally. A scheduled run never uploads a preview: a
+# rendered email is a reader's private desk.
 name: Daily Desk email
 on:
   schedule:
@@ -12,9 +20,17 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Render and log only — send nothing'
+        description: 'Render and log only — send nothing; upload the renders as the daily-desk-preview artifact'
         type: boolean
         default: false
+      force:
+        description: 'Send even to a reader already sent today (last_sent_on)'
+        type: boolean
+        default: false
+      only:
+        description: 'One recipient only — their email address or user id'
+        type: string
+        default: ''
 concurrency:
   group: daily-desk
   cancel-in-progress: false
@@ -37,5 +53,17 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           DAILY_DESK_FROM: ${{ vars.DAILY_DESK_FROM || 'lectr <desk@lectr.bid>' }}
-        # no preview artifact: a rendered email is a reader's private desk
-        run: npx tsx scripts/daily-desk-send.ts ${{ inputs.dry_run && '--dry-run' || '' }}
+          DD_ONLY: ${{ inputs.only }}
+        run: >
+          npx tsx scripts/daily-desk-send.ts
+          ${{ inputs.dry_run && '--dry-run --preview-dir out/daily-desk' || '' }}
+          ${{ inputs.force && '--force' || '' }}
+          ${DD_ONLY:+--only "$DD_ONLY"}
+      - name: Upload the dry-run renders
+        if: ${{ inputs.dry_run }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-desk-preview
+          path: out/daily-desk
+          retention-days: 3
+          if-no-files-found: warn

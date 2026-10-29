@@ -172,10 +172,13 @@ export function renderDesk(e: DeskEmail, o: { origin: string; unsubUrl: string; 
   const deskSection = section('Your desk today', deskBody, e.desk.length ? `${n2(e.glance.watching)} live ${e.glance.watching === 1 ? 'watch' : 'watches'}, soonest close first · bid, bids added since you saved it, the engine’s read, the room to your max` : null);
 
   // NEW FOR YOU
+  // NEW FOR YOU — grouped by the follow that reaches each lot, three rows a group, "+N more →" to the name's page or the feed's new tab
+  const freshGroups = e.fresh?.groups.map(g =>
+    group(`${g.label} · ${n2(g.total)}`) + g.items.map(i => row(origin, i)).join('') + (g.more ? more(origin, `+${n2(g.more)} more ${g.label.replace(/^By /, 'by ')}`, g.href) : '')).join('') ?? '';
   const freshSection = e.fresh
-    ? section('New for you', e.fresh.items.length
-      ? e.fresh.items.map(i => row(origin, i)).join('') + (e.fresh.more ? more(origin, `and ${n2(e.fresh.more)} more new for you`, '/?tab=new') : '')
-      : empty('Nothing new for the names you follow since the last Desk.'), esc(e.fresh.since))
+    ? section('New for you', e.fresh.groups.length
+      ? freshGroups + (e.fresh.moreGroups ? more(origin, `and ${n2(e.fresh.moreGroups)} more of your follows with new lots`, '/?tab=new') : '')
+      : empty('Nothing new for the names you follow since the last Desk.'), `${n2(e.fresh.total)} new · ${esc(e.fresh.since)}`)
     : '';
 
   // THE PICKS, laned
@@ -220,43 +223,69 @@ You get this because you turned on the Daily Desk email on lectr. Figures are le
 </td></tr></table></td></tr></table></body></html>`;
 
   // the plain-text edition
+  // THE PLAIN-TEXT EDITION — every section the HTML prints, in the same order
   const g = e.glance;
   const t: string[] = [`lectr · The Daily Desk · ${o.dateLabel}`, '', e.headline, e.preheader, '',
-    `Watching ${g.watching}${g.est ? ` (${g.est} at estimate midpoint)` : ''} · Next hammer ${g.next ? `${g.next.when} — ${g.next.title}` : '—'} · ${g.week} close this week · ${g.picks} picks`, ''];
-  const lines = (title: string, items: (DeskItem | PickItem)[], sub?: string) => {
+    `Watching ${g.watching}${g.est ? ` (${g.est} at estimate midpoint)` : ''} · Next hammer ${g.next ? `${g.next.when}${g.next.time ? ` ${g.next.time}` : ''} — ${g.next.above ? 'first under needs you' : g.next.title}` : '—'} · ${g.week} close this week · ${g.picks} picks`, ''];
+  const metaOf = (i: DeskItem) => [i.maker, i.house, i.est].filter(Boolean).join(' · ');
+  const line = (i: DeskItem | PickItem) => `- ${i.title}${i.when ? ` (${i.when})` : ''}${metaOf(i) ? ` · ${metaOf(i)}` : ''}${i.sig ? ` · ${i.sig.text}` : ''}${i.over ? ` · bid ${i.bid} passed your max` : i.max ? ` · your max ${i.max}` : ''}${'note' in i && i.note ? `\n  ${i.note}` : ''}\n  ${lotUrl(origin, i.id)}`;
+  const head = (title: string, sub?: string | null) => { t.push(title.toUpperCase()); if (sub) t.push(sub); };
+  const lines = (title: string, items: (DeskItem | PickItem)[]) => {
     if (!items.length) return;
-    t.push(title.toUpperCase());
-    if (sub) t.push(sub);
-    for (const i of items) t.push(`- ${i.title}${i.when ? ` (${i.when})` : ''}${i.sig ? ` · ${i.sig.text}` : ''}${i.over ? ` · bid ${i.bid} passed your max` : i.max ? ` · your max ${i.max}` : ''}${'note' in i && i.note ? `\n  ${i.note}` : ''}\n  ${lotUrl(origin, i.id)}`);
+    t.push(title);
+    for (const i of items) t.push(line(i));
     t.push('');
   };
+  if (e.overMax.length || e.closing.length || e.results.length) head('Needs you');
+  else if (e.watched) head('Needs you', 'Nothing today — no bid past your max, nothing of yours closing before tomorrow night, no result to confirm.\n');
   lines('Bids past your max', e.overMax);
   lines('Closing before tomorrow night', e.closing);
   if (e.results.length) {
-    t.push('RESULTS TO CONFIRM');
-    for (const r of e.results) t.push(`- ${r.title} · hammered ${r.hammer}${r.vsMax ? ` · ${r.vsMax}` : ''}\n  ${lotUrl(origin, r.id)}`);
+    t.push('Results to confirm');
+    for (const r of e.results) t.push(`- ${r.title} · ${r.house} · hammered ${r.hammer}${r.vsEst ? ` · ${r.vsEst}` : ''}${r.vsMax ? ` · ${r.inReach ? 'in reach' : 'past you'} · ${r.vsMax}` : ''}\n  Did you win it? ${origin}/profile#results\n  ${lotUrl(origin, r.id)}`);
     t.push('');
   }
+  head('Your desk today');
   if (e.desk.length) {
-    t.push('YOUR DESK TODAY');
-    for (const r of e.desk) t.push(`- ${r.title}${r.when ? ` (${r.when})` : ''}${[r.bid ? `bid ${r.bid}` : '', r.bids, r.moved, r.room, r.sig?.text].filter(Boolean).map(x => ` · ${x}`).join('')}\n  ${lotUrl(origin, r.id)}`);
+    for (const r of e.desk) t.push(`- ${r.title}${r.when ? ` (${r.when})` : ''}${metaOf(r) ? ` · ${metaOf(r)}` : ''}${[/\bbid\b/.test(r.est) ? '' : [r.bid ? `bid ${r.bid}` : '', r.bids].filter(Boolean).join(' · '), r.moved, r.room, r.sig?.text].filter(Boolean).map(x => ` · ${x}`).join('')}\n  ${lotUrl(origin, r.id)}`);
     if (e.deskMore) t.push(`  and ${e.deskMore} more: ${origin}/profile#tab-watching`);
     if (e.deskAbove) t.push(`  + the ${e.deskAbove} above under needs you`);
+  } else if (e.deskAbove) t.push(`All ${e.deskAbove} of your live ${e.deskAbove === 1 ? 'watch is' : 'watches are'} under needs you.`);
+  else t.push(e.watched ? `Nothing of yours is live right now — your ${e.watched} watched ${e.watched === 1 ? 'lot has' : 'lots have'} settled or rolled off the block.` : 'You’re not watching anything yet. Save a lot on lectr and it reports here every morning.');
+  t.push('');
+  head('Closing this week', `${e.week.watches} watches · ${e.week.picks} picks · ${e.week.names} by your names`);
+  t.push(e.week.days.map(d => `${d.today ? 'Today' : d.dow} ${d.date}: ${d.watches + d.picks}${d.names ? ` (+${d.names} names)` : ''}`).join(' · '), `${origin}/profile#tab-week`, '');
+  if (e.fresh) {
+    head('New for you', `${e.fresh.total} new · ${e.fresh.since}`);
+    if (!e.fresh.groups.length) t.push('Nothing new for the names you follow since the last Desk.');
+    for (const gr of e.fresh.groups) {
+      t.push(`${gr.label} · ${gr.total}`);
+      for (const i of gr.items) t.push(line(i));
+      if (gr.more) t.push(`  +${gr.more} more: ${pageUrl(origin, gr.href)}`);
+    }
+    if (e.fresh.moreGroups) t.push(`and ${e.fresh.moreGroups} more of your follows with new lots: ${origin}/?tab=new`);
     t.push('');
   }
-  t.push('CLOSING THIS WEEK', e.week.days.map(d => `${d.today ? 'Today' : d.dow} ${d.watches + d.picks}${d.names ? ` (+${d.names} names)` : ''}`).join(' · '), '');
-  if (e.fresh) lines('New for you', e.fresh.items, e.fresh.since);
-  lines('The picks', e.picks);
+  if (e.picks.length) {
+    head('The picks', `${e.picks.length} from the recommender, by what you follow and save`);
+    let lane = '\u0000';
+    for (const p of e.picks) {
+      const l = p.lane?.label ?? 'For you';
+      if (l !== lane) { t.push(l); lane = l; }
+      t.push(line(p));
+    }
+    t.push('');
+  }
   if (e.names.length) {
-    t.push('YOUR NAMES');
-    for (const n of e.names) t.push(`- ${n.label}: ${n.live ? `${n.live} live${n.soonest ? ` · soonest ${n.soonest.when} at ${n.soonest.house}` : ''}` : 'nothing live'}${n.last ? ` · last hammer ${n.last.hammer} ${n.last.day} at ${n.last.house}` : n.note ? ` · ${n.note}` : ''}`);
+    head('Your names', `${e.names.length} followed · the last hammer is the newest settled sale on file`);
+    for (const n of e.names) t.push(`- ${n.label}: ${n.live ? `${n.live} live${n.soonest ? ` · soonest ${n.soonest.when} at ${n.soonest.house}` : ''}` : 'nothing live'}${n.last ? ` · last hammer ${n.last.hammer} ${n.last.day} at ${n.last.house} — ${n.last.title}` : n.note ? ` · ${n.note}` : ' · no settled sale on file'}\n  ${pageUrl(origin, n.href)}`);
     t.push('');
   }
   if (e.market.length) {
-    t.push('THE MARKET');
-    for (const m of e.market) t.push(`- ${m.strong ? `${m.strong} — ` : ''}${m.text}\n  ${origin}${m.href}`);
+    head('The market', 'read off today’s build: the engine’s record, the block tonight, what’s new');
+    for (const m of e.market) t.push(`- ${m.strong ? `${m.strong} — ` : ''}${m.text}\n  ${pageUrl(origin, m.href)}`);
     t.push('');
   }
-  t.push(`Open your desk: ${origin}/profile`, '', `Unsubscribe: ${o.unsubUrl}`);
+  t.push(`Open your desk: ${origin}/profile`, '', 'You get this because you turned on the Daily Desk email on lectr. Figures are lectr’s reads from public auction data, not appraisals.', `Unsubscribe: ${o.unsubUrl}`, `Email settings: ${origin}/profile#account`);
   return { html, text: t.join('\n') };
 }
