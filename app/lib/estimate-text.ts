@@ -3,7 +3,7 @@
  * (moved out of LotCard.tsx in r9 so pure modules and tests can read them).
  */
 import type { AuctionLot } from '../types';
-import { fmtFace } from './lot-face';
+import { fmtFace, liveBidUsd } from './lot-face';
 
 /** (W24, Oct 11 2026) the card's money words are the lot page's: fmtFace
  *  ($6.9K, $18K, $2.39M, $850) — one decimal under $10K. The cards used to
@@ -35,9 +35,13 @@ export function formatEstimate(lot: AuctionLot): string {
     return lo === hi ? `${lo} est.` : `${lo}–${hi} est.`;
   }
   // Goldin runs bid auctions with no estimates — the live bid is the honest
-  // number, and it's real money on the lot right now.
+  // number, and it's real money on the lot right now. In USD (lot-face
+  // liveBidUsd — the desk row, My max and the Daily Desk read the same);
+  // a bid the money layer cannot convert keeps its own currency's code.
   if (lot.currentBid && lot.currentBid > 0) {
-    return `${fmt(lot.currentBid)} bid${lot.bidCount ? ` · ${lot.bidCount} ${lot.bidCount === 1 ? 'bid' : 'bids'}` : ''}`;
+    const usd = liveBidUsd(lot);
+    const bidText = usd != null ? fmt(usd) : `${lot.currentBid.toLocaleString('en-US')} ${lot.currency}`;
+    return `${bidText} bid${lot.bidCount ? ` · ${lot.bidCount} ${lot.bidCount === 1 ? 'bid' : 'bids'}` : ''}`;
   }
   // ONE-SIDED estimate (D2 P2): a published bound must never vanish into
   // "Estimate on request" — say which side the house put on paper. Live-bid

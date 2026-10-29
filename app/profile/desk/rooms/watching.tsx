@@ -32,7 +32,7 @@ import { WatchMark } from '../../../components/marks';
 import DecisionLine from '../../../components/DecisionLine';
 import { formatDate, craftTitle, closeDayOf } from '../../../utils';
 import { fmtFace } from '../../../lib/lot-face';
-import { fromText } from '../priced';
+import { fromText, liveBidUsd } from '../priced';
 import { displayMakerOf } from '../../../lib/maker-subjects';
 import { RoomHead } from '../../head';
 import { closeDays, hammerWord, sigText, type LiveSignal } from '../derive';
@@ -339,7 +339,8 @@ export default function WatchingRoom(_p: SectionProps) {
                 : (call!.dir === 'below' ? dPP > 0 : dPP < 0) ? 'var(--color-up)' : 'var(--color-down-text)';
               const open = openRow === lot.id;
               const dossierId = `ck-dossier-${lot.id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
-              const bid = (lot.currentBid || 0) > 0 ? lot.currentBid! : 0;
+              // the live bid in USD (lot-face liveBidUsd — the lot page, My max and the paper read the same)
+              const bid = liveBidUsd(lot) ?? 0;
               // the estimate as the figure: the range alone, "estimate" under it; a
               // one-sided "from $X" prints as it is; the house's no-estimate words
               // ("No reserve · opening bid") as a short quiet figure, the rest under

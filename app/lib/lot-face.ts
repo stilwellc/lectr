@@ -52,6 +52,19 @@ export const FACE_LABEL = {
 /** the one formatter for every face figure ($1.7K, $416, $4.96M) */
 export const fmtFace = fmtUsd;
 
+/** THE LIVE BID IN USD — the one read every surface prints (the desk row, the
+ *  lot page, My max, the Daily Desk, the over-max count): the row's currency
+ *  through its dated rate; a non-USD bid with no rate cannot be read as
+ *  dollars and returns null (never a native figure under a $ sign, never a
+ *  false alarm against a USD max). Every live bid on the book today is a USD
+ *  house's (Goldin, REA, bidsquare) — the rule is for the day one isn't. */
+export function liveBidUsd(l: { currentBid?: number | null; currency?: string | null; fxRate?: number | null }): number | null {
+  const bid = l.currentBid || 0;
+  if (!(bid > 0)) return null;
+  if (!l.currency || l.currency === 'USD') return bid;
+  return l.fxRate && l.fxRate > 0 ? bid * l.fxRate : null;
+}
+
 export interface FaceValue {
   /** expected hammer (premium stripped) */
   hammer: number;

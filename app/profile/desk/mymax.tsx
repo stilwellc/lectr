@@ -8,7 +8,7 @@
  */
 import React, { useEffect, useRef, useState } from 'react';
 import type { AuctionLot } from '../../types';
-import { fmtFace } from '../../lib/lot-face';
+import { fmtFace, liveBidUsd } from '../../lib/lot-face';
 import { useDesk } from './provider';
 
 /** the reader's max on a lot (null = none set) */
@@ -18,14 +18,12 @@ export function useMyMax(lotId: string): number | null {
   return typeof m === 'number' && m > 0 ? m : null;
 }
 
-/** the live bid has passed the reader's max */
-export function bidUsdOf(lot: AuctionLot): number {
-  const b = lot.currentBid || 0;
-  if (!b) return 0;
-  return !lot.currency || lot.currency === 'USD' ? b : b * (lot.fxRate || 0);
-}
-export const overMax = (lot: AuctionLot, max: number | null): boolean =>
-  max != null && lot.priceUsd == null && bidUsdOf(lot) > max;
+/** the live bid has passed the reader's max — lot-face liveBidUsd, the one
+ *  read (an unconvertible bid is never read against a USD max) */
+export const overMax = (lot: AuctionLot, max: number | null): boolean => {
+  const usd = liveBidUsd(lot);
+  return max != null && lot.priceUsd == null && usd != null && usd > max;
+};
 
 const parse = (s: string): number | null => {
   const t = s.trim().toLowerCase().replace(/[$,\s]/g, '');

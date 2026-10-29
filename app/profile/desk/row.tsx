@@ -142,11 +142,13 @@ export function priceFigureOf(lot: AuctionLot): { fig: string; sub: string | nul
   if (from) return { fig: from, sub: 'estimate', quiet: false, kind: 'est' };
   const t = formatEstimate(lot);
   if (/ est\.$/.test(t)) return { fig: t.replace(/ est\.$/, ''), sub: 'estimate', quiet: false, kind: 'est' };
-  if (t.includes(' bid')) { const [lead, ...rest] = t.split(' · '); return { fig: lead.replace(/ bid$/, ''), sub: rest[0] ?? 'live bid', quiet: false, kind: 'bid' }; }
   // the house's words with no number in them ("No reserve · opening bid",
-  // "Estimate on request"): a short quiet figure, the rest under it
+  // "Estimate on request"): a short quiet figure, the rest under it — read
+  // BEFORE the bid form ("opening bid" is not a live bid; pass 16: it printed
+  // as kind 'bid', "live bid No reserve, opening bid" in the row's sentence)
   if (t.startsWith('No reserve')) return { fig: 'No reserve', sub: 'opening bid', quiet: true, kind: 'est' };
   if (t === 'Estimate on request') return { fig: 'On request', sub: 'estimate', quiet: true, kind: 'est' };
+  if (t.includes(' bid')) { const [lead, ...rest] = t.split(' · '); return { fig: lead.replace(/ bid$/, ''), sub: rest[0] ?? 'live bid', quiet: false, kind: 'bid' }; }
   return { fig: t, sub: null, quiet: true, kind: 'est' };
 }
 

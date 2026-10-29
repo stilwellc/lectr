@@ -13,7 +13,7 @@
  * names.ts double-FX bug read them as native and converted again — never
  * convert here). No React, no clock.
  */
-import { fmtFace } from '../../lib/lot-face';
+import { fmtFace, liveBidUsd } from '../../lib/lot-face';
 
 export interface EstBounds { estLowUsd?: number | null; estHighUsd?: number | null; estimateLow?: number | null; estimateHigh?: number | null }
 
@@ -65,16 +65,9 @@ export function pricedBasisText(t: Pick<PricedTotal, 'priced' | 'oneSided' | 'n'
   return [`${t.priced} of ${t.n} priced`, t.oneSided > 0 ? `${t.oneSided} from one bound, not summed` : null].filter(Boolean).join(' · ');
 }
 
-/** a live bid in USD — the row's currency through its dated rate; a non-USD
- *  bid with no rate cannot be read against a USD max and returns null (never
- *  a native figure read as dollars, never a false alarm). The cockpit's
- *  over-max count and the Daily Desk's read the same rule. */
-export function liveBidUsd(l: { currentBid?: number | null; currency?: string | null; fxRate?: number | null }): number | null {
-  const bid = l.currentBid || 0;
-  if (!(bid > 0)) return null;
-  if (!l.currency || l.currency === 'USD') return bid;
-  return l.fxRate && l.fxRate > 0 ? bid * l.fxRate : null;
-}
+/** the live bid in USD — lot-face's one read (the lot page, the desk, My max
+ *  and the Daily Desk all print it) */
+export { liveBidUsd };
 
 /** Σ midpoints over the priced rows + the counts every head prints
  *  ("$212K at estimate midpoint · 3 of 4 priced · 1 from $700") */
