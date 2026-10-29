@@ -134,10 +134,16 @@ export interface DeskEmail {
   desk: DeskRow[]; deskMore: number;
   /** live watches printed under needs-you instead (never twice) */
   deskAbove: number;
+  /** watches no longer on the block (settled / rolled off) — the Record holds them */
+  deskSettled: number;
+  /** settled watches still waiting on "Did you win it?" (not owned, not dismissed), any date */
+  pendingResults: number;
   week: WeekCalendar;
   fresh: FreshSection | null;
   picks: PickItem[];
   names: NameLine[];
+  /** followed names with nothing live, collapsed into one line */
+  quietNames: string[];
   market: MarketLine[];
 }
 
@@ -252,6 +258,8 @@ export interface PlanInput {
   nameRecent?: ReadonlyMap<string, readonly LastSale[]>;
   receipts?: ReceiptsIn | null;
   backtest?: BacktestIn | null;
+  /** settled watches still waiting on "Did you win it?" (the runner counts them: sold, not owned, not dismissed) */
+  pendingResults?: number;
 }
 
 export function planDesk(input: PlanInput): DeskEmail | null {
@@ -376,8 +384,8 @@ export function planDesk(input: PlanInput): DeskEmail | null {
     };
   }
 
-  // YOUR NAMES — one ledger line each, the names with lots live first
-  const names: NameLine[] = roster
+  // YOUR NAMES — one ledger line per name with lots live; the quiet ones collapse into one line
+  const namesAll: NameLine[] = roster
     .map(n => {
       const ls = nameLive.get(n.key) || [];
       const soon = ls.map(l => ({ l, ms: closeMsOf(l) })).filter(x => x.ms != null && x.ms >= now).sort((a, b) => a.ms! - b.ms!)[0] ?? null;
@@ -389,8 +397,9 @@ export function planDesk(input: PlanInput): DeskEmail | null {
         note: n.id ? null : n.follow.kind === 'cat' ? 'category follow · live lots only' : 'live lots only',
       };
     })
-    .sort((a, b) => (b.live - a.live) || a.label.localeCompare(b.label))
-    .slice(0, NAME_ROWS);
+    .sort((a, b) => (b.live - a.live) || a.label.localeCompare(b.label));
+  const names = namesAll.filter(n => n.live > 0).slice(0, NAME_ROWS);
+  const quietNames = namesAll.filter(n => n.live === 0).map(n => n.label);
 
   // THE MARKET — read off the served files, each line linked into lectr
   const myMarkets = new Set<string>();
@@ -462,7 +471,8 @@ export function planDesk(input: PlanInput): DeskEmail | null {
     estUsd += !l.currency || l.currency === 'USD' ? mid : mid * (l.fxRate || 0);
   }
   const soonest = deskAll.find(x => x.ms != null) ?? null;
-  const weekAll = deskAll.filter(x => x.ms != null && x.ms - now <= WEEK_MS).length;
+  // what Closing this week counts: your watches + picks on the calendar (the picks closing today used to be missing here)
+  const weekAll = week.watches + week.picks;
   const glance: Glance = {
     watching: liveWatched.length,
     est: estUsd > 0 ? fmtFace(estUsd) : null,
@@ -502,18 +512,46 @@ export function planDesk(input: PlanInput): DeskEmail | null {
     preheader: facts || 'Your watches, your names, what’s new and the market — every morning.',
     headline: `${lead[0].toUpperCase()}${lead.slice(1)}.`,
     glance, overMax, closing, results,
-    watched: watches.length, desk, deskMore, deskAbove, week, fresh, picks: pickItems, names, market,
+    watched: watches.length, desk, deskMore, deskAbove, deskSettled: watches.filter(w => !live.has(baseId(w.lot_id))).length,
+    pendingResults: Math.max(0, input.pendingResults ?? 0), week, fresh, picks: pickItems, names, quietNames, market,
   };
 }
 
 /** the pick's lane from the recommender's seed — the runner's one read of a Rec */
-export function laneOf(r: { seed: { kind: string; label: string; follow?: unknown; broad?: boolean; market?: string; who?: string }; tier?: number }): PickLane {
+export function laneOf(r: { seed: { kind: string; label: string; follow?: unknown; broad?: boolean; market?: string; who?: string } ; tier?: number }, who?: string | null): PickLane {
   const s = r.seed;
   if (s.market || (r.tier ?? 1) > 1) return { kind: 'new', label: 'New to you' };
   if (s.kind === 'follow' && s.follow) return { kind: 'follow', label: `Because you follow ${cut(s.label, 48)}` };
-  // a saved lot's handle: its maker line + the short title ("Pablo Picasso · Deux buveurs catalans"), capped at a whole word
-  if (s.kind === 'saved' || s.kind === 'owned') return { kind: 'saved', label: `Because you ${s.kind === 'owned' ? 'own' : 'saved'} ${cut(s.who && !s.label.includes(s.who) ? `${s.who} · ${s.label}` : s.label, 48)}` };
+  // a saved lot's handle: its maker line + the short title ("Pablo Picasso · Deux buveurs catalans"), capped at a whole
+  // word. A settled watch has no lot behind its seed (the snapshot only), so the runner hands in the name it read
+  // (the lot's entity, else the title's leading name: "Thomas Edison · Autograph Letter Signed…").
+  if (s.kind === 'saved' || s.kind === 'owned') {
+    const w = s.who || who || leadingNameOf(s.label);
+    // a title that opens on the name splits there — only at a word break ("Tom Brady/Patrick Mahomes" stays whole)
+    const rest = w && s.label.toLowerCase().startsWith(w.toLowerCase()) ? s.label.slice(w.length) : null;
+    const label = !w ? s.label
+      : rest == null ? `${w} · ${s.label}`
+        : /^[\s:,–—-]/.test(rest) && rest.replace(/^[\s:,–—-]+/, '') ? `${w} · ${rest.replace(/^[\s:,–—-]+/, '')}` : s.label;
+    return { kind: 'saved', label: `Because you ${s.kind === 'owned' ? 'own' : 'saved'} ${cut(label, 48)}` };
+  }
   return { kind: 'new', label: 'New to you' };
+}
+
+/** words a catalogue title puts right after the name — the name stops there */
+const NAME_STOP = /^(?:Signed|Autograph|Autographed|Typed|Handwritten|Rare|Original|Vintage|Letter|Document|Photograph|Check|Flown|Archive|Collection|Set|Lot|Pair|Group|Game|Rookie|Card|Print|Poster|Limited|Framed|Inscribed|Personal|Early|Important|Large|Small|Fine|Custom)$/i;
+/** the leading name of a title that opens on one ("Thomas Edison Autograph Letter Signed…" → "Thomas Edison";
+ *  "Charles Lindbergh: Donald…" → "Charles Lindbergh"); null when the title opens on a year, a number or a lone word */
+export function leadingNameOf(title: string | null | undefined): string | null {
+  const t = String(title || '').trim();
+  const head = t.split(/[:(–—]| - /)[0].trim();
+  const words = head.split(/\s+/);
+  const out: string[] = [];
+  for (const w of words) {
+    if (out.length >= 3 || NAME_STOP.test(w) || !/^(?:[A-Z][\w'’.-]*|[A-Z]\.?)$/.test(w) || /^\d/.test(w)) break;
+    out.push(w);
+  }
+  if (out.length < 2) return null;
+  return out.join(' ').replace(/[,.]+$/, '');
 }
 
 /** a name's settled rows from its detail bucket (recent ∪ top, once each) */
