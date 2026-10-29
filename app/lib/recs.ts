@@ -91,6 +91,18 @@
  * (recs-signals) is never dealt back — unless the engine now reads it below
  * market.
  *
+ * (Oct 29, pass 2) THE LADDER'S ANCHOR LAW: a rung never deals on "same
+ * sub-category" alone. Another PERSON (the sj:…|p family — every signer on
+ * the culture market is one family) must share a real anchor with the
+ * desk's lots: the franchise they keep, else their DOMAIN (film & TV, music,
+ * a political / royal / military / literary line, a space program), an ERA
+ * within ~25 years, or the FORM of the signed object (a photograph, a
+ * letter, a cut, a document…) — and the reason says which ("Another film &
+ * TV figure", "Another signed letter", "Another figure of the 1950s"). A
+ * Karloff desk never gets a politician's cut. The price-only rung in cards
+ * and space asks the same (an era or a shared facet); art, design and
+ * watches keep theirs, where same sub at your price is the tie law.
+ *
  * (W28, Oct 11) A REASON MUST BE TRUE, checked by recs-eval §4 over 22
  * personas: "Like your X prints" groups the desk's X's of the same MEDIUM (a
  * Polaroid set filed under Prints is a photograph) under the name the desk's
@@ -253,6 +265,17 @@ export interface Feat {
    *  Andy Warhol (Pictures of Ink)" — Muniz's work, Warhol its subject): the
    *  lot's maker slug is its subject, so no maker tie or follow reads it */
   byOther?: boolean;
+  /** (Oct 29) the year the title dates the object to (a card's issue year, a
+   *  letter's date, a programme's season) — the ladder's era anchor */
+  year?: number | null;
+  /** (Oct 29) a signed / collected object's FORM (photograph, letter, cut,
+   *  document, book, program, poster, prop, record) — the ladder's form anchor */
+  form?: string | null;
+  /** (Oct 29) the DOMAIN a lot about WHO or WHAT belongs to: film & TV or
+   *  music (entertainment), its historical line (political, royalty, military,
+   *  aviation, crime, literary, historic), its space program (apollo…) — the
+   *  ladder's domain anchor; null where the sport or the sub is the gate */
+  domain?: string | null;
 }
 
 export interface Seed {
@@ -356,6 +379,50 @@ function ekOf(l: RecLot): string | null {
   return l.ek !== undefined ? l.ek ?? null : entityKeyOf(l);
 }
 
+/* ── the ladder's anchors, read off a lot (Oct 29) ───────────────────────── */
+
+/** the first plausible year in a title (1600–2029) — a card's issue, a
+ *  letter's date, a programme's season; null when the title carries none */
+export function yearOf(title: string): number | null {
+  const m = title.match(/\b(1[6-9]\d{2}|20[0-2]\d)\b/);
+  return m ? parseInt(m[1], 10) : null;
+}
+/** categories whose objects have a FORM worth anchoring on (what a signer signed) */
+const FORM_CATS: ReadonlySet<CatKey> = new Set<CatKey>(['entertainment', 'historical', 'sports-memorabilia', 'space-science']);
+const FORMS: [string, RegExp][] = [
+  ['prop', /\b(?:props?|costume|wardrobe|screen[- ](?:used|worn|matched)|production[- ](?:used|made)|hero prop)\b/i],
+  ['photograph', /\b(?:photo(?:graph)?s?|still|8\s?x\s?10|11\s?x\s?14|portrait|publicity shot)\b/i],
+  ['letter', /\b(?:letter|ALS|TLS|typed letter|autograph letter|note|postcard|telegram)\b/i],
+  ['document', /\b(?:cheque|check|contract|document|receipt|invoice|certificate|voucher|manuscript|agreement|affidavit)\b/i],
+  ['book', /\b(?:book|first edition|presentation copy|copy of|novel|hardcover|paperback)\b/i],
+  ['program', /\b(?:program(?:me)?|playbill|ticket|pass|menu|handbill)\b/i],
+  ['poster', /\b(?:poster|lobby card|one[- ]sheet|half[- ]sheet|insert)\b/i],
+  ['record', /\b(?:album|record|LP|vinyl|45\s?rpm|single)\b/i],
+  ['cut', /\b(?:cut|signature|index card|album page|card signed|signed card|autograph card)\b/i],
+];
+/** what the object IS, among the forms collectors file signed pieces by */
+export function formOf(title: string): string | null {
+  for (const [k, re] of FORMS) if (re.test(title)) return k;
+  return null;
+}
+/** a WHO-or-WHAT lot's domain: entertainment by its facet, historical by its
+ *  line, space by its program; null in the markets where the sport or the sub
+ *  is the gate already (a shared sport is not an anchor, it is the ante) */
+function domainOf(cat: CatKey, sub: string, fx: ReadonlySet<string>): string | null {
+  if (cat === 'entertainment') return fx.has('film-tv') ? 'film-tv' : fx.has('music') ? 'music' : null;
+  if (cat === 'historical') return sub && sub !== 'other' ? sub : null;
+  if (cat === 'space-science') return sub && sub !== 'science' && sub !== 'space-other' ? sub : null;
+  return null;
+}
+/** a domain in a reason's voice ("film & TV", "political", "Apollo") */
+function domainWord(cat: CatKey, domain: string): string {
+  if (domain === 'film-tv') return 'film & TV';
+  if (domain === 'music') return 'music';
+  if (cat === 'historical') return ({ political: 'political', royalty: 'royal', military: 'military', aviation: 'aviation', crime: 'notorious', literary: 'literary', historic: 'historic' } as Record<string, string>)[domain] ?? domain;
+  if (cat === 'space-science') return subLabel(cat, domain);
+  return domain;
+}
+
 function anchorOf(l: RecLot, nowMs: number, fallback?: number | null): number | null {
   // a settled lot's realized price is the truest anchor it has
   if (l.status === 'sold' && (l.priceUsd || 0) > 0) return l.priceUsd as number;
@@ -399,11 +466,13 @@ export function featOf(l: RecLot, nowMs: number, estFallback?: number | null): F
   const fx = new Set<string>();
   for (const k of Array.from(lotFacets(l))) if (TASTE_FX.test(k)) fx.add(k);
   const a = anchorOf(l, nowMs, estFallback);
+  const title = String(l.title || '');
   const f: Feat = {
     cat: t.cat, sub: t.sub, ek, named: !!ek && !ek.startsWith('cs:'),
     card, drill: DRILL_CATS.has(t.cat) && l.drill ? l.drill : null, sport: t.sport ?? null, fx,
     logA: a ? Math.log10(a) : null, house: l.auctionHouse || null,
-    medium: t.cat === 'fine-art' ? artMediumOf(String(l.title || '')) : null, byOther,
+    medium: t.cat === 'fine-art' ? artMediumOf(title) : null, byOther,
+    year: yearOf(title), form: FORM_CATS.has(t.cat) ? formOf(title) : null, domain: domainOf(t.cat, t.sub, fx),
   };
   featMemo.set(l as object, { day, f });
   return f;
@@ -1023,7 +1092,7 @@ const FX_WORD: Record<string, string> = {
 /** a fallback rung (the ladder): 2 = same identity family, 3 = same sub +
  *  a shared cut, 4 = same category at the anchor's prices */
 export type LadderTier = 2 | 3 | 4;
-export interface LadderHit { tier: LadderTier; /** the anchor's facts the rung reads */ anchor: LadderAnchor }
+export interface LadderHit { tier: LadderTier; /** the anchor's facts the rung reads */ anchor: LadderAnchor; /** (Oct 29) what the lot shares beyond its family / sub */ via?: LadderVia | null }
 
 /** one scored lot before the diversity pass (the eval reads the full ranking) */
 export interface ScoredRow<L extends RecLot = RecLot> {
@@ -1065,6 +1134,34 @@ export interface LadderAnchor {
   logA: number | null;
   /** the franchise most of its lots carry (fr-…) */
   fr: string | null;
+  /** (Oct 29) the anchors its lots agree on: the domain most carry, the
+   *  median year of the dated ones, the form most are */
+  domain: string | null;
+  year: number | null;
+  form: string | null;
+}
+
+/** how a rung REACHED a lot beyond its family / sub — the reason says it */
+export interface LadderVia { kind: 'franchise' | 'domain' | 'era' | 'form'; word: string }
+/** years apart two dated objects may be and still share an era */
+const ERA_SPAN = 25;
+
+/** the anchor a candidate shares with the desk's lots, strongest first: the
+ *  franchise they keep, their domain, an era (the card buckets, else dated
+ *  within ERA_SPAN years), the form of the object — null when nothing but
+ *  the sub-category is shared (and the sub alone deals nothing) */
+function anchorVia(c: Feat, a: LadderAnchor): LadderVia | null {
+  if (a.fr && c.fx.has(a.fr)) return { kind: 'franchise', word: FACET_LABEL[a.fr] ?? 'the franchise' };
+  if (a.domain && c.domain === a.domain) return { kind: 'domain', word: domainWord(c.cat, a.domain) };
+  // two domains that disagree (a music signer for a film desk) share nothing,
+  // whatever the date or the paper says
+  if (a.domain && c.domain && a.domain !== c.domain) return null;
+  const eraA = a.cut.find(k => k.startsWith('era-')), eraC = eraOf(c.fx);
+  if (eraA && eraC && eraA === eraC) return { kind: 'era', word: FX_WORD[eraA] ?? 'the same era' };
+  if (a.year != null && c.year != null && Math.abs(c.year - a.year) <= ERA_SPAN) return { kind: 'era', word: `the ${Math.floor(c.year / 10) * 10}s` };
+  // a bare signature cut is what every autograph desk holds — no anchor
+  if (a.form && a.form !== 'cut' && c.form === a.form) return { kind: 'form', word: a.form };
+  return null;
 }
 
 /** THE IDENTITY FAMILY of a named entity: another Pokémon / film / mission
@@ -1110,36 +1207,61 @@ function ladderAnchors(taste: Taste, members: Map<Seed, Feat[]>): LadderAnchor[]
     cnt.forEach((n, k) => { if (n * 2 >= inCat.length) cut.push(k); });
     const fr = modeOf(inCat.flatMap(f => Array.from(f.fx).filter(k => k.startsWith('fr-'))));
     const ps = inCat.map(f => f.logA).filter((x): x is number => x != null);
-    out.push({ seed: s, cat, sub, sport, fam, cut, logA: ps.length ? medianOf(ps) : null, fr });
+    const ys = inCat.map(f => f.year).filter((x): x is number => x != null);
+    out.push({
+      seed: s, cat, sub, sport, fam, cut, logA: ps.length ? medianOf(ps) : null, fr,
+      domain: modeOf(inCat.map(f => f.domain ?? null).filter((x): x is string => !!x)),
+      year: ys.length ? medianOf(ys) : null,
+      form: modeOf(inCat.map(f => f.form ?? null).filter((x): x is string => !!x)),
+    });
   }
   return out;
 }
 
-/** the best rung one candidate reaches on one anchor (0 = none) */
-function ladderTier(c: Feat, a: LadderAnchor, stated = false): LadderTier | 0 {
-  if (c.cat !== a.cat) return 0;
-  if (c.sport && a.sport && c.sport !== a.sport) return 0;
+/** the best rung one candidate reaches on one anchor (null = none), and
+ *  what it shares beyond its family / sub when the rung asked for an anchor */
+function ladderTier(c: Feat, a: LadderAnchor, stated = false): { tier: LadderTier; via: LadderVia | null } | null {
+  if (c.cat !== a.cat) return null;
+  // (Oct 29) an anchor with a sport asks for that sport: a card the taxonomy
+  // cannot place is not "more '80s cards" for a Gretzky desk
+  if (a.sport && c.sport !== a.sport) return null;
   const price = c.logA != null && a.logA != null ? Math.exp(-((c.logA - a.logA) ** 2) / (2 * PRICE_SIGMA * PRICE_SIGMA)) : null;
   if (a.fam && familyOf(c) === a.fam) {
-    // another PERSON is a family only inside the same sub and outside a
-    // franchise (a Star Wars signer's next pick is Star Wars — lotSim's
-    // tie — never Houdini because both are people who signed photos);
     // another MAKER of the same category · sub is a family only near the
     // anchor's prices (W28: a $300 quartz Cartier was "another maker's
     // watch" for a $10K–80K Patek / Rolex desk) — or, when the reader stated
     // a range, inside it (the caller gates that: a $50K-and-up Patek reader
     // whose Patek lots on the block run $2K still wants the $60K Daytona)
-    if (a.fam.startsWith('mk|')) { if (stated || price == null || price >= 0.3) return 2; }
-    else if (!a.fam.endsWith('|p') || (c.sub === a.sub && !a.fr)) return 2;
+    if (a.fam.startsWith('mk|')) { if (stated || price == null || price >= 0.3) return { tier: 2, via: null }; }
+    else if (!a.fam.endsWith('|p')) return { tier: 2, via: null };
+    else if (c.sub === a.sub) {
+      // (Oct 29) another PERSON: every signer on the culture market is one
+      // family (sj:culture|p), so the sub alone dealt a politician's cut to a
+      // Karloff desk. The rung needs an anchor the desk's lots share — their
+      // franchise (and ONLY that, when they keep one: a Star Wars signer's
+      // next pick is Star Wars, never Houdini), else their domain, an era
+      // within ERA_SPAN years, or the form of the object
+      const via = anchorVia(c, a);
+      if (via && (!a.fr || via.kind === 'franchise')) return { tier: 2, via };
+    }
   }
   // memorabilia, entertainment and historical lots are about WHO or WHAT:
   // only the family rung reaches them (a shared "signed" or the same price
   // is no tie between Houdini and Star Wars — lotSim's FACET_TIE_CATS rule)
-  if (!FACET_TIE_CATS.has(c.cat) && !PRICE_LINK_CATS.has(c.cat)) return 0;
+  if (!FACET_TIE_CATS.has(c.cat) && !PRICE_LINK_CATS.has(c.cat)) return null;
   const eraA = a.cut.find(k => k.startsWith('era-')), eraC = eraOf(c.fx);
-  if (a.sub && c.sub === a.sub && !(eraA && eraC && eraA !== eraC) && a.cut.some(k => c.fx.has(k)) && (price == null || price >= 0.3)) return 3;
-  if ((a.sub == null || c.sub === a.sub) && price != null && price >= 0.6) return 4;
-  return 0;
+  if (a.sub && c.sub === a.sub && !(eraA && eraC && eraA !== eraC) && a.cut.some(k => c.fx.has(k)) && (price == null || price >= 0.3)) return { tier: 3, via: null };
+  if ((a.sub == null || c.sub === a.sub) && price != null && price >= 0.6) {
+    // (Oct 29) the price-only rung in cards and space asks for an anchor too
+    // (an era, a program, a shared facet): a 2021 raw card is not "more
+    // baseball cards at your prices" for a 1952 desk. Art, design and watches
+    // keep the rung as it was — there the same sub at your price is the tie
+    // law itself (lotSim's PRICE_LINK_CATS)
+    if (PRICE_LINK_CATS.has(c.cat)) return { tier: 4, via: null };
+    const via = anchorVia(c, a);
+    if (via) return { tier: 4, via };
+  }
+  return null;
 }
 
 /** how many strong rows a taste needs before the ladder stays shut */
@@ -1427,7 +1549,9 @@ function scoreCore<L extends RecLot>(pool: readonly L[], taste: Taste, opts: Rec
       for (const c of cs) {
         if (!(c.sub === f.sub || subMatches(c.cat, c.sub, f.sub))) continue;
         if ((c.medium ?? null) !== (f.medium ?? null)) continue;
-        if (c.sport && f.sport && c.sport !== f.sport) continue;
+        // a cut with a sport asks for that sport (a card the taxonomy cannot
+        // place is not "baseball cards" — pass 2)
+        if (c.sport && f.sport !== c.sport) continue;
         const era = c.fx.find(k => k.startsWith('era-')), ec = eraOf(f.fx);
         if (era && ec && era !== ec) continue;
         // a lot about WHO or WHAT: the franchise the cut keeps (a Star Wars desk
@@ -1466,22 +1590,23 @@ function scoreCore<L extends RecLot>(pool: readonly L[], taste: Taste, opts: Rec
       if (!o.f && deskTwin(l, f)) continue;
       if (!kindFits({ ...l, ek: f.ek }) || (f.cat === 'fine-art' && f.sub === 'prints' && f.medium)) continue;
       if (taste.stated && f.logA != null && !statedFit(f.logA, taste.stated).inside) continue;
-      let bestTier: LadderTier | 0 = 0, bestC = 0, bestA: LadderAnchor | null = null;
+      let bestTier: LadderTier | 0 = 0, bestC = 0, bestA: LadderAnchor | null = null, bestVia: LadderVia | null = null;
       for (const a of anchors) {
         // a looked-at lot never stands in as its own kin
         if (a.seed.kind === 'signal' && a.seed.lotId === l.id) continue;
-        const t = ladderTier(f, a, !!taste.stated);
-        if (!t) continue;
+        const hit = ladderTier(f, a, !!taste.stated);
+        if (!hit) continue;
+        const t = hit.tier;
         // inside a rung, the anchor's price level leads (a $420K Kobe is a
         // stranger to a $96 Ewing rookie, however alike the family)
         const near = f.logA != null && a.logA != null ? Math.exp(-((f.logA - a.logA) ** 2) / (2 * 0.5 * 0.5)) : 0.5;
         const c = a.seed.w * LADDER_SIM[t] * (0.6 + 0.4 * near);
-        if (!bestTier || t < bestTier || (t === bestTier && c > bestC)) { bestTier = t; bestC = c; bestA = a; }
+        if (!bestTier || t < bestTier || (t === bestTier && c > bestC)) { bestTier = t; bestC = c; bestA = a; bestVia = hit.via; }
       }
       if (!bestTier || !bestA) continue;
       const fin = finish(l, f, bestC, close);
       if (fin.score <= 0) continue;
-      rungs[bestTier].push({ l, score: fin.score, taste: bestC, best: { seed: bestA.seed, c: bestC, ladder: { tier: bestTier, anchor: bestA } }, f, flagged: fin.flagged, inBand: fin.inBand, inStated: fin.inStated });
+      rungs[bestTier].push({ l, score: fin.score, taste: bestC, best: { seed: bestA.seed, c: bestC, ladder: { tier: bestTier, anchor: bestA, via: bestVia } }, f, flagged: fin.flagged, inBand: fin.inBand, inStated: fin.inStated });
     }
     // each rung sits strictly below the one above: rescale into the gap
     let ceil = inRange.length ? inRange[inRange.length - 1].score : Infinity;
@@ -1977,6 +2102,7 @@ function discoverReason(f: Feat, cut: TasteCut, bands: ReadonlyMap<CatKey, Price
     : f.cat === 'tcg' ? 'Pokémon cards'
     : f.cat === 'fine-art' ? nounOf(f.cat, f.sub, f.medium)
     : f.cat === 'sports-memorabilia' ? `${sportW}${subLabel(f.cat, f.sub).toLowerCase()}`
+    : f.cat === 'space-science' ? `${subLabel(f.cat, f.sub)} pieces`
     : dom ? `${DOMAIN_WORD[dom] ?? FACET_LABEL[dom]} ${nounOf(f.cat, f.sub)}`
     : subLabel(f.cat, f.sub).toLowerCase();
   const what = `${eraW ? `${eraW} ` : ''}${noun}`;
@@ -1987,9 +2113,15 @@ function discoverReason(f: Feat, cut: TasteCut, bands: ReadonlyMap<CatKey, Price
   return { reason, why: ['new to you', what, price], short: reason };
 }
 
-/** what a family is called, for "Another …" */
-function familyWord(a: LadderAnchor): string {
+/** what a family is called, for "Another …" — a person by the anchor the
+ *  rung stands on ("film & TV figure", "signed letter", "figure of the 1950s") */
+function familyWord(a: LadderAnchor, via: LadderVia | null = null): string {
   const fam = a.fam ?? '';
+  if (via && /\|p$/.test(fam)) {
+    if (via.kind === 'franchise' || via.kind === 'domain') return `${via.word} figure`;
+    if (via.kind === 'form') return `signed ${via.word}`;
+    return `figure of ${via.word}`;
+  }
   if (fam.startsWith('pl|')) {
     const era = fam.split('|')[3];
     const sport = a.sport ? SPORT_WORD[a.sport] : null;
@@ -2017,15 +2149,21 @@ function ladderReason(l: RecLot, f: Feat, hit: LadderHit, s: Seed): { reason: st
     : f.cat === 'tcg' ? 'Pokémon cards'
     : nounOf(f.cat, f.sub);
   let lead: string;
-  if (hit.tier === 2) lead = `Another ${familyWord(a)}`;
+  const via = hit.via ?? null;
+  if (hit.tier === 2) lead = `Another ${familyWord(a, via)}`;
   else if (hit.tier === 3) {
     const words = a.cut.filter(k => f.fx.has(k) && FX_WORD[k]).sort((x, y) => rankCut(x) - rankCut(y)).slice(0, 2).map(k => FX_WORD[k]);
     lead = `More ${words.length ? `${words.join(' ')} ` : ''}${noun}`;
   } else {
     const p = a.logA != null ? Math.pow(10, a.logA) : null;
-    lead = `More ${noun} at ${whose === 'your save' ? 'your save’s' : `${whose}’s`} prices${p ? ` · ~${bandText(p, p)}` : ''}`;
+    // (Oct 29) the anchor the price-only rung stands on, in the noun ("More
+    // vintage baseball cards at…", "More Apollo pieces at…")
+    const anchorW = via?.kind === 'era' && !/^the /.test(via.word) ? `${via.word} ` : via?.kind === 'domain' ? `${via.word} ` : '';
+    const eraTail = via?.kind === 'era' && /^the /.test(via.word) ? ` of ${via.word}` : '';
+    lead = `More ${anchorW}${noun}${eraTail} at ${whose === 'your save' ? 'your save’s' : `${whose}’s`} prices${p ? ` · ~${bandText(p, p)}` : ''}`;
   }
-  const why = [hit.tier === 2 ? `another ${familyWord(a)}` : hit.tier === 3 ? 'same cut' : 'same price level'];
+  const why = [hit.tier === 2 ? `another ${familyWord(a, via)}` : hit.tier === 3 ? 'same cut' : 'same price level'];
+  if (via) why.push(via.kind === 'franchise' ? `also ${via.word}` : via.kind === 'domain' ? `same domain · ${via.word}` : via.kind === 'era' ? `same era · ${via.word}` : `same form · ${via.word}`);
   void l;
   return { reason: `${lead} · ${src}`, why, short: `${lead} · ${src}` };
 }

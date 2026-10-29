@@ -9,7 +9,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTaste, recommend, discoverLots, rotationOf, ENGINE_NOTE, DISCOVER_DAYS, type RecLot } from '../recs';
+import { buildTaste, recommend, discoverLots, scoreLots, featOf, rotationOf, ENGINE_NOTE, DISCOVER_DAYS, type RecLot } from '../recs';
 import { readSignals, recordSignal, signalsToTaste, VIEWED_DAYS, type KV } from '../recs-signals';
 import { reasonKindOf } from '../pick-log';
 
@@ -163,4 +163,74 @@ test('viewed: a lot this device saw the reader open in the last 7 days stays out
   // the plain input works without the store
   const direct = buildTaste({ saved, follows: [], negative: { viewed: [other.id] }, nowMs: NOW });
   assert.ok(!ids(recommend([seen, stale, other], direct, { nowMs: NOW })).includes(other.id));
+});
+
+/* ── pass 2: the ladder's anchor law ──────────────────────────────────── */
+
+test('ladder: a Karloff desk never gets a politician — another person needs a shared anchor, and the rung says which', () => {
+  // no photos: only the ladder speaks here (the discover lane needs a picture)
+  const cut = (title: string, o: Partial<RecLot> = {}) => auto(title, 1000, { imageUrl: null, ...o });
+  const desk = [
+    cut('Boris Karloff Signed Cut - JSA LOA'),
+    cut('Basil Rathbone, Nigel Bruce Dual-Signed Cut - JSA LOA'),
+    cut('Audrey Hepburn Signed Film Document for Charade'),
+  ];
+  const newsom = cut('Gavin Newsom Signed Cut - PSA/DNA Authentic', { drill: null });
+  const burney = cut('Charles Burney Autograph Letter Signed to Samuel Wesley, 1789', { drill: null });
+  const lugosi = cut('Bela Lugosi Signed Dracula Program (Belfast, 1951)');
+  const chaney = cut('Lon Chaney Jr. Signed Wolf Man Photograph');
+  const holiday = cut('Billie Holiday Signed Cut - JSA LOA', { drill: 'music' });
+  const pool = [...desk, newsom, burney, lugosi, chaney, holiday];
+  const t = buildTaste({ saved: desk.map(l => ({ id: l.id, lot: l, savedAt: at(-3) })), follows: [], nowMs: NOW });
+  const rows = scoreLots(pool, t, { nowMs: NOW });
+  assert.ok(rows.every(r => r.best.ladder), 'nothing ties by name or franchise: every row is the ladder’s');
+  const rs = recommend(pool, t, { nowMs: NOW, n: 12 });
+  const got = ids(rs);
+  assert.ok(!got.includes(newsom.id) && !got.includes(burney.id), `a politician’s cut and an 18th-century letter share nothing but the sub: ${rs.map(r => r.reason).join(' | ')}`);
+  assert.ok(!got.includes(holiday.id), 'a music signer’s cut is another domain — the shared paper does not count');
+  assert.ok(got.includes(lugosi.id) && got.includes(chaney.id), 'the Universal-monsters pieces come');
+  for (const id of [lugosi.id, chaney.id]) {
+    const r = rs.find(x => x.lot.id === id)!;
+    assert.equal(r.tier, 2);
+    assert.match(r.reason, /^Another film & TV figure · you saved /, r.reason);
+    assert.ok(r.why.includes('same domain · film & TV'), r.why.join());
+  }
+});
+
+test('ladder: with no domain to read, an era within 25 years or the same form of object anchors a person; nothing shared deals nothing', () => {
+  const doc = (title: string) => auto(title, 1000, { imageUrl: null, drill: null });
+  const desk = [doc('Orson Welles Signed Letter to Irving Lazar, 1946'), doc('Orson Welles Typed Letter Signed, 1949')];
+  const hemingway = doc('Ernest Hemingway Typed Letter Signed, 1952');
+  const dickens = doc('Charles Dickens Autograph Letter Signed, 1855');
+  const photo = doc('Ernest Hemingway Signed Photograph');
+  const newsom = doc('Gavin Newsom Signed Cut - PSA/DNA Authentic');
+  const pool = [...desk, hemingway, dickens, photo, newsom];
+  const t = buildTaste({ saved: desk.map(l => ({ id: l.id, lot: l, savedAt: at(-3) })), follows: [], nowMs: NOW });
+  const rs = recommend(pool, t, { nowMs: NOW, n: 12 });
+  const by = new Map(rs.map(r => [r.lot.id, r]));
+  assert.match(by.get(hemingway.id)!.reason, /^Another figure of the 1950s · you saved Orson Welles/, 'dated within 25 years of the desk’s letters');
+  assert.match(by.get(dickens.id)!.reason, /^Another signed letter · you saved Orson Welles/, 'a century apart, but a letter like theirs');
+  assert.ok(!by.has(photo.id), 'an undated photograph shares neither era nor form');
+  assert.ok(!by.has(newsom.id), 'an undated cut from no domain shares nothing');
+});
+
+test('ladder: the price-only rung in cards needs an era too — a 2021 raw card is not "more baseball cards at your prices" for a 1952 desk', () => {
+  const seed = card('1952 Topps #311 Mickey Mantle - PSA 3', 'baseball', 5000, { imageUrl: null });
+  const modern = card('2021 Topps Chrome #44 Joe Nobody', 'baseball', 4000, { imageUrl: null });
+  const vintage = card('1958 Topps #47 Hank Aaron', 'baseball', 4500, { imageUrl: null });
+  const t = buildTaste({ saved: [{ id: seed.id, lot: seed, savedAt: at(-3) }], follows: [], nowMs: NOW });
+  const rows = scoreLots([seed, modern, vintage], t, { nowMs: NOW });
+  assert.ok(!rows.some(r => r.l.id === modern.id), 'no rung reaches it');
+  const rs = recommend([seed, modern, vintage], t, { nowMs: NOW, n: 12 });
+  assert.deepEqual(ids(rs), [vintage.id]);
+  assert.match(rs[0].reason, /^More vintage baseball cards like yours/);
+});
+
+test('discover: a cut with a sport asks for that sport — a card the taxonomy cannot place is not "baseball cards"', () => {
+  const seed = card('1960 Topps #350 Mickey Mantle - PSA 4', 'baseball', 300);
+  const nowhere = card('Jeremiah Smith Signed Custom Trading Card - Beckett', 'racing', 280, { drill: null, subCat: 'cards' });
+  const t = buildTaste({ saved: [{ id: seed.id, lot: seed, savedAt: at(-3) }], follows: [], nowMs: NOW });
+  const f = featOf(nowhere, NOW);
+  if (f.sport == null) assert.ok(!rids(discoverLots([seed, nowhere], t, { nowMs: NOW })).includes(nowhere.id), 'no sport read: not the baseball cut’s');
+  else assert.ok(f.sport !== 'baseball');
 });
