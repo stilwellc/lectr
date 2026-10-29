@@ -147,7 +147,7 @@ async function main() {
   console.log(`[daily-desk] ${rcpt.length} recipient(s) · ${watches.length} watch(es) · ${pool.length} live lots · ${sold.size} recent result(s)${DRY ? ' · DRY (no send)' : ''}`);
   if (PREVIEW) fs.mkdirSync(PREVIEW, { recursive: true });
 
-  let sent = 0, skipped = 0;
+  let sent = 0, skipped = 0, failed = 0;
   for (const r of rcpt) {
     try {
       const mine = watches.filter(w => w.user_id === r.user_id);
@@ -164,12 +164,17 @@ async function main() {
       if (await send(r.email, desk.subject, html, text, unsubUrl, `daily-desk/${r.user_id}/${today}`)) {
         sent++;
         await rest(`email_prefs?user_id=eq.${r.user_id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ last_sent_on: today }) });
+      } else {
+        failed++;
       }
     } catch (e) {
+      failed++;
       warn(`user ${r.user_id.slice(0, 8)}: ${(e as Error).message}`);
     }
   }
-  console.log(`[daily-desk] sent ${sent} · skipped ${skipped} (nothing to say)`);
+  console.log(`[daily-desk] sent ${sent} · skipped ${skipped} (nothing to say) · failed ${failed}`);
+  // a send that Resend refused (unverified domain, bad key) turns the job red instead of passing quietly
+  if (failed && !sent) process.exitCode = 1;
 }
 
 main().catch(e => {
