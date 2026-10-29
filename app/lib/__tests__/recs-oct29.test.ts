@@ -9,11 +9,11 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTaste, recommend, discoverLots, scoreLots, featOf, formOf, rotationOf, topOf, ENGINE_NOTE, DISCOVER_DAYS, type RecLot } from '../recs';
+import { buildTaste, recommend, discoverLots, scoreLots, featOf, formOf, leagueOf, thingOf, rotationOf, topOf, ENGINE_NOTE, DISCOVER_DAYS, type RecLot } from '../recs';
 import { readSignals, recordSignal, signalsToTaste, VIEWED_DAYS, type KV } from '../recs-signals';
 import { reasonKindOf } from '../pick-log';
 import { kindFits } from '../object-kind';
-import { catFollow } from '../follows';
+import { catFollow, makerFollow, entityFollow } from '../follows';
 
 // local noon: a day's rotation reads the reader's calendar
 const NOW = new Date(2026, 9, 12, 12, 0, 0).getTime();
@@ -438,4 +438,91 @@ test('pass 6: a print of a photograph is a print (no "signed photograph" rung fo
   const by = new Map(rw.map(r => [r.lot.id, r.reason]));
   assert.match(by.get(mid.id)!, /^More prints in your range · \$[\d.]+K–[\d.]+K/, by.get(mid.id));
   assert.match(by.get(low.id)!, /^More prints near your saves’ prices/, by.get(low.id));
+});
+
+/* ── pass 7: era, league, one object, the grail prior ─────────────────── */
+
+test('players have an era: a 1973 Namath jersey desk is not filled with this season’s game-worn; a 1972 jersey comes; a follow lifts the gate', () => {
+  const mem = (title: string, est: number, o: Partial<RecLot> = {}): RecLot => ({ id: `gu-${++seq}`, artist: 'sports-memorabilia', title, subCat: 'game-used', drill: 'football', auctionHouse: 'NFL Auctions', saleName: 'Crucial Catch', saleDate: at(4).slice(0, 10), saleDateTime: at(4), currentBid: est, bidCount: 4, currency: 'USD', status: 'upcoming', imageUrl: PHOTO, ...o });
+  const namath = mem('JOE NAMATH NEW YORK JETS TEAM ISSUED PROFESSIONAL QUALITY HOME JERSEY CIRCA 1973-75', 3000, { playerSlug: 'joe-namath', ek: 'pl:joe-namath' });
+  const kraft = mem('Crucial Catch - Packers Tucker Kraft Signed Game Worn Jersey (10/19/2025)', 4500, { playerSlug: 'tucker-kraft', ek: 'pl:tucker-kraft' });
+  const johnson = mem('STS - Eagles Lane Johnson Game Worn Jersey (11/16/2025)', 2850, { playerSlug: 'lane-johnson', ek: 'pl:lane-johnson' });
+  const csonka = mem('1972 Larry Csonka Miami Dolphins Game Worn Home Jersey', 3200, { playerSlug: 'larry-csonka', ek: 'pl:larry-csonka' });
+  const t = buildTaste({ saved: [{ id: namath.id, lot: namath, savedAt: at(-3) }], follows: [], nowMs: NOW });
+  assert.deepEqual(t.playerEras?.get('pl:joe-namath'), { lo: 1973, hi: 1973 }, 'the era is read off the save’s title');
+  const got = ids(recommend([kraft, johnson, csonka], t, { nowMs: NOW }));
+  assert.ok(!got.includes(kraft.id) && !got.includes(johnson.id), `2025 game-worn is another era: ${got.join(',')}`);
+  assert.ok(got.includes(csonka.id), 'a 1972 jersey is the same era');
+  // a follow of the name lifts the gate (the reader asked for the name's world)
+  const tf = buildTaste({ saved: [{ id: namath.id, lot: namath, savedAt: at(-3) }], follows: [makerFollow('joe-namath', 'Joe Namath')], nowMs: NOW });
+  assert.ok(ids(recommend([kraft, johnson, csonka], tf, { nowMs: NOW })).includes(kraft.id));
+  // an era handed in stands in when the save carries no year
+  // (a vintage jersey at a consignment house: the league's own houses date their undated game-worn by the sale)
+  const undated = { ...namath, id: 'gu-u', title: 'JOE NAMATH NEW YORK JETS TEAM ISSUED HOME JERSEY', auctionHouse: 'Goldin' };
+  const te = buildTaste({ saved: [{ id: undated.id, lot: undated, savedAt: at(-3) }], follows: [], playerEras: new Map([['pl:joe-namath', { lo: 1965, hi: 1977 }]]), nowMs: NOW });
+  assert.ok(!ids(recommend([kraft, csonka], te, { nowMs: NOW })).includes(kraft.id));
+});
+
+test('a named player tie outside the era is softened (×0.6), not hidden: a 1969 Ryan desk puts the 1973 Ryan before the 2018 autograph', () => {
+  const seed = card('1969 Topps #533 Nolan Ryan Rookie - PSA 5', 'baseball', 500, { playerSlug: 'nolan-ryan' });
+  const vintage = card('1973 Topps #220 Nolan Ryan - PSA 6', 'baseball', 500, { playerSlug: 'nolan-ryan' });
+  const modern = card('2018 Panini Flawless Legendary Signatures #LS-NR Nolan Ryan Auto - BGS 9', 'baseball', 500, { playerSlug: 'nolan-ryan' });
+  const t = buildTaste({ saved: [{ id: seed.id, lot: seed, savedAt: at(-3) }], follows: [], nowMs: NOW });
+  const rs = recommend([modern, vintage], t, { nowMs: NOW, tune: { rotate: 0 } });
+  assert.deepEqual(ids(rs), [vintage.id, modern.id]);
+  const ratio = rs[1].taste / rs[0].taste;
+  // ×0.6 for the era, and lotSim's own ×0.75 era clash on top — softened, never hidden
+  assert.ok(ratio > 0.3 && ratio < 0.75, `softened, not hidden: ${ratio.toFixed(2)}`);
+  const tf = buildTaste({ saved: [{ id: seed.id, lot: seed, savedAt: at(-3) }], follows: [makerFollow('nolan-ryan', 'Nolan Ryan')], nowMs: NOW });
+  const rf = recommend([modern, vintage], tf, { nowMs: NOW, tune: { rotate: 0 } });
+  const ratioF = rf.find(r => r.lot.id === modern.id)!.taste / rf.find(r => r.lot.id === vintage.id)!.taste;
+  assert.ok(ratioF > ratio && ratioF > 0.6, `a followed name is wanted in every era — only lotSim's own era clash remains: ${ratioF.toFixed(2)} vs ${ratio.toFixed(2)}`);
+});
+
+test('a league is a gate like the sport for cuts and the lane: a WNBA rookie is not "more basketball cards like yours" for an NBA desk', () => {
+  assert.equal(leagueOf('2025 Prizm WNBA Pandora #147 Paige Bueckers Rookie Card - PSA GEM MT 10'), 'wnba');
+  assert.equal(leagueOf('Jan. 30, 2012 Weekly Baseball Shohei Ohtani 1st Cover (Japan)'), 'npb');
+  assert.equal(leagueOf('2024 Panini Prizm #2 LeBron James - PSA 10'), null);
+  const lebron = card('2024 Panini Prizm Kaleidoscopic #2 LeBron James - PSA 10', 'basketball', 330, { playerSlug: 'lebron-james' });
+  const wnba = card('2025 Prizm WNBA Pandora #147 Paige Bueckers Rookie Card - PSA GEM MT 10', 'basketball', 300, { playerSlug: 'paige-bueckers' });
+  const nba = card('2024 Panini Prizm #248 Jayson Tatum - PSA 10', 'basketball', 310, { playerSlug: 'jayson-tatum' });
+  const t = buildTaste({ saved: [{ id: lebron.id, lot: lebron, savedAt: at(-3) }], follows: [], nowMs: NOW });
+  const got = ids(recommend([wnba, nba], t, { nowMs: NOW }));
+  assert.ok(got.includes(nba.id) && !got.includes(wnba.id), got.join(','));
+  assert.deepEqual(rids(discoverLots([wnba, nba], t, { nowMs: NOW })), [], 'the lane keeps the league too');
+  // a WNBA desk gets WNBA
+  const tw = buildTaste({ saved: [{ id: wnba.id, lot: wnba, savedAt: at(-3) }], follows: [], nowMs: NOW });
+  const clark = card('2025 Panini WNBA Prizm Signatures Green #SG-CC Caitlin Clark Signed Card - PSA 10', 'basketball', 320, { playerSlug: 'caitlin-clark' });
+  assert.deepEqual(ids(recommend([clark, nba], tw, { nowMs: NOW })), [clark.id]);
+});
+
+test('one object, one seat: an unidentified card by set · number · grade; an edition print by its title without the numbers; two different sheets stay two', () => {
+  const f = { cat: 'tcg' as const, card: null };
+  const sheetA = { id: 'a', title: '1997 Pokemon Japanese CoroCoro Unpeeled Promo Insert Sheet - Featuring Flying Pikachu', auctionHouse: 'Goldin', artist: 'pokemon' } as RecLot;
+  const sheetB = { id: 'b', title: '1997 Pokemon Japanese CoroCoro Unpeeled Promo Insert Sheet - Featuring Pikachu, Imakuni?', auctionHouse: 'Goldin', artist: 'pokemon' } as RecLot;
+  assert.notEqual(thingOf(sheetA, f), thingOf(sheetB, f), 'two sheets, two objects');
+  const e17 = { id: 'c', title: 'Keith Haring, Pop Shop I (#17/122) - Signed', auctionHouse: 'Bonhams', artist: 'keith-haring' } as RecLot;
+  const e18 = { id: 'd', title: 'Keith Haring, Pop Shop I (#18/122) - Signed', auctionHouse: 'Bonhams', artist: 'keith-haring' } as RecLot;
+  assert.equal(thingOf(e17, { cat: 'fine-art', card: null }), thingOf(e18, { cat: 'fine-art', card: null }), 'two numbers of one edition are one object');
+  const pr = (title: string) => ({ id: `kh-${++seq}`, artist: 'keith-haring', title, subCat: 'prints', auctionHouse: 'Bonhams', saleName: 'Prints', saleDate: at(5).slice(0, 10), estimateLow: 15000, estimateHigh: 20000, currency: 'USD', status: 'upcoming', imageUrl: PHOTO } as RecLot);
+  const seed = pr('Pop Shop II');
+  const t = buildTaste({ saved: [{ id: seed.id, lot: seed, savedAt: at(-3) }], follows: [], nowMs: NOW });
+  const p17 = pr('Pop Shop I (#17/122)'), p18 = pr('Pop Shop I (#18/122)');
+  assert.equal(recommend([p17, p18], t, { nowMs: NOW }).length, 1, 'one seat for the edition');
+});
+
+test('a followed name whose live median is a grail leans its prior to the lower quartile: a Charizard follower sees the $300–2K Charizards first', () => {
+  const zard = (title: string, bid: number): RecLot => ({ id: `gz-${++seq}`, artist: 'pokemon', title, subCat: 'pokemon-cards', drill: 'vintage', auctionHouse: 'Goldin', saleName: `S${seq % 5}`, saleDate: at(3).slice(0, 10), saleDateTime: at(3), currentBid: bid, bidCount: 5, currency: 'USD', status: 'upcoming', imageUrl: PHOTO, ek: 'sj:tcg|k:charizard' });
+  // the name's live median is a grail ($19.6K, 25× its lower quartile): the prior leans to the quartile
+  const cheap = [300, 600, 1200, 2000].map((p, i) => zard(`199${i} Pokemon Set ${i} Holo #4 Charizard - PSA 7`, p));
+  const grails = [15000, 19600, 22000, 25000, 30000].map((p, i) => zard(`2003 Pokemon Skyridge Holo #${100 + i} Charizard - PSA 10`, p));
+  const t = buildTaste({ saved: [], follows: [entityFollow('sj:tcg|k:charizard', 'Charizard')], nowMs: NOW });
+  const rs = recommend([...grails, ...cheap], t, { nowMs: NOW, n: 4, tune: { rotate: 0, discover: 0 } });
+  const top = rs.map(r => Number(r.lot.currentBid));
+  assert.ok(top.filter(p => p <= 2000).length >= 3, `the prior leans to the quartile: ${top.join(',')}`);
+  // a wide market is not a grail: a $300–1,500 name keeps its median (nothing sinks to the stickers)
+  const wide = [60, 150, 300, 800, 1200, 1500, 3000].map((p, i) => card(`199${i} Upper Deck #${i} Michael Jordan - PSA 8`, 'basketball', p, { playerSlug: 'michael-jordan' }));
+  const tj = buildTaste({ saved: [], follows: [makerFollow('michael-jordan', 'Michael Jordan')], nowMs: NOW });
+  const rj = recommend(wide, tj, { nowMs: NOW, n: 3, tune: { rotate: 0, discover: 0 } });
+  assert.ok(rj.every(r => Number(r.lot.currentBid) >= 300), `the median leads, not the $60 sticker: ${rj.map(r => r.lot.currentBid).join(',')}`);
 });

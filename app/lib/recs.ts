@@ -131,6 +131,19 @@
  * band's strip takes the deal's first n, any lane, never all n from one
  * house while another house's pick weighs within 80%.
  *
+ * (Oct 29, pass 7) ERA AND LEAGUE: a player has an ERA — read from the desk's
+ * saves of the name (card years, title years), else from `playerEras` handed
+ * in (players.json carries no career years yet) — and the player rung and the
+ * memorabilia rung deal only within ±15 years of it unless the reader follows
+ * the name; a NAMED tie to a player outside that span is softened (×0.6), so
+ * a 1969 desk stays vintage without hiding the 2018 autograph. A LEAGUE read
+ * off the title (WNBA, CFL, NPB — else the sport's main league) is a gate
+ * like the sport for cuts, rungs and the lane. ONE OBJECT, ONE SEAT: a card
+ * with no identity is keyed by set · number · grade, everything else by its
+ * title with edition and lot numbers stripped. A followed name whose live
+ * median is a GRAIL (3× its lower quartile, and $5K+) leans its price prior — and the
+ * lane's level — to the lower quartile.
+ *
  * (W28, Oct 11) A REASON MUST BE TRUE, checked by recs-eval §4 over 22
  * personas: "Like your X prints" groups the desk's X's of the same MEDIUM (a
  * Polaroid set filed under Prints is a photograph) under the name the desk's
@@ -254,6 +267,9 @@ export interface TasteInput {
   extra?: ExtraInput[];
   /** on-device "Not for me" marks */
   negative?: NegativeInput;
+  /** (pass 7) a player's career era by slug (`pl:<slug>` → years), when the
+   *  caller has one — the desk's own saves of the name are read first */
+  playerEras?: ReadonlyMap<string, { lo: number; hi: number }>;
   /** the price range the reader STATED in the quick start (app/lib/interests,
    *  hammer-basis USD) — read as a strong band across every category, never a
    *  hard filter: a lot outside it sinks, it does not vanish */
@@ -304,6 +320,9 @@ export interface Feat {
    *  aviation, crime, literary, historic), its space program (apollo…) — the
    *  ladder's domain anchor; null where the sport or the sub is the gate */
   domain?: string | null;
+  /** (pass 7) a sports lot's LEAGUE when the title says one other than the
+   *  sport's main league ('wnba', 'cfl', 'npb'); null = the main league */
+  league?: string | null;
 }
 
 export interface Seed {
@@ -351,6 +370,9 @@ export interface Taste {
   followedEks?: Set<string>;
   /** ids (with aliases) the device saw opened lately — dealt back only below market */
   viewed?: Set<string>;
+  /** (pass 7) a player's era by `pl:<slug>`: the median year of the desk's
+   *  saves of the name, else the caller's career span */
+  playerEras?: Map<string, { lo: number; hi: number }>;
 }
 
 /** a learned price band, in log10 dollars */
@@ -444,6 +466,37 @@ function domainOf(cat: CatKey, sub: string, fx: ReadonlySet<string>): string | n
   if (cat === 'space-science') return sub && sub !== 'science' && sub !== 'space-other' ? sub : null;
   return null;
 }
+/** the sports categories a league is read in */
+const SPORT_CATS: ReadonlySet<CatKey> = new Set<CatKey>(['sports-cards', 'sports-memorabilia']);
+const LEAGUES: [string, RegExp][] = [
+  ['wnba', /\bWNBA\b|Indiana Fever|New York Liberty|Las Vegas Aces|Chicago Sky|Minnesota Lynx|Phoenix Mercury|Seattle Storm|Connecticut Sun|Atlanta Dream|Dallas Wings|Los Angeles Sparks|Washington Mystics|Golden State Valkyries|Caitlin Clark|Paige Bueckers|Angel Reese|Sabrina Ionescu|A'ja Wilson|Breanna Stewart|Diana Taurasi|Sue Bird|Candace Parker/i],
+  ['cfl', /\bCFL\b|Grey Cup|Toronto Argonauts|Montreal Alouettes|Saskatchewan Roughriders|Calgary Stampeders|Winnipeg Blue Bombers|Hamilton Tiger-Cats|Edmonton (?:Elks|Eskimos)|BC Lions|Ottawa Redblacks/i],
+  ['npb', /\bNPB\b|Nippon Professional|\bBBM\b|Calbee|Yomiuri Giants|Hanshin Tigers|Seibu Lions|Hokkaido Nippon-Ham|Orix Buffaloes|Chunichi Dragons|Yakult Swallows|Hiroshima (?:Toyo )?Carp|SoftBank Hawks|Chiba Lotte|Rakuten (?:Golden )?Eagles|Yokohama (?:DeNA )?BayStars|\(Japan\)|Japanese baseball|Koshien/i],
+];
+/** a sports lot's league when the title (or sale) names one other than the
+ *  sport's main league — a WNBA rookie is not "more basketball cards like
+ *  yours" for an NBA desk, a BBM issue not a Topps one */
+export function leagueOf(text: string): string | null {
+  for (const [k, re] of LEAGUES) if (re.test(text)) return k;
+  return null;
+}
+/** years either side of a player's era the player rung and a named player tie read as the same era */
+export const PLAYER_ERA_SPAN = 15;
+/** a named player tie outside the era keeps this much */
+const ERA_SOFT = 0.6;
+/** a name's live median this far above its lower quartile (log10 3) is a grail: the prior leans to the quartile */
+const GRAIL_GAP = Math.log10(3);
+/** …and a grail is expensive: a live median (the hammer-basis anchor) under this is a wide market, not a grail
+ *  (Jordan's $2.8K median over $760 stickers; Charizard's $8.5K over $1.5K is one) */
+const GRAIL_MIN = Math.log10(5000);
+/** the leagues' own houses sell this season's game-worn: an undated game-used lot there is dated by its sale */
+const LEAGUE_HOUSE = /^(?:NFL|MLB|NBA|NHL) Auctions?$/i;
+function leagueHouseYear(l: Pick<RecLot, 'auctionHouse' | 'saleDate' | 'saleDateTime'>, cat: CatKey, sub: string): number | null {
+  if (cat !== 'sports-memorabilia' || sub !== 'game-used' || !LEAGUE_HOUSE.test(String(l.auctionHouse || ''))) return null;
+  const y = parseInt(String(l.saleDateTime || l.saleDate || '').slice(0, 4), 10);
+  return Number.isFinite(y) && y > 1900 ? y : null;
+}
+
 /** a domain in a reason's voice ("film & TV", "political", "Apollo") */
 function domainWord(cat: CatKey, domain: string): string {
   if (domain === 'film-tv') return 'film & TV';
@@ -502,7 +555,8 @@ export function featOf(l: RecLot, nowMs: number, estFallback?: number | null): F
     card, drill: DRILL_CATS.has(t.cat) && l.drill ? l.drill : null, sport: t.sport ?? null, fx,
     logA: a ? Math.log10(a) : null, house: l.auctionHouse || null,
     medium: t.cat === 'fine-art' ? artMediumOf(title) : null, byOther,
-    year: yearOf(title), form: FORM_CATS.has(t.cat) ? formOf(title) : null, domain: domainOf(t.cat, t.sub, fx),
+    year: yearOf(title) ?? leagueHouseYear(l, t.cat, t.sub), form: FORM_CATS.has(t.cat) ? formOf(title) : null, domain: domainOf(t.cat, t.sub, fx),
+    league: SPORT_CATS.has(t.cat) ? leagueOf(`${title} ${l.saleName ?? ''}`) : null,
   };
   featMemo.set(l as object, { day, f });
   return f;
@@ -646,7 +700,13 @@ export function buildTaste(input: TasteInput): Taste {
     if (best) passed.set(best, (passed.get(best) ?? 0) + 1);
   }
   passed.forEach((k, s) => { s.w *= Math.max(s.f ? 0.3 : 0.5, Math.pow(0.75, k)); });
-  return { seeds, exclude, excludeKeys, down, counts: { owned, saved, follows: input.follows.length, searches, signals }, bands: learnBands(seeds), stated: statedBandOf(input.price), followedEks, viewed };
+  // (pass 7) a player's era: the desk's saves of the name (their years), else the caller's span
+  const playerEras = new Map<string, { lo: number; hi: number }>();
+  const yrs = new Map<string, number[]>();
+  for (const s of seeds) if ((s.kind === 'owned' || s.kind === 'saved') && s.f?.ek?.startsWith('pl:') && s.f.year != null) { let xs = yrs.get(s.f.ek); if (!xs) yrs.set(s.f.ek, (xs = [])); xs.push(s.f.year); }
+  yrs.forEach((xs, ek) => { const m = medianOf(xs); playerEras.set(ek, { lo: m, hi: m }); });
+  input.playerEras?.forEach((e, ek) => { if (!playerEras.has(ek)) playerEras.set(ek, e); });
+  return { seeds, exclude, excludeKeys, down, counts: { owned, saved, follows: input.follows.length, searches, signals }, bands: learnBands(seeds), stated: statedBandOf(input.price), followedEks, viewed, playerEras };
 }
 
 /** a quick-start market's seed weight — below a follow, above a page view */
@@ -810,7 +870,8 @@ export function lotSim(c: Feat, s: Feat, entityTie = REC_TUNE.entityTie): SimPar
   const eraClash = !!eraA && !!eraB && eraA !== eraB;
   // a facet tie needs the same sport when either side names one (an
   // unlabeled 1973 Panini sticker pack is no answer to a Topps baseball save)
-  const sameSport = c.sport === s.sport;
+  // (pass 7) and the same league: a WNBA rookie is no cut for an NBA desk
+  const sameSport = c.sport === s.sport && (c.league ?? null) === (s.league ?? null);
   const facetTie = out.sub && FACET_TIE_CATS.has(c.cat) && !eraClash && sameSport && priceOk(0.3)
     && (out.shared.length > 0 || (CARD_CATS.has(c.cat) && c.fx.has('graded') && s.fx.has('graded') && out.price != null && out.price >= 0.5));
   const strong = out.entity || out.card || out.franchise || (out.drill && out.sub) || facetTie;
@@ -820,7 +881,7 @@ export function lotSim(c: Feat, s: Feat, entityTie = REC_TUNE.entityTie): SimPar
   // one pick: every other hockey single on the block was another era or
   // another grader. It spans eras (no era clash), it is weak (its reason
   // says only the cut), and the kind gate still asks for a card.
-  const sportTie = !strong && out.sub && CARD_CATS.has(c.cat) && (c.cat === 'tcg' || (!!c.sport && c.sport === s.sport)) && out.price != null && out.price >= 0.5;
+  const sportTie = !strong && out.sub && CARD_CATS.has(c.cat) && (c.cat === 'tcg' || (!!c.sport && sameSport)) && out.price != null && out.price >= 0.5;
   if (sportTie) v += 0.1; else if (eraClash) v *= 0.75;
   out.weak = !strong && ((out.sub && PRICE_LINK_CATS.has(c.cat) && out.price != null && out.price >= 0.6) || sportTie);
   out.sim = strong ? Math.min(1, v) : out.weak ? Math.min(1, v) * 0.75 : 0;
@@ -1191,6 +1252,10 @@ export interface LadderAnchor {
   domain: string | null;
   year: number | null;
   form: string | null;
+  /** (pass 7) the league most of its lots are in (null = the sport's main) */
+  league: string | null;
+  /** (pass 7) the lower quartile of its lots' log prices — the prior's level when the median is a grail */
+  logQ1: number | null;
 }
 
 /** how a rung REACHED a lot beyond its family / sub — the reason says it */
@@ -1260,8 +1325,11 @@ function ladderAnchors(taste: Taste, members: Map<Seed, Feat[]>): LadderAnchor[]
     const fr = modeOf(inCat.flatMap(f => Array.from(f.fx).filter(k => k.startsWith('fr-'))));
     const ps = inCat.map(f => f.logA).filter((x): x is number => x != null);
     const ys = inCat.map(f => f.year).filter((x): x is number => x != null);
+    const sorted = ps.slice().sort((a, b) => a - b);
     out.push({
       seed: s, cat, sub, sport, fam, cut, logA: ps.length ? medianOf(ps) : null, fr,
+      league: modeOf(inCat.map(f => f.league ?? null)) ?? null,
+      logQ1: sorted.length ? quantile(sorted, 0.25) : null,
       domain: modeOf(inCat.map(f => f.domain ?? null).filter((x): x is string => !!x)),
       year: ys.length ? medianOf(ys) : null,
       form: modeOf(inCat.map(f => f.form ?? null).filter((x): x is string => !!x)),
@@ -1270,13 +1338,27 @@ function ladderAnchors(taste: Taste, members: Map<Seed, Feat[]>): LadderAnchor[]
   return out;
 }
 
+/** a name's price level for a prior: the lower quartile when the median sits a grail above it, else the median */
+function grailLevel(med: number | null, q1: number | null): number | null {
+  if (med == null) return null;
+  return q1 != null && med >= GRAIL_MIN && med - q1 > GRAIL_GAP ? q1 : med;
+}
+/** the centre of a player's era from the eras a taste carries (null when unknown) */
+function eraCentre(eras: ReadonlyMap<string, { lo: number; hi: number }> | undefined, ek: string | null): number | null {
+  if (!eras || !ek) return null;
+  const e = eras.get(ek);
+  return e ? (e.lo + e.hi) / 2 : null;
+}
+
 /** the best rung one candidate reaches on one anchor (null = none), and
  *  what it shares beyond its family / sub when the rung asked for an anchor */
-function ladderTier(c: Feat, a: LadderAnchor, stated = false): { tier: LadderTier; via: LadderVia | null } | null {
+function ladderTier(c: Feat, a: LadderAnchor, stated = false, taste?: Pick<Taste, 'followedEks' | 'playerEras'>): { tier: LadderTier; via: LadderVia | null } | null {
   if (c.cat !== a.cat) return null;
   // (Oct 29) an anchor with a sport asks for that sport: a card the taxonomy
-  // cannot place is not "more '80s cards" for a Gretzky desk
+  // cannot place is not "more '80s cards" for a Gretzky desk — (pass 7) and
+  // its league: a WNBA rookie is no rung for an NBA desk
   if (a.sport && c.sport !== a.sport) return null;
+  if ((a.league ?? null) !== (c.league ?? null)) return null;
   const price = c.logA != null && a.logA != null ? Math.exp(-((c.logA - a.logA) ** 2) / (2 * PRICE_SIGMA * PRICE_SIGMA)) : null;
   if (a.fam && familyOf(c) === a.fam) {
     // another MAKER of the same category · sub is a family only near the
@@ -1285,9 +1367,22 @@ function ladderTier(c: Feat, a: LadderAnchor, stated = false): { tier: LadderTie
     // a range, inside it (the caller gates that: a $50K-and-up Patek reader
     // whose Patek lots on the block run $2K still wants the $60K Daytona)
     if (a.fam.startsWith('mk|')) { if (stated || price == null || price >= 0.3) return { tier: 2, via: null }; }
-    // (pass 6) another PLAYER in memorabilia is a family inside the same sub
-    // only — a ticket desk is not handed a bobblehead
-    else if (a.fam.startsWith('pl|') && c.cat === 'sports-memorabilia') { if (c.sub === a.sub) return { tier: 2, via: null }; }
+    else if (a.fam.startsWith('pl|')) {
+      // (pass 6) another PLAYER in memorabilia is a family inside the same sub
+      // only — a ticket desk is not handed a bobblehead; (pass 7) and within
+      // PLAYER_ERA_SPAN years of the player's era (the desk's saves of the
+      // name, else the era handed in; the candidate by its own year or era),
+      // unless the reader follows the name — a 1973 Namath jersey desk is not
+      // filled with this season's game-worn
+      if (c.cat === 'sports-memorabilia' && c.sub !== a.sub) return null;
+      const followed = !!a.seed.follow || (!!a.seed.f?.ek && !!taste?.followedEks?.has(a.seed.f.ek)) || (!!c.ek && !!taste?.followedEks?.has(c.ek));
+      if (!followed) {
+        const ay = a.year ?? eraCentre(taste?.playerEras, a.seed.f?.ek ?? null);
+        const cy = c.year ?? eraCentre(taste?.playerEras, c.ek);
+        if (ay != null && cy != null && Math.abs(cy - ay) > PLAYER_ERA_SPAN) return null;
+      }
+      return { tier: 2, via: null };
+    }
     else if (!a.fam.endsWith('|p')) return { tier: 2, via: null };
     else if (c.sub === a.sub) {
       // (Oct 29) another PERSON: every signer on the culture market is one
@@ -1463,7 +1558,10 @@ function scoreCore<L extends RecLot>(pool: readonly L[], taste: Taste, opts: Rec
   for (const a of anchors) {
     // the device's own looks lend the ladder, never the broad follows' reading
     if (a.seed.kind !== 'signal') { let xs = anchorsByCat.get(a.cat); if (!xs) anchorsByCat.set(a.cat, (xs = [])); xs.push(a); }
-    anchorLogA.set(a.seed, a.logA);
+    // (pass 7) a name whose live median is a GRAIL (3× its lower quartile)
+    // leans its prior to the quartile: a Charizard follower sees the $300–2K
+    // Charizards before the $19.6K ones
+    anchorLogA.set(a.seed, grailLevel(a.logA, a.logQ1));
   }
   // a quick-start market opens only when nothing the reader named or saved
   // sits in that market (a Mantle follower who picked Sports is a Mantle
@@ -1556,7 +1654,11 @@ function scoreCore<L extends RecLot>(pool: readonly L[], taste: Taste, opts: Rec
       const p = lotSim(f, s.f!, T.entityTie);
       if (p.sim < LOT_SIM_MIN) continue;
       if (!kind && !p.entity && !p.card) continue;
-      contribs.push({ seed: s, c: s.w * p.sim, parts: p });
+      // (pass 7) a named PLAYER tie outside the save's era is softened, not
+      // hidden (a 2018 Ryan autograph for a 1969 desk) — never for a name the
+      // reader follows, and never on the same card in another grade
+      const eraSoft = p.entity && !p.card && f.ek?.startsWith('pl:') && !taste.followedEks?.has(f.ek) && s.f!.year != null && f.year != null && Math.abs(f.year - s.f!.year) > PLAYER_ERA_SPAN ? ERA_SOFT : 1;
+      contribs.push({ seed: s, c: s.w * p.sim * eraSoft, parts: p });
     }
     for (const s of followOn) {
       const fo = s.follow!;
@@ -1655,6 +1757,7 @@ function scoreCore<L extends RecLot>(pool: readonly L[], taste: Taste, opts: Rec
         // a cut with a sport asks for that sport (a card the taxonomy cannot
         // place is not "baseball cards" — pass 2)
         if (c.sport && f.sport !== c.sport) continue;
+        if ((c.league ?? null) !== (f.league ?? null)) continue;
         const era = c.fx.find(k => k.startsWith('era-')), ec = eraOf(f.fx);
         if (era && ec && era !== ec) continue;
         // a lot about WHO or WHAT: the franchise the cut keeps (a Star Wars desk
@@ -1704,7 +1807,7 @@ function scoreCore<L extends RecLot>(pool: readonly L[], taste: Taste, opts: Rec
       for (const a of anchors) {
         // a looked-at lot never stands in as its own kin
         if (a.seed.kind === 'signal' && a.seed.lotId === l.id) continue;
-        const hit = ladderTier(f, a, !!taste.stated);
+        const hit = ladderTier(f, a, !!taste.stated, taste);
         if (!hit) continue;
         const t = hit.tier;
         // inside a rung, the anchor's price level leads (a $420K Kobe is a
@@ -1745,6 +1848,8 @@ export interface TasteCut {
   cat: CatKey;
   sub: string;
   sport: string | null;
+  /** (pass 7) the league of the cut (null = the sport's main) */
+  league: string | null;
   medium: Feat['medium'];
   /** the facets at least half the cut's lots share (an era, a language, a domain, a franchise) */
   fx: string[];
@@ -1773,12 +1878,12 @@ export const DISCOVER_DAYS = 14;
 const DISCOVER_SIM = 0.2;
 
 function tasteCuts(taste: Taste, members: Map<Seed, Feat[]>): TasteCut[] {
-  type Acc = { cat: CatKey; sub: string; sport: string | null; medium: Feat['medium']; fs: Feat[]; w: number; n: number; seed: Seed };
+  type Acc = { cat: CatKey; sub: string; sport: string | null; league: string | null; medium: Feat['medium']; fs: Feat[]; w: number; n: number; seed: Seed };
   const acc = new Map<string, Acc>();
-  const add = (s: Seed, cat: CatKey, sub: string, sport: string | null, medium: Feat['medium'], fs: Feat[]) => {
-    const key = `${cat}|${sub}|${sport ?? ''}|${medium ?? ''}`;
+  const add = (s: Seed, cat: CatKey, sub: string, sport: string | null, league: string | null, medium: Feat['medium'], fs: Feat[]) => {
+    const key = `${cat}|${sub}|${sport ?? ''}|${league ?? ''}|${medium ?? ''}`;
     let a = acc.get(key);
-    if (!a) acc.set(key, (a = { cat, sub, sport, medium, fs: [], w: 0, n: 0, seed: s }));
+    if (!a) acc.set(key, (a = { cat, sub, sport, league, medium, fs: [], w: 0, n: 0, seed: s }));
     a.fs.push(...fs); a.w += s.w; a.n++;
     if (s.w > a.seed.w) a.seed = s;
   };
@@ -1786,7 +1891,7 @@ function tasteCuts(taste: Taste, members: Map<Seed, Feat[]>): TasteCut[] {
     if (s.f) {
       // a lot merely looked at lends no cut (a glance is not a taste)
       if (s.kind === 'signal' && s.verb !== 'asked for more like') continue;
-      add(s, s.f.cat, s.f.sub, s.f.sport, s.f.medium ?? null, [s.f]);
+      add(s, s.f.cat, s.f.sub, s.f.sport, s.f.league ?? null, s.f.medium ?? null, [s.f]);
       continue;
     }
     const fo = s.follow;
@@ -1795,7 +1900,7 @@ function tasteCuts(taste: Taste, members: Map<Seed, Feat[]>): TasteCut[] {
     if (!fs.length) continue;
     const cat = modeOf(fs.map(f => f.cat))!;
     const inCat = fs.filter(f => f.cat === cat);
-    add(s, cat, modeOf(inCat.map(f => f.sub))!, modeOf(inCat.map(f => f.sport)) ?? null, null, inCat);
+    add(s, cat, modeOf(inCat.map(f => f.sub))!, modeOf(inCat.map(f => f.sport)) ?? null, modeOf(inCat.map(f => f.league ?? null)) ?? null, null, inCat);
   }
   const out: TasteCut[] = [];
   acc.forEach((a, key) => {
@@ -1804,7 +1909,9 @@ function tasteCuts(taste: Taste, members: Map<Seed, Feat[]>): TasteCut[] {
     const fx: string[] = [];
     cnt.forEach((n, k) => { if (n * 2 >= a.fs.length) fx.push(k); });
     const ps = a.fs.map(f => f.logA).filter((x): x is number => x != null);
-    out.push({ key, cat: a.cat, sub: a.sub, sport: a.sport, medium: a.medium, fx, logA: ps.length ? medianOf(ps) : null, w: a.w, n: a.n, seed: a.seed });
+    const sorted = ps.slice().sort((x, y) => x - y);
+    // the cut's level: the lower quartile when the median is a grail (a followed Charizard's live lots)
+    out.push({ key, cat: a.cat, sub: a.sub, sport: a.sport, league: a.league, medium: a.medium, fx, logA: sorted.length ? grailLevel(medianOf(sorted), quantile(sorted, 0.25)) : null, w: a.w, n: a.n, seed: a.seed });
   });
   return out;
 }
@@ -1903,7 +2010,7 @@ export function recommend<L extends RecLot>(pool: readonly L[], taste: Taste, op
     // a collection bucket (cs:) is not one entity: its lots are spread by
     // the cut's own penalties, not discounted as repeats of one name
     ent: r.f.named && r.f.ek ? r.f.ek : `id:${r.l.id}`, sale: saleKeyOf(r.l), house: r.l.auctionHouse ?? '',
-    thing: r.f.card ? `card:${r.f.card}` : `t:${r.l.auctionHouse}|${normTitle(r.l.title)}`,
+    thing: thingOf(r.l, r.f),
   });
   const keys = new Map(cand.map(r => [r, keysOf(r)]));
   for (const r of disc) keys.set(r, keysOf(r));
@@ -2345,6 +2452,24 @@ export function recNote(r: Pick<Rec, 'reason' | 'why'> & { short?: string }, opt
   if (opts.short && r.short) return r.short;
   const extra = r.why.find(w => !/^(?:followed|saved search|picked market)/.test(w) && !r.reason.toLowerCase().includes(w.toLowerCase()));
   return extra && !/^(?:Like your|More )/.test(r.reason) ? `${r.reason} · ${extra}` : r.reason;
+}
+
+/** (pass 7) ONE OBJECT, ONE SEAT — what makes two lots the same object: a
+ *  card's identity in any grade (the r9 law); a card the parser cannot
+ *  identify by its set · number · grade; everything else by its title with
+ *  edition and lot numbers stripped ("(#17/122)" and "(#18/122)" of one
+ *  print are one object) */
+export function thingOf(l: RecLot, f: Pick<Feat, 'cat' | 'card'>): string {
+  if (f.card) return `card:${f.card}`;
+  if (CARD_CATS.has(f.cat)) {
+    const id = parseCard(String(l.title || ''));
+    if (id.setName && id.cardNo) return `card2:${f.cat}|${cardYearKey(id.year) ?? ''}|${cardSetKey(id.setName)}|${id.cardNo.toLowerCase()}|${cardGradeOf(String(l.title || ''))}`;
+  }
+  return `t:${l.auctionHouse}|${objectTitle(l.title)}`;
+}
+/** a title without its edition / lot / copy numbers */
+function objectTitle(t: string | null | undefined): string {
+  return normTitle(String(t || '').replace(/\(?\s*#?\s*\d+\s*\/\s*\d+\s*\)?/g, ' ').replace(/\b(?:lot|copy|edition|ed|no)\.?\s*#?\d+\b/gi, ' '));
 }
 
 /* ── the top of the deal ────────────────────────────────────────────────── */

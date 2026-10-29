@@ -3,7 +3,7 @@
 `app/lib/recs.ts` is ONE recommender for the profile's For-you room, the home
 feed's For-you tab, the Today strip (`topOf`) and the Daily Desk email, so they
 agree. This page is the law in one sitting; the file's header is the long form,
-`app/lib/__tests__/recs*.test.ts` the proof. Last revised Oct 29 2026 (passes 1–6).
+`app/lib/__tests__/recs*.test.ts` the proof. Last revised Oct 29 2026 (passes 1–7).
 
 ## 1 · What is weighed
 
@@ -27,7 +27,9 @@ market (`negative.viewed`).
 
 ## 2 · The tie law (lotSim)
 
-Nothing crosses a category or a sport. Inside one, a candidate ties to a seed
+Nothing crosses a category, a sport or a LEAGUE (read off the title — WNBA,
+CFL, NPB — else the sport's main league; a league mismatch gates cuts, rungs
+and the lane like a sport mismatch, never a named tie). Inside one, a candidate ties to a seed
 lot only through something REAL: the same named entity, the same card in any
 grade, the same franchise, the same model line, or — in cards, TCG, space and
 watches — a shared distinctive facet (era, grader, language, complication,
@@ -41,11 +43,16 @@ follow, a rung, a cut) must also pass the KIND gate (`object-kind.kindFits`): a
 guitar is not a single, a menu is not a watch, a Type I photograph or a replica
 jersey is not a card, a strategy guide is not a Pokémon card. A NAMED reach
 does not (an Omega menu is still Omega's) — but its group noun says "pieces"
-when the lot is not the kind.
+when the lot is not the kind. A named PLAYER tie outside the player's ERA
+(±15 years of the desk's saves of the name) is softened ×0.6, not hidden — a
+1969 Ryan desk sees the 1973 Ryan before the 2018 autograph — never for a name
+the reader follows, never on the same card in another grade.
 
     score = taste × (0.8 + 0.2·priority/100) × window × band × span × placed × quiet × lift
 
-`priority` is the "matters most" score (app/lib/priority — it carries the
+A followed name with no band to read leans to its own live price level —
+the lower quartile when the median is a grail — 3× the quartile and $5K+ (a Charizard follower sees the
+$300–2K Charizards before the $19.6K Skyridges). `priority` is the "matters most" score (app/lib/priority — it carries the
 engine's edge). `window`: closing this week 1, ≤14 days 0.8, ≤30 days 0.55,
 later 0.35, undated 0.45. `band`: the reader's learned band per category (≥3
 priced saves, median ± 1.5 robust spreads, soft floor .45), else the stated
@@ -62,7 +69,10 @@ Rungs deal strictly below every real tie, each saying its rung and whose it is:
 
 - **2 · another of the family** — another Pokémon, film, mission, team, set;
   another maker of the same category · sub near the anchor's prices; another
-  player of the same sport and era. Another PERSON (every signer on the culture
+  player of the same sport and era — in memorabilia inside the same sub, and
+  within ±15 years of the player's ERA (the median year of the desk's saves of
+  the name, else `TasteInput.playerEras` handed in — players.json carries no
+  career years yet), unless the reader follows the name. Another PERSON (every signer on the culture
   market is one family) needs a shared ANCHOR beyond the sub: the franchise the
   desk keeps (and only that when it keeps one), else the DOMAIN (film & TV /
   music by facet, a historical line, a space program), an ERA within 25 years,
@@ -81,11 +91,12 @@ Rungs deal strictly below every real tie, each saying its rung and whose it is:
 
 About a quarter of the seats (every fourth from the third; ≥3 at n ≥ 12) for
 lots the taste reaches only SOFTLY — no strong tie, in one of the reader's
-CUTS (category · sub · sport · medium of a save, an owned lot, a "More like
+CUTS (category · sub · sport · league · medium of a save, an owned lot, a "More like
 this", or a followed name's live lots — a category follow or a market is a tie
 already), inside the learned band when it prints, else the stated range, else
 the interquartile span of ≥3 priced saves (×1.26 grace), else ±0.4 decade of
-the cut's own level; the kind of object the cut names; a photo; closing inside
+the cut's own level (a followed name whose live median is a GRAIL — 3× its
+lower quartile and $5K+ — levels at the quartile); the kind of object the cut names; a photo; closing inside
 14 days; in the WHO/WHAT markets a shared franchise (else domain). Ranked by
 priority and the engine's read, one per name, spread across cuts, never shut by
 the sale cap. Each says only what is true: "New to you · film & TV pieces in
@@ -100,8 +111,10 @@ seat at a time only when every seed is stuck (never filler): one seed ≤ 40%
 (a broad seed ≤ 20%); one NAME: followed ≤ 40–90% by its share, saved
 0.08 + 0.24·share, looked-at a fifth, ≥3; one HOUSE ≤ 40% while another is in
 reach; one SALE ≤ 1/6 of the GENERIC seats (a named tie is never sale-capped;
-the cap yields when nothing elsewhere comes within 70%); one object (a card in
-any grade, a title per house) one seat. The device's quiet signals keep 3 of
+the cap yields when nothing elsewhere comes within 70%); one OBJECT one seat (`thingOf`:
+a card's identity in any grade; an unidentified card by set · number · grade;
+anything else by its title with edition and lot numbers stripped — "(#17/122)"
+and "(#18/122)" of one print are one object). The device's quiet signals keep 3 of
 24 seats once the reader has said anything out loud. Phases: every real tie in
 range → the ladder → real ties far outside a stated range (saying so).
 
@@ -139,16 +152,17 @@ the prices, a photo, ≤14 days), a tie seat on the persona's want.
 - The house cap wins over this-week-first: on a Bonhams-heavy watch desk the
   second screen fills with 16–20-day Christie's / Sotheby's lots because every
   nearer lot left is Bonhams past 40%.
-- Memorabilia players carry no era: a 1960s Namath jersey desk is dealt this
-  season's game-worn jerseys ("Another football player"). Needs a career era.
-- Named ties ignore era: a 2018 Nolan Ryan autograph card for a 1969 desk.
-- WNBA and NBA share one sport; a league facet would separate them.
-- A followed name's lane level is the name's own live median — Charizard's puts
-  $19.6K Skyridge holos "near Charizard's prices".
+- A player's era comes from the desk's saves of the name (or a span the caller
+  hands in); players.json has no career years, so a save with no year on it
+  and no handed-in span gates nothing. A build step could derive the span from
+  the sold archive's card years.
+- The league reader is a word list (WNBA teams and stars, CFL teams, NPB clubs
+  and issuers); a league the list does not name reads as the main league.
 - A lot with no price and no bid can lead when nothing behind it has a bid
   either (the Welles letter): evidence only breaks ties.
-- One object in two lots (CoroCoro inserts, edition prints) takes two seats
-  when the titles differ by a number.
+- The two CoroCoro inserts once read as duplicates were two sheets (Flying
+  Pikachu; Pikachu & Imakuni?) — rightly two seats. One object in two lots is
+  now one seat by set · number · grade or by the title without its numbers.
 - One-house markets (modern basketball, Pokémon) are one house; thin books
   (design, hockey) deal 0–3 — honestly.
 - The eval's `want` judge for the lane is a rule-of-thumb mirror of the lane,
