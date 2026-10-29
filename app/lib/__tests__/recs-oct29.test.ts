@@ -9,7 +9,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTaste, recommend, discoverLots, scoreLots, featOf, rotationOf, ENGINE_NOTE, DISCOVER_DAYS, type RecLot } from '../recs';
+import { buildTaste, recommend, discoverLots, scoreLots, featOf, rotationOf, topOf, ENGINE_NOTE, DISCOVER_DAYS, type RecLot } from '../recs';
 import { readSignals, recordSignal, signalsToTaste, VIEWED_DAYS, type KV } from '../recs-signals';
 import { reasonKindOf } from '../pick-log';
 import { kindFits } from '../object-kind';
@@ -316,4 +316,40 @@ test('price holds without a band: a grail far above two saves sinks below their 
   const tf = buildTaste({ saved: [], follows: [catFollow('fine-art', 'prints')], nowMs: NOW });
   const rf = recommend(prints, tf, { nowMs: NOW, n: 6 });
   assert.ok(rf.every(r => Number(r.lot.estimateLow) < 50000), `the first six are at the category’s level: ${rf.map(r => r.lot.estimateLow).join(',')}`);
+});
+
+/* ── pass 4: this week first; the top of the deal ─────────────────────── */
+
+test('this week first: the first 12 seats keep at most a third for lots closing past 14 days while nearer lots weigh within 80%; the far lots still come after', () => {
+  const owned = card('1952 Topps #311 Mickey Mantle - PSA 3', 'baseball', 5000);
+  // twelve Mantle cards (the name you own) closing in 16 days…
+  const far: RecLot[] = [];
+  for (let i = 0; i < 12; i++) far.push(card(`19${53 + i} Topps #${i + 1} Mickey Mantle - PSA 5`, 'baseball', 5000, { saleDateTime: at(16), saleDate: at(16).slice(0, 10), auctionHouse: ['Goldin', 'REA', 'Heritage'][i % 3], saleName: `F${i % 3}` }));
+  // …and twelve vintage PSA 5 singles of other players (a cut tie) closing in 10
+  const near: RecLot[] = [];
+  const houses = ['Goldin', 'REA', 'Heritage', 'PWCC', 'Love of the Game', 'Mile High'];
+  for (let i = 0; i < 12; i++) near.push(card(`19${53 + i} Topps #${i + 40} Ty Player${i} - PSA 5`, 'baseball', 5000, { saleDateTime: at(10), saleDate: at(10).slice(0, 10), auctionHouse: houses[i % 6], saleName: `N${i % 6}` }));
+  const t = buildTaste({ saved: [{ id: owned.id, lot: owned, owned: true, savedAt: at(-3) }], follows: [], nowMs: NOW });
+  const isFar = (r: { lot: RecLot }) => far.some(l => l.id === r.lot.id);
+  const off = recommend([...far, ...near], t, { nowMs: NOW, n: 24, tune: { farShare: 1 } });
+  assert.ok(off.slice(0, 12).filter(isFar).length > 4, `without the rule the name's far-off lots take the first screen: ${off.slice(0, 12).filter(isFar).length} of 12`);
+  const on = recommend([...far, ...near], t, { nowMs: NOW, n: 24 });
+  assert.ok(on.slice(0, 12).filter(isFar).length <= 4, `with it, at most a third: ${on.slice(0, 12).filter(isFar).length} of 12`);
+  assert.equal(on.length, 24, 'nothing is dropped');
+  assert.equal(on.filter(isFar).length, 12, 'the far lots all come, later');
+  // when nothing nearer weighs within 80%, the far lots keep their seats
+  const weak: RecLot[] = near.map(l => ({ ...l, id: `${l.id}w`, currentBid: 1500 })); // under the owned price: the kernel and the span sink them
+  const keep = recommend([...far, ...weak], t, { nowMs: NOW, n: 24 });
+  assert.ok(keep.slice(0, 12).filter(isFar).length > 4, 'a nearer lot far below the far one does not displace it');
+});
+
+test('topOf: the deal’s first n, any lane, never all from one house while another house weighs within 80%, skipping what the band already shows', () => {
+  const rec = (id: string, house: string, score: number, lane?: 'discover') => ({ lot: { id, auctionHouse: house }, score, lane });
+  const a = rec('a', 'Goldin', 1), b = rec('b', 'Goldin', 0.95), c = rec('c', 'Goldin', 0.9), d = rec('d', 'Heritage', 0.85, 'discover'), e = rec('e', 'Goldin', 0.5);
+  assert.deepEqual(topOf([a, b, c, d, e], 3).map(r => r.lot.id), ['a', 'b', 'd'], 'the other house within 80% takes the third seat');
+  assert.deepEqual(topOf([a, b, c, rec('d', 'Heritage', 0.6)], 3).map(r => r.lot.id), ['a', 'b', 'c'], 'not when it weighs under 80%');
+  assert.deepEqual(topOf([a, b, c, d], 3, { claimed: new Set(['a']) }).map(r => r.lot.id), ['b', 'c', 'd'], 'a claimed lot is skipped');
+  assert.deepEqual(topOf([d, a, b], 3).map(r => r.lot.id), ['d', 'a', 'b'], 'a discover pick that ranks is in');
+  assert.deepEqual(topOf([a, b], 3).map(r => r.lot.id), ['a', 'b'], 'fewer than n: all of them');
+  assert.deepEqual(topOf([a, b, c], 3).map(r => r.lot.id), ['a', 'b', 'c'], 'one house only: the deal stands');
 });
