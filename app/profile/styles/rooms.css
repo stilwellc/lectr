@@ -154,7 +154,11 @@
   background: none; cursor: pointer; font: 500 12px/1 var(--font-sans), sans-serif; color: var(--color-fg); text-decoration: none;
 }
 .dk-empty-tap:hover { border-color: var(--color-border-mid); }
-@media (max-width: 639.98px) { .dk-empty-tap { min-height: 44px; padding: 0 14px; } }
+@media (max-width: 639.98px) {
+  /* (pass 9) on a phone the tap is the sentence's own last line, never a pill mid-sentence */
+  .dk-empty-tap { min-height: 44px; padding: 0 14px; }
+  .dk-empty > .dk-empty-tap { display: flex; width: max-content; margin: 8px 0 0; }
+}
 
 /* the picks' Tune editor and the cold start sit on the room's spacing: the row's 2px edge, a hairline above */
 .dk-tune { margin: 4px 0 14px; padding: 12px 2px 4px; border-top: 1px solid var(--hairline); }
