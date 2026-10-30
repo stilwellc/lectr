@@ -54,7 +54,7 @@ const styleOf = (tag: string) => attr(tag, 'style') || '';
 
 test('email lint: no flex, grid, position, negative margins or CSS variables anywhere', () => {
   const html = richHtml();
-  for (const bad of [/display\s*:\s*(?:flex|grid|inline-flex|inline-grid)/i, /position\s*:\s*(?:absolute|fixed|relative|sticky)/i, /margin(?:-(?:top|right|bottom|left))?\s*:\s*-\d/i, /var\(--/i, /calc\(/i, /@media/i, /transform\s*:/i]) {
+  for (const bad of [/display\s*:\s*(?:flex|grid|inline-flex|inline-grid)/i, /position\s*:\s*(?:absolute|fixed|relative|sticky)/i, /margin(?:-(?:top|right|bottom|left))?\s*:\s*-\d/i, /var\(--/i, /calc\(/i, /@media/i, /(?<![\w-])transform\s*:/i]) {
     assert.ok(!bad.test(html), `found ${bad}`);
   }
 });

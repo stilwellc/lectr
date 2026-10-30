@@ -579,6 +579,34 @@ test('the schedule: of the 11:00 and 12:00 UTC lines, the runner takes the one t
   assert.equal(isSendHour(Date.parse('2026-12-10T12:09:00Z'), 'America/New_York'), true);
 });
 
+test('the brand on the paper: the wordmark in the masthead and the foot, the butter accent on the headline’s figure, mono kickers, the colophon', () => {
+  const c = lot('c', 8 * H, { currentBid: 5000 });
+  const d = planDesk({ now: NOW, watches: [{ lot_id: 'c', max_usd: 4000 }, { lot_id: 'b' }], live: liveMap([c, lot('b', 50 * H)]), sold: [], picks: [] })!;
+  const { html, text } = renderDesk(d, { origin: 'https://lectr.bid', unsubUrl: 'https://lectr.bid/u', dateLabel: 'Wednesday, Oct 21', year: 2026 });
+  // the wordmark: an https PNG with width, height and alt, in the masthead (56×36) and the foot (40×26)
+  assert.ok(html.includes('<img src="https://lectr.bid/email/lectr-wordmark.png" width="56" height="36" alt="lectr"'));
+  assert.ok(html.includes('<img src="https://lectr.bid/email/lectr-wordmark.png" width="40" height="26" alt="lectr"'));
+  // the masthead row: wordmark left, the edition line right as a mono microcap
+  assert.ok(html.includes('The Daily Desk · Wednesday, Oct 21</span>'));
+  assert.ok(/font:500 11px\/1\.4 'IBM Plex Mono'[^"]*letter-spacing:0\.08em;text-transform:uppercase/.test(html));
+  // ONE accent, on the headline's key figure only
+  assert.ok(html.includes('<span style="color:#7A5A14">1 bid</span> has passed your max.'));
+  assert.equal((html.match(/#7A5A14/g) || []).length, 1);
+  // section heads are mono kickers over an ink rule
+  assert.ok(html.includes('>Needs you</span>') && html.includes('>Your desk today</span>'));
+  // the registration marks on the glance strip: four dots
+  assert.equal((html.match(/width:3px;height:3px;border-radius:50%/g) || []).length, 4);
+  // the foot's tagline + colophon, html and text
+  assert.ok(html.includes('Every estimate, read against every hammer.'));
+  assert.ok(html.includes('© 2026 lectr · auction intelligence'));
+  assert.ok(text.includes('Every estimate, read against every hammer.\n© 2026 lectr · auction intelligence'));
+  // no serif, no italic heads, no ordinals
+  assert.ok(!/font-style:italic|Georgia|(?<!sans-)serif/.test(html));
+  // a quiet day carries no accent
+  const q = planDesk({ now: NOW, watches: [{ lot_id: 'gone' }], live: new Map(), sold: [], picks: [] })!;
+  assert.ok(!renderDesk(q, { origin: 'https://lectr.bid', unsubUrl: 'https://lectr.bid/u', dateLabel: 'Wednesday, Oct 21' }).html.includes('#7A5A14'));
+});
+
 test('whenText reads the reader clock', () => {
   assert.match(whenText(NOW + 2 * H, NOW, 'America/New_York')!, /^today /);
   assert.match(whenText(NOW + 26 * H, NOW, 'America/New_York')!, /^tomorrow /);
