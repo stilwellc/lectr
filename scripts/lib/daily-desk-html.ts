@@ -13,6 +13,15 @@ import { SEND_HOUR, type DeskEmail, type DeskItem, type DeskRow, type PickItem, 
 const INK = '#1C1917', MUTED = '#777169', FAINT = '#A59F97', LINE = '#EBE8E4', BG = '#F5F3F1', CARD = '#FDFCFC', WELL = '#F5F3F1';
 const UP = '#0F7C43', DOWN = '#C13E2C';
 const FONT = `Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif`;
+/** the site's data register (IBM Plex Mono) for the microcap kickers; Inter after the monos */
+const MONO = `'IBM Plex Mono', 'SFMono-Regular', Menlo, Consolas, ${FONT}`;
+/** THE ONE ACCENT — the porcelain's butter at ink density (globals.css --color-butter-text), on the headline's key figure only */
+const BUTTER = '#7A5A14';
+const DOT = '#D7D2CC';
+/** the script wordmark, ink on transparent, 224×144 (4× of the masthead's 56×36), shipped with the static site */
+const WORDMARK = '/email/lectr-wordmark.png';
+/** a mono microcap kicker — the site's instrument label ("CERTIFIED · HEDONIC"), never an eyebrow over a headline */
+const kicker = (text: string, color = MUTED) => `<span style="font:500 11px/1.4 ${MONO};letter-spacing:0.08em;text-transform:uppercase;color:${color}">${esc(text)}</span>`;
 const UTM = 'utm_source=daily-desk&utm_medium=email';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -34,10 +43,10 @@ function photo(img: string | null, alt: string, size = 64) {
   if (!img) return `<div style="width:${size}px;height:${size}px;border-radius:12px;background:${LINE};color:${FAINT};font:300 ${Math.round(size * 0.42)}px/${size}px ${FONT};text-align:center">${esc((alt.trim()[0] || '·').toUpperCase())}</div>`;
   return `<img src="${esc(img)}" width="${size}" height="${size}" alt="${esc(alt)}" border="0" style="display:block;width:${size}px;height:${size}px;border-radius:12px;object-fit:cover;background:${LINE};border:0">`;
 }
-/** a section: a quiet sentence-case title over a hairline, an optional sub-line, then its body */
+/** a section: a mono microcap kicker over an ink rule (the site's section grammar), an optional sub-line, then its body */
 function section(title: string, body: string, sub?: string | null) {
   return `<tr><td style="padding:30px 0 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-<tr><td style="padding:0 0 8px;font:500 15px/1.3 ${FONT};color:${INK};letter-spacing:-0.01em">${esc(title)}</td></tr>
+<tr><td style="padding:0 0 8px">${kicker(title, INK)}</td></tr>
 <tr><td style="border-top:1px solid ${INK}"></td></tr>
 ${sub ? `<tr><td style="padding:8px 0 0;font:400 12.5px/1.5 ${FONT};color:${MUTED}">${sub}</td></tr>` : ''}
 ${body}</table></td></tr>`;
@@ -120,11 +129,29 @@ function glance(origin: string, g: DeskEmail['glance']) {
   const nextLine = g.next
     ? `${g.next.time ? `<b style="color:${INK};font-weight:500">${esc(g.next.time)}</b> · ` : ''}${g.next.above ? 'first under Needs you' : esc(g.next.title)}`
     : 'no watch on a clock';
-  return `<tr><td style="padding:18px 0 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid ${LINE};border-bottom:1px solid ${LINE}">
+  // the registration marks: a 3px dot where the strip's rules meet the frame (the cockpit's crop dots, NORTHSTAR §1.5)
+  const marks = `<tr><td style="padding:0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+<td width="3" style="font-size:0;line-height:0"><div style="width:3px;height:3px;border-radius:50%;background:${DOT}"></div></td>
+<td style="border-top:1px solid ${LINE};font-size:0;line-height:0;height:1px">&nbsp;</td>
+<td width="3" style="font-size:0;line-height:0"><div style="width:3px;height:3px;border-radius:50%;background:${DOT}"></div></td>
+</tr></table></td></tr>`;
+  return `<tr><td style="padding:18px 0 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+${marks}
+<tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0">
 <tr>${cell('Watching', n2(g.watching), g.est ? `${esc(g.est)} at estimate midpoint${g.estBasis ? ` · ${esc(g.estBasis)}` : ''}` : g.watching ? 'live lots' : 'nothing live', `${desk}#tab-watching`, true)}${cell('Next hammer', g.next ? g.next.when : '—', nextLine, nextHref, false)}</tr>
 <tr><td colspan="2" style="border-top:1px solid ${LINE};font-size:0;line-height:0">&nbsp;</td></tr>
 <tr>${cell('This week', n2(g.week), g.week ? `${n2(g.weekWatches)} ${g.weekWatches === 1 ? 'watch' : 'watches'} + ${n2(g.weekPicks)} ${g.weekPicks === 1 ? 'pick' : 'picks'} closing` : 'nothing of yours closing', `${desk}#tab-week`, true)}${cell('Picks', n2(g.picks), g.picks ? 'for you' : 'none today', `${desk}#tab-for-you`, false)}</tr>
+</table></td></tr>
+${marks}
 </table></td></tr>`;
+}
+
+/** the headline with its key figure in the one accent, the way the site's masthead prints
+ *  "Watching <accent>$3.00M</accent> to the hammer." — the leading count and its noun ("2 bids",
+ *  "8 picks", "52 new lots"); a quiet day carries no accent */
+export function headlineHtml(h: string): string {
+  const m = /^(\d[\d,]*(?: of your)? [a-z-]+)(.*)$/i.exec(h);
+  return m ? `<span style="color:${BUTTER}">${esc(m[1])}</span>${esc(m[2])}` : esc(h);
 }
 
 /** THE WEEK — seven day columns: yours (watches + picks) large, your names' lots small; today on a cream well */
@@ -189,6 +216,8 @@ export interface RenderOpts {
   linkTarget?: '_top';
   /** the on-desk frame: html and body fill it and the body scrolls (iOS Safari sizes a srcdoc frame to its content otherwise) */
   frame?: boolean;
+  /** the colophon's year (tests pin it) */
+  year?: number;
 }
 export function renderDesk(e: DeskEmail, o: RenderOpts): { html: string; text: string; trimmed: boolean } {
   const cap = o.sizeCap ?? SIZE_CAP;
@@ -285,16 +314,25 @@ function renderHtml(e: DeskEmail, o: RenderOpts, trimmed: boolean): string {
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:${CARD};background-color:${CARD};border-radius:16px">
 <tr><td style="padding:28px 24px 8px;mso-line-height-rule:exactly">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-<tr><td style="font:400 13px/1.3 ${FONT};color:${MUTED}"><b style="color:${INK};font-weight:600">lectr</b> · The Daily Desk · ${esc(o.dateLabel)}</td></tr>
+<tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+<td valign="middle" width="56"><a href="${pageUrl(origin, '/')}" style="text-decoration:none"><img src="${origin}${WORDMARK}" width="56" height="36" alt="lectr" border="0" style="display:block;width:56px;height:36px;border:0"></a></td>
+<td valign="middle" align="right" style="padding-left:12px">${kicker(`The Daily Desk · ${o.dateLabel}`)}</td>
+</tr></table></td></tr>
 ${welcome}
-<tr><td style="padding-top:12px;font:300 32px/1.12 ${FONT};color:${INK};letter-spacing:-0.025em">${esc(e.headline)}</td></tr>
+<tr><td style="padding-top:18px;font:300 32px/1.12 ${FONT};color:${INK};letter-spacing:-0.025em">${headlineHtml(e.headline)}</td></tr>
 ${e.preheader ? `<tr><td style="padding-top:8px;font:400 14px/1.5 ${FONT};color:${MUTED}">${esc(e.preheader)}</td></tr>` : ''}
 ${glance(origin, e.glance)}
 ${e.edition.length ? `<tr><td style="padding:10px 0 0;font:400 12.5px/1.5 ${FONT};color:${MUTED}">In this edition: ${e.edition.map(esc).join(' · ')}</td></tr>` : ''}
 ${body}
 <tr><td style="padding:30px 0 6px" align="left"><a href="${pageUrl(origin, '/profile')}" style="display:inline-block;padding:12px 20px;border-radius:999px;background:${INK};color:#fff;font:500 14px/1 ${FONT};text-decoration:none">Open your desk</a></td></tr>
 </table></td></tr>
-<tr><td style="padding:18px 24px 26px;font:400 12px/1.6 ${FONT};color:${FAINT};border-top:1px solid ${LINE}">
+<tr><td style="padding:22px 24px 8px;border-top:1px solid ${LINE}">
+<div style="font:300 19px/1.25 ${FONT};color:${INK};letter-spacing:-0.015em">Every estimate, read against every hammer.</div>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:12px"><tr>
+<td valign="middle" width="40"><img src="${origin}${WORDMARK}" width="40" height="26" alt="lectr" border="0" style="display:block;width:40px;height:26px;border:0"></td>
+<td valign="middle" style="padding-left:10px">${kicker(`© ${o.year ?? new Date().getFullYear()} lectr · auction intelligence`)}</td>
+</tr></table></td></tr>
+<tr><td style="padding:10px 24px 26px;font:400 12px/1.6 ${FONT};color:${FAINT}">
 You get this because you turned on the Daily Desk email on lectr. Figures are lectr&rsquo;s reads from public auction data, not appraisals.${trimmed ? ' Trimmed for your inbox &mdash; the whole desk is on lectr.' : ''}<br>
 <a href="${esc(o.unsubUrl)}" style="color:${MUTED}">Unsubscribe</a> · <a href="${origin}/profile#account" style="color:${MUTED}">Email settings</a>
 </td></tr></table>
@@ -387,6 +425,6 @@ function renderText(e: DeskEmail, o: RenderOpts): string {
     for (const m of e.market) t.push(`- ${m.strong ? `${m.strong} — ` : ''}${m.text}\n  ${pageUrl(origin, m.href)}`);
     t.push('');
   }
-  t.push(`Open your desk: ${origin}/profile`, '', 'You get this because you turned on the Daily Desk email on lectr. Figures are lectr’s reads from public auction data, not appraisals.', `Unsubscribe: ${o.unsubUrl}`, `Email settings: ${origin}/profile#account`);
+  t.push(`Open your desk: ${origin}/profile`, '', 'Every estimate, read against every hammer.', `© ${o.year ?? new Date().getFullYear()} lectr · auction intelligence`, '', 'You get this because you turned on the Daily Desk email on lectr. Figures are lectr’s reads from public auction data, not appraisals.', `Unsubscribe: ${o.unsubUrl}`, `Email settings: ${origin}/profile#account`);
   return t.join('\n');
 }
