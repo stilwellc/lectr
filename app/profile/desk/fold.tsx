@@ -87,7 +87,15 @@ function cutAt(inner: HTMLElement, max: number): number {
   const top = inner.getBoundingClientRect().top;
   const rows = Array.from(inner.querySelectorAll<HTMLElement>(ROWS));
   const blocks = Array.from(inner.querySelectorAll<HTMLElement>(BLOCKS)).filter(m => !m.parentElement?.closest(ROWS));
-  const bottoms = rows.concat(blocks).map(m => m.getBoundingClientRect().bottom - top).filter(b => b > 0).sort((a, b) => a - b);
+  // (pass 7) a boundary never falls INSIDE a row: a block's bottom that lands
+  // within a row's box (a name's head row over its lots in Names, a row's
+  // own sub-line) is not a cut — the Names fold faded mid-row on the owner's desk
+  const spans = rows.map(r => { const b = r.getBoundingClientRect(); return [b.top - top, b.bottom - top] as const; });
+  const inside = (y: number) => spans.some(([a, b]) => y > a + 1 && y < b - 1);
+  const every = rows.concat(blocks).map(m => m.getBoundingClientRect().bottom - top).filter(b => b > 0).sort((a, b) => a - b);
+  const safe = every.filter(b => !inside(b));
+  // (a room whose rows overlap — the week's day columns — keeps every mark)
+  const bottoms = safe.length ? safe : every;
   if (!bottoms.length) return max;
   let best = 0;
   for (const b of bottoms) { if (b <= max) best = b; else break; }
@@ -187,9 +195,22 @@ export function Clamp({ ids, label, count, whole = false, lazy = false, children
       setMeasured(true);
     };
     read();
+    // (pass 7) the clamped box never changes size once its room overflows it
+    // (max-height), so observing it alone left the cut where the room's FIRST
+    // layout put it — rows grew (photos, bids, the sold history) and the cut
+    // sat mid-row on the owner's desk. Observe the room itself (the inner's
+    // children) and re-observe when children come and go.
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(read) : null;
-    ro?.observe(el);
-    return () => ro?.disconnect();
+    const watch = () => { ro?.disconnect(); ro?.observe(el); for (const c of Array.from(el.children)) ro?.observe(c); };
+    watch();
+    const mo = typeof MutationObserver !== 'undefined' ? new MutationObserver(() => { watch(); read(); }) : null;
+    mo?.observe(el, { childList: true });
+    // and once more as the fold comes into view (the layout is final by then —
+    // a photo that landed, a line that stopped wrapping) and on every image load
+    const io = typeof IntersectionObserver !== 'undefined' ? new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) read(); }, { rootMargin: '50% 0px' }) : null;
+    io?.observe(box);
+    el.addEventListener('load', read, true);
+    return () => { ro?.disconnect(); mo?.disconnect(); io?.disconnect(); el.removeEventListener('load', read, true); };
   }, [whole, near]);
   // the travel: set the far end, let the transition run, then release the height
   const timer = useRef(0);

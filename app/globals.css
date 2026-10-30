@@ -5865,3 +5865,53 @@ html:not([data-lectr-light]) .ck-page .ck-deskdetails-btn[aria-expanded='true'] 
   .ck-ccells .ck-ccell-vphone { display: inline; }
   .ck-ccells .ck-ccell-v > .ck-ccell-vword { display: block; white-space: normal; overflow-wrap: anywhere; font-size: 14px; line-height: 1.15; }
 }
+
+/* ── pass 7 (Oct 29): the owner's desk at 390 ── */
+/* the phone's next-lot line: the title holds two lines (the pass-4 rule
+   `.ck-lotline > .ck-ccell-lot { display:block }` had undone the clamp — a
+   three-line RR title pushed the strip a screen down) */
+@media (max-width: 639.98px) {
+  .ck-page .ck-cockpit-next .ck-lotline > .ck-ccell-lot { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; }
+  .ck-page .ck-cockpit-next .ck-lotline { row-gap: 2px; }
+  /* the photo spans the line's two rows, not six: four empty rows under the
+     title held 22px of nothing between the lot and its hammer line */
+  .ck-page .ck-cockpit-next .ck-lotline > .ck-thumb { grid-row: 1 / span 2; }
+}
+
+/* THE ACCOUNT LEDGER (pass 7): the settings foot — label · line · note rows
+   parted by dotted hairlines (NORTHSTAR §2.5), the identity under the head */
+.ck-page .ck-account .ck-head-sub { max-width: 720px; }
+.ck-page .ck-account .ck-head-sub b { color: var(--color-fg); font-weight: 500; }
+.ck-acct { margin-top: 18px; border-top: 1px dotted var(--color-border-mid); }
+.ck-acct-row { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 4px 24px; padding: 16px 0; border-bottom: 1px dotted var(--color-border-mid); }
+.ck-acct-k { font-size: 13px; color: var(--color-text-muted); padding-top: 5px; }
+.ck-acct-v { min-width: 0; }
+.ck-acct-line { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; min-height: 30px; font-size: 13.5px; color: var(--color-fg); }
+.ck-acct-word { color: var(--color-text-secondary); }
+.ck-acct-note { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: var(--color-text-muted); max-width: 720px; }
+.ck-acct-muted { color: var(--color-text-muted); }
+.ck-acct-quiet { font-size: 13.5px; color: var(--color-text-secondary); text-decoration: underline; text-decoration-color: var(--color-border-mid); text-underline-offset: 3px; position: relative; }
+.ck-acct-quiet:hover { color: var(--color-fg); text-decoration-color: var(--color-fg); }
+.ck-acct-quiet::before { content: ''; position: absolute; inset: -10px -4px; }
+.ck-acct .ray-toolbar-pill { min-height: 30px; }
+/* the band's own seam closes the ledger: no dotted rule under its last row (80px of bare stone on a phone) */
+.ck-acct > :last-child { border-bottom: none !important; }
+/* PushOptIn's own block reads as a row of the ledger */
+.ck-acct > .ck-account-in { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 4px 24px; padding: 16px 0; margin: 0; border-top: none; border-bottom: 1px dotted var(--color-border-mid); font-size: 13.5px; }
+.ck-acct > .ck-account-in .kicker { font-size: 13px; color: var(--color-text-muted); padding-top: 2px; }
+/* THE SWITCH: a 36×20 track, the knob 16; ink when on; 44px of tap around it */
+.ck-switch { position: relative; flex: none; width: 36px; height: 20px; padding: 0; border: none; border-radius: 999px; background: var(--color-border-mid, #D7D2CC); cursor: pointer; transition: background 150ms var(--ease-signature, cubic-bezier(.4, 0, .2, 1)); }
+.ck-switch::before { content: ''; position: absolute; inset: -12px; }
+.ck-switch i { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); transition: transform 150ms var(--ease-signature, cubic-bezier(.4, 0, .2, 1)); }
+.ck-switch[aria-checked='true'] { background: var(--color-fg); }
+.ck-switch[aria-checked='true'] i { transform: translateX(16px); }
+.ck-switch:disabled { cursor: default; opacity: 0.45; }
+.ck-switch:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+html:not([data-lectr-light]) .ck-switch { background: rgba(255, 255, 255, 0.18); }
+html:not([data-lectr-light]) .ck-switch i { background: #e8e8ea; }
+html:not([data-lectr-light]) .ck-switch[aria-checked='true'] i { background: #131519; }
+@media (max-width: 639.98px) {
+  .ck-acct-row, .ck-acct > .ck-account-in { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 14px 0; }
+  .ck-acct-k { padding-top: 0; }
+  .ck-acct-line { min-height: 0; }
+}

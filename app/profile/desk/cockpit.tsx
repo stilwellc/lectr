@@ -85,10 +85,14 @@ function Cell({ k, v, note, body, href, tone, tap, children }: {
  *  as tall as its neighbours; `tip` (the scope words) rides in the title's
  *  tooltip, never dropped */
 function LotLine({ lot, phone = false, tip }: { lot: AuctionLot; phone?: boolean; tip?: string }) {
-  const who = displayMakerOf(lot)?.name ?? null;
+  const name = displayMakerOf(lot)?.name ?? null;
+  const craft = craftTitle(lot.title, lot.auctionHouse);
+  // (pass 7) a title that already carries the name ("1929 Thomas Edison, Henry
+  // Ford…") doesn't print it twice — the one line keeps its words for the lot
+  const who = name && !craft.toLowerCase().includes(name.toLowerCase()) ? name : null;
   const est = formatEstimate(lot);
   const sub = [est, lot.auctionHouse].filter(Boolean).join(' · ');
-  const title = `${who ? `${who} · ` : ''}${craftTitle(lot.title, lot.auctionHouse)}`;
+  const title = `${who ? `${who} · ` : ''}${craft}`;
   // a phone prints the FIGURE first and lets the title take two lines — a
   // single ellipsized line cut the estimate, not the noise (R2 f)
   // the lot's photo leads its lines (the command center shows what it counts down to)
@@ -115,7 +119,8 @@ function shortCaption(strip: readonly { n: number; watches: number; picks: numbe
   const w = strip.reduce((s, d) => s + d.watches, 0), p = strip.reduce((s, d) => s + d.picks, 0), n = strip.reduce((s, d) => s + d.names, 0);
   const first = strip.find(d => d.n > 0);
   const when = !first ? '' : first.today ? 'today' : strip.indexOf(first) === 1 ? 'tomorrow' : dayLabel(first.day).split(',')[0];
-  const parts = [w ? `${w} ${w === 1 ? 'watch' : 'watches'}` : null, p ? `${p} ${p === 1 ? 'pick' : 'picks'}` : null, n ? `${n} of your names` : null].filter(Boolean);
+  // "1 name" for a sale of one of your names — the one line at 390 ends on a word
+  const parts = [w ? `${w} ${w === 1 ? 'watch' : 'watches'}` : null, p ? `${p} ${p === 1 ? 'pick' : 'picks'}` : null, n ? `${n} ${n === 1 ? 'name' : 'names'}` : null].filter(Boolean);
   return `${parts.join(' · ')}${when ? ` · next ${when}` : ''}`;
 }
 

@@ -99,13 +99,15 @@ export function RecsRoom({ book, deal, compLots, taste, ready, isSaved, onToggle
     c.signals ? `${c.signals} ${c.signals === 1 ? 'signal' : 'signals'} on this device` : null,
   ].filter(Boolean).join(', ');
   const cold = ready && taste.seeds.length === 0;
-  // (R3#9) "Show my picks" on a cold desk: the picks deal and the page lands
-  // so the masthead's "Tuned to …" line and the cockpit are in view, then the
-  // picks — not the middle of a room that just changed shape under the tap
+  // (R3#9; pass 7) "Show my picks" on a cold desk: the picks deal and the page
+  // lands on THEM — the room's head under the chrome, the first picks in view
+  // (the cockpit and the section bar fill behind; landing on the masthead left
+  // the picks a screen below the tap). jump() re-anchors while the rooms above
+  // (Today, now with closes) take their height.
   const wasCold = useRef(false);
   useEffect(() => {
     if (cold) { wasCold.current = true; return; }
-    if (wasCold.current && ready) { wasCold.current = false; window.setTimeout(() => jump('desk', { focus: false }), 60); }
+    if (wasCold.current && ready) { wasCold.current = false; window.setTimeout(() => jump('for-you', { focus: false }), 60); }
   }, [cold, ready]);
   // a pick you just asked "More like this" of keeps its seat: the list re-reads
   // at once and the new kin would otherwise push it off the screen under
