@@ -38,6 +38,10 @@ const toneInk = (t?: 'up' | 'down') => (t === 'up' ? 'var(--color-up)' : t === '
 
 /** the nav's real height — the bar hangs under it */
 const navHeight = () => document.querySelector<HTMLElement>('.ray-artist-nav')?.offsetHeight ?? 64;
+/** (pass 7) the desk has ended: its foot band (Account) has scrolled off above
+ *  the nav — the bar has nothing left to point at and stands down over the
+ *  site footer (it used to ride over "Every estimate, read against every hammer.") */
+const pastDesk = () => { const foot = document.querySelector<HTMLElement>('.dt-band-foot'); return !!foot && foot.getBoundingClientRect().bottom <= navHeight(); };
 
 export function SectionBar({ items }: { items: BarItem[] }) {
   const ref = useRef<HTMLElement | null>(null);
@@ -57,7 +61,7 @@ export function SectionBar({ items }: { items: BarItem[] }) {
     const cockpit = document.querySelector<HTMLElement>('.ck-cockpit') ?? document.querySelector<HTMLElement>('.dt-head');
     if (!cockpit || typeof IntersectionObserver === 'undefined') return;
     const io = new IntersectionObserver(
-      ([e]) => setShow(!e.isIntersecting && e.boundingClientRect.top < 0),
+      ([e]) => setShow(!e.isIntersecting && e.boundingClientRect.top < 0 && !pastDesk()),
       { rootMargin: `-${navHeight()}px 0px 0px 0px`, threshold: 0 },
     );
     io.observe(cockpit);
@@ -94,7 +98,7 @@ export function SectionBar({ items }: { items: BarItem[] }) {
       const cockpit = document.querySelector<HTMLElement>('.ck-cockpit');
       if (cockpit) {
         const r = cockpit.getBoundingClientRect();
-        if (r.bottom > navHeight()) setShow(false); else if (r.top < 0) setShow(true);
+        if (r.bottom > navHeight() || pastDesk()) setShow(false); else if (r.top < 0) setShow(true);
       }
       const line = navHeight() + (show && bar ? bar.offsetHeight : 0) + 24;
       let c: string | null = null, last = -Infinity;

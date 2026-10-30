@@ -158,14 +158,17 @@ function DeskMasthead() {
                   </Accent>{' '}
                   to the hammer{summary.priced < upcoming.length ? <> across {summary.priced} of {upcoming.length} lots</> : null}.
                 </>
-              : collection.rows.length > 0
+              // (pass 7) lots on the block lead the morning's headline even without a
+              // sum to print (19 RR autographs with one-sided estimates): the live desk
+              // before the collection line — the collection has its own cell and room
+              : upcoming.length > 0
+                ? <>
+                    Watching <Accent>{upcoming.length} {upcoming.length === 1 ? 'lot' : 'lots'}</Accent> to the hammer{summary.closesToday > 0 ? <>, {summary.closesToday} {summary.closesToday === 1 ? 'closes' : 'close'} today</> : null}.
+                  </>
+                : collection.rows.length > 0
                 ? <>Your desk: <Accent>{collection.rows.length} owned</Accent>, {settledN} settled{i.pendingResultsN > 0 ? <> · {i.pendingResultsN} awaiting results</> : null}.</>
                 : upcoming.length === 0 && savedLotsN === 0 && orphanIds.length > 0
                 ? <>Your desk: <Accent>{orphanIds.length} settled {orphanIds.length === 1 ? 'watch' : 'watches'}</Accent>, resolving results.</>
-                : upcoming.length > 0
-                ? <>
-                    Watching <Accent>{upcoming.length} {upcoming.length === 1 ? 'lot' : 'lots'}</Accent> to the hammer.
-                  </>
                 // nothing live: the desk is a record, not a watch — falling
                 // back to savedLots.length claimed "Watching 3 lots to the
                 // hammer" over a sub-line that said "0 live lots"
