@@ -235,7 +235,9 @@ async function main() {
       const { html, text } = renderDesk(desk, { origin: ORIGIN, unsubUrl, dateLabel });
       if (PREVIEW) { fs.writeFileSync(path.join(PREVIEW, `${r.user_id}.html`), html); fs.writeFileSync(path.join(PREVIEW, `${r.user_id}.txt`), text); }
       if (DRY) { console.log(`[daily-desk] would send "${desk.subject}" to ${r.email.replace(/^(.).*(@.*)$/, '$1…$2')}`); continue; }
-      if (await send(r.email, desk.subject, html, text, unsubUrl, `daily-desk/${r.user_id}/${today}`)) {
+      // the idempotency key is the day's, so the scheduled send can never double; a FORCED
+      // resend (a review run) carries the run id, else Resend refuses it as a changed body (409)
+      if (await send(r.email, desk.subject, html, text, unsubUrl, `daily-desk/${r.user_id}/${today}${FORCE ? `/${process.env.GITHUB_RUN_ID || Date.now()}` : ''}`)) {
         sent++;
         await rest(`email_prefs?user_id=eq.${r.user_id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ last_sent_on: today }) });
       } else {
