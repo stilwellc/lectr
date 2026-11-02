@@ -1,0 +1,1967 @@
+{
+ "schema": 1,
+ "month": "2026-10",
+ "window": {
+  "from": "2026-10-01",
+  "to": "2026-10-31"
+ },
+ "partial": false,
+ "generatedAt": "2026-11-02T17:17:32.819Z",
+ "basis": "HAMMER. lectr = served expectedHammerUsd (else served all-in value ÷ the lot premium factor); house = estimate midpoint (hammer); realized = the published hammer, else realized all-in ÷ the lot premium factor. Errors are log errors: med abs err = exp(median|ln(actual/pred)|)−1; ±30% = |ln(actual/pred)| ≤ ln 1.3; bias = exp(median ln(actual/pred)), >1 means lots sold ABOVE the call.",
+ "thresholds": {
+  "minShow": 10,
+  "minSolid": 30,
+  "maxBidTargetPct": 30
+ },
+ "sources": {
+  "value tape": "data/corpus/value-tape.json.gz (10790 rows)",
+  "calls ledger": "data/corpus/calls-ledger.json.gz (12249 rows)",
+  "sold corpus": "data/corpus/lots.json.gz, data/corpus/sold-archive.json.gz (1245360 rows scanned, 9343 of 10321 called lots joined)",
+  "data as of (lastCrawl)": "2026-11-02T13:08:08.246Z"
+ },
+ "tape": {
+  "counts": {
+   "rows": 10790,
+   "settledInWindow": 8571,
+   "graded": 7736,
+   "boughtIn": 300,
+   "soldBeforeCall": 2,
+   "notInCorpus": 1183,
+   "unsettled": 1559
+  },
+  "versionsOnTape": [
+   "2026.10.03-house-gate",
+   "2026.10.06-hammer-basis",
+   "2026.10.06-wave10",
+   "2026.10.06-wave3",
+   "2026.10.06-wave4",
+   "2026.10.06-wave5",
+   "2026.10.06-wave6",
+   "2026.10.06-wave7",
+   "2026.10.11-w24"
+  ],
+  "tapeSince": "2026-10-03",
+  "overall": {
+   "n": 7736,
+   "thin": false,
+   "lectr": {
+    "n": 7736,
+    "thin": false,
+    "medAbsErrPct": 27.6,
+    "within30Pct": 53.1,
+    "bias": 0.977
+   },
+   "house": {
+    "n": 4619,
+    "thin": false,
+    "medAbsErrPct": 33.3,
+    "within30Pct": 46,
+    "bias": 1.1
+   },
+   "closer": {
+    "n": 4619,
+    "thin": false,
+    "pct": 57.7
+   },
+   "band": {
+    "n": 7736,
+    "thin": false,
+    "pct": 72.2
+   },
+   "maxBid": {
+    "n": 7736,
+    "thin": false,
+    "pct": 38.9
+   }
+  },
+  "byMarket": {
+   "art": {
+    "n": 743,
+    "thin": false,
+    "lectr": {
+     "n": 743,
+     "thin": false,
+     "medAbsErrPct": 25.6,
+     "within30Pct": 55.9,
+     "bias": 0.953
+    },
+    "house": {
+     "n": 743,
+     "thin": false,
+     "medAbsErrPct": 25.3,
+     "within30Pct": 57.2,
+     "bias": 0.929
+    },
+    "closer": {
+     "n": 743,
+     "thin": false,
+     "pct": 51
+    },
+    "band": {
+     "n": 743,
+     "thin": false,
+     "pct": 85.3
+    },
+    "maxBid": {
+     "n": 743,
+     "thin": false,
+     "pct": 39.6
+    }
+   },
+   "culture": {
+    "n": 2577,
+    "thin": false,
+    "lectr": {
+     "n": 2577,
+     "thin": false,
+     "medAbsErrPct": 27.6,
+     "within30Pct": 52.8,
+     "bias": 1.046
+    },
+    "house": {
+     "n": 2577,
+     "thin": false,
+     "medAbsErrPct": 35.9,
+     "within30Pct": 43.6,
+     "bias": 1.189
+    },
+    "closer": {
+     "n": 2577,
+     "thin": false,
+     "pct": 62.4
+    },
+    "band": {
+     "n": 2577,
+     "thin": false,
+     "pct": 70.4
+    },
+    "maxBid": {
+     "n": 2577,
+     "thin": false,
+     "pct": 32.5
+    }
+   },
+   "design": {
+    "n": 116,
+    "thin": false,
+    "lectr": {
+     "n": 116,
+     "thin": false,
+     "medAbsErrPct": 40.5,
+     "within30Pct": 19,
+     "bias": 1.123
+    },
+    "house": {
+     "n": 116,
+     "thin": false,
+     "medAbsErrPct": 60,
+     "within30Pct": 19,
+     "bias": 1
+    },
+    "closer": {
+     "n": 116,
+     "thin": false,
+     "pct": 73.3
+    },
+    "band": {
+     "n": 116,
+     "thin": false,
+     "pct": 69.8
+    },
+    "maxBid": {
+     "n": 116,
+     "thin": false,
+     "pct": 48.3
+    }
+   },
+   "science": {
+    "n": 1056,
+    "thin": false,
+    "lectr": {
+     "n": 1056,
+     "thin": false,
+     "medAbsErrPct": 31,
+     "within30Pct": 49.3,
+     "bias": 1
+    },
+    "house": {
+     "n": 1056,
+     "thin": false,
+     "medAbsErrPct": 35.9,
+     "within30Pct": 46.6,
+     "bias": 1.085
+    },
+    "closer": {
+     "n": 1056,
+     "thin": false,
+     "pct": 51.1
+    },
+    "band": {
+     "n": 1056,
+     "thin": false,
+     "pct": 65.9
+    },
+    "maxBid": {
+     "n": 1056,
+     "thin": false,
+     "pct": 37.5
+    }
+   },
+   "sports": {
+    "n": 3159,
+    "thin": false,
+    "lectr": {
+     "n": 3159,
+     "thin": false,
+     "medAbsErrPct": 26.8,
+     "within30Pct": 54.7,
+     "bias": 0.908
+    },
+    "house": {
+     "n": 42,
+     "thin": false,
+     "medAbsErrPct": 69.4,
+     "within30Pct": 0,
+     "bias": 1.694
+    },
+    "closer": {
+     "n": 42,
+     "thin": false,
+     "pct": 90.5
+    },
+    "band": {
+     "n": 3159,
+     "thin": false,
+     "pct": 72.6
+    },
+    "maxBid": {
+     "n": 3159,
+     "thin": false,
+     "pct": 44.9
+    }
+   },
+   "watches": {
+    "n": 85,
+    "thin": false,
+    "lectr": {
+     "n": 85,
+     "thin": false,
+     "medAbsErrPct": 17.1,
+     "within30Pct": 74.1,
+     "bias": 1.113
+    },
+    "house": {
+     "n": 85,
+     "thin": false,
+     "medAbsErrPct": 4,
+     "within30Pct": 76.5,
+     "bias": 1.001
+    },
+    "closer": {
+     "n": 85,
+     "thin": false,
+     "pct": 16.5
+    },
+    "band": {
+     "n": 85,
+     "thin": false,
+     "pct": 78.8
+    },
+    "maxBid": {
+     "n": 85,
+     "thin": false,
+     "pct": 10.6
+    }
+   }
+  },
+  "byTier": {
+   "high": {
+    "n": 1336,
+    "thin": false,
+    "lectr": {
+     "n": 1336,
+     "thin": false,
+     "medAbsErrPct": 23.3,
+     "within30Pct": 57.8,
+     "bias": 0.975
+    },
+    "house": {
+     "n": 617,
+     "thin": false,
+     "medAbsErrPct": 25.2,
+     "within30Pct": 53,
+     "bias": 1.12
+    },
+    "closer": {
+     "n": 617,
+     "thin": false,
+     "pct": 57.4
+    },
+    "band": {
+     "n": 1336,
+     "thin": false,
+     "pct": 68.7
+    },
+    "maxBid": {
+     "n": 1336,
+     "thin": false,
+     "pct": 35.6
+    }
+   },
+   "low": {
+    "n": 3531,
+    "thin": false,
+    "lectr": {
+     "n": 3531,
+     "thin": false,
+     "medAbsErrPct": 30.1,
+     "within30Pct": 50,
+     "bias": 0.976
+    },
+    "house": {
+     "n": 2402,
+     "thin": false,
+     "medAbsErrPct": 36.4,
+     "within30Pct": 42.2,
+     "bias": 1.1
+    },
+    "closer": {
+     "n": 2402,
+     "thin": false,
+     "pct": 57.5
+    },
+    "band": {
+     "n": 3531,
+     "thin": false,
+     "pct": 73.1
+    },
+    "maxBid": {
+     "n": 3531,
+     "thin": false,
+     "pct": 38.5
+    }
+   },
+   "medium": {
+    "n": 2869,
+    "thin": false,
+    "lectr": {
+     "n": 2869,
+     "thin": false,
+     "medAbsErrPct": 26.9,
+     "within30Pct": 54.9,
+     "bias": 0.979
+    },
+    "house": {
+     "n": 1600,
+     "thin": false,
+     "medAbsErrPct": 30.9,
+     "within30Pct": 49.2,
+     "bias": 1.088
+    },
+    "closer": {
+     "n": 1600,
+     "thin": false,
+     "pct": 58.2
+    },
+    "band": {
+     "n": 2869,
+     "thin": false,
+     "pct": 72.7
+    },
+    "maxBid": {
+     "n": 2869,
+     "thin": false,
+     "pct": 41
+    }
+   }
+  },
+  "byVersion": {
+   "2026.10.03-house-gate": {
+    "n": 722,
+    "thin": false,
+    "lectr": {
+     "n": 722,
+     "thin": false,
+     "medAbsErrPct": 29,
+     "within30Pct": 50.7,
+     "bias": 1.009
+    },
+    "house": {
+     "n": 574,
+     "thin": false,
+     "medAbsErrPct": 33.3,
+     "within30Pct": 45.6,
+     "bias": 1.1
+    },
+    "closer": {
+     "n": 574,
+     "thin": false,
+     "pct": 55.3
+    },
+    "band": {
+     "n": 722,
+     "thin": false,
+     "pct": 71.2
+    },
+    "maxBid": {
+     "n": 722,
+     "thin": false,
+     "pct": 30.9
+    }
+   },
+   "2026.10.06-hammer-basis": {
+    "n": 844,
+    "thin": false,
+    "lectr": {
+     "n": 844,
+     "thin": false,
+     "medAbsErrPct": 27.3,
+     "within30Pct": 53.2,
+     "bias": 0.993
+    },
+    "house": {
+     "n": 583,
+     "thin": false,
+     "medAbsErrPct": 33.3,
+     "within30Pct": 45.3,
+     "bias": 1.1
+    },
+    "closer": {
+     "n": 583,
+     "thin": false,
+     "pct": 54.9
+    },
+    "band": {
+     "n": 844,
+     "thin": false,
+     "pct": 70.9
+    },
+    "maxBid": {
+     "n": 844,
+     "thin": false,
+     "pct": 39.8
+    }
+   },
+   "2026.10.06-wave10": {
+    "n": 1268,
+    "thin": false,
+    "lectr": {
+     "n": 1268,
+     "thin": false,
+     "medAbsErrPct": 27.4,
+     "within30Pct": 53.2,
+     "bias": 0.949
+    },
+    "house": {
+     "n": 536,
+     "thin": false,
+     "medAbsErrPct": 33.1,
+     "within30Pct": 46.6,
+     "bias": 1.085
+    },
+    "closer": {
+     "n": 536,
+     "thin": false,
+     "pct": 57.9
+    },
+    "band": {
+     "n": 1268,
+     "thin": false,
+     "pct": 75.1
+    },
+    "maxBid": {
+     "n": 1268,
+     "thin": false,
+     "pct": 42.4
+    }
+   },
+   "2026.10.06-wave3": {
+    "n": 768,
+    "thin": false,
+    "lectr": {
+     "n": 768,
+     "thin": false,
+     "medAbsErrPct": 28,
+     "within30Pct": 53.1,
+     "bias": 0.978
+    },
+    "house": {
+     "n": 508,
+     "thin": false,
+     "medAbsErrPct": 33.3,
+     "within30Pct": 46.3,
+     "bias": 1.1
+    },
+    "closer": {
+     "n": 508,
+     "thin": false,
+     "pct": 55
+    },
+    "band": {
+     "n": 768,
+     "thin": false,
+     "pct": 65.5
+    },
+    "maxBid": {
+     "n": 768,
+     "thin": false,
+     "pct": 41.4
+    }
+   },
+   "2026.10.06-wave4": {
+    "n": 742,
+    "thin": false,
+    "lectr": {
+     "n": 742,
+     "thin": false,
+     "medAbsErrPct": 28.2,
+     "within30Pct": 52.8,
+     "bias": 0.98
+    },
+    "house": {
+     "n": 477,
+     "thin": false,
+     "medAbsErrPct": 33.3,
+     "within30Pct": 45.5,
+     "bias": 1.1
+    },
+    "closer": {
+     "n": 477,
+     "thin": false,
+     "pct": 58.2
+    },
+    "band": {
+     "n": 742,
+     "thin": false,
+     "pct": 68.2
+    },
+    "maxBid": {
+     "n": 742,
+     "thin": false,
+     "pct": 40.8
+    }
+   },
+   "2026.10.06-wave5": {
+    "n": 724,
+    "thin": false,
+    "lectr": {
+     "n": 724,
+     "thin": false,
+     "medAbsErrPct": 28.3,
+     "within30Pct": 52.9,
+     "bias": 0.983
+    },
+    "house": {
+     "n": 459,
+     "thin": false,
+     "medAbsErrPct": 33.3,
+     "within30Pct": 45.8,
+     "bias": 1.1
+    },
+    "closer": {
+     "n": 459,
+     "thin": false,
+     "pct": 58.7
+    },
+    "band": {
+     "n": 724,
+     "thin": false,
+     "pct": 69.9
+    },
+    "maxBid": {
+     "n": 724,
+     "thin": false,
+     "pct": 39.6
+    }
+   },
+   "2026.10.06-wave6": {
+    "n": 729,
+    "thin": false,
+    "lectr": {
+     "n": 729,
+     "thin": false,
+     "medAbsErrPct": 28,
+     "within30Pct": 53.6,
+     "bias": 0.979
+    },
+    "house": {
+     "n": 459,
+     "thin": false,
+     "medAbsErrPct": 33.3,
+     "within30Pct": 45.8,
+     "bias": 1.1
+    },
+    "closer": {
+     "n": 459,
+     "thin": false,
+     "pct": 58.9
+    },
+    "band": {
+     "n": 729,
+     "thin": false,
+     "pct": 69.7
+    },
+    "maxBid": {
+     "n": 729,
+     "thin": false,
+     "pct": 39.5
+    }
+   },
+   "2026.10.06-wave7": {
+    "n": 719,
+    "thin": false,
+    "lectr": {
+     "n": 719,
+     "thin": false,
+     "medAbsErrPct": 27.1,
+     "within30Pct": 54.5,
+     "bias": 1.023
+    },
+    "house": {
+     "n": 465,
+     "thin": false,
+     "medAbsErrPct": 33.3,
+     "within30Pct": 46.2,
+     "bias": 1.1
+    },
+    "closer": {
+     "n": 465,
+     "thin": false,
+     "pct": 59.7
+    },
+    "band": {
+     "n": 719,
+     "thin": false,
+     "pct": 72
+    },
+    "maxBid": {
+     "n": 719,
+     "thin": false,
+     "pct": 35.2
+    }
+   },
+   "2026.10.11-w24": {
+    "n": 1220,
+    "thin": false,
+    "lectr": {
+     "n": 1220,
+     "thin": false,
+     "medAbsErrPct": 26.9,
+     "within30Pct": 53.6,
+     "bias": 0.934
+    },
+    "house": {
+     "n": 558,
+     "thin": false,
+     "medAbsErrPct": 32,
+     "within30Pct": 47.3,
+     "bias": 1.088
+    },
+    "closer": {
+     "n": 558,
+     "thin": false,
+     "pct": 61.3
+    },
+    "band": {
+     "n": 1220,
+     "thin": false,
+     "pct": 80.3
+    },
+    "maxBid": {
+     "n": 1220,
+     "thin": false,
+     "pct": 38
+    }
+   }
+  },
+  "byPath": {
+   "path:c": {
+    "n": 2901,
+    "thin": false,
+    "lectr": {
+     "n": 2901,
+     "thin": false,
+     "medAbsErrPct": 25.7,
+     "within30Pct": 56.4,
+     "bias": 0.905
+    },
+    "house": {
+     "n": 0,
+     "thin": true,
+     "medAbsErrPct": null,
+     "within30Pct": null,
+     "bias": null
+    },
+    "closer": {
+     "n": 0,
+     "thin": true,
+     "pct": null
+    },
+    "band": {
+     "n": 2901,
+     "thin": false,
+     "pct": 74
+    },
+    "maxBid": {
+     "n": 2901,
+     "thin": false,
+     "pct": 45.6
+    }
+   },
+   "path:e": {
+    "n": 4619,
+    "thin": false,
+    "lectr": {
+     "n": 4619,
+     "thin": false,
+     "medAbsErrPct": 28.3,
+     "within30Pct": 51.9,
+     "bias": 1.024
+    },
+    "house": {
+     "n": 4619,
+     "thin": false,
+     "medAbsErrPct": 33.3,
+     "within30Pct": 46,
+     "bias": 1.1
+    },
+    "closer": {
+     "n": 4619,
+     "thin": false,
+     "pct": 57.7
+    },
+    "band": {
+     "n": 4619,
+     "thin": false,
+     "pct": 71.8
+    },
+    "maxBid": {
+     "n": 4619,
+     "thin": false,
+     "pct": 34.5
+    }
+   },
+   "path:n": {
+    "n": 216,
+    "thin": false,
+    "lectr": {
+     "n": 216,
+     "thin": false,
+     "medAbsErrPct": 49.6,
+     "within30Pct": 34.7,
+     "bias": 0.916
+    },
+    "house": {
+     "n": 0,
+     "thin": true,
+     "medAbsErrPct": null,
+     "within30Pct": null,
+     "bias": null
+    },
+    "closer": {
+     "n": 0,
+     "thin": true,
+     "pct": null
+    },
+    "band": {
+     "n": 216,
+     "thin": false,
+     "pct": 56.5
+    },
+    "maxBid": {
+     "n": 216,
+     "thin": false,
+     "pct": 44
+    }
+   }
+  },
+  "byOrigin": {
+   "value tape": {
+    "n": 7736,
+    "thin": false,
+    "lectr": {
+     "n": 7736,
+     "thin": false,
+     "medAbsErrPct": 27.6,
+     "within30Pct": 53.1,
+     "bias": 0.977
+    },
+    "house": {
+     "n": 4619,
+     "thin": false,
+     "medAbsErrPct": 33.3,
+     "within30Pct": 46,
+     "bias": 1.1
+    },
+    "closer": {
+     "n": 4619,
+     "thin": false,
+     "pct": 57.7
+    },
+    "band": {
+     "n": 7736,
+     "thin": false,
+     "pct": 72.2
+    },
+    "maxBid": {
+     "n": 7736,
+     "thin": false,
+     "pct": 38.9
+    }
+   }
+  },
+  "flags": {
+   "flagged": {
+    "n": 799,
+    "thin": false,
+    "medRealizedOverEst": 1.312,
+    "beatHighPct": 69.6
+   },
+   "unflagged": {
+    "n": 3820,
+    "thin": false,
+    "medRealizedOverEst": 1.08,
+    "beatHighPct": 53.3
+   },
+   "above": {
+    "n": 1124,
+    "thin": false,
+    "medRealizedOverEst": 0.999,
+    "beatHighPct": 43.9
+   },
+   "at": {
+    "n": 1510,
+    "thin": false,
+    "medRealizedOverEst": 1.081,
+    "beatHighPct": 54.2
+   },
+   "none": {
+    "n": 1186,
+    "thin": false,
+    "medRealizedOverEst": 1.189,
+    "beatHighPct": 61
+   },
+   "edgeRatio": 0.232,
+   "edgeBeatHighPt": 16.3
+  }
+ },
+ "calls": {
+  "counts": {
+   "rows": 12249,
+   "settledInWindow": 3377,
+   "graded": 3377,
+   "boughtIn": 0,
+   "soldBeforeCall": 0,
+   "notInCorpus": 65,
+   "unsettled": 0
+  },
+  "byKind": {
+   "card": {
+    "n": 1761,
+    "thin": false,
+    "lectr": {
+     "n": 1761,
+     "thin": false,
+     "medAbsErrPct": 65.8,
+     "within30Pct": 32,
+     "bias": 1.012
+    },
+    "house": {
+     "n": 0,
+     "thin": true,
+     "medAbsErrPct": null,
+     "within30Pct": null,
+     "bias": null
+    },
+    "closer": {
+     "n": 0,
+     "thin": true,
+     "pct": null
+    },
+    "band": {
+     "n": 0,
+     "thin": true,
+     "pct": null
+    },
+    "maxBid": {
+     "n": 0,
+     "thin": true,
+     "pct": null
+    }
+   },
+   "gap": {
+    "n": 37,
+    "thin": false,
+    "lectr": {
+     "n": 37,
+     "thin": false,
+     "medAbsErrPct": 389.9,
+     "within30Pct": 8.1,
+     "bias": 4.899
+    },
+    "house": {
+     "n": 0,
+     "thin": true,
+     "medAbsErrPct": null,
+     "within30Pct": null,
+     "bias": null
+    },
+    "closer": {
+     "n": 0,
+     "thin": true,
+     "pct": null
+    },
+    "band": {
+     "n": 0,
+     "thin": true,
+     "pct": null
+    },
+    "maxBid": {
+     "n": 0,
+     "thin": true,
+     "pct": null
+    }
+   },
+   "quiet": {
+    "n": 29,
+    "thin": true,
+    "lectr": {
+     "n": 29,
+     "thin": true,
+     "medAbsErrPct": 60.8,
+     "within30Pct": 31,
+     "bias": 0.789
+    },
+    "house": {
+     "n": 9,
+     "thin": true,
+     "medAbsErrPct": null,
+     "within30Pct": null,
+     "bias": null
+    },
+    "closer": {
+     "n": 9,
+     "thin": true,
+     "pct": null
+    },
+    "band": {
+     "n": 0,
+     "thin": true,
+     "pct": null
+    },
+    "maxBid": {
+     "n": 0,
+     "thin": true,
+     "pct": null
+    }
+   },
+   "vsbid": {
+    "n": 1550,
+    "thin": false,
+    "lectr": {
+     "n": 1550,
+     "thin": false,
+     "medAbsErrPct": 90,
+     "within30Pct": 20.4,
+     "bias": 0.654
+    },
+    "house": {
+     "n": 300,
+     "thin": false,
+     "medAbsErrPct": 33.3,
+     "within30Pct": 46,
+     "bias": 1.125
+    },
+    "closer": {
+     "n": 300,
+     "thin": false,
+     "pct": 22.7
+    },
+    "band": {
+     "n": 0,
+     "thin": true,
+     "pct": null
+    },
+    "maxBid": {
+     "n": 0,
+     "thin": true,
+     "pct": null
+    }
+   }
+  },
+  "byKindTier": {
+   "card": {
+    "g": {
+     "n": 284,
+     "thin": false,
+     "lectr": {
+      "n": 284,
+      "thin": false,
+      "medAbsErrPct": 164.8,
+      "within30Pct": 18,
+      "bias": 1.739
+     },
+     "house": {
+      "n": 0,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "closer": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    },
+    "m": {
+     "n": 107,
+     "thin": false,
+     "lectr": {
+      "n": 107,
+      "thin": false,
+      "medAbsErrPct": 89.8,
+      "within30Pct": 20.6,
+      "bias": 1.763
+     },
+     "house": {
+      "n": 0,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "closer": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    },
+    "p": {
+     "n": 630,
+     "thin": false,
+     "lectr": {
+      "n": 630,
+      "thin": false,
+      "medAbsErrPct": 137.6,
+      "within30Pct": 19.8,
+      "bias": 1.009
+     },
+     "house": {
+      "n": 0,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "closer": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    },
+    "t": {
+     "n": 71,
+     "thin": false,
+     "lectr": {
+      "n": 71,
+      "thin": false,
+      "medAbsErrPct": 88.8,
+      "within30Pct": 25.4,
+      "bias": 1.525
+     },
+     "house": {
+      "n": 0,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "closer": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    },
+    "x": {
+     "n": 669,
+     "thin": false,
+     "lectr": {
+      "n": 669,
+      "thin": false,
+      "medAbsErrPct": 27.9,
+      "within30Pct": 52,
+      "bias": 0.874
+     },
+     "house": {
+      "n": 0,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "closer": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    }
+   },
+   "gap": {
+    "f": {
+     "n": 31,
+     "thin": false,
+     "lectr": {
+      "n": 31,
+      "thin": false,
+      "medAbsErrPct": 412.4,
+      "within30Pct": 3.2,
+      "bias": 5.124
+     },
+     "house": {
+      "n": 0,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "closer": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    },
+    "w": {
+     "n": 6,
+     "thin": true,
+     "lectr": {
+      "n": 6,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "house": {
+      "n": 0,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "closer": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    }
+   },
+   "quiet": {
+    "e": {
+     "n": 9,
+     "thin": true,
+     "lectr": {
+      "n": 9,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "house": {
+      "n": 9,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "closer": {
+      "n": 9,
+      "thin": true,
+      "pct": null
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    },
+    "v": {
+     "n": 20,
+     "thin": true,
+     "lectr": {
+      "n": 20,
+      "thin": true,
+      "medAbsErrPct": 85.2,
+      "within30Pct": 25,
+      "bias": 0.75
+     },
+     "house": {
+      "n": 0,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "closer": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    }
+   },
+   "vsbid": {
+    "-": {
+     "n": 1432,
+     "thin": false,
+     "lectr": {
+      "n": 1432,
+      "thin": false,
+      "medAbsErrPct": 93.3,
+      "within30Pct": 19.8,
+      "bias": 0.626
+     },
+     "house": {
+      "n": 300,
+      "thin": false,
+      "medAbsErrPct": 33.3,
+      "within30Pct": 46,
+      "bias": 1.125
+     },
+     "closer": {
+      "n": 300,
+      "thin": false,
+      "pct": 22.7
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    },
+    "k": {
+     "n": 1,
+     "thin": true,
+     "lectr": {
+      "n": 1,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "house": {
+      "n": 0,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "closer": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    },
+    "k2": {
+     "n": 117,
+     "thin": false,
+     "lectr": {
+      "n": 117,
+      "thin": false,
+      "medAbsErrPct": 60,
+      "within30Pct": 27.4,
+      "bias": 1.311
+     },
+     "house": {
+      "n": 0,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "closer": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    }
+   }
+  },
+  "byKindMarket": {
+   "card": {
+    "sports": {
+     "n": 1690,
+     "thin": false,
+     "lectr": {
+      "n": 1690,
+      "thin": false,
+      "medAbsErrPct": 64.9,
+      "within30Pct": 32.3,
+      "bias": 0.997
+     },
+     "house": {
+      "n": 0,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "closer": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    },
+    "tcg": {
+     "n": 71,
+     "thin": false,
+     "lectr": {
+      "n": 71,
+      "thin": false,
+      "medAbsErrPct": 88.8,
+      "within30Pct": 25.4,
+      "bias": 1.525
+     },
+     "house": {
+      "n": 0,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "closer": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    }
+   },
+   "gap": {
+    "sports": {
+     "n": 35,
+     "thin": false,
+     "lectr": {
+      "n": 35,
+      "thin": false,
+      "medAbsErrPct": 356.5,
+      "within30Pct": 8.6,
+      "bias": 4.565
+     },
+     "house": {
+      "n": 0,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "closer": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    },
+    "tcg": {
+     "n": 2,
+     "thin": true,
+     "lectr": {
+      "n": 2,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "house": {
+      "n": 0,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "closer": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    }
+   },
+   "quiet": {
+    "culture": {
+     "n": 4,
+     "thin": true,
+     "lectr": {
+      "n": 4,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "house": {
+      "n": 4,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "closer": {
+      "n": 4,
+      "thin": true,
+      "pct": null
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    },
+    "science": {
+     "n": 5,
+     "thin": true,
+     "lectr": {
+      "n": 5,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "house": {
+      "n": 5,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "closer": {
+      "n": 5,
+      "thin": true,
+      "pct": null
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    },
+    "sports": {
+     "n": 20,
+     "thin": true,
+     "lectr": {
+      "n": 20,
+      "thin": true,
+      "medAbsErrPct": 85.2,
+      "within30Pct": 25,
+      "bias": 0.75
+     },
+     "house": {
+      "n": 0,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "closer": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    }
+   },
+   "vsbid": {
+    "culture": {
+     "n": 217,
+     "thin": false,
+     "lectr": {
+      "n": 217,
+      "thin": false,
+      "medAbsErrPct": 127.4,
+      "within30Pct": 14.7,
+      "bias": 0.44
+     },
+     "house": {
+      "n": 217,
+      "thin": false,
+      "medAbsErrPct": 33.2,
+      "within30Pct": 45.6,
+      "bias": 1.165
+     },
+     "closer": {
+      "n": 217,
+      "thin": false,
+      "pct": 23.5
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    },
+    "science": {
+     "n": 78,
+     "thin": false,
+     "lectr": {
+      "n": 78,
+      "thin": false,
+      "medAbsErrPct": 102.2,
+      "within30Pct": 15.4,
+      "bias": 0.533
+     },
+     "house": {
+      "n": 78,
+      "thin": false,
+      "medAbsErrPct": 33.2,
+      "within30Pct": 48.7,
+      "bias": 1.07
+     },
+     "closer": {
+      "n": 78,
+      "thin": false,
+      "pct": 19.2
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    },
+    "sports": {
+     "n": 1231,
+     "thin": false,
+     "lectr": {
+      "n": 1231,
+      "thin": false,
+      "medAbsErrPct": 78.6,
+      "within30Pct": 22.1,
+      "bias": 0.718
+     },
+     "house": {
+      "n": 4,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "closer": {
+      "n": 4,
+      "thin": true,
+      "pct": null
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    },
+    "tcg": {
+     "n": 23,
+     "thin": true,
+     "lectr": {
+      "n": 23,
+      "thin": true,
+      "medAbsErrPct": 243,
+      "within30Pct": 0,
+      "bias": 2.793
+     },
+     "house": {
+      "n": 0,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "closer": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    },
+    "watches": {
+     "n": 1,
+     "thin": true,
+     "lectr": {
+      "n": 1,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "house": {
+      "n": 1,
+      "thin": true,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null
+     },
+     "closer": {
+      "n": 1,
+      "thin": true,
+      "pct": null
+     },
+     "band": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     },
+     "maxBid": {
+      "n": 0,
+      "thin": true,
+      "pct": null
+     }
+    }
+   }
+  }
+ },
+ "abstention": {
+  "book": {
+   "asOf": "2026-11-02",
+   "upcoming": 5300,
+   "valued": 998,
+   "abstained": 3867,
+   "neither": 435,
+   "abstainPct": 73,
+   "reasons": {
+    "pool<3": 685,
+    "no-candidates": 1320,
+    "identity-less": 12,
+    "pool-scale": 37,
+    "noest:gate-accuracy": 288,
+    "card:pool<2": 901,
+    "no-identity": 288,
+    "card:stale": 159,
+    "card:new-release": 30,
+    "card:gate-accuracy": 69,
+    "card:player-tier": 10,
+    "tcg:pool<2": 68
+   }
+  },
+  "settled": {
+   "tapeSince": "2026-10-03",
+   "eligible": 8206,
+   "valued": 725,
+   "valuedPct": 8.8,
+   "byMarket": {
+    "art": {
+     "eligible": 352,
+     "valued": 212,
+     "valuedPct": 60.2
+    },
+    "culture": {
+     "eligible": 797,
+     "valued": 0,
+     "valuedPct": 0
+    },
+    "design": {
+     "eligible": 37,
+     "valued": 18,
+     "valuedPct": 48.6
+    },
+    "science": {
+     "eligible": 1,
+     "valued": 0,
+     "valuedPct": null
+    },
+    "sports": {
+     "eligible": 5569,
+     "valued": 480,
+     "valuedPct": 8.6
+    },
+    "tcg": {
+     "eligible": 1419,
+     "valued": 0,
+     "valuedPct": 0
+    },
+    "watches": {
+     "eligible": 31,
+     "valued": 15,
+     "valuedPct": 48.4
+    }
+   }
+  }
+ },
+ "headline": {
+  "tapeGraded": 7736,
+  "tapeMedAbsErrPct": 27.6,
+  "tapeWithin30Pct": 53.1,
+  "tapeBias": 0.977,
+  "houseMedAbsErrPct": 33.3,
+  "closerPct": 57.7,
+  "bandPct": 72.2,
+  "maxBidPct": 38.9,
+  "flagEdgeRatio": 0.232,
+  "estGraded": 4619,
+  "estMedAbsErrPct": 28.3,
+  "calls": {
+   "card": {
+    "graded": 1761,
+    "medAbsErrPct": 65.8,
+    "within30Pct": 32,
+    "bias": 1.012,
+    "closerPct": null
+   },
+   "gap": {
+    "graded": 37,
+    "medAbsErrPct": 389.9,
+    "within30Pct": 8.1,
+    "bias": 4.899,
+    "closerPct": null
+   },
+   "quiet": {
+    "graded": 29,
+    "medAbsErrPct": 60.8,
+    "within30Pct": 31,
+    "bias": 0.789,
+    "closerPct": null
+   },
+   "vsbid": {
+    "graded": 1550,
+    "medAbsErrPct": 90,
+    "within30Pct": 20.4,
+    "bias": 0.654,
+    "closerPct": 22.7
+   }
+  }
+ },
+ "trend": [
+  {
+   "month": "2026-09",
+   "partial": false,
+   "headline": {
+    "tapeGraded": 2594,
+    "tapeMedAbsErrPct": 158.4,
+    "tapeWithin30Pct": 18,
+    "tapeBias": 1.727,
+    "houseMedAbsErrPct": 32.4,
+    "closerPct": 28,
+    "bandPct": 53.4,
+    "maxBidPct": null,
+    "flagEdgeRatio": 0.001,
+    "estGraded": 118,
+    "estMedAbsErrPct": 71.3,
+    "calls": {
+     "card": {
+      "graded": 3924,
+      "medAbsErrPct": 165.1,
+      "within30Pct": 17.1,
+      "bias": 1.452,
+      "closerPct": null
+     },
+     "gap": {
+      "graded": 254,
+      "medAbsErrPct": 179.7,
+      "within30Pct": 9.8,
+      "bias": 2.601,
+      "closerPct": null
+     },
+     "quiet": {
+      "graded": 6,
+      "medAbsErrPct": null,
+      "within30Pct": null,
+      "bias": null,
+      "closerPct": null
+     },
+     "vsbid": {
+      "graded": 2882,
+      "medAbsErrPct": 141.3,
+      "within30Pct": 15.9,
+      "bias": 1.203,
+      "closerPct": 16
+     }
+    }
+   }
+  }
+ ],
+ "notes": [
+  "The served-value record only starts on 2026-10-03 (the tape was reborn empty every night until the Oct 3 2026 persistence fix), so lots that sold in this window before then have no served-value record. Their accuracy is not measured here — the calls ledger section covers the card / projection / lane products for the whole window."
+ ]
+}
