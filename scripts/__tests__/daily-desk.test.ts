@@ -568,15 +568,17 @@ test('the first edition carries a two-line welcome; the second never does', () =
   assert.ok(!render(second).text.includes('Welcome to the Daily Desk'));
 });
 
-test('the schedule: of the 11:00 and 12:00 UTC lines, the runner takes the one that is 7 AM in New York', () => {
-  // EDT (Oct 21): 11:00 UTC is 7 AM
+test('the schedule: a run sends at or after 7 AM New York, never before — a late runner still sends', () => {
+  // EDT (Oct 21): 11:00 UTC is 7 AM; 12:00 is 8 AM (the second line — last_sent_on stops a second send)
   assert.equal(isSendHour(Date.parse('2026-10-21T11:00:00Z'), 'America/New_York'), true);
-  assert.equal(isSendHour(Date.parse('2026-10-21T12:00:00Z'), 'America/New_York'), false);
-  // EST (Dec 10): 12:00 UTC is 7 AM
-  assert.equal(isSendHour(Date.parse('2026-12-10T12:00:00Z'), 'America/New_York'), true);
+  assert.equal(isSendHour(Date.parse('2026-10-21T10:59:00Z'), 'America/New_York'), false);
+  // EST (Dec 10): 11:00 UTC is 6 AM — too early; 12:00 is 7 AM
   assert.equal(isSendHour(Date.parse('2026-12-10T11:00:00Z'), 'America/New_York'), false);
-  // a few minutes of runner start-up lag stay inside the hour
-  assert.equal(isSendHour(Date.parse('2026-12-10T12:09:00Z'), 'America/New_York'), true);
+  assert.equal(isSendHour(Date.parse('2026-12-10T12:00:00Z'), 'America/New_York'), true);
+  // the failure that stopped the paper Oct 30 – Nov 2: GitHub started the 11:17 UTC job at 21:18 UTC (4 PM New York)
+  assert.equal(isSendHour(Date.parse('2026-11-02T21:18:00Z'), 'America/New_York'), true);
+  // the day rolls over at midnight New York, not before
+  assert.equal(isSendHour(Date.parse('2026-11-03T04:59:00Z'), 'America/New_York'), true);
 });
 
 test('the brand on the paper: the wordmark in the masthead and the foot, the butter accent on the headline’s figure, mono kickers, the colophon', () => {

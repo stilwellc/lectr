@@ -15,10 +15,11 @@
 name: Daily Desk email
 on:
   schedule:
-    # 7:00 AM New York year-round: 11:00 UTC is 7 AM EDT, 12:00 UTC is 7 AM EST — the
-    # runner takes the line that is 7 AM in America/New_York and skips the other
-    - cron: '0 11 * * *'
-    - cron: '0 12 * * *'
+    # 7 AM New York year-round: 11 UTC is 7 AM EDT, 12 UTC is 7 AM EST. The runner sends at or after 7 AM
+    # (a run before it skips) and last_sent_on keeps it to one edition a reader a day. Off the top of the
+    # hour on purpose: GitHub delays :00 jobs most, and an exact-hour gate made late runs skip (Oct 30 – Nov 2).
+    - cron: '17 11 * * *'
+    - cron: '17 12 * * *'
   workflow_dispatch:
     inputs:
       dry_run:

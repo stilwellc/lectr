@@ -82,11 +82,13 @@ export const NAME_ROWS = 8;
 export const WEEK_DAYS_N = 7;
 /** the subject line's cap (Gmail shows ~70 on a desktop list, ~40 on a phone) */
 export const SUBJECT_MAX = 60;
-/** the hour the paper lands, on the reader's clock (America/New_York): the workflow fires at 11:00 and 12:00 UTC
- *  so one of them is 7 AM through DST; the runner takes the one that is */
+/** the hour the paper lands, on the reader's clock (America/New_York). A scheduled run sends at or after it, never
+ *  before: GitHub starts scheduled jobs late (5–6 h behind, Oct 30 – Nov 2 2026), and the old exact-hour gate made
+ *  every late run skip as a success. Once per reader per day is kept by email_prefs.last_sent_on, so the second
+ *  cron line (and any re-run) finds the day already sent and sends nothing. */
 export const SEND_HOUR = 7;
 export function isSendHour(nowMs: number, tz: string): boolean {
-  return Number(new Date(nowMs).toLocaleString('en-US', { timeZone: tz, hour: 'numeric', hour12: false })) % 24 === SEND_HOUR;
+  return Number(new Date(nowMs).toLocaleString('en-US', { timeZone: tz, hour: 'numeric', hour12: false })) % 24 >= SEND_HOUR;
 }
 /** the engine's weekly record prints only on this many graded calls */
 export const RECORD_MIN_N = 5;

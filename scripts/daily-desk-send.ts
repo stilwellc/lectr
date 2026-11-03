@@ -143,7 +143,7 @@ async function main() {
   const now = Date.now();
   // the schedule fires at 11:00 and 12:00 UTC so one lands at 7 AM New York through DST; the other is skipped
   // (a manual run is never)
-  if (process.env.GITHUB_EVENT_NAME === 'schedule' && !isSendHour(now, TZ)) { console.log(`[daily-desk] not ${SEND_HOUR} AM in ${TZ} — the other cron line sends today`); return; }
+  if (process.env.GITHUB_EVENT_NAME === 'schedule' && !isSendHour(now, TZ)) { console.log(`[daily-desk] before ${SEND_HOUR} AM in ${TZ} — the later cron line sends today`); return; }
   const today = new Date(now).toLocaleDateString('en-CA', { timeZone: TZ });
   const dateLabel = new Date(now).toLocaleDateString('en-US', { timeZone: TZ, weekday: 'long', month: 'short', day: 'numeric' });
 
