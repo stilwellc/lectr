@@ -1,282 +1,211 @@
 <div align="center">
 
-# lectr
+<a href="https://lectr.bid"><picture><source media="(prefers-color-scheme: dark)" srcset="public/brand/lectr.png"><img src="public/brand/lectr-ink-lg.png" alt="lectr" height="64"></picture></a>
 
-**Auction-market intelligence for the collectibles market.**
+### Every lot on the block, priced against the record.
 
-Every estimate, read against every hammer.
+Auction-market intelligence for art, design, watches, sports, trading cards, science and pop culture.
 
-[lectr.bid](https://lectr.bid)
+**[lectr.bid](https://lectr.bid)** · [What is lectr](https://lectr.bid/about) · [The record](https://lectr.bid/receipts) · [Notes from the desk](https://lectr.bid/blog)
+
+<br>
+
+<a href="https://lectr.bid"><img src="docs/readme/home.webp" alt="The lectr home page: live lot counts per market, the demand read per market, and a Right Now panel with 6,820 lots on the block" width="100%"></a>
 
 </div>
 
 ---
 
-lectr tracks the collectibles auction market — art, design, watches, sports, science, and pop culture — across seven auction houses. It calls whether a lot is trading below or above its true comparables, reads every upcoming lot against a price history it builds itself, precomputes a "below market / above market" signal, and replays those calls point-in-time to prove the record.
+lectr reads the live auction book every night. It prices each open lot against what its comparables actually sold for, flags the ones listed below market, and then grades every call against the hammer once the lot sells. It covers auctions only, never fixed-price listings, because an asking price isn't market data.
 
-It also measures **price movement**, two ways: a confidence-gated hedonic index that surfaces only the makers whose returns clear a 95% confidence bar (the *verified movers*), and — for the estimate-less card market — a **repeat-sales index** that tracks the same physical card across its own resales. Both abstain everywhere the data can't defend a number. Where a market-level return isn't defensible, it drills to **sub-markets** — each shown at the strongest honest read its data supports.
+## By the numbers
 
-It is a read-only intelligence terminal: **auctions only, never fixed-price listings** — an asking price is not market data.
+Live from [lectr.bid](https://lectr.bid) on **November 13, 2026**:
 
----
+| Metric | Detail |
+|---|---|
+| **1,250,699** lots on file | 1,227,110 sold results, 1989 to today |
+| **21** auction houses | **16** crawled every night |
+| **6,820** lots on the block | across 8 market views |
+| **714,500** documents | in the static, sharded search index |
+| **24.4%** median value error | 90-day forward tape, 2,276 graded lots. The house estimate midpoint scored **30.9%** on the same lots |
+| **+44% vs +20%** | median result against estimate for flagged lots vs unflagged lots, over 17,975 point-in-time backtested calls |
 
-## Table of contents
+> These figures are a snapshot. Live values are on [/receipts](https://lectr.bid/receipts) and in `public/data/ray/accuracy-ledger.json`, which is regenerated nightly.
 
-- [What it does](#what-it-does)
-- [Architecture](#architecture)
-- [The markets](#the-markets)
-- [The data model (v2)](#the-data-model-v2)
-- [The data pipeline](#the-data-pipeline)
-- [The value engine](#the-value-engine)
-- [Repository layout](#repository-layout)
-- [Running locally](#running-locally)
-- [Deployment](#deployment)
-- [Doctrine & invariants](#doctrine--invariants)
-- [Roadmap](#roadmap)
+## The product
 
----
+<table>
+<tr>
+<td width="62%" valign="top">
+<a href="https://lectr.bid/value"><img src="docs/readme/value.webp" alt="The value desk: 53 flags live, median gap +83%"></a>
+<br><sub><b>The value desk</b> (<code>/value</code>): live lots listed under where their comparables cleared, ranked by odds and gap.</sub>
+</td>
+<td width="38%" rowspan="2" valign="top" align="center">
+<a href="https://lectr.bid"><img src="docs/readme/home-mobile.webp" alt="lectr on a phone" width="88%"></a>
+<br><sub><b>Built for phones too.</b> Every page works from 390 to 1440 px wide.</sub>
+</td>
+</tr>
+<tr>
+<td valign="top">
+<a href="https://lectr.bid/andy-warhol"><img src="docs/readme/warhol.webp" alt="Andy Warhol maker page: 14,464 sales tracked, $195.04M record"></a>
+<br><sub><b>Maker dossiers</b>: typical sale, record, year-on-year move with its interval, and every live lot.</sub>
+</td>
+</tr>
+</table>
 
-## What it does
+<a href="https://lectr.bid/receipts"><img src="docs/readme/receipts.webp" alt="The record: every call graded against the hammer"></a>
+<sub><b>The record</b> (<code>/receipts</code>): each call is logged the night it's made, append-only with the first call winning, then judged when the lot sells.</sub>
 
-- **Aggregates** live and historical auction results from Phillips, Sotheby's, Christie's, Bonhams, Wright, Rago, and Goldin.
-- **Comps** every lot against same-maker / same-form / size-banded sales, with a 4-tier confidence rating.
-- **Signals** each upcoming lot as *Below Market* or *Above Market* vs. its comparables, precomputed at crawl time.
-- **Backtests** those calls point-in-time: what would you have known that day, and how did the lot actually hammer?
-- **Tracks demand** per market as a typical-sale-vs-estimate index (and, for the estimate-less Goldin verticals, a like-for-like realized-price cohort).
-- **Measures price movement** with a per-maker hedonic index (robust log-price regression, mix-controlled), confidence-gated so it publishes a return *only* when the 95% CI resolves the sign — the *verified movers*. Where estimates don't exist (the card market), a **Bailey-Muth-Nourse repeat-sales regression** takes over — same card, same grade, resold — under the same CI gate. Where neither can be defended, sub-markets fall to measured demand, else a descriptive read (typical price · record · volume) — never a fabricated appreciation.
+### What's on the site
 
-The home page is a trading-floor terminal: the market switch, a **demand-led hero**, the **verified movers** (CI-bounded maker returns), the live feed of lots "on the block," the **sub-market board**, and the all-time record board. On desktop the hero is *the observatory*: an unboxed, full-width chart stage (the directional fill and glow are the composition), a right-hand **ledger rail** for the side metrics — Yearly ROI with the demand × ROI divergence flag, on-the-block, below-market, ⌘K — and the verified movers running beneath as a single hairline **ticker band**, all sized to land above the fold. Mobile keeps its own scene. Switching markets re-scopes every section.
-
-## Architecture
-
-lectr is a **pure static export** — there is no server.
-
-```
- nightly.yml (GitHub Actions, 13:00 UTC)              push to main (deploy.yml)
-   crawl     per-house matrix (7 houses)                next build → out/
-             → segment artifacts (+ R2 last-good)       → wrangler pages deploy
-   assemble  reunion → hygiene passes → engine                │
-             → R2 versions/<stamp>/ (write-once)              │
-               behind latest/pointer.txt                      │
-             → same-run artifact handoff to ↓                 ▼
-   ├─ deploy   build → Cloudflare Pages ────────►  lectr.bid  (Cloudflare Pages)
-   ├─ sync     Supabase + alerts (non-blocking)
-   └─ backtest incremental Mon–Sat · full replay Sunday
-```
-
-- **Framework:** Next.js (App Router), `output: 'export'` → ~113 prerendered static pages.
-- **Hosting:** Cloudflare Pages (free tier, unlimited bandwidth — the right fit for a multi-MB dataset). No compute is metered because there is none.
-- **Data:** flat JSON files served from `/data/ray/`, fetched by the client in tiers; the full corpus lives in **R2** (bucket `lectr-data`), not git.
-- **The R2 store is write-once.** Every push lands under a unique `versions/<UTC>-<sha>/` prefix; only a tiny `latest/pointer.txt` is overwritten (written *last*, so readers never see a half-stored version). Freshness is polled on the pointer alone, which killed the old ~14-min R2 GET-lag on the big payloads — measured, the deploy job went **28m → 2m** and sync **28m → 36s**. Downstream jobs take a same-run artifact handoff from assemble first and touch R2 only as a fallback. A nightly prune keeps the newest 14 versions.
-- **Automation:** three GitHub Actions — `nightly.yml` (the segmented crawl → assemble → {deploy, sync, backtest} pipeline), `deploy.yml` (code pushes), and `ray-crawl.yml` (the old monolith, demoted to a manual fallback).
-
-### Client data tiers
-
-The client never downloads everything up front:
-
-1. **Eager** (`upcoming.json` + `market.json`) — upcoming lots with precomputed signals + the tape, plus the market payload: per-market demand, the **price-movement indices** (hedonic + repeat-sales), the per-maker verified indices, and the sub-markets. Paints instantly.
-2. **Full history** (`lots-*.json` shards — the corpus outgrew Cloudflare's 25 MiB/file cap; `lots-index.json` names the shard count, fetched in parallel) — streams behind the paint for comps and results.
-3. **Sold archive** (`sold-archive-*.json` shards) — the Goldin realized-price history, **lazy-loaded** only when a sports/science deep view needs it (comps modal, maker page, analytics). A cold home load fetches zero archive bytes.
-
-## The markets
-
-`Market = 'all' | 'art' | 'design' | 'watches' | 'sports' | 'science' | 'culture'` — all live.
-
-| Market | Sources | Notes |
+| Surface | Route | What it does |
 |---|---|---|
-| **Art** | Phillips, Sotheby's, Christie's | paintings, editions, photography, sculpture |
-| **Design** | Wright, Rago, Phillips | furniture & objects; model-keyed comps (an LC2 never comps a Chandigarh) |
-| **Watches** | Bonhams, Phillips, Sotheby's, Christie's | reference-keyed (a Daytona never comps a Datejust) |
-| **Sports** | Goldin, Sotheby's, Christie's | cards, game-worn, trophies, tickets |
-| **Science** | Sotheby's, Christie's, Goldin | tech, fossils, space, instruments — **never video games** |
-| **Pop Culture** | Goldin, Christie's, Sotheby's | screen-worn, stage-played, and the unrepeatable 1/1s |
+| Overview | `/`, `/art`, `/design`, `/watches`, `/sports`, `/tcg`, `/science`, `/culture` | Demand read per market, lots on the block, what closes next |
+| Value desk | `/value`, `/value/[market]` | Below-market flags, the gap and the sleepers, today's call |
+| Makers | `/makers`, `/[artist]`, `/makers/[slug]` | The roster and per-maker dossiers |
+| Lots | `/lot/[id]` | A lot priced against its comparables, with share previews that unfurl as the lot itself |
+| Players and entities | `/p/[slug]`, `/e/[slug]` | Sports player and pop-culture entity dossiers |
+| References and sub-markets | `/ref/[maker]/[key]`, `/sub/[a]/[b]` | Watch references, furniture models, drill-downs |
+| Analytics | `/analytics` | Rankings, house calibration, seasonality |
+| The record | `/receipts` | The forward tape of graded calls |
+| My profile (the Desk) | `/profile` | Follows, saved lots, alerts, "my max", picks. Optional opt-in Daily Desk email |
+| Notes | `/blog` | Quarterly market notes, corrections, methodology |
 
-Markets split **by maker/entity**, not by source. Switching markets re-scopes every section of the site.
+## Coverage
 
-## The data model (v2)
+Markets are split by maker or entity, not by house, and every lot is routed on its own.
 
-The heart of lectr is a canonical `AuctionLot` (see [`app/types.ts`](app/types.ts)). It was rebuilt from the ground up to be a trustworthy foundation for value comparison. Three principles:
+| Market | Houses |
+|---|---|
+| **Art** | Christie's, Sotheby's, Phillips, Bonhams |
+| **Design** | Wright, Rago, Phillips, LAMA |
+| **Watches** | Phillips, Christie's, Sotheby's, Bonhams |
+| **Sports** | Goldin, REA, Huggins & Scott, Lelands, Memory Lane, Love of the Game, SCP, Hake's, NFL Auction, MLB Auctions |
+| **TCG** | Goldin and the card houses: singles, vintage, sealed product, lots and sets |
+| **Science** | Christie's, Sotheby's, RR Auction, Goldin. Covers tech, space, fossils and instruments, never video games |
+| **Pop Culture** | RR Auction, Julien's, Propstore, Goldin, Christie's, Sotheby's |
 
-### 1. Native currency is the fact; USD is a derived view
+**Deepest archives:** Goldin (435,813 lots), RR Auction (242,723), REA (182,300), Huggins & Scott (105,662), Christie's (78,199, back to 1991) and Sotheby's (65,932).
 
-Prices arrive in seven currencies. Storing a USD price against a native-currency estimate silently corrupts every price-vs-estimate comparison. Instead:
-
-- `nativeCurrency`, `hammerNative`, `premiumNative`, `realizedNative` — the transaction, as it happened.
-- `fxRate` / `fxAsOf` — a **dated** rate from a static, checked-in per-year table (`FX_BY_YEAR` in [`app/lib/normalize.ts`](app/lib/normalize.ts)). A 2015 London sale converts at 2015's rate, so cross-year series are honest.
-- `realizedUsd`, `estLowUsd`, `estHighUsd` — the derived USD view all downstream math reads.
-- `priceBasis` — `realized` (hammer + buyer's premium) · `hammer-only` · `final-bid-plus-bp` (Goldin) · `last-tracked-bid`. Required on every sold lot.
-
-### 2. Identity is persisted, in two tiers
-
-For the value engine to answer *"has this exact item sold before?"* and *"what similar items sold?"*, identity is decomposed and stored (not re-derived at runtime):
-
-- **Layer A — "very similar":** `modelKey` (Eames 670, a watch reference), `normalizedTitle`, `titleTokens`, parsed `{heightCm, widthCm, depthCm, sizeClass}`, `yearNum` (+ `yearSource`), `mediumCanon`, `materialTokens`.
-- **Layer B — "that exact item":** `objectFingerprint` (a coarse **blocking key** built from title + structured attributes — never an image hash, since different houses photograph the same object differently), `editionOf`/`editionTotal`/`editionMarker`, `serialNo`, for sports `entity`/`objectType`/`eventKey`/`sportYear`/`photoMatched`, and for cards the parsed `_card` fingerprint (player + year + set + card number + grade + serial) that keys the repeat-sales index.
-
-The same-vs-similar decision is a **scored percentage**, not an equality test — wording never matches exactly.
-
-### 3. Every row is validated before it is published
-
-A write-time gate ([`app/lib/validate.ts`](app/lib/validate.ts)) asserts invariants and **aborts the crawl rather than publish a bad row**: a sold lot must have a positive `realizedUsd` + a `priceBasis` + a real, non-future date; a non-sold lot must have null price fields; every `*Usd` must equal `native × fxRate`; ids and dates must be well-formed.
-
-Legacy fields (`priceUsd`, `estimateLow/High`, `currency`) are retained as **USD-valued aliases**, so the UI (which renders everything in USD) stays correct while the engine reads the canonical fields.
-
-## The data pipeline
+## How it works
 
 ```
-scripts/ray-crawl.ts        crawl 7 houses → merge → classify → normalize (v2) → validate
-      │                     └─ precompute signals (build-upcoming) + backtest (build-backtest*)
-      ▼
-scripts/corpus-io.ts        write the split:
-      ├── data/corpus/*.json.gz      full v2 corpus (~76 fields/lot, gzipped) — pushed to R2, gitignored
-      └── public/data/ray/*.json     slim projection (display fields, nulls omitted) — served to clients
+ cron Worker ─► nightly.yml (GitHub Actions)
+                 ├─ crawl      16-house matrix, one segment per house (last-good on failure)
+                 ├─ assemble   reunite → hygiene passes → validate → sanity + engine gates
+                 │             → R2  versions/<utc>-<sha>/  (write-once, behind latest/pointer.txt)
+                 ├─ deploy     next build (static export) → Cloudflare Pages → lectr.bid
+                 ├─ sync       Supabase mirror + alerts (non-blocking)
+                 ├─ backtest   incremental Mon–Sat · full point-in-time replay Sunday
+                 └─ health     per-house issues, publish verdict, social desk
 ```
 
-- **`ray-crawl.ts`** — the crawler CLI (maker sweep → merge → reconcile → classify → segment write). The per-house fetch + parse + enrich code lives in `scripts/lib/houses/` (one module per house behind the `HouseModule` interface in `lib/houses/index.ts`; `RAY_HTTP_RECORD`/`RAY_HTTP_REPLAY` + `scripts/ci/crawl-replay-check.ts` prove a refactor output-identical on recorded responses). Per-house parsers, item-level routing, the Goldin faceted `lots_v2` API (live + `show_only:Sold` results archive), currency conversion, identity stamping, and the validation gate. **Incremental by default Mon–Sat**: Christie's and Sotheby's skip sales whose every prior lot is terminal, non-pending, and >14 days past (the shared `lib/skip-set.ts` predicate — skip rates run ~99%, skipped lots are carried forward), with a **Sunday-UTC full sweep** as the weekly correctness backstop; `INCREMENTAL_CRAWL=1/0` forces either mode. Each house logs a `[health]` line (expected vs. fetched vs. parse errors) with tripwires on upcoming-count collapses; every parser validates required fields at parse time (a lot missing id/title/url is counted and dropped, never silently shipped); transient fetches retry via `lib/fetch-retry.ts`, and estimates parse through the range-aware `lib/estimate-range.ts`.
-- **`corpus-io.ts`** — the corpus/served split. The full corpus is the source of truth (gzipped, persisted to R2); the served files are a null-omitted display projection, sharded under Cloudflare's 25 MB/file limit.
-- **`data-store.sh`** — the R2 store: write-once `versions/<stamp>/` payloads behind `latest/pointer.txt`, legacy-path migration, and the keep-14 `prune`.
-- **`lib/corpus-normalize.ts`** — deterministic, **idempotent corpus-hygiene passes** run in both assemble and build-market before anything is built or persisted: clamp impossible years, reroute/evict science misroutes (the 501 leaked art/watch lots → 0, using the detectors from `audit-data-quality.ts`), fill missing watch references via `lib/identity-enrich.ts` (coverage 63.5% → 71.5%), and reconcile `saleDate` down to `saleDateTime`'s day — killing the crawl-day fallback dates that made long-sold lots look live on the block.
-- **`build-upcoming.ts`** — the eager payload: upcoming lots + precomputed signals + the tape + per-market demand.
-- **`build-backtest.ts`** / **`build-backtest-incremental.ts`** — the point-in-time replay of flagged vs. unflagged calls, split for speed: both are thin entries over the shared **`backtest-core.ts`** engine. The nightly (Mon–Sat) incremental rehydrates a gzipped sidecar accumulator state, scores *only* lots that closed since the last run, and republishes — **~17s where the full replay ran ~54min**, validated byte-identical against a full rebuild. Sunday runs the full replay as the correctness backstop (a late-ingested prior enters an already-scored target's pool only on a full pass; drift is bounded to one week).
-- **`assemble.ts`** — reunions the per-segment crawl output into the full corpus, runs the hygiene passes and the sanity gate (refuses to publish a shrunken or empty book), then drives the market build.
-- **`build-market.ts`** — per-market series (demand, sell-through, house calibration, seasonality) plus the **hedonic price-movement index**, the per-maker verified indices, market composites, and the sub-markets → `market.json`. Hot-path tuned — corpus pre-bucketed by maker, `parseCard` memoized, dates pre-parsed once, and repeat-sale candidate pairs pruned by a cheap structural pre-check (the similarity phase alone went 165s → 22s) — with the outputs verified semantically identical to the naive build.
-- **`hedonic-index.ts`** — the confidence-gated hedonic engine: robust IRLS log-price regression, per-maker indices, and bottom-up composites, publishing only what the 95% CI resolves.
-- **`repeat-sales.ts`** — the Bailey-Muth-Nourse repeat-sales engine (see [the value engine](#the-value-engine)).
-- **`sub-markets.ts`** — the per-vertical sub-market reads (verified index — hedonic or repeat-sales — / demand / descriptive).
-- **`audit-data-quality.ts`** — the read-only auditor: misroute detectors, field-completeness scorecard, integrity checks.
-- **`build-og.tsx`** — pre-renders the share cards (the root card + one per maker) as static PNGs.
+- **The site is a static export with no app server.** Next.js `output: 'export'` deploys to Cloudflare Pages. The client loads JSON in tiers: an eager first screen, then the full-history shards, with the sold archive lazy-loaded only when a page needs it.
+- **Pages Functions do a little work at the edge.** They serve per-lot and per-dossier share previews for bots, a small `/api` over the R2 lot store, and the email unsubscribe link.
+- **R2 is the source of truth.** The full v2 corpus is gzipped and written once per run. Readers poll a single pointer file, which is written last, so they never see a half-written version. The newest 14 versions are kept.
+- **Supabase is optional.** It powers sign-in and the Desk (saved lots, alerts, follows). Without its env vars, saves fall back to `localStorage`.
+- **Houses fail independently.** A house that crashes or shrinks serves its last-good segment, opens its own issue, and closes that issue when it recovers. If a house has no good crawl for 48 hours, its live lots are hidden rather than served stale. See [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
-## The value engine
+Mechanics by job: [`docs/data-pipeline.md`](docs/data-pipeline.md).
 
-[`app/lib/comps.ts`](app/lib/comps.ts) is the single source of truth for comparability:
+## The engine
 
-- A **26-form taxonomy** with hard gates on form + size + model — an item never comps across incompatible forms.
-- **Model / reference keys** so a specific furniture series or watch reference only comps its own kind.
-- **Same-edition fast path** and an **IQR dispersion guard** against noisy pools.
-- **4-tier confidence** (very-high = the exact work sold 3+ times, down to low).
+**One comparability engine** ([`app/lib/comps.ts`](app/lib/comps.ts)) feeds the lot signal, the comparables view and the crawl-time precompute. It uses a 26-form taxonomy with hard gates on form, size and model, so a Daytona never comps a Datejust and an LC2 never comps a Chandigarh chair. It adds a same-edition fast path, an IQR dispersion guard and four confidence tiers.
 
-The comps result feeds the card signal, the comparables modal, and the crawl-time precompute — one number, one meaning, everywhere.
+**Multiple lanes.** Flags, the Gap and the Sleepers are separate reads with separate records, defined once in [`app/lib/lanes.ts`](app/lib/lanes.ts). See [`docs/ENGINE_LANES.md`](docs/ENGINE_LANES.md) and [`docs/ENGINE_SPEC_V2.md`](docs/ENGINE_SPEC_V2.md).
 
-Demand ([`app/lib/demand.ts`](app/lib/demand.ts)) is a mix-proof *typical-sale-vs-estimate* index for markets with published estimates, and a *like-for-like realized-price cohort* for the estimate-less Goldin verticals — never a raw price average, which would be pure mix-noise.
+**Price movement, measured two ways:**
+- **Hedonic index** ([`scripts/hedonic-index.ts`](scripts/hedonic-index.ts)): a robust per-maker log-price regression that holds mix constant (reference, form, size, decade, house). A horizon publishes a return only when its 95% confidence interval resolves the sign.
+- **Repeat-sales index** ([`scripts/repeat-sales.ts`](scripts/repeat-sales.ts)): Bailey-Muth-Nourse, the Case-Shiller method. It runs on the card market, which carries no estimates, and links resales of the same card by player, year, set, number, grade and serial.
 
-### Price movement — the hedonic index
+Where neither index can defend a number, the page falls back to measured **demand** (typical sale against estimate). Where even that isn't possible, it shows a descriptive read: typical price, record and volume.
 
-Demand answers "are lots beating their estimates?" — a *relative* read that houses can game by cutting estimates. So price movement is measured separately. [`scripts/hedonic-index.ts`](scripts/hedonic-index.ts) fits a **per-maker log-price hedonic regression** (robust Huber IRLS) that holds the mix constant — reference/model, form, size, object-decade, house — so a quarter's coefficient is *price movement*, not composition. Each horizon (1Y / 3Y / 5Y) publishes a return **only when its 95% CI resolves the sign**; otherwise it abstains. Market composites are built bottom-up from the publishable component makers, with honest gates (component coverage, degeneracy, and an outright refusal of collectible *buckets* that aren't makers). The output is the **verified movers** — the makers that clear the bar, each with its interval (e.g. Rolex `+25% 5Y [12, 39]`).
+**Graded in public.** Every call is backtested point-in-time and logged forward on the tape. Each month a report lands in [`docs/accuracy/`](docs/accuracy/).
 
-The lander pairs the two: the hero shows **demand**, the ledger rail shows **yearly ROI**, and it flags the divergence — lots beating a softening bar.
+### The data model
 
-### Price movement — the repeat-sales index
+The canonical `AuctionLot` lives in [`app/types.ts`](app/types.ts) and rests on three rules:
 
-The card vertical is the largest in the corpus and carries **no estimates** (Goldin publishes none), so neither demand nor the hedonic can run there. But the same physical card resold twice *is* its own control — no mix bias, no hedonic dummies. [`scripts/repeat-sales.ts`](scripts/repeat-sales.ts) implements the **Bailey-Muth-Nourse repeat-sales regression** (the Case-Shiller method): consecutive-sale pairs of the same object regress log-price relatives onto the period design, with the standard 3-stage GLS gap-weighting to de-bias long holding intervals, and the same honesty gates as the hedonic — a horizon publishes only past minimum pair and distinct-object counts *and* a sign-resolving 95% CI.
+1. **The native currency is the fact.** USD is derived with a dated, checked-in FX table, so no price-against-estimate comparison ever crosses currencies.
+2. **Identity is persisted.** Model or reference keys, parsed dimensions, editions, serials and card fingerprints are stored rather than re-derived, so "has this exact item sold before?" is a lookup.
+3. **Every row is validated before it ships.** The write-time gate in [`app/lib/validate.ts`](app/lib/validate.ts) aborts the publish rather than ship a bad row.
 
-Objects are linked by a caller-supplied key, never guessed. For cards it's the composite `_card` fingerprint — **player + year + set + card number + grade + serial** — with grades parsed by [`app/lib/cards.ts`](app/lib/cards.ts) (a structured grader on ~87% of cards, a numeric grade on ~75%; grading-cert numbers are absent from the source data, so the fingerprint stands in). Live in production: **sports-cards publishes 3Y +87% [79, 95]** on 14,482 linked objects / 18,156 pairs — the estimate-less card market went from a descriptive read to a real, CI'd index.
+### Rules
 
-**Sub-markets** ([`scripts/sub-markets.ts`](scripts/sub-markets.ts)) view every vertical as a hierarchy. A bucket like *meteorites* or *game-used* is a sub-market, not a maker — so it carries no hedonic index — but each sub-market shows the strongest honest read its data supports: a verified CI'd move (hedonic where a real maker clears the bar, **repeat-sales** where the card fingerprint links resales), else measured demand where it carries estimates, else a descriptive read (typical price · all-time record · volume). Each indexed row carries an `indexMethod` (`'hedonic' | 'repeat-sale'`) surfaced in the UI, so the two are never conflated. Nothing prints an appreciation the engine won't defend.
+- **Auctions only.** No buy-it-now, fixed-price or retail listings.
+- **No unsupported returns.** No appreciation figure is published without a confidence interval behind it.
+- **Honest numbers.** Red means down, green means up. Realized and hammer prices are facts, and a mix-noise average is never shown as demand.
+- **Buyer's premium is stated.** Prices are what the buyer pays, and every sold row carries a `priceBasis`.
 
-## Repository layout
+## Stack
 
-```
-app/
-  page.tsx                 renders the Terminal home
-  preview/terminal/        the Terminal implementation — IndexHero, SubMarketBoard,
-                           VerifiedMovers, RecordBoard, MarketChart, VerticalGhost
-  [artist]/                per-maker market pages
-  {art,design,watches,     market landers (static, re-scope the terminal)
-   sports,science,culture,
-   collectibles}/
-  value/                   the calls + the backtest record
-  artists/  analytics/     the roster · the rankings
-  saved/                   watchlist
-  components/              LotCard, ComparableModal, MarketSwitch, …
-  hooks/useRayData.ts      the tiered client data loader
-  lib/
-    comps.ts               the comparability engine
-    demand.ts              the demand / realized-cohort series
-    normalize.ts           pure v2 normalization (FX, dims, year, identity)
-    validate.ts            the write-time invariant gate
-  types.ts                 the canonical AuctionLot (v2)
-scripts/
-  ray-crawl.ts             the crawler (incremental Mon–Sat, full sweep Sunday)
-  lib/houses/              per-house fetch + parse + enrich modules (phillips, sothebys, christies, wright, lama, bonhams, goldin)
-  corpus-io.ts             corpus/served split
-  data-store.sh            R2 store — write-once versions/ + pointer + prune
-  assemble.ts              reunion + hygiene passes + sanity gate + market build
-  build-market.ts          per-market series + indices + sub-markets
-  hedonic-index.ts         confidence-gated hedonic price-movement engine
-  repeat-sales.ts          Bailey-Muth-Nourse repeat-sales engine (cards)
-  sub-markets.ts           per-vertical sub-market reads
-  build-upcoming.ts        eager payload (signals, tape, demand)
-  backtest-core.ts         shared point-in-time replay engine
-  build-backtest.ts        full replay (Sunday) — thin entry over the core
-  build-backtest-incremental.ts  nightly append over sidecar state (Mon–Sat)
-  audit-data-quality.ts    misroute detectors + completeness scorecard
-  build-og.tsx             static share cards
-  lib/
-    corpus-normalize.ts    idempotent corpus-hygiene passes
-    identity-enrich.ts     objectFingerprint + watch reference extractor
-    skip-set.ts            incremental-crawl "fully resolved sale" predicate
-    fetch-retry.ts         transient-failure retry (5xx/network/timeout only)
-    estimate-range.ts      range-aware estimate parsing
-data/corpus/               full v2 corpus (gzipped) — persisted to R2, gitignored
-public/data/ray/           slim served JSON (lots + sold-archive sharded)
-public/brand/              the lectr script mark + icons
-.github/workflows/
-  nightly.yml              segmented crawl → assemble → {deploy, sync, backtest}
-  deploy.yml               code push → build → Cloudflare Pages
-  ray-crawl.yml            the old monolith — manual fallback only
-```
+Next.js 16 (static export) · React 19 · TypeScript · Tailwind · Recharts · Cloudflare Pages, Pages Functions, R2 and Workers · Supabase (auth and Postgres) · GitHub Actions · DuckDB, cheerio and Playwright for the pipeline · Resend for email · Node 22.
 
-> Historical note: internal names (`ray-*` CSS classes, `scripts/ray-crawl.ts`, `public/data/ray/`, `useRayData`) predate the rename to lectr and are kept for stability. Only the user-facing brand is lectr.
-
-## Running locally
+## Development
 
 ```bash
+nvm use                 # Node 22
 npm install
-npm run dev            # http://localhost:3000
-
-# rebuild the derived data from the corpus
-npx tsx scripts/build-upcoming.ts
-npx tsx scripts/build-backtest.ts              # full replay
-npx tsx scripts/build-backtest-incremental.ts  # nightly append (needs prior state)
-
-# run a crawl (writes corpus + served + rebuilds derived)
-npm run crawl                     # incremental Mon–Sat, full sweep Sunday
-INCREMENTAL_CRAWL=0 npm run crawl # force the full sweep
-RAY_DEEP=1 npm run crawl          # deep backfill (full Goldin sold history, etc.)
-RAY_ONLY=game-used npm run crawl  # scope to specific slugs
-
-# preview the static export
-npm run build && npx serve out
+npm run data:pull       # latest served payload from R2 (CLOUDFLARE_API_TOKEN or `npx wrangler login`)
+npm run dev             # http://localhost:3000
 ```
 
-**Requirements:** Node 22+. The crawler and build scripts run under `tsx`.
+| Command | Does |
+|---|---|
+| `npm run build` | Share cards, redirects, first screen, `next build`, then the CSP and first-paint post-build steps → `out/` |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run lint` | ESLint (flat config) |
+| `npm test` | Unit tests (`scripts/__tests__`, `tests/`) |
+| `npm run crawl` | Crawl → normalize → validate → precompute. Incremental Mon–Sat, full sweep Sunday |
+| `INCREMENTAL_CRAWL=0 npm run crawl` | Force a full sweep |
+| `RAY_ONLY=<slug> npm run crawl` | Crawl only the named slugs |
+| `npx serve out` | Preview the static export |
+
+### Configuration
+
+Copy only what you need. The site builds and runs with none of these set.
+
+| Variable | Used for |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Sign-in and the Desk (see [`SUPABASE_SETUP.md`](SUPABASE_SETUP.md); run `supabase/migrations/` in order) |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Web push alerts |
+
+The CI secrets are `CLOUDFLARE_*` and `CF_*` tokens (Pages, R2 read/write, Workers), `SUPABASE_URL`/`SUPABASE_SERVICE_KEY`, `RESEND_API_KEY`, `VAPID_PRIVATE_KEY`, the social-desk tokens, and `LECTR_DISPATCH_PAT` for the cron Worker.
 
 ## Deployment
 
-Fully automated — a code push or the nightly pipeline ships the site:
+Deploys are fully automated, and there's no server to provision.
 
-- **`nightly.yml`** — the data path (13:00 UTC daily): the per-house crawl matrix → assemble (hygiene passes + sanity gate + engine) → push corpus + served payloads to R2 (write-once `versions/` + pointer, then prune to 14) → three parallel downstream jobs riding the **same-run artifact handoff** (R2 only as a fallback): **deploy** (build → Cloudflare Pages), **sync** (Supabase + alerts, non-blocking), and **backtest** (incremental Mon–Sat, full replay Sunday).
-- **`deploy.yml`** — on every push to `main`: pull the served payload → `npm run build` (share cards + static export) → `wrangler pages deploy out` → Cloudflare Pages (`collectr` project, served at `lectr.bid`).
-- **`ray-crawl.yml`** — the pre-segmentation monolith, kept as a manual (`workflow_dispatch`) fallback only.
+- **Nightly data**: [`nightly.yml`](.github/workflows/nightly.yml), dispatched on the minute by the [`cron-trigger`](workers/cron-trigger) Worker, with GitHub cron as a guarded fallback.
+- **Code**: [`deploy.yml`](.github/workflows/deploy.yml) on every push to `main` pulls the served payload, builds, and runs `wrangler pages deploy`.
+- **Intraday**: `close-board.yml` refreshes what's closing every four hours, and `daily-desk.yml` sends the opt-in morning email.
+- **Upkeep**: a monthly accuracy report, a quarterly restore drill, daily UI screenshots, plus manual backfill and heal workflows for each house.
 
-Both paths need repo secrets `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` (the same token drives the `lectr-data` R2 bucket); sync additionally uses `SUPABASE_URL`/`SUPABASE_SERVICE_KEY`. There is no server to provision.
+When a run goes red, start with [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
-## Doctrine & invariants
+## Repository map
 
-Non-negotiable rules enforced across the crawler and UI:
+```
+app/                 Next.js routes, components, hooks
+  lib/               comps, demand, normalize, validate: the engine's core
+  types.ts           the canonical AuctionLot (v2)
+functions/           Cloudflare Pages Functions (share previews, /api, unsubscribe)
+workers/             the cron-trigger Worker
+scripts/             crawlers, assemble, market build, indices, backtest, OG cards
+  lib/houses/        per-house fetch + parse modules
+  ci/                gates, replay checks, test runner
+supabase/migrations/ schema for accounts and the Desk
+public/data/ray/     served JSON shards (pulled from R2, not committed)
+docs/                runbook, pipeline, engine specs, UI law, accuracy reports
+```
 
-- **Auctions only.** Buy-it-now / fixed-price / retail listings are never crawled. An asking price is not market data.
-- **Item-level routing.** Nothing is classified at the auction level; every routing decision is per lot.
-- **Sports spans cards + objects.** Cards, game-worn, trophies, tickets. Estimate-less Goldin cards are indexed by **repeat sales** — the object is its own control — and fall back to a *descriptive* read (typical price · record · volume) where the CI can't resolve. Never a fabricated appreciation.
-- **Science excludes video games.** Apple/computing + fossils/space/instruments only.
-- **Data honesty.** The numeral is the line is the sentence. Red means down/loss only; green means up. Realized and hammer prices are facts. A mix-noise average is never presented as demand.
-- **Never a return the data can't defend.** The hedonic index publishes a price-movement number *only* when its 95% CI resolves the sign; otherwise it abstains and says so. No maker- or market-level appreciation is asserted without a confidence interval behind it.
-- **Native is the fact, USD is derived, dated.** No price-vs-estimate comparison ever crosses currency units.
+Internal names such as `ray-*`, `useRayData` and `public/data/ray/` predate the rename to lectr. They're kept for stability.
 
-## Roadmap
+### Docs
 
-**Shipped — price-movement tracking.** The confidence-gated hedonic index (per-maker + composites), the verified movers, and the vertical → sub-market decomposition are live. Coverage is deliberately narrow — only makers that clear the 95% CI publish — so the next lever is *depth*, not a looser bar: semi-annual cohort pooling to lift thin makers over the n≥80/quarter gate, and form-banding to unlock the print-dominated art names (Warhol, Picasso).
+[RUNBOOK](docs/RUNBOOK.md) · [Data pipeline](docs/data-pipeline.md) · [Engine spec v2](docs/ENGINE_SPEC_V2.md) · [Engine lanes](docs/ENGINE_LANES.md) · [The Desk](docs/DESK.md) · [Picks](docs/PICKS.md) · [Retention](docs/RETENTION.md) · [Social](docs/SOCIAL.md) · [UI north star](docs/NORTHSTAR_UI.md) · [Accuracy reports](docs/accuracy/)
 
-**Shipped — the repeat-sales index.** The Bailey-Muth-Nourse engine is live on the card vertical (sports-cards: 3Y +87% [79, 95]), keyed on the composite `_card` fingerprint, surfaced in sub-markets with an honest `indexMethod` tag. The pipeline is likewise done: write-once R2 versioning, same-run artifact handoff, the incremental crawl/backtest cadence (fast Mon–Sat, full-truth Sunday), and the corpus-hygiene passes.
+## License
 
-**Next — the deep similarity engine, and repeat-sales beyond cards.** The v2 foundation exists to support a scored `similarity(a, b)` over `titleTokens` + maker + model + year + dimensions + edition + sports tags, yielding "≳90% = the same item / 60–90% = very similar" from one number. The `objectFingerprint` blocking key already buckets ~7,300 candidate repeat-sale groups across the non-card verticals — the scored matcher is what turns those candidates into linked resales the repeat-sales engine can index. The features are clean, comparable, and persisted, so building it is weighting and threshold-tuning rather than re-deriving identity from raw strings.
+The source is public for transparency, but it is **not open source**. All rights are reserved. See [LICENSE](LICENSE).
